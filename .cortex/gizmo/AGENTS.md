@@ -19,6 +19,19 @@ immutable typed Workbench record, not another coordinator or worker.
 Gizmo never gives its graph to a Team Agent and loads a team authority only to
 verify a returned contract.
 
+## Activity clock
+
+Every user-visible activity line follows the universal
+[agent communication](../AGENTS.md#agent-communication) contract.
+
+- Read `HH:mm` from the authoritative local clock of the execution host
+  immediately before emitting each line.
+- Never infer the time from model knowledge or conversation context.
+- Never convert a UTC value for the line.
+- Never reuse a cached timestamp or a timestamp from an earlier line.
+- Do not substitute a fallback clock source when the authoritative host clock
+  is unavailable.
+
 ## Ownership
 
 Gizmo owns:
