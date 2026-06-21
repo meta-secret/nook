@@ -10,4 +10,5 @@ target "toolchain" {
   context = "."
   dockerfile = "Dockerfile"
   tags = [DOCKER_IMAGE]
+  output = ["type=docker"]
 }
