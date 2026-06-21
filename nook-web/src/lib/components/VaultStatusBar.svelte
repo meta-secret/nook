@@ -50,9 +50,7 @@
   }
 
   const storageLabel = $derived(
-    storageMode === 'github'
-      ? githubRepo.trim() || 'GitHub'
-      : 'This device',
+    storageMode === 'github' ? githubRepo.trim() || 'GitHub' : 'This device',
   )
 </script>
 
@@ -64,9 +62,7 @@
     <div
       class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs"
     >
-      <div
-        class="flex min-w-0 items-center gap-2 text-muted-foreground"
-      >
+      <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
         {#if storageMode === 'github'}
           <Cloud class="size-3.5 shrink-0 text-primary/80" aria-hidden="true" />
         {:else}
@@ -79,7 +75,10 @@
         <span class="hidden text-muted-foreground sm:inline" aria-hidden="true"
           >·</span
         >
-        <span class="shrink-0 text-muted-foreground" data-testid="vault-last-sync">
+        <span
+          class="shrink-0 text-muted-foreground"
+          data-testid="vault-last-sync"
+        >
           Synced {formatLastSync(lastSyncedAt)}
         </span>
       </div>
