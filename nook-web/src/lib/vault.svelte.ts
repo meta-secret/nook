@@ -7,16 +7,13 @@ import type {
 export class VaultState {
   activeTab = $state<'auth' | 'secrets'>('auth')
 
-  // Storage settings
   storageMode = $state<'local' | 'github'>('local')
   githubPat = $state('')
 
-  // Database manager state
   manager = $state<NookVaultManager | null>(null)
   isAuthenticated = $state(false)
   secrets = $state<SecretRecord[]>([])
 
-  // Status & loading indicators
   errorMsg = $state('')
   successMsg = $state('')
   isVerifying = $state(false)
@@ -49,6 +46,30 @@ export class VaultState {
     localStorage.setItem('nook_github_pat', this.githubPat)
   }
 
+  filterSecrets(query: string): SecretRecord[] {
+    if (!this.manager) return []
+    return mapWasmRecords(this.manager.filter_secrets(query))
+  }
+
+  generatePassword(
+    length: number,
+    lowercase: boolean,
+    uppercase: boolean,
+    numbers: boolean,
+    symbols: boolean,
+  ): string {
+    if (!this.manager) {
+      throw new Error('Vault engine is not available.')
+    }
+    return this.manager.generate_password(
+      length,
+      lowercase,
+      uppercase,
+      numbers,
+      symbols,
+    )
+  }
+
   async loadDb() {
     if (this.isInitializing) {
       this.errorMsg = 'Vault engine is still loading. Try again in a moment.'
@@ -66,12 +87,6 @@ export class VaultState {
       return
     }
 
-    if (this.storageMode === 'github' && !this.githubPat.trim()) {
-      this.errorMsg = 'Enter a GitHub personal access token to connect.'
-      return
-    }
-
-    this.githubPat = this.githubPat.trim()
     this.errorMsg = ''
     this.successMsg = ''
     this.isVerifying = true
@@ -117,6 +132,9 @@ export class VaultState {
     this.errorMsg = ''
     this.successMsg = ''
     this.isSaving = true
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
     try {
       const rawRecords = (await this.manager.add_secret(
         key,
@@ -137,6 +155,9 @@ export class VaultState {
     this.errorMsg = ''
     this.successMsg = ''
     this.isSaving = true
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
     try {
       const rawRecords = (await this.manager.delete_secret(
         key,

@@ -8,6 +8,7 @@
 )]
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use wasm_bindgen::{JsError, JsValue};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -70,6 +71,8 @@ pub struct NookVaultManager {
     github_repo: String,
     github_path: String,
     encryption_key: String,
+    crypto: Option<nook_core::VaultCrypto>,
+    stored_armored: HashMap<String, String>,
     decrypted_jsonl: String,
     file_sha: Option<String>,
     status_tx: flume::Sender<String>,
@@ -87,6 +90,8 @@ impl NookVaultManager {
             github_repo: String::new(),
             github_path: String::new(),
             encryption_key: String::new(),
+            crypto: None,
+            stored_armored: HashMap::new(),
             decrypted_jsonl: String::new(),
             file_sha: None,
             status_tx,
@@ -109,6 +114,34 @@ impl NookVaultManager {
         self.file_sha.clone()
     }
 
+    /// Case-insensitive label search over the in-memory vault.
+    pub fn filter_secrets(&self, query: &str) -> Result<js_sys::Array, JsError> {
+        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
+            .map_err(NookError::Database)?;
+        let filtered = nook_core::filter_secrets(&db.list(), query);
+        records_to_array(filtered).map_err(Into::into)
+    }
+
+    /// Cryptographically secure password generation (same rules as the vault UI).
+    pub fn generate_password(
+        &self,
+        length: u32,
+        lowercase: bool,
+        uppercase: bool,
+        numbers: bool,
+        symbols: bool,
+    ) -> Result<String, JsError> {
+        nook_core::generate_password(&nook_core::PasswordOptions {
+            length: length as usize,
+            lowercase,
+            uppercase,
+            numbers,
+            symbols,
+        })
+        .map_err(NookError::Database)
+        .map_err(Into::into)
+    }
+
     // Expose status channel stream to Svelte client
     pub async fn next_status(&self) -> Result<String, JsError> {
         let msg = self
@@ -127,8 +160,14 @@ impl NookVaultManager {
         github_pat: String,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
+        nook_core::validate_storage_mode(&storage_mode).map_err(NookError::Database)?;
         self.storage_mode = storage_mode;
-        self.github_pat = github_pat.trim().to_owned();
+        if self.storage_mode == nook_core::STORAGE_MODE_GITHUB {
+            self.github_pat =
+                nook_core::validate_github_pat(&github_pat).map_err(NookError::GitHub)?;
+        } else {
+            self.github_pat = String::new();
+        }
         self.file_sha = None;
 
         // Encryption key lives only in IndexedDB — never on GitHub.
@@ -140,7 +179,11 @@ impl NookVaultManager {
                 new_key
             }
         };
-        self.encryption_key = encryption_key;
+        self.encryption_key = encryption_key.clone();
+        self.crypto = Some(
+            nook_core::VaultCrypto::new(&encryption_key).map_err(NookError::Encryption)?,
+        );
+        self.stored_armored.clear();
 
         if self.storage_mode == "github" {
             let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
@@ -160,12 +203,14 @@ impl NookVaultManager {
                 self.decrypted_jsonl = String::new();
             } else {
                 let _ = self.status_tx.send("DECRYPT_START".to_owned());
-                let db = nook_core::Database::from_stored_auto(
+                let (jsonl, armored) = load_stored_vault(
+                    self.crypto.as_ref().ok_or_else(|| {
+                        NookError::Decryption("Vault crypto not initialized.".to_owned())
+                    })?,
                     stored.as_deref().unwrap_or(""),
-                    &self.encryption_key,
-                )
-                .map_err(NookError::Decryption)?;
-                self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
+                )?;
+                self.decrypted_jsonl = jsonl;
+                self.stored_armored = armored;
                 let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
             }
         } else {
@@ -180,12 +225,14 @@ impl NookVaultManager {
                         self.decrypted_jsonl = String::new();
                     } else {
                         let _ = self.status_tx.send("DECRYPT_START".to_owned());
-                        let db = nook_core::Database::from_stored_auto(
+                        let (jsonl, armored) = load_stored_vault(
+                            self.crypto.as_ref().ok_or_else(|| {
+                                NookError::Decryption("Vault crypto not initialized.".to_owned())
+                            })?,
                             &content,
-                            &self.encryption_key,
-                        )
-                        .map_err(NookError::Decryption)?;
-                        self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
+                        )?;
+                        self.decrypted_jsonl = jsonl;
+                        self.stored_armored = armored;
                         let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
                     }
                 }
@@ -210,6 +257,7 @@ impl NookVaultManager {
     pub async fn initialize_empty(&mut self) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("INITIALIZE_START".to_owned());
         self.decrypted_jsonl = String::new();
+        self.stored_armored.clear();
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
@@ -222,11 +270,22 @@ impl NookVaultManager {
         value: String,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
+        let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
+        nook_core::validate_secret_value(&value).map_err(NookError::Database)?;
         let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
             .map_err(NookError::Database)?;
-        db.insert(key, value);
+        db.insert(key.clone(), value.clone());
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
+
+        let armored = self
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
+            .encrypt_value(&value)
+            .map_err(NookError::Encryption)?;
+        self.stored_armored.insert(key, armored);
+
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
@@ -235,11 +294,13 @@ impl NookVaultManager {
     // Delete a secret
     pub async fn delete_secret(&mut self, key: String) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
+        let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
         let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
             .map_err(NookError::Database)?;
         db.remove(&key);
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
+        self.stored_armored.remove(&key);
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
@@ -249,22 +310,13 @@ impl NookVaultManager {
     fn get_records_as_array(&self) -> Result<js_sys::Array, NookError> {
         let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
             .map_err(NookError::Database)?;
-        let records = db.list();
-        let array = js_sys::Array::new();
-        for r in records {
-            let wasm_record = NookSecretRecord::new(r.key, r.value);
-            array.push(&JsValue::from(wasm_record));
-        }
-        Ok(array)
+        records_to_array(db.list())
     }
 
-    // Helper: Save current db to storage
     async fn save_current_db(&mut self) -> Result<(), NookError> {
         let _ = self.status_tx.send("SAVE_START".to_owned());
-        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(NookError::Database)?;
-        let stored = db
-            .to_stored(&self.encryption_key, nook_core::VaultFormat::Yaml)
+        let records = nook_core::Database::stored_records_from_armored(&self.stored_armored);
+        let stored = nook_core::serialize_stored(&records, nook_core::VaultFormat::Yaml)
             .map_err(NookError::Encryption)?;
 
         if self.storage_mode == "local" {
@@ -286,6 +338,32 @@ impl NookVaultManager {
         }
         Ok(())
     }
+}
+
+fn records_to_array(records: Vec<nook_core::SecretRecord>) -> Result<js_sys::Array, NookError> {
+    let array = js_sys::Array::new();
+    for record in records {
+        let wasm_record = NookSecretRecord::new(record.key, record.value);
+        array.push(&JsValue::from(wasm_record));
+    }
+    Ok(array)
+}
+
+fn load_stored_vault(
+    crypto: &nook_core::VaultCrypto,
+    content: &str,
+) -> Result<(String, HashMap<String, String>), NookError> {
+    let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
+    let stored_records =
+        nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    let mut armored = HashMap::with_capacity(stored_records.len());
+    for record in &stored_records {
+        armored.insert(record.key.clone(), record.value.clone());
+    }
+    let db = nook_core::Database::from_stored_records_with_crypto(&stored_records, crypto)
+        .map_err(NookError::Decryption)?;
+    let jsonl = db.to_jsonl().map_err(NookError::Database)?;
+    Ok((jsonl, armored))
 }
 
 // -------------------------------------------------------------

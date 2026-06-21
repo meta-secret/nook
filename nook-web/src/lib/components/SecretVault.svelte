@@ -23,19 +23,29 @@
   import type { SecretRecord } from '$lib/nook'
 
   let {
-    secrets,
     isAuthenticated,
     isSaving,
+    secretsCount,
     onAddSecret,
     onDeleteSecret,
     onGoToAuth,
+    onFilterSecrets,
+    onGeneratePassword,
   }: {
-    secrets: SecretRecord[]
     isAuthenticated: boolean
     isSaving: boolean
+    secretsCount: number
     onAddSecret: (key: string, value: string) => Promise<void>
     onDeleteSecret: (key: string) => Promise<void>
     onGoToAuth: () => void
+    onFilterSecrets: (query: string) => SecretRecord[]
+    onGeneratePassword: (
+      length: number,
+      lowercase: boolean,
+      uppercase: boolean,
+      numbers: boolean,
+      symbols: boolean,
+    ) => string
   } = $props()
 
   // Svelte 5 Local states
@@ -54,28 +64,23 @@
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (!newKey || !newValue) return
     await onAddSecret(newKey, newValue)
     newKey = ''
     newValue = ''
   }
 
   function generatePassword() {
-    let chars = ''
-    if (genLowercase) chars += 'abcdefghijklmnopqrstuvwxyz'
-    if (genUppercase) chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    if (genNumbers) chars += '0123456789'
-    if (genSymbols) chars += '!@#$%^&*()_+-=[]{}|;:,.<>?'
-
-    if (!chars) return
-
-    let result = ''
-    const array = new Uint32Array(genLength)
-    window.crypto.getRandomValues(array)
-    for (let i = 0; i < genLength; i++) {
-      result += chars[array[i] % chars.length]
+    try {
+      newValue = onGeneratePassword(
+        genLength,
+        genLowercase,
+        genUppercase,
+        genNumbers,
+        genSymbols,
+      )
+    } catch (err) {
+      console.error('Password generation failed:', err)
     }
-    newValue = result
   }
 
   async function copyToClipboard(text: string, key: string) {
@@ -98,11 +103,10 @@
   }
 
   // Derived filtered secrets
-  let filteredSecrets = $derived(
-    secrets.filter((s) =>
-      s.key.toLowerCase().includes(searchPattern.toLowerCase()),
-    ),
-  )
+  let filteredSecrets = $derived.by(() => {
+    void secretsCount
+    return onFilterSecrets(searchPattern)
+  })
 </script>
 
 <div class="animate-in fade-in duration-200">

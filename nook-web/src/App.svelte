@@ -117,12 +117,21 @@
       />
     {:else if vault.activeTab === 'secrets'}
       <SecretVault
-        secrets={vault.secrets}
         isAuthenticated={vault.isAuthenticated}
         isSaving={vault.isSaving}
+        secretsCount={vault.secrets.length}
         onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
         onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
         onGoToAuth={() => (vault.activeTab = 'auth')}
+        onFilterSecrets={(query) => vault.filterSecrets(query)}
+        onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
+          vault.generatePassword(
+            length,
+            lowercase,
+            uppercase,
+            numbers,
+            symbols,
+          )}
       />
     {/if}
   </div>

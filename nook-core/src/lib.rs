@@ -4,13 +4,21 @@
     clippy::uninlined_format_args
 )]
 
+mod password;
+mod validation;
 mod vault_format;
+mod vault_crypto;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{Read, Write};
 
-pub use vault_format::{detect_stored_format, VaultFormat};
+pub use password::{generate_password, PasswordOptions, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH};
+pub use validation::{
+    filter_secrets, validate_connect, validate_github_pat, validate_secret_label,
+    validate_secret_value, validate_storage_mode, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL,
+};
+pub use vault_crypto::VaultCrypto;
+pub use vault_format::{deserialize_stored, detect_stored_format, serialize_stored, VaultFormat};
 
 /// Plaintext secret (in memory only).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -127,15 +135,31 @@ impl Database {
         stored_records: Vec<StoredSecretRecord>,
         passphrase: &str,
     ) -> Result<Self, String> {
+        let crypto = VaultCrypto::new(passphrase)?;
+        Self::from_stored_records_with_crypto(&stored_records, &crypto)
+    }
+
+    pub fn from_stored_records_with_crypto(
+        stored_records: &[StoredSecretRecord],
+        crypto: &VaultCrypto,
+    ) -> Result<Self, String> {
         let mut records = HashMap::new();
         for stored in stored_records {
-            let value = decrypt_value(&stored.value, passphrase)?;
-            records.insert(stored.key, value);
+            let value = crypto.decrypt_value(&stored.value)?;
+            records.insert(stored.key.clone(), value);
         }
         Ok(Self { records })
     }
 
     fn to_stored_records(&self, passphrase: &str) -> Result<Vec<StoredSecretRecord>, String> {
+        let crypto = VaultCrypto::new(passphrase)?;
+        self.to_stored_records_with_crypto(&crypto)
+    }
+
+    pub fn to_stored_records_with_crypto(
+        &self,
+        crypto: &VaultCrypto,
+    ) -> Result<Vec<StoredSecretRecord>, String> {
         let mut keys: Vec<&String> = self.records.keys().collect();
         keys.sort();
         let mut stored_records = Vec::with_capacity(keys.len());
@@ -143,10 +167,24 @@ impl Database {
             let value = self.records.get(key).unwrap();
             stored_records.push(StoredSecretRecord {
                 key: key.clone(),
-                value: encrypt_value(value, passphrase)?,
+                value: crypto.encrypt_value(value)?,
             });
         }
         Ok(stored_records)
+    }
+
+    /// Build sorted stored records from an armored-value cache (no encryption).
+    pub fn stored_records_from_armored(
+        armored: &HashMap<String, String>,
+    ) -> Vec<StoredSecretRecord> {
+        let mut keys: Vec<&String> = armored.keys().collect();
+        keys.sort();
+        keys.into_iter()
+            .map(|key| StoredSecretRecord {
+                key: key.clone(),
+                value: armored.get(key).cloned().unwrap_or_default(),
+            })
+            .collect()
     }
 }
 
@@ -154,50 +192,6 @@ impl Default for Database {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn encrypt_value(plaintext: &str, passphrase: &str) -> Result<String, String> {
-    use age::armor::{ArmoredWriter, Format};
-
-    let encryptor = age::Encryptor::with_user_passphrase(age::secrecy::SecretString::from(
-        passphrase.to_owned(),
-    ));
-    let mut armored = Vec::new();
-    let armor_writer = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
-        .map_err(|e| format!("Armor wrap error: {}", e))?;
-    let mut writer = encryptor
-        .wrap_output(armor_writer)
-        .map_err(|e| format!("Encryption error: {}", e))?;
-    writer
-        .write_all(plaintext.as_bytes())
-        .map_err(|e| format!("Write error: {}", e))?;
-    writer
-        .finish()
-        .map_err(|e| format!("Finish error: {}", e))?
-        .finish()
-        .map_err(|e| format!("Armor finish error: {}", e))?;
-
-    String::from_utf8(armored).map_err(|e| format!("Invalid UTF-8 armor: {}", e))
-}
-
-fn decrypt_value(armored: &str, passphrase: &str) -> Result<String, String> {
-    use age::armor::ArmoredReader;
-
-    let identity =
-        age::scrypt::Identity::new(age::secrecy::SecretString::from(passphrase.to_owned()));
-
-    let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored.as_bytes()))
-        .map_err(|e| format!("Decryption setup error: {}", e))?;
-
-    let mut reader = decryptor
-        .decrypt(std::iter::once(&identity as &dyn age::Identity))
-        .map_err(|e| format!("Decryption error: {}", e))?;
-
-    let mut decrypted = String::new();
-    reader
-        .read_to_string(&mut decrypted)
-        .map_err(|e| format!("Read error: {}", e))?;
-    Ok(decrypted)
 }
 
 #[cfg(test)]
