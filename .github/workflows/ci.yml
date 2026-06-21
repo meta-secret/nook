@@ -89,6 +89,7 @@ jobs:
         run: |
           task setup
           task wasm:build
+          rm -rf nook-web/node_modules
           cd nook-web && bun install
         env:
           CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
