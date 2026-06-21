@@ -10,8 +10,8 @@
 
   const vault = new VaultState()
 
-  onMount(async () => {
-    await vault.init()
+  onMount(() => {
+    void vault.init()
     return () => vault.stopVaultSync()
   })
 
