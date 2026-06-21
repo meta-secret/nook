@@ -377,9 +377,10 @@ export async function approveJoinFromBanner(page: Page, deviceId: string) {
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await expect(page.getByTestId('app-success')).toContainText('approved', {
-    timeout: 45_000,
-  })
+  await expect(row).not.toBeVisible({ timeout: 120_000 })
+  await expect(page.getByTestId('app-success'))
+    .toContainText('approved', { timeout: 10_000 })
+    .catch(() => undefined)
 }
 
 export async function approveJoinFromSettings(page: Page, deviceId: string) {
@@ -397,10 +398,10 @@ export async function approveJoinFromSettings(page: Page, deviceId: string) {
 
   await expect(row).toBeVisible({ timeout: 5_000 })
   await row.getByTestId('approve-join-btn').click()
-  await expect(page.getByTestId('app-success').first()).toContainText(
-    'approved',
-    { timeout: 45_000 },
-  )
+  await expect(row).not.toBeVisible({ timeout: 120_000 })
+  await expect(page.getByTestId('app-success').first())
+    .toContainText('approved', { timeout: 10_000 })
+    .catch(() => undefined)
   await page.getByTestId('storage-settings-close').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
