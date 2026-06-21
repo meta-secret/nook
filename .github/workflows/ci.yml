@@ -156,10 +156,23 @@ jobs:
         run: |
           set -euo pipefail
           bunx wrangler@4 pages project create nook --production-branch=main 2>/dev/null || true
-          bunx wrangler@4 pages deploy nook-web/dist \
-            --project-name=nook \
-            --branch="pr-${{ github.event.pull_request.number }}"
-          echo "deployment-url=https://pr-${{ github.event.pull_request.number }}.nook.pages.dev" >> "$GITHUB_OUTPUT"
+          deploy_output="$(
+            bunx wrangler@4 pages deploy nook-web/dist \
+              --project-name=nook \
+              --branch="pr-${{ github.event.pull_request.number }}" 2>&1
+          )"
+          echo "$deploy_output"
+          deployment_url="$(
+            echo "$deploy_output" \
+              | grep -oE 'Deployment alias URL: https://[^ ]+' \
+              | sed 's/Deployment alias URL: //' \
+              | tail -1
+          )"
+          if [ -z "$deployment_url" ]; then
+            echo "Could not parse Cloudflare deployment alias URL" >&2
+            exit 1
+          fi
+          echo "deployment-url=$deployment_url" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
         env:
