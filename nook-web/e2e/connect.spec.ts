@@ -1,17 +1,11 @@
 import { expect, test } from '@playwright/test'
+import { waitForEngine } from './helpers'
 
-async function waitForConnectButton(page: import('@playwright/test').Page) {
-  const button = page.getByTestId('connect-vault-btn')
-  await expect(button).toBeVisible()
-  await expect(button).not.toContainText('Loading engine', { timeout: 20_000 })
-  return button
-}
-
-test.describe('vault connect flow', () => {
+test.describe('setup connect flow', () => {
   test('connects local vault and shows success', async ({ page }) => {
     await page.goto('/')
 
-    const connectButton = await waitForConnectButton(page)
+    const connectButton = await waitForEngine(page)
     await connectButton.click()
 
     await expect(page.getByTestId('connect-success')).toContainText(
@@ -24,7 +18,7 @@ test.describe('vault connect flow', () => {
   test('shows error when github mode has no pat', async ({ page }) => {
     await page.goto('/')
 
-    const connectButton = await waitForConnectButton(page)
+    const connectButton = await waitForEngine(page)
     await page.getByRole('button', { name: /^GitHub/ }).click()
     await connectButton.click()
 
@@ -43,5 +37,14 @@ test.describe('vault connect flow', () => {
     await expect(
       page.getByTestId('connect-error').or(page.getByTestId('connect-success')),
     ).toBeVisible({ timeout: 20_000 })
+  })
+
+  test('locked vault prompts user to open setup', async ({ page }) => {
+    await page.goto('/')
+    await page.getByTestId('nav-vault').click()
+
+    await expect(page.getByTestId('vault-locked')).toBeVisible()
+    await page.getByTestId('go-to-setup-btn').click()
+    await expect(page.getByTestId('connect-vault-btn')).toBeVisible()
   })
 })

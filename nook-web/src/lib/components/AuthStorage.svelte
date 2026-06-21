@@ -181,7 +181,7 @@
                   <span class="font-mono text-foreground/80">ghp_</span> with
                   <span class="font-mono text-foreground/80">repo</span> scope.
                   Syncs encrypted vault to
-                  <span class="font-mono text-foreground/80">username/nook/nook-vault</span>.
+                  <span class="font-mono text-foreground/80">username/nook/nook-vault.yaml</span>.
                   Creates the <span class="font-mono text-foreground/80">nook</span> repo automatically if needed.
                   Your encryption key never leaves this browser.
                 </p>

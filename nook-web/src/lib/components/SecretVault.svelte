@@ -110,6 +110,7 @@
     <!-- Unauthenticated Vault Lock View -->
     <div
       class="flex flex-col items-center justify-center border border-border bg-card rounded-xl p-16 text-center max-w-2xl mx-auto space-y-6"
+      data-testid="vault-locked"
     >
       <div
         class="p-4 bg-accent text-accent-foreground rounded-full border border-border"
@@ -126,13 +127,14 @@
       <Button
         onclick={onGoToAuth}
         class="bg-primary hover:bg-primary/90 text-primary-foreground"
+        data-testid="go-to-setup-btn"
       >
         Configure Storage Provider
       </Button>
     </div>
   {:else}
     <!-- Authenticated Vault Interface -->
-    <div class="grid gap-6 lg:grid-cols-3">
+    <div class="grid gap-6 lg:grid-cols-3" data-testid="vault-panel">
       <!-- Left panel: Add Secret & Generator -->
       <div class="space-y-6">
         <!-- Add Secret Form -->
@@ -155,6 +157,7 @@
                 <input
                   id="secret-label"
                   type="text"
+                  data-testid="secret-label"
                   bind:value={newKey}
                   placeholder="e.g. github.com (personal)"
                   required
@@ -170,6 +173,7 @@
                 <input
                   id="secret-value"
                   type="text"
+                  data-testid="secret-value"
                   bind:value={newValue}
                   placeholder="Enter secret text"
                   required
@@ -181,6 +185,7 @@
                 type="submit"
                 class="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 disabled={isSaving}
+                data-testid="save-secret-btn"
               >
                 {#if isSaving}
                   <RefreshCw class="size-4 animate-spin mr-2" />
@@ -271,6 +276,7 @@
               variant="outline"
               onclick={generatePassword}
               class="w-full border-border text-foreground hover:bg-accent mt-2"
+              data-testid="generate-password-btn"
             >
               <RefreshCw class="size-3.5 mr-2" />
               Generate & Populate
@@ -289,6 +295,7 @@
           <input
             type="text"
             bind:value={searchPattern}
+            data-testid="search-secrets"
             placeholder="Search labels..."
             class="flex h-10 w-full rounded-lg border border-border bg-background pl-10 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
@@ -298,7 +305,10 @@
         <Card class="bg-card text-card-foreground border-border">
           <CardContent class="p-0">
             {#if filteredSecrets.length === 0}
-              <div class="p-12 text-center text-muted-foreground space-y-2">
+              <div
+                class="p-12 text-center text-muted-foreground space-y-2"
+                data-testid="vault-empty-search"
+              >
                 <Unlock class="size-8 mx-auto text-muted-foreground/40" />
                 <p>No secrets matched your search.</p>
                 <p class="text-xs">
@@ -311,6 +321,7 @@
                   <div
                     class="flex items-center justify-between p-4 hover:bg-accent/40 transition-colors"
                     role="listitem"
+                    data-testid="secret-row"
                   >
                     <div class="space-y-1 pr-4 min-w-0 flex-1">
                       <h3

@@ -48,6 +48,7 @@
           'auth'
             ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
+          data-testid="nav-setup"
           onclick={() => (vault.activeTab = 'auth')}
         >
           Setup
@@ -57,6 +58,7 @@
           'secrets'
             ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
+          data-testid="nav-vault"
           onclick={() => (vault.activeTab = 'secrets')}
         >
           Vault
@@ -88,6 +90,7 @@
       <div
         class="mb-6 flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/10 p-4 text-sm text-primary animate-in fade-in slide-in-from-top-2"
         role="alert"
+        data-testid="app-success"
       >
         <ShieldCheck class="size-5 shrink-0 text-primary mt-0.5" />
         <div class="flex-1">

@@ -146,40 +146,54 @@ impl NookVaultManager {
             let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
             let username = fetch_github_username(&self.github_pat).await?;
             self.github_repo = format!("{}/nook", username);
-            self.github_path = "nook-vault".to_owned();
+            self.github_path = "nook-vault.yaml".to_owned();
             let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
             ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
         }
 
         let mut vault_file_missing = false;
-        let encrypted_hex = if self.storage_mode == "local" {
+        if self.storage_mode == "local" {
             let _ = self.status_tx.send("IDB_LOAD_START".to_owned());
-            let hex = load_from_indexed_db().await?;
+            let stored = load_from_indexed_db().await?;
             let _ = self.status_tx.send("IDB_LOAD_SUCCESS".to_owned());
-            hex.unwrap_or_default()
+            if stored.as_deref().unwrap_or("").is_empty() {
+                self.decrypted_jsonl = String::new();
+            } else {
+                let _ = self.status_tx.send("DECRYPT_START".to_owned());
+                let db = nook_core::Database::from_stored_auto(
+                    stored.as_deref().unwrap_or(""),
+                    &self.encryption_key,
+                )
+                .map_err(NookError::Decryption)?;
+                self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
+                let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
+            }
         } else {
             let _ = self.status_tx.send("GITHUB_FETCH_START".to_owned());
-            let res = fetch_github_file(&self.github_pat, &self.github_repo, &self.github_path).await?;
+            let res = fetch_github_vault(&self.github_pat, &self.github_repo, &self.github_path)
+                .await?;
             let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
             match res {
-                Some((hex, sha)) => {
+                Some((content, sha)) => {
                     self.file_sha = Some(sha);
-                    hex
+                    if content.is_empty() {
+                        self.decrypted_jsonl = String::new();
+                    } else {
+                        let _ = self.status_tx.send("DECRYPT_START".to_owned());
+                        let db = nook_core::Database::from_stored_auto(
+                            &content,
+                            &self.encryption_key,
+                        )
+                        .map_err(NookError::Decryption)?;
+                        self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
+                        let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
+                    }
                 }
                 None => {
                     vault_file_missing = true;
-                    String::new()
+                    self.decrypted_jsonl = String::new();
                 }
             }
-        };
-
-        if encrypted_hex.is_empty() {
-            self.decrypted_jsonl = String::new();
-        } else {
-            let _ = self.status_tx.send("DECRYPT_START".to_owned());
-            self.decrypted_jsonl = nook_core::decrypt(&encrypted_hex, &self.encryption_key)
-                .map_err(NookError::Decryption)?;
-            let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
         }
 
         if vault_file_missing {
@@ -247,20 +261,23 @@ impl NookVaultManager {
     // Helper: Save current db to storage
     async fn save_current_db(&mut self) -> Result<(), NookError> {
         let _ = self.status_tx.send("SAVE_START".to_owned());
-        let encrypted_hex = nook_core::encrypt(&self.decrypted_jsonl, &self.encryption_key)
+        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
+            .map_err(NookError::Database)?;
+        let stored = db
+            .to_stored(&self.encryption_key, nook_core::VaultFormat::Yaml)
             .map_err(NookError::Encryption)?;
 
         if self.storage_mode == "local" {
             let _ = self.status_tx.send("IDB_SAVE_START".to_owned());
-            save_to_indexed_db(&encrypted_hex).await?;
+            save_to_indexed_db(&stored).await?;
             let _ = self.status_tx.send("IDB_SAVE_SUCCESS".to_owned());
         } else {
             let _ = self.status_tx.send("GITHUB_SAVE_START".to_owned());
-            let new_sha = write_github_file(
+            let new_sha = write_github_text_file(
                 &self.github_pat,
                 &self.github_repo,
                 &self.github_path,
-                &encrypted_hex,
+                &stored,
                 self.file_sha.as_deref(),
             )
             .await?;
@@ -557,7 +574,7 @@ fn generate_encryption_key() -> Result<String, NookError> {
     Ok(hex::encode(bytes))
 }
 
-async fn fetch_github_file(
+async fn fetch_github_vault(
     pat: &str,
     repo: &str,
     path: &str,
@@ -596,24 +613,23 @@ async fn fetch_github_file(
         .replace('\r', "")
         .replace(' ', "");
     let decoded_bytes = base64_decode(&cleaned_content)?;
-    let hex_content = hex::encode(decoded_bytes);
+    let vault_content = String::from_utf8(decoded_bytes).map_err(|e| {
+        NookError::Serialization(format!("Vault file is not valid UTF-8: {}", e))
+    })?;
 
-    Ok(Some((hex_content, parsed.sha)))
+    Ok(Some((vault_content, parsed.sha)))
 }
 
-async fn write_github_file(
+async fn write_github_text_file(
     pat: &str,
     repo: &str,
     path: &str,
-    content_hex: &str,
+    content: &str,
     sha: Option<&str>,
 ) -> Result<String, NookError> {
     use base64::{Engine as _, engine::general_purpose};
 
-    let bin_bytes = hex::decode(content_hex)
-        .map_err(|e| NookError::Serialization(format!("Invalid hex format: {}", e)))?;
-
-    let base64_content = general_purpose::STANDARD.encode(bin_bytes);
+    let base64_content = general_purpose::STANDARD.encode(content.as_bytes());
 
     let body = GitHubPutBody {
         message: "Update secrets store via Nook WASM".to_owned(),
