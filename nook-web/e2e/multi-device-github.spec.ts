@@ -235,10 +235,15 @@ describeMultiDevice('multi-device approve from settings', () => {
     await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
     const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
 
-    await approveJoinFromSettings(deviceA, join.deviceId, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    }, 2)
+    await approveJoinFromSettings(
+      deviceA,
+      join.deviceId,
+      {
+        pat: githubPat,
+        repoName: e2eRepo,
+      },
+      2,
+    )
 
     const enrolledYaml = await assertEnrolledVaultOnGithub(
       githubPat,

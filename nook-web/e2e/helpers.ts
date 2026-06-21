@@ -226,12 +226,7 @@ export async function waitForGithubVaultState(
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
-  return waitForVaultYaml(
-    target.pat,
-    target.repoName,
-    predicate,
-    options,
-  )
+  return waitForVaultYaml(target.pat, target.repoName, predicate, options)
 }
 
 export async function clearBrowserVault(page: Page) {
@@ -531,8 +526,7 @@ export async function addSecret(
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) =>
-        yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+      (yaml) => yaml.secretLabels.includes(key) || yaml.raw.includes(key),
       { page },
     )
   }
@@ -554,8 +548,7 @@ export async function waitForSecretOnDevice(
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) =>
-        yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+      (yaml) => yaml.secretLabels.includes(key) || yaml.raw.includes(key),
     )
   }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
@@ -580,8 +573,7 @@ export async function deleteSecret(
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) =>
-        !yaml.secretLabels.includes(key) && !yaml.raw.includes(key),
+      (yaml) => !yaml.secretLabels.includes(key) && !yaml.raw.includes(key),
       { page },
     )
   }
