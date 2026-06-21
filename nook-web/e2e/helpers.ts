@@ -154,10 +154,11 @@ export async function connectGithubVault(page: Page, pat: string) {
   await assertGithubConnected(page)
 }
 
-/** Open the storage settings drawer (must already be connected). */
+/** Open storage settings (must already be connected). */
 export async function openStorageSettings(page: Page) {
   await page.getByTestId('storage-settings-btn').click()
   await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+  await expect(page.getByTestId('vault-panel')).not.toBeVisible()
 }
 
 /** Reconnect after reload — PAT and storage mode are restored from localStorage. */
@@ -169,13 +170,11 @@ export async function reconnectGithubVault(page: Page) {
   )
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await expect(page.getByTestId('connect-success')).toContainText(
+  await expect(page.getByTestId('app-success')).toContainText(
     'Connected to GitHub',
     { timeout: 90_000 },
   )
-  await assertGithubConnected(page)
-  await page.getByTestId('storage-settings-close').click()
-  await expect(page.getByTestId('storage-settings-panel')).not.toBeVisible()
+  await assertVaultReady(page)
 }
 
 export async function assertVaultReady(page: Page) {

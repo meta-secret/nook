@@ -9,8 +9,6 @@
     KeyRound,
     Plus,
     RefreshCw,
-    Settings,
-    X,
     ChevronDown,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -23,7 +21,6 @@
     storageMode,
     onAddSecret,
     onDeleteSecret,
-    onOpenSettings,
     onFilterSecrets,
     onGeneratePassword,
   }: {
@@ -32,7 +29,6 @@
     storageMode: 'local' | 'github'
     onAddSecret: (key: string, value: string) => Promise<void>
     onDeleteSecret: (key: string) => Promise<void>
-    onOpenSettings: () => void
     onFilterSecrets: (query: string) => SecretRecord[]
     onGeneratePassword: (
       length: number,
@@ -127,7 +123,16 @@
           >{storageMode === 'github' ? 'GitHub' : 'local storage'}</span
         >
       </p>
-      <div class="flex items-center gap-2">
+      {#if addSecretOpen}
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid="add-secret-cancel-btn"
+          onclick={closeAddSecret}
+        >
+          Cancel
+        </Button>
+      {:else}
         <Button
           size="sm"
           data-testid="add-secret-btn"
@@ -136,18 +141,163 @@
           <Plus class="size-3.5 mr-1.5" />
           Add secret
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          class="border-border text-foreground hover:bg-accent"
-          data-testid="vault-storage-settings-btn"
-          onclick={onOpenSettings}
-        >
-          <Settings class="size-3.5 mr-1.5" />
-          Storage
-        </Button>
-      </div>
+      {/if}
     </div>
+
+    {#if addSecretOpen}
+      <Card
+        class="border-border bg-card animate-in fade-in slide-in-from-top-2 duration-200"
+        data-testid="add-secret-panel"
+      >
+        <form onsubmit={handleSubmit}>
+          <CardContent class="space-y-4 p-4">
+            <div class="space-y-2">
+              <label
+                class="text-xs font-medium text-muted-foreground"
+                for="secret-label">Label</label
+              >
+              <input
+                id="secret-label"
+                type="text"
+                data-testid="secret-label"
+                bind:value={newKey}
+                placeholder="e.g. github.com (personal)"
+                required
+                class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <label
+                class="text-xs font-medium text-muted-foreground"
+                for="secret-value">Value</label
+              >
+              <input
+                id="secret-value"
+                type="text"
+                data-testid="secret-value"
+                bind:value={newValue}
+                placeholder="Enter secret text"
+                required
+                class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div class="rounded-lg border border-border bg-muted/20">
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                data-testid="password-generator-toggle"
+                aria-expanded={showPasswordOptions}
+                onclick={() => (showPasswordOptions = !showPasswordOptions)}
+              >
+                <span class="inline-flex items-center gap-1.5">
+                  <KeyRound class="size-3.5" />
+                  Generate password
+                </span>
+                <ChevronDown
+                  class="size-3.5 shrink-0 transition-transform {showPasswordOptions
+                    ? 'rotate-180'
+                    : ''}"
+                />
+              </button>
+
+              {#if showPasswordOptions}
+                <div
+                  class="space-y-3 border-t border-border px-3 py-3 animate-in fade-in slide-in-from-top-1 duration-150"
+                >
+                  <div class="space-y-1.5">
+                    <div
+                      class="flex items-center justify-between text-xs font-medium text-muted-foreground"
+                    >
+                      <span>Length</span>
+                      <span class="text-primary">{genLength}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="8"
+                      max="64"
+                      bind:value={genLength}
+                      class="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2">
+                    <label
+                      class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        bind:checked={genLowercase}
+                        class="rounded-sm border-border text-primary bg-background focus:ring-0"
+                      />
+                      a-z
+                    </label>
+                    <label
+                      class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        bind:checked={genUppercase}
+                        class="rounded-sm border-border text-primary bg-background focus:ring-0"
+                      />
+                      A-Z
+                    </label>
+                    <label
+                      class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        bind:checked={genNumbers}
+                        class="rounded-sm border-border text-primary bg-background focus:ring-0"
+                      />
+                      0-9
+                    </label>
+                    <label
+                      class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        bind:checked={genSymbols}
+                        class="rounded-sm border-border text-primary bg-background focus:ring-0"
+                      />
+                      symbols
+                    </label>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onclick={generatePassword}
+                    class="w-full border-border"
+                    data-testid="generate-password-btn"
+                  >
+                    <RefreshCw class="size-3.5 mr-1.5" />
+                    Generate
+                  </Button>
+                </div>
+              {/if}
+            </div>
+
+            <div class="flex justify-end pt-1">
+              <Button
+                type="submit"
+                disabled={isSaving}
+                data-testid="save-secret-btn"
+              >
+                {#if isSaving}
+                  <RefreshCw class="size-4 animate-spin mr-2" />
+                  Saving...
+                {:else}
+                  Save secret
+                {/if}
+              </Button>
+            </div>
+          </CardContent>
+        </form>
+      </Card>
+    {/if}
 
     <div class="relative">
       <Search
@@ -253,191 +403,3 @@
     </Card>
   </div>
 </div>
-
-{#if addSecretOpen}
-  <div class="fixed inset-0 z-50">
-    <button
-      type="button"
-      class="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
-      aria-label="Close add secret"
-      data-testid="add-secret-backdrop"
-      onclick={closeAddSecret}
-    ></button>
-    <aside
-      class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-card shadow-2xl animate-in slide-in-from-right duration-200"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Add secret"
-      data-testid="add-secret-panel"
-    >
-      <div class="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
-        <h2 class="text-sm font-semibold text-foreground">Add secret</h2>
-        <button
-          type="button"
-          class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Close add secret"
-          data-testid="add-secret-close"
-          onclick={closeAddSecret}
-        >
-          <X class="size-4" />
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-4 sm:p-6">
-        <form onsubmit={handleSubmit} class="space-y-4">
-          <div class="space-y-2">
-            <label
-              class="text-xs font-medium text-muted-foreground"
-              for="secret-label">Label</label
-            >
-            <input
-              id="secret-label"
-              type="text"
-              data-testid="secret-label"
-              bind:value={newKey}
-              placeholder="e.g. github.com (personal)"
-              required
-              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <label
-              class="text-xs font-medium text-muted-foreground"
-              for="secret-value">Value</label
-            >
-            <input
-              id="secret-value"
-              type="text"
-              data-testid="secret-value"
-              bind:value={newValue}
-              placeholder="Enter secret text"
-              required
-              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
-            />
-          </div>
-
-          <div class="rounded-lg border border-border bg-muted/20">
-            <button
-              type="button"
-              class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              data-testid="password-generator-toggle"
-              aria-expanded={showPasswordOptions}
-              onclick={() => (showPasswordOptions = !showPasswordOptions)}
-            >
-              <span class="inline-flex items-center gap-1.5">
-                <KeyRound class="size-3.5" />
-                Generate password
-              </span>
-              <ChevronDown
-                class="size-3.5 shrink-0 transition-transform {showPasswordOptions
-                  ? 'rotate-180'
-                  : ''}"
-              />
-            </button>
-
-            {#if showPasswordOptions}
-              <div
-                class="space-y-3 border-t border-border px-3 py-3 animate-in fade-in slide-in-from-top-1 duration-150"
-              >
-                <div class="space-y-1.5">
-                  <div
-                    class="flex items-center justify-between text-xs font-medium text-muted-foreground"
-                  >
-                    <span>Length</span>
-                    <span class="text-primary">{genLength}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="8"
-                    max="64"
-                    bind:value={genLength}
-                    class="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                  />
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                  <label
-                    class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      bind:checked={genLowercase}
-                      class="rounded-sm border-border text-primary bg-background focus:ring-0"
-                    />
-                    a-z
-                  </label>
-                  <label
-                    class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      bind:checked={genUppercase}
-                      class="rounded-sm border-border text-primary bg-background focus:ring-0"
-                    />
-                    A-Z
-                  </label>
-                  <label
-                    class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      bind:checked={genNumbers}
-                      class="rounded-sm border-border text-primary bg-background focus:ring-0"
-                    />
-                    0-9
-                  </label>
-                  <label
-                    class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      bind:checked={genSymbols}
-                      class="rounded-sm border-border text-primary bg-background focus:ring-0"
-                    />
-                    symbols
-                  </label>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onclick={generatePassword}
-                  class="w-full border-border"
-                  data-testid="generate-password-btn"
-                >
-                  <RefreshCw class="size-3.5 mr-1.5" />
-                  Generate
-                </Button>
-              </div>
-            {/if}
-          </div>
-
-          <div class="flex gap-2 pt-1">
-            <Button
-              type="submit"
-              class="flex-1"
-              disabled={isSaving}
-              data-testid="save-secret-btn"
-            >
-              {#if isSaving}
-                <RefreshCw class="size-4 animate-spin mr-2" />
-                Saving...
-              {:else}
-                Save secret
-              {/if}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onclick={closeAddSecret}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
-    </aside>
-  </div>
-{/if}

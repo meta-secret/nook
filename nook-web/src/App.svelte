@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Lock, ShieldCheck, TriangleAlert, Settings } from '@lucide/svelte'
+  import { Lock, ShieldCheck, TriangleAlert, Settings, X } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
@@ -19,9 +19,7 @@
     }
   }
 
-  const shellWidth = $derived(
-    vault.isAuthenticated ? 'max-w-6xl' : 'max-w-xl',
-  )
+  const shellWidth = 'max-w-xl'
 </script>
 
 <main class="dark min-h-svh bg-background text-foreground pb-16">
@@ -50,24 +48,36 @@
 
       <div class="flex items-center gap-2">
         {#if vault.isAuthenticated}
-          <button
-            type="button"
-            onclick={() => vault.openSettings()}
-            class="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            data-testid="storage-status-chip"
-          >
-            {vault.storageMode === 'github' ? 'GitHub sync' : 'Local storage'}
-          </button>
-          <Button
-            variant="outline"
-            size="icon"
-            class="shrink-0 border-border"
-            aria-label="Storage settings"
-            data-testid="storage-settings-btn"
-            onclick={() => vault.openSettings()}
-          >
-            <Settings class="size-4" />
-          </Button>
+          {#if vault.settingsOpen}
+            <Button
+              variant="outline"
+              size="sm"
+              class="border-border"
+              data-testid="storage-settings-close"
+              onclick={() => vault.closeSettings()}
+            >
+              Back to vault
+            </Button>
+          {:else}
+            <button
+              type="button"
+              onclick={() => vault.openSettings()}
+              class="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              data-testid="storage-status-chip"
+            >
+              {vault.storageMode === 'github' ? 'GitHub sync' : 'Local storage'}
+            </button>
+            <Button
+              variant="outline"
+              size="icon"
+              class="shrink-0 border-border"
+              aria-label="Storage settings"
+              data-testid="storage-settings-btn"
+              onclick={() => vault.openSettings()}
+            >
+              <Settings class="size-4" />
+            </Button>
+          {/if}
         {:else}
           <span
             class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground"
@@ -93,10 +103,19 @@
         role="alert"
       >
         <TriangleAlert class="size-5 shrink-0 text-destructive mt-0.5" />
-        <div class="flex-1">
+        <div class="flex-1 min-w-0">
           <p class="font-semibold">Action Failed</p>
           <p class="mt-1 text-destructive/90">{vault.errorMsg}</p>
         </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-md p-1 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Dismiss error"
+          data-testid="dismiss-error-btn"
+          onclick={() => vault.dismissError()}
+        >
+          <X class="size-4" />
+        </button>
       </div>
     {/if}
 
@@ -107,31 +126,58 @@
         data-testid="app-success"
       >
         <ShieldCheck class="size-5 shrink-0 text-primary mt-0.5" />
-        <div class="flex-1">
+        <div class="flex-1 min-w-0">
           <p class="font-semibold">Success</p>
           <p class="mt-1 text-primary/90">{vault.successMsg}</p>
         </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-md p-1 text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary"
+          aria-label="Dismiss success"
+          data-testid="dismiss-success-btn"
+          onclick={() => vault.dismissSuccess()}
+        >
+          <X class="size-4" />
+        </button>
       </div>
     {/if}
 
     {#if vault.isAuthenticated}
-      <SecretVault
-        isSaving={vault.isSaving}
-        secretsCount={vault.secrets.length}
-        storageMode={vault.storageMode}
-        onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
-        onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
-        onOpenSettings={() => vault.openSettings()}
-        onFilterSecrets={(query) => vault.filterSecrets(query)}
-        onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
-          vault.generatePassword(
-            length,
-            lowercase,
-            uppercase,
-            numbers,
-            symbols,
-          )}
-      />
+      {#if vault.settingsOpen}
+        <div data-testid="storage-settings-panel" class="w-full">
+          <AuthStorage
+            bind:storageMode={vault.storageMode}
+            bind:githubPat={vault.githubPat}
+            variant="panel"
+            isAuthenticated={vault.isAuthenticated}
+            isVerifying={vault.isVerifying}
+            isSaving={vault.isSaving}
+            isInitializing={vault.isInitializing}
+            errorMsg={vault.errorMsg}
+            successMsg={vault.successMsg}
+            secretsCount={vault.secrets.length}
+            onConnect={handleConnect}
+            onInitializeEmpty={() => vault.handleInitializeEmpty()}
+          />
+        </div>
+      {:else}
+        <SecretVault
+          isSaving={vault.isSaving}
+          secretsCount={vault.secrets.length}
+          storageMode={vault.storageMode}
+          onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
+          onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
+          onFilterSecrets={(query) => vault.filterSecrets(query)}
+          onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
+            vault.generatePassword(
+              length,
+              lowercase,
+              uppercase,
+              numbers,
+              symbols,
+            )}
+        />
+      {/if}
     {:else}
       <div data-testid="vault-welcome" class="w-full">
         <AuthStorage
@@ -151,41 +197,4 @@
       </div>
     {/if}
   </div>
-
-  {#if vault.settingsOpen}
-    <div class="fixed inset-0 z-50">
-      <button
-        type="button"
-        class="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
-        aria-label="Close storage settings"
-        data-testid="storage-settings-backdrop"
-        onclick={() => vault.closeSettings()}
-      ></button>
-      <aside
-        class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-card shadow-2xl animate-in slide-in-from-right duration-200"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Storage settings"
-        data-testid="storage-settings-panel"
-      >
-        <div class="overflow-y-auto p-4 sm:p-6">
-          <AuthStorage
-            bind:storageMode={vault.storageMode}
-            bind:githubPat={vault.githubPat}
-            variant="panel"
-            isAuthenticated={vault.isAuthenticated}
-            isVerifying={vault.isVerifying}
-            isSaving={vault.isSaving}
-            isInitializing={vault.isInitializing}
-            errorMsg={vault.errorMsg}
-            successMsg={vault.successMsg}
-            secretsCount={vault.secrets.length}
-            onConnect={handleConnect}
-            onInitializeEmpty={() => vault.handleInitializeEmpty()}
-            onClose={() => vault.closeSettings()}
-          />
-        </div>
-      </aside>
-    </div>
-  {/if}
 </main>

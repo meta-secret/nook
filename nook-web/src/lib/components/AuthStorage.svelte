@@ -7,7 +7,6 @@
     Cloud,
     CheckCircle2,
     ExternalLink,
-    X,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -31,7 +30,6 @@
     secretsCount,
     onConnect,
     onInitializeEmpty,
-    onClose,
   }: {
     storageMode: 'local' | 'github'
     githubPat: string
@@ -45,7 +43,6 @@
     secretsCount: number
     onConnect: () => void | Promise<void>
     onInitializeEmpty: () => void | Promise<void>
-    onClose?: () => void
   } = $props()
 
   const githubPatUrl =
@@ -53,31 +50,8 @@
 </script>
 
 <div class="w-full animate-in fade-in duration-300">
-  {#if variant === 'panel'}
-    <div class="mb-4 flex items-start justify-between gap-3">
-      <div class="space-y-1">
-        <h2 class="text-lg font-semibold text-foreground">Storage settings</h2>
-        <p class="text-sm text-muted-foreground">
-          Change provider or reconnect your vault.
-        </p>
-      </div>
-      {#if onClose}
-        <Button
-          variant="outline"
-          size="icon"
-          class="shrink-0 border-border"
-          aria-label="Close storage settings"
-          data-testid="storage-settings-close"
-          onclick={onClose}
-        >
-          <X class="size-4" />
-        </Button>
-      {/if}
-    </div>
-  {/if}
-
   <Card class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden">
-    <CardHeader class="border-b border-border/60 {variant === 'welcome' ? 'pb-4 pt-5' : 'pb-3 pt-4'}">
+    <CardHeader class="border-b border-border/60 {variant === 'welcome' ? 'pb-4 pt-5' : 'pb-4 pt-5'}">
       <div class="flex items-start justify-between gap-3">
         <div class="space-y-1">
           {#if variant === 'welcome'}
@@ -88,9 +62,12 @@
               Pick where secrets sync. Your encryption key stays in this browser.
             </CardDescription>
           {:else}
-            <CardTitle class="text-sm font-medium text-foreground"
-              >Storage provider</CardTitle
-            >
+            <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
+              Storage settings
+            </CardTitle>
+            <CardDescription>
+              Change provider or reconnect your vault.
+            </CardDescription>
           {/if}
         </div>
         {#if isAuthenticated}
@@ -234,7 +211,24 @@
           </div>
         {/if}
 
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {#if isAuthenticated && secretsCount === 0}
+            <Button
+              type="button"
+              variant="outline"
+              onclick={onInitializeEmpty}
+              disabled={isSaving}
+              class="border-border text-foreground hover:bg-accent sm:mr-auto"
+            >
+              {#if isSaving}
+                <RefreshCw class="size-4 animate-spin" />
+              {:else}
+                <GitBranch class="size-4" />
+              {/if}
+              Initialize empty vault
+            </Button>
+          {/if}
+
           <Button
             type="submit"
             class="sm:min-w-[180px]"
@@ -254,23 +248,6 @@
               Connect vault
             {/if}
           </Button>
-
-          {#if isAuthenticated && secretsCount === 0}
-            <Button
-              type="button"
-              variant="outline"
-              onclick={onInitializeEmpty}
-              disabled={isSaving}
-              class="border-border text-foreground hover:bg-accent"
-            >
-              {#if isSaving}
-                <RefreshCw class="size-4 animate-spin" />
-              {:else}
-                <GitBranch class="size-4" />
-              {/if}
-              Initialize empty vault
-            </Button>
-          {/if}
         </div>
       </form>
     </CardContent>

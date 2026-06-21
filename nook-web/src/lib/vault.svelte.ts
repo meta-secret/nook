@@ -20,6 +20,28 @@ export class VaultState {
   isSaving = $state(false)
   isInitializing = $state(true)
 
+  private successDismissTimer: ReturnType<typeof setTimeout> | null = null
+
+  dismissSuccess() {
+    if (this.successDismissTimer !== null) {
+      clearTimeout(this.successDismissTimer)
+      this.successDismissTimer = null
+    }
+    this.successMsg = ''
+  }
+
+  dismissError() {
+    this.errorMsg = ''
+  }
+
+  private showSuccess(message: string) {
+    this.dismissSuccess()
+    this.successMsg = message
+    this.successDismissTimer = setTimeout(() => {
+      this.dismissSuccess()
+    }, 5000)
+  }
+
   async init() {
     this.isInitializing = true
     this.isVerifying = false
@@ -96,7 +118,7 @@ export class VaultState {
     }
 
     this.errorMsg = ''
-    this.successMsg = ''
+    this.dismissSuccess()
     this.isVerifying = true
     try {
       const connectPromise = this.manager.connect(
@@ -122,10 +144,11 @@ export class VaultState {
       this.isAuthenticated = true
       this.saveConfig()
       if (this.storageMode === 'local') {
-        this.successMsg = 'Local vault loaded from IndexedDB.'
+        this.showSuccess('Local vault loaded from IndexedDB.')
       } else {
-        this.successMsg =
-          'Connected to GitHub. Encryption key is stored locally in this browser.'
+        this.showSuccess(
+          'Connected to GitHub. Encryption key is stored locally in this browser.',
+        )
       }
     } catch (e: unknown) {
       this.isAuthenticated = false
@@ -138,7 +161,7 @@ export class VaultState {
   async handleAddSecret(key: string, value: string) {
     if (!this.manager) return
     this.errorMsg = ''
-    this.successMsg = ''
+    this.dismissSuccess()
     this.isSaving = true
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
@@ -149,7 +172,7 @@ export class VaultState {
         value,
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.successMsg = 'Secret saved successfully.'
+      this.showSuccess('Secret saved successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
@@ -161,7 +184,7 @@ export class VaultState {
   async handleDeleteSecret(key: string) {
     if (!this.manager) return
     this.errorMsg = ''
-    this.successMsg = ''
+    this.dismissSuccess()
     this.isSaving = true
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
@@ -171,7 +194,7 @@ export class VaultState {
         key,
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.successMsg = 'Secret deleted successfully.'
+      this.showSuccess('Secret deleted successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
@@ -183,14 +206,14 @@ export class VaultState {
   async handleInitializeEmpty() {
     if (!this.manager) return
     this.errorMsg = ''
-    this.successMsg = ''
+    this.dismissSuccess()
     this.isSaving = true
     try {
       const rawRecords =
         (await this.manager.initialize_empty()) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
-      this.successMsg = 'Empty database initialized successfully.'
+      this.showSuccess('Empty database initialized successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to initialize: ${e instanceof Error ? e.message : String(e)}`
       throw e
