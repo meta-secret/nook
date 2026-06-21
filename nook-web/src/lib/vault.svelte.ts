@@ -1,4 +1,4 @@
-import { getVaultManager, mapWasmRecords, type SecretRecord } from '$lib/nook'
+import { getVaultManager, mapWasmRecords, mapWasmJoinRequests, mapWasmVaultMembers, type JoinRequest, type SecretRecord, type VaultMember } from '$lib/nook'
 import type {
   NookVaultManager,
   NookSecretRecord,
@@ -19,6 +19,13 @@ export class VaultState {
   isVerifying = $state(false)
   isSaving = $state(false)
   isInitializing = $state(true)
+
+  deviceId = $state('')
+  devicePublicKey = $state('')
+  pendingJoins = $state<JoinRequest[]>([])
+  vaultMembers = $state<VaultMember[]>([])
+  enrollSecretsKey = $state('')
+  enrollMembersKey = $state('')
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -48,6 +55,7 @@ export class VaultState {
     this.errorMsg = ''
     try {
       this.manager = await getVaultManager()
+      await this.refreshDeviceState()
     } catch (error) {
       this.errorMsg =
         error instanceof Error
@@ -70,6 +78,7 @@ export class VaultState {
 
   openSettings() {
     this.settingsOpen = true
+    void this.refreshDeviceState()
   }
 
   closeSettings() {
@@ -79,6 +88,108 @@ export class VaultState {
   filterSecrets(query: string): SecretRecord[] {
     if (!this.manager) return []
     return mapWasmRecords(this.manager.filter_secrets(query))
+  }
+
+  async refreshDeviceState() {
+    if (!this.manager) return
+    try {
+      await this.manager.init_device()
+      this.deviceId = this.manager.device_id
+      this.devicePublicKey = this.manager.device_public_key
+      if (this.isAuthenticated) {
+        this.pendingJoins = mapWasmJoinRequests(
+          this.manager.list_pending_joins(),
+        )
+        try {
+          this.vaultMembers = mapWasmVaultMembers(
+            this.manager.list_vault_members(),
+          )
+        } catch {
+          this.vaultMembers = []
+        }
+      } else {
+        this.pendingJoins = []
+        this.vaultMembers = []
+      }
+    } catch {
+      // Device identity is optional until first connect/join action.
+    }
+  }
+
+  async requestVaultAccess() {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isVerifying = true
+    try {
+      await this.manager.request_vault_access(
+        this.storageMode,
+        this.githubPat,
+        new Date().toISOString(),
+      )
+      this.saveConfig()
+      await this.refreshDeviceState()
+      this.showSuccess(
+        'Join request sent. An enrolled device must approve before you can connect.',
+      )
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to request vault access.'
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async approveJoin(joinDeviceId: string) {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isSaving = true
+    try {
+      const rawRecords = (await this.manager.approve_join_request(
+        joinDeviceId,
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      await this.refreshDeviceState()
+      this.showSuccess('Device approved. They can now connect from their browser.')
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to approve join request.'
+    } finally {
+      this.isSaving = false
+    }
+  }
+
+  async enrollAndConnect() {
+    if (!this.manager) return
+    const secretsKey = this.enrollSecretsKey.trim()
+    const membersKey = this.enrollMembersKey.trim()
+    if (!secretsKey || !membersKey) return
+
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isVerifying = true
+    try {
+      const rawRecords = (await this.manager.enroll_and_connect(
+        this.storageMode,
+        this.githubPat,
+        secretsKey,
+        membersKey,
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      this.isAuthenticated = true
+      this.enrollSecretsKey = ''
+      this.enrollMembersKey = ''
+      this.saveConfig()
+      await this.refreshDeviceState()
+      this.showSuccess('Enrolled and connected to the vault.')
+      this.closeSettings()
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to enroll with vault keys.'
+    } finally {
+      this.isVerifying = false
+    }
   }
 
   generatePassword(
@@ -143,6 +254,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       this.saveConfig()
+      await this.refreshDeviceState()
       if (this.storageMode === 'local') {
         this.showSuccess('Local vault loaded from IndexedDB.')
       } else {

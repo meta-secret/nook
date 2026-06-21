@@ -40,7 +40,7 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
    - **Local Mode:** No credentials required. Click **Connect vault**.
    - **GitHub Mode:** Requires only a GitHub Personal Access Token (PAT) with `repo` scope. The repository (`{username}/nook`) and vault file (`nook-vault.yaml`) are resolved automatically from the PAT.
 3. **Encryption Key (auto-managed):**
-   - On first connect, a random 128-bit encryption key is generated and stored in IndexedDB under key `vault_secret_key` (via `rexie`).
+   - On first connect, a random DEC is generated and written to the vault file as an `auth:` envelope for this device. The device private key stays in IndexedDB (`device_identity_secret`).
    - The key never leaves the browser and is never stored on GitHub.
    - GitHub only stores the encrypted vault file (YAML with per-record armored ciphertext).
 4. **Vault Connection:**
@@ -110,7 +110,9 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 ### C. Local Storage Adapter (IndexedDB)
 - **Database Name:** `nook_db`, version `1`, store `vault`
 - **Records:**
-  - `vault_secret_key` — hex-encoded 128-bit random age passphrase (never synced to GitHub).
+  - `device_identity_secret` — age X25519 identity (never synced).
+  - `device_id` — short fingerprint for UI.
+  - `encrypted_db` — local copy of vault YAML (local storage mode).
   - `encrypted_db` — UTF-8 text of the on-disk vault file (YAML).
 
 ### D. GitHub Repository Adapter
@@ -129,7 +131,7 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 - **Format:** Age ASCII armor (`age` crate with `armor` feature).
 - **Session crypto:** `VaultCrypto` in `nook-core` derives scrypt identity/recipient once per connect and reuses them.
 - **Work factor:** New encryptions use scrypt `N = 2^15` (`PROGRAMMATIC_SCRYPT_LOG_N`) because the vault key is high-entropy random hex, not a human passphrase. Existing records decrypt using the factor embedded in each age stanza.
-- **Key generation:** 128-bit random key via `getrandom`, stored as hex in `vault_secret_key`.
+- **Key generation:** 32-byte random DEC via `generate_dec()`; distributed per-device in vault `auth:` section.
 - **Incremental save path:** WASM keeps `stored_armored: HashMap<key, armored_value>`. Saves serialize the cache to YAML without re-encrypting unchanged records.
 
 ---

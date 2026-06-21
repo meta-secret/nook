@@ -148,6 +148,8 @@
           <AuthStorage
             bind:storageMode={vault.storageMode}
             bind:githubPat={vault.githubPat}
+            bind:enrollSecretsKey={vault.enrollSecretsKey}
+            bind:enrollMembersKey={vault.enrollMembersKey}
             variant="panel"
             isAuthenticated={vault.isAuthenticated}
             isVerifying={vault.isVerifying}
@@ -156,8 +158,14 @@
             errorMsg={vault.errorMsg}
             successMsg={vault.successMsg}
             secretsCount={vault.secrets.length}
+            deviceId={vault.deviceId}
+            devicePublicKey={vault.devicePublicKey}
+            pendingJoins={vault.pendingJoins}
+            vaultMembers={vault.vaultMembers}
             onConnect={handleConnect}
             onInitializeEmpty={() => vault.handleInitializeEmpty()}
+            onApproveJoin={(id) => vault.approveJoin(id)}
+            onRefreshJoins={() => vault.refreshDeviceState()}
           />
         </div>
       {:else}
@@ -183,6 +191,8 @@
         <AuthStorage
           bind:storageMode={vault.storageMode}
           bind:githubPat={vault.githubPat}
+          bind:enrollSecretsKey={vault.enrollSecretsKey}
+          bind:enrollMembersKey={vault.enrollMembersKey}
           variant="welcome"
           isAuthenticated={vault.isAuthenticated}
           isVerifying={vault.isVerifying}
@@ -191,8 +201,14 @@
           errorMsg={vault.errorMsg}
           successMsg={vault.successMsg}
           secretsCount={vault.secrets.length}
+          deviceId={vault.deviceId}
+          devicePublicKey={vault.devicePublicKey}
+          pendingJoins={vault.pendingJoins}
           onConnect={handleConnect}
           onInitializeEmpty={() => vault.handleInitializeEmpty()}
+          onRequestAccess={() => vault.requestVaultAccess()}
+          onEnrollWithDec={() => vault.enrollAndConnect()}
+          onRefreshJoins={() => vault.refreshDeviceState()}
         />
       </div>
     {/if}

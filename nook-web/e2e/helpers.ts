@@ -144,7 +144,7 @@ export async function connectLocalVault(page: Page) {
 export async function connectGithubVault(page: Page, pat: string) {
   await page.goto('/')
   await page.getByRole('button', { name: /^GitHub/ }).click()
-  await page.getByLabel('Personal access token').fill(pat)
+  await page.getByLabel('Paste token here').fill(pat)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await expect(page.getByTestId('app-success')).toContainText(

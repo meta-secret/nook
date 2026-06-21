@@ -9,6 +9,8 @@
     ExternalLink,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
+  import type { JoinRequest, VaultMember } from '$lib/nook'
   import {
     Card,
     CardContent,
@@ -20,6 +22,8 @@
   let {
     storageMode = $bindable(),
     githubPat = $bindable(),
+    enrollSecretsKey = $bindable(''),
+    enrollMembersKey = $bindable(''),
     variant = 'welcome',
     isAuthenticated,
     isVerifying,
@@ -28,11 +32,21 @@
     errorMsg,
     successMsg,
     secretsCount,
+    deviceId = '',
+    devicePublicKey = '',
+    pendingJoins = [] as JoinRequest[],
+    vaultMembers = [] as VaultMember[],
     onConnect,
     onInitializeEmpty,
+    onRequestAccess,
+    onApproveJoin,
+    onEnrollWithDec,
+    onRefreshJoins,
   }: {
     storageMode: 'local' | 'github'
     githubPat: string
+    enrollSecretsKey?: string
+    enrollMembersKey?: string
     variant?: 'welcome' | 'panel'
     isAuthenticated: boolean
     isVerifying: boolean
@@ -41,8 +55,16 @@
     errorMsg: string
     successMsg: string
     secretsCount: number
+    deviceId?: string
+    devicePublicKey?: string
+    pendingJoins?: JoinRequest[]
+    vaultMembers?: VaultMember[]
     onConnect: () => void | Promise<void>
     onInitializeEmpty: () => void | Promise<void>
+    onRequestAccess?: () => void | Promise<void>
+    onApproveJoin?: (deviceId: string) => void | Promise<void>
+    onEnrollWithDec?: () => void | Promise<void>
+    onRefreshJoins?: () => void | Promise<void>
   } = $props()
 
   const githubPatUrl =
@@ -250,6 +272,23 @@
           </Button>
         </div>
       </form>
+
+      <div class="mt-4">
+        <DeviceEnrollment
+          {deviceId}
+          {devicePublicKey}
+          {pendingJoins}
+          {vaultMembers}
+          isBusy={isVerifying || isSaving || isInitializing}
+          showJoinActions={variant === 'welcome'}
+          bind:enrollSecretsKey
+          bind:enrollMembersKey
+          onRequestAccess={onRequestAccess}
+          onApproveJoin={onApproveJoin}
+          onEnrollWithDec={onEnrollWithDec}
+          onRefresh={onRefreshJoins}
+        />
+      </div>
     </CardContent>
   </Card>
 </div>
