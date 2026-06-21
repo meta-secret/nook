@@ -83,6 +83,8 @@ pub struct NookVaultManager {
     decrypted_jsonl: String,
     file_sha: Option<String>,
     last_synced_content: String,
+    /// Cached empty-repo listing from GitHub (`GET .../contents/` → 404).
+    github_root_empty: bool,
     status_tx: flume::Sender<String>,
     status_rx: flume::Receiver<String>,
 }
@@ -106,6 +108,7 @@ impl NookVaultManager {
             decrypted_jsonl: String::new(),
             file_sha: None,
             last_synced_content: String::new(),
+            github_root_empty: false,
             status_tx,
             status_rx,
         }
@@ -183,8 +186,10 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
     ) -> Result<JsValue, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
@@ -200,22 +205,18 @@ impl NookVaultManager {
             return sync_result_access_status("new_vault");
         }
 
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-        let records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
-
         if self.members_key.is_empty() {
             self.last_synced_content = content.clone();
             let identity = self.ensure_device_identity().await?;
-            let status = match nook_core::assess_connect_access(&records, &identity) {
-                nook_core::ConnectAccessStatus::Ready => "ready",
-                nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-                nook_core::ConnectAccessStatus::JoinPending => "join_pending",
-            };
-            return sync_result_access_status(status);
+            let status = access_status_for_vault_content(&content, &identity)?;
+            return sync_result_access_status(&status);
         }
 
         let identity = self.device_identity()?;
+        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let fresh_records =
+            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+        nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
         let (jsonl, armored, secrets_key, members_key) = load_stored_vault(&content, &identity)?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.decrypted_jsonl = jsonl;
@@ -267,9 +268,11 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
         requested_at: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -307,10 +310,12 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
         secrets_key: String,
         members_key: String,
     ) -> Result<js_sys::Array, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -459,8 +464,10 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
     ) -> Result<String, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
@@ -470,19 +477,7 @@ impl NookVaultManager {
         }
 
         self.last_synced_content = content.clone();
-
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-        let records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
-
-        Ok(
-            match nook_core::assess_connect_access(&records, &identity) {
-                nook_core::ConnectAccessStatus::Ready => "ready",
-                nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-                nook_core::ConnectAccessStatus::JoinPending => "join_pending",
-            }
-            .to_owned(),
-        )
+        Ok(access_status_for_vault_content(&content, &identity)?)
     }
 
     // Connects to storage (loads, decrypts, and updates session state)
@@ -491,30 +486,42 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
+    ) -> Result<js_sys::Array, JsError> {
+        self.connect_internal(storage_mode, github_pat, github_repo, false)
+            .await
+    }
+
+    /// Replace storage with a fresh genesis vault for this device.
+    pub async fn connect_fresh(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<js_sys::Array, JsError> {
+        self.connect_internal(storage_mode, github_pat, github_repo, true)
+            .await
+    }
+
+    async fn connect_internal(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+        force_genesis: bool,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
 
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
-        self.stored_armored.clear();
-        if content.trim().is_empty() {
-            let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
-            self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
-            let genesis =
-                nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
-                    .map_err(NookError::Encryption)?;
-            self.stored_armored
-                .insert(genesis.key.clone(), genesis.value);
-            for member in
-                nook_core::genesis_members_records(&identity, &keys.members_key, "genesis")
-                    .map_err(NookError::Encryption)?
-            {
-                self.stored_armored.insert(member.key.clone(), member.value);
-            }
-            self.decrypted_jsonl = String::new();
+        let use_genesis = content_requires_genesis(&content, force_genesis)?;
+
+        if use_genesis {
+            self.initialize_genesis_vault(&identity)?;
         } else {
             let format =
                 nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
@@ -536,7 +543,7 @@ impl NookVaultManager {
 
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
-        if vault_file_missing {
+        if use_genesis || vault_file_missing {
             let _ = self.status_tx.send("GITHUB_INIT_START".to_owned());
             self.save_current_db().await?;
             let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
@@ -544,6 +551,28 @@ impl NookVaultManager {
 
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
+    }
+
+    fn initialize_genesis_vault(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<(), NookError> {
+        self.stored_armored.clear();
+        let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
+        self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
+        let genesis =
+            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)
+                .map_err(NookError::Encryption)?;
+        self.stored_armored
+            .insert(genesis.key.clone(), genesis.value);
+        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")
+            .map_err(NookError::Encryption)?
+        {
+            self.stored_armored.insert(member.key.clone(), member.value);
+        }
+        self.decrypted_jsonl = String::new();
+        self.last_synced_content.clear();
+        Ok(())
     }
 
     // Initialize an empty database
@@ -637,15 +666,16 @@ impl NookVaultManager {
             let _ = self.status_tx.send("IDB_SAVE_SUCCESS".to_owned());
         } else {
             let _ = self.status_tx.send("GITHUB_SAVE_START".to_owned());
-            let new_sha = write_github_text_file(
+            let new_sha = write_github_text_file_with_retry(
                 &self.github_pat,
                 &self.github_repo,
                 &self.github_path,
                 &stored,
-                self.file_sha.as_deref(),
+                self.file_sha.clone(),
             )
             .await?;
             self.file_sha = Some(new_sha);
+            self.github_root_empty = false;
             let _ = self.status_tx.send("GITHUB_SAVE_SUCCESS".to_owned());
         }
         self.last_synced_content = stored;
@@ -693,6 +723,7 @@ impl NookVaultManager {
         &mut self,
         storage_mode: &str,
         github_pat: &str,
+        github_repo_name: &str,
     ) -> Result<(), NookError> {
         nook_core::validate_storage_mode(storage_mode).map_err(NookError::Database)?;
         self.storage_mode = storage_mode.to_owned();
@@ -705,9 +736,15 @@ impl NookVaultManager {
         self.file_sha = None;
 
         if self.storage_mode == "github" {
+            let repo_name = nook_core::validate_github_repo_name(github_repo_name)
+                .map_err(NookError::Database)?;
             let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
             let username = fetch_github_username(&self.github_pat).await?;
-            self.github_repo = format!("{}/nook", username);
+            let new_repo = format!("{}/{}", username, repo_name);
+            if self.github_repo != new_repo {
+                self.github_root_empty = false;
+            }
+            self.github_repo = new_repo;
             self.github_path = "nook-vault.yaml".to_owned();
             let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
             ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
@@ -735,8 +772,13 @@ impl NookVaultManager {
             Ok(stored.unwrap_or_default())
         } else {
             let _ = self.status_tx.send("GITHUB_FETCH_START".to_owned());
-            let res =
-                fetch_github_vault(&self.github_pat, &self.github_repo, &self.github_path).await?;
+            let res = fetch_github_vault(
+                &self.github_pat,
+                &self.github_repo,
+                &self.github_path,
+                Some(&mut self.github_root_empty),
+            )
+            .await?;
             let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
             if let Some((content, sha)) = res {
                 self.file_sha = Some(sha);
@@ -763,6 +805,38 @@ fn records_to_armored(records: &[nook_core::StoredSecretRecord]) -> HashMap<Stri
         .iter()
         .map(|record| (record.key.clone(), record.value.clone()))
         .collect()
+}
+
+fn content_requires_genesis(content: &str, force_genesis: bool) -> Result<bool, NookError> {
+    if force_genesis {
+        return Ok(true);
+    }
+    if content.trim().is_empty() {
+        return Ok(true);
+    }
+    let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
+    let records = nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    Ok(!nook_core::vault_has_multi_device_records(&records))
+}
+
+fn access_status_for_vault_content(
+    content: &str,
+    identity: &nook_core::DeviceIdentity,
+) -> Result<String, NookError> {
+    if content.trim().is_empty() {
+        return Ok("new_vault".to_owned());
+    }
+    let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
+    let records = nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    if !nook_core::vault_has_multi_device_records(&records) {
+        return Ok("new_vault".to_owned());
+    }
+    Ok(match nook_core::assess_connect_access(&records, identity) {
+        nook_core::ConnectAccessStatus::Ready => "ready",
+        nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
+        nook_core::ConnectAccessStatus::JoinPending => "join_pending",
+    }
+    .to_owned())
 }
 
 fn sync_result_unchanged() -> Result<JsValue, JsError> {
@@ -1022,6 +1096,13 @@ struct GitHubFileResponse {
     sha: String,
 }
 
+#[derive(Deserialize)]
+struct GitHubDirEntry {
+    name: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+}
+
 #[derive(Serialize)]
 struct GitHubPutBody {
     message: String,
@@ -1043,6 +1124,24 @@ struct GitHubPutResponseContent {
 #[derive(Deserialize)]
 struct GitHubUserResponse {
     login: String,
+}
+
+fn github_cache_bust_url(url: &str) -> String {
+    let stamp = js_sys::Date::now();
+    if url.contains('?') {
+        format!("{url}&_={stamp}")
+    } else {
+        format!("{url}?_={stamp}")
+    }
+}
+
+fn github_get_headers(pat: &str) -> [(&'static str, String); 4] {
+    [
+        ("Authorization", format!("Bearer {}", pat.trim())),
+        ("Accept", "application/vnd.github+json".to_owned()),
+        ("X-GitHub-Api-Version", "2022-11-28".to_owned()),
+        ("User-Agent", "nook-wasm".to_owned()),
+    ]
 }
 
 async fn fetch_github_username(pat: &str) -> Result<String, NookError> {
@@ -1147,31 +1246,70 @@ async fn fetch_github_vault(
     pat: &str,
     repo: &str,
     path: &str,
+    root_empty: Option<&mut bool>,
 ) -> Result<Option<(String, String)>, NookError> {
-    let pat = pat.trim();
-    let url = format!("https://api.github.com/repos/{}/contents/{}", repo, path);
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {pat}"))
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .header("User-Agent", "nook-wasm")
-        .send()
-        .await?;
-
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
+    if root_empty.as_ref().is_some_and(|flag| **flag) {
         return Ok(None);
     }
 
-    if !response.status().is_success() {
+    let pat = pat.trim();
+    let client = reqwest::Client::new();
+    let apply_headers = |request: reqwest::RequestBuilder| {
+        let mut request = request;
+        for (name, value) in github_get_headers(pat) {
+            request = request.header(name, value);
+        }
+        request
+    };
+
+    // List repo root first so a missing vault file does not produce fetch 404
+    // noise in the browser console (Chrome logs failed fetch responses).
+    let list_url = github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/"));
+    let list_response = apply_headers(client.get(&list_url)).send().await?;
+
+    if list_response.status() == reqwest::StatusCode::NOT_FOUND {
+        if let Some(flag) = root_empty {
+            *flag = true;
+        }
+        return Ok(None);
+    }
+
+    if !list_response.status().is_success() {
         return Err(NookError::GitHub(format!(
             "GitHub API responded with status {}",
-            response.status()
+            list_response.status()
         )));
     }
 
-    let text = response.text().await?;
+    let list_text = list_response.text().await?;
+    let entries: Vec<GitHubDirEntry> = serde_json::from_str(&list_text).map_err(|e| {
+        NookError::Serialization(format!("Failed to parse GitHub directory listing: {e}"))
+    })?;
+
+    if !entries
+        .iter()
+        .any(|item| item.name == path && item.entry_type == "file")
+    {
+        return Ok(None);
+    }
+
+    let file_url = github_cache_bust_url(&format!(
+        "https://api.github.com/repos/{repo}/contents/{path}"
+    ));
+    let file_response = apply_headers(client.get(&file_url)).send().await?;
+
+    if file_response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    if !file_response.status().is_success() {
+        return Err(NookError::GitHub(format!(
+            "GitHub API responded with status {}",
+            file_response.status()
+        )));
+    }
+
+    let text = file_response.text().await?;
 
     let parsed: GitHubFileResponse = serde_json::from_str(&text)
         .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
@@ -1183,7 +1321,7 @@ async fn fetch_github_vault(
         .replace(' ', "");
     let decoded_bytes = base64_decode(&cleaned_content)?;
     let vault_content = String::from_utf8(decoded_bytes)
-        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {}", e)))?;
+        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
 
     Ok(Some((vault_content, parsed.sha)))
 }
@@ -1239,6 +1377,31 @@ async fn write_github_text_file(
         .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
 
     Ok(parsed.content.sha)
+}
+
+async fn write_github_text_file_with_retry(
+    pat: &str,
+    repo: &str,
+    path: &str,
+    content: &str,
+    mut sha: Option<String>,
+) -> Result<String, NookError> {
+    for attempt in 0..3 {
+        match write_github_text_file(pat, repo, path, content, sha.as_deref()).await {
+            Ok(new_sha) => return Ok(new_sha),
+            Err(NookError::GitHub(message))
+                if attempt < 2 && (message.contains("422") || message.contains("409")) =>
+            {
+                if let Ok(Some((_, fresh_sha))) = fetch_github_vault(pat, repo, path, None).await {
+                    sha = Some(fresh_sha);
+                }
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    Err(NookError::GitHub(
+        "GitHub vault write failed after retries.".to_owned(),
+    ))
 }
 
 fn base64_decode(input: &str) -> Result<Vec<u8>, NookError> {

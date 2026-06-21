@@ -20,10 +20,16 @@ task setup
 task check
 task build
 task web:dev
+task web:test:e2e          # full Playwright suite (Docker)
+task web:test:e2e:local    # connect + local vault only
 ```
 
 `task setup` builds the local Docker toolchain image with `docker buildx bake` and installs web
 dependencies with Bun inside Docker.
+
+GitHub e2e tests read `NOOK_GITHUB_PAT` from the environment or from
+`nook-web/.env.test.local` (see `nook-web/.env.test.example`). Cleanup runs automatically via
+Task defer after `web:test:e2e`.
 
 When adding tools to the Docker image, prefer official release archives downloaded with `curl`
 over `cargo install` for standalone binaries.

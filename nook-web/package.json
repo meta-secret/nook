@@ -16,6 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:local": "playwright test e2e/connect.spec.ts e2e/local-vault.spec.ts",
     "test:e2e:github": "playwright test e2e/github-vault.spec.ts",
+    "test:e2e:multi-device": "playwright test e2e/multi-device-github.spec.ts",
+    "test:e2e:cleanup": "bun e2e/cleanup-github-repos.ts",
     "test:all": "vitest run && playwright test"
   },
   "devDependencies": {
@@ -38,7 +40,8 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.61.1",
     "vite": "8.0.16",
-    "vitest": "4.1.9"
+    "vitest": "4.1.9",
+    "yaml": "^2.9.0"
   },
   "dependencies": {
     "@lucide/svelte": "1.21.0",

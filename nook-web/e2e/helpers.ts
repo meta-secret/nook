@@ -1,7 +1,26 @@
-import { expect, type Page } from '@playwright/test'
+import {
+  expect,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test'
 import dotenv from 'dotenv'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  assertEnrolledVaultYaml,
+  assertGenesisVaultYaml,
+  assertJoinPendingYaml,
+  joinCountFromYaml,
+  parseVaultYamlSnapshot,
+  type VaultYamlSnapshot,
+} from './vault-yaml'
+import { registerE2eGithubRepo } from './github-repos'
+
+export {
+  cleanupAllRegisteredE2eGithubRepos,
+  cleanupE2eGithubRepo,
+} from './github-repos'
 
 dotenv.config({
   path: path.join(
@@ -11,8 +30,51 @@ dotenv.config({
 })
 
 export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
+/** Legacy default for docs; GitHub e2e suites use {@link createE2eGithubRepoName}. */
+export const DEFAULT_GITHUB_REPO = 'nook'
+
+/** Unique repo per run so parallel PRs do not share `nook-vault.yaml`. */
+export function createE2eGithubRepoName(): string {
+  const override = process.env.NOOK_GITHUB_E2E_REPO?.trim()
+  if (override) {
+    return override
+  }
+  const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  const repoName = `nook-${suffix}`
+  registerE2eGithubRepo(repoName)
+  return repoName
+}
 
 const GITHUB_VAULT_PATH = 'nook-vault.yaml'
+
+/** UI actions we control should complete in a couple of seconds. */
+export const UI_TIMEOUT_MS = 5_000
+
+export type GithubE2eTarget = { pat: string; repoName: string }
+
+function configuredVaultSyncIntervalMs(): number {
+  const parsed = Number(process.env.VITE_VAULT_SYNC_INTERVAL_MS)
+  if (Number.isFinite(parsed) && parsed >= 250) return parsed
+  return 10_000
+}
+
+function configuredGithubPollIntervalMs(): number {
+  const parsed = Number(process.env.NOOK_GITHUB_POLL_MS)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 250
+}
+
+/** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
+export const NOTIFICATION_TIMEOUT_MS = Math.max(
+  UI_TIMEOUT_MS,
+  configuredVaultSyncIntervalMs() * 4,
+)
+
+/** GitHub YAML should reflect our write almost immediately in CI. */
+const GITHUB_SYNC_TIMEOUT_MS = 5_000
+/** First connect may create the repo on GitHub. */
+const GITHUB_CONNECT_TIMEOUT_MS = 15_000
+const GITHUB_SYNC_INTERVAL_MS = configuredGithubPollIntervalMs()
 
 const githubApiHeaders = (pat: string) => ({
   Authorization: `Bearer ${pat}`,
@@ -26,7 +88,7 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function githubRepoForPat(pat: string) {
+export async function githubRepoContext(pat: string, repoName: string) {
   const headers = githubApiHeaders(pat)
   const userRes = await fetch('https://api.github.com/user', {
     headers,
@@ -36,7 +98,7 @@ async function githubRepoForPat(pat: string) {
     throw new Error(`GitHub user fetch failed: ${userRes.status}`)
   }
   const { login } = (await userRes.json()) as { login: string }
-  return { headers, repo: `${login}/nook` }
+  return { headers, repo: `${login}/${repoName}`, login }
 }
 
 async function deleteGithubFileIfExists(
@@ -73,7 +135,6 @@ async function deleteGithubFileIfExists(
       continue
     }
 
-    // SHA race or cached metadata — refetch and retry.
     if (deleteRes.status === 409 || deleteRes.status === 422) {
       await sleep(400)
       continue
@@ -92,9 +153,80 @@ async function deleteGithubFileIfExists(
 }
 
 /** Wipe remote vault file so a fresh local encryption key can connect. */
-export async function resetGithubVault(pat: string) {
-  const { headers, repo } = await githubRepoForPat(pat)
+export async function resetGithubVault(
+  pat: string,
+  repoName = DEFAULT_GITHUB_REPO,
+) {
+  const { headers, repo } = await githubRepoContext(pat, repoName)
   await deleteGithubFileIfExists(headers, repo, GITHUB_VAULT_PATH)
+}
+
+export async function fetchGithubVaultYaml(
+  pat: string,
+  repoName: string,
+): Promise<string | null> {
+  const { headers, repo } = await githubRepoContext(pat, repoName)
+  const url = `https://api.github.com/repos/${repo}/contents/${GITHUB_VAULT_PATH}`
+  const res = await fetch(url, { headers, cache: 'no-store' })
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    throw new Error(`GitHub vault fetch failed: ${res.status}`)
+  }
+  const data = (await res.json()) as { content: string }
+  return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString(
+    'utf-8',
+  )
+}
+
+export async function waitForVaultYaml(
+  pat: string,
+  repoName: string,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
+): Promise<VaultYamlSnapshot> {
+  const timeoutMs = options?.timeoutMs ?? GITHUB_SYNC_TIMEOUT_MS
+  const intervalMs = options?.intervalMs ?? GITHUB_SYNC_INTERVAL_MS
+  const deadline = Date.now() + timeoutMs
+  let lastError = 'vault file missing'
+
+  while (Date.now() < deadline) {
+    if (options?.page) {
+      await assertNoVaultErrors(options.page)
+    }
+    const yaml = await fetchGithubVaultYaml(pat, repoName)
+    if (yaml) {
+      const snapshot = parseVaultYamlSnapshot(yaml)
+      if (predicate(snapshot)) {
+        return snapshot
+      }
+      lastError = `predicate not satisfied (secrets=${snapshot.secretLabels.length}, joins=${joinCountFromYaml(yaml)})`
+    }
+    await sleep(intervalMs)
+  }
+
+  throw new Error(`Timed out waiting for vault YAML: ${lastError}`)
+}
+
+async function assertNoVaultErrors(page: Page) {
+  const connectError = page.getByTestId('connect-error')
+  if (await connectError.isVisible()) {
+    throw new Error(`Connect failed: ${await connectError.textContent()}`)
+  }
+  const vaultError = page.getByTestId('vault-error')
+  if (await vaultError.isVisible()) {
+    throw new Error(`Vault error: ${await vaultError.textContent()}`)
+  }
+}
+
+/** Wait until GitHub has the expected vault state (source of truth for sync). */
+export async function waitForGithubVaultState(
+  target: GithubE2eTarget,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
+): Promise<VaultYamlSnapshot> {
+  return waitForVaultYaml(target.pat, target.repoName, predicate, options)
 }
 
 export async function clearBrowserVault(page: Page) {
@@ -102,13 +234,31 @@ export async function clearBrowserVault(page: Page) {
     () =>
       new Promise<void>((resolve, reject) => {
         localStorage.clear()
-        const request = indexedDB.deleteDatabase('nook_db')
-        request.onsuccess = () => resolve()
-        request.onerror = () =>
-          reject(request.error ?? new Error('IndexedDB delete failed'))
-        request.onblocked = () => resolve()
+        let pending = 2
+        const done = () => {
+          pending -= 1
+          if (pending === 0) resolve()
+        }
+        const onError = (err: DOMException | null) =>
+          reject(err ?? new Error('IndexedDB delete failed'))
+
+        const vaultDb = indexedDB.deleteDatabase('nook_db')
+        vaultDb.onsuccess = done
+        vaultDb.onerror = () => onError(vaultDb.error)
+        vaultDb.onblocked = done
+
+        const authDb = indexedDB.deleteDatabase('nook_auth')
+        authDb.onsuccess = done
+        authDb.onerror = () => onError(authDb.error)
+        authDb.onblocked = done
       }),
   )
+}
+
+export async function createIsolatedContext(
+  browser: Browser,
+): Promise<BrowserContext> {
+  return browser.newContext()
 }
 
 export function uniqueSecretKey(prefix: string) {
@@ -116,10 +266,14 @@ export function uniqueSecretKey(prefix: string) {
 }
 
 export async function waitForEngine(page: Page) {
-  const button = page.getByTestId('connect-vault-btn')
-  await expect(button).toBeVisible()
-  await expect(button).not.toContainText('Loading engine', { timeout: 20_000 })
-  return button
+  const button = page
+    .getByTestId('unlock-vault-btn')
+    .or(page.getByTestId('sign-in-btn'))
+  await expect(button.first()).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(button.first()).not.toContainText('Loading engine', {
+    timeout: UI_TIMEOUT_MS,
+  })
+  return button.first()
 }
 
 async function assertGithubConnected(page: Page) {
@@ -128,33 +282,212 @@ async function assertGithubConnected(page: Page) {
     throw new Error(`GitHub connect failed: ${await error.textContent()}`)
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: 90_000,
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
+async function setupGithubProvider(page: Page, pat: string, repoName: string) {
+  await page.getByTestId('provider-option-github').click()
+  await page.getByTestId('github-repo-input').fill(repoName)
+  await page.getByTestId('github-pat-input').fill(pat)
+}
+
+export async function waitForVaultUnlocked(page: Page) {
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
   })
 }
 
 export async function connectLocalVault(page: Page) {
   await page.goto('/')
-  await page.getByRole('button', { name: /^Local/ }).click()
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Local vault loaded',
-    { timeout: 20_000 },
-  )
-  await expect(page.getByTestId('vault-panel')).toBeVisible()
+  await expect(
+    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+
+  if (await page.getByTestId('vault-panel').isVisible()) {
+    return
+  }
+
+  const unlockButton = page.getByTestId('unlock-vault-btn')
+  if (await unlockButton.isVisible()) {
+    const autoUnlocked = await page
+      .getByTestId('vault-panel')
+      .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
+      .then(() => true)
+      .catch(() => false)
+    if (autoUnlocked) {
+      return
+    }
+    const button = await waitForEngine(page)
+    await button.click()
+    await expect(
+      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
+    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+  } else {
+    await page.getByTestId('provider-option-local').click()
+    const connectButton = await waitForEngine(page)
+    await connectButton.click()
+    await expect(
+      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
+    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+  }
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
-export async function connectGithubVault(page: Page, pat: string) {
+export async function connectGithubVault(
+  page: Page,
+  pat: string,
+  repoName = DEFAULT_GITHUB_REPO,
+) {
+  const target = { pat, repoName }
   await page.goto('/')
-  await page.getByRole('button', { name: /^GitHub/ }).click()
-  await page.getByLabel('Paste token here').fill(pat)
+  await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Connected to GitHub',
-    { timeout: 90_000 },
+  await waitForGithubVaultState(
+    target,
+    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
+    { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
+  await assertNoVaultErrors(page)
   await assertGithubConnected(page)
+}
+
+/** Genesis device: fresh browser + GitHub repo → connected vault. */
+export async function connectGithubGenesisDevice(
+  page: Page,
+  pat: string,
+  repoName: string,
+) {
+  await page.goto('/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await connectGithubVault(page, pat, repoName)
+}
+
+/** Second device: same repo → join enrollment dialog. */
+export async function connectGithubJoinerDevice(
+  page: Page,
+  pat: string,
+  repoName: string,
+) {
+  await assertGenesisVaultOnGithub(pat, repoName)
+  await page.goto('/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await setupGithubProvider(page, pat, repoName)
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
+  await assertNoVaultErrors(page)
+  await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
+export async function sendJoinRequest(
+  page: Page,
+  pat: string,
+  repoName: string,
+) {
+  await page.getByTestId('join-enrollment-confirm').click()
+
+  const snapshot = await waitForGithubVaultState(
+    { pat, repoName },
+    (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
+    { page },
+  )
+  assertJoinPendingYaml(snapshot)
+  const join = snapshot.joinEntries[0]
+
+  await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
+    'Waiting for approval',
+    { timeout: UI_TIMEOUT_MS },
+  )
+
+  await page.getByTestId('join-enrollment-dismiss').click()
+  await expect(page.getByTestId('join-enrollment-dialog')).not.toBeVisible()
+
+  return join
+}
+
+export async function waitForPendingJoinOnDevice(page: Page, deviceId: string) {
+  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
+  if (await row.isVisible()) {
+    return
+  }
+  const refresh = page.getByTestId('refresh-joins-banner-btn')
+  if (await refresh.isVisible()) {
+    await refresh.click()
+  }
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+export async function approveJoinFromBanner(
+  page: Page,
+  deviceId: string,
+  target: GithubE2eTarget,
+  expectedMembers: number,
+) {
+  await waitForPendingJoinOnDevice(page, deviceId)
+  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
+  await row.getByTestId('approve-join-btn').click()
+  await assertEnrolledVaultOnGithub(
+    target.pat,
+    target.repoName,
+    expectedMembers,
+  )
+  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+export async function approveJoinFromSettings(
+  page: Page,
+  deviceId: string,
+  target: GithubE2eTarget,
+  expectedMembers: number,
+) {
+  await openStorageSettings(page)
+  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
+
+  if (!(await row.isVisible())) {
+    await page.getByTestId('refresh-joins-btn').click()
+  }
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await row.getByTestId('approve-join-btn').click()
+  await assertEnrolledVaultOnGithub(
+    target.pat,
+    target.repoName,
+    expectedMembers,
+  )
+  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await page.getByTestId('storage-settings-close').click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
+export async function unlockGithubVault(page: Page) {
+  await page.goto('/')
+  const vaultPanel = page.getByTestId('vault-panel')
+  const autoUnlocked = await vaultPanel
+    .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
+    .then(() => true)
+    .catch(() => false)
+  if (autoUnlocked) {
+    return
+  }
+  const unlock = page.getByTestId('unlock-vault-btn')
+  if (await unlock.isVisible()) {
+    await waitForEngine(page)
+    await unlock.click()
+  }
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 /** Open storage settings (must already be connected). */
@@ -164,48 +497,114 @@ export async function openStorageSettings(page: Page) {
   await expect(page.getByTestId('vault-panel')).not.toBeVisible()
 }
 
-/** Reconnect after reload — PAT and storage mode are restored from localStorage. */
+/** Reconnect after reload — auto-unlocks when a saved provider exists. */
 export async function reconnectGithubVault(page: Page) {
-  await openStorageSettings(page)
-  await expect(page.getByRole('button', { name: /^GitHub/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Connected to GitHub',
-    { timeout: 90_000 },
-  )
-  await assertVaultReady(page)
+  await page.goto('/')
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
-export async function addSecret(page: Page, key: string, value: string) {
+export async function addSecret(
+  page: Page,
+  key: string,
+  value: string,
+  github?: GithubE2eTarget,
+) {
   await assertVaultReady(page)
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Secret saved successfully',
-    { timeout: 45_000 },
-  )
-  await expect(
-    page.getByTestId('secret-row').filter({ hasText: key }),
-  ).toBeVisible()
+  const row = page.getByTestId('secret-row').filter({ hasText: key })
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  if (github) {
+    await waitForGithubVaultState(
+      github,
+      (yaml) => yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+      { page },
+    )
+  }
 }
 
-export async function deleteSecret(page: Page, key: string) {
+export async function revealSecretValue(page: Page, key: string) {
+  const row = page.getByTestId('secret-row').filter({ hasText: key })
+  await row.getByRole('button', { name: 'Show password' }).click()
+  const code = row.locator('code')
+  await expect(code).toBeVisible()
+  return (await code.textContent()) ?? ''
+}
+
+export async function waitForSecretOnDevice(
+  page: Page,
+  key: string,
+  github?: GithubE2eTarget,
+) {
+  if (github) {
+    await waitForGithubVaultState(
+      github,
+      (yaml) => yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+    )
+  }
+  const row = page.getByTestId('secret-row').filter({ hasText: key })
+  if (await row.isVisible()) {
+    return
+  }
+  const refresh = page.getByTestId('vault-sync-refresh-btn')
+  if (await refresh.isVisible()) {
+    await refresh.click()
+  }
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+export async function deleteSecret(
+  page: Page,
+  key: string,
+  github?: GithubE2eTarget,
+) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await row.getByRole('button', { name: 'Delete secret' }).click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Secret deleted successfully',
-    { timeout: 45_000 },
+  await expect(row).toHaveCount(0, { timeout: UI_TIMEOUT_MS })
+  if (github) {
+    await waitForGithubVaultState(
+      github,
+      (yaml) => !yaml.secretLabels.includes(key) && !yaml.raw.includes(key),
+      { page },
+    )
+  }
+}
+
+export async function assertGenesisVaultOnGithub(
+  pat: string,
+  repoName: string,
+) {
+  const snapshot = await waitForVaultYaml(
+    pat,
+    repoName,
+    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
   )
-  await expect(row).toHaveCount(0)
+  assertGenesisVaultYaml(snapshot)
+  return snapshot
+}
+
+export async function assertEnrolledVaultOnGithub(
+  pat: string,
+  repoName: string,
+  expectedMembers: number,
+) {
+  const snapshot = await waitForVaultYaml(
+    pat,
+    repoName,
+    (yaml) =>
+      yaml.joinEntries.length === 0 &&
+      yaml.authPkIds.length === expectedMembers &&
+      yaml.memberPkIds.length === expectedMembers,
+  )
+  assertEnrolledVaultYaml(snapshot, expectedMembers)
+  return snapshot
 }

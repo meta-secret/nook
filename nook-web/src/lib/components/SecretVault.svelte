@@ -17,19 +17,15 @@
 
   let {
     isSaving,
-    secretsCount,
-    storageMode,
+    secrets = [] as SecretRecord[],
     onAddSecret,
     onDeleteSecret,
-    onFilterSecrets,
     onGeneratePassword,
   }: {
     isSaving: boolean
-    secretsCount: number
-    storageMode: 'local' | 'github'
+    secrets?: SecretRecord[]
     onAddSecret: (key: string, value: string) => Promise<void>
     onDeleteSecret: (key: string) => Promise<void>
-    onFilterSecrets: (query: string) => SecretRecord[]
     onGeneratePassword: (
       length: number,
       lowercase: boolean,
@@ -109,20 +105,17 @@
   }
 
   let filteredSecrets = $derived.by(() => {
-    void secretsCount
-    return onFilterSecrets(searchPattern)
+    const needle = searchPattern.trim().toLowerCase()
+    if (!needle) {
+      return secrets
+    }
+    return secrets.filter((secret) => secret.key.toLowerCase().includes(needle))
   })
 </script>
 
 <div class="animate-in fade-in duration-200" data-testid="vault-panel">
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-sm text-muted-foreground">
-        Syncing via
-        <span class="font-medium text-foreground"
-          >{storageMode === 'github' ? 'GitHub' : 'local storage'}</span
-        >
-      </p>
+    <div class="flex flex-wrap items-center justify-end gap-3">
       {#if addSecretOpen}
         <Button
           size="sm"
@@ -315,7 +308,7 @@
           >
             <p>No secrets matched your search.</p>
             <p class="text-xs">
-              {#if secretsCount === 0}
+              {#if secrets.length === 0}
                 Use <span class="text-foreground">Add secret</span> to store your
                 first credential.
               {:else}

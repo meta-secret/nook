@@ -6,6 +6,7 @@ import {
   connectLocalVault,
   deleteSecret,
   uniqueSecretKey,
+  waitForVaultUnlocked,
 } from './helpers'
 
 test.describe('local vault', () => {
@@ -64,7 +65,8 @@ test.describe('local vault', () => {
 
     await addSecret(page, key, value)
     await page.reload()
-    await connectLocalVault(page)
+    await page.waitForLoadState('domcontentloaded')
+    await waitForVaultUnlocked(page)
     await assertVaultReady(page)
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
