@@ -87,13 +87,13 @@ function configuredGithubPollIntervalMs(): number {
 function configuredGithubSyncTimeoutMs(): number {
   const parsed = Number(process.env.NOOK_GITHUB_SYNC_TIMEOUT_MS)
   if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return 20_000
+  return 15_000
 }
 
 function configuredGithubConnectTimeoutMs(): number {
   const parsed = Number(process.env.NOOK_GITHUB_CONNECT_TIMEOUT_MS)
   if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return 60_000
+  return 30_000
 }
 
 /** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
