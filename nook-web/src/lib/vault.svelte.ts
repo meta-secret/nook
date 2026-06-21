@@ -31,6 +31,7 @@ export class VaultState {
   // Status & loading indicators
   errorMsg = $state('')
   successMsg = $state('')
+  currentStatus = $state('')
   isVerifying = $state(false)
   isSaving = $state(false)
 
@@ -46,6 +47,7 @@ export class VaultState {
     // Instantiate Rust Wasm Session Manager
     try {
       this.manager = await getVaultManager()
+      this.startStatusListener()
     } catch (error) {
       this.loadError =
         error instanceof Error
@@ -67,6 +69,19 @@ export class VaultState {
     if (this.passphrase && this.manager) {
       if (this.storageMode === 'local' || (this.githubPat && this.githubRepo)) {
         await this.loadDb()
+      }
+    }
+  }
+
+  async startStatusListener() {
+    if (!this.manager) return
+    while (true) {
+      try {
+        const status = await this.manager.next_status()
+        this.currentStatus = status
+      } catch (error) {
+        console.warn('Vault status channel error or manager closed:', error)
+        break
       }
     }
   }

@@ -32,14 +32,23 @@
           <Lock class="size-6" />
         </div>
         <div>
-          <span
-            class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent"
-            >nook</span
-          >
-          <span
-            class="ml-2 text-xs font-medium text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded-sm"
-            >v0.1.0</span
-          >
+          <div class="flex items-center gap-2">
+            <span
+              class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent"
+              >nook</span
+            >
+            <span
+              class="text-xs font-medium text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded-sm"
+              >v0.1.0</span
+            >
+            {#if vault.currentStatus}
+              <span
+                class="text-[10px] uppercase font-mono tracking-wider bg-slate-800 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded animate-pulse"
+              >
+                {vault.currentStatus}
+              </span>
+            {/if}
+          </div>
         </div>
       </div>
 
