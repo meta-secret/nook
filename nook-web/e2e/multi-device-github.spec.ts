@@ -17,6 +17,7 @@ import {
   sendJoinRequest,
   unlockGithubVault,
   uniqueSecretKey,
+  UI_TIMEOUT_MS,
   waitForSecretOnDevice,
   waitForVaultYaml,
 } from './helpers'
@@ -103,10 +104,10 @@ describeMultiDevice('multi-device github vault', () => {
     await deviceA.getByTestId('vault-sync-refresh-btn').click()
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
       /just now|s ago/,
-      { timeout: 15_000 },
+      { timeout: UI_TIMEOUT_MS },
     )
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: 15_000,
+      timeout: UI_TIMEOUT_MS,
     })
     await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible()
     await expect(
@@ -124,10 +125,10 @@ describeMultiDevice('multi-device github vault', () => {
     ).joinEntries[0]
 
     await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible({
-      timeout: 60_000,
+      timeout: UI_TIMEOUT_MS,
     })
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: 60_000,
+      timeout: UI_TIMEOUT_MS,
     })
 
     await approveJoinFromBanner(deviceA, join.deviceId)

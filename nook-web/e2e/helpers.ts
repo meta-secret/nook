@@ -47,6 +47,12 @@ export function createE2eGithubRepoName(): string {
 
 const GITHUB_VAULT_PATH = 'nook-vault.yaml'
 
+/** UI actions we control should complete quickly; long waits hide bugs. */
+export const UI_TIMEOUT_MS = 5_000
+/** GitHub API round-trip budget when we just wrote the vault ourselves. */
+const GITHUB_SYNC_TIMEOUT_MS = 10_000
+const GITHUB_SYNC_INTERVAL_MS = 500
+
 const githubApiHeaders = (pat: string) => ({
   Authorization: `Bearer ${pat}`,
   Accept: 'application/vnd.github+json',
@@ -157,8 +163,8 @@ export async function waitForVaultYaml(
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
-  const timeoutMs = options?.timeoutMs ?? 60_000
-  const intervalMs = options?.intervalMs ?? 2_000
+  const timeoutMs = options?.timeoutMs ?? GITHUB_SYNC_TIMEOUT_MS
+  const intervalMs = options?.intervalMs ?? GITHUB_SYNC_INTERVAL_MS
   const deadline = Date.now() + timeoutMs
   let lastError = 'vault file missing'
 
@@ -357,53 +363,37 @@ export async function sendJoinRequest(
 
 export async function waitForPendingJoinOnDevice(page: Page, deviceId: string) {
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
-  const deadline = Date.now() + 60_000
-
-  while (Date.now() < deadline) {
-    if (await row.isVisible()) {
-      return
-    }
-    const refresh = page.getByTestId('refresh-joins-banner-btn')
-    if (await refresh.isVisible()) {
-      await refresh.click()
-    }
-    await sleep(2_000)
+  if (await row.isVisible()) {
+    return
   }
-
-  await expect(row).toBeVisible({ timeout: 5_000 })
+  const refresh = page.getByTestId('refresh-joins-banner-btn')
+  if (await refresh.isVisible()) {
+    await refresh.click()
+  }
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 export async function approveJoinFromBanner(page: Page, deviceId: string) {
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await expect(row).not.toBeVisible({ timeout: 120_000 })
-  await expect(page.getByTestId('app-success'))
-    .toContainText('approved', { timeout: 10_000 })
-    .catch(() => undefined)
+  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 export async function approveJoinFromSettings(page: Page, deviceId: string) {
   await openStorageSettings(page)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
 
-  const deadline = Date.now() + 60_000
-  while (Date.now() < deadline) {
-    if (await row.isVisible()) {
-      break
-    }
+  if (!(await row.isVisible())) {
     await page.getByTestId('refresh-joins-btn').click()
-    await sleep(2_000)
   }
-
-  await expect(row).toBeVisible({ timeout: 5_000 })
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await row.getByTestId('approve-join-btn').click()
-  await expect(row).not.toBeVisible({ timeout: 120_000 })
-  await expect(page.getByTestId('app-success').first())
-    .toContainText('approved', { timeout: 10_000 })
-    .catch(() => undefined)
+  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
   await page.getByTestId('storage-settings-close').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function unlockGithubVault(page: Page) {
