@@ -40,16 +40,30 @@ export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
 /** Legacy default for docs; GitHub e2e suites use {@link createE2eGithubRepoName}. */
 export const DEFAULT_GITHUB_REPO = 'nook'
 
-/** Unique repo per run so parallel PRs do not share `nook-vault.yaml`. */
+let cachedE2eGithubRepoName: string | null = null
+
+/**
+ * One GitHub repo per Playwright run. CI sets NOOK_GITHUB_E2E_REPO=nook-e2e-$RUN_ID;
+ * local runs without that env get a random nook-* repo (deleted in global teardown).
+ */
 export function createE2eGithubRepoName(): string {
+  if (cachedE2eGithubRepoName) {
+    return cachedE2eGithubRepoName
+  }
+
   const override = process.env.NOOK_GITHUB_E2E_REPO?.trim()
   if (override) {
     registerE2eGithubRepo(override)
+    cachedE2eGithubRepoName = override
+    console.log(`[e2e] shared GitHub repo: ${override}`)
     return override
   }
+
   const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   const repoName = `nook-${suffix}`
   registerE2eGithubRepo(repoName)
+  cachedE2eGithubRepoName = repoName
+  console.log(`[e2e] GitHub repo: ${repoName}`)
   return repoName
 }
 

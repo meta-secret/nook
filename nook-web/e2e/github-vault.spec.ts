@@ -23,7 +23,6 @@ describeGithub('github vault', () => {
 
   test.beforeAll(async ({ browser }) => {
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] github vault repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
     vaultPage = await browser.newPage()
     await vaultPage.goto('/')

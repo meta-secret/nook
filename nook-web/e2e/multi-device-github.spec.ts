@@ -45,7 +45,6 @@ describeMultiDevice('multi-device github vault', () => {
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] multi-device repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
 
     contextA = await createIsolatedContext(browser)
@@ -212,7 +211,6 @@ describeMultiDevice('multi-device approve from settings', () => {
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] multi-device settings repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
 
     contextA = await createIsolatedContext(browser)
@@ -273,7 +271,6 @@ describeMultiDevice('multi-device join background sync', () => {
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] join background sync repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
 
     contextA = await createIsolatedContext(browser)
