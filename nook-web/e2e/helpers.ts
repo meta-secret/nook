@@ -50,6 +50,8 @@ const GITHUB_VAULT_PATH = 'nook-vault.yaml'
 /** UI actions we control should complete in a couple of seconds. */
 export const UI_TIMEOUT_MS = 5_000
 
+export type GithubE2eTarget = { pat: string; repoName: string }
+
 function configuredVaultSyncIntervalMs(): number {
   const parsed = Number(process.env.VITE_VAULT_SYNC_INTERVAL_MS)
   if (Number.isFinite(parsed) && parsed >= 250) return parsed
@@ -70,6 +72,8 @@ export const NOTIFICATION_TIMEOUT_MS = Math.max(
 
 /** GitHub YAML should reflect our write almost immediately in CI. */
 const GITHUB_SYNC_TIMEOUT_MS = 5_000
+/** First connect may create the repo on GitHub. */
+const GITHUB_CONNECT_TIMEOUT_MS = 15_000
 const GITHUB_SYNC_INTERVAL_MS = configuredGithubPollIntervalMs()
 
 const githubApiHeaders = (pat: string) => ({
@@ -180,7 +184,7 @@ export async function waitForVaultYaml(
   pat: string,
   repoName: string,
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
-  options?: { timeoutMs?: number; intervalMs?: number },
+  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? GITHUB_SYNC_TIMEOUT_MS
   const intervalMs = options?.intervalMs ?? GITHUB_SYNC_INTERVAL_MS
@@ -188,18 +192,46 @@ export async function waitForVaultYaml(
   let lastError = 'vault file missing'
 
   while (Date.now() < deadline) {
+    if (options?.page) {
+      await assertNoVaultErrors(options.page)
+    }
     const yaml = await fetchGithubVaultYaml(pat, repoName)
     if (yaml) {
       const snapshot = parseVaultYamlSnapshot(yaml)
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (joins=${joinCountFromYaml(yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretLabels.length}, joins=${joinCountFromYaml(yaml)})`
     }
     await sleep(intervalMs)
   }
 
   throw new Error(`Timed out waiting for vault YAML: ${lastError}`)
+}
+
+async function assertNoVaultErrors(page: Page) {
+  const connectError = page.getByTestId('connect-error')
+  if (await connectError.isVisible()) {
+    throw new Error(`Connect failed: ${await connectError.textContent()}`)
+  }
+  const vaultError = page.getByTestId('vault-error')
+  if (await vaultError.isVisible()) {
+    throw new Error(`Vault error: ${await vaultError.textContent()}`)
+  }
+}
+
+/** Wait until GitHub has the expected vault state (source of truth for sync). */
+export async function waitForGithubVaultState(
+  target: GithubE2eTarget,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
+): Promise<VaultYamlSnapshot> {
+  return waitForVaultYaml(
+    target.pat,
+    target.repoName,
+    predicate,
+    options,
+  )
 }
 
 export async function clearBrowserVault(page: Page) {
@@ -314,13 +346,17 @@ export async function connectGithubVault(
   pat: string,
   repoName = DEFAULT_GITHUB_REPO,
 ) {
+  const target = { pat, repoName }
   await page.goto('/')
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await expect(
-    page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-  ).toContainText('Connected to GitHub', { timeout: UI_TIMEOUT_MS })
+  await waitForGithubVaultState(
+    target,
+    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
+    { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
+  )
+  await assertNoVaultErrors(page)
   await assertGithubConnected(page)
 }
 
@@ -334,11 +370,6 @@ export async function connectGithubGenesisDevice(
   await clearBrowserVault(page)
   await page.reload()
   await connectGithubVault(page, pat, repoName)
-  await waitForVaultYaml(
-    pat,
-    repoName,
-    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
-  )
 }
 
 /** Second device: same repo → join enrollment dialog. */
@@ -347,12 +378,14 @@ export async function connectGithubJoinerDevice(
   pat: string,
   repoName: string,
 ) {
+  await assertGenesisVaultOnGithub(pat, repoName)
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
+  await assertNoVaultErrors(page)
   await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -367,18 +400,19 @@ export async function sendJoinRequest(
   repoName: string,
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
+
+  const snapshot = await waitForGithubVaultState(
+    { pat, repoName },
+    (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
+    { page },
+  )
+  assertJoinPendingYaml(snapshot)
+  const join = snapshot.joinEntries[0]
+
   await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
     'Waiting for approval',
     { timeout: UI_TIMEOUT_MS },
   )
-
-  const snapshot = await waitForVaultYaml(
-    pat,
-    repoName,
-    (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
-  )
-  assertJoinPendingYaml(snapshot)
-  const join = snapshot.joinEntries[0]
 
   await page.getByTestId('join-enrollment-dismiss').click()
   await expect(page.getByTestId('join-enrollment-dialog')).not.toBeVisible()
@@ -398,14 +432,29 @@ export async function waitForPendingJoinOnDevice(page: Page, deviceId: string) {
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
-export async function approveJoinFromBanner(page: Page, deviceId: string) {
+export async function approveJoinFromBanner(
+  page: Page,
+  deviceId: string,
+  target: GithubE2eTarget,
+  expectedMembers: number,
+) {
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
+  await assertEnrolledVaultOnGithub(
+    target.pat,
+    target.repoName,
+    expectedMembers,
+  )
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
-export async function approveJoinFromSettings(page: Page, deviceId: string) {
+export async function approveJoinFromSettings(
+  page: Page,
+  deviceId: string,
+  target: GithubE2eTarget,
+  expectedMembers: number,
+) {
   await openStorageSettings(page)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
 
@@ -414,6 +463,11 @@ export async function approveJoinFromSettings(page: Page, deviceId: string) {
   }
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await row.getByTestId('approve-join-btn').click()
+  await assertEnrolledVaultOnGithub(
+    target.pat,
+    target.repoName,
+    expectedMembers,
+  )
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
   await page.getByTestId('storage-settings-close').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -460,7 +514,12 @@ export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
-export async function addSecret(page: Page, key: string, value: string) {
+export async function addSecret(
+  page: Page,
+  key: string,
+  value: string,
+  github?: GithubE2eTarget,
+) {
   await assertVaultReady(page)
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
@@ -469,11 +528,14 @@ export async function addSecret(page: Page, key: string, value: string) {
   await page.getByTestId('save-secret-btn').click()
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(
-    page.getByTestId('app-success').or(page.getByTestId('connect-success')),
-  )
-    .toContainText('Secret saved successfully', { timeout: UI_TIMEOUT_MS })
-    .catch(() => undefined)
+  if (github) {
+    await waitForGithubVaultState(
+      github,
+      (yaml) =>
+        yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+      { page },
+    )
+  }
 }
 
 export async function revealSecretValue(page: Page, key: string) {
@@ -484,7 +546,18 @@ export async function revealSecretValue(page: Page, key: string) {
   return (await code.textContent()) ?? ''
 }
 
-export async function waitForSecretOnDevice(page: Page, key: string) {
+export async function waitForSecretOnDevice(
+  page: Page,
+  key: string,
+  github?: GithubE2eTarget,
+) {
+  if (github) {
+    await waitForGithubVaultState(
+      github,
+      (yaml) =>
+        yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+    )
+  }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   if (await row.isVisible()) {
     return
@@ -496,14 +569,22 @@ export async function waitForSecretOnDevice(page: Page, key: string) {
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
-export async function deleteSecret(page: Page, key: string) {
+export async function deleteSecret(
+  page: Page,
+  key: string,
+  github?: GithubE2eTarget,
+) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await row.getByRole('button', { name: 'Delete secret' }).click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Secret deleted successfully',
-    { timeout: UI_TIMEOUT_MS },
-  )
-  await expect(row).toHaveCount(0)
+  await expect(row).toHaveCount(0, { timeout: UI_TIMEOUT_MS })
+  if (github) {
+    await waitForGithubVaultState(
+      github,
+      (yaml) =>
+        !yaml.secretLabels.includes(key) && !yaml.raw.includes(key),
+      { page },
+    )
+  }
 }
 
 export async function assertGenesisVaultOnGithub(

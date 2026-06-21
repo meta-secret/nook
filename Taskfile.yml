@@ -96,10 +96,34 @@ tasks:
         vars: { TASK: _web:check }
 
   web:test:
-    desc: Run web tests in Docker.
+    desc: Run web unit tests in Docker.
     cmds:
       - task: docker:task
         vars: { TASK: _web:test }
+
+  web:test:e2e:
+    desc: Run Playwright e2e tests in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test:e2e }
+
+  web:test:e2e:local:
+    desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test:e2e:local }
+
+  web:test:e2e:github:
+    desc: Run GitHub vault Playwright e2e in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test:e2e:github }
+
+  web:test:e2e:multi-device:
+    desc: Run multi-device Playwright e2e in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test:e2e:multi-device }
 
   web:lint:
     desc: Lint the web app in Docker.
@@ -126,8 +150,12 @@ tasks:
     cmds:
       - >-
         {{.DOCKER}} run --rm
+        --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
+        -e NOOK_GITHUB_PAT
+        -e CI
         -v "{{.ROOT_DIR}}:/workspace"
+        -v nook-web-node-modules:/workspace/nook-web/node_modules
         -w /workspace
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
@@ -226,13 +254,49 @@ tasks:
       - cd nook-web && bun run check
 
   _web:test:
-    desc: Run web unit and e2e tests.
+    desc: Run web unit tests.
     deps:
       - _wasm:build
     cmds:
       - cd nook-web && bun run test
+
+  _web:test:e2e:
+    desc: Run full Playwright e2e suite.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun install
       - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:local:
+    desc: Run local-only Playwright e2e specs.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun install
+      - cd nook-web && bunx playwright install --with-deps chromium
+      - cd nook-web && bun run test:e2e:local
+
+  _web:test:e2e:github:
+    desc: Run GitHub vault Playwright e2e specs.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun install
+      - cd nook-web && bunx playwright install --with-deps chromium
+      - cd nook-web && bun run test:e2e:github
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:multi-device:
+    desc: Run multi-device Playwright e2e specs.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun install
+      - cd nook-web && bunx playwright install --with-deps chromium
+      - cd nook-web && bun run test:e2e:multi-device
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:lint:

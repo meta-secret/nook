@@ -80,9 +80,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
       - name: Setup Task
         uses: arduino/setup-task@v2
 
@@ -100,27 +97,16 @@ jobs:
         run: |
           echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Build WASM and install web dependencies
-        run: |
-          task docker:build
-          task wasm:build
-          cd nook-web && bun install
+      - name: Build toolchain and install dependencies
+        run: task setup
         env:
           CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
           CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
 
-      - name: Install Playwright browsers
-        run: cd nook-web && bunx playwright install --with-deps chromium
-
       - name: Run Playwright e2e
-        run: cd nook-web && bun run test:e2e
+        run: task web:test:e2e
         env:
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-
-      - name: Clean up e2e GitHub repos
-        if: always()
-        run: cd nook-web && bun run test:e2e:cleanup
-        env:
+          CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
 
   deploy:

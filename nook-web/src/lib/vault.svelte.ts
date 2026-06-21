@@ -106,13 +106,15 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
-      await this.manager.request_vault_access(
-        ...this.wasmGithubArgs(),
-        isoTimestamp(),
+      await this.enqueueStorage(() =>
+        this.manager!.request_vault_access(
+          ...this.wasmGithubArgs(),
+          isoTimestamp(),
+        ),
       )
       await this.ensureProviderSaved()
-      await this.refreshDeviceState()
       this.joinEnrollmentPrompt = 'pending'
+      this.startVaultSync()
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to request vault access.'
@@ -174,13 +176,12 @@ export class VaultState {
     } else {
       await this.refreshDeviceState()
     }
-    this.startVaultSync()
   }
 
   private async initDeviceIdentity() {
     if (!this.manager) return
     try {
-      await this.manager.init_device()
+      await this.enqueueStorage(() => this.manager!.init_device())
       this.deviceId = this.manager.device_id
       this.devicePublicKey = this.manager.device_public_key
     } catch {
@@ -323,10 +324,21 @@ export class VaultState {
 
   startVaultSync() {
     this.stopVaultSync()
+    const needsRemoteUpdates =
+      this.isAuthenticated || this.joinEnrollmentPrompt !== 'none'
+    if (!needsRemoteUpdates) {
+      return
+    }
     if (this.isAuthenticated) {
       void this.syncFromStorage()
     }
     this.syncTimer = setInterval(() => {
+      if (this.isVerifying || this.isSaving || this.isSyncing) {
+        return
+      }
+      if (!this.isAuthenticated && this.joinEnrollmentPrompt === 'none') {
+        return
+      }
       void this.syncFromStorage()
     }, VaultState.syncIntervalMs())
   }
@@ -448,9 +460,11 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
-      await this.manager.request_vault_access(
-        ...this.wasmGithubArgs(),
-        isoTimestamp(),
+      await this.enqueueStorage(() =>
+        this.manager!.request_vault_access(
+          ...this.wasmGithubArgs(),
+          isoTimestamp(),
+        ),
       )
       await this.ensureProviderSaved()
       await this.refreshDeviceState()
@@ -471,8 +485,8 @@ export class VaultState {
     this.dismissSuccess()
     this.isSaving = true
     try {
-      const rawRecords = (await this.manager.approve_join_request(
-        joinDeviceId,
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.approve_join_request(joinDeviceId),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.hydrateMultiDeviceState()
@@ -539,10 +553,12 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
-      const rawRecords = (await this.manager.enroll_and_connect(
-        ...this.wasmGithubArgs(),
-        secretsKey,
-        membersKey,
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.enroll_and_connect(
+          ...this.wasmGithubArgs(),
+          secretsKey,
+          membersKey,
+        ),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
@@ -624,10 +640,12 @@ export class VaultState {
 
       if (accessStatus === 'needs_enrollment') {
         this.joinEnrollmentPrompt = 'needs_request'
+        this.startVaultSync()
         return
       }
       if (accessStatus === 'join_pending') {
         this.joinEnrollmentPrompt = 'pending'
+        this.startVaultSync()
         return
       }
 
@@ -661,6 +679,7 @@ export class VaultState {
           'Connected to GitHub. Encryption key is stored locally in this browser.',
         )
       }
+      this.startVaultSync()
     } catch (e: unknown) {
       this.isAuthenticated = false
       this.errorMsg = e instanceof Error ? e.message : String(e)

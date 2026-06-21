@@ -114,6 +114,7 @@
       <div
         class="flex w-full items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive sm:ml-auto sm:w-auto"
         role="alert"
+        data-testid="vault-error"
       >
         <TriangleAlert class="size-3.5 shrink-0" />
         <span class="min-w-0 truncate">{errorMsg}</span>

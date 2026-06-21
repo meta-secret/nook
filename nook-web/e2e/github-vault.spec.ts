@@ -48,15 +48,15 @@ describeGithub('github vault', () => {
     const key = uniqueSecretKey('e2e-github')
     const value = 'github-sync-secret'
 
-    await addSecret(vaultPage, key, value)
-    await deleteSecret(vaultPage, key)
+    await addSecret(vaultPage, key, value, { pat: githubPat, repoName: e2eRepo })
+    await deleteSecret(vaultPage, key, { pat: githubPat, repoName: e2eRepo })
   })
 
   test('persists secrets across reload and reconnect', async () => {
     const key = uniqueSecretKey('e2e-github-persist')
     const value = 'github-persist-value'
 
-    await addSecret(vaultPage, key, value)
+    await addSecret(vaultPage, key, value, { pat: githubPat, repoName: e2eRepo })
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
     await reconnectGithubVault(vaultPage)
@@ -67,6 +67,6 @@ describeGithub('github vault', () => {
     await row.getByRole('button', { name: 'Show password' }).click()
     await row.getByText(value).waitFor()
 
-    await deleteSecret(vaultPage, key)
+    await deleteSecret(vaultPage, key, { pat: githubPat, repoName: e2eRepo })
   })
 })
