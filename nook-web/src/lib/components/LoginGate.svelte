@@ -6,6 +6,7 @@
     ShieldCheck,
     ExternalLink,
     Plus,
+    ChevronLeft,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
@@ -42,6 +43,7 @@
     onSelectProvider,
     addProviderOpen = false,
     onBeginAddProvider,
+    onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
     onInitializeEmpty,
@@ -68,6 +70,7 @@
     onSelectProvider: (id: string) => void | Promise<void>
     addProviderOpen?: boolean
     onBeginAddProvider?: () => void
+    onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onInitializeEmpty?: () => void | Promise<void>
@@ -96,6 +99,17 @@
   >
     <CardHeader class="border-b border-border/60 pb-4 pt-5">
       <div class="space-y-1">
+        {#if addProviderOpen}
+          <button
+            type="button"
+            class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="cancel-add-provider-btn"
+            onclick={() => onCancelAddProvider?.()}
+          >
+            <ChevronLeft class="size-3.5" />
+            Back to saved providers
+          </button>
+        {/if}
         <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
           Sign in to nook
         </CardTitle>
@@ -304,7 +318,8 @@
           {/if}
         {/if}
 
-        <DeviceEnrollment
+        {#if !showProviderPicker}
+          <DeviceEnrollment
           {deviceId}
           {devicePublicKey}
           {pendingJoins}
@@ -316,6 +331,7 @@
           {onEnrollWithDec}
           onRefresh={onRefreshJoins}
         />
+        {/if}
 
         {#if errorMsg}
           <div

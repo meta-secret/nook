@@ -166,7 +166,6 @@ export class VaultState {
 
   beginProviderSetup(type: StorageProviderType) {
     this.loginSetupType = type
-    this.addProviderOpen = false
     this.storageMode = type
     this.githubPat = ''
     this.errorMsg = ''
@@ -179,7 +178,20 @@ export class VaultState {
     this.errorMsg = ''
   }
 
+  cancelAddProvider() {
+    this.addProviderOpen = false
+    this.loginSetupType = null
+    this.applyActiveProviderCredentials()
+    this.errorMsg = ''
+  }
+
   cancelProviderSetup() {
+    if (this.addProviderOpen && this.loginSetupType !== null) {
+      this.loginSetupType = null
+      this.githubPat = ''
+      this.errorMsg = ''
+      return
+    }
     this.loginSetupType = null
     this.addProviderOpen = false
     this.applyActiveProviderCredentials()

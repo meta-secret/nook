@@ -229,6 +229,7 @@
         onUnlock={handleUnlock}
         onSelectProvider={(id) => vault.selectProvider(id)}
         onBeginAddProvider={() => vault.beginAddProvider()}
+        onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={(type) => vault.beginProviderSetup(type)}
         onCancelSetup={() => vault.cancelProviderSetup()}
         onInitializeEmpty={() => vault.handleInitializeEmpty()}
