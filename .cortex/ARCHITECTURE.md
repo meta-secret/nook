@@ -71,7 +71,7 @@ The diagram below outlines how user actions in the Svelte UI trace down to the e
        | 3. Serializes database back to sorted JSONL
        v
 [nook-core Engine] (nook-core/src/lib.rs)
-       | (runs encrypt(jsonl, passphrase) via age format)
+       | (runs encrypt(jsonl, key) via age format)
        v
 [nook-wasm Bridge]
        | (saves encrypted hex representation)
@@ -85,7 +85,7 @@ The diagram below outlines how user actions in the Svelte UI trace down to the e
 ```
 
 ### Memory & State Lifetimes
-1. **Passphrase Handling:** The encryption passphrase exists only in browser memory or Svelte state during active vault sessions. If user allows localStorage persistence, it is cached there, but the core design relies on in-memory wasm state.
+1. **Encryption Key Handling:** A random encryption key is auto-generated on first connect and persisted in IndexedDB (`vault_secret_key` via `rexie`). It never leaves the browser and is never stored on GitHub. The key lives in WASM session state during active vault sessions.
 2. **Database Cache:** The decrypted database payload (JSONL format) is cached in-memory inside the Rust `NookVaultManager` struct instance. No plaintext is ever written to IndexedDB or GitHub.
 
 ---
@@ -94,10 +94,10 @@ The diagram below outlines how user actions in the Svelte UI trace down to the e
 
 - **Encryption Format:** Age format (RFC-compliant) using scrypt-based key derivation.
 - **Storage Encodings:**
-  - Plaintxt (JSONL database) is encrypted inside `nook-core` using a user passphrase.
+  - Plaintext (JSONL database) is encrypted inside `nook-core` using an auto-generated key stored in IndexedDB.
   - The resulting binary payload is encoded as a hexadecimal string (`hex::encode`).
   - For local storage, the hex string is saved under the key `encrypted_db` in the IndexedDB `vault` store.
-  - For remote storage, the hex string is decoded back to binary bytes, base64-encoded, and sent via the GitHub PUT API to the specified repository file path.
+  - For remote storage, the hex string is decoded back to binary bytes, base64-encoded, and sent via the GitHub PUT API to `{username}/nook/nook-vault`.
 
 ---
 

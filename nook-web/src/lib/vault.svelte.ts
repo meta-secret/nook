@@ -10,9 +10,6 @@ export class VaultState {
   // Storage settings
   storageMode = $state<'local' | 'github'>('local')
   githubPat = $state('')
-  githubRepo = $state('')
-  githubPath = $state('nook-secrets.age')
-  passphrase = $state('')
 
   // Database manager state
   manager = $state<NookVaultManager | null>(null)
@@ -22,82 +19,90 @@ export class VaultState {
   // Status & loading indicators
   errorMsg = $state('')
   successMsg = $state('')
-  currentStatus = $state('')
   isVerifying = $state(false)
   isSaving = $state(false)
+  isInitializing = $state(true)
 
   async init() {
-    // Instantiate Rust Wasm Session Manager
+    this.isInitializing = true
+    this.isVerifying = false
+    this.errorMsg = ''
     try {
       this.manager = await getVaultManager()
-      this.startStatusListener()
     } catch (error) {
       this.errorMsg =
         error instanceof Error
           ? error.message
           : 'Failed to initialize Nook Session Manager.'
+    } finally {
+      this.isInitializing = false
     }
 
-    // Load credentials
     this.storageMode =
       (localStorage.getItem('nook_storage_mode') as 'local' | 'github') ||
       'local'
     this.githubPat = localStorage.getItem('nook_github_pat') || ''
-    this.githubRepo = localStorage.getItem('nook_github_repo') || ''
-    this.githubPath =
-      localStorage.getItem('nook_github_path') || 'nook-secrets.age'
-    this.passphrase = localStorage.getItem('nook_passphrase') || ''
-
-    // Auto-connect if passphrase exists
-    if (this.passphrase && this.manager) {
-      if (this.storageMode === 'local' || (this.githubPat && this.githubRepo)) {
-        await this.loadDb()
-      }
-    }
-  }
-
-  async startStatusListener() {
-    if (!this.manager) return
-    while (true) {
-      try {
-        const status = await this.manager.next_status()
-        this.currentStatus = status
-      } catch (error) {
-        console.warn('Vault status channel error or manager closed:', error)
-        break
-      }
-    }
   }
 
   saveConfig() {
     localStorage.setItem('nook_storage_mode', this.storageMode)
     localStorage.setItem('nook_github_pat', this.githubPat)
-    localStorage.setItem('nook_github_repo', this.githubRepo)
-    localStorage.setItem('nook_github_path', this.githubPath)
-    localStorage.setItem('nook_passphrase', this.passphrase)
   }
 
   async loadDb() {
-    if (!this.manager) return
+    if (this.isInitializing) {
+      this.errorMsg = 'Vault engine is still loading. Try again in a moment.'
+      return
+    }
+
+    if (!this.manager) {
+      this.errorMsg =
+        'Vault engine is not available. Refresh the page and try again.'
+      return
+    }
+
+    if (this.isVerifying) {
+      this.errorMsg = 'Connection already in progress.'
+      return
+    }
+
+    if (this.storageMode === 'github' && !this.githubPat.trim()) {
+      this.errorMsg = 'Enter a GitHub personal access token to connect.'
+      return
+    }
+
+    this.githubPat = this.githubPat.trim()
     this.errorMsg = ''
     this.successMsg = ''
     this.isVerifying = true
-    this.saveConfig()
     try {
-      const rawRecords = (await this.manager.connect(
+      const connectPromise = this.manager.connect(
         this.storageMode,
-        this.passphrase,
         this.githubPat,
-        this.githubRepo,
-        this.githubPath,
-      )) as NookSecretRecord[]
+      )
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Connection timed out. Check your PAT, network, and try again.',
+              ),
+            ),
+          30_000,
+        )
+      })
+      const rawRecords = (await Promise.race([
+        connectPromise,
+        timeoutPromise,
+      ])) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
+      this.saveConfig()
       if (this.storageMode === 'local') {
-        this.successMsg = 'Local Mock Storage loaded.'
+        this.successMsg = 'Local vault loaded from IndexedDB.'
       } else {
         this.successMsg =
-          'Secrets file loaded & decrypted successfully from GitHub.'
+          'Connected to GitHub. Encryption key is stored locally in this browser.'
       }
     } catch (e: unknown) {
       this.isAuthenticated = false

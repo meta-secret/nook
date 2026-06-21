@@ -20,62 +20,56 @@
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50"
   >
     <div
-      class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8"
+      class="mx-auto flex max-w-xl items-center justify-between gap-4 px-4 py-3"
     >
-      <div class="flex items-center gap-3">
+      <div class="flex min-w-0 items-center gap-2.5">
         <div
-          class="p-2 bg-accent text-accent-foreground rounded-lg border border-border"
+          class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-accent-foreground"
         >
-          <Lock class="size-6" />
+          <Lock class="size-4" />
         </div>
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="text-xl font-bold tracking-tight text-foreground"
-              >nook</span
-            >
-            <span
-              class="text-xs font-medium text-muted-foreground border border-border px-1.5 py-0.5 rounded-sm"
-              >v0.1.0</span
-            >
-            {#if vault.currentStatus}
-              <span
-                class="text-[10px] uppercase font-mono tracking-wider bg-accent text-accent-foreground border border-border px-1.5 py-0.5 rounded animate-pulse"
-              >
-                {vault.currentStatus}
-              </span>
-            {/if}
-          </div>
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="text-base font-semibold tracking-tight text-foreground"
+            >nook</span
+          >
+          <span
+            class="shrink-0 text-[10px] font-medium text-muted-foreground border border-border px-1 py-0.5 rounded-sm"
+            >v0.1.0</span
+          >
         </div>
       </div>
 
-      <!-- Tab Buttons -->
       <nav
-        class="flex p-1 bg-muted border border-border rounded-lg"
+        class="flex shrink-0 rounded-lg border border-border bg-muted p-0.5"
         aria-label="Main Navigation"
       >
         <button
-          class="px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 {vault.activeTab ===
+          class="rounded-md px-3 py-1 text-xs font-medium transition-all duration-200 sm:px-3.5 sm:text-sm {vault.activeTab ===
           'auth'
             ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
           onclick={() => (vault.activeTab = 'auth')}
         >
-          Auth & Storage
+          Setup
         </button>
         <button
-          class="px-4 py-1.5 text-sm font-medium rounded-md transition-all duration-200 {vault.activeTab ===
+          class="rounded-md px-3 py-1 text-xs font-medium transition-all duration-200 sm:px-3.5 sm:text-sm {vault.activeTab ===
           'secrets'
             ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
           onclick={() => (vault.activeTab = 'secrets')}
         >
-          Secret Vault
+          Vault
         </button>
       </nav>
     </div>
   </header>
 
-  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+  <div
+    class="mx-auto px-4 {vault.activeTab === 'secrets'
+      ? 'max-w-6xl py-8 sm:px-6 lg:px-8'
+      : 'max-w-xl pt-4 pb-8'}"
+  >
     <!-- Notifications -->
     {#if vault.errorMsg}
       <div
@@ -108,12 +102,12 @@
       <AuthStorage
         bind:storageMode={vault.storageMode}
         bind:githubPat={vault.githubPat}
-        bind:githubRepo={vault.githubRepo}
-        bind:githubPath={vault.githubPath}
-        bind:passphrase={vault.passphrase}
         isAuthenticated={vault.isAuthenticated}
         isVerifying={vault.isVerifying}
         isSaving={vault.isSaving}
+        isInitializing={vault.isInitializing}
+        errorMsg={vault.errorMsg}
+        successMsg={vault.successMsg}
         secretsCount={vault.secrets.length}
         onConnect={() => vault.loadDb()}
         onInitializeEmpty={() => vault.handleInitializeEmpty()}

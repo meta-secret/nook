@@ -119,8 +119,8 @@
       <div class="space-y-2">
         <h2 class="text-2xl font-bold text-foreground">Vault is Locked</h2>
         <p class="text-muted-foreground max-w-md">
-          Please configure your master passphrase and select a storage provider
-          under the Auth & Storage tab to unlock the vault.
+          Select a storage provider and connect your vault under the Auth &
+          Storage tab to unlock.
         </p>
       </div>
       <Button

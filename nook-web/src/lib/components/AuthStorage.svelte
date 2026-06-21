@@ -2,12 +2,13 @@
   import {
     Server,
     GitBranch,
-    KeyRound,
     ShieldCheck,
-    Boxes,
     RefreshCw,
+    HardDrive,
+    Cloud,
+    CheckCircle2,
+    ExternalLink,
   } from '@lucide/svelte'
-  import { Badge } from '$lib/components/ui/badge'
   import { Button } from '$lib/components/ui/button'
   import {
     Card,
@@ -20,264 +21,243 @@
   let {
     storageMode = $bindable(),
     githubPat = $bindable(),
-    githubRepo = $bindable(),
-    githubPath = $bindable(),
-    passphrase = $bindable(),
     isAuthenticated,
     isVerifying,
     isSaving,
+    isInitializing,
+    errorMsg,
+    successMsg,
     secretsCount,
     onConnect,
     onInitializeEmpty,
   }: {
     storageMode: 'local' | 'github'
     githubPat: string
-    githubRepo: string
-    githubPath: string
-    passphrase: string
     isAuthenticated: boolean
     isVerifying: boolean
     isSaving: boolean
+    isInitializing: boolean
+    errorMsg: string
+    successMsg: string
     secretsCount: number
-    onConnect: () => void
-    onInitializeEmpty: () => void
+    onConnect: () => void | Promise<void>
+    onInitializeEmpty: () => void | Promise<void>
   } = $props()
+
+  const githubPatUrl =
+    'https://github.com/settings/tokens/new?scopes=repo&description=nook'
 </script>
 
-<div class="grid gap-6 md:grid-cols-3 animate-in fade-in duration-200">
-  <!-- Main config panel -->
-  <div class="md:col-span-2 space-y-6">
-    <Card class="bg-card text-card-foreground border-border">
-      <CardHeader>
-        <CardTitle class="text-foreground"
-          >Credentials & Storage Providers</CardTitle
-        >
-        <CardDescription class="text-muted-foreground"
-          >Choose where to store your encrypted vault and configure your master
-          passphrase.</CardDescription
-        >
-      </CardHeader>
-      <CardContent>
-        <form
-          onsubmit={(e) => {
-            e.preventDefault()
-            onConnect()
-          }}
-          class="space-y-5"
-        >
-          <!-- Mode Toggle -->
-          <div class="space-y-2">
-            <label
-              class="text-sm font-medium text-foreground"
-              for="storage-mode-select">Storage Target</label
-            >
-            <div class="grid grid-cols-2 gap-2" id="storage-mode-select">
-              <button
-                type="button"
-                class="flex items-center justify-center gap-2 p-3 rounded-lg border text-sm font-medium transition-all {storageMode ===
-                'local'
-                  ? 'bg-secondary text-secondary-foreground border-primary/50'
-                  : 'bg-transparent border-border text-muted-foreground hover:text-foreground'}"
-                onclick={() => (storageMode = 'local')}
-              >
-                <Server class="size-4" />
-                Local Storage Mock (IndexedDB)
-              </button>
-              <button
-                type="button"
-                class="flex items-center justify-center gap-2 p-3 rounded-lg border text-sm font-medium transition-all {storageMode ===
-                'github'
-                  ? 'bg-secondary text-secondary-foreground border-primary/50'
-                  : 'bg-transparent border-border text-muted-foreground hover:text-foreground'}"
-                onclick={() => (storageMode = 'github')}
-              >
-                <GitBranch class="size-4" />
-                GitHub Repository
-              </button>
-            </div>
-          </div>
-
-          <!-- Passphrase -->
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <label
-                class="text-sm font-medium text-foreground"
-                for="passphrase">Master Passphrase</label
-              >
-              <span class="text-xs text-muted-foreground"
-                >Used for client-side age encryption</span
-              >
-            </div>
-            <div class="relative">
-              <input
-                id="passphrase"
-                type="password"
-                bind:value={passphrase}
-                placeholder="Enter master password key"
-                required
-                class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
-              />
-            </div>
-          </div>
-
-          {#if storageMode === 'github'}
-            <div
-              class="border-t border-border pt-5 space-y-4 animate-in fade-in duration-300"
-            >
-              <!-- PAT -->
-              <div class="space-y-2">
-                <label class="text-sm font-medium text-foreground" for="pat"
-                  >GitHub PAT (Personal Access Token)</label
-                >
-                <input
-                  id="pat"
-                  type="password"
-                  bind:value={githubPat}
-                  placeholder="ghp_xxxxxxxxxxxx"
-                  required
-                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
-                />
-                <p class="text-xs text-muted-foreground">
-                  Requires `repo` scope to read and write files in private
-                  repositories.
-                </p>
-              </div>
-
-              <!-- Repository -->
-              <div class="space-y-2">
-                <label class="text-sm font-medium text-foreground" for="repo"
-                  >GitHub Repository</label
-                >
-                <input
-                  id="repo"
-                  type="text"
-                  bind:value={githubRepo}
-                  placeholder="owner/repository"
-                  required
-                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
-                />
-              </div>
-
-              <!-- Path -->
-              <div class="space-y-2">
-                <label class="text-sm font-medium text-foreground" for="path"
-                  >File Storage Path</label
-                >
-                <input
-                  id="path"
-                  type="text"
-                  bind:value={githubPath}
-                  placeholder="nook-secrets.age"
-                  required
-                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            </div>
-          {/if}
-
-          <div class="pt-2 flex gap-3">
-            <Button
-              type="submit"
-              class="bg-primary hover:bg-primary/90 text-primary-foreground flex-1"
-              disabled={isVerifying}
-            >
-              {#if isVerifying}
-                <RefreshCw class="size-4 animate-spin mr-2" />
-                Connecting...
-              {:else}
-                <ShieldCheck class="size-4 mr-2" />
-                Verify & Connect Vault
-              {/if}
-            </Button>
-
-            {#if isAuthenticated && secretsCount === 0}
-              <Button
-                variant="outline"
-                onclick={onInitializeEmpty}
-                disabled={isSaving}
-                class="border-border text-foreground hover:bg-accent"
-              >
-                Initialize Vault
-              </Button>
-            {/if}
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+<div class="mx-auto max-w-xl animate-in fade-in duration-300">
+  <div class="mb-5 space-y-1.5 text-center">
+    <h1 class="text-2xl font-semibold tracking-tight text-foreground">
+      Connect your vault
+    </h1>
+    <p class="text-sm leading-relaxed text-muted-foreground">
+      Pick where encrypted secrets live. Your key stays in this browser —
+      never on GitHub.
+    </p>
   </div>
 
-  <!-- Sidebar notes -->
-  <div class="space-y-6">
-    <Card class="bg-card text-card-foreground border-border">
-      <CardHeader>
-        <CardTitle class="text-foreground text-sm"
-          >Security & Architecture</CardTitle
-        >
-      </CardHeader>
-      <CardContent class="text-xs text-muted-foreground space-y-4">
-        <div class="flex gap-2">
-          <ShieldCheck class="size-4 shrink-0 text-primary mt-0.5" />
-          <p>
-            <strong class="text-foreground">Zero Knowledge:</strong> All data is encrypted
-            and decrypted in WebAssembly directly in your browser. Passphrases and
-            keys never leave your device.
-          </p>
-        </div>
-        <div class="flex gap-2">
-          <KeyRound class="size-4 shrink-0 text-primary mt-0.5" />
-          <p>
-            <strong class="text-foreground">Age Encryption:</strong> Employs the `age`
-            format (via scrypt and x25519) to guard data. Compatible with the command-line
-            `rage` utility.
-          </p>
-        </div>
-        <div class="flex gap-2">
-          <Boxes class="size-4 shrink-0 text-primary mt-0.5" />
-          <p>
-            <strong class="text-foreground">IndexedDB:</strong> Stored locally using
-            the Rust-Wasm futures wrapper crate `rexie` for safe storage inside the
-            browser.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-
-    <Card class="bg-card text-card-foreground border-border">
-      <CardHeader>
-        <CardTitle class="text-foreground text-sm">Status Info</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-3">
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">Vault Status:</span>
-          {#if isAuthenticated}
-            <Badge
-              class="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/10"
-              >Unlocked</Badge
-            >
-          {:else}
-            <Badge
-              class="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/10"
-              >Locked</Badge
-            >
-          {/if}
-        </div>
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">Mode:</span>
-          <span class="text-foreground font-medium capitalize"
-            >{storageMode}</span
+  <Card class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm">
+    <CardHeader class="pb-4">
+      <div class="flex items-start justify-between gap-4">
+        <div class="space-y-1">
+          <CardTitle class="text-base font-medium text-foreground"
+            >Storage provider</CardTitle
           >
+          <CardDescription class="text-muted-foreground">
+            Switch anytime — your encryption key remains local.
+          </CardDescription>
         </div>
-        {#if storageMode === 'github' && githubRepo}
-          <div class="flex items-center justify-between text-sm">
-            <span class="text-muted-foreground">Repo:</span>
-            <span class="text-foreground font-mono text-xs">{githubRepo}</span>
+        {#if isAuthenticated}
+          <span
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-500"
+            data-testid="connected-badge"
+          >
+            <CheckCircle2 class="size-3.5" />
+            Connected
+          </span>
+        {/if}
+      </div>
+    </CardHeader>
+
+    <CardContent>
+      <form
+        novalidate
+        onsubmit={(e) => {
+          e.preventDefault()
+          void onConnect()
+        }}
+        class="space-y-6"
+      >
+        <fieldset class="space-y-3">
+          <legend class="sr-only">Storage target</legend>
+          <div class="grid gap-3 sm:grid-cols-2" id="storage-mode-select">
+            <button
+              type="button"
+              aria-pressed={storageMode === 'local'}
+              class="group relative flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 {storageMode ===
+              'local'
+                ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30'
+                : 'border-border bg-background/50 hover:border-border hover:bg-accent/40'}"
+              onclick={() => (storageMode = 'local')}
+            >
+              <div
+                class="flex size-9 items-center justify-center rounded-lg border transition-colors {storageMode ===
+                'local'
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-border bg-muted text-muted-foreground group-hover:text-foreground'}"
+              >
+                <HardDrive class="size-4" />
+              </div>
+              <div class="space-y-1">
+                <span class="block text-sm font-medium text-foreground"
+                  >Local</span
+                >
+                <span class="block text-xs leading-relaxed text-muted-foreground"
+                  >IndexedDB in this browser. No sign-in.</span
+                >
+              </div>
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={storageMode === 'github'}
+              class="group relative flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 {storageMode ===
+              'github'
+                ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30'
+                : 'border-border bg-background/50 hover:border-border hover:bg-accent/40'}"
+              onclick={() => (storageMode = 'github')}
+            >
+              <div
+                class="flex size-9 items-center justify-center rounded-lg border transition-colors {storageMode ===
+                'github'
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-border bg-muted text-muted-foreground group-hover:text-foreground'}"
+              >
+                <Cloud class="size-4" />
+              </div>
+              <div class="space-y-1">
+                <span class="block text-sm font-medium text-foreground"
+                  >GitHub</span
+                >
+                <span class="block text-xs leading-relaxed text-muted-foreground"
+                  >Sync encrypted vault to <span class="font-mono">username/nook</span>.</span
+                >
+              </div>
+            </button>
+          </div>
+        </fieldset>
+
+        {#if storageMode === 'github'}
+          <div
+            class="space-y-3 rounded-xl border border-border bg-muted/30 p-4 animate-in fade-in slide-in-from-top-1 duration-200"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-sm font-medium text-foreground" for="pat">
+                Personal access token
+              </label>
+              <a
+                href={githubPatUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Generate new token
+                <ExternalLink class="size-3" />
+              </a>
+            </div>
+            <input
+              id="pat"
+              type="password"
+              bind:value={githubPat}
+              placeholder="ghp_xxxxxxxxxxxx"
+              autocomplete="off"
+              class="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+            />
+                <p class="text-xs leading-relaxed text-muted-foreground">
+                  Use a classic token starting with
+                  <span class="font-mono text-foreground/80">ghp_</span> with
+                  <span class="font-mono text-foreground/80">repo</span> scope.
+                  Syncs encrypted vault to
+                  <span class="font-mono text-foreground/80">username/nook/nook-vault</span>.
+                  Creates the <span class="font-mono text-foreground/80">nook</span> repo automatically if needed.
+                  Your encryption key never leaves this browser.
+                </p>
+          </div>
+        {:else}
+          <div
+            class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
+          >
+            <Server class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <p class="text-xs leading-relaxed text-muted-foreground">
+              Everything stays on this device. Clear site data to remove the vault.
+            </p>
           </div>
         {/if}
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">Total Secrets:</span>
-          <span class="text-primary font-bold">{secretsCount}</span>
+
+        {#if errorMsg}
+          <div
+            class="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            role="alert"
+            data-testid="connect-error"
+          >
+            {errorMsg}
+          </div>
+        {/if}
+
+        {#if successMsg}
+          <div
+            class="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary"
+            role="status"
+            data-testid="connect-success"
+          >
+            {successMsg}
+          </div>
+        {/if}
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button
+            type="submit"
+            size="lg"
+            class="sm:min-w-[200px]"
+            data-testid="connect-vault-btn"
+          >
+            {#if isInitializing}
+              <RefreshCw class="size-4 animate-spin" />
+              Loading engine…
+            {:else if isVerifying}
+              <RefreshCw class="size-4 animate-spin" />
+              Connecting…
+            {:else if isAuthenticated}
+              <ShieldCheck class="size-4" />
+              Reconnect
+            {:else}
+              <ShieldCheck class="size-4" />
+              Connect vault
+            {/if}
+          </Button>
+
+          {#if isAuthenticated && secretsCount === 0}
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              onclick={onInitializeEmpty}
+              disabled={isSaving}
+              class="border-border text-foreground hover:bg-accent"
+            >
+              {#if isSaving}
+                <RefreshCw class="size-4 animate-spin" />
+              {:else}
+                <GitBranch class="size-4" />
+              {/if}
+              Initialize empty vault
+            </Button>
+          {/if}
         </div>
-      </CardContent>
-    </Card>
-  </div>
+      </form>
+    </CardContent>
+  </Card>
 </div>

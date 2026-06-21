@@ -21,7 +21,7 @@ js-sys = "0.3"
 base64 = "0.21.7"
 hex = "0.4.3"
 serde = { version = "1.0.228", features = ["derive"] }
-reqwest = "0.12.12"
+reqwest = { version = "0.12.12", default-features = false, features = ["json"] }
 thiserror = "2.0.18"
 flume = "0.11.0"
 

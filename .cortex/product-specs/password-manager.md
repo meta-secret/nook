@@ -9,7 +9,7 @@ This document defines the functional and technical specifications for Nook's Zer
 The Nook Password Manager is a client-side, zero-knowledge secret vault. It enables users to secure and organize credentials locally in their browser or synchronize them to their private GitHub repositories.
 
 ### Core Goals
-- **Zero-Knowledge Architecture:** Plaintext credentials and master passphrases must never leave the user's browser or be sent over the wire in unencrypted form.
+- **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
 - **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, and cryptographic operations are encapsulated in WebAssembly.
 - **Portable Backends:** Support local browser storage (IndexedDB) and remote git-backed repositories (GitHub API) with a unified connection flow.
 - **Rage/Age Compatibility:** Encrypted vaults must be standard age files, decryptable via standard command-line tools like `rage`.
@@ -20,7 +20,7 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
 
 ```
       +--------------------+
-      | 1. Config & Login  | <---+ (Decryption fails / Wrong passphrase)
+      | 1. Config & Login  | <---+ (Decryption fails / Key mismatch)
       +--------------------+     |
                 |                |
                 v (Success)      |
@@ -37,13 +37,17 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
 ### A. Configuration & Authentication Flow
 1. **Target Selection:** The user chooses between `local` (IndexedDB) and `github` storage mode.
 2. **Configuration Entry:**
-   - **Local Mode:** Requires only a Master Passphrase.
-   - **GitHub Mode:** Requires a GitHub Personal Access Token (PAT), repository name (e.g. `username/repo`), target file path (e.g. `nook-secrets.age`), and a Master Passphrase.
-3. **Vault Connection:**
-   - The user clicks **Connect**.
+   - **Local Mode:** No credentials required. Click **Verify & Connect Vault**.
+   - **GitHub Mode:** Requires only a GitHub Personal Access Token (PAT) with `repo` scope. The repository (`{username}/nook`) and vault file (`nook-vault`) are resolved automatically from the PAT.
+3. **Encryption Key (auto-managed):**
+   - On first connect, a random encryption key is generated and stored in IndexedDB under key `vault_secret_key` (via `rexie`).
+   - The key never leaves the browser and is never stored on GitHub.
+   - GitHub only stores the age-encrypted vault payload.
+4. **Vault Connection:**
+   - The user clicks **Verify & Connect Vault**.
    - If the database file is found, it is loaded, decrypted, and parsed.
    - If no database file is found (e.g. 404 from GitHub or empty IndexedDB), the UI displays a warning and prompts the user to **Initialize Empty Database**.
-   - Upon successful connection, credentials are saved to `localStorage` for session convenience, and the user is redirected to the **Secret Vault** tab.
+   - Upon successful connection, the storage mode and GitHub PAT are saved to `localStorage` for session convenience, and the user is redirected to the **Secret Vault** tab.
 
 ### B. Managing Vault Secrets
 1. **Secrets List:** Plaintext secrets are listed alphabetically by key (service name).
@@ -84,12 +88,14 @@ The database payload is a UTF-8 string containing JSON Lines (JSONL). Each line 
 - **Database Name:** `nook_db`
 - **Version:** `1`
 - **Store Name:** `vault`
-- **Stored Record:**
-  - Key: `encrypted_db`
-  - Value: The age-encrypted database payload represented as a lowercase hex string.
+- **Stored Records:**
+  - Key: `vault_secret_key` — auto-generated age encryption key (hex string). Never synced to GitHub.
+  - Key: `encrypted_db` — the age-encrypted database payload as a lowercase hex string (local mode only).
 
 ### C. GitHub Repository Adapter
-- **Endpoint:** `https://api.github.com/repos/{repo}/contents/{path}`
+- **Repository:** `{username}/nook` (resolved from PAT via GitHub `/user` API).
+- **File Path:** `nook-vault` (encrypted vault blob — not the encryption key).
+- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-vault`
 - **Authentication:** `Authorization: token {pat}` header.
 - **Conflict Avoidance (SHA):**
   - During `connect`, the file's current Git blob SHA is cached.
@@ -104,4 +110,4 @@ The database payload is a UTF-8 string containing JSON Lines (JSONL). Each line 
 - **Key Derivation (scrypt):**
   - Automatically derives keys using a salt generated during encryption.
   - Uses default parameters from the standard Rust `age` crate for scrypt (logN = 15, r = 8, p = 1), optimizing balance between safety and browser execution speed.
-- **Passphrase Fallback:** If the passphrase is left blank, the system skips age encryption/decryption and operates on plaintext strings directly. This serves as a debugging feature and should not be used in production.
+- **Key Generation:** On first connect, a 128-bit random key is generated via `getrandom` and stored in IndexedDB as `vault_secret_key`. This key is used as the age passphrase for encrypt/decrypt operations.
