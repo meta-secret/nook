@@ -156,10 +156,8 @@ describeMultiDevice('multi-device github vault', () => {
   test('both devices can add secrets and see shared vault state', async () => {
     await addSecret(deviceB, joinerSecretKey, joinerSecretValue)
 
-    const yaml = await waitForVaultYaml(
-      githubPat,
-      e2eRepo,
-      (snapshot) => snapshot.secretLabels.includes(joinerSecretKey),
+    const yaml = await waitForVaultYaml(githubPat, e2eRepo, (snapshot) =>
+      snapshot.secretLabels.includes(joinerSecretKey),
     )
     expect(yaml.secretLabels).toEqual(
       expect.arrayContaining([genesisSecretKey, joinerSecretKey]),

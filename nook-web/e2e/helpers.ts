@@ -15,11 +15,7 @@ import {
   parseVaultYamlSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
-import {
-  cleanupAllRegisteredE2eGithubRepos,
-  cleanupE2eGithubRepo,
-  registerE2eGithubRepo,
-} from './github-repos'
+import { registerE2eGithubRepo } from './github-repos'
 
 export {
   cleanupAllRegisteredE2eGithubRepos,

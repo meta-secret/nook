@@ -18,14 +18,12 @@
   let {
     isSaving,
     secrets = [] as SecretRecord[],
-    storageMode,
     onAddSecret,
     onDeleteSecret,
     onGeneratePassword,
   }: {
     isSaving: boolean
     secrets?: SecretRecord[]
-    storageMode: 'local' | 'github'
     onAddSecret: (key: string, value: string) => Promise<void>
     onDeleteSecret: (key: string) => Promise<void>
     onGeneratePassword: (
@@ -111,9 +109,7 @@
     if (!needle) {
       return secrets
     }
-    return secrets.filter((secret) =>
-      secret.key.toLowerCase().includes(needle),
-    )
+    return secrets.filter((secret) => secret.key.toLowerCase().includes(needle))
   })
 </script>
 

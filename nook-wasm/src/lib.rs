@@ -815,8 +815,7 @@ fn content_requires_genesis(content: &str, force_genesis: bool) -> Result<bool, 
         return Ok(true);
     }
     let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
-    let records =
-        nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    let records = nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
     Ok(!nook_core::vault_has_multi_device_records(&records))
 }
 
@@ -828,19 +827,16 @@ fn access_status_for_vault_content(
         return Ok("new_vault".to_owned());
     }
     let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
-    let records =
-        nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    let records = nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
     if !nook_core::vault_has_multi_device_records(&records) {
         return Ok("new_vault".to_owned());
     }
-    Ok(
-        match nook_core::assess_connect_access(&records, identity) {
-            nook_core::ConnectAccessStatus::Ready => "ready",
-            nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-            nook_core::ConnectAccessStatus::JoinPending => "join_pending",
-        }
-        .to_owned(),
-    )
+    Ok(match nook_core::assess_connect_access(&records, identity) {
+        nook_core::ConnectAccessStatus::Ready => "ready",
+        nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
+        nook_core::ConnectAccessStatus::JoinPending => "join_pending",
+    }
+    .to_owned())
 }
 
 fn sync_result_unchanged() -> Result<JsValue, JsError> {
@@ -1268,8 +1264,7 @@ async fn fetch_github_vault(
 
     // List repo root first so a missing vault file does not produce fetch 404
     // noise in the browser console (Chrome logs failed fetch responses).
-    let list_url =
-        github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/"));
+    let list_url = github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/"));
     let list_response = apply_headers(client.get(&list_url)).send().await?;
 
     if list_response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -1291,12 +1286,16 @@ async fn fetch_github_vault(
         NookError::Serialization(format!("Failed to parse GitHub directory listing: {e}"))
     })?;
 
-    if !entries.iter().any(|item| item.name == path && item.entry_type == "file") {
+    if !entries
+        .iter()
+        .any(|item| item.name == path && item.entry_type == "file")
+    {
         return Ok(None);
     }
 
-    let file_url =
-        github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/{path}"));
+    let file_url = github_cache_bust_url(&format!(
+        "https://api.github.com/repos/{repo}/contents/{path}"
+    ));
     let file_response = apply_headers(client.get(&file_url)).send().await?;
 
     if file_response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -1391,12 +1390,9 @@ async fn write_github_text_file_with_retry(
         match write_github_text_file(pat, repo, path, content, sha.as_deref()).await {
             Ok(new_sha) => return Ok(new_sha),
             Err(NookError::GitHub(message))
-                if attempt < 2
-                    && (message.contains("422") || message.contains("409")) =>
+                if attempt < 2 && (message.contains("422") || message.contains("409")) =>
             {
-                if let Ok(Some((_, fresh_sha))) =
-                    fetch_github_vault(pat, repo, path, None).await
-                {
+                if let Ok(Some((_, fresh_sha))) = fetch_github_vault(pat, repo, path, None).await {
                     sha = Some(fresh_sha);
                 }
             }

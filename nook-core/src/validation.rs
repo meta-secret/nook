@@ -115,7 +115,10 @@ mod tests {
             validate_github_repo_name("  ").unwrap(),
             DEFAULT_GITHUB_REPO_NAME
         );
-        assert_eq!(validate_github_repo_name("work-vault").unwrap(), "work-vault");
+        assert_eq!(
+            validate_github_repo_name("work-vault").unwrap(),
+            "work-vault"
+        );
         assert!(validate_github_repo_name(".").is_err());
         assert!(validate_github_repo_name("bad name").is_err());
     }

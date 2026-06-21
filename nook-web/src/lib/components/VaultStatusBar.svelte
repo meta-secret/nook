@@ -59,9 +59,13 @@
   <div
     class="mx-auto flex max-w-xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-6"
   >
-    <div class="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground">
+    <div
+      class="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground"
+    >
       <span class="truncate">
-        Syncing via <span class="font-medium text-foreground">{storageLabel}</span>
+        Syncing via <span class="font-medium text-foreground"
+          >{storageLabel}</span
+        >
       </span>
       <span class="hidden sm:inline" aria-hidden="true">·</span>
       <span class="shrink-0" data-testid="vault-last-sync">

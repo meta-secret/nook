@@ -9,6 +9,7 @@ import {
   type SecretRecord,
   type VaultMember,
 } from '$lib/nook'
+import { SvelteDate } from 'svelte/reactivity'
 import type {
   NookVaultManager,
   NookSecretRecord,
@@ -52,7 +53,7 @@ export class VaultState {
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
-  lastSyncedAt = $state<Date | null>(null)
+  lastSyncedAt = $state<SvelteDate | null>(null)
   isSyncing = $state(false)
 
   static readonly SYNC_INTERVAL_MS = 10_000
@@ -288,10 +289,7 @@ export class VaultState {
           this.storageMode === 'github'
             ? pat || this.activeProvider.githubPat
             : undefined,
-        githubRepo:
-          this.storageMode === 'github'
-            ? repo
-            : undefined,
+        githubRepo: this.storageMode === 'github' ? repo : undefined,
       }
       this.providers = this.providers.map((p) =>
         p.id === updated.id ? updated : p,
@@ -385,7 +383,7 @@ export class VaultState {
         this.manager!.sync_vault_from_storage(...this.wasmGithubArgs()),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
-      this.lastSyncedAt = new Date()
+      this.lastSyncedAt = new SvelteDate()
     } catch {
       // Background sync should not interrupt the UI.
     } finally {
@@ -489,7 +487,9 @@ export class VaultState {
     try {
       await this.initDeviceIdentity()
       const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise = this.manager!.connect_fresh(...this.wasmGithubArgs())
+        const connectPromise = this.manager!.connect_fresh(
+          ...this.wasmGithubArgs(),
+        )
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () =>

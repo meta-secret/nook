@@ -252,9 +252,10 @@
                       New here? Create a GitHub token first
                     </p>
                     <p class="text-xs leading-relaxed text-muted-foreground">
-                      Nook needs a classic personal access token
-                      (<span class="font-mono text-foreground/90">ghp_</span>)
-                      with <span class="font-mono text-foreground/90">repo</span>
+                      Nook needs a classic personal access token (<span
+                        class="font-mono text-foreground/90">ghp_</span
+                      >) with
+                      <span class="font-mono text-foreground/90">repo</span>
                       scope so it can read and write your vault file.
                     </p>
                   </div>
@@ -288,8 +289,8 @@
                       class="text-[11px] leading-relaxed text-muted-foreground"
                     >
                       Use the button above — GitHub opens with
-                      <span class="font-mono">repo</span> scope pre-selected.
-                      Copy the token when it is shown; you will not see it again.
+                      <span class="font-mono">repo</span> scope pre-selected. Copy
+                      the token when it is shown; you will not see it again.
                     </p>
                   </div>
                 </li>

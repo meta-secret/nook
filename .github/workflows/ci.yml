@@ -1,3 +1,9 @@
+# CI: build + check, Playwright e2e (local dev server), GitHub Pages deploy.
+#
+# Playwright does not hit the Pages preview — it starts `vite dev` on localhost.
+# PR previews deploy to GitHub Pages (preview URL commented on the PR) so developers
+# can open a live build without running locally.
+
 name: CI
 
 on:
@@ -10,9 +16,10 @@ permissions:
   packages: write
   pages: write
   id-token: write
+  pull-requests: write
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,11 +56,19 @@ jobs:
       - name: Check
         run: task check
 
+      - name: Set Vite base path
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "VITE_BASE=/${{ github.event.repository.name }}/" >> $GITHUB_ENV
+          else
+            echo "VITE_BASE=/" >> $GITHUB_ENV
+          fi
+
       - name: Build web for GitHub Pages
-        run: task web:build VITE_BASE="/"
+        run: task web:build VITE_BASE="${{ env.VITE_BASE }}"
 
       - name: Upload Pages artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: actions/upload-pages-artifact@v3
         with:
           path: nook-web/dist
@@ -87,9 +102,8 @@ jobs:
 
       - name: Build WASM and install web dependencies
         run: |
-          task setup
+          task docker:build
           task wasm:build
-          rm -rf nook-web/node_modules
           cd nook-web && bun install
         env:
           CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
@@ -121,3 +135,31 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-preview:
+    name: Deploy preview
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy preview
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          preview: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Comment preview URL on PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bun run .github/scripts/comment-preview-url.ts
