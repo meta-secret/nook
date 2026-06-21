@@ -73,7 +73,6 @@ async function deleteGithubFileIfExists(
       continue
     }
 
-    // SHA race or cached metadata — refetch and retry.
     if (deleteRes.status === 409 || deleteRes.status === 422) {
       await sleep(400)
       continue
@@ -102,11 +101,23 @@ export async function clearBrowserVault(page: Page) {
     () =>
       new Promise<void>((resolve, reject) => {
         localStorage.clear()
-        const request = indexedDB.deleteDatabase('nook_db')
-        request.onsuccess = () => resolve()
-        request.onerror = () =>
-          reject(request.error ?? new Error('IndexedDB delete failed'))
-        request.onblocked = () => resolve()
+        let pending = 2
+        const done = () => {
+          pending -= 1
+          if (pending === 0) resolve()
+        }
+        const onError = (err: DOMException | null) =>
+          reject(err ?? new Error('IndexedDB delete failed'))
+
+        const vaultDb = indexedDB.deleteDatabase('nook_db')
+        vaultDb.onsuccess = done
+        vaultDb.onerror = () => onError(vaultDb.error)
+        vaultDb.onblocked = done
+
+        const authDb = indexedDB.deleteDatabase('nook_auth')
+        authDb.onsuccess = done
+        authDb.onerror = () => onError(authDb.error)
+        authDb.onblocked = done
       }),
   )
 }
@@ -116,10 +127,14 @@ export function uniqueSecretKey(prefix: string) {
 }
 
 export async function waitForEngine(page: Page) {
-  const button = page.getByTestId('connect-vault-btn')
-  await expect(button).toBeVisible()
-  await expect(button).not.toContainText('Loading engine', { timeout: 20_000 })
-  return button
+  const button = page
+    .getByTestId('unlock-vault-btn')
+    .or(page.getByTestId('sign-in-btn'))
+  await expect(button.first()).toBeVisible()
+  await expect(button.first()).not.toContainText('Loading engine', {
+    timeout: 20_000,
+  })
+  return button.first()
 }
 
 async function assertGithubConnected(page: Page) {
@@ -134,26 +149,29 @@ async function assertGithubConnected(page: Page) {
 
 export async function connectLocalVault(page: Page) {
   await page.goto('/')
-  await page.getByRole('button', { name: /^Local/ }).click()
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Local vault loaded',
-    { timeout: 20_000 },
-  )
+  const unlockButton = page.getByTestId('unlock-vault-btn')
+  if (await unlockButton.isVisible()) {
+    await unlockButton.click()
+  } else {
+    await page.getByTestId('provider-option-local').click()
+    const connectButton = await waitForEngine(page)
+    await connectButton.click()
+  }
+  await expect(
+    page.getByTestId('connect-success').or(page.getByTestId('app-success')),
+  ).toContainText('Local vault loaded', { timeout: 20_000 })
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
 export async function connectGithubVault(page: Page, pat: string) {
   await page.goto('/')
-  await page.getByRole('button', { name: /^GitHub/ }).click()
-  await page.getByLabel('Paste token here').fill(pat)
+  await page.getByTestId('provider-option-github').click()
+  await page.getByTestId('github-pat-input').fill(pat)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Connected to GitHub',
-    { timeout: 90_000 },
-  )
+  await expect(
+    page.getByTestId('connect-success').or(page.getByTestId('app-success')),
+  ).toContainText('Connected to GitHub', { timeout: 90_000 })
   await assertGithubConnected(page)
 }
 
@@ -164,19 +182,12 @@ export async function openStorageSettings(page: Page) {
   await expect(page.getByTestId('vault-panel')).not.toBeVisible()
 }
 
-/** Reconnect after reload — PAT and storage mode are restored from localStorage. */
+/** Reconnect after reload — PAT restored from IndexedDB auth providers. */
 export async function reconnectGithubVault(page: Page) {
-  await openStorageSettings(page)
-  await expect(page.getByRole('button', { name: /^GitHub/ })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  )
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await expect(page.getByTestId('app-success')).toContainText(
-    'Connected to GitHub',
-    { timeout: 90_000 },
-  )
+  await page.getByTestId('unlock-vault-btn').click()
+  await expect(
+    page.getByTestId('connect-success').or(page.getByTestId('app-success')),
+  ).toContainText('Connected to GitHub', { timeout: 90_000 })
   await assertVaultReady(page)
 }
 

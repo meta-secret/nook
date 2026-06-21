@@ -13,9 +13,22 @@ import type {
   NookVaultManager,
   NookSecretRecord,
 } from '$lib/nook-wasm/nook_wasm'
+import {
+  loadAuthProviders,
+  providerDefaultLabel,
+  saveAuthProviders,
+  type StorageProvider,
+  type StorageProviderType,
+} from '$lib/auth-providers'
 
 export class VaultState {
   settingsOpen = $state(false)
+
+  providers = $state<StorageProvider[]>([])
+  activeProviderId = $state<string | null>(null)
+  providersLoaded = $state(false)
+  loginSetupType = $state<StorageProviderType | null>(null)
+  addProviderOpen = $state(false)
 
   storageMode = $state<'local' | 'github'>('local')
   githubPat = $state('')
@@ -70,7 +83,7 @@ export class VaultState {
         this.githubPat,
         isoTimestamp(),
       )
-      this.saveConfig()
+      await this.ensureProviderSaved()
       await this.refreshDeviceState()
       this.joinEnrollmentPrompt = 'pending'
     } catch (e: unknown) {
@@ -89,15 +102,25 @@ export class VaultState {
     }, 5000)
   }
 
+  get activeProvider(): StorageProvider | null {
+    return this.providers.find((p) => p.id === this.activeProviderId) ?? null
+  }
+
+  get hasProviders(): boolean {
+    return this.providers.length > 0
+  }
+
+  get activeProviderLabel(): string {
+    return this.activeProvider?.label ?? providerDefaultLabel(this.storageMode)
+  }
+
   async init() {
     this.isInitializing = true
     this.isVerifying = false
     this.errorMsg = ''
-    this.storageMode =
-      (localStorage.getItem('nook_storage_mode') as 'local' | 'github') ||
-      'local'
-    this.githubPat = localStorage.getItem('nook_github_pat') || ''
     try {
+      await this.loadProviders()
+      this.applyActiveProviderCredentials()
       this.manager = await getVaultManager()
       await this.refreshDeviceState()
     } catch (error) {
@@ -109,6 +132,111 @@ export class VaultState {
       this.isInitializing = false
     }
     this.startVaultSync()
+  }
+
+  async loadProviders() {
+    const snapshot = await loadAuthProviders()
+    this.providers = snapshot.providers
+    this.activeProviderId =
+      snapshot.activeProviderId ?? snapshot.providers[0]?.id ?? null
+    this.providersLoaded = true
+  }
+
+  applyActiveProviderCredentials() {
+    const provider = this.activeProvider
+    if (!provider) {
+      if (this.loginSetupType) {
+        this.storageMode = this.loginSetupType
+        if (this.loginSetupType !== 'github') {
+          this.githubPat = ''
+        }
+      }
+      return
+    }
+    this.storageMode = provider.type
+    this.githubPat = provider.githubPat ?? ''
+  }
+
+  async persistProviders() {
+    await saveAuthProviders({
+      providers: this.providers,
+      activeProviderId: this.activeProviderId,
+    })
+  }
+
+  beginProviderSetup(type: StorageProviderType) {
+    this.loginSetupType = type
+    this.addProviderOpen = false
+    this.storageMode = type
+    this.githubPat = ''
+    this.errorMsg = ''
+    this.dismissSuccess()
+  }
+
+  beginAddProvider() {
+    this.addProviderOpen = true
+    this.loginSetupType = null
+    this.errorMsg = ''
+  }
+
+  cancelProviderSetup() {
+    this.loginSetupType = null
+    this.addProviderOpen = false
+    this.applyActiveProviderCredentials()
+    this.errorMsg = ''
+  }
+
+  async selectProvider(id: string) {
+    this.activeProviderId = id
+    this.loginSetupType = null
+    this.applyActiveProviderCredentials()
+    await this.persistProviders()
+    this.errorMsg = ''
+  }
+
+  async ensureProviderSaved() {
+    const pat = this.githubPat.trim()
+    const type = this.loginSetupType ?? this.storageMode
+    const isNewSetup = this.loginSetupType !== null
+
+    if (isNewSetup) {
+      const provider: StorageProvider = {
+        id: crypto.randomUUID(),
+        type,
+        label: providerDefaultLabel(type),
+        githubPat: type === 'github' ? pat : undefined,
+        createdAt: isoTimestamp(),
+      }
+      this.providers = [...this.providers, provider]
+      this.activeProviderId = provider.id
+    } else if (this.activeProvider) {
+      const updated: StorageProvider = {
+        ...this.activeProvider,
+        type: this.storageMode,
+        githubPat:
+          this.storageMode === 'github'
+            ? pat || this.activeProvider.githubPat
+            : undefined,
+      }
+      this.providers = this.providers.map((p) =>
+        p.id === updated.id ? updated : p,
+      )
+    } else {
+      const provider: StorageProvider = {
+        id: crypto.randomUUID(),
+        type,
+        label: providerDefaultLabel(type),
+        githubPat: type === 'github' ? pat : undefined,
+        createdAt: isoTimestamp(),
+      }
+      this.providers = [provider]
+      this.activeProviderId = provider.id
+    }
+
+    this.loginSetupType = null
+    this.addProviderOpen = false
+    this.applyActiveProviderCredentials()
+    await this.persistProviders()
   }
 
   startVaultSync() {
@@ -182,11 +310,6 @@ export class VaultState {
     }
   }
 
-  saveConfig() {
-    localStorage.setItem('nook_storage_mode', this.storageMode)
-    localStorage.setItem('nook_github_pat', this.githubPat)
-  }
-
   openSettings() {
     this.settingsOpen = true
     void this.refreshDeviceState()
@@ -233,7 +356,7 @@ export class VaultState {
         this.githubPat,
         isoTimestamp(),
       )
-      this.saveConfig()
+      await this.ensureProviderSaved()
       await this.refreshDeviceState()
       this.showSuccess(
         'Join request sent. An enrolled device must approve before you can connect.',
@@ -288,7 +411,7 @@ export class VaultState {
       this.isAuthenticated = true
       this.enrollSecretsKey = ''
       this.enrollMembersKey = ''
-      this.saveConfig()
+      await this.ensureProviderSaved()
       this.hydrateMultiDeviceState()
       await this.syncFromStorage()
       this.showSuccess('Enrolled and connected to the vault.')
@@ -393,7 +516,7 @@ export class VaultState {
       ])) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
-      this.saveConfig()
+      await this.ensureProviderSaved()
       this.hydrateMultiDeviceState()
       await this.syncFromStorage()
       if (this.storageMode === 'local') {
@@ -466,6 +589,7 @@ export class VaultState {
         (await this.manager.initialize_empty()) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
+      await this.ensureProviderSaved()
       this.showSuccess('Empty database initialized successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to initialize: ${e instanceof Error ? e.message : String(e)}`

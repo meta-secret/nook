@@ -5,22 +5,22 @@ test.describe('vault connect flow', () => {
   test('connects local vault and opens vault directly', async ({ page }) => {
     await page.goto('/')
 
+    await page.getByTestId('provider-option-local').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
 
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Local vault loaded',
-      { timeout: 20_000 },
-    )
+    await expect(
+      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
+    ).toContainText('Local vault loaded', { timeout: 20_000 })
     await expect(page.getByTestId('vault-panel')).toBeVisible()
-    await expect(page.getByTestId('vault-welcome')).not.toBeVisible()
+    await expect(page.getByTestId('login-gate')).not.toBeVisible()
   })
 
   test('shows error when github mode has no pat', async ({ page }) => {
     await page.goto('/')
 
+    await page.getByTestId('provider-option-github').click()
     const connectButton = await waitForEngine(page)
-    await page.getByRole('button', { name: /^GitHub/ }).click()
     await connectButton.click()
 
     await expect(page.getByTestId('connect-error')).toContainText(
@@ -33,7 +33,8 @@ test.describe('vault connect flow', () => {
   }) => {
     await page.goto('/')
 
-    const connectButton = page.getByTestId('connect-vault-btn')
+    await page.getByTestId('provider-option-local').click()
+    const connectButton = page.getByTestId('sign-in-btn')
     await expect(connectButton).toBeVisible()
     await connectButton.click({ force: true })
 
@@ -42,11 +43,29 @@ test.describe('vault connect flow', () => {
     ).toBeVisible({ timeout: 20_000 })
   })
 
-  test('shows connect form on first visit', async ({ page }) => {
+  test('shows login gate on first visit', async ({ page }) => {
     await page.goto('/')
 
-    await expect(page.getByTestId('vault-welcome')).toBeVisible()
-    await expect(page.getByTestId('connect-vault-btn')).toBeVisible()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('provider-option-local')).toBeVisible()
+    await expect(page.getByTestId('provider-option-github')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
+  })
+
+  test('unlock saved local provider without re-setup', async ({ page }) => {
+    await page.goto('/')
+    await page.getByTestId('provider-option-local').click()
+    await (await waitForEngine(page)).click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: 20_000,
+    })
+
+    await page.reload()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('saved-provider-local')).toBeVisible()
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: 20_000,
+    })
   })
 })

@@ -3,6 +3,7 @@
   import { Lock, ShieldCheck, TriangleAlert, Settings, X } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
@@ -15,11 +16,8 @@
     return () => vault.stopVaultSync()
   })
 
-  async function handleConnect() {
+  async function handleUnlock() {
     await vault.loadDb()
-    if (vault.isAuthenticated) {
-      vault.closeSettings()
-    }
   }
 
   const shellWidth = 'max-w-xl'
@@ -68,7 +66,7 @@
               class="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               data-testid="storage-status-chip"
             >
-              {vault.storageMode === 'github' ? 'GitHub sync' : 'Local storage'}
+              {vault.activeProviderLabel}
             </button>
             <Button
               variant="outline"
@@ -157,11 +155,10 @@
       {#if vault.settingsOpen}
         <div data-testid="storage-settings-panel" class="w-full">
           <AuthStorage
-            bind:storageMode={vault.storageMode}
-            bind:githubPat={vault.githubPat}
+            providers={vault.providers}
+            activeProviderId={vault.activeProviderId}
             bind:enrollSecretsKey={vault.enrollSecretsKey}
             bind:enrollMembersKey={vault.enrollMembersKey}
-            variant="panel"
             isAuthenticated={vault.isAuthenticated}
             isVerifying={vault.isVerifying}
             isSaving={vault.isSaving}
@@ -173,10 +170,12 @@
             devicePublicKey={vault.devicePublicKey}
             pendingJoins={vault.pendingJoins}
             vaultMembers={vault.vaultMembers}
-            onConnect={handleConnect}
+            onReconnect={handleUnlock}
+            onSelectProvider={(id) => vault.selectProvider(id)}
             onInitializeEmpty={() => vault.handleInitializeEmpty()}
             onApproveJoin={(id) => vault.approveJoin(id)}
             onRefreshJoins={() => vault.refreshDeviceState()}
+            onEnrollWithDec={() => vault.enrollAndConnect()}
           />
         </div>
       {:else}
@@ -209,30 +208,34 @@
             )}
         />
       {/if}
-    {:else}
-      <div data-testid="vault-welcome" class="w-full">
-        <AuthStorage
-          bind:storageMode={vault.storageMode}
-          bind:githubPat={vault.githubPat}
-          bind:enrollSecretsKey={vault.enrollSecretsKey}
-          bind:enrollMembersKey={vault.enrollMembersKey}
-          variant="welcome"
-          isAuthenticated={vault.isAuthenticated}
-          isVerifying={vault.isVerifying}
-          isSaving={vault.isSaving}
-          isInitializing={vault.isInitializing}
-          errorMsg={vault.errorMsg}
-          successMsg={vault.successMsg}
-          secretsCount={vault.secrets.length}
-          deviceId={vault.deviceId}
-          devicePublicKey={vault.devicePublicKey}
-          pendingJoins={vault.pendingJoins}
-          onConnect={handleConnect}
-          onInitializeEmpty={() => vault.handleInitializeEmpty()}
-          onEnrollWithDec={() => vault.enrollAndConnect()}
-          onRefreshJoins={() => vault.refreshDeviceState()}
-        />
-      </div>
+    {:else if vault.providersLoaded}
+      <LoginGate
+        providers={vault.providers}
+        activeProviderId={vault.activeProviderId}
+        bind:setupType={vault.loginSetupType}
+        bind:githubPat={vault.githubPat}
+        addProviderOpen={vault.addProviderOpen}
+        isVerifying={vault.isVerifying}
+        isSaving={vault.isSaving}
+        isInitializing={vault.isInitializing}
+        errorMsg={vault.errorMsg}
+        successMsg={vault.successMsg}
+        deviceId={vault.deviceId}
+        devicePublicKey={vault.devicePublicKey}
+        pendingJoins={vault.pendingJoins}
+        vaultMembers={vault.vaultMembers}
+        bind:enrollSecretsKey={vault.enrollSecretsKey}
+        bind:enrollMembersKey={vault.enrollMembersKey}
+        onUnlock={handleUnlock}
+        onSelectProvider={(id) => vault.selectProvider(id)}
+        onBeginAddProvider={() => vault.beginAddProvider()}
+        onBeginSetup={(type) => vault.beginProviderSetup(type)}
+        onCancelSetup={() => vault.cancelProviderSetup()}
+        onInitializeEmpty={() => vault.handleInitializeEmpty()}
+        onApproveJoin={(id) => vault.approveJoin(id)}
+        onEnrollWithDec={() => vault.enrollAndConnect()}
+        onRefreshJoins={() => vault.refreshDeviceState()}
+      />
     {/if}
   </div>
 
