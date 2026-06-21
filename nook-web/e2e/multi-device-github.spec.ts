@@ -12,7 +12,7 @@ import {
   githubPat,
   openStorageSettings,
   resetGithubVault,
-  cleanupE2eGithubRepo,
+  finishE2eGithubSuite,
   revealSecretValue,
   sendJoinRequest,
   unlockGithubVault,
@@ -77,7 +77,7 @@ describeMultiDevice('multi-device github vault', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('device B sees join dialog and sends a join request', async () => {
@@ -228,7 +228,7 @@ describeMultiDevice('multi-device approve from settings', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('approves join from Storage & devices panel', async () => {
@@ -289,7 +289,7 @@ describeMultiDevice('multi-device join background sync', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('device A eventually sees pending join without manual refresh', async () => {

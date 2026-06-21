@@ -1,31 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { githubApiFetch, githubRepoContext } from './github-api'
 
 const REGISTRY_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '.e2e-github-repos.json',
 )
-
-const githubApiHeaders = (pat: string) => ({
-  Authorization: `Bearer ${pat}`,
-  Accept: 'application/vnd.github+json',
-  'X-GitHub-Api-Version': '2022-11-28',
-  'User-Agent': 'nook-e2e',
-})
-
-async function githubRepoFullName(pat: string, repoName: string) {
-  const headers = githubApiHeaders(pat)
-  const userRes = await fetch('https://api.github.com/user', {
-    headers,
-    cache: 'no-store',
-  })
-  if (!userRes.ok) {
-    throw new Error(`GitHub user fetch failed: ${userRes.status}`)
-  }
-  const { login } = (await userRes.json()) as { login: string }
-  return { headers, repo: `${login}/${repoName}` }
-}
 
 export function readRegisteredE2eGithubRepos(): string[] {
   try {
@@ -74,20 +55,16 @@ export async function deleteGithubRepo(pat: string, repoName: string) {
   if (!pat) {
     return
   }
-  const { headers, repo } = await githubRepoFullName(pat, repoName)
-  const res = await fetch(`https://api.github.com/repos/${repo}`, {
-    method: 'DELETE',
-    headers,
-    cache: 'no-store',
-  })
+  const { repo } = await githubRepoContext(pat, repoName)
+  const res = await githubApiFetch(
+    pat,
+    `https://api.github.com/repos/${repo}`,
+    {
+      method: 'DELETE',
+    },
+  )
   if (res.status === 404) {
     return
-  }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(
-      `GitHub repo delete failed for ${repo}: ${res.status}${body ? ` — ${body}` : ''}`,
-    )
   }
 }
 
@@ -118,5 +95,6 @@ export async function cleanupAllRegisteredE2eGithubRepos(pat: string) {
   console.log(`[e2e] cleaning up ${repos.length} GitHub repo(s)...`)
   for (const repoName of repos) {
     await cleanupE2eGithubRepo(pat, repoName)
+    await new Promise((resolve) => setTimeout(resolve, 500))
   }
 }
