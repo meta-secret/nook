@@ -14,4 +14,8 @@ export default defineConfig({
       $lib: new URL('./src/lib', import.meta.url).pathname,
     },
   },
+  test: {
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    exclude: ['e2e/**', 'node_modules/**'],
+  },
 })

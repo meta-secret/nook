@@ -12,7 +12,7 @@
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
     "test:e2e:local": "playwright test e2e/connect.spec.ts e2e/local-vault.spec.ts",
     "test:e2e:github": "playwright test e2e/github-vault.spec.ts",
