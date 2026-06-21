@@ -1,16 +1,27 @@
 export type StorageProviderType = 'local' | 'github'
 
+export const DEFAULT_GITHUB_REPO = 'nook'
+
 export interface StorageProvider {
   id: string
   type: StorageProviderType
   label: string
   githubPat?: string
+  /** GitHub repository name (not owner/name). Defaults to `nook`. */
+  githubRepo?: string
   createdAt: string
 }
 
 export interface AuthProvidersSnapshot {
   providers: StorageProvider[]
   activeProviderId: string | null
+}
+
+/** Plain snapshot safe for IndexedDB structured clone (no reactive proxies). */
+function toStorableSnapshot(
+  snapshot: AuthProvidersSnapshot,
+): AuthProvidersSnapshot {
+  return JSON.parse(JSON.stringify(snapshot)) as AuthProvidersSnapshot
 }
 
 const DB_NAME = 'nook_auth'
@@ -50,8 +61,9 @@ function migrateFromLocalStorage(
   const provider: StorageProvider = {
     id: crypto.randomUUID(),
     type,
-    label: type === 'github' ? 'GitHub sync' : 'This device',
+    label: providerDefaultLabel(type),
     githubPat: type === 'github' ? pat : undefined,
+    githubRepo: type === 'github' ? DEFAULT_GITHUB_REPO : undefined,
     createdAt: new Date().toISOString(),
   }
 
@@ -62,6 +74,26 @@ function migrateFromLocalStorage(
     providers: [provider],
     activeProviderId: provider.id,
   }
+}
+
+function migrateProviderFields(
+  snapshot: AuthProvidersSnapshot,
+): AuthProvidersSnapshot {
+  let changed = false
+  const providers = snapshot.providers.map((provider) => {
+    if (provider.type !== 'github') {
+      return provider
+    }
+    if (provider.githubRepo?.trim()) {
+      return provider
+    }
+    changed = true
+    return { ...provider, githubRepo: DEFAULT_GITHUB_REPO }
+  })
+  if (!changed) {
+    return snapshot
+  }
+  return { ...snapshot, providers }
 }
 
 export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
@@ -85,7 +117,8 @@ export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
           reject(request.error ?? new Error('Failed to read auth providers.'))
       },
     )
-    const migrated = migrateFromLocalStorage(snapshot)
+    const fromLocalStorage = migrateFromLocalStorage(snapshot)
+    const migrated = migrateProviderFields(fromLocalStorage)
     if (migrated !== snapshot) {
       await saveAuthProviders(migrated)
     }
@@ -98,12 +131,13 @@ export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
 export async function saveAuthProviders(
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
+  const storable = toStorableSnapshot(snapshot)
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite')
       const store = tx.objectStore(STORE)
-      store.put(snapshot, STATE_KEY)
+      store.put(storable, STATE_KEY)
       tx.oncomplete = () => resolve()
       tx.onerror = () =>
         reject(tx.error ?? new Error('Failed to save auth providers.'))
@@ -113,8 +147,15 @@ export async function saveAuthProviders(
   }
 }
 
-export function providerDefaultLabel(type: StorageProviderType): string {
-  return type === 'github' ? 'GitHub sync' : 'This device'
+export function providerDefaultLabel(
+  type: StorageProviderType,
+  githubRepo?: string,
+): string {
+  if (type === 'github') {
+    const repo = githubRepo?.trim() || DEFAULT_GITHUB_REPO
+    return repo === DEFAULT_GITHUB_REPO ? 'GitHub sync' : `GitHub · ${repo}`
+  }
+  return 'This device'
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {

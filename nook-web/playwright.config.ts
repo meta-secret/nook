@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: 'list',
+  globalTeardown: './e2e/global-teardown.ts',
   timeout: 90_000,
   use: {
     baseURL: 'http://127.0.0.1:5173',

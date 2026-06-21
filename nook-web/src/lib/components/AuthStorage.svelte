@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    GitBranch,
     ShieldCheck,
     RefreshCw,
     HardDrive,
@@ -10,6 +9,7 @@
   import { Button } from '$lib/components/ui/button'
   import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
   import type { StorageProvider } from '$lib/auth-providers'
+  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import {
     Card,
@@ -28,16 +28,15 @@
     isInitializing,
     errorMsg,
     successMsg,
-    secretsCount,
     deviceId = '',
     devicePublicKey = '',
     pendingJoins = [] as JoinRequest[],
     vaultMembers = [] as VaultMember[],
     onReconnect,
     onSelectProvider,
-    onInitializeEmpty,
     onApproveJoin,
     onRefreshJoins,
+    githubRepo = $bindable(DEFAULT_GITHUB_REPO),
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -47,16 +46,15 @@
     isInitializing: boolean
     errorMsg: string
     successMsg: string
-    secretsCount: number
     deviceId?: string
     devicePublicKey?: string
     pendingJoins?: JoinRequest[]
     vaultMembers?: VaultMember[]
     onReconnect: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
-    onInitializeEmpty: () => void | Promise<void>
     onApproveJoin?: (deviceId: string) => void | Promise<void>
     onRefreshJoins?: () => void | Promise<void>
+    githubRepo?: string
   } = $props()
 
   const activeProvider = $derived(
@@ -123,6 +121,13 @@
                   <span class="min-w-0 flex-1 truncate font-medium">
                     {provider.label}
                   </span>
+                  {#if provider.type === 'github'}
+                    <span
+                      class="shrink-0 font-mono text-[10px] text-muted-foreground"
+                    >
+                      {provider.githubRepo ?? DEFAULT_GITHUB_REPO}
+                    </span>
+                  {/if}
                   {#if provider.id === activeProviderId}
                     <span
                       class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
@@ -135,10 +140,31 @@
           </ul>
         {/if}
         {#if activeProvider?.type === 'github'}
-          <p class="text-[11px] text-muted-foreground">
-            GitHub token saved in IndexedDB. Reconnect uses the stored token —
-            no re-entry needed.
-          </p>
+          <div class="space-y-1.5">
+            <label
+              class="text-xs font-medium text-foreground"
+              for="settings-github-repo"
+            >
+              GitHub repository
+            </label>
+            <input
+              id="settings-github-repo"
+              type="text"
+              bind:value={githubRepo}
+              placeholder={DEFAULT_GITHUB_REPO}
+              autocomplete="off"
+              spellcheck="false"
+              data-testid="settings-github-repo-input"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+            />
+            <p class="text-[11px] text-muted-foreground">
+              Vault file:
+              <span class="font-mono text-foreground/80"
+                >username/{githubRepo.trim() ||
+                  DEFAULT_GITHUB_REPO}/nook-vault.yaml</span
+              >. Token stays in IndexedDB — reconnect to apply repo changes.
+            </p>
+          </div>
         {/if}
       </fieldset>
 
@@ -173,23 +199,6 @@
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >
-          {#if isAuthenticated && secretsCount === 0}
-            <Button
-              type="button"
-              variant="outline"
-              onclick={onInitializeEmpty}
-              disabled={isSaving}
-              class="border-border text-foreground hover:bg-accent sm:mr-auto"
-            >
-              {#if isSaving}
-                <RefreshCw class="size-4 animate-spin" />
-              {:else}
-                <GitBranch class="size-4" />
-              {/if}
-              Initialize empty vault
-            </Button>
-          {/if}
-
           <Button
             type="submit"
             class="sm:min-w-[180px]"

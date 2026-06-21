@@ -4,6 +4,7 @@ use crate::is_device_id;
 
 pub const STORAGE_MODE_LOCAL: &str = "local";
 pub const STORAGE_MODE_GITHUB: &str = "github";
+pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
 
 pub fn validate_storage_mode(mode: &str) -> Result<(), String> {
     match mode {
@@ -18,6 +19,31 @@ pub fn validate_github_pat(pat: &str) -> Result<String, String> {
         return Err("Enter a GitHub personal access token to connect.".to_owned());
     }
     Ok(trimmed.to_owned())
+}
+
+/// Validates a GitHub repository name (not `owner/name`). Empty uses [`DEFAULT_GITHUB_REPO_NAME`].
+pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
+    let repo = if name.trim().is_empty() {
+        DEFAULT_GITHUB_REPO_NAME.to_owned()
+    } else {
+        name.trim().to_owned()
+    };
+    if repo.len() > 100 {
+        return Err("GitHub repository name must be 100 characters or fewer.".to_owned());
+    }
+    if repo == "." || repo == ".." {
+        return Err("Invalid GitHub repository name.".to_owned());
+    }
+    if !repo
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    {
+        return Err(
+            "Repository name may only contain letters, numbers, dots, hyphens, and underscores."
+                .to_owned(),
+        );
+    }
+    Ok(repo)
 }
 
 /// Validates connect inputs. Returns trimmed GitHub PAT when mode is `github`.
@@ -81,6 +107,17 @@ mod tests {
                 value: "b".to_owned(),
             },
         ]
+    }
+
+    #[test]
+    fn validate_github_repo_name_defaults_and_rejects_invalid() {
+        assert_eq!(
+            validate_github_repo_name("  ").unwrap(),
+            DEFAULT_GITHUB_REPO_NAME
+        );
+        assert_eq!(validate_github_repo_name("work-vault").unwrap(), "work-vault");
+        assert!(validate_github_repo_name(".").is_err());
+        assert!(validate_github_repo_name("bad name").is_err());
     }
 
     #[test]

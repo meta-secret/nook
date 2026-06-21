@@ -232,6 +232,7 @@ tasks:
       - cd nook-web && bun run test
       - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:lint:
     desc: Lint the web app.

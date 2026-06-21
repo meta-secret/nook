@@ -3,11 +3,13 @@ import {
   addSecret,
   clearBrowserVault,
   connectGithubVault,
+  createE2eGithubRepoName,
   deleteSecret,
   githubPat,
   assertVaultReady,
   reconnectGithubVault,
   resetGithubVault,
+  cleanupE2eGithubRepo,
   uniqueSecretKey,
 } from './helpers'
 
@@ -17,19 +19,22 @@ describeGithub('github vault', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
+  let e2eRepo: string
 
   test.beforeAll(async ({ browser }) => {
-    await resetGithubVault(githubPat)
+    e2eRepo = createE2eGithubRepoName()
+    console.log(`[e2e] github vault repo: ${e2eRepo}`)
+    await resetGithubVault(githubPat, e2eRepo)
     vaultPage = await browser.newPage()
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectGithubVault(vaultPage, githubPat)
+    await connectGithubVault(vaultPage, githubPat, e2eRepo)
   })
 
   test.afterAll(async () => {
     await vaultPage?.close()
-    await resetGithubVault(githubPat)
+    await cleanupE2eGithubRepo(githubPat, e2eRepo)
   })
 
   test('connects and shows vault after github sync', async () => {

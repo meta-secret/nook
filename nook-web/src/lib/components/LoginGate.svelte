@@ -13,6 +13,7 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
+  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
   import {
     Card,
     CardContent,
@@ -26,8 +27,8 @@
     activeProviderId,
     setupType = $bindable(null as StorageProviderType | null),
     githubPat = $bindable(''),
+    githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
-    isSaving,
     isInitializing,
     errorMsg,
     successMsg,
@@ -38,14 +39,13 @@
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
-    onInitializeEmpty,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
     setupType?: StorageProviderType | null
     githubPat: string
+    githubRepo: string
     isVerifying: boolean
-    isSaving: boolean
     isInitializing: boolean
     errorMsg: string
     successMsg: string
@@ -56,7 +56,6 @@
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
-    onInitializeEmpty?: () => void | Promise<void>
   } = $props()
 
   const githubPatUrl =
@@ -146,6 +145,13 @@
                     <span class="min-w-0 flex-1 truncate font-medium">
                       {provider.label}
                     </span>
+                    {#if provider.type === 'github'}
+                      <span
+                        class="shrink-0 font-mono text-[10px] text-muted-foreground"
+                      >
+                        {provider.githubRepo ?? DEFAULT_GITHUB_REPO}
+                      </span>
+                    {/if}
                     {#if provider.id === activeProviderId}
                       <span
                         class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
@@ -200,7 +206,7 @@
                 <Cloud class="size-4 text-foreground" />
                 <span class="text-sm font-medium text-foreground">GitHub</span>
                 <span class="text-xs text-muted-foreground">
-                  Sync encrypted vault to username/nook.
+                  Sync encrypted vault to a GitHub repo (default: nook).
                 </span>
               </button>
             </div>
@@ -267,6 +273,37 @@
                   <div class="min-w-0 flex-1 space-y-1.5">
                     <label
                       class="text-xs font-medium text-foreground"
+                      for="login-github-repo"
+                    >
+                      Repository name
+                    </label>
+                    <input
+                      id="login-github-repo"
+                      type="text"
+                      bind:value={githubRepo}
+                      placeholder={DEFAULT_GITHUB_REPO}
+                      autocomplete="off"
+                      spellcheck="false"
+                      data-testid="github-repo-input"
+                      class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+                    />
+                    <p class="text-[11px] text-muted-foreground">
+                      Repo under your account — vault file is
+                      <span class="font-mono text-foreground/80"
+                        >nook-vault.yaml</span
+                      >. Use a different name for a second vault.
+                    </p>
+                  </div>
+                </li>
+
+                <li class="flex gap-3">
+                  <span
+                    class="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground"
+                    aria-hidden="true">3</span
+                  >
+                  <div class="min-w-0 flex-1 space-y-1.5">
+                    <label
+                      class="text-xs font-medium text-foreground"
                       for="login-github-pat"
                     >
                       Paste token here
@@ -283,7 +320,8 @@
                     <p class="text-[11px] text-muted-foreground">
                       Saved in this browser after first sign-in. Syncs to
                       <span class="font-mono text-foreground/80"
-                        >username/nook/nook-vault.yaml</span
+                        >username/{githubRepo.trim() ||
+                          DEFAULT_GITHUB_REPO}/nook-vault.yaml</span
                       >
                     </p>
                   </div>
@@ -340,17 +378,6 @@
           </div>
         {:else if showSetup}
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            {#if onInitializeEmpty}
-              <Button
-                type="button"
-                variant="outline"
-                onclick={onInitializeEmpty}
-                disabled={isSaving}
-                class="border-border text-foreground hover:bg-accent sm:mr-auto"
-              >
-                Initialize empty vault
-              </Button>
-            {/if}
             <Button
               type="submit"
               class="sm:min-w-[180px]"

@@ -14,6 +14,7 @@ import type {
   NookSecretRecord,
 } from '$lib/nook-wasm/nook_wasm'
 import {
+  DEFAULT_GITHUB_REPO,
   loadAuthProviders,
   providerDefaultLabel,
   saveAuthProviders,
@@ -32,6 +33,7 @@ export class VaultState {
 
   storageMode = $state<'local' | 'github'>('local')
   githubPat = $state('')
+  githubRepo = $state(DEFAULT_GITHUB_REPO)
 
   manager = $state<NookVaultManager | null>(null)
   isAuthenticated = $state(false)
@@ -67,6 +69,10 @@ export class VaultState {
     return next
   }
 
+  private wasmGithubArgs(): [string, string, string] {
+    return [this.storageMode, this.githubPat, this.githubRepo]
+  }
+
   dismissSuccess() {
     if (this.successDismissTimer !== null) {
       clearTimeout(this.successDismissTimer)
@@ -90,8 +96,7 @@ export class VaultState {
     this.isVerifying = true
     try {
       await this.manager.request_vault_access(
-        this.storageMode,
-        this.githubPat,
+        ...this.wasmGithubArgs(),
         isoTimestamp(),
       )
       await this.ensureProviderSaved()
@@ -202,6 +207,7 @@ export class VaultState {
     }
     this.storageMode = provider.type
     this.githubPat = provider.githubPat ?? ''
+    this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
   }
 
   async persistProviders() {
@@ -215,6 +221,7 @@ export class VaultState {
     this.loginSetupType = type
     this.storageMode = type
     this.githubPat = ''
+    this.githubRepo = DEFAULT_GITHUB_REPO
     this.errorMsg = ''
     this.dismissSuccess()
   }
@@ -236,6 +243,7 @@ export class VaultState {
     if (this.addProviderOpen && this.loginSetupType !== null) {
       this.loginSetupType = null
       this.githubPat = ''
+      this.githubRepo = DEFAULT_GITHUB_REPO
       this.errorMsg = ''
       return
     }
@@ -255,6 +263,7 @@ export class VaultState {
 
   async ensureProviderSaved() {
     const pat = this.githubPat.trim()
+    const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
     const type = this.loginSetupType ?? this.storageMode
     const isNewSetup = this.loginSetupType !== null
 
@@ -262,8 +271,9 @@ export class VaultState {
       const provider: StorageProvider = {
         id: crypto.randomUUID(),
         type,
-        label: providerDefaultLabel(type),
+        label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
+        githubRepo: type === 'github' ? repo : undefined,
         createdAt: isoTimestamp(),
       }
       this.providers = [...this.providers, provider]
@@ -276,6 +286,10 @@ export class VaultState {
           this.storageMode === 'github'
             ? pat || this.activeProvider.githubPat
             : undefined,
+        githubRepo:
+          this.storageMode === 'github'
+            ? repo
+            : undefined,
       }
       this.providers = this.providers.map((p) =>
         p.id === updated.id ? updated : p,
@@ -284,8 +298,9 @@ export class VaultState {
       const provider: StorageProvider = {
         id: crypto.randomUUID(),
         type,
-        label: providerDefaultLabel(type),
+        label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
+        githubRepo: type === 'github' ? repo : undefined,
         createdAt: isoTimestamp(),
       }
       this.providers = [provider]
@@ -363,7 +378,7 @@ export class VaultState {
 
     try {
       const raw = await this.enqueueStorage(() =>
-        this.manager!.sync_vault_from_storage(this.storageMode, this.githubPat),
+        this.manager!.sync_vault_from_storage(...this.wasmGithubArgs()),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
     } catch {
@@ -383,6 +398,10 @@ export class VaultState {
   filterSecrets(query: string): SecretRecord[] {
     if (!this.manager) return []
     return mapWasmRecords(this.manager.filter_secrets(query))
+  }
+
+  private refreshSecretsFromSession() {
+    this.secrets = this.filterSecrets('')
   }
 
   async refreshDeviceState() {
@@ -411,8 +430,7 @@ export class VaultState {
     this.isVerifying = true
     try {
       await this.manager.request_vault_access(
-        this.storageMode,
-        this.githubPat,
+        ...this.wasmGithubArgs(),
         isoTimestamp(),
       )
       await this.ensureProviderSaved()
@@ -458,10 +476,7 @@ export class VaultState {
     try {
       await this.initDeviceIdentity()
       const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise = this.manager!.connect_fresh(
-          this.storageMode,
-          this.githubPat,
-        )
+        const connectPromise = this.manager!.connect_fresh(...this.wasmGithubArgs())
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () =>
@@ -504,8 +519,7 @@ export class VaultState {
     this.isVerifying = true
     try {
       const rawRecords = (await this.manager.enroll_and_connect(
-        this.storageMode,
-        this.githubPat,
+        ...this.wasmGithubArgs(),
         secretsKey,
         membersKey,
       )) as NookSecretRecord[]
@@ -571,8 +585,7 @@ export class VaultState {
 
       const accessStatus = await this.enqueueStorage(async () => {
         const assessPromise = this.manager!.assess_vault_connect(
-          this.storageMode,
-          this.githubPat,
+          ...this.wasmGithubArgs(),
         )
         const assessTimeout = new Promise<never>((_, reject) => {
           setTimeout(
@@ -598,10 +611,7 @@ export class VaultState {
       }
 
       const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise = this.manager!.connect(
-          this.storageMode,
-          this.githubPat,
-        )
+        const connectPromise = this.manager!.connect(...this.wasmGithubArgs())
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () =>
@@ -647,11 +657,14 @@ export class VaultState {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
-      const rawRecords = (await this.manager.add_secret(
-        key,
-        value,
-      )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      await this.enqueueStorage(async () => {
+        const rawRecords = (await this.manager!.add_secret(
+          key,
+          value,
+        )) as NookSecretRecord[]
+        this.secrets = mapWasmRecords(rawRecords)
+      })
+      this.refreshSecretsFromSession()
       this.showSuccess('Secret saved successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
@@ -670,33 +683,16 @@ export class VaultState {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
-      const rawRecords = (await this.manager.delete_secret(
-        key,
-      )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      await this.enqueueStorage(async () => {
+        const rawRecords = (await this.manager!.delete_secret(
+          key,
+        )) as NookSecretRecord[]
+        this.secrets = mapWasmRecords(rawRecords)
+      })
+      this.refreshSecretsFromSession()
       this.showSuccess('Secret deleted successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
-      throw e
-    } finally {
-      this.isSaving = false
-    }
-  }
-
-  async handleInitializeEmpty() {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    try {
-      const rawRecords =
-        (await this.manager.initialize_empty()) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
-      await this.ensureProviderSaved()
-      this.showSuccess('Empty database initialized successfully.')
-    } catch (e: unknown) {
-      this.errorMsg = `Failed to initialize: ${e instanceof Error ? e.message : String(e)}`
       throw e
     } finally {
       this.isSaving = false

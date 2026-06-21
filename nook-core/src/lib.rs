@@ -31,7 +31,8 @@ pub use multi_device::{
 
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use validation::{
-    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, filter_secrets, validate_connect, validate_github_pat,
+    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, DEFAULT_GITHUB_REPO_NAME, filter_secrets,
+    validate_connect, validate_github_pat, validate_github_repo_name,
     validate_secret_label, validate_secret_value, validate_storage_mode,
 };
 pub use vault_crypto::VaultCrypto;

@@ -183,8 +183,10 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
     ) -> Result<JsValue, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
@@ -259,9 +261,11 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
         requested_at: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -299,10 +303,12 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
         secrets_key: String,
         members_key: String,
     ) -> Result<js_sys::Array, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -451,8 +457,10 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
     ) -> Result<String, JsError> {
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
@@ -471,8 +479,10 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
     ) -> Result<js_sys::Array, JsError> {
-        self.connect_internal(storage_mode, github_pat, false).await
+        self.connect_internal(storage_mode, github_pat, github_repo, false)
+            .await
     }
 
     /// Replace storage with a fresh genesis vault for this device.
@@ -480,18 +490,22 @@ impl NookVaultManager {
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
     ) -> Result<js_sys::Array, JsError> {
-        self.connect_internal(storage_mode, github_pat, true).await
+        self.connect_internal(storage_mode, github_pat, github_repo, true)
+            .await
     }
 
     async fn connect_internal(
         &mut self,
         storage_mode: String,
         github_pat: String,
+        github_repo: String,
         force_genesis: bool,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
-        self.prepare_storage(&storage_mode, &github_pat).await?;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
         let identity = self.ensure_device_identity().await?;
 
         let mut vault_file_missing = false;
@@ -645,12 +659,12 @@ impl NookVaultManager {
             let _ = self.status_tx.send("IDB_SAVE_SUCCESS".to_owned());
         } else {
             let _ = self.status_tx.send("GITHUB_SAVE_START".to_owned());
-            let new_sha = write_github_text_file(
+            let new_sha = write_github_text_file_with_retry(
                 &self.github_pat,
                 &self.github_repo,
                 &self.github_path,
                 &stored,
-                self.file_sha.as_deref(),
+                self.file_sha.clone(),
             )
             .await?;
             self.file_sha = Some(new_sha);
@@ -701,6 +715,7 @@ impl NookVaultManager {
         &mut self,
         storage_mode: &str,
         github_pat: &str,
+        github_repo_name: &str,
     ) -> Result<(), NookError> {
         nook_core::validate_storage_mode(storage_mode).map_err(NookError::Database)?;
         self.storage_mode = storage_mode.to_owned();
@@ -713,9 +728,11 @@ impl NookVaultManager {
         self.file_sha = None;
 
         if self.storage_mode == "github" {
+            let repo_name = nook_core::validate_github_repo_name(github_repo_name)
+                .map_err(NookError::Database)?;
             let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
             let username = fetch_github_username(&self.github_pat).await?;
-            self.github_repo = format!("{}/nook", username);
+            self.github_repo = format!("{}/{}", username, repo_name);
             self.github_path = "nook-vault.yaml".to_owned();
             let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
             ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
@@ -1283,6 +1300,32 @@ async fn write_github_text_file(
         .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
 
     Ok(parsed.content.sha)
+}
+
+async fn write_github_text_file_with_retry(
+    pat: &str,
+    repo: &str,
+    path: &str,
+    content: &str,
+    mut sha: Option<String>,
+) -> Result<String, NookError> {
+    for attempt in 0..3 {
+        match write_github_text_file(pat, repo, path, content, sha.as_deref()).await {
+            Ok(new_sha) => return Ok(new_sha),
+            Err(NookError::GitHub(message))
+                if attempt < 2
+                    && (message.contains("422") || message.contains("409")) =>
+            {
+                if let Ok(Some((_, fresh_sha))) = fetch_github_vault(pat, repo, path).await {
+                    sha = Some(fresh_sha);
+                }
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    Err(NookError::GitHub(
+        "GitHub vault write failed after retries.".to_owned(),
+    ))
 }
 
 fn base64_decode(input: &str) -> Result<Vec<u8>, NookError> {

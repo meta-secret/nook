@@ -163,16 +163,15 @@
             isInitializing={vault.isInitializing}
             errorMsg={vault.errorMsg}
             successMsg={vault.successMsg}
-            secretsCount={vault.secrets.length}
             deviceId={vault.deviceId}
             devicePublicKey={vault.devicePublicKey}
             pendingJoins={vault.pendingJoins}
             vaultMembers={vault.vaultMembers}
             onReconnect={handleUnlock}
             onSelectProvider={(id) => vault.selectProvider(id)}
-            onInitializeEmpty={() => vault.handleInitializeEmpty()}
             onApproveJoin={(id) => vault.approveJoin(id)}
             onRefreshJoins={() => vault.refreshDeviceState()}
+            bind:githubRepo={vault.githubRepo}
           />
         </div>
       {:else}
@@ -184,11 +183,10 @@
         />
         <SecretVault
           isSaving={vault.isSaving}
-          secretsCount={vault.secrets.length}
+          secrets={vault.secrets}
           storageMode={vault.storageMode}
           onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
           onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
-          onFilterSecrets={(query) => vault.filterSecrets(query)}
           onGeneratePassword={(
             length,
             lowercase,
@@ -211,9 +209,9 @@
         activeProviderId={vault.activeProviderId}
         bind:setupType={vault.loginSetupType}
         bind:githubPat={vault.githubPat}
+        bind:githubRepo={vault.githubRepo}
         addProviderOpen={vault.addProviderOpen}
         isVerifying={vault.isVerifying}
-        isSaving={vault.isSaving}
         isInitializing={vault.isInitializing}
         errorMsg={vault.errorMsg}
         successMsg={vault.successMsg}
@@ -223,7 +221,6 @@
         onCancelAddProvider={() => vault.cancelAddProvider()}
         onBeginSetup={(type) => vault.beginProviderSetup(type)}
         onCancelSetup={() => vault.cancelProviderSetup()}
-        onInitializeEmpty={() => vault.handleInitializeEmpty()}
       />
     {/if}
   </div>
