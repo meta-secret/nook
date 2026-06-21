@@ -5,7 +5,7 @@ import {
   connectGithubVault,
   deleteSecret,
   githubPat,
-  openVaultTab,
+  assertVaultReady,
   reconnectGithubVault,
   resetGithubVault,
   uniqueSecretKey,
@@ -32,9 +32,11 @@ describeGithub('github vault', () => {
     await resetGithubVault(githubPat)
   })
 
-  test('connects and shows github success', async () => {
-    await vaultPage.getByTestId('connected-badge').waitFor()
-    await vaultPage.getByTestId('connect-success').waitFor()
+  test('connects and shows vault after github sync', async () => {
+    await expect(vaultPage.getByTestId('vault-panel')).toBeVisible()
+    await expect(vaultPage.getByTestId('storage-status-chip')).toContainText(
+      'GitHub',
+    )
   })
 
   test('adds and deletes a secret synced to github', async () => {
@@ -53,7 +55,7 @@ describeGithub('github vault', () => {
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
     await reconnectGithubVault(vaultPage)
-    await openVaultTab(vaultPage)
+    await assertVaultReady(vaultPage)
 
     const row = vaultPage.getByTestId('secret-row').filter({ hasText: key })
     await row.waitFor()

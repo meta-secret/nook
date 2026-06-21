@@ -5,7 +5,7 @@ import type {
 } from '$lib/nook-wasm/nook_wasm'
 
 export class VaultState {
-  activeTab = $state<'auth' | 'secrets'>('auth')
+  settingsOpen = $state(false)
 
   storageMode = $state<'local' | 'github'>('local')
   githubPat = $state('')
@@ -44,6 +44,14 @@ export class VaultState {
   saveConfig() {
     localStorage.setItem('nook_storage_mode', this.storageMode)
     localStorage.setItem('nook_github_pat', this.githubPat)
+  }
+
+  openSettings() {
+    this.settingsOpen = true
+  }
+
+  closeSettings() {
+    this.settingsOpen = false
   }
 
   filterSecrets(query: string): SecretRecord[] {

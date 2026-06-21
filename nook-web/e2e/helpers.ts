@@ -124,7 +124,7 @@ async function assertGithubConnected(page: Page) {
   if (await error.isVisible()) {
     throw new Error(`GitHub connect failed: ${await error.textContent()}`)
   }
-  await expect(page.getByTestId('connected-badge')).toBeVisible({
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: 90_000,
   })
 }
@@ -134,11 +134,11 @@ export async function connectLocalVault(page: Page) {
   await page.getByRole('button', { name: /^Local/ }).click()
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await expect(page.getByTestId('connect-success')).toContainText(
+  await expect(page.getByTestId('app-success')).toContainText(
     'Local vault loaded',
     { timeout: 20_000 },
   )
-  await expect(page.getByTestId('connected-badge')).toBeVisible()
+  await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
 export async function connectGithubVault(page: Page, pat: string) {
@@ -147,16 +147,22 @@ export async function connectGithubVault(page: Page, pat: string) {
   await page.getByLabel('Personal access token').fill(pat)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await expect(page.getByTestId('connect-success')).toContainText(
+  await expect(page.getByTestId('app-success')).toContainText(
     'Connected to GitHub',
     { timeout: 90_000 },
   )
   await assertGithubConnected(page)
 }
 
+/** Open the storage settings drawer (must already be connected). */
+export async function openStorageSettings(page: Page) {
+  await page.getByTestId('storage-settings-btn').click()
+  await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+}
+
 /** Reconnect after reload — PAT and storage mode are restored from localStorage. */
 export async function reconnectGithubVault(page: Page) {
-  await page.getByTestId('nav-setup').click()
+  await openStorageSettings(page)
   await expect(page.getByRole('button', { name: /^GitHub/ })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -168,15 +174,18 @@ export async function reconnectGithubVault(page: Page) {
     { timeout: 90_000 },
   )
   await assertGithubConnected(page)
+  await page.getByTestId('storage-settings-close').click()
+  await expect(page.getByTestId('storage-settings-panel')).not.toBeVisible()
 }
 
-export async function openVaultTab(page: Page) {
-  await page.getByTestId('nav-vault').click()
+export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
 export async function addSecret(page: Page, key: string, value: string) {
-  await openVaultTab(page)
+  await assertVaultReady(page)
+  await page.getByTestId('add-secret-btn').click()
+  await expect(page.getByTestId('add-secret-panel')).toBeVisible()
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()

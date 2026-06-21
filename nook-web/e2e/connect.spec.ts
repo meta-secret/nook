@@ -1,18 +1,19 @@
 import { expect, test } from '@playwright/test'
 import { waitForEngine } from './helpers'
 
-test.describe('setup connect flow', () => {
-  test('connects local vault and shows success', async ({ page }) => {
+test.describe('vault connect flow', () => {
+  test('connects local vault and opens vault directly', async ({ page }) => {
     await page.goto('/')
 
     const connectButton = await waitForEngine(page)
     await connectButton.click()
 
-    await expect(page.getByTestId('connect-success')).toContainText(
+    await expect(page.getByTestId('app-success')).toContainText(
       'Local vault loaded',
       { timeout: 20_000 },
     )
-    await expect(page.getByTestId('connected-badge')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('vault-welcome')).not.toBeVisible()
   })
 
   test('shows error when github mode has no pat', async ({ page }) => {
@@ -35,16 +36,15 @@ test.describe('setup connect flow', () => {
     await connectButton.click({ force: true })
 
     await expect(
-      page.getByTestId('connect-error').or(page.getByTestId('connect-success')),
+      page.getByTestId('connect-error').or(page.getByTestId('vault-panel')),
     ).toBeVisible({ timeout: 20_000 })
   })
 
-  test('locked vault prompts user to open setup', async ({ page }) => {
+  test('shows connect form on first visit', async ({ page }) => {
     await page.goto('/')
-    await page.getByTestId('nav-vault').click()
 
-    await expect(page.getByTestId('vault-locked')).toBeVisible()
-    await page.getByTestId('go-to-setup-btn').click()
+    await expect(page.getByTestId('vault-welcome')).toBeVisible()
     await expect(page.getByTestId('connect-vault-btn')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).not.toBeVisible()
   })
 })

@@ -1,26 +1,35 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Lock, ShieldCheck, TriangleAlert } from '@lucide/svelte'
+  import { Lock, ShieldCheck, TriangleAlert, Settings } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
-
-  // Subcomponents
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
+  import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
 
   onMount(async () => {
     await vault.init()
   })
+
+  async function handleConnect() {
+    await vault.loadDb()
+    if (vault.isAuthenticated) {
+      vault.closeSettings()
+    }
+  }
+
+  const shellWidth = $derived(
+    vault.isAuthenticated ? 'max-w-6xl' : 'max-w-xl',
+  )
 </script>
 
 <main class="dark min-h-svh bg-background text-foreground pb-16">
-  <!-- Nav Header -->
   <header
-    class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50"
+    class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="mx-auto flex max-w-xl items-center justify-between gap-4 px-4 py-3"
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {shellWidth}"
     >
       <div class="flex min-w-0 items-center gap-2.5">
         <div
@@ -39,41 +48,46 @@
         </div>
       </div>
 
-      <nav
-        class="flex shrink-0 rounded-lg border border-border bg-muted p-0.5"
-        aria-label="Main Navigation"
-      >
-        <button
-          class="rounded-md px-3 py-1 text-xs font-medium transition-all duration-200 sm:px-3.5 sm:text-sm {vault.activeTab ===
-          'auth'
-            ? 'bg-card text-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'}"
-          data-testid="nav-setup"
-          onclick={() => (vault.activeTab = 'auth')}
-        >
-          Setup
-        </button>
-        <button
-          class="rounded-md px-3 py-1 text-xs font-medium transition-all duration-200 sm:px-3.5 sm:text-sm {vault.activeTab ===
-          'secrets'
-            ? 'bg-card text-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground'}"
-          data-testid="nav-vault"
-          onclick={() => (vault.activeTab = 'secrets')}
-        >
-          Vault
-        </button>
-      </nav>
+      <div class="flex items-center gap-2">
+        {#if vault.isAuthenticated}
+          <button
+            type="button"
+            onclick={() => vault.openSettings()}
+            class="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            data-testid="storage-status-chip"
+          >
+            {vault.storageMode === 'github' ? 'GitHub sync' : 'Local storage'}
+          </button>
+          <Button
+            variant="outline"
+            size="icon"
+            class="shrink-0 border-border"
+            aria-label="Storage settings"
+            data-testid="storage-settings-btn"
+            onclick={() => vault.openSettings()}
+          >
+            <Settings class="size-4" />
+          </Button>
+        {:else}
+          <span
+            class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+            data-testid="welcome-header-hint"
+          >
+            <ShieldCheck class="size-3 shrink-0" />
+            <span class="hidden sm:inline">Encrypted in your browser</span>
+            <span class="sm:hidden">Encrypted locally</span>
+          </span>
+        {/if}
+      </div>
     </div>
   </header>
 
   <div
-    class="mx-auto px-4 {vault.activeTab === 'secrets'
-      ? 'max-w-6xl py-8 sm:px-6 lg:px-8'
-      : 'max-w-xl pt-4 pb-8'}"
+    class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
+      ? 'py-8'
+      : 'py-5 sm:py-6'}"
   >
-    <!-- Notifications -->
-    {#if vault.errorMsg}
+    {#if vault.errorMsg && vault.isAuthenticated}
       <div
         class="mb-6 flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive animate-in fade-in slide-in-from-top-2"
         role="alert"
@@ -86,10 +100,10 @@
       </div>
     {/if}
 
-    {#if vault.successMsg}
+    {#if vault.successMsg && vault.isAuthenticated}
       <div
         class="mb-6 flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/10 p-4 text-sm text-primary animate-in fade-in slide-in-from-top-2"
-        role="alert"
+        role="status"
         data-testid="app-success"
       >
         <ShieldCheck class="size-5 shrink-0 text-primary mt-0.5" />
@@ -100,29 +114,14 @@
       </div>
     {/if}
 
-    <!-- Tab Panels -->
-    {#if vault.activeTab === 'auth'}
-      <AuthStorage
-        bind:storageMode={vault.storageMode}
-        bind:githubPat={vault.githubPat}
-        isAuthenticated={vault.isAuthenticated}
-        isVerifying={vault.isVerifying}
-        isSaving={vault.isSaving}
-        isInitializing={vault.isInitializing}
-        errorMsg={vault.errorMsg}
-        successMsg={vault.successMsg}
-        secretsCount={vault.secrets.length}
-        onConnect={() => vault.loadDb()}
-        onInitializeEmpty={() => vault.handleInitializeEmpty()}
-      />
-    {:else if vault.activeTab === 'secrets'}
+    {#if vault.isAuthenticated}
       <SecretVault
-        isAuthenticated={vault.isAuthenticated}
         isSaving={vault.isSaving}
         secretsCount={vault.secrets.length}
+        storageMode={vault.storageMode}
         onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
         onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
-        onGoToAuth={() => (vault.activeTab = 'auth')}
+        onOpenSettings={() => vault.openSettings()}
         onFilterSecrets={(query) => vault.filterSecrets(query)}
         onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
           vault.generatePassword(
@@ -133,6 +132,60 @@
             symbols,
           )}
       />
+    {:else}
+      <div data-testid="vault-welcome" class="w-full">
+        <AuthStorage
+          bind:storageMode={vault.storageMode}
+          bind:githubPat={vault.githubPat}
+          variant="welcome"
+          isAuthenticated={vault.isAuthenticated}
+          isVerifying={vault.isVerifying}
+          isSaving={vault.isSaving}
+          isInitializing={vault.isInitializing}
+          errorMsg={vault.errorMsg}
+          successMsg={vault.successMsg}
+          secretsCount={vault.secrets.length}
+          onConnect={handleConnect}
+          onInitializeEmpty={() => vault.handleInitializeEmpty()}
+        />
+      </div>
     {/if}
   </div>
+
+  {#if vault.settingsOpen}
+    <div class="fixed inset-0 z-50">
+      <button
+        type="button"
+        class="absolute inset-0 bg-black/60 backdrop-blur-[1px]"
+        aria-label="Close storage settings"
+        data-testid="storage-settings-backdrop"
+        onclick={() => vault.closeSettings()}
+      ></button>
+      <aside
+        class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-card shadow-2xl animate-in slide-in-from-right duration-200"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Storage settings"
+        data-testid="storage-settings-panel"
+      >
+        <div class="overflow-y-auto p-4 sm:p-6">
+          <AuthStorage
+            bind:storageMode={vault.storageMode}
+            bind:githubPat={vault.githubPat}
+            variant="panel"
+            isAuthenticated={vault.isAuthenticated}
+            isVerifying={vault.isVerifying}
+            isSaving={vault.isSaving}
+            isInitializing={vault.isInitializing}
+            errorMsg={vault.errorMsg}
+            successMsg={vault.successMsg}
+            secretsCount={vault.secrets.length}
+            onConnect={handleConnect}
+            onInitializeEmpty={() => vault.handleInitializeEmpty()}
+            onClose={() => vault.closeSettings()}
+          />
+        </div>
+      </aside>
+    </div>
+  {/if}
 </main>

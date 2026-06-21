@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 import {
   addSecret,
+  assertVaultReady,
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
-  openVaultTab,
   uniqueSecretKey,
 } from './helpers'
 
@@ -45,7 +45,9 @@ test.describe('local vault', () => {
   })
 
   test('password generator fills the secret value field', async ({ page }) => {
-    await openVaultTab(page)
+    await assertVaultReady(page)
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('password-generator-toggle').click()
     await page.getByTestId('secret-value').fill('')
     await page.getByTestId('generate-password-btn').click()
     const generated = await page.getByTestId('secret-value').inputValue()
@@ -59,7 +61,7 @@ test.describe('local vault', () => {
     await addSecret(page, key, value)
     await page.reload()
     await connectLocalVault(page)
-    await openVaultTab(page)
+    await assertVaultReady(page)
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
     await expect(row).toBeVisible()

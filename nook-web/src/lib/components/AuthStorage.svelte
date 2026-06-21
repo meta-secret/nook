@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    Server,
     GitBranch,
     ShieldCheck,
     RefreshCw,
@@ -8,6 +7,7 @@
     Cloud,
     CheckCircle2,
     ExternalLink,
+    X,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -21,6 +21,7 @@
   let {
     storageMode = $bindable(),
     githubPat = $bindable(),
+    variant = 'welcome',
     isAuthenticated,
     isVerifying,
     isSaving,
@@ -30,9 +31,11 @@
     secretsCount,
     onConnect,
     onInitializeEmpty,
+    onClose,
   }: {
     storageMode: 'local' | 'github'
     githubPat: string
+    variant?: 'welcome' | 'panel'
     isAuthenticated: boolean
     isVerifying: boolean
     isSaving: boolean
@@ -42,158 +45,172 @@
     secretsCount: number
     onConnect: () => void | Promise<void>
     onInitializeEmpty: () => void | Promise<void>
+    onClose?: () => void
   } = $props()
 
   const githubPatUrl =
     'https://github.com/settings/tokens/new?scopes=repo&description=nook'
 </script>
 
-<div class="mx-auto max-w-xl animate-in fade-in duration-300">
-  <div class="mb-5 space-y-1.5 text-center">
-    <h1 class="text-2xl font-semibold tracking-tight text-foreground">
-      Connect your vault
-    </h1>
-    <p class="text-sm leading-relaxed text-muted-foreground">
-      Pick where encrypted secrets live. Your key stays in this browser —
-      never on GitHub.
-    </p>
-  </div>
+<div class="w-full animate-in fade-in duration-300">
+  {#if variant === 'panel'}
+    <div class="mb-4 flex items-start justify-between gap-3">
+      <div class="space-y-1">
+        <h2 class="text-lg font-semibold text-foreground">Storage settings</h2>
+        <p class="text-sm text-muted-foreground">
+          Change provider or reconnect your vault.
+        </p>
+      </div>
+      {#if onClose}
+        <Button
+          variant="outline"
+          size="icon"
+          class="shrink-0 border-border"
+          aria-label="Close storage settings"
+          data-testid="storage-settings-close"
+          onclick={onClose}
+        >
+          <X class="size-4" />
+        </Button>
+      {/if}
+    </div>
+  {/if}
 
-  <Card class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm">
-    <CardHeader class="pb-4">
-      <div class="flex items-start justify-between gap-4">
+  <Card class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden">
+    <CardHeader class="border-b border-border/60 {variant === 'welcome' ? 'pb-4 pt-5' : 'pb-3 pt-4'}">
+      <div class="flex items-start justify-between gap-3">
         <div class="space-y-1">
-          <CardTitle class="text-base font-medium text-foreground"
-            >Storage provider</CardTitle
-          >
-          <CardDescription class="text-muted-foreground">
-            Switch anytime — your encryption key remains local.
-          </CardDescription>
+          {#if variant === 'welcome'}
+            <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
+              Unlock your vault
+            </CardTitle>
+            <CardDescription>
+              Pick where secrets sync. Your encryption key stays in this browser.
+            </CardDescription>
+          {:else}
+            <CardTitle class="text-sm font-medium text-foreground"
+              >Storage provider</CardTitle
+            >
+          {/if}
         </div>
         {#if isAuthenticated}
           <span
-            class="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-500"
+            class="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500"
             data-testid="connected-badge"
           >
-            <CheckCircle2 class="size-3.5" />
+            <CheckCircle2 class="size-3" />
             Connected
           </span>
         {/if}
       </div>
     </CardHeader>
 
-    <CardContent>
+    <CardContent class="pt-4">
       <form
         novalidate
         onsubmit={(e) => {
           e.preventDefault()
           void onConnect()
         }}
-        class="space-y-6"
+        class="space-y-4"
       >
-        <fieldset class="space-y-3">
+        <fieldset class="space-y-2">
           <legend class="sr-only">Storage target</legend>
-          <div class="grid gap-3 sm:grid-cols-2" id="storage-mode-select">
+          <div
+            class="flex rounded-lg border border-border bg-muted/40 p-0.5"
+            id="storage-mode-select"
+          >
             <button
               type="button"
               aria-pressed={storageMode === 'local'}
-              class="group relative flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 {storageMode ===
+              class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all {storageMode ===
               'local'
-                ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30'
-                : 'border-border bg-background/50 hover:border-border hover:bg-accent/40'}"
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'}"
               onclick={() => (storageMode = 'local')}
             >
-              <div
-                class="flex size-9 items-center justify-center rounded-lg border transition-colors {storageMode ===
-                'local'
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border bg-muted text-muted-foreground group-hover:text-foreground'}"
-              >
-                <HardDrive class="size-4" />
-              </div>
-              <div class="space-y-1">
-                <span class="block text-sm font-medium text-foreground"
-                  >Local</span
-                >
-                <span class="block text-xs leading-relaxed text-muted-foreground"
-                  >IndexedDB in this browser. No sign-in.</span
-                >
-              </div>
+              <HardDrive class="size-3.5 shrink-0" />
+              Local
             </button>
-
             <button
               type="button"
               aria-pressed={storageMode === 'github'}
-              class="group relative flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition-all duration-200 {storageMode ===
+              class="flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all {storageMode ===
               'github'
-                ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30'
-                : 'border-border bg-background/50 hover:border-border hover:bg-accent/40'}"
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'}"
               onclick={() => (storageMode = 'github')}
             >
-              <div
-                class="flex size-9 items-center justify-center rounded-lg border transition-colors {storageMode ===
-                'github'
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border bg-muted text-muted-foreground group-hover:text-foreground'}"
-              >
-                <Cloud class="size-4" />
-              </div>
-              <div class="space-y-1">
-                <span class="block text-sm font-medium text-foreground"
-                  >GitHub</span
-                >
-                <span class="block text-xs leading-relaxed text-muted-foreground"
-                  >Sync encrypted vault to <span class="font-mono">username/nook</span>.</span
-                >
-              </div>
+              <Cloud class="size-3.5 shrink-0" />
+              GitHub
             </button>
           </div>
+          <p class="text-xs text-muted-foreground">
+            {#if storageMode === 'github'}
+              Syncs encrypted vault to
+              <span class="font-mono text-foreground/80">username/nook</span>.
+              Key never leaves this browser.
+            {:else}
+              Stored in IndexedDB on this device. No sign-in required.
+            {/if}
+          </p>
         </fieldset>
 
         {#if storageMode === 'github'}
           <div
-            class="space-y-3 rounded-xl border border-border bg-muted/30 p-4 animate-in fade-in slide-in-from-top-1 duration-200"
+            class="space-y-4 rounded-lg border border-border bg-muted/30 p-3 animate-in fade-in slide-in-from-top-1 duration-200"
           >
-            <div class="flex items-center justify-between gap-2">
-              <label class="text-sm font-medium text-foreground" for="pat">
-                Personal access token
-              </label>
-              <a
-                href={githubPatUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-              >
-                Generate new token
-                <ExternalLink class="size-3" />
-              </a>
-            </div>
-            <input
-              id="pat"
-              type="password"
-              bind:value={githubPat}
-              placeholder="ghp_xxxxxxxxxxxx"
-              autocomplete="off"
-              class="flex h-10 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-            />
-                <p class="text-xs leading-relaxed text-muted-foreground">
-                  Use a classic token starting with
-                  <span class="font-mono text-foreground/80">ghp_</span> with
-                  <span class="font-mono text-foreground/80">repo</span> scope.
-                  Syncs encrypted vault to
-                  <span class="font-mono text-foreground/80">username/nook/nook-vault.yaml</span>.
-                  Creates the <span class="font-mono text-foreground/80">nook</span> repo automatically if needed.
-                  Your encryption key never leaves this browser.
-                </p>
-          </div>
-        {:else}
-          <div
-            class="flex items-start gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
-          >
-            <Server class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <p class="text-xs leading-relaxed text-muted-foreground">
-              Everything stays on this device. Clear site data to remove the vault.
-            </p>
+            <ol class="space-y-4">
+              <li class="flex gap-3">
+                <span
+                  class="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground"
+                  aria-hidden="true"
+                >1</span>
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <p class="text-xs font-medium text-foreground">
+                    Create a token on GitHub
+                  </p>
+                  <p class="text-[11px] leading-relaxed text-muted-foreground">
+                    Classic <span class="font-mono">ghp_</span> token with
+                    <span class="font-mono">repo</span> scope.
+                  </p>
+                  <a
+                    href={githubPatUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="github-new-token-btn"
+                    class="inline-flex items-center gap-1 text-xs font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
+                  >
+                    Open token settings
+                    <ExternalLink class="size-3 shrink-0 opacity-70" />
+                  </a>
+                </div>
+              </li>
+
+              <li class="flex gap-3">
+                <span
+                  class="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground"
+                  aria-hidden="true"
+                >2</span>
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <label class="text-xs font-medium text-foreground" for="pat">
+                    Paste token here
+                  </label>
+                  <input
+                    id="pat"
+                    type="password"
+                    bind:value={githubPat}
+                    placeholder="ghp_xxxxxxxxxxxx"
+                    autocomplete="off"
+                    class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+                  />
+                  <p class="text-[11px] text-muted-foreground">
+                    Syncs to
+                    <span class="font-mono text-foreground/80">username/nook/nook-vault.yaml</span>
+                  </p>
+                </div>
+              </li>
+            </ol>
           </div>
         {/if}
 
@@ -217,11 +234,10 @@
           </div>
         {/if}
 
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Button
             type="submit"
-            size="lg"
-            class="sm:min-w-[200px]"
+            class="sm:min-w-[180px]"
             data-testid="connect-vault-btn"
           >
             {#if isInitializing}
@@ -243,7 +259,6 @@
             <Button
               type="button"
               variant="outline"
-              size="lg"
               onclick={onInitializeEmpty}
               disabled={isSaving}
               class="border-border text-foreground hover:bg-accent"
