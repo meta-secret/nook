@@ -16,7 +16,7 @@ These files are the source of truth for how this project works.
 ## Domain Invariants (do not regress)
 
 ### Authentication & storage
-- **No user master passphrase.** Encryption keys are auto-generated on first connect and stored in IndexedDB (`vault_secret_key` via `rexie`). Never expose a passphrase input in the UI.
+- **No user master passphrase.** DEC is auto-generated on first connect and stored in the vault `auth:` section (encrypted to the device key). Device identity lives in IndexedDB (`device_identity_secret`). Never expose a passphrase input in the UI.
 - **Secret key stays in the browser.** The encryption key is never written to GitHub — only the encrypted vault file (`nook-vault.yaml`) is synced remotely.
 - **GitHub mode requires only a PAT** with `repo` scope. Repository and vault file are resolved automatically: `{username}/nook/nook-vault.yaml`.
 - **Local mode requires no credentials.** The encrypted vault lives in IndexedDB under `encrypted_db`.

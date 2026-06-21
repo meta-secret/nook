@@ -1,4 +1,6 @@
 use crate::SecretRecord;
+use crate::is_auth_id;
+use crate::is_device_id;
 
 pub const STORAGE_MODE_LOCAL: &str = "local";
 pub const STORAGE_MODE_GITHUB: &str = "github";
@@ -33,6 +35,9 @@ pub fn validate_secret_label(key: &str) -> Result<String, String> {
     if trimmed.is_empty() {
         return Err("Secret label is required.".to_owned());
     }
+    if is_device_id(trimmed) || is_auth_id(trimmed) {
+        return Err("Secret label cannot use a reserved device id.".to_owned());
+    }
     Ok(trimmed.to_owned())
 }
 
@@ -43,16 +48,21 @@ pub fn validate_secret_value(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[must_use]
 pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
+    let user_records: Vec<SecretRecord> = records
+        .iter()
+        .filter(|record| !is_device_id(&record.key) && !is_auth_id(&record.key))
+        .cloned()
+        .collect();
     let needle = query.trim().to_lowercase();
     if needle.is_empty() {
-        return records.to_vec();
+        return user_records;
     }
 
-    records
-        .iter()
+    user_records
+        .into_iter()
         .filter(|record| record.key.to_lowercase().contains(&needle))
-        .cloned()
         .collect()
 }
 
@@ -93,6 +103,8 @@ mod tests {
         assert_eq!(validate_secret_label(" github ").unwrap(), "github");
         assert!(validate_secret_value("").is_err());
         assert!(validate_secret_value("x").is_ok());
+        assert!(validate_secret_label("abc123def4567890").is_err());
+        assert!(validate_secret_label(&"a".repeat(64)).is_err());
     }
 
     #[test]

@@ -230,7 +230,7 @@ tasks:
       - _wasm:build
     cmds:
       - cd nook-web && bun run test
-      - cd nook-web && bunx playwright install chromium
+      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e
 
   _web:lint:

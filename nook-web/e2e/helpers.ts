@@ -4,7 +4,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 dotenv.config({
-  path: path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env.test.local'),
+  path: path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../.env.test.local',
+  ),
 })
 
 export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
@@ -144,7 +147,7 @@ export async function connectLocalVault(page: Page) {
 export async function connectGithubVault(page: Page, pat: string) {
   await page.goto('/')
   await page.getByRole('button', { name: /^GitHub/ }).click()
-  await page.getByLabel('Personal access token').fill(pat)
+  await page.getByLabel('Paste token here').fill(pat)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await expect(page.getByTestId('app-success')).toContainText(
@@ -192,7 +195,9 @@ export async function addSecret(page: Page, key: string, value: string) {
     'Secret saved successfully',
     { timeout: 45_000 },
   )
-  await expect(page.getByTestId('secret-row').filter({ hasText: key })).toBeVisible()
+  await expect(
+    page.getByTestId('secret-row').filter({ hasText: key }),
+  ).toBeVisible()
 }
 
 export async function deleteSecret(page: Page, key: string) {

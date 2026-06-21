@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 
@@ -13,5 +13,9 @@ export default defineConfig({
     alias: {
       $lib: new URL('./src/lib', import.meta.url).pathname,
     },
+  },
+  test: {
+    include: ['src/**/*.{test,spec}.{js,ts}'],
+    exclude: ['e2e/**', 'node_modules/**'],
   },
 })

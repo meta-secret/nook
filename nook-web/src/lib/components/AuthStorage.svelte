@@ -9,6 +9,8 @@
     ExternalLink,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
+  import type { JoinRequest, VaultMember } from '$lib/nook'
   import {
     Card,
     CardContent,
@@ -20,6 +22,8 @@
   let {
     storageMode = $bindable(),
     githubPat = $bindable(),
+    enrollSecretsKey = $bindable(''),
+    enrollMembersKey = $bindable(''),
     variant = 'welcome',
     isAuthenticated,
     isVerifying,
@@ -28,11 +32,20 @@
     errorMsg,
     successMsg,
     secretsCount,
+    deviceId = '',
+    devicePublicKey = '',
+    pendingJoins = [] as JoinRequest[],
+    vaultMembers = [] as VaultMember[],
     onConnect,
     onInitializeEmpty,
+    onApproveJoin,
+    onEnrollWithDec,
+    onRefreshJoins,
   }: {
     storageMode: 'local' | 'github'
     githubPat: string
+    enrollSecretsKey?: string
+    enrollMembersKey?: string
     variant?: 'welcome' | 'panel'
     isAuthenticated: boolean
     isVerifying: boolean
@@ -41,8 +54,15 @@
     errorMsg: string
     successMsg: string
     secretsCount: number
+    deviceId?: string
+    devicePublicKey?: string
+    pendingJoins?: JoinRequest[]
+    vaultMembers?: VaultMember[]
     onConnect: () => void | Promise<void>
     onInitializeEmpty: () => void | Promise<void>
+    onApproveJoin?: (deviceId: string) => void | Promise<void>
+    onEnrollWithDec?: () => void | Promise<void>
+    onRefreshJoins?: () => void | Promise<void>
   } = $props()
 
   const githubPatUrl =
@@ -50,19 +70,30 @@
 </script>
 
 <div class="w-full animate-in fade-in duration-300">
-  <Card class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden">
-    <CardHeader class="border-b border-border/60 {variant === 'welcome' ? 'pb-4 pt-5' : 'pb-4 pt-5'}">
+  <Card
+    class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
+  >
+    <CardHeader
+      class="border-b border-border/60 {variant === 'welcome'
+        ? 'pb-4 pt-5'
+        : 'pb-4 pt-5'}"
+    >
       <div class="flex items-start justify-between gap-3">
         <div class="space-y-1">
           {#if variant === 'welcome'}
-            <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
+            <CardTitle
+              class="text-lg font-semibold tracking-tight text-foreground"
+            >
               Unlock your vault
             </CardTitle>
             <CardDescription>
-              Pick where secrets sync. Your encryption key stays in this browser.
+              Pick where secrets sync. Your encryption key stays in this
+              browser.
             </CardDescription>
           {:else}
-            <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
+            <CardTitle
+              class="text-lg font-semibold tracking-tight text-foreground"
+            >
               Storage settings
             </CardTitle>
             <CardDescription>
@@ -141,8 +172,8 @@
               <li class="flex gap-3">
                 <span
                   class="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground"
-                  aria-hidden="true"
-                >1</span>
+                  aria-hidden="true">1</span
+                >
                 <div class="min-w-0 flex-1 space-y-1.5">
                   <p class="text-xs font-medium text-foreground">
                     Create a token on GitHub
@@ -167,8 +198,8 @@
               <li class="flex gap-3">
                 <span
                   class="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground"
-                  aria-hidden="true"
-                >2</span>
+                  aria-hidden="true">2</span
+                >
                 <div class="min-w-0 flex-1 space-y-1.5">
                   <label class="text-xs font-medium text-foreground" for="pat">
                     Paste token here
@@ -183,12 +214,29 @@
                   />
                   <p class="text-[11px] text-muted-foreground">
                     Syncs to
-                    <span class="font-mono text-foreground/80">username/nook/nook-vault.yaml</span>
+                    <span class="font-mono text-foreground/80"
+                      >username/nook/nook-vault.yaml</span
+                    >
                   </p>
                 </div>
               </li>
             </ol>
           </div>
+        {/if}
+
+        {#if variant === 'welcome'}
+          <DeviceEnrollment
+            {deviceId}
+            {devicePublicKey}
+            {pendingJoins}
+            {vaultMembers}
+            isBusy={isVerifying || isSaving || isInitializing}
+            bind:enrollSecretsKey
+            bind:enrollMembersKey
+            {onApproveJoin}
+            {onEnrollWithDec}
+            onRefresh={onRefreshJoins}
+          />
         {/if}
 
         {#if errorMsg}
@@ -211,7 +259,9 @@
           </div>
         {/if}
 
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <div
+          class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
+        >
           {#if isAuthenticated && secretsCount === 0}
             <Button
               type="button"
@@ -250,6 +300,23 @@
           </Button>
         </div>
       </form>
+
+      {#if variant !== 'welcome'}
+        <div class="mt-4">
+          <DeviceEnrollment
+            {deviceId}
+            {devicePublicKey}
+            {pendingJoins}
+            {vaultMembers}
+            isBusy={isVerifying || isSaving || isInitializing}
+            bind:enrollSecretsKey
+            bind:enrollMembersKey
+            {onApproveJoin}
+            {onEnrollWithDec}
+            onRefresh={onRefreshJoins}
+          />
+        </div>
+      {/if}
     </CardContent>
   </Card>
 </div>

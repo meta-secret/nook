@@ -36,17 +36,18 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ## 2. Package Responsibilities & Layers
 
 ### A. `nook-core` (The Domain Core)
-- **`Database`:** In-memory JSONL session (sorted KV records).
+- **`multi_device`:** `secrets_key` + `members_key`, device identity, join/approve/enroll; YAML `auth:` / `joins:` / `members:` sections.
+- **`Database`:** In-memory JSONL session (sorted KV records); user secrets only at rest in session.
 - **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load.
 - **`vault_crypto`:** Session-scoped age encrypt/decrypt with cached scrypt identity/recipient.
 - **`validation`:** Storage mode, PAT, secret field validation; label search filter.
 - **`password`:** CSPRNG password generation via `getrandom`.
-- **Tests:** Unit tests in each module + `tests/vault_workflow.rs` for incremental save workflows.
+- **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
 ### B. `nook-wasm` (The Bridge Layer)
-- **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `VaultCrypto`, GitHub SHA.
+- **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
-- **Exported methods:** `connect`, `add_secret`, `delete_secret`, `filter_secrets`, `generate_password`, etc.
+- **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
 ### C. `nook-web` (The Presentation Layer)
@@ -59,16 +60,15 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ## 3. Detailed Data Flow & Execution Model
 
-### Connect
+### Connect (multi-device)
 ```
 [Svelte] → VaultState.loadDb()
          → NookVaultManager.connect(mode, pat)
-              → nook-core: validate_storage_mode, validate_github_pat
-              → load/create vault_secret_key (IndexedDB)
-              → VaultCrypto::new
+              → load/create device identity (IndexedDB)
               → load nook-vault.yaml (IDB or GitHub)
-              → deserialize_stored → stored_armored cache
-              → decrypt values → decrypted_jsonl session
+              → resolve_secrets_key() + resolve_members_key() from auth row
+              → VaultCrypto::new(secrets_key)
+              → decrypt user secret values → decrypted_jsonl session
 ```
 
 ### Add Secret (incremental save)
@@ -94,9 +94,21 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 | Layer | Format | Location |
 |-------|--------|----------|
-| Session (plaintext) | JSONL lines | WASM `decrypted_jsonl` only |
-| On-disk (ciphertext values) | YAML `secrets:` list | `nook-vault.yaml` / `encrypted_db` |
-| Encryption key | Hex string | IndexedDB `vault_secret_key` only |
+| Session (plaintext user secrets) | JSONL lines | WASM `decrypted_jsonl` only |
+| On-disk user secrets | YAML `secrets:` list | Values encrypted with `secrets_key` |
+| On-disk key envelopes | YAML `auth:` list | `pk_id` → age-armored `secrets_key` + `members_key` |
+| Member catalog | YAML `members:` list | `pk_id` + `members_key`-encrypted `{pk_id, pk}` |
+| Pending joins | YAML `joins:` list | `device_id` → JSON (includes `public_key` while pending) |
+| Device identity (X25519 private) | age secret string | IndexedDB `device_identity_secret` only |
+
+See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
+
+```
+secrets:  user passwords (secrets_key)
+auth:     per-device secrets_key + members_key envelopes
+joins:    transient join requests
+members:  members_key-encrypted catalog entries
+```
 
 - **Per-record age armor** for values; labels plaintext in YAML.
 - **Legacy JSONL vault files** load via `from_stored_auto`; new writes use YAML.

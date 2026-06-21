@@ -133,11 +133,7 @@
           Cancel
         </Button>
       {:else}
-        <Button
-          size="sm"
-          data-testid="add-secret-btn"
-          onclick={openAddSecret}
-        >
+        <Button size="sm" data-testid="add-secret-btn" onclick={openAddSecret}>
           <Plus class="size-3.5 mr-1.5" />
           Add secret
         </Button>
@@ -300,9 +296,7 @@
     {/if}
 
     <div class="relative">
-      <Search
-        class="absolute left-3 top-3 size-4 text-muted-foreground/60"
-      />
+      <Search class="absolute left-3 top-3 size-4 text-muted-foreground/60" />
       <input
         type="text"
         bind:value={searchPattern}
@@ -338,9 +332,7 @@
                 data-testid="secret-row"
               >
                 <div class="space-y-1 pr-4 min-w-0 flex-1">
-                  <h3
-                    class="text-sm font-semibold text-foreground truncate"
-                  >
+                  <h3 class="text-sm font-semibold text-foreground truncate">
                     {secret.key}
                   </h3>
                   <div class="flex items-center gap-2">

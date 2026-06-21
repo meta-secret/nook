@@ -3,13 +3,16 @@
   import { Lock, ShieldCheck, TriangleAlert, Settings, X } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
+  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
 
-  onMount(async () => {
-    await vault.init()
+  onMount(() => {
+    void vault.init()
+    return () => vault.stopVaultSync()
   })
 
   async function handleConnect() {
@@ -70,12 +73,20 @@
             <Button
               variant="outline"
               size="icon"
-              class="shrink-0 border-border"
+              class="relative shrink-0 border-border"
               aria-label="Storage settings"
               data-testid="storage-settings-btn"
               onclick={() => vault.openSettings()}
             >
               <Settings class="size-4" />
+              {#if vault.pendingJoins.length > 0}
+                <span
+                  class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
+                  data-testid="pending-joins-badge"
+                >
+                  {vault.pendingJoins.length}
+                </span>
+              {/if}
             </Button>
           {/if}
         {:else}
@@ -148,6 +159,8 @@
           <AuthStorage
             bind:storageMode={vault.storageMode}
             bind:githubPat={vault.githubPat}
+            bind:enrollSecretsKey={vault.enrollSecretsKey}
+            bind:enrollMembersKey={vault.enrollMembersKey}
             variant="panel"
             isAuthenticated={vault.isAuthenticated}
             isVerifying={vault.isVerifying}
@@ -156,11 +169,23 @@
             errorMsg={vault.errorMsg}
             successMsg={vault.successMsg}
             secretsCount={vault.secrets.length}
+            deviceId={vault.deviceId}
+            devicePublicKey={vault.devicePublicKey}
+            pendingJoins={vault.pendingJoins}
+            vaultMembers={vault.vaultMembers}
             onConnect={handleConnect}
             onInitializeEmpty={() => vault.handleInitializeEmpty()}
+            onApproveJoin={(id) => vault.approveJoin(id)}
+            onRefreshJoins={() => vault.refreshDeviceState()}
           />
         </div>
       {:else}
+        <PendingJoinsBanner
+          pendingJoins={vault.pendingJoins}
+          isBusy={vault.isSaving || vault.isVerifying}
+          onApproveJoin={(id) => vault.approveJoin(id)}
+          onRefresh={() => vault.refreshDeviceState()}
+        />
         <SecretVault
           isSaving={vault.isSaving}
           secretsCount={vault.secrets.length}
@@ -168,7 +193,13 @@
           onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
           onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
           onFilterSecrets={(query) => vault.filterSecrets(query)}
-          onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
+          onGeneratePassword={(
+            length,
+            lowercase,
+            uppercase,
+            numbers,
+            symbols,
+          ) =>
             vault.generatePassword(
               length,
               lowercase,
@@ -183,6 +214,8 @@
         <AuthStorage
           bind:storageMode={vault.storageMode}
           bind:githubPat={vault.githubPat}
+          bind:enrollSecretsKey={vault.enrollSecretsKey}
+          bind:enrollMembersKey={vault.enrollMembersKey}
           variant="welcome"
           isAuthenticated={vault.isAuthenticated}
           isVerifying={vault.isVerifying}
@@ -191,10 +224,26 @@
           errorMsg={vault.errorMsg}
           successMsg={vault.successMsg}
           secretsCount={vault.secrets.length}
+          deviceId={vault.deviceId}
+          devicePublicKey={vault.devicePublicKey}
+          pendingJoins={vault.pendingJoins}
           onConnect={handleConnect}
           onInitializeEmpty={() => vault.handleInitializeEmpty()}
+          onEnrollWithDec={() => vault.enrollAndConnect()}
+          onRefreshJoins={() => vault.refreshDeviceState()}
         />
       </div>
     {/if}
   </div>
+
+  <JoinEnrollmentDialog
+    open={vault.joinEnrollmentPrompt !== 'none'}
+    variant={vault.joinEnrollmentPrompt === 'pending'
+      ? 'pending'
+      : 'needs_request'}
+    deviceId={vault.deviceId}
+    isBusy={vault.isVerifying}
+    onConfirm={() => vault.confirmJoinRequest()}
+    onCancel={() => vault.dismissJoinEnrollment()}
+  />
 </main>

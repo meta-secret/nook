@@ -4,6 +4,7 @@
     clippy::uninlined_format_args
 )]
 
+mod multi_device;
 mod password;
 mod validation;
 mod vault_crypto;
@@ -11,6 +12,22 @@ mod vault_format;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+pub use multi_device::{
+    AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
+    MemberEntry, VaultKeys, VaultMember, approve_join_request, assess_connect_access, auth_record,
+    build_members_records, create_join_request_record, dec_auth_id, dec_auth_id_from_public_key,
+    device_is_enrolled, encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec,
+    enroll_device_with_keys, ensure_self_in_roster, explain_connect_blocked, generate_dec,
+    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
+    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id,
+    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
+    is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
+    member_from_join, member_stored_key, merge_remote_join_records, parse_auth_envelopes,
+    parse_join_request, pending_join_for_device, replace_member_records, resolve_dec, resolve_dek,
+    resolve_member_roster, resolve_members_key, resolve_secrets_key, roster_add_member,
+    user_stored_records, vault_has_multi_device_records,
+};
 
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use validation::{
@@ -67,7 +84,7 @@ impl Database {
         format: VaultFormat,
     ) -> Result<Self, String> {
         let stored_records = vault_format::deserialize_stored(stored, format)?;
-        Self::from_stored_records(stored_records, passphrase)
+        Self::from_stored_records(&stored_records, passphrase)
     }
 
     pub fn from_stored_auto(stored: &str, passphrase: &str) -> Result<Self, String> {
@@ -136,19 +153,20 @@ impl Database {
     }
 
     fn from_stored_records(
-        stored_records: Vec<StoredSecretRecord>,
+        stored_records: &[StoredSecretRecord],
         passphrase: &str,
     ) -> Result<Self, String> {
         let crypto = VaultCrypto::new(passphrase)?;
-        Self::from_stored_records_with_crypto(&stored_records, &crypto)
+        Self::from_stored_records_with_crypto(stored_records, &crypto)
     }
 
     pub fn from_stored_records_with_crypto(
         stored_records: &[StoredSecretRecord],
         crypto: &VaultCrypto,
     ) -> Result<Self, String> {
+        let user_records = user_stored_records(stored_records);
         let mut records = HashMap::new();
-        for stored in stored_records {
+        for stored in user_records {
             let value = crypto.decrypt_value(&stored.value)?;
             records.insert(stored.key.clone(), value);
         }
@@ -178,6 +196,7 @@ impl Database {
     }
 
     /// Build sorted stored records from an armored-value cache (no encryption).
+    #[must_use]
     pub fn stored_records_from_armored(
         armored: &HashMap<String, String>,
     ) -> Vec<StoredSecretRecord> {
@@ -267,7 +286,7 @@ mod tests {
 
         assert!(stored.contains("github.com"));
         assert!(stored.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert!(stored.contains("|"));
+        assert!(stored.contains('|'));
         assert!(!stored.contains("hunter2"));
         assert!(!stored.contains("token-abc"));
         assert!(!stored.contains("\\n"));
@@ -330,7 +349,7 @@ mod tests {
             .expect("missing fixtures/nook-vault.example.jsonl");
 
         assert!(yaml.contains("secrets:"));
-        assert!(yaml.contains("|"));
+        assert!(yaml.contains('|'));
         assert!(
             jsonl
                 .lines()

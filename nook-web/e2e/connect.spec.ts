@@ -28,7 +28,9 @@ test.describe('vault connect flow', () => {
     )
   })
 
-  test('connect button stays clickable while engine loads', async ({ page }) => {
+  test('connect button stays clickable while engine loads', async ({
+    page,
+  }) => {
     await page.goto('/')
 
     const connectButton = page.getByTestId('connect-vault-btn')
