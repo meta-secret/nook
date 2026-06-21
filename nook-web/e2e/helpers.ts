@@ -15,7 +15,7 @@ import {
   parseVaultYamlSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
-import { registerE2eGithubRepo, cleanupE2eGithubRepo } from './github-repos'
+import { registerE2eGithubRepo } from './github-repos'
 import {
   fetchGithubVaultYaml,
   githubApiFetch,
@@ -100,12 +100,9 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Between suites: wipe vault YAML only. Repo deletion happens once in global teardown. */
 export async function finishE2eGithubSuite(pat: string, repoName: string) {
-  if (process.env.NOOK_GITHUB_E2E_REPO?.trim()) {
-    await resetGithubVault(pat, repoName)
-    return
-  }
-  await cleanupE2eGithubRepo(pat, repoName)
+  await resetGithubVault(pat, repoName)
 }
 
 async function deleteGithubFileIfExists(
