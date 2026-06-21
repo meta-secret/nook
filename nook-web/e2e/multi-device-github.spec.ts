@@ -12,7 +12,7 @@ import {
   githubPat,
   openStorageSettings,
   resetGithubVault,
-  cleanupE2eGithubRepo,
+  finishE2eGithubSuite,
   revealSecretValue,
   sendJoinRequest,
   unlockGithubVault,
@@ -29,7 +29,7 @@ const describeMultiDevice = githubPat ? test.describe : test.describe.skip
 
 describeMultiDevice('multi-device github vault', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
 
   let deviceA: Page
   let deviceB: Page
@@ -43,9 +43,8 @@ describeMultiDevice('multi-device github vault', () => {
   const joinerSecretValue = 'joiner-device-password-пароль'
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] multi-device repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
 
     contextA = await createIsolatedContext(browser)
@@ -77,7 +76,7 @@ describeMultiDevice('multi-device github vault', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('device B sees join dialog and sends a join request', async () => {
@@ -201,7 +200,7 @@ describeMultiDevice('multi-device github vault', () => {
 
 describeMultiDevice('multi-device approve from settings', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
 
   let deviceA: Page
   let deviceB: Page
@@ -210,9 +209,8 @@ describeMultiDevice('multi-device approve from settings', () => {
   let e2eRepo: string
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] multi-device settings repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
 
     contextA = await createIsolatedContext(browser)
@@ -228,7 +226,7 @@ describeMultiDevice('multi-device approve from settings', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('approves join from Storage & devices panel', async () => {
@@ -262,7 +260,7 @@ describeMultiDevice('multi-device approve from settings', () => {
 
 describeMultiDevice('multi-device join background sync', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(60_000)
+  test.setTimeout(120_000)
 
   let deviceA: Page
   let deviceB: Page
@@ -271,9 +269,8 @@ describeMultiDevice('multi-device join background sync', () => {
   let e2eRepo: string
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] join background sync repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
 
     contextA = await createIsolatedContext(browser)
@@ -289,7 +286,7 @@ describeMultiDevice('multi-device join background sync', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('device A eventually sees pending join without manual refresh', async () => {

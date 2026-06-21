@@ -24,7 +24,7 @@
   const shellWidth = 'max-w-xl'
 </script>
 
-<main class="dark min-h-svh bg-background text-foreground pb-16">
+<main class="dark min-h-svh bg-background text-foreground">
   <header
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
@@ -94,60 +94,77 @@
 
   <div
     class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? 'py-8 pb-24'
+      ? 'py-8'
       : 'py-5 sm:py-6'}"
   >
     {#if vault.isAuthenticated}
-      {#if vault.settingsOpen}
-        <div data-testid="storage-settings-panel" class="w-full">
-          <AuthStorage
-            providers={vault.providers}
-            activeProviderId={vault.activeProviderId}
-            isAuthenticated={vault.isAuthenticated}
-            isVerifying={vault.isVerifying}
-            isSaving={vault.isSaving}
-            isInitializing={vault.isInitializing}
-            errorMsg={vault.errorMsg}
-            successMsg={vault.successMsg}
-            deviceId={vault.deviceId}
-            devicePublicKey={vault.devicePublicKey}
-            pendingJoins={vault.pendingJoins}
-            vaultMembers={vault.vaultMembers}
-            onReconnect={handleUnlock}
-            onSelectProvider={(id) => vault.selectProvider(id)}
-            onApproveJoin={(id) => vault.approveJoin(id)}
-            onRefreshJoins={() => vault.manualSync()}
-            bind:githubRepo={vault.githubRepo}
-          />
+      <div
+        class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      >
+        <div class="space-y-4 p-4 sm:p-5">
+          {#if vault.settingsOpen}
+            <div data-testid="storage-settings-panel" class="w-full">
+              <AuthStorage
+                providers={vault.providers}
+                activeProviderId={vault.activeProviderId}
+                isAuthenticated={vault.isAuthenticated}
+                isVerifying={vault.isVerifying}
+                isSaving={vault.isSaving}
+                isInitializing={vault.isInitializing}
+                errorMsg={vault.errorMsg}
+                successMsg={vault.successMsg}
+                deviceId={vault.deviceId}
+                devicePublicKey={vault.devicePublicKey}
+                pendingJoins={vault.pendingJoins}
+                vaultMembers={vault.vaultMembers}
+                onReconnect={handleUnlock}
+                onSelectProvider={(id) => vault.selectProvider(id)}
+                onApproveJoin={(id) => vault.approveJoin(id)}
+                onRefreshJoins={() => vault.manualSync()}
+                bind:githubRepo={vault.githubRepo}
+              />
+            </div>
+          {:else}
+            <PendingJoinsBanner
+              pendingJoins={vault.pendingJoins}
+              isBusy={vault.isSaving || vault.isVerifying}
+              onApproveJoin={(id) => vault.approveJoin(id)}
+              onRefresh={() => vault.manualSync()}
+            />
+            <SecretVault
+              isSaving={vault.isSaving}
+              secrets={vault.secrets}
+              onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
+              onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
+              onGeneratePassword={(
+                length,
+                lowercase,
+                uppercase,
+                numbers,
+                symbols,
+              ) =>
+                vault.generatePassword(
+                  length,
+                  lowercase,
+                  uppercase,
+                  numbers,
+                  symbols,
+                )}
+            />
+          {/if}
         </div>
-      {:else}
-        <PendingJoinsBanner
-          pendingJoins={vault.pendingJoins}
-          isBusy={vault.isSaving || vault.isVerifying}
-          onApproveJoin={(id) => vault.approveJoin(id)}
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
           onRefresh={() => vault.manualSync()}
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
         />
-        <SecretVault
-          isSaving={vault.isSaving}
-          secrets={vault.secrets}
-          onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
-          onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
-          onGeneratePassword={(
-            length,
-            lowercase,
-            uppercase,
-            numbers,
-            symbols,
-          ) =>
-            vault.generatePassword(
-              length,
-              lowercase,
-              uppercase,
-              numbers,
-              symbols,
-            )}
-        />
-      {/if}
+      </div>
     {:else if vault.providersLoaded}
       <LoginGate
         providers={vault.providers}
@@ -169,20 +186,6 @@
       />
     {/if}
   </div>
-
-  {#if vault.isAuthenticated}
-    <VaultStatusBar
-      storageMode={vault.storageMode}
-      githubRepo={vault.githubRepo}
-      lastSyncedAt={vault.lastSyncedAt}
-      isSyncing={vault.isSyncing || vault.isSaving}
-      successMsg={vault.successMsg}
-      errorMsg={vault.errorMsg}
-      onRefresh={() => vault.manualSync()}
-      onDismissSuccess={() => vault.dismissSuccess()}
-      onDismissError={() => vault.dismissError()}
-    />
-  {/if}
 
   <JoinEnrollmentDialog
     open={vault.joinEnrollmentPrompt !== 'none'}

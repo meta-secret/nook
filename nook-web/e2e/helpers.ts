@@ -16,6 +16,13 @@ import {
   type VaultYamlSnapshot,
 } from './vault-yaml'
 import { registerE2eGithubRepo } from './github-repos'
+import {
+  fetchGithubVaultYaml,
+  githubApiFetch,
+  githubApiHeaders,
+  githubRepoContext,
+  GITHUB_VAULT_PATH,
+} from './github-api'
 
 export {
   cleanupAllRegisteredE2eGithubRepos,
@@ -33,19 +40,32 @@ export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
 /** Legacy default for docs; GitHub e2e suites use {@link createE2eGithubRepoName}. */
 export const DEFAULT_GITHUB_REPO = 'nook'
 
-/** Unique repo per run so parallel PRs do not share `nook-vault.yaml`. */
+let cachedE2eGithubRepoName: string | null = null
+
+/**
+ * One GitHub repo per Playwright run. CI sets NOOK_GITHUB_E2E_REPO=nook-e2e-$RUN_ID;
+ * local runs without that env get a random nook-* repo (deleted in global teardown).
+ */
 export function createE2eGithubRepoName(): string {
+  if (cachedE2eGithubRepoName) {
+    return cachedE2eGithubRepoName
+  }
+
   const override = process.env.NOOK_GITHUB_E2E_REPO?.trim()
   if (override) {
+    registerE2eGithubRepo(override)
+    cachedE2eGithubRepoName = override
+    console.log(`[e2e] shared GitHub repo: ${override}`)
     return override
   }
+
   const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   const repoName = `nook-${suffix}`
   registerE2eGithubRepo(repoName)
+  cachedE2eGithubRepoName = repoName
+  console.log(`[e2e] GitHub repo: ${repoName}`)
   return repoName
 }
-
-const GITHUB_VAULT_PATH = 'nook-vault.yaml'
 
 /** UI actions we control should complete in a couple of seconds. */
 export const UI_TIMEOUT_MS = 5_000
@@ -61,7 +81,19 @@ function configuredVaultSyncIntervalMs(): number {
 function configuredGithubPollIntervalMs(): number {
   const parsed = Number(process.env.NOOK_GITHUB_POLL_MS)
   if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return 250
+  return 3_000
+}
+
+function configuredGithubSyncTimeoutMs(): number {
+  const parsed = Number(process.env.NOOK_GITHUB_SYNC_TIMEOUT_MS)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 15_000
+}
+
+function configuredGithubConnectTimeoutMs(): number {
+  const parsed = Number(process.env.NOOK_GITHUB_CONNECT_TIMEOUT_MS)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 30_000
 }
 
 /** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
@@ -70,46 +102,33 @@ export const NOTIFICATION_TIMEOUT_MS = Math.max(
   configuredVaultSyncIntervalMs() * 4,
 )
 
-/** GitHub YAML should reflect our write almost immediately in CI. */
-const GITHUB_SYNC_TIMEOUT_MS = 5_000
+/** GitHub YAML polls are slow by design — prefer fewer API calls over fast failure. */
+const GITHUB_SYNC_TIMEOUT_MS = configuredGithubSyncTimeoutMs()
 /** First connect may create the repo on GitHub. */
-const GITHUB_CONNECT_TIMEOUT_MS = 15_000
+const GITHUB_CONNECT_TIMEOUT_MS = configuredGithubConnectTimeoutMs()
 const GITHUB_SYNC_INTERVAL_MS = configuredGithubPollIntervalMs()
 
-const githubApiHeaders = (pat: string) => ({
-  Authorization: `Bearer ${pat}`,
-  Accept: 'application/vnd.github+json',
-  'X-GitHub-Api-Version': '2022-11-28',
-  'User-Agent': 'nook-e2e',
-  'Cache-Control': 'no-cache',
-})
+export { fetchGithubVaultYaml }
 
 async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export async function githubRepoContext(pat: string, repoName: string) {
-  const headers = githubApiHeaders(pat)
-  const userRes = await fetch('https://api.github.com/user', {
-    headers,
-    cache: 'no-store',
-  })
-  if (!userRes.ok) {
-    throw new Error(`GitHub user fetch failed: ${userRes.status}`)
-  }
-  const { login } = (await userRes.json()) as { login: string }
-  return { headers, repo: `${login}/${repoName}`, login }
+/** Between suites: wipe vault YAML only. Repo deletion happens once in global teardown. */
+export async function finishE2eGithubSuite(pat: string, repoName: string) {
+  await resetGithubVault(pat, repoName)
 }
 
 async function deleteGithubFileIfExists(
+  pat: string,
   headers: ReturnType<typeof githubApiHeaders>,
   repo: string,
   vaultPath: string,
 ) {
   const contentsUrl = `https://api.github.com/repos/${repo}/contents/${vaultPath}`
 
-  for (let attempt = 0; attempt < 15; attempt++) {
-    const fileRes = await fetch(contentsUrl, { headers, cache: 'no-store' })
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const fileRes = await githubApiFetch(pat, contentsUrl, { headers })
     if (fileRes.status === 404) {
       return
     }
@@ -120,23 +139,22 @@ async function deleteGithubFileIfExists(
     }
 
     const file = (await fileRes.json()) as { sha: string }
-    const deleteRes = await fetch(contentsUrl, {
+    const deleteRes = await githubApiFetch(pat, contentsUrl, {
       method: 'DELETE',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: 'Reset nook e2e vault',
         sha: file.sha,
       }),
-      cache: 'no-store',
     })
 
     if (deleteRes.ok || deleteRes.status === 404) {
-      await sleep(400)
+      await sleep(2_000)
       continue
     }
 
     if (deleteRes.status === 409 || deleteRes.status === 422) {
-      await sleep(400)
+      await sleep(2_000)
       continue
     }
 
@@ -145,7 +163,7 @@ async function deleteGithubFileIfExists(
     )
   }
 
-  const verify = await fetch(contentsUrl, { headers, cache: 'no-store' })
+  const verify = await githubApiFetch(pat, contentsUrl, { headers })
   if (verify.status === 404) {
     return
   }
@@ -158,26 +176,7 @@ export async function resetGithubVault(
   repoName = DEFAULT_GITHUB_REPO,
 ) {
   const { headers, repo } = await githubRepoContext(pat, repoName)
-  await deleteGithubFileIfExists(headers, repo, GITHUB_VAULT_PATH)
-}
-
-export async function fetchGithubVaultYaml(
-  pat: string,
-  repoName: string,
-): Promise<string | null> {
-  const { headers, repo } = await githubRepoContext(pat, repoName)
-  const url = `https://api.github.com/repos/${repo}/contents/${GITHUB_VAULT_PATH}`
-  const res = await fetch(url, { headers, cache: 'no-store' })
-  if (res.status === 404) {
-    return null
-  }
-  if (!res.ok) {
-    throw new Error(`GitHub vault fetch failed: ${res.status}`)
-  }
-  const data = (await res.json()) as { content: string }
-  return Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString(
-    'utf-8',
-  )
+  await deleteGithubFileIfExists(pat, headers, repo, GITHUB_VAULT_PATH)
 }
 
 export async function waitForVaultYaml(

@@ -9,7 +9,7 @@ import {
   assertVaultReady,
   reconnectGithubVault,
   resetGithubVault,
-  cleanupE2eGithubRepo,
+  finishE2eGithubSuite,
   uniqueSecretKey,
 } from './helpers'
 
@@ -23,7 +23,6 @@ describeGithub('github vault', () => {
 
   test.beforeAll(async ({ browser }) => {
     e2eRepo = createE2eGithubRepoName()
-    console.log(`[e2e] github vault repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
     vaultPage = await browser.newPage()
     await vaultPage.goto('/')
@@ -34,7 +33,7 @@ describeGithub('github vault', () => {
 
   test.afterAll(async () => {
     await vaultPage?.close()
-    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('connects and shows vault after github sync', async () => {

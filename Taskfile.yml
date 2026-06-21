@@ -154,6 +154,10 @@ tasks:
         -e VITE_BASE="{{.VITE_BASE}}"
         -e NOOK_GITHUB_PAT
         -e CI
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
         -v "{{.ROOT_DIR}}:/workspace"
         -v nook-web-node-modules:/workspace/nook-web/node_modules
         -w /workspace
