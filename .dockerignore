@@ -1,0 +1,9 @@
+.git
+.cortex
+target
+node_modules
+dist
+nook-web/node_modules
+nook-web/dist
+nook-web/src/lib/nook-wasm
+.DS_Store

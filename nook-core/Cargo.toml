@@ -1,0 +1,13 @@
+[package]
+name = "nook-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+
+[lints]
+workspace = true
