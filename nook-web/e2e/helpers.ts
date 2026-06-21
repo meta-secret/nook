@@ -67,7 +67,19 @@ function configuredVaultSyncIntervalMs(): number {
 function configuredGithubPollIntervalMs(): number {
   const parsed = Number(process.env.NOOK_GITHUB_POLL_MS)
   if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return 250
+  return 2_500
+}
+
+function configuredGithubSyncTimeoutMs(): number {
+  const parsed = Number(process.env.NOOK_GITHUB_SYNC_TIMEOUT_MS)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 20_000
+}
+
+function configuredGithubConnectTimeoutMs(): number {
+  const parsed = Number(process.env.NOOK_GITHUB_CONNECT_TIMEOUT_MS)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 60_000
 }
 
 /** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
@@ -76,10 +88,10 @@ export const NOTIFICATION_TIMEOUT_MS = Math.max(
   configuredVaultSyncIntervalMs() * 4,
 )
 
-/** GitHub YAML should reflect our write almost immediately in CI. */
-const GITHUB_SYNC_TIMEOUT_MS = 5_000
+/** GitHub YAML polls are slow by design — prefer fewer API calls over fast failure. */
+const GITHUB_SYNC_TIMEOUT_MS = configuredGithubSyncTimeoutMs()
 /** First connect may create the repo on GitHub. */
-const GITHUB_CONNECT_TIMEOUT_MS = 15_000
+const GITHUB_CONNECT_TIMEOUT_MS = configuredGithubConnectTimeoutMs()
 const GITHUB_SYNC_INTERVAL_MS = configuredGithubPollIntervalMs()
 
 export { fetchGithubVaultYaml }
@@ -104,7 +116,7 @@ async function deleteGithubFileIfExists(
 ) {
   const contentsUrl = `https://api.github.com/repos/${repo}/contents/${vaultPath}`
 
-  for (let attempt = 0; attempt < 15; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const fileRes = await githubApiFetch(pat, contentsUrl, { headers })
     if (fileRes.status === 404) {
       return
@@ -126,12 +138,12 @@ async function deleteGithubFileIfExists(
     })
 
     if (deleteRes.ok || deleteRes.status === 404) {
-      await sleep(400)
+      await sleep(2_000)
       continue
     }
 
     if (deleteRes.status === 409 || deleteRes.status === 422) {
-      await sleep(400)
+      await sleep(2_000)
       continue
     }
 

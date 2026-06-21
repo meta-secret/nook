@@ -114,7 +114,9 @@ jobs:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-${{ github.run_id }}
-          NOOK_GITHUB_POLL_MS: '750'
+          NOOK_GITHUB_POLL_MS: '5000'
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: '30000'
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '90000'
 
   deploy:
     name: Deploy GitHub Pages

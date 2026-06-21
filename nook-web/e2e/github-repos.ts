@@ -95,6 +95,6 @@ export async function cleanupAllRegisteredE2eGithubRepos(pat: string) {
   console.log(`[e2e] cleaning up ${repos.length} GitHub repo(s)...`)
   for (const repoName of repos) {
     await cleanupE2eGithubRepo(pat, repoName)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
   }
 }
