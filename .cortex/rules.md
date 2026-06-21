@@ -1,29 +1,26 @@
-# Nook Rules
+# Nook Rules & Golden Principles
 
 Keep these rules current when code, tooling, commands, or architecture changes.
 
-## AI Context
+---
 
-- Update `.cortex` docs, skills, subagents, and rules in the same change that modifies project
-  architecture, workflows, command surfaces, or quality gates.
-- Keep AI-facing docs operational and concise. They should describe how to work in this repo, not
-  duplicate every implementation detail.
+## 1. Golden Principles for Agent Development
+* **Strict Package Boundaries**: Never allow cycles or reverse dependencies. The flow must strictly follow: `nook-core` ➔ `nook-wasm` ➔ `nook-web`.
+* **Validation at Boundaries**: Do not probe data "YOLO-style" across package/language boundaries. Parse data structures completely at the WASM/JS interface using strict typings and conversions.
+* **Unified Tooling Interface**: Always use `Taskfile.yml` tasks (`task setup`, `task check`, `task build`) to interface with the code. Never invoke raw cargo, bun, prettier, or vite commands on the host directly.
+* **Hermetic Environment**: All dependency installation, code compilation, and checks must run containerized in the Docker build image (`nook-build:local`) to prevent host-specific environment drift.
 
-## Tooling
+---
 
-- Use Taskfile as the command surface.
-- Run project builds, checks, tests, and web dependency installs inside Docker through Taskfile.
-- Use Bun for JavaScript tooling. Do not add npm commands, npm lockfiles, or Node-only command
-  flows.
-- Build Docker images with Docker Buildx Bake. Do not add plain `docker build` workflows.
-- Prefer official prebuilt release archives downloaded with `curl` for standalone binaries in
-  Docker images. Avoid `cargo install` for tool binaries when a release archive is available.
-- Pin all dependency versions to exact values. No semver ranges (`^`, `~`, `>=`, `*`, `"0.2"`,
-  `"1"`). Use `=x.y.z` in Cargo.toml and bare `x.y.z` in package.json.
+## 2. Hard Tooling Constraints
+* **Pinned Dependency Versions**: Pin all dependencies strictly to exact versions. No semver ranges (`^`, `~`, `>=`, `*`, `"0.2"`, `"1"`). Use `=x.y.z` in `Cargo.toml` and bare `x.y.z` in `package.json`.
+* **JS Tooling**: Use Bun only. Do not commit `package-lock.json` or `yarn.lock`.
+* **Docker Builds**: Use Docker Buildx Bake (`docker-bake.hcl`). Do not add plain `docker build` scripts.
+* **Binary Installation**: Prefer downloading official precompiled release archives with `curl` in Dockerfiles instead of compiling with `cargo install`.
 
-## Package Boundaries
+---
 
-- Preserve the one-way dependency flow: `nook-core -> nook-wasm -> nook-web`.
-- Keep reusable Rust logic in `nook-core`.
-- Keep wasm-specific conversion in `nook-wasm`.
-- Keep Svelte and shadcn-svelte UI concerns in `nook-web`.
+## 3. Package Responsibilities
+* **`nook-core`**: Reusable pure Rust business/crypto logic. No Web or Wasm-bindgen dependencies.
+* **`nook-wasm`**: Wasm boundary layer. Performs conversion logic and registers exports. Keep logic to a minimum.
+* **`nook-web`**: Svelte UI frontend, consuming the generated wasm pkg in `src/lib/nook-wasm/`.
