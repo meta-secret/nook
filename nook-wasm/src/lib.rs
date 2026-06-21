@@ -1139,13 +1139,12 @@ fn github_cache_bust_url(url: &str) -> String {
     }
 }
 
-fn github_get_headers(pat: &str) -> [(&'static str, String); 5] {
+fn github_get_headers(pat: &str) -> [(&'static str, String); 4] {
     [
         ("Authorization", format!("Bearer {}", pat.trim())),
         ("Accept", "application/vnd.github+json".to_owned()),
         ("X-GitHub-Api-Version", "2022-11-28".to_owned()),
         ("User-Agent", "nook-wasm".to_owned()),
-        ("Cache-Control", "no-cache".to_owned()),
     ]
 }
 
