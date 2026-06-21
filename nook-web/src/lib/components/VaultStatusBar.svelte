@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { RefreshCw, ShieldCheck, TriangleAlert } from '@lucide/svelte'
+  import {
+    Cloud,
+    HardDrive,
+    RefreshCw,
+    ShieldCheck,
+    TriangleAlert,
+  } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
 
   let {
@@ -45,57 +51,64 @@
 
   const storageLabel = $derived(
     storageMode === 'github'
-      ? githubRepo.trim()
-        ? `GitHub · ${githubRepo.trim()}`
-        : 'GitHub'
-      : 'local storage',
+      ? githubRepo.trim() || 'GitHub'
+      : 'This device',
   )
 </script>
 
-<footer
-  class="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur-md"
+<div
+  class="border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5"
   data-testid="vault-status-bar"
 >
-  <div
-    class="mx-auto flex max-w-xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-6"
-  >
+  <div class="flex flex-col gap-2">
     <div
-      class="flex min-w-0 flex-1 items-center gap-2 text-xs text-muted-foreground"
+      class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs"
     >
-      <span class="truncate">
-        Syncing via <span class="font-medium text-foreground"
-          >{storageLabel}</span
+      <div
+        class="flex min-w-0 items-center gap-2 text-muted-foreground"
+      >
+        {#if storageMode === 'github'}
+          <Cloud class="size-3.5 shrink-0 text-primary/80" aria-hidden="true" />
+        {:else}
+          <HardDrive
+            class="size-3.5 shrink-0 text-primary/80"
+            aria-hidden="true"
+          />
+        {/if}
+        <span class="truncate font-medium text-foreground">{storageLabel}</span>
+        <span class="hidden text-muted-foreground sm:inline" aria-hidden="true"
+          >·</span
         >
-      </span>
-      <span class="hidden sm:inline" aria-hidden="true">·</span>
-      <span class="shrink-0" data-testid="vault-last-sync">
-        Last sync: {formatLastSync(lastSyncedAt)}
-      </span>
+        <span class="shrink-0 text-muted-foreground" data-testid="vault-last-sync">
+          Synced {formatLastSync(lastSyncedAt)}
+        </span>
+      </div>
+
       {#if onRefresh}
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          class="h-7 shrink-0 px-2 text-xs"
+          class="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
           disabled={isSyncing}
           data-testid="vault-sync-refresh-btn"
           aria-label="Refresh vault from storage"
           onclick={() => void onRefresh()}
         >
           <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
-          <span class="ml-1 hidden sm:inline">Refresh</span>
+          <span class="ml-1">Refresh</span>
         </Button>
       {/if}
     </div>
 
     {#if successMsg}
       <div
-        class="flex w-full items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs text-primary sm:ml-auto sm:w-auto"
+        class="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs text-primary"
         role="status"
         data-testid="app-success"
       >
         <ShieldCheck class="size-3.5 shrink-0" />
-        <span class="min-w-0 truncate">{successMsg}</span>
+        <span class="min-w-0 flex-1 truncate">{successMsg}</span>
         {#if onDismissSuccess}
           <button
             type="button"
@@ -112,12 +125,12 @@
 
     {#if errorMsg}
       <div
-        class="flex w-full items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive sm:ml-auto sm:w-auto"
+        class="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive"
         role="alert"
         data-testid="vault-error"
       >
         <TriangleAlert class="size-3.5 shrink-0" />
-        <span class="min-w-0 truncate">{errorMsg}</span>
+        <span class="min-w-0 flex-1 truncate">{errorMsg}</span>
         {#if onDismissError}
           <button
             type="button"
@@ -132,4 +145,4 @@
       </div>
     {/if}
   </div>
-</footer>
+</div>
