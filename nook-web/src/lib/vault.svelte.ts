@@ -55,6 +55,17 @@ export class VaultState {
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
   private syncTimer: ReturnType<typeof setInterval> | null = null
+  private initPromise: Promise<void> | null = null
+  private storageChain: Promise<unknown> = Promise.resolve()
+
+  private enqueueStorage<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.storageChain.then(() => operation())
+    this.storageChain = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
 
   dismissSuccess() {
     if (this.successDismissTimer !== null) {
@@ -115,14 +126,23 @@ export class VaultState {
   }
 
   async init() {
+    if (this.initPromise) {
+      return this.initPromise
+    }
+    this.initPromise = this.initOnce()
+    return this.initPromise
+  }
+
+  private async initOnce() {
     this.isInitializing = true
-    this.isVerifying = false
-    this.errorMsg = ''
+    if (!this.isVerifying) {
+      this.errorMsg = ''
+    }
     try {
       await this.loadProviders()
       this.applyActiveProviderCredentials()
       this.manager = await getVaultManager()
-      await this.refreshDeviceState()
+      await this.initDeviceIdentity()
     } catch (error) {
       this.errorMsg =
         error instanceof Error
@@ -131,9 +151,24 @@ export class VaultState {
     } finally {
       this.isInitializing = false
     }
-    this.startVaultSync()
-    if (this.shouldAutoUnlock()) {
+
+    const autoUnlock = this.shouldAutoUnlock()
+    if (autoUnlock) {
       await this.loadDb()
+    } else {
+      await this.refreshDeviceState()
+    }
+    this.startVaultSync()
+  }
+
+  private async initDeviceIdentity() {
+    if (!this.manager) return
+    try {
+      await this.manager.init_device()
+      this.deviceId = this.manager.device_id
+      this.devicePublicKey = this.manager.device_public_key
+    } catch {
+      // Device identity is optional until first connect/join action.
     }
   }
 
@@ -265,7 +300,9 @@ export class VaultState {
 
   startVaultSync() {
     this.stopVaultSync()
-    void this.syncFromStorage()
+    if (this.isAuthenticated) {
+      void this.syncFromStorage()
+    }
     this.syncTimer = setInterval(() => {
       void this.syncFromStorage()
     }, VaultState.SYNC_INTERVAL_MS)
@@ -319,14 +356,17 @@ export class VaultState {
   }
 
   async syncFromStorage(options?: { force?: boolean }) {
-    if (!this.manager || this.isVerifying) return
+    if (!this.manager) return
+    if (!options?.force && this.isVerifying) return
     if (!options?.force && this.isSaving) return
     if (this.storageMode === 'github' && !this.githubPat.trim()) return
 
     try {
-      const raw = await this.manager.sync_vault_from_storage(
-        this.storageMode,
-        this.githubPat,
+      const raw = await this.enqueueStorage(() =>
+        this.manager!.sync_vault_from_storage(
+          this.storageMode,
+          this.githubPat,
+        ),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
     } catch {
@@ -351,9 +391,7 @@ export class VaultState {
   async refreshDeviceState() {
     if (!this.manager) return
     try {
-      await this.manager.init_device()
-      this.deviceId = this.manager.device_id
-      this.devicePublicKey = this.manager.device_public_key
+      await this.initDeviceIdentity()
       if (this.storageMode === 'github' && !this.githubPat.trim()) {
         this.pendingJoins = []
         this.vaultMembers = []
@@ -489,27 +527,26 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
-      await this.refreshDeviceState()
+      await this.initDeviceIdentity()
 
-      const assessPromise = this.manager.assess_vault_connect(
-        this.storageMode,
-        this.githubPat,
-      )
-      const assessTimeout = new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                'Connection timed out. Check your PAT, network, and try again.',
-              ),
-            ),
-          30_000,
+      const accessStatus = await this.enqueueStorage(async () => {
+        const assessPromise = this.manager!.assess_vault_connect(
+          this.storageMode,
+          this.githubPat,
         )
+        const assessTimeout = new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Connection timed out. Check your PAT, network, and try again.',
+                ),
+              ),
+            30_000,
+          )
+        })
+        return (await Promise.race([assessPromise, assessTimeout])) as string
       })
-      const accessStatus = (await Promise.race([
-        assessPromise,
-        assessTimeout,
-      ])) as string
 
       if (accessStatus === 'needs_enrollment') {
         this.joinEnrollmentPrompt = 'needs_request'
@@ -520,30 +557,32 @@ export class VaultState {
         return
       }
 
-      const connectPromise = this.manager.connect(
-        this.storageMode,
-        this.githubPat,
-      )
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error(
-                'Connection timed out. Check your PAT, network, and try again.',
-              ),
-            ),
-          30_000,
+      const rawRecords = await this.enqueueStorage(async () => {
+        const connectPromise = this.manager!.connect(
+          this.storageMode,
+          this.githubPat,
         )
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Connection timed out. Check your PAT, network, and try again.',
+                ),
+              ),
+            30_000,
+          )
+        })
+        return (await Promise.race([
+          connectPromise,
+          timeoutPromise,
+        ])) as NookSecretRecord[]
       })
-      const rawRecords = (await Promise.race([
-        connectPromise,
-        timeoutPromise,
-      ])) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
       this.hydrateMultiDeviceState()
-      await this.syncFromStorage()
+      await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
         this.showSuccess('Local vault loaded from IndexedDB.')
       } else {
