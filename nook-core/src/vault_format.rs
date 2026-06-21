@@ -193,18 +193,12 @@ mod tests {
 
     #[test]
     fn format_from_path() {
-        assert_eq!(
-            VaultFormat::from_path("nook-vault.yaml"),
-            VaultFormat::Yaml
-        );
+        assert_eq!(VaultFormat::from_path("nook-vault.yaml"), VaultFormat::Yaml);
         assert_eq!(
             VaultFormat::from_path("nook-vault.jsonl"),
             VaultFormat::Jsonl
         );
-        assert_eq!(
-            VaultFormat::from_path("nook-vault.yml"),
-            VaultFormat::Yaml
-        );
+        assert_eq!(VaultFormat::from_path("nook-vault.yml"), VaultFormat::Yaml);
         assert_eq!(
             VaultFormat::from_path("/data/user/nook-vault.yaml"),
             VaultFormat::Yaml
@@ -214,7 +208,10 @@ mod tests {
     #[test]
     fn detect_empty_defaults_to_yaml() {
         assert_eq!(detect_stored_format("").unwrap(), VaultFormat::Yaml);
-        assert_eq!(detect_stored_format("   \n  \n").unwrap(), VaultFormat::Yaml);
+        assert_eq!(
+            detect_stored_format("   \n  \n").unwrap(),
+            VaultFormat::Yaml
+        );
     }
 
     #[test]
@@ -266,9 +263,11 @@ mod tests {
 
     #[test]
     fn jsonl_invalid_line_fails() {
-        let err = deserialize_stored_jsonl(r#"{"key":"ok","value":"x"}
+        let err = deserialize_stored_jsonl(
+            r#"{"key":"ok","value":"x"}
 not-json
-"#)
+"#,
+        )
         .unwrap_err();
         assert!(err.contains("Failed to parse stored JSONL line"));
     }

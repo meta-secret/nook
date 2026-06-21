@@ -19,7 +19,10 @@ impl VaultCrypto {
         let mut recipient = age::scrypt::Recipient::new(secret.clone());
         recipient.set_work_factor(PROGRAMMATIC_SCRYPT_LOG_N);
         let identity = age::scrypt::Identity::new(secret);
-        Ok(Self { identity, recipient })
+        Ok(Self {
+            identity,
+            recipient,
+        })
     }
 
     pub fn encrypt_value(&self, plaintext: &str) -> Result<String, String> {

@@ -9,8 +9,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use wasm_bindgen::{JsError, JsValue};
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, JsValue};
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
@@ -116,8 +116,8 @@ impl NookVaultManager {
 
     /// Case-insensitive label search over the in-memory vault.
     pub fn filter_secrets(&self, query: &str) -> Result<js_sys::Array, JsError> {
-        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(NookError::Database)?;
+        let db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
         let filtered = nook_core::filter_secrets(&db.list(), query);
         records_to_array(filtered).map_err(Into::into)
     }
@@ -180,9 +180,8 @@ impl NookVaultManager {
             }
         };
         self.encryption_key = encryption_key.clone();
-        self.crypto = Some(
-            nook_core::VaultCrypto::new(&encryption_key).map_err(NookError::Encryption)?,
-        );
+        self.crypto =
+            Some(nook_core::VaultCrypto::new(&encryption_key).map_err(NookError::Encryption)?);
         self.stored_armored.clear();
 
         if self.storage_mode == "github" {
@@ -215,8 +214,8 @@ impl NookVaultManager {
             }
         } else {
             let _ = self.status_tx.send("GITHUB_FETCH_START".to_owned());
-            let res = fetch_github_vault(&self.github_pat, &self.github_repo, &self.github_path)
-                .await?;
+            let res =
+                fetch_github_vault(&self.github_pat, &self.github_repo, &self.github_path).await?;
             let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
             match res {
                 Some((content, sha)) => {
@@ -272,8 +271,8 @@ impl NookVaultManager {
         let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
         let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
         nook_core::validate_secret_value(&value).map_err(NookError::Database)?;
-        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(NookError::Database)?;
+        let mut db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
         db.insert(key.clone(), value.clone());
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
@@ -295,8 +294,8 @@ impl NookVaultManager {
     pub async fn delete_secret(&mut self, key: String) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
         let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
-        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(NookError::Database)?;
+        let mut db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
         db.remove(&key);
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
@@ -308,8 +307,8 @@ impl NookVaultManager {
 
     // Helper: list secrets as array of NookSecretRecord
     fn get_records_as_array(&self) -> Result<js_sys::Array, NookError> {
-        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(NookError::Database)?;
+        let db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
         records_to_array(db.list())
     }
 
@@ -633,7 +632,8 @@ async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(), NookErro
         .send()
         .await?;
 
-    if create.status().is_success() || create.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+    if create.status().is_success() || create.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    {
         // 422 = repo already exists (race) or name taken under another account
         return Ok(());
     }
@@ -646,9 +646,8 @@ async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(), NookErro
 
 fn generate_encryption_key() -> Result<String, NookError> {
     let mut bytes = [0u8; 16];
-    getrandom::getrandom(&mut bytes).map_err(|e| {
-        NookError::Encryption(format!("Failed to generate encryption key: {}", e))
-    })?;
+    getrandom::getrandom(&mut bytes)
+        .map_err(|e| NookError::Encryption(format!("Failed to generate encryption key: {}", e)))?;
     Ok(hex::encode(bytes))
 }
 
@@ -691,9 +690,8 @@ async fn fetch_github_vault(
         .replace('\r', "")
         .replace(' ', "");
     let decoded_bytes = base64_decode(&cleaned_content)?;
-    let vault_content = String::from_utf8(decoded_bytes).map_err(|e| {
-        NookError::Serialization(format!("Vault file is not valid UTF-8: {}", e))
-    })?;
+    let vault_content = String::from_utf8(decoded_bytes)
+        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {}", e)))?;
 
     Ok(Some((vault_content, parsed.sha)))
 }

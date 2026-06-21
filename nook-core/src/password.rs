@@ -122,7 +122,11 @@ mod tests {
             symbols: false,
         })
         .unwrap();
-        assert!(password.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+        assert!(
+            password
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        );
     }
 
     #[test]

@@ -6,19 +6,19 @@
 
 mod password;
 mod validation;
-mod vault_format;
 mod vault_crypto;
+mod vault_format;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub use password::{generate_password, PasswordOptions, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH};
+pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use validation::{
-    filter_secrets, validate_connect, validate_github_pat, validate_secret_label,
-    validate_secret_value, validate_storage_mode, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL,
+    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, filter_secrets, validate_connect, validate_github_pat,
+    validate_secret_label, validate_secret_value, validate_storage_mode,
 };
 pub use vault_crypto::VaultCrypto;
-pub use vault_format::{deserialize_stored, detect_stored_format, serialize_stored, VaultFormat};
+pub use vault_format::{VaultFormat, deserialize_stored, detect_stored_format, serialize_stored};
 
 /// Plaintext secret (in memory only).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,7 +61,11 @@ impl Database {
         Ok(Self { records })
     }
 
-    pub fn from_stored(stored: &str, passphrase: &str, format: VaultFormat) -> Result<Self, String> {
+    pub fn from_stored(
+        stored: &str,
+        passphrase: &str,
+        format: VaultFormat,
+    ) -> Result<Self, String> {
         let stored_records = vault_format::deserialize_stored(stored, format)?;
         Self::from_stored_records(stored_records, passphrase)
     }
@@ -327,7 +331,11 @@ mod tests {
 
         assert!(yaml.contains("secrets:"));
         assert!(yaml.contains("|"));
-        assert!(jsonl.lines().all(|line| line.trim().is_empty() || line.trim_start().starts_with('{')));
+        assert!(
+            jsonl
+                .lines()
+                .all(|line| line.trim().is_empty() || line.trim_start().starts_with('{'))
+        );
 
         let from_yaml = Database::from_stored_yaml(&yaml, passphrase).unwrap();
         let from_jsonl = Database::from_stored_jsonl(&jsonl, passphrase).unwrap();
@@ -355,18 +363,24 @@ mod tests {
         let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
         let stored_jsonl = db.to_stored_jsonl(TEST_PASSPHRASE).unwrap();
 
-        assert!(Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)
-            .unwrap()
-            .list()
-            .is_empty());
-        assert!(Database::from_stored_jsonl(&stored_jsonl, TEST_PASSPHRASE)
-            .unwrap()
-            .list()
-            .is_empty());
-        assert!(Database::from_stored_auto(&stored_yaml, TEST_PASSPHRASE)
-            .unwrap()
-            .list()
-            .is_empty());
+        assert!(
+            Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE)
+                .unwrap()
+                .list()
+                .is_empty()
+        );
+        assert!(
+            Database::from_stored_jsonl(&stored_jsonl, TEST_PASSPHRASE)
+                .unwrap()
+                .list()
+                .is_empty()
+        );
+        assert!(
+            Database::from_stored_auto(&stored_yaml, TEST_PASSPHRASE)
+                .unwrap()
+                .list()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -405,8 +419,11 @@ mod tests {
 
     #[test]
     fn from_jsonl_rejects_invalid_json() {
-        let err = Database::from_jsonl(r#"{"key":"x","value":"y"}
-{broken"#).unwrap_err();
+        let err = Database::from_jsonl(
+            r#"{"key":"x","value":"y"}
+{broken"#,
+        )
+        .unwrap_err();
         assert!(err.contains("Failed to parse JSONL line"));
     }
 
@@ -419,10 +436,13 @@ mod tests {
 
         let jsonl = db.to_jsonl().unwrap();
         let restored = Database::from_jsonl(&jsonl).unwrap();
-        assert_eq!(restored.list(), vec![SecretRecord {
-            key: key.to_owned(),
-            value: value.to_owned(),
-        }]);
+        assert_eq!(
+            restored.list(),
+            vec![SecretRecord {
+                key: key.to_owned(),
+                value: value.to_owned(),
+            }]
+        );
 
         let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
         let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE).unwrap();
