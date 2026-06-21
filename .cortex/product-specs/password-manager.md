@@ -10,9 +10,9 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
 
 ### Core Goals
 - **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
-- **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, and cryptographic operations are encapsulated in WebAssembly.
+- **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, validation, password generation, and cryptographic operations are encapsulated in Rust (`nook-core` + `nook-wasm`).
 - **Portable Backends:** Support local browser storage (IndexedDB) and remote git-backed repositories (GitHub API) with a unified connection flow.
-- **Rage/Age Compatibility:** Encrypted vaults must be standard age files, decryptable via standard command-line tools like `rage`.
+- **Age Compatibility:** Secret values are armored age ciphertext. Vault files are human-readable YAML (or legacy JSONL on load).
 
 ---
 
@@ -37,77 +37,129 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
 ### A. Configuration & Authentication Flow
 1. **Target Selection:** The user chooses between `local` (IndexedDB) and `github` storage mode.
 2. **Configuration Entry:**
-   - **Local Mode:** No credentials required. Click **Verify & Connect Vault**.
-   - **GitHub Mode:** Requires only a GitHub Personal Access Token (PAT) with `repo` scope. The repository (`{username}/nook`) and vault file (`nook-vault`) are resolved automatically from the PAT.
+   - **Local Mode:** No credentials required. Click **Connect vault**.
+   - **GitHub Mode:** Requires only a GitHub Personal Access Token (PAT) with `repo` scope. The repository (`{username}/nook`) and vault file (`nook-vault.yaml`) are resolved automatically from the PAT.
 3. **Encryption Key (auto-managed):**
-   - On first connect, a random encryption key is generated and stored in IndexedDB under key `vault_secret_key` (via `rexie`).
+   - On first connect, a random 128-bit encryption key is generated and stored in IndexedDB under key `vault_secret_key` (via `rexie`).
    - The key never leaves the browser and is never stored on GitHub.
-   - GitHub only stores the age-encrypted vault payload.
+   - GitHub only stores the encrypted vault file (YAML with per-record armored ciphertext).
 4. **Vault Connection:**
-   - The user clicks **Verify & Connect Vault**.
-   - If the database file is found, it is loaded, decrypted, and parsed.
-   - If no database file is found (e.g. 404 from GitHub or empty IndexedDB), the UI displays a warning and prompts the user to **Initialize Empty Database**.
-   - Upon successful connection, the storage mode and GitHub PAT are saved to `localStorage` for session convenience, and the user is redirected to the **Secret Vault** tab.
+   - The user clicks **Connect vault**.
+   - Rust validates storage mode and PAT (GitHub mode) before I/O.
+   - If the vault file is found, it is loaded, parsed, and secret **values** are decrypted into an in-memory session.
+   - If no vault file is found (404 from GitHub or empty IndexedDB), an empty vault is initialized automatically (GitHub) or starts empty (local).
+   - Upon successful connection, storage mode and GitHub PAT are saved to `localStorage` for session convenience.
 
 ### B. Managing Vault Secrets
 1. **Secrets List:** Plaintext secrets are listed alphabetically by key (service name).
-2. **Search / Filter:** A search bar filters secrets in real-time by matching the query against keys.
-3. **Secret Visibility Toggle:** Secret values (passwords) are masked as dots (`••••••••••••••••`) by default. Users can click the Eye/EyeOff toggle to mask/unmask individual values.
-4. **Copy to Clipboard:** Clicking the Copy icon copies the secret value to the clipboard. The icon changes to a checkmark for 2 seconds to indicate success.
+2. **Search / Filter:** A search bar filters secrets in real-time. Filtering runs in `nook-core` (`filter_secrets`) via WASM — labels only, case-insensitive substring match.
+3. **Secret Visibility Toggle:** Secret values are masked as dots by default. Users can toggle reveal per row.
+4. **Copy to Clipboard:** Browser clipboard API (UI-only).
 5. **Adding Secrets:**
-   - The user enters a unique key (service/label) and a value (password).
-   - Clicking **Save Secret** triggers an insert.
-   - The updated database is sorted, formatted to JSONL, encrypted, and immediately written back to the storage target.
+   - The user enters a key (label) and value.
+   - Rust validates non-empty label (trimmed) and non-empty value.
+   - Clicking **Save Secret** inserts into the in-memory session, encrypts **only the changed record**, updates the armored cache, serializes to YAML, and writes to storage.
 6. **Deleting Secrets:**
-   - The user clicks the trash icon next to a secret.
-   - The secret is removed, and the vault is serialized, encrypted, and saved to the storage backend.
+   - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
 
 ### C. Cryptographically Secure Password Generator
 1. **Options Panel:** Located alongside the addition form.
 2. **Parameters:**
-   - **Length Slider:** Range: 8 to 64 characters (default: 16).
-   - **Character Sets:** Lowercase (`a-z`), Uppercase (`A-Z`), Numbers (`0-9`), and Symbols (`!@#$...`).
-3. **Generation Trigger:**
-   - Computes a random string using browser-native cryptographically secure random values (`window.crypto.getRandomValues`).
-   - Automatically populates the password value field in the secret addition form.
+   - **Length Slider:** Range 8–64 in UI (Rust accepts 8–128 via `PasswordOptions`).
+   - **Character Sets:** Lowercase, uppercase, numbers, symbols.
+3. **Generation:** Implemented in `nook-core` (`generate_password`) using `getrandom`. Exposed via `NookVaultManager.generate_password`. UI only calls WASM and populates the value field.
 
 ---
 
 ## 3. Database Schema & File Formats
 
-### A. In-Memory Plaintext Layout (JSONL)
-The database payload is a UTF-8 string containing JSON Lines (JSONL). Each line represents one secret record with exact formatting:
+### A. In-Memory Plaintext Layout (JSONL session)
+The WASM session holds a UTF-8 JSONL string (`decrypted_jsonl`). Each line is one plaintext record:
+
 ```json
 {"key":"github.com","value":"ghp_SecretToken123"}
 {"key":"gmail.com","value":"my_secure_password_99"}
 ```
-- **Sorting:** Lines are sorted lexicographically by `key` to ensure deterministic Git diffs.
-- **Whitespace:** No extra newlines, indentations, or spaces are allowed at the line boundaries.
 
-### B. Local Storage Adapter (IndexedDB)
-- **Database Name:** `nook_db`
-- **Version:** `1`
-- **Store Name:** `vault`
-- **Stored Records:**
-  - Key: `vault_secret_key` — auto-generated age encryption key (hex string). Never synced to GitHub.
-  - Key: `encrypted_db` — the age-encrypted database payload as a lowercase hex string (local mode only).
+- **Sorting:** Lines sorted lexicographically by `key`.
+- **Scope:** In-memory only — never written to GitHub or IndexedDB as plaintext.
 
-### C. GitHub Repository Adapter
-- **Repository:** `{username}/nook` (resolved from PAT via GitHub `/user` API).
-- **File Path:** `nook-vault` (encrypted vault blob — not the encryption key).
-- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-vault`
-- **Authentication:** `Authorization: token {pat}` header.
-- **Conflict Avoidance (SHA):**
-  - During `connect`, the file's current Git blob SHA is cached.
-  - During writes, this SHA is sent back to GitHub in the `sha` field of the PUT body to prevent overwriting concurrent updates.
-  - On successful write, the new Git blob SHA returned in the response is cached for the next update.
+### B. On-Disk Vault Layout (YAML — default)
+Path: `nook-vault.yaml` (GitHub and IndexedDB `encrypted_db`).
+
+```yaml
+secrets:
+  - key: github.com
+    value: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
+      -----END AGE ENCRYPTED FILE-----
+  - key: work-vpn
+    value: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
+      -----END AGE ENCRYPTED FILE-----
+```
+
+- **`key`:** Plaintext label (visible on disk).
+- **`value`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
+- **Legacy JSONL on-disk format** is still supported on load (`from_stored_auto` / format detection). New saves always use YAML.
+
+Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example generate_vault_fixtures -p nook-core`).
+
+### C. Local Storage Adapter (IndexedDB)
+- **Database Name:** `nook_db`, version `1`, store `vault`
+- **Records:**
+  - `vault_secret_key` — hex-encoded 128-bit random age passphrase (never synced to GitHub).
+  - `encrypted_db` — UTF-8 text of the on-disk vault file (YAML).
+
+### D. GitHub Repository Adapter
+- **Repository:** `{username}/nook` (auto-created if missing).
+- **File Path:** `nook-vault.yaml`
+- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-vault.yaml`
+- **Authentication:** `Authorization: Bearer {pat}`
+- **Encoding:** File content is UTF-8 YAML; GitHub API stores base64 in transit.
+- **Optimistic concurrency:** Blob SHA cached on load and sent on PUT.
 
 ---
 
 ## 4. Cryptographic Specifications
 
-- **Encryption Format:** Age (specifically using standard scrypt key derivation and x25519-dalek under the hood).
-- **Key Derivation (scrypt):**
-  - Automatically derives keys using a salt generated during encryption.
-  - Uses default parameters from the standard Rust `age` crate for scrypt (logN = 15, r = 8, p = 1), optimizing balance between safety and browser execution speed.
-- **Key Generation:** On first connect, a 128-bit random key is generated via `getrandom` and stored in IndexedDB as `vault_secret_key`. This key is used as the age passphrase for encrypt/decrypt operations.
+- **Per-record encryption:** Each secret **value** is independently encrypted. Labels stay plaintext in the vault file.
+- **Format:** Age ASCII armor (`age` crate with `armor` feature).
+- **Session crypto:** `VaultCrypto` in `nook-core` derives scrypt identity/recipient once per connect and reuses them.
+- **Work factor:** New encryptions use scrypt `N = 2^15` (`PROGRAMMATIC_SCRYPT_LOG_N`) because the vault key is high-entropy random hex, not a human passphrase. Existing records decrypt using the factor embedded in each age stanza.
+- **Key generation:** 128-bit random key via `getrandom`, stored as hex in `vault_secret_key`.
+- **Incremental save path:** WASM keeps `stored_armored: HashMap<key, armored_value>`. Saves serialize the cache to YAML without re-encrypting unchanged records.
+
+---
+
+## 5. Rust Domain Modules (`nook-core`)
+
+| Module | Responsibility |
+|--------|----------------|
+| `lib.rs` / `Database` | In-memory JSONL session, stored vault encrypt/decrypt |
+| `vault_format.rs` | YAML + JSONL serialization, format detection |
+| `vault_crypto.rs` | Session-scoped age encrypt/decrypt |
+| `validation.rs` | Connect/secret validation, search filter |
+| `password.rs` | CSPRNG password generation |
+
+All format, crypto, validation, and generator behavior must be covered by Rust tests (`cargo test -p nook-core`). Integration workflows live in `nook-core/tests/vault_workflow.rs`.
+
+---
+
+## 6. TypeScript / UI Boundaries
+
+**Belongs in Rust (not TS/Svelte):**
+- Vault serialization (YAML/JSONL)
+- Encrypt/decrypt
+- Password generation
+- Secret label/value validation
+- Connect/PAT validation
+- Secret search/filter
+
+**Belongs in UI only:**
+- Tab navigation, loading spinners, toast messages
+- `localStorage` for storage mode + PAT convenience
+- Clipboard, reveal/hide, form bindings
+- `requestAnimationFrame` yield before blocking WASM crypto (paint "Saving…")

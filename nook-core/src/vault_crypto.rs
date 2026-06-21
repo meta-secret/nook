@@ -78,4 +78,30 @@ mod tests {
         assert!(armored.contains("BEGIN AGE ENCRYPTED FILE"));
         assert_eq!(crypto.decrypt_value(&armored).unwrap(), plaintext);
     }
+
+    #[test]
+    fn wrong_passphrase_fails_to_decrypt() {
+        let enc = VaultCrypto::new("correct-key-1234567890123456").unwrap();
+        let armored = enc.encrypt_value("payload").unwrap();
+        let dec = VaultCrypto::new("wrong-key-123456789012345678").unwrap();
+        assert!(dec.decrypt_value(&armored).is_err());
+    }
+
+    #[test]
+    fn repeated_encrypt_produces_unique_ciphertext() {
+        let crypto = VaultCrypto::new("deadbeefdeadbeefdeadbeefdeadbeef").unwrap();
+        let first = crypto.encrypt_value("same").unwrap();
+        let second = crypto.encrypt_value("same").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(crypto.decrypt_value(&first).unwrap(), "same");
+        assert_eq!(crypto.decrypt_value(&second).unwrap(), "same");
+    }
+
+    #[test]
+    fn multiline_plaintext_roundtrip() {
+        let crypto = VaultCrypto::new("deadbeefdeadbeefdeadbeefdeadbeef").unwrap();
+        let plaintext = "line-one\nline-two\n\tindented";
+        let armored = crypto.encrypt_value(plaintext).unwrap();
+        assert_eq!(crypto.decrypt_value(&armored).unwrap(), plaintext);
+    }
 }

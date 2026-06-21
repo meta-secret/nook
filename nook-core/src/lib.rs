@@ -522,4 +522,47 @@ mod tests {
             assert!(line.value.contains("BEGIN AGE ENCRYPTED FILE"));
         }
     }
+
+    #[test]
+    fn stored_records_from_armored_is_sorted_and_preserves_ciphertext() {
+        use crate::VaultCrypto;
+        use std::collections::HashMap;
+
+        let crypto = VaultCrypto::new(TEST_PASSPHRASE).unwrap();
+        let mut armored = HashMap::new();
+        armored.insert("z-last".to_owned(), crypto.encrypt_value("z").unwrap());
+        armored.insert("a-first".to_owned(), crypto.encrypt_value("a").unwrap());
+
+        let records = Database::stored_records_from_armored(&armored);
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].key, "a-first");
+        assert_eq!(records[1].key, "z-last");
+        assert_ne!(records[0].value, records[1].value);
+    }
+
+    #[test]
+    fn stored_records_from_armored_empty() {
+        use std::collections::HashMap;
+
+        assert!(Database::stored_records_from_armored(&HashMap::new()).is_empty());
+    }
+
+    #[test]
+    fn stored_records_with_crypto_roundtrip() {
+        use crate::VaultCrypto;
+
+        let crypto = VaultCrypto::new(TEST_PASSPHRASE).unwrap();
+        let db = sample_db();
+        let stored = db.to_stored_records_with_crypto(&crypto).unwrap();
+        let restored = Database::from_stored_records_with_crypto(&stored, &crypto).unwrap();
+        assert_eq!(restored.to_jsonl().unwrap(), db.to_jsonl().unwrap());
+    }
+
+    #[test]
+    fn validate_before_insert_rejects_blank_label() {
+        use crate::{validate_secret_label, validate_secret_value};
+
+        assert!(validate_secret_label("   ").is_err());
+        assert!(validate_secret_value("").is_err());
+    }
 }

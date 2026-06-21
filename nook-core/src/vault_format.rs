@@ -315,4 +315,19 @@ not-json
         assert_eq!(parsed[0].value, records[0].value);
         assert!(parsed[0].value.contains('\n'));
     }
+
+    #[test]
+    fn detect_root_array_yaml() {
+        assert_eq!(
+            detect_stored_format("- key: a\n  value: b\n").unwrap(),
+            VaultFormat::Yaml
+        );
+    }
+
+    #[test]
+    fn serialize_empty_yaml_has_secrets_key() {
+        let stored = serialize_stored_yaml(&[]).unwrap();
+        assert!(stored.contains("secrets:"));
+        assert!(deserialize_stored_yaml(&stored).unwrap().is_empty());
+    }
 }

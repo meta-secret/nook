@@ -23,7 +23,7 @@ These files are the source of truth for how this project works.
 
 ### Package boundaries
 - Dependency flow is strictly `nook-core` → `nook-wasm` → `nook-web`. Never reverse this.
-- Crypto and vault format logic belong in `nook-core`. Storage I/O (IndexedDB, GitHub API) belongs in `nook-wasm`. UI and reactive state belong in `nook-web`.
+- Crypto, vault formats (YAML/JSONL), validation, password generation, and search filtering belong in `nook-core` with Rust tests. Storage I/O (IndexedDB, GitHub API) belongs in `nook-wasm`. UI and reactive state belong in `nook-web`.
 
 ### WASM API contract
 - `NookVaultManager.connect(storage_mode, github_pat)` — two arguments only.

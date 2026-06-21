@@ -14,7 +14,8 @@ This document defines the strict development standards, architectural boundaries
 - **`nook-wasm` Bridge Responsibilities:**
   - Exposes Rust structs to JS via `#[wasm_bindgen]`.
   - Performs network/database input/output operations (e.g., IndexedDB, GitHub API).
-  - All complex business logic and calculations must be delegated to `nook-core`.
+  - Holds WASM session state (`decrypted_jsonl`, `stored_armored`, `VaultCrypto`).
+  - All complex business logic (crypto, formats, validation, password generation, search) must live in `nook-core` and be tested there.
 
 ---
 
@@ -41,11 +42,20 @@ This document defines the strict development standards, architectural boundaries
 - **Subcomponent Bindings:**
   - Bind state class instance fields directly in subcomponents using `bind:property={state.field}`.
 - **Separation of Concerns:**
-  - Svelte components should only bind data, render layouts, and trigger event calls on the state controller. They must not contain data serialization or direct WebAssembly configuration logic.
+  - Svelte components should only bind data, render layouts, and trigger event calls on the state controller.
+  - They must not contain vault serialization, encryption, validation, password generation, or secret filtering logic — those belong in `nook-core` with Rust tests.
 
 ---
 
-## 4. Pinned Dependencies & Tooling Constraints
+## 4. Testing Requirements
+
+- **Vault domain logic:** Add or update tests in `nook-core` (`cargo test -p nook-core`). Prefer module unit tests; use `tests/vault_workflow.rs` for end-to-end vault save paths.
+- **UI / integration:** Playwright e2e in `nook-web/e2e/` for connect and vault flows.
+- **Do not** re-implement vault rules in TypeScript for testing — if TS needs behavior, expose it from WASM/core first.
+
+---
+
+## 5. Pinned Dependencies & Tooling Constraints
 
 - **Cargo Version Constraints:**
   - Pinned versions must be standard version strings (e.g., `age = "0.11.3"`, `hex = "0.4.3"`).

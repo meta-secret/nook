@@ -124,4 +124,53 @@ mod tests {
         .unwrap();
         assert!(password.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
     }
+
+    #[test]
+    fn accepts_min_and_max_length() {
+        let min = generate_password(&PasswordOptions {
+            length: MIN_PASSWORD_LENGTH,
+            lowercase: true,
+            uppercase: false,
+            numbers: false,
+            symbols: false,
+        })
+        .unwrap();
+        assert_eq!(min.len(), MIN_PASSWORD_LENGTH);
+
+        let max = generate_password(&PasswordOptions {
+            length: MAX_PASSWORD_LENGTH,
+            lowercase: true,
+            uppercase: false,
+            numbers: false,
+            symbols: false,
+        })
+        .unwrap();
+        assert_eq!(max.len(), MAX_PASSWORD_LENGTH);
+    }
+
+    #[test]
+    fn rejects_length_above_max() {
+        let err = generate_password(&PasswordOptions {
+            length: MAX_PASSWORD_LENGTH + 1,
+            lowercase: true,
+            uppercase: false,
+            numbers: false,
+            symbols: false,
+        })
+        .unwrap_err();
+        assert!(err.contains("between 8 and 128"));
+    }
+
+    #[test]
+    fn symbols_only_charset() {
+        let password = generate_password(&PasswordOptions {
+            length: 16,
+            lowercase: false,
+            uppercase: false,
+            numbers: false,
+            symbols: true,
+        })
+        .unwrap();
+        assert!(password.chars().all(|c| SYMBOLS.contains(c)));
+    }
 }

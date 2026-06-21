@@ -106,4 +106,40 @@ mod tests {
     fn filter_secrets_empty_query_returns_all() {
         assert_eq!(filter_secrets(&sample_records(), "  ").len(), 2);
     }
+
+    #[test]
+    fn validate_storage_mode_rejects_unknown() {
+        assert!(validate_storage_mode("s3").is_err());
+    }
+
+    #[test]
+    fn validate_connect_rejects_unknown_mode() {
+        assert!(validate_connect("icloud", "token").is_err());
+    }
+
+    #[test]
+    fn filter_secrets_no_match_returns_empty() {
+        assert!(filter_secrets(&sample_records(), "aws").is_empty());
+    }
+
+    #[test]
+    fn filter_secrets_matches_substring_in_label() {
+        let filtered = filter_secrets(&sample_records(), ".com");
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].key, "github.com");
+    }
+
+    #[test]
+    fn validate_secret_value_allows_whitespace() {
+        assert!(validate_secret_value("   ").is_ok());
+    }
+
+    #[test]
+    fn filter_secrets_does_not_search_values() {
+        let records = vec![SecretRecord {
+            key: "label".to_owned(),
+            value: "find-me".to_owned(),
+        }];
+        assert!(filter_secrets(&records, "find-me").is_empty());
+    }
 }
