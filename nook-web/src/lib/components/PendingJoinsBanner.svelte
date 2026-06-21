@@ -28,15 +28,17 @@
   >
     <div class="flex items-start justify-between gap-3">
       <div class="space-y-1">
-        <p class="text-sm font-semibold text-foreground inline-flex items-center gap-2">
+        <p
+          class="text-sm font-semibold text-foreground inline-flex items-center gap-2"
+        >
           <UserPlus class="size-4 shrink-0 text-primary" />
           {pendingJoins.length === 1
             ? '1 device wants to join'
             : `${pendingJoins.length} devices want to join`}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
-          Approve a device to encrypt vault keys for it. You can also manage joins in storage
-          settings.
+          Approve a device to encrypt vault keys for it. You can also manage
+          joins in storage settings.
         </p>
       </div>
       {#if onRefresh}
@@ -63,7 +65,10 @@
         >
           <div class="min-w-0">
             <p class="font-mono text-xs text-foreground">{join.device_id}</p>
-            <p class="truncate text-[11px] text-muted-foreground" title={join.public_key}>
+            <p
+              class="truncate text-[11px] text-muted-foreground"
+              title={join.public_key}
+            >
               {truncate(join.public_key, 10, 8)}
             </p>
           </div>

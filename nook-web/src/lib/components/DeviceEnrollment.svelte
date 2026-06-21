@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { ChevronDown, Copy, RefreshCw, Smartphone, Users } from '@lucide/svelte'
+  import {
+    ChevronDown,
+    Copy,
+    RefreshCw,
+    Smartphone,
+    Users,
+  } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { JoinRequest, VaultMember } from '$lib/nook'
 
@@ -50,13 +56,16 @@
 >
   <div class="flex items-start justify-between gap-3">
     <div class="space-y-1">
-      <p class="text-xs font-medium text-foreground inline-flex items-center gap-1.5">
+      <p
+        class="text-xs font-medium text-foreground inline-flex items-center gap-1.5"
+      >
         <Smartphone class="size-3.5" />
         This device
       </p>
       <p class="text-[11px] text-muted-foreground">
-        Multi-device access uses your device key to unwrap secrets_key and members_key from auth.
-        Member public keys are encrypted in the members section with members_key.
+        Multi-device access uses your device key to unwrap secrets_key and
+        members_key from auth. Member public keys are encrypted in the members
+        section with members_key.
       </p>
     </div>
     {#if onRefresh}
@@ -93,8 +102,14 @@
     </div>
     <div class="flex items-start justify-between gap-2">
       <dt class="shrink-0 text-muted-foreground">Public key</dt>
-      <dd class="flex min-w-0 items-center gap-1 font-mono text-[11px] text-foreground/90">
-        <span class="truncate" data-testid="device-public-key" title={devicePublicKey}>
+      <dd
+        class="flex min-w-0 items-center gap-1 font-mono text-[11px] text-foreground/90"
+      >
+        <span
+          class="truncate"
+          data-testid="device-public-key"
+          title={devicePublicKey}
+        >
           {devicePublicKey ? truncate(devicePublicKey, 12, 10) : '—'}
         </span>
         {#if devicePublicKey}
@@ -113,7 +128,9 @@
 
   {#if vaultMembers.length > 0}
     <div class="space-y-2 border-t border-border/60 pt-3">
-      <p class="text-xs font-medium text-foreground inline-flex items-center gap-1.5">
+      <p
+        class="text-xs font-medium text-foreground inline-flex items-center gap-1.5"
+      >
         <Users class="size-3.5" />
         Enrolled members ({vaultMembers.length})
       </p>
@@ -127,7 +144,9 @@
               <p class="font-mono text-foreground">
                 {member.device_id}
                 {#if member.device_id === deviceId}
-                  <span class="ml-1.5 text-[10px] text-primary">(this device)</span>
+                  <span class="ml-1.5 text-[10px] text-primary"
+                    >(this device)</span
+                  >
                 {/if}
               </p>
               <p
@@ -159,7 +178,10 @@
           >
             <div class="min-w-0">
               <p class="font-mono text-xs text-foreground">{join.device_id}</p>
-              <p class="truncate text-[11px] text-muted-foreground" title={join.public_key}>
+              <p
+                class="truncate text-[11px] text-muted-foreground"
+                title={join.public_key}
+              >
                 {truncate(join.public_key, 10, 8)}
               </p>
             </div>
@@ -193,15 +215,22 @@
         aria-expanded={showAdvanced}
         onclick={() => (showAdvanced = !showAdvanced)}
       >
-        <span>Already have secrets_key and members_key from an enrolled device?</span>
+        <span
+          >Already have secrets_key and members_key from an enrolled device?</span
+        >
         <ChevronDown
-          class="size-3.5 shrink-0 transition-transform {showAdvanced ? 'rotate-180' : ''}"
+          class="size-3.5 shrink-0 transition-transform {showAdvanced
+            ? 'rotate-180'
+            : ''}"
         />
       </button>
 
       {#if showAdvanced}
         <div class="space-y-2 border-t border-border px-3 py-3">
-          <label class="text-xs font-medium text-muted-foreground" for="enroll-secrets-key">
+          <label
+            class="text-xs font-medium text-muted-foreground"
+            for="enroll-secrets-key"
+          >
             secrets_key
           </label>
           <input
@@ -213,7 +242,10 @@
             data-testid="enroll-secrets-key-input"
             class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
-          <label class="text-xs font-medium text-muted-foreground" for="enroll-members-key">
+          <label
+            class="text-xs font-medium text-muted-foreground"
+            for="enroll-members-key"
+          >
             members_key
           </label>
           <input
@@ -230,7 +262,9 @@
             variant="outline"
             size="sm"
             class="w-full border-border"
-            disabled={isBusy || !enrollSecretsKey.trim() || !enrollMembersKey.trim()}
+            disabled={isBusy ||
+              !enrollSecretsKey.trim() ||
+              !enrollMembersKey.trim()}
             data-testid="enroll-with-keys-btn"
             onclick={() => void onEnrollWithDec()}
           >

@@ -193,7 +193,13 @@
           onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
           onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
           onFilterSecrets={(query) => vault.filterSecrets(query)}
-          onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
+          onGeneratePassword={(
+            length,
+            lowercase,
+            uppercase,
+            numbers,
+            symbols,
+          ) =>
             vault.generatePassword(
               length,
               lowercase,
@@ -232,7 +238,9 @@
 
   <JoinEnrollmentDialog
     open={vault.joinEnrollmentPrompt !== 'none'}
-    variant={vault.joinEnrollmentPrompt === 'pending' ? 'pending' : 'needs_request'}
+    variant={vault.joinEnrollmentPrompt === 'pending'
+      ? 'pending'
+      : 'needs_request'}
     deviceId={vault.deviceId}
     isBusy={vault.isVerifying}
     onConfirm={() => vault.confirmJoinRequest()}

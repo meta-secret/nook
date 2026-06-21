@@ -38,8 +38,12 @@ test.describe('local vault', () => {
 
     await page.getByTestId('search-secrets').fill('')
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await row.getByRole('button', { name: 'Copy password to clipboard' }).click()
-    await expect(row.getByRole('button', { name: 'Copy password to clipboard' })).toBeVisible()
+    await row
+      .getByRole('button', { name: 'Copy password to clipboard' })
+      .click()
+    await expect(
+      row.getByRole('button', { name: 'Copy password to clipboard' }),
+    ).toBeVisible()
 
     await deleteSecret(page, key)
   })

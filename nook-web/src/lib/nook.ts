@@ -56,7 +56,8 @@ export function mapVaultSyncResult(raw: unknown): VaultSyncResult & {
     changed: Boolean(value.changed),
   }
   if (typeof value.access_status === 'string') {
-    result.access_status = value.access_status as VaultSyncResult['access_status']
+    result.access_status =
+      value.access_status as VaultSyncResult['access_status']
   }
   if (value.secrets !== undefined) {
     result.secrets = mapWasmRecords(value.secrets)

@@ -66,9 +66,11 @@
             </CardTitle>
             <CardDescription>
               {#if variant === 'needs_request'}
-                This browser is not enrolled yet. Send a join request to an existing device.
+                This browser is not enrolled yet. Send a join request to an
+                existing device.
               {:else}
-                Your join request was sent. Connect again after an enrolled device approves it.
+                Your join request was sent. Connect again after an enrolled
+                device approves it.
               {/if}
             </CardDescription>
           </div>
@@ -90,18 +92,23 @@
             class="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs"
             data-testid="join-enrollment-device"
           >
-            <p class="font-medium text-foreground inline-flex items-center gap-1.5">
+            <p
+              class="font-medium text-foreground inline-flex items-center gap-1.5"
+            >
               <Smartphone class="size-3.5" />
               This device
             </p>
-            <p class="mt-1 font-mono text-muted-foreground">{truncate(deviceId)}</p>
+            <p class="mt-1 font-mono text-muted-foreground">
+              {truncate(deviceId)}
+            </p>
           </div>
         {/if}
 
         {#if variant === 'needs_request'}
           <p class="text-sm leading-relaxed text-muted-foreground">
-            An enrolled device will see your request and can approve access. Your public key is
-            shared in the vault until approval — no secrets are exposed.
+            An enrolled device will see your request and can approve access.
+            Your public key is shared in the vault until approval — no secrets
+            are exposed.
           </p>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
@@ -129,8 +136,10 @@
           </div>
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
-            Open Nook on an enrolled device, approve this device in storage settings, then click
-            <strong class="font-medium text-foreground">Connect vault</strong> here again.
+            Open Nook on an enrolled device, approve this device in storage
+            settings, then click
+            <strong class="font-medium text-foreground">Connect vault</strong> here
+            again.
           </p>
           <div class="flex justify-end">
             <Button

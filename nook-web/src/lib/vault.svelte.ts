@@ -1,4 +1,13 @@
-import { getVaultManager, mapVaultSyncResult, mapWasmRecords, mapWasmJoinRequests, mapWasmVaultMembers, type JoinRequest, type SecretRecord, type VaultMember } from '$lib/nook'
+import {
+  getVaultManager,
+  mapVaultSyncResult,
+  mapWasmRecords,
+  mapWasmJoinRequests,
+  mapWasmVaultMembers,
+  type JoinRequest,
+  type SecretRecord,
+  type VaultMember,
+} from '$lib/nook'
 import type {
   NookVaultManager,
   NookSecretRecord,
@@ -116,9 +125,7 @@ export class VaultState {
     }
   }
 
-  private applyVaultSyncResult(
-    result: ReturnType<typeof mapVaultSyncResult>,
-  ) {
+  private applyVaultSyncResult(result: ReturnType<typeof mapVaultSyncResult>) {
     if (this.isAuthenticated) {
       if (result.secrets) {
         this.secrets = result.secrets
@@ -134,7 +141,10 @@ export class VaultState {
 
     if (!result.changed) return
 
-    if (result.access_status === 'ready' && this.joinEnrollmentPrompt === 'pending') {
+    if (
+      result.access_status === 'ready' &&
+      this.joinEnrollmentPrompt === 'pending'
+    ) {
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess('Your device was approved. Click Connect vault.')
     } else if (
@@ -246,7 +256,9 @@ export class VaultState {
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       this.hydrateMultiDeviceState()
-      this.showSuccess('Device approved. They can now connect from their browser.')
+      this.showSuccess(
+        'Device approved. They can now connect from their browser.',
+      )
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to approve join request.'

@@ -4,7 +4,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 dotenv.config({
-  path: path.join(path.dirname(fileURLToPath(import.meta.url)), '../.env.test.local'),
+  path: path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../.env.test.local',
+  ),
 })
 
 export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
@@ -192,7 +195,9 @@ export async function addSecret(page: Page, key: string, value: string) {
     'Secret saved successfully',
     { timeout: 45_000 },
   )
-  await expect(page.getByTestId('secret-row').filter({ hasText: key })).toBeVisible()
+  await expect(
+    page.getByTestId('secret-row').filter({ hasText: key }),
+  ).toBeVisible()
 }
 
 export async function deleteSecret(page: Page, key: string) {
