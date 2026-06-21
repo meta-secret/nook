@@ -14,7 +14,10 @@ pub enum VaultFormat {
 impl VaultFormat {
     #[must_use]
     pub fn from_path(path: &str) -> Self {
-        if path.ends_with(".jsonl") {
+        if std::path::Path::new(path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
+        {
             Self::Jsonl
         } else {
             Self::Yaml
@@ -196,9 +199,7 @@ pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, 
         return Ok(records);
     }
 
-    Err(format!(
-        "Failed to parse stored YAML: expected secrets/auth/joins/members sections"
-    ))
+    Err("Failed to parse stored YAML: expected secrets/auth/joins/members sections".to_string())
 }
 
 #[cfg(test)]
@@ -236,7 +237,7 @@ mod tests {
         let records = sample_records();
         let stored = serialize_stored_yaml(&records).unwrap();
         assert!(stored.contains("github.com"));
-        assert!(stored.contains("|"));
+        assert!(stored.contains('|'));
         assert!(!stored.contains("\\n"));
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
@@ -474,7 +475,7 @@ not-json
                 .to_owned(),
         });
 
-        let yaml = serialize_stored_yaml(&[record.clone()]).unwrap();
+        let yaml = serialize_stored_yaml(std::slice::from_ref(&record)).unwrap();
         assert!(yaml.contains("secrets_key:"));
         assert!(yaml.contains("members_key:"));
         assert!(!yaml.contains("dek:"));

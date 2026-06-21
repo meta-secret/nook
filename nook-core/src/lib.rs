@@ -84,7 +84,7 @@ impl Database {
         format: VaultFormat,
     ) -> Result<Self, String> {
         let stored_records = vault_format::deserialize_stored(stored, format)?;
-        Self::from_stored_records(stored_records, passphrase)
+        Self::from_stored_records(&stored_records, passphrase)
     }
 
     pub fn from_stored_auto(stored: &str, passphrase: &str) -> Result<Self, String> {
@@ -153,11 +153,11 @@ impl Database {
     }
 
     fn from_stored_records(
-        stored_records: Vec<StoredSecretRecord>,
+        stored_records: &[StoredSecretRecord],
         passphrase: &str,
     ) -> Result<Self, String> {
         let crypto = VaultCrypto::new(passphrase)?;
-        Self::from_stored_records_with_crypto(&stored_records, &crypto)
+        Self::from_stored_records_with_crypto(stored_records, &crypto)
     }
 
     pub fn from_stored_records_with_crypto(
@@ -196,6 +196,7 @@ impl Database {
     }
 
     /// Build sorted stored records from an armored-value cache (no encryption).
+    #[must_use]
     pub fn stored_records_from_armored(
         armored: &HashMap<String, String>,
     ) -> Vec<StoredSecretRecord> {
@@ -285,7 +286,7 @@ mod tests {
 
         assert!(stored.contains("github.com"));
         assert!(stored.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert!(stored.contains("|"));
+        assert!(stored.contains('|'));
         assert!(!stored.contains("hunter2"));
         assert!(!stored.contains("token-abc"));
         assert!(!stored.contains("\\n"));
@@ -348,7 +349,7 @@ mod tests {
             .expect("missing fixtures/nook-vault.example.jsonl");
 
         assert!(yaml.contains("secrets:"));
-        assert!(yaml.contains("|"));
+        assert!(yaml.contains('|'));
         assert!(
             jsonl
                 .lines()

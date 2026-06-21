@@ -3,6 +3,8 @@ use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::hash::BuildHasher;
 use std::io::{Read, Write};
 
 /// Symmetric vault key (32-byte random hex).
@@ -31,13 +33,13 @@ pub fn generate_vault_keys() -> Result<VaultKeys, String> {
     })
 }
 
-/// Short fingerprint for UI, joins, and IndexedDB (first 8 bytes of SHA256).
+/// Short fingerprint for UI, joins, and `IndexedDB` (first 8 bytes of SHA256).
 #[must_use]
 pub fn is_device_id(key: &str) -> bool {
     key.len() == 16 && key.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Full SHA256(public key) used as pk_id (64 hex chars).
+/// Full SHA256(public key) used as `pk_id` (64 hex chars).
 #[must_use]
 pub fn is_auth_id(key: &str) -> bool {
     key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -142,7 +144,7 @@ pub struct JoinRequest {
     pub requested_at: String,
 }
 
-/// Per-device X25519 identity used to unwrap secrets_key/members_key from the vault file.
+/// Per-device X25519 identity used to unwrap `secrets_key/members_key` from the vault file.
 #[derive(Clone)]
 pub struct DeviceIdentity {
     identity: Identity,
@@ -229,6 +231,7 @@ pub fn parse_join_request(value: &str) -> Result<JoinRequest, String> {
     serde_json::from_str(value).map_err(|e| format!("Invalid join request JSON: {}", e))
 }
 
+#[must_use]
 pub fn list_join_requests(records: &[StoredSecretRecord]) -> Vec<JoinRequest> {
     records
         .iter()
@@ -237,8 +240,8 @@ pub fn list_join_requests(records: &[StoredSecretRecord]) -> Vec<JoinRequest> {
 }
 
 /// Replace in-memory join rows with the latest join rows from a freshly fetched vault file.
-pub fn merge_remote_join_records(
-    armored: &mut std::collections::HashMap<String, String>,
+pub fn merge_remote_join_records<S: BuildHasher>(
+    armored: &mut HashMap<String, String, S>,
     fresh_records: &[StoredSecretRecord],
 ) {
     armored.retain(|_, value| {
@@ -259,6 +262,7 @@ pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
     records.iter().any(is_auth_stored_record)
 }
 
+#[must_use]
 pub fn user_stored_records(records: &[StoredSecretRecord]) -> Vec<StoredSecretRecord> {
     records
         .iter()
@@ -267,6 +271,7 @@ pub fn user_stored_records(records: &[StoredSecretRecord]) -> Vec<StoredSecretRe
         .collect()
 }
 
+#[must_use]
 pub fn member_from_identity(identity: &DeviceIdentity, enrolled_at: &str) -> VaultMember {
     VaultMember {
         auth_id: identity.auth_id(),
@@ -347,6 +352,7 @@ pub fn resolve_member_roster(
     Ok(roster)
 }
 
+#[must_use]
 pub fn roster_add_member(mut roster: Vec<VaultMember>, member: VaultMember) -> Vec<VaultMember> {
     roster.retain(|entry| entry.auth_id != member.auth_id);
     roster.push(member);
@@ -399,7 +405,7 @@ pub fn genesis_auth_record(
     )
 }
 
-/// Back-compat alias — prefer genesis_auth_record with separate secrets_key and members_key.
+/// Back-compat alias — prefer `genesis_auth_record` with separate `secrets_key` and `members_key`.
 pub fn genesis_dec_record(
     identity: &DeviceIdentity,
     dec: &str,
@@ -473,7 +479,7 @@ pub fn enroll_device_with_dec(
     Ok((auth, members))
 }
 
-/// If this device holds members_key but has no roster row, add itself (fallback when approver missed it).
+/// If this device holds `members_key` but has no roster row, add itself (fallback when approver missed it).
 pub fn ensure_self_in_roster(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
@@ -527,6 +533,7 @@ pub fn pending_join_for_device(
 }
 
 /// User-facing hint when `connect` cannot decrypt because this device has no auth row yet.
+#[must_use]
 pub fn explain_connect_blocked(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
@@ -560,7 +567,7 @@ fn resolve_auth_envelopes(
     parse_auth_envelopes(&record.value)
 }
 
-/// Resolve the secrets_key for this device from stored vault records.
+/// Resolve the `secrets_key` for this device from stored vault records.
 pub fn resolve_secrets_key(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
@@ -585,7 +592,7 @@ pub fn resolve_dec(
     resolve_secrets_key(records, identity)
 }
 
-/// Resolve the members_key for this device from stored vault records.
+/// Resolve the `members_key` for this device from stored vault records.
 pub fn resolve_members_key(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
@@ -696,11 +703,7 @@ mod tests {
 
         let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 2);
-        assert!(
-            roster
-                .iter()
-                .any(|m| m.device_id == joiner.device_id().to_owned())
-        );
+        assert!(roster.iter().any(|m| m.device_id == joiner.device_id()));
     }
 
     #[test]
@@ -917,7 +920,7 @@ mod tests {
     #[test]
     fn merge_remote_join_records_replaces_stale_join_rows() {
         let keys = generate_vault_keys().unwrap();
-        let (genesis, mut armored_records) = genesis_vault(&keys);
+        let (genesis, armored_records) = genesis_vault(&keys);
         let joiner = DeviceIdentity::generate().unwrap();
         let join = create_join_request_record(&joiner, "2026-01-01T00:00:00Z").unwrap();
         let mut armored = records_to_armored_map(&armored_records);
@@ -927,9 +930,9 @@ mod tests {
         let joiner2 = DeviceIdentity::generate().unwrap();
         let join2 = create_join_request_record(&joiner2, "2026-01-02T00:00:00Z").unwrap();
         merge_remote_join_records(&mut armored, std::slice::from_ref(&join2));
-        let joins = list_join_requests(&records_from_armored(&armored));
-        assert_eq!(joins.len(), 1);
-        assert_eq!(joins[0].device_id, joiner2.device_id());
+        let pending_joins = list_join_requests(&records_from_armored(&armored));
+        assert_eq!(pending_joins.len(), 1);
+        assert_eq!(pending_joins[0].device_id, joiner2.device_id());
         let _ = genesis;
     }
 

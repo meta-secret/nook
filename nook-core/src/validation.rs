@@ -48,6 +48,7 @@ pub fn validate_secret_value(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[must_use]
 pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
     let user_records: Vec<SecretRecord> = records
         .iter()

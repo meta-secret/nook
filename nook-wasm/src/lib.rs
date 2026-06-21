@@ -4,7 +4,11 @@
     clippy::uninlined_format_args,
     clippy::must_use_candidate,
     clippy::new_without_default,
-    clippy::collapsible_str_replace
+    clippy::collapsible_str_replace,
+    clippy::assigning_clones,
+    clippy::fn_params_excessive_bools,
+    clippy::unnecessary_wraps,
+    clippy::items_after_statements
 )]
 
 use serde::{Deserialize, Serialize};
@@ -137,7 +141,7 @@ impl NookVaultManager {
             .unwrap_or_default()
     }
 
-    /// Load or create this browser's device identity (IndexedDB).
+    /// Load or create this browser's device identity (`IndexedDB`).
     pub async fn init_device(&mut self) -> Result<(), JsError> {
         self.ensure_device_identity().await?;
         Ok(())
@@ -220,7 +224,7 @@ impl NookVaultManager {
         sync_result_session(self, true)
     }
 
-    /// Enrolled vault members (decrypted with members_key).
+    /// Enrolled vault members (decrypted with `members_key`).
     pub fn list_vault_members(&self) -> Result<js_sys::Array, JsError> {
         let records = self.stored_records_snapshot();
         let members_key = self.members_key.clone();
@@ -298,7 +302,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    /// Device B enrolls with out-of-band secrets_key and members_key, then unlocks the vault.
+    /// Device B enrolls with out-of-band `secrets_key` and `members_key`, then unlocks the vault.
     pub async fn enroll_and_connect(
         &mut self,
         storage_mode: String,
@@ -383,7 +387,7 @@ impl NookVaultManager {
         Ok(self.get_records_as_array()?)
     }
 
-    /// Device B self-enrolls when it already holds secrets_key and members_key out-of-band.
+    /// Device B self-enrolls when it already holds `secrets_key` and `members_key` out-of-band.
     pub async fn enroll_with_keys(
         &mut self,
         secrets_key: String,
@@ -406,7 +410,7 @@ impl NookVaultManager {
         Ok(self.get_records_as_array()?)
     }
 
-    /// Back-compat alias — members_key must equal secrets_key (legacy test path only).
+    /// Back-compat alias — `members_key` must equal `secrets_key` (legacy test path only).
     pub async fn enroll_with_dec(&mut self, dec: String) -> Result<js_sys::Array, JsError> {
         self.enroll_with_keys(dec.clone(), dec).await
     }
@@ -734,15 +738,12 @@ impl NookVaultManager {
             let res =
                 fetch_github_vault(&self.github_pat, &self.github_repo, &self.github_path).await?;
             let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
-            match res {
-                Some((content, sha)) => {
-                    self.file_sha = Some(sha);
-                    Ok(content)
-                }
-                None => {
-                    *vault_file_missing = true;
-                    Ok(String::new())
-                }
+            if let Some((content, sha)) = res {
+                self.file_sha = Some(sha);
+                Ok(content)
+            } else {
+                *vault_file_missing = true;
+                Ok(String::new())
             }
         }
     }
@@ -1039,6 +1040,11 @@ struct GitHubPutResponseContent {
     sha: String,
 }
 
+#[derive(Deserialize)]
+struct GitHubUserResponse {
+    login: String,
+}
+
 async fn fetch_github_username(pat: &str) -> Result<String, NookError> {
     let pat = pat.trim();
     if pat.is_empty() {
@@ -1071,13 +1077,8 @@ async fn fetch_github_username(pat: &str) -> Result<String, NookError> {
         )));
     }
 
-    #[derive(Deserialize)]
-    struct UserResponse {
-        login: String,
-    }
-
     let text = response.text().await?;
-    let parsed: UserResponse = serde_json::from_str(&text)
+    let parsed: GitHubUserResponse = serde_json::from_str(&text)
         .map_err(|e| NookError::Serialization(format!("Failed to parse user JSON: {}", e)))?;
 
     Ok(parsed.login)
