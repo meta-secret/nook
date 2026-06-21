@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Lock, ShieldCheck, TriangleAlert, Settings, X } from '@lucide/svelte'
+  import { Lock, ShieldCheck } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
+  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
@@ -63,20 +64,10 @@
             <button
               type="button"
               onclick={() => vault.openSettings()}
-              class="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              data-testid="storage-status-chip"
+              class="relative inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              data-testid="storage-settings-btn"
             >
               {vault.activeProviderLabel}
-            </button>
-            <Button
-              variant="outline"
-              size="icon"
-              class="relative shrink-0 border-border"
-              aria-label="Storage settings"
-              data-testid="storage-settings-btn"
-              onclick={() => vault.openSettings()}
-            >
-              <Settings class="size-4" />
               {#if vault.pendingJoins.length > 0}
                 <span
                   class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
@@ -85,7 +76,7 @@
                   {vault.pendingJoins.length}
                 </span>
               {/if}
-            </Button>
+            </button>
           {/if}
         {:else}
           <span
@@ -103,54 +94,9 @@
 
   <div
     class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? 'py-8'
+      ? 'py-8 pb-24'
       : 'py-5 sm:py-6'}"
   >
-    {#if vault.errorMsg && vault.isAuthenticated}
-      <div
-        class="mb-6 flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive animate-in fade-in slide-in-from-top-2"
-        role="alert"
-      >
-        <TriangleAlert class="size-5 shrink-0 text-destructive mt-0.5" />
-        <div class="flex-1 min-w-0">
-          <p class="font-semibold">Action Failed</p>
-          <p class="mt-1 text-destructive/90">{vault.errorMsg}</p>
-        </div>
-        <button
-          type="button"
-          class="shrink-0 rounded-md p-1 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
-          aria-label="Dismiss error"
-          data-testid="dismiss-error-btn"
-          onclick={() => vault.dismissError()}
-        >
-          <X class="size-4" />
-        </button>
-      </div>
-    {/if}
-
-    {#if vault.successMsg && vault.isAuthenticated}
-      <div
-        class="mb-6 flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/10 p-4 text-sm text-primary animate-in fade-in slide-in-from-top-2"
-        role="status"
-        data-testid="app-success"
-      >
-        <ShieldCheck class="size-5 shrink-0 text-primary mt-0.5" />
-        <div class="flex-1 min-w-0">
-          <p class="font-semibold">Success</p>
-          <p class="mt-1 text-primary/90">{vault.successMsg}</p>
-        </div>
-        <button
-          type="button"
-          class="shrink-0 rounded-md p-1 text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary"
-          aria-label="Dismiss success"
-          data-testid="dismiss-success-btn"
-          onclick={() => vault.dismissSuccess()}
-        >
-          <X class="size-4" />
-        </button>
-      </div>
-    {/if}
-
     {#if vault.isAuthenticated}
       {#if vault.settingsOpen}
         <div data-testid="storage-settings-panel" class="w-full">
@@ -170,7 +116,7 @@
             onReconnect={handleUnlock}
             onSelectProvider={(id) => vault.selectProvider(id)}
             onApproveJoin={(id) => vault.approveJoin(id)}
-            onRefreshJoins={() => vault.refreshDeviceState()}
+            onRefreshJoins={() => vault.manualSync()}
             bind:githubRepo={vault.githubRepo}
           />
         </div>
@@ -179,7 +125,7 @@
           pendingJoins={vault.pendingJoins}
           isBusy={vault.isSaving || vault.isVerifying}
           onApproveJoin={(id) => vault.approveJoin(id)}
-          onRefresh={() => vault.refreshDeviceState()}
+          onRefresh={() => vault.manualSync()}
         />
         <SecretVault
           isSaving={vault.isSaving}
@@ -224,6 +170,20 @@
       />
     {/if}
   </div>
+
+  {#if vault.isAuthenticated}
+    <VaultStatusBar
+      storageMode={vault.storageMode}
+      githubRepo={vault.githubRepo}
+      lastSyncedAt={vault.lastSyncedAt}
+      isSyncing={vault.isSyncing || vault.isSaving}
+      successMsg={vault.successMsg}
+      errorMsg={vault.errorMsg}
+      onRefresh={() => vault.manualSync()}
+      onDismissSuccess={() => vault.dismissSuccess()}
+      onDismissError={() => vault.dismissError()}
+    />
+  {/if}
 
   <JoinEnrollmentDialog
     open={vault.joinEnrollmentPrompt !== 'none'}

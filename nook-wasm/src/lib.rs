@@ -83,6 +83,8 @@ pub struct NookVaultManager {
     decrypted_jsonl: String,
     file_sha: Option<String>,
     last_synced_content: String,
+    /// Cached empty-repo listing from GitHub (`GET .../contents/` → 404).
+    github_root_empty: bool,
     status_tx: flume::Sender<String>,
     status_rx: flume::Receiver<String>,
 }
@@ -106,6 +108,7 @@ impl NookVaultManager {
             decrypted_jsonl: String::new(),
             file_sha: None,
             last_synced_content: String::new(),
+            github_root_empty: false,
             status_tx,
             status_rx,
         }
@@ -210,6 +213,10 @@ impl NookVaultManager {
         }
 
         let identity = self.device_identity()?;
+        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let fresh_records =
+            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+        nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
         let (jsonl, armored, secrets_key, members_key) = load_stored_vault(&content, &identity)?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.decrypted_jsonl = jsonl;
@@ -668,6 +675,7 @@ impl NookVaultManager {
             )
             .await?;
             self.file_sha = Some(new_sha);
+            self.github_root_empty = false;
             let _ = self.status_tx.send("GITHUB_SAVE_SUCCESS".to_owned());
         }
         self.last_synced_content = stored;
@@ -732,7 +740,11 @@ impl NookVaultManager {
                 .map_err(NookError::Database)?;
             let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
             let username = fetch_github_username(&self.github_pat).await?;
-            self.github_repo = format!("{}/{}", username, repo_name);
+            let new_repo = format!("{}/{}", username, repo_name);
+            if self.github_repo != new_repo {
+                self.github_root_empty = false;
+            }
+            self.github_repo = new_repo;
             self.github_path = "nook-vault.yaml".to_owned();
             let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
             ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
@@ -760,8 +772,13 @@ impl NookVaultManager {
             Ok(stored.unwrap_or_default())
         } else {
             let _ = self.status_tx.send("GITHUB_FETCH_START".to_owned());
-            let res =
-                fetch_github_vault(&self.github_pat, &self.github_repo, &self.github_path).await?;
+            let res = fetch_github_vault(
+                &self.github_pat,
+                &self.github_repo,
+                &self.github_path,
+                Some(&mut self.github_root_empty),
+            )
+            .await?;
             let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
             if let Some((content, sha)) = res {
                 self.file_sha = Some(sha);
@@ -1083,6 +1100,13 @@ struct GitHubFileResponse {
     sha: String,
 }
 
+#[derive(Deserialize)]
+struct GitHubDirEntry {
+    name: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+}
+
 #[derive(Serialize)]
 struct GitHubPutBody {
     message: String,
@@ -1104,6 +1128,25 @@ struct GitHubPutResponseContent {
 #[derive(Deserialize)]
 struct GitHubUserResponse {
     login: String,
+}
+
+fn github_cache_bust_url(url: &str) -> String {
+    let stamp = js_sys::Date::now();
+    if url.contains('?') {
+        format!("{url}&_={stamp}")
+    } else {
+        format!("{url}?_={stamp}")
+    }
+}
+
+fn github_get_headers(pat: &str) -> [(&'static str, String); 5] {
+    [
+        ("Authorization", format!("Bearer {}", pat.trim())),
+        ("Accept", "application/vnd.github+json".to_owned()),
+        ("X-GitHub-Api-Version", "2022-11-28".to_owned()),
+        ("User-Agent", "nook-wasm".to_owned()),
+        ("Cache-Control", "no-cache".to_owned()),
+    ]
 }
 
 async fn fetch_github_username(pat: &str) -> Result<String, NookError> {
@@ -1208,31 +1251,67 @@ async fn fetch_github_vault(
     pat: &str,
     repo: &str,
     path: &str,
+    root_empty: Option<&mut bool>,
 ) -> Result<Option<(String, String)>, NookError> {
-    let pat = pat.trim();
-    let url = format!("https://api.github.com/repos/{}/contents/{}", repo, path);
-    let client = reqwest::Client::new();
-    let response = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {pat}"))
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .header("User-Agent", "nook-wasm")
-        .send()
-        .await?;
-
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
+    if root_empty.as_ref().is_some_and(|flag| **flag) {
         return Ok(None);
     }
 
-    if !response.status().is_success() {
+    let pat = pat.trim();
+    let client = reqwest::Client::new();
+    let apply_headers = |request: reqwest::RequestBuilder| {
+        let mut request = request;
+        for (name, value) in github_get_headers(pat) {
+            request = request.header(name, value);
+        }
+        request
+    };
+
+    // List repo root first so a missing vault file does not produce fetch 404
+    // noise in the browser console (Chrome logs failed fetch responses).
+    let list_url =
+        github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/"));
+    let list_response = apply_headers(client.get(&list_url)).send().await?;
+
+    if list_response.status() == reqwest::StatusCode::NOT_FOUND {
+        if let Some(flag) = root_empty {
+            *flag = true;
+        }
+        return Ok(None);
+    }
+
+    if !list_response.status().is_success() {
         return Err(NookError::GitHub(format!(
             "GitHub API responded with status {}",
-            response.status()
+            list_response.status()
         )));
     }
 
-    let text = response.text().await?;
+    let list_text = list_response.text().await?;
+    let entries: Vec<GitHubDirEntry> = serde_json::from_str(&list_text).map_err(|e| {
+        NookError::Serialization(format!("Failed to parse GitHub directory listing: {e}"))
+    })?;
+
+    if !entries.iter().any(|item| item.name == path && item.entry_type == "file") {
+        return Ok(None);
+    }
+
+    let file_url =
+        github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/{path}"));
+    let file_response = apply_headers(client.get(&file_url)).send().await?;
+
+    if file_response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    if !file_response.status().is_success() {
+        return Err(NookError::GitHub(format!(
+            "GitHub API responded with status {}",
+            file_response.status()
+        )));
+    }
+
+    let text = file_response.text().await?;
 
     let parsed: GitHubFileResponse = serde_json::from_str(&text)
         .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
@@ -1244,7 +1323,7 @@ async fn fetch_github_vault(
         .replace(' ', "");
     let decoded_bytes = base64_decode(&cleaned_content)?;
     let vault_content = String::from_utf8(decoded_bytes)
-        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {}", e)))?;
+        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
 
     Ok(Some((vault_content, parsed.sha)))
 }
@@ -1316,7 +1395,9 @@ async fn write_github_text_file_with_retry(
                 if attempt < 2
                     && (message.contains("422") || message.contains("409")) =>
             {
-                if let Ok(Some((_, fresh_sha))) = fetch_github_vault(pat, repo, path).await {
+                if let Ok(Some((_, fresh_sha))) =
+                    fetch_github_vault(pat, repo, path, None).await
+                {
                     sha = Some(fresh_sha);
                 }
             }

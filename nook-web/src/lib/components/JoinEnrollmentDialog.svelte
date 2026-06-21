@@ -20,8 +20,8 @@
     variant,
     deviceId = '',
     isBusy = false,
-    enrollSecretsKey = $bindable(''),
-    enrollMembersKey = $bindable(''),
+    enrollSecretsKey = $bindable(),
+    enrollMembersKey = $bindable(),
     onConfirm,
     onEnrollWithKeys,
     onCreateFreshVault,
@@ -31,8 +31,8 @@
     variant: 'needs_request' | 'pending'
     deviceId?: string
     isBusy?: boolean
-    enrollSecretsKey?: string
-    enrollMembersKey?: string
+    enrollSecretsKey: string
+    enrollMembersKey: string
     onConfirm?: () => void | Promise<void>
     onEnrollWithKeys?: () => void | Promise<void>
     onCreateFreshVault?: () => void | Promise<void>

@@ -5,6 +5,7 @@
     RefreshCw,
     ShieldCheck,
     ExternalLink,
+    KeyRound,
     Plus,
     ChevronLeft,
   } from '@lucide/svelte'
@@ -21,6 +22,8 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
+  import { buttonVariants } from '$lib/components/ui/button/button.svelte'
+  import { cn } from '$lib/utils'
 
   let {
     providers,
@@ -101,7 +104,7 @@
           {:else if showProviderPicker && addProviderOpen}
             Add another storage provider for your vault.
           {:else if showSetup && setupType === 'github'}
-            Connect GitHub once — your token is saved in this browser.
+            Create a GitHub token first, then paste it below to connect.
           {:else if showSetup}
             Set up local storage on this device.
           {:else}
@@ -234,34 +237,60 @@
 
           {#if showGithubPat}
             <div
-              class="space-y-4 rounded-lg border border-border bg-muted/30 p-3 animate-in fade-in slide-in-from-top-1 duration-200"
+              class="space-y-4 rounded-lg border border-primary/25 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-1 duration-200"
+              data-testid="github-token-setup"
             >
-              <ol class="space-y-4">
+              <div class="space-y-3">
+                <div class="flex items-start gap-3">
+                  <div
+                    class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary"
+                  >
+                    <KeyRound class="size-4" />
+                  </div>
+                  <div class="min-w-0 flex-1 space-y-1">
+                    <p class="text-sm font-semibold text-foreground">
+                      New here? Create a GitHub token first
+                    </p>
+                    <p class="text-xs leading-relaxed text-muted-foreground">
+                      Nook needs a classic personal access token
+                      (<span class="font-mono text-foreground/90">ghp_</span>)
+                      with <span class="font-mono text-foreground/90">repo</span>
+                      scope so it can read and write your vault file.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={githubPatUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="github-new-token-btn"
+                  class={cn(
+                    buttonVariants({ variant: 'default', size: 'default' }),
+                    'w-full sm:w-auto',
+                  )}
+                >
+                  Create token on GitHub
+                  <ExternalLink class="size-4" />
+                </a>
+              </div>
+
+              <ol class="space-y-4 border-t border-primary/15 pt-4">
                 <li class="flex gap-3">
                   <span
-                    class="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-background text-[10px] font-semibold text-muted-foreground"
+                    class="flex size-5 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-[10px] font-semibold text-primary"
                     aria-hidden="true">1</span
                   >
                   <div class="min-w-0 flex-1 space-y-1.5">
                     <p class="text-xs font-medium text-foreground">
-                      Create a token on GitHub
+                      Open GitHub and generate the token
                     </p>
                     <p
                       class="text-[11px] leading-relaxed text-muted-foreground"
                     >
-                      Classic <span class="font-mono">ghp_</span> token with
-                      <span class="font-mono">repo</span> scope.
+                      Use the button above — GitHub opens with
+                      <span class="font-mono">repo</span> scope pre-selected.
+                      Copy the token when it is shown; you will not see it again.
                     </p>
-                    <a
-                      href={githubPatUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      data-testid="github-new-token-btn"
-                      class="inline-flex items-center gap-1 text-xs font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
-                    >
-                      Open token settings
-                      <ExternalLink class="size-3 shrink-0 opacity-70" />
-                    </a>
                   </div>
                 </li>
 

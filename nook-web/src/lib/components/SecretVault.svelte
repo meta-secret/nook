@@ -119,13 +119,7 @@
 
 <div class="animate-in fade-in duration-200" data-testid="vault-panel">
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-sm text-muted-foreground">
-        Syncing via
-        <span class="font-medium text-foreground"
-          >{storageMode === 'github' ? 'GitHub' : 'local storage'}</span
-        >
-      </p>
+    <div class="flex flex-wrap items-center justify-end gap-3">
       {#if addSecretOpen}
         <Button
           size="sm"

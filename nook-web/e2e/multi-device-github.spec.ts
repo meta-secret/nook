@@ -91,6 +91,29 @@ describeMultiDevice('multi-device github vault', () => {
     expect(yaml.joinEntries[0].publicKey).toBe(join.publicKey)
   })
 
+  test('device A sees pending join after manual vault refresh', async () => {
+    const join = (
+      await waitForVaultYaml(
+        githubPat,
+        e2eRepo,
+        (snapshot) => snapshot.joinEntries.length === 1,
+      )
+    ).joinEntries[0]
+
+    await deviceA.getByTestId('vault-sync-refresh-btn').click()
+    await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
+      /just now|s ago/,
+      { timeout: 15_000 },
+    )
+    await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible()
+    await expect(
+      deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
+    ).toBeVisible()
+  })
+
   test('device A sees pending join badge and approves from banner', async () => {
     const join = (
       await waitForVaultYaml(
@@ -213,5 +236,59 @@ describeMultiDevice('multi-device approve from settings', () => {
 
     await unlockGithubVault(deviceB)
     await assertVaultReady(deviceB)
+  })
+})
+
+describeMultiDevice('multi-device join background sync', () => {
+  test.describe.configure({ mode: 'serial' })
+  test.setTimeout(180_000)
+
+  let deviceA: Page
+  let deviceB: Page
+  let contextA: BrowserContext
+  let contextB: BrowserContext
+  let e2eRepo: string
+
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(240_000)
+    e2eRepo = createE2eGithubRepoName()
+    console.log(`[e2e] join background sync repo: ${e2eRepo}`)
+    await resetGithubVault(githubPat, e2eRepo)
+
+    contextA = await createIsolatedContext(browser)
+    contextB = await createIsolatedContext(browser)
+    deviceA = await contextA.newPage()
+    deviceB = await contextB.newPage()
+
+    await connectGithubGenesisDevice(deviceA, githubPat, e2eRepo)
+  })
+
+  test.afterAll(async () => {
+    await deviceA?.close()
+    await deviceB?.close()
+    await contextA?.close()
+    await contextB?.close()
+    await cleanupE2eGithubRepo(githubPat, e2eRepo)
+  })
+
+  test('device A eventually sees pending join without manual refresh', async () => {
+    await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
+    const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
+
+    await waitForVaultYaml(
+      githubPat,
+      e2eRepo,
+      (snapshot) => snapshot.joinEntries.length === 1,
+    )
+
+    await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible({
+      timeout: 25_000,
+    })
+    await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
+      timeout: 5_000,
+    })
+    await expect(
+      deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
+    ).toBeVisible()
   })
 })

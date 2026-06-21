@@ -52,6 +52,8 @@ export class VaultState {
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
+  lastSyncedAt = $state<Date | null>(null)
+  isSyncing = $state(false)
 
   static readonly SYNC_INTERVAL_MS = 10_000
 
@@ -374,15 +376,41 @@ export class VaultState {
     if (!this.manager) return
     if (!options?.force && this.isVerifying) return
     if (!options?.force && this.isSaving) return
+    if (!options?.force && this.isSyncing) return
     if (this.storageMode === 'github' && !this.githubPat.trim()) return
 
+    this.isSyncing = true
     try {
       const raw = await this.enqueueStorage(() =>
         this.manager!.sync_vault_from_storage(...this.wasmGithubArgs()),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
+      this.lastSyncedAt = new Date()
     } catch {
       // Background sync should not interrupt the UI.
+    } finally {
+      this.isSyncing = false
+    }
+  }
+
+  async manualSync() {
+    if (!this.manager) return
+    try {
+      await this.initDeviceIdentity()
+      if (this.storageMode === 'github' && !this.githubPat.trim()) {
+        this.pendingJoins = []
+        this.vaultMembers = []
+        return
+      }
+      await this.syncFromStorage({ force: true })
+      if (this.isAuthenticated) {
+        this.hydrateMultiDeviceState()
+      } else {
+        this.pendingJoins = []
+        this.vaultMembers = []
+      }
+    } catch {
+      // Manual refresh should not interrupt the UI.
     }
   }
 
@@ -405,22 +433,7 @@ export class VaultState {
   }
 
   async refreshDeviceState() {
-    if (!this.manager) return
-    try {
-      await this.initDeviceIdentity()
-      if (this.storageMode === 'github' && !this.githubPat.trim()) {
-        this.pendingJoins = []
-        this.vaultMembers = []
-        return
-      }
-      await this.syncFromStorage()
-      if (!this.isAuthenticated) {
-        this.pendingJoins = []
-        this.vaultMembers = []
-      }
-    } catch {
-      // Device identity is optional until first connect/join action.
-    }
+    await this.manualSync()
   }
 
   async requestVaultAccess() {
