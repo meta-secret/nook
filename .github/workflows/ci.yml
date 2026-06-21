@@ -155,6 +155,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
+          bunx wrangler@4 pages project create nook --production-branch=main 2>/dev/null || true
           bunx wrangler@4 pages deploy nook-web/dist \
             --project-name=nook \
             --branch="pr-${{ github.event.pull_request.number }}"
