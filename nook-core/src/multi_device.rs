@@ -236,6 +236,24 @@ pub fn list_join_requests(records: &[StoredSecretRecord]) -> Vec<JoinRequest> {
         .collect()
 }
 
+/// Replace in-memory join rows with the latest join rows from a freshly fetched vault file.
+pub fn merge_remote_join_records(
+    armored: &mut std::collections::HashMap<String, String>,
+    fresh_records: &[StoredSecretRecord],
+) {
+    armored.retain(|_, value| {
+        !is_join_stored_record(&StoredSecretRecord {
+            key: String::new(),
+            value: value.clone(),
+        })
+    });
+    for record in fresh_records {
+        if is_join_stored_record(record) {
+            armored.insert(record.key.clone(), record.value.clone());
+        }
+    }
+}
+
 #[must_use]
 pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
     records.iter().any(is_auth_stored_record)
@@ -467,6 +485,61 @@ pub fn ensure_self_in_roster(
     }
     let updated = roster_add_member(roster, member_from_identity(identity, "self-sync"));
     Ok(Some(build_members_records(&updated, members_key)?))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectAccessStatus {
+    Ready,
+    NeedsEnrollment,
+    JoinPending,
+}
+
+#[must_use]
+pub fn assess_connect_access(
+    records: &[StoredSecretRecord],
+    identity: &DeviceIdentity,
+) -> ConnectAccessStatus {
+    if device_is_enrolled(records, identity) {
+        ConnectAccessStatus::Ready
+    } else if pending_join_for_device(records, identity.device_id()).is_some() {
+        ConnectAccessStatus::JoinPending
+    } else {
+        ConnectAccessStatus::NeedsEnrollment
+    }
+}
+
+#[must_use]
+pub fn device_is_enrolled(records: &[StoredSecretRecord], identity: &DeviceIdentity) -> bool {
+    let pk_id = identity.auth_id();
+    records
+        .iter()
+        .any(|record| record.key == pk_id && is_auth_stored_record(record))
+}
+
+#[must_use]
+pub fn pending_join_for_device(
+    records: &[StoredSecretRecord],
+    device_id: &str,
+) -> Option<JoinRequest> {
+    list_join_requests(records)
+        .into_iter()
+        .find(|join| join.device_id == device_id)
+}
+
+/// User-facing hint when `connect` cannot decrypt because this device has no auth row yet.
+pub fn explain_connect_blocked(
+    records: &[StoredSecretRecord],
+    identity: &DeviceIdentity,
+) -> Option<String> {
+    match assess_connect_access(records, identity) {
+        ConnectAccessStatus::Ready => None,
+        ConnectAccessStatus::JoinPending => Some(
+            "Join request pending. An enrolled device must approve before you can connect. After approval, click Connect vault again.".to_owned(),
+        ),
+        ConnectAccessStatus::NeedsEnrollment => Some(
+            "This device is not enrolled yet. Request access from an enrolled device, then connect again.".to_owned(),
+        ),
+    }
 }
 
 fn resolve_auth_envelopes(
@@ -758,5 +831,87 @@ mod tests {
         assert!(!yaml.contains("\nmek:"));
         assert!(!yaml.contains("\ndec:"));
         let _ = genesis;
+    }
+
+    #[test]
+    fn explain_connect_blocked_when_not_enrolled() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        let msg = explain_connect_blocked(&records, &joiner).expect("should block");
+        assert!(msg.contains("not enrolled"));
+        let _ = genesis;
+    }
+
+    #[test]
+    fn assess_connect_access_when_not_enrolled() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        assert_eq!(
+            assess_connect_access(&records, &joiner),
+            ConnectAccessStatus::NeedsEnrollment
+        );
+        let _ = genesis;
+    }
+
+    #[test]
+    fn assess_connect_access_when_join_pending() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, mut records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        let join = create_join_request_record(&joiner, "2026-01-01T00:00:00Z").unwrap();
+        records.push(join);
+        assert_eq!(
+            assess_connect_access(&records, &joiner),
+            ConnectAccessStatus::JoinPending
+        );
+        let _ = genesis;
+    }
+
+    #[test]
+    fn merge_remote_join_records_replaces_stale_join_rows() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, mut armored_records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        let join = create_join_request_record(&joiner, "2026-01-01T00:00:00Z").unwrap();
+        let mut armored = records_to_armored_map(&armored_records);
+        merge_remote_join_records(&mut armored, std::slice::from_ref(&join));
+        assert_eq!(list_join_requests(&records_from_armored(&armored)).len(), 1);
+
+        let joiner2 = DeviceIdentity::generate().unwrap();
+        let join2 = create_join_request_record(&joiner2, "2026-01-02T00:00:00Z").unwrap();
+        merge_remote_join_records(&mut armored, std::slice::from_ref(&join2));
+        let joins = list_join_requests(&records_from_armored(&armored));
+        assert_eq!(joins.len(), 1);
+        assert_eq!(joins[0].device_id, joiner2.device_id());
+        let _ = genesis;
+    }
+
+    fn records_to_armored_map(records: &[StoredSecretRecord]) -> std::collections::HashMap<String, String> {
+        records
+            .iter()
+            .map(|record| (record.key.clone(), record.value.clone()))
+            .collect()
+    }
+
+    fn records_from_armored(armored: &std::collections::HashMap<String, String>) -> Vec<StoredSecretRecord> {
+        armored
+            .iter()
+            .map(|(key, value)| StoredSecretRecord {
+                key: key.clone(),
+                value: value.clone(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn assess_connect_access_when_enrolled() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, records) = genesis_vault(&keys);
+        assert_eq!(
+            assess_connect_access(&records, &genesis),
+            ConnectAccessStatus::Ready
+        );
     }
 }

@@ -78,6 +78,7 @@ pub struct NookVaultManager {
     stored_armored: HashMap<String, String>,
     decrypted_jsonl: String,
     file_sha: Option<String>,
+    last_synced_content: String,
     status_tx: flume::Sender<String>,
     status_rx: flume::Receiver<String>,
 }
@@ -100,6 +101,7 @@ impl NookVaultManager {
             stored_armored: HashMap::new(),
             decrypted_jsonl: String::new(),
             file_sha: None,
+            last_synced_content: String::new(),
             status_tx,
             status_rx,
         }
@@ -169,6 +171,54 @@ impl NookVaultManager {
             array.push(&obj);
         }
         Ok(array)
+    }
+
+    /// Pull the latest vault file from storage when it changed; update the active session.
+    /// Returns `{ changed, access_status?, secrets?, pending_joins?, vault_members? }`.
+    pub async fn sync_vault_from_storage(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+    ) -> Result<JsValue, JsError> {
+        self.prepare_storage(&storage_mode, &github_pat).await?;
+        let mut vault_file_missing = false;
+        let content = self.fetch_vault_content(&mut vault_file_missing).await?;
+
+        if content.trim() == self.last_synced_content.trim() {
+            if self.members_key.is_empty() {
+                return sync_result_unchanged();
+            }
+            return sync_result_session(self, false);
+        }
+
+        if content.trim().is_empty() {
+            self.last_synced_content = content.clone();
+            return sync_result_access_status("new_vault");
+        }
+
+        let format =
+            nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let records =
+            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+
+        if self.members_key.is_empty() {
+            self.last_synced_content = content.clone();
+            let identity = self.ensure_device_identity().await?;
+            let status = match nook_core::assess_connect_access(&records, &identity) {
+                nook_core::ConnectAccessStatus::Ready => "ready",
+                nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
+                nook_core::ConnectAccessStatus::JoinPending => "join_pending",
+            };
+            return sync_result_access_status(status);
+        }
+
+        let identity = self.device_identity()?;
+        let (jsonl, armored, secrets_key, members_key) = load_stored_vault(&content, &identity)?;
+        self.apply_vault_keys(&secrets_key, &members_key)?;
+        self.decrypted_jsonl = jsonl;
+        self.stored_armored = armored;
+        self.last_synced_content = content.clone();
+        sync_result_session(self, true)
     }
 
     /// Enrolled vault members (decrypted with members_key).
@@ -402,6 +452,37 @@ impl NookVaultManager {
         Ok(msg)
     }
 
+    /// Check whether this device can decrypt the vault before attempting connect.
+    /// Returns `ready`, `new_vault`, `needs_enrollment`, or `join_pending`.
+    pub async fn assess_vault_connect(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+    ) -> Result<String, JsError> {
+        self.prepare_storage(&storage_mode, &github_pat).await?;
+        let identity = self.ensure_device_identity().await?;
+        let mut vault_file_missing = false;
+        let content = self.fetch_vault_content(&mut vault_file_missing).await?;
+
+        if content.trim().is_empty() {
+            return Ok("new_vault".to_owned());
+        }
+
+        self.last_synced_content = content.clone();
+
+        let format =
+            nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let records =
+            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+
+        Ok(match nook_core::assess_connect_access(&records, &identity) {
+            nook_core::ConnectAccessStatus::Ready => "ready",
+            nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
+            nook_core::ConnectAccessStatus::JoinPending => "join_pending",
+        }
+        .to_owned())
+    }
+
     // Connects to storage (loads, decrypts, and updates session state)
     // Returns js_sys::Array of NookSecretRecord on success
     pub async fn connect(
@@ -432,6 +513,13 @@ impl NookVaultManager {
             }
             self.decrypted_jsonl = String::new();
         } else {
+            let format =
+                nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+            let records =
+                nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+            if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
+                return Err(NookError::Database(message).into());
+            }
             let _ = self.status_tx.send("DECRYPT_START".to_owned());
             let (jsonl, armored, secrets_key, members_key) = load_stored_vault(&content, &identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
@@ -439,6 +527,7 @@ impl NookVaultManager {
             self.stored_armored = armored;
             self.maybe_sync_self_into_roster(&identity).await?;
             let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
+            self.last_synced_content = content.clone();
         }
 
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret)
@@ -558,6 +647,7 @@ impl NookVaultManager {
             self.file_sha = Some(new_sha);
             let _ = self.status_tx.send("GITHUB_SAVE_SUCCESS".to_owned());
         }
+        self.last_synced_content = stored;
         Ok(())
     }
 
@@ -675,6 +765,47 @@ fn records_to_armored(records: &[nook_core::StoredSecretRecord]) -> HashMap<Stri
         .iter()
         .map(|record| (record.key.clone(), record.value.clone()))
         .collect()
+}
+
+fn sync_result_unchanged() -> Result<JsValue, JsError> {
+    let obj = js_sys::Object::new();
+    js_set(&obj, "changed", &JsValue::FALSE)?;
+    Ok(obj.into())
+}
+
+fn sync_result_access_status(status: &str) -> Result<JsValue, JsError> {
+    let obj = js_sys::Object::new();
+    js_set(&obj, "changed", &JsValue::TRUE)?;
+    js_set(&obj, "access_status", &JsValue::from_str(status))?;
+    Ok(obj.into())
+}
+
+fn sync_result_session(manager: &NookVaultManager, changed: bool) -> Result<JsValue, JsError> {
+    let obj = js_sys::Object::new();
+    js_set(&obj, "changed", &JsValue::from_bool(changed))?;
+    js_set(
+        &obj,
+        "secrets",
+        &manager.get_records_as_array()?.into(),
+    )?;
+    js_set(
+        &obj,
+        "pending_joins",
+        &manager.list_pending_joins()?.into(),
+    )?;
+    js_set(
+        &obj,
+        "vault_members",
+        &manager.list_vault_members()?.into(),
+    )?;
+    Ok(obj.into())
+}
+
+fn js_set(obj: &js_sys::Object, key: &str, value: &JsValue) -> Result<(), NookError> {
+    js_sys::Reflect::set(obj, &JsValue::from_str(key), value).map_err(|_| {
+        NookError::Serialization(format!("Failed to set sync result field `{key}`."))
+    })?;
+    Ok(())
 }
 
 fn apply_member_records(

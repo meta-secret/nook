@@ -1,4 +1,4 @@
-import { getVaultManager, mapWasmRecords, mapWasmJoinRequests, mapWasmVaultMembers, type JoinRequest, type SecretRecord, type VaultMember } from '$lib/nook'
+import { getVaultManager, mapVaultSyncResult, mapWasmRecords, mapWasmJoinRequests, mapWasmVaultMembers, type JoinRequest, type SecretRecord, type VaultMember } from '$lib/nook'
 import type {
   NookVaultManager,
   NookSecretRecord,
@@ -26,8 +26,12 @@ export class VaultState {
   vaultMembers = $state<VaultMember[]>([])
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
+  joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
+
+  static readonly SYNC_INTERVAL_MS = 10_000
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
+  private syncTimer: ReturnType<typeof setInterval> | null = null
 
   dismissSuccess() {
     if (this.successDismissTimer !== null) {
@@ -39,6 +43,32 @@ export class VaultState {
 
   dismissError() {
     this.errorMsg = ''
+  }
+
+  dismissJoinEnrollment() {
+    this.joinEnrollmentPrompt = 'none'
+  }
+
+  async confirmJoinRequest() {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isVerifying = true
+    try {
+      await this.manager.request_vault_access(
+        this.storageMode,
+        this.githubPat,
+        new Date().toISOString(),
+      )
+      this.saveConfig()
+      await this.refreshDeviceState()
+      this.joinEnrollmentPrompt = 'pending'
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to request vault access.'
+    } finally {
+      this.isVerifying = false
+    }
   }
 
   private showSuccess(message: string) {
@@ -53,6 +83,10 @@ export class VaultState {
     this.isInitializing = true
     this.isVerifying = false
     this.errorMsg = ''
+    this.storageMode =
+      (localStorage.getItem('nook_storage_mode') as 'local' | 'github') ||
+      'local'
+    this.githubPat = localStorage.getItem('nook_github_pat') || ''
     try {
       this.manager = await getVaultManager()
       await this.refreshDeviceState()
@@ -64,11 +98,77 @@ export class VaultState {
     } finally {
       this.isInitializing = false
     }
+    this.startVaultSync()
+  }
 
-    this.storageMode =
-      (localStorage.getItem('nook_storage_mode') as 'local' | 'github') ||
-      'local'
-    this.githubPat = localStorage.getItem('nook_github_pat') || ''
+  startVaultSync() {
+    this.stopVaultSync()
+    void this.syncFromStorage()
+    this.syncTimer = setInterval(() => {
+      void this.syncFromStorage()
+    }, VaultState.SYNC_INTERVAL_MS)
+  }
+
+  stopVaultSync() {
+    if (this.syncTimer !== null) {
+      clearInterval(this.syncTimer)
+      this.syncTimer = null
+    }
+  }
+
+  private applyVaultSyncResult(
+    result: ReturnType<typeof mapVaultSyncResult>,
+  ) {
+    if (this.isAuthenticated) {
+      if (result.secrets) {
+        this.secrets = result.secrets
+      }
+      if (result.pending_joins !== undefined) {
+        this.pendingJoins = result.pending_joins
+      }
+      if (result.vault_members !== undefined) {
+        this.vaultMembers = result.vault_members
+      }
+      return
+    }
+
+    if (!result.changed) return
+
+    if (result.access_status === 'ready' && this.joinEnrollmentPrompt === 'pending') {
+      this.joinEnrollmentPrompt = 'none'
+      this.showSuccess('Your device was approved. Click Connect vault.')
+    } else if (
+      result.access_status === 'join_pending' &&
+      this.joinEnrollmentPrompt === 'none'
+    ) {
+      this.joinEnrollmentPrompt = 'pending'
+    }
+  }
+
+  private hydrateMultiDeviceState() {
+    if (!this.manager || !this.isAuthenticated) return
+    try {
+      this.pendingJoins = mapWasmJoinRequests(this.manager.list_pending_joins())
+      this.vaultMembers = mapWasmVaultMembers(this.manager.list_vault_members())
+    } catch {
+      this.vaultMembers = []
+    }
+  }
+
+  async syncFromStorage(options?: { force?: boolean }) {
+    if (!this.manager || this.isVerifying) return
+    if (!options?.force && this.isSaving) return
+    if (this.storageMode === 'github' && !this.githubPat.trim()) return
+
+    try {
+      const raw = await this.manager.sync_vault_from_storage(
+        this.storageMode,
+        this.githubPat,
+      )
+      this.applyVaultSyncResult(mapVaultSyncResult(raw))
+    } catch {
+      // Background sync should not interrupt the UI.
+    }
   }
 
   saveConfig() {
@@ -96,18 +196,13 @@ export class VaultState {
       await this.manager.init_device()
       this.deviceId = this.manager.device_id
       this.devicePublicKey = this.manager.device_public_key
-      if (this.isAuthenticated) {
-        this.pendingJoins = mapWasmJoinRequests(
-          this.manager.list_pending_joins(),
-        )
-        try {
-          this.vaultMembers = mapWasmVaultMembers(
-            this.manager.list_vault_members(),
-          )
-        } catch {
-          this.vaultMembers = []
-        }
-      } else {
+      if (this.storageMode === 'github' && !this.githubPat.trim()) {
+        this.pendingJoins = []
+        this.vaultMembers = []
+        return
+      }
+      await this.syncFromStorage()
+      if (!this.isAuthenticated) {
         this.pendingJoins = []
         this.vaultMembers = []
       }
@@ -150,7 +245,7 @@ export class VaultState {
         joinDeviceId,
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      await this.refreshDeviceState()
+      this.hydrateMultiDeviceState()
       this.showSuccess('Device approved. They can now connect from their browser.')
     } catch (e: unknown) {
       this.errorMsg =
@@ -181,7 +276,8 @@ export class VaultState {
       this.enrollSecretsKey = ''
       this.enrollMembersKey = ''
       this.saveConfig()
-      await this.refreshDeviceState()
+      this.hydrateMultiDeviceState()
+      await this.syncFromStorage()
       this.showSuccess('Enrolled and connected to the vault.')
       this.closeSettings()
     } catch (e: unknown) {
@@ -232,6 +328,37 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
+      await this.refreshDeviceState()
+
+      const assessPromise = this.manager.assess_vault_connect(
+        this.storageMode,
+        this.githubPat,
+      )
+      const assessTimeout = new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Connection timed out. Check your PAT, network, and try again.',
+              ),
+            ),
+          30_000,
+        )
+      })
+      const accessStatus = (await Promise.race([
+        assessPromise,
+        assessTimeout,
+      ])) as string
+
+      if (accessStatus === 'needs_enrollment') {
+        this.joinEnrollmentPrompt = 'needs_request'
+        return
+      }
+      if (accessStatus === 'join_pending') {
+        this.joinEnrollmentPrompt = 'pending'
+        return
+      }
+
       const connectPromise = this.manager.connect(
         this.storageMode,
         this.githubPat,
@@ -254,7 +381,8 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       this.saveConfig()
-      await this.refreshDeviceState()
+      this.hydrateMultiDeviceState()
+      await this.syncFromStorage()
       if (this.storageMode === 'local') {
         this.showSuccess('Local vault loaded from IndexedDB.')
       } else {

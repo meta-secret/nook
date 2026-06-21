@@ -37,6 +37,39 @@ export function mapWasmVaultMembers(raw: unknown): VaultMember[] {
   }))
 }
 
+export type VaultSyncResult = {
+  changed: boolean
+  access_status?: 'ready' | 'new_vault' | 'needs_enrollment' | 'join_pending'
+}
+
+export function mapVaultSyncResult(raw: unknown): VaultSyncResult & {
+  secrets?: SecretRecord[]
+  pending_joins?: JoinRequest[]
+  vault_members?: VaultMember[]
+} {
+  const value = raw as Record<string, unknown>
+  const result: VaultSyncResult & {
+    secrets?: SecretRecord[]
+    pending_joins?: JoinRequest[]
+    vault_members?: VaultMember[]
+  } = {
+    changed: Boolean(value.changed),
+  }
+  if (typeof value.access_status === 'string') {
+    result.access_status = value.access_status as VaultSyncResult['access_status']
+  }
+  if (value.secrets !== undefined) {
+    result.secrets = mapWasmRecords(value.secrets)
+  }
+  if (value.pending_joins !== undefined) {
+    result.pending_joins = mapWasmJoinRequests(value.pending_joins)
+  }
+  if (value.vault_members !== undefined) {
+    result.vault_members = mapWasmVaultMembers(value.vault_members)
+  }
+  return result
+}
+
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
     const wasm = await import('./nook-wasm/nook_wasm.js')

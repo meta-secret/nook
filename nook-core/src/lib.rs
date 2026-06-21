@@ -22,9 +22,10 @@ pub use multi_device::{
     genesis_dec_record, genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id,
     is_join_stored_record, is_members_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
-    member_from_join, member_stored_key, parse_auth_envelopes, parse_join_request,
-    replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
-    resolve_secrets_key,
+    merge_remote_join_records, member_from_join, member_stored_key, parse_auth_envelopes,
+    parse_join_request, replace_member_records, resolve_dec, resolve_dek, resolve_member_roster,
+    resolve_members_key, resolve_secrets_key, assess_connect_access, device_is_enrolled, explain_connect_blocked,
+    pending_join_for_device, ConnectAccessStatus,
     roster_add_member, user_stored_records, vault_has_multi_device_records,
 };
 

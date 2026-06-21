@@ -3,6 +3,8 @@
   import { Lock, ShieldCheck, TriangleAlert, Settings, X } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
+  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import { Button } from '$lib/components/ui/button'
 
@@ -10,6 +12,7 @@
 
   onMount(async () => {
     await vault.init()
+    return () => vault.stopVaultSync()
   })
 
   async function handleConnect() {
@@ -70,12 +73,20 @@
             <Button
               variant="outline"
               size="icon"
-              class="shrink-0 border-border"
+              class="relative shrink-0 border-border"
               aria-label="Storage settings"
               data-testid="storage-settings-btn"
               onclick={() => vault.openSettings()}
             >
               <Settings class="size-4" />
+              {#if vault.pendingJoins.length > 0}
+                <span
+                  class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
+                  data-testid="pending-joins-badge"
+                >
+                  {vault.pendingJoins.length}
+                </span>
+              {/if}
             </Button>
           {/if}
         {:else}
@@ -169,6 +180,12 @@
           />
         </div>
       {:else}
+        <PendingJoinsBanner
+          pendingJoins={vault.pendingJoins}
+          isBusy={vault.isSaving || vault.isVerifying}
+          onApproveJoin={(id) => vault.approveJoin(id)}
+          onRefresh={() => vault.refreshDeviceState()}
+        />
         <SecretVault
           isSaving={vault.isSaving}
           secretsCount={vault.secrets.length}
@@ -206,11 +223,19 @@
           pendingJoins={vault.pendingJoins}
           onConnect={handleConnect}
           onInitializeEmpty={() => vault.handleInitializeEmpty()}
-          onRequestAccess={() => vault.requestVaultAccess()}
           onEnrollWithDec={() => vault.enrollAndConnect()}
           onRefreshJoins={() => vault.refreshDeviceState()}
         />
       </div>
     {/if}
   </div>
+
+  <JoinEnrollmentDialog
+    open={vault.joinEnrollmentPrompt !== 'none'}
+    variant={vault.joinEnrollmentPrompt === 'pending' ? 'pending' : 'needs_request'}
+    deviceId={vault.deviceId}
+    isBusy={vault.isVerifying}
+    onConfirm={() => vault.confirmJoinRequest()}
+    onCancel={() => vault.dismissJoinEnrollment()}
+  />
 </main>

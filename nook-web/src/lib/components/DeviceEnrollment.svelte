@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, Copy, RefreshCw, Smartphone, UserPlus, Users } from '@lucide/svelte'
+  import { ChevronDown, Copy, RefreshCw, Smartphone, Users } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { JoinRequest, VaultMember } from '$lib/nook'
 
@@ -9,10 +9,8 @@
     pendingJoins,
     vaultMembers = [] as VaultMember[],
     isBusy,
-    showJoinActions = false,
     enrollSecretsKey = $bindable(''),
     enrollMembersKey = $bindable(''),
-    onRequestAccess,
     onApproveJoin,
     onEnrollWithDec,
     onRefresh,
@@ -22,10 +20,8 @@
     pendingJoins: JoinRequest[]
     vaultMembers?: VaultMember[]
     isBusy: boolean
-    showJoinActions?: boolean
     enrollSecretsKey?: string
     enrollMembersKey?: string
-    onRequestAccess?: () => void | Promise<void>
     onApproveJoin?: (deviceId: string) => void | Promise<void>
     onEnrollWithDec?: () => void | Promise<void>
     onRefresh?: () => void | Promise<void>
@@ -115,28 +111,6 @@
     </div>
   </dl>
 
-  {#if showJoinActions && onRequestAccess}
-    <div class="space-y-2 border-t border-border/60 pt-3">
-      <p class="text-xs font-medium text-foreground">Join an existing vault</p>
-      <p class="text-[11px] leading-relaxed text-muted-foreground">
-        Request access on a synced vault. An enrolled device must approve before you can
-        connect here.
-      </p>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        class="w-full border-border"
-        disabled={isBusy}
-        data-testid="request-vault-access-btn"
-        onclick={() => void onRequestAccess()}
-      >
-        <UserPlus class="size-3.5 mr-1.5" />
-        Request access
-      </Button>
-    </div>
-  {/if}
-
   {#if vaultMembers.length > 0}
     <div class="space-y-2 border-t border-border/60 pt-3">
       <p class="text-xs font-medium text-foreground inline-flex items-center gap-1.5">
@@ -204,7 +178,7 @@
         {/each}
       </ul>
     </div>
-  {:else if !showJoinActions && onRefresh}
+  {:else if onRefresh}
     <p class="text-[11px] text-muted-foreground border-t border-border/60 pt-3">
       No pending join requests.
     </p>
