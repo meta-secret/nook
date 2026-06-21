@@ -1,6 +1,6 @@
+use crate::SecretRecord;
 use crate::is_auth_id;
 use crate::is_device_id;
-use crate::SecretRecord;
 
 pub const STORAGE_MODE_LOCAL: &str = "local";
 pub const STORAGE_MODE_GITHUB: &str = "github";

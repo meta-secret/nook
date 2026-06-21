@@ -14,9 +14,8 @@ fn encrypt_user_secrets(db: &Database, crypto: &VaultCrypto) -> Vec<nook_core::S
 
 fn genesis_vault(keys: &VaultKeys) -> (DeviceIdentity, Vec<nook_core::StoredSecretRecord>) {
     let genesis = DeviceIdentity::generate().unwrap();
-    let mut records = vec![
-        genesis_auth_record(&genesis, &keys.secrets_key, &keys.members_key).unwrap(),
-    ];
+    let mut records =
+        vec![genesis_auth_record(&genesis, &keys.secrets_key, &keys.members_key).unwrap()];
     records.extend(
         genesis_members_records(&genesis, &keys.members_key, "2026-06-21T00:00:00Z").unwrap(),
     );
@@ -172,9 +171,14 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() {
     records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z").unwrap());
     let join = list_join_requests(&records).pop().unwrap();
 
-    let (auth, join_key, _) =
-        approve_join_request(&keys.secrets_key, &keys.members_key, &join, &genesis, &records)
-            .unwrap();
+    let (auth, join_key, _) = approve_join_request(
+        &keys.secrets_key,
+        &keys.members_key,
+        &join,
+        &genesis,
+        &records,
+    )
+    .unwrap();
     records.retain(|r| r.key != join_key);
     records.push(auth.clone());
 

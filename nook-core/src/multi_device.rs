@@ -72,14 +72,12 @@ pub struct AuthEnvelopes {
 }
 
 pub fn parse_auth_envelopes(value: &str) -> Result<AuthEnvelopes, String> {
-    let envelopes: AuthEnvelopes = serde_json::from_str(value)
-        .map_err(|e| format!("Invalid auth envelope JSON: {}", e))?;
+    let envelopes: AuthEnvelopes =
+        serde_json::from_str(value).map_err(|e| format!("Invalid auth envelope JSON: {}", e))?;
     if !envelopes.secrets_key.contains("BEGIN AGE ENCRYPTED FILE")
         || !envelopes.members_key.contains("BEGIN AGE ENCRYPTED FILE")
     {
-        return Err(
-            "Auth envelope missing age-armored secrets_key or members_key.".to_owned(),
-        );
+        return Err("Auth envelope missing age-armored secrets_key or members_key.".to_owned());
     }
     Ok(envelopes)
 }
@@ -132,7 +130,9 @@ pub fn is_members_stored_record(record: &StoredSecretRecord) -> bool {
 
 #[must_use]
 pub fn is_vault_meta_record(record: &StoredSecretRecord) -> bool {
-    is_join_stored_record(record) || is_auth_stored_record(record) || is_members_stored_record(record)
+    is_join_stored_record(record)
+        || is_auth_stored_record(record)
+        || is_members_stored_record(record)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -640,7 +640,8 @@ mod tests {
 
     fn genesis_vault(keys: &VaultKeys) -> (DeviceIdentity, Vec<StoredSecretRecord>) {
         let genesis = DeviceIdentity::generate().unwrap();
-        let mut records = vec![genesis_auth_record(&genesis, &keys.secrets_key, &keys.members_key).unwrap()];
+        let mut records =
+            vec![genesis_auth_record(&genesis, &keys.secrets_key, &keys.members_key).unwrap()];
         records.extend(
             genesis_members_records(&genesis, &keys.members_key, "2026-06-21T00:00:00Z").unwrap(),
         );
@@ -651,8 +652,14 @@ mod tests {
     fn genesis_device_can_decrypt_vault_keys() {
         let keys = generate_vault_keys().unwrap();
         let (genesis, records) = genesis_vault(&keys);
-        assert_eq!(resolve_secrets_key(&records, &genesis).unwrap(), keys.secrets_key);
-        assert_eq!(resolve_members_key(&records, &genesis).unwrap(), keys.members_key);
+        assert_eq!(
+            resolve_secrets_key(&records, &genesis).unwrap(),
+            keys.secrets_key
+        );
+        assert_eq!(
+            resolve_members_key(&records, &genesis).unwrap(),
+            keys.members_key
+        );
     }
 
     #[test]
@@ -666,30 +673,57 @@ mod tests {
         let pending = list_join_requests(&records);
         assert_eq!(pending.len(), 1);
 
-        let (auth_record, join_key, member_records) =
-            approve_join_request(&keys.secrets_key, &keys.members_key, &pending[0], &genesis, &records).unwrap();
+        let (auth_record, join_key, member_records) = approve_join_request(
+            &keys.secrets_key,
+            &keys.members_key,
+            &pending[0],
+            &genesis,
+            &records,
+        )
+        .unwrap();
         records.retain(|record| record.key != join_key);
         records.push(auth_record);
         replace_member_records(&mut records, member_records);
 
-        assert_eq!(resolve_secrets_key(&records, &joiner).unwrap(), keys.secrets_key);
-        assert_eq!(resolve_members_key(&records, &joiner).unwrap(), keys.members_key);
+        assert_eq!(
+            resolve_secrets_key(&records, &joiner).unwrap(),
+            keys.secrets_key
+        );
+        assert_eq!(
+            resolve_members_key(&records, &joiner).unwrap(),
+            keys.members_key
+        );
 
         let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 2);
-        assert!(roster.iter().any(|m| m.device_id == joiner.device_id().to_owned()));
+        assert!(
+            roster
+                .iter()
+                .any(|m| m.device_id == joiner.device_id().to_owned())
+        );
     }
 
     #[test]
     fn device_can_self_enroll_when_keys_already_known() {
         let keys = generate_vault_keys().unwrap();
         let device = DeviceIdentity::generate().unwrap();
-        let (auth, members) =
-            enroll_device_with_keys(&keys.secrets_key, &keys.members_key, &device, "2026-06-21T00:00:00Z").unwrap();
+        let (auth, members) = enroll_device_with_keys(
+            &keys.secrets_key,
+            &keys.members_key,
+            &device,
+            "2026-06-21T00:00:00Z",
+        )
+        .unwrap();
         let mut records = vec![auth];
         records.extend(members);
-        assert_eq!(resolve_secrets_key(&records, &device).unwrap(), keys.secrets_key);
-        assert_eq!(resolve_members_key(&records, &device).unwrap(), keys.members_key);
+        assert_eq!(
+            resolve_secrets_key(&records, &device).unwrap(),
+            keys.secrets_key
+        );
+        assert_eq!(
+            resolve_members_key(&records, &device).unwrap(),
+            keys.members_key
+        );
         let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].auth_id, device.auth_id());
@@ -702,8 +736,14 @@ mod tests {
         let joiner = DeviceIdentity::generate().unwrap();
         records.push(create_join_request_record(&joiner, "2026-06-21T01:00:00Z").unwrap());
         let join = list_join_requests(&records).pop().unwrap();
-        let (auth_record, join_key, member_records) =
-            approve_join_request(&keys.secrets_key, &keys.members_key, &join, &genesis, &records).unwrap();
+        let (auth_record, join_key, member_records) = approve_join_request(
+            &keys.secrets_key,
+            &keys.members_key,
+            &join,
+            &genesis,
+            &records,
+        )
+        .unwrap();
         records.retain(|record| record.key != join_key);
         records.push(auth_record);
         replace_member_records(&mut records, member_records);
@@ -722,8 +762,13 @@ mod tests {
         let keys = generate_vault_keys().unwrap();
         let (genesis, records) = genesis_vault(&keys);
         let joiner = DeviceIdentity::generate().unwrap();
-        let (auth, _) = enroll_device_with_keys(&keys.secrets_key, &keys.members_key, &joiner, "2026-06-21T02:00:00Z")
-            .unwrap();
+        let (auth, _) = enroll_device_with_keys(
+            &keys.secrets_key,
+            &keys.members_key,
+            &joiner,
+            "2026-06-21T02:00:00Z",
+        )
+        .unwrap();
         let mut records = records;
         records.push(auth);
 
@@ -888,14 +933,18 @@ mod tests {
         let _ = genesis;
     }
 
-    fn records_to_armored_map(records: &[StoredSecretRecord]) -> std::collections::HashMap<String, String> {
+    fn records_to_armored_map(
+        records: &[StoredSecretRecord],
+    ) -> std::collections::HashMap<String, String> {
         records
             .iter()
             .map(|record| (record.key.clone(), record.value.clone()))
             .collect()
     }
 
-    fn records_from_armored(armored: &std::collections::HashMap<String, String>) -> Vec<StoredSecretRecord> {
+    fn records_from_armored(
+        armored: &std::collections::HashMap<String, String>,
+    ) -> Vec<StoredSecretRecord> {
         armored
             .iter()
             .map(|(key, value)| StoredSecretRecord {

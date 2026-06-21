@@ -412,10 +412,12 @@ not-json
             },
             auth_to_stored_record(AuthYamlRecord {
                 pk_id: auth_id.clone(),
-                secrets_key: "-----BEGIN AGE ENCRYPTED FILE-----\nsecrets\n-----END AGE ENCRYPTED FILE-----"
-                    .to_owned(),
-                members_key: "-----BEGIN AGE ENCRYPTED FILE-----\nmembers\n-----END AGE ENCRYPTED FILE-----"
-                    .to_owned(),
+                secrets_key:
+                    "-----BEGIN AGE ENCRYPTED FILE-----\nsecrets\n-----END AGE ENCRYPTED FILE-----"
+                        .to_owned(),
+                members_key:
+                    "-----BEGIN AGE ENCRYPTED FILE-----\nmembers\n-----END AGE ENCRYPTED FILE-----"
+                        .to_owned(),
             }),
             StoredSecretRecord {
                 key: join_id.to_owned(),

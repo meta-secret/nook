@@ -196,8 +196,7 @@ impl NookVaultManager {
             return sync_result_access_status("new_vault");
         }
 
-        let format =
-            nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let records =
             nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
 
@@ -225,7 +224,8 @@ impl NookVaultManager {
     pub fn list_vault_members(&self) -> Result<js_sys::Array, JsError> {
         let records = self.stored_records_snapshot();
         let members_key = self.members_key.clone();
-        let members = nook_core::resolve_member_roster(&records, &members_key).map_err(NookError::Decryption)?;
+        let members = nook_core::resolve_member_roster(&records, &members_key)
+            .map_err(NookError::Decryption)?;
         let array = js_sys::Array::new();
         for member in members {
             let obj = js_sys::Object::new();
@@ -273,8 +273,7 @@ impl NookVaultManager {
             return Err(NookError::Database("No vault found to join.".to_owned()).into());
         }
 
-        let format =
-            nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let mut records =
             nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
 
@@ -294,8 +293,7 @@ impl NookVaultManager {
         );
 
         self.stored_armored = records_to_armored(&records);
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret)
-            .await?;
+        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
         Ok(())
     }
@@ -316,8 +314,7 @@ impl NookVaultManager {
             return Err(NookError::Database("No vault found to join.".to_owned()).into());
         }
 
-        let format =
-            nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let mut records =
             nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
 
@@ -335,11 +332,11 @@ impl NookVaultManager {
         records.extend(members);
 
         self.stored_armored = records_to_armored(&records);
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret)
-            .await?;
+        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
 
-        let updated = nook_core::serialize_stored(&records, format).map_err(NookError::Encryption)?;
+        let updated =
+            nook_core::serialize_stored(&records, format).map_err(NookError::Encryption)?;
         let (jsonl, armored, resolved_secrets_key, resolved_members_key) =
             load_stored_vault(&updated, &identity)?;
         self.apply_vault_keys(&resolved_secrets_key, &resolved_members_key)?;
@@ -470,17 +467,18 @@ impl NookVaultManager {
 
         self.last_synced_content = content.clone();
 
-        let format =
-            nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let records =
             nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
 
-        Ok(match nook_core::assess_connect_access(&records, &identity) {
-            nook_core::ConnectAccessStatus::Ready => "ready",
-            nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-            nook_core::ConnectAccessStatus::JoinPending => "join_pending",
-        }
-        .to_owned())
+        Ok(
+            match nook_core::assess_connect_access(&records, &identity) {
+                nook_core::ConnectAccessStatus::Ready => "ready",
+                nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
+                nook_core::ConnectAccessStatus::JoinPending => "join_pending",
+            }
+            .to_owned(),
+        )
     }
 
     // Connects to storage (loads, decrypts, and updates session state)
@@ -501,15 +499,16 @@ impl NookVaultManager {
         if content.trim().is_empty() {
             let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
             self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
-            let genesis = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
-                .map_err(NookError::Encryption)?;
+            let genesis =
+                nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
+                    .map_err(NookError::Encryption)?;
             self.stored_armored
                 .insert(genesis.key.clone(), genesis.value);
-            for member in nook_core::genesis_members_records(&identity, &keys.members_key, "genesis")
-                .map_err(NookError::Encryption)?
+            for member in
+                nook_core::genesis_members_records(&identity, &keys.members_key, "genesis")
+                    .map_err(NookError::Encryption)?
             {
-                self.stored_armored
-                    .insert(member.key.clone(), member.value);
+                self.stored_armored.insert(member.key.clone(), member.value);
             }
             self.decrypted_jsonl = String::new();
         } else {
@@ -521,7 +520,8 @@ impl NookVaultManager {
                 return Err(NookError::Database(message).into());
             }
             let _ = self.status_tx.send("DECRYPT_START".to_owned());
-            let (jsonl, armored, secrets_key, members_key) = load_stored_vault(&content, &identity)?;
+            let (jsonl, armored, secrets_key, members_key) =
+                load_stored_vault(&content, &identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             self.decrypted_jsonl = jsonl;
             self.stored_armored = armored;
@@ -530,8 +530,7 @@ impl NookVaultManager {
             self.last_synced_content = content.clone();
         }
 
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret)
-            .await?;
+        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
         if vault_file_missing {
             let _ = self.status_tx.send("GITHUB_INIT_START".to_owned());
@@ -547,13 +546,12 @@ impl NookVaultManager {
     pub async fn initialize_empty(&mut self) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("INITIALIZE_START".to_owned());
         self.decrypted_jsonl = String::new();
-        self.stored_armored
-            .retain(|key, value| {
-                nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
-                    key: key.clone(),
-                    value: value.clone(),
-                })
-            });
+        self.stored_armored.retain(|key, value| {
+            nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
+                key: key.clone(),
+                value: value.clone(),
+            })
+        });
         if self.needs_genesis_persist() {
             let identity = self.device_identity()?;
             let secrets_key = self.secrets_key.clone();
@@ -565,8 +563,7 @@ impl NookVaultManager {
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")
                 .map_err(NookError::Encryption)?
             {
-                self.stored_armored
-                    .insert(member.key.clone(), member.value);
+                self.stored_armored.insert(member.key.clone(), member.value);
             }
         }
         self.save_current_db().await?;
@@ -783,21 +780,9 @@ fn sync_result_access_status(status: &str) -> Result<JsValue, JsError> {
 fn sync_result_session(manager: &NookVaultManager, changed: bool) -> Result<JsValue, JsError> {
     let obj = js_sys::Object::new();
     js_set(&obj, "changed", &JsValue::from_bool(changed))?;
-    js_set(
-        &obj,
-        "secrets",
-        &manager.get_records_as_array()?.into(),
-    )?;
-    js_set(
-        &obj,
-        "pending_joins",
-        &manager.list_pending_joins()?.into(),
-    )?;
-    js_set(
-        &obj,
-        "vault_members",
-        &manager.list_vault_members()?.into(),
-    )?;
+    js_set(&obj, "secrets", &manager.get_records_as_array()?.into())?;
+    js_set(&obj, "pending_joins", &manager.list_pending_joins()?.into())?;
+    js_set(&obj, "vault_members", &manager.list_vault_members()?.into())?;
     Ok(obj.into())
 }
 

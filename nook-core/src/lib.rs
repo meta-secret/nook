@@ -14,19 +14,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub use multi_device::{
-    AuthEnvelopes, DeviceIdentity, JoinRequest, MemberEntry, VaultKeys, VaultMember,
-    MEMBER_RECORD_PREFIX, approve_join_request, auth_record, build_members_records,
-    create_join_request_record, dec_auth_id, dec_auth_id_from_public_key, enroll_device_with_dec,
-    enroll_device_with_keys, ensure_self_in_roster, encrypt_for_recipient, encrypt_member_entry,
-    generate_dec, generate_symmetric_key, generate_vault_keys, genesis_auth_record,
-    genesis_dec_record, genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id,
+    AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
+    MemberEntry, VaultKeys, VaultMember, approve_join_request, assess_connect_access, auth_record,
+    build_members_records, create_join_request_record, dec_auth_id, dec_auth_id_from_public_key,
+    device_is_enrolled, encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec,
+    enroll_device_with_keys, ensure_self_in_roster, explain_connect_blocked, generate_dec,
+    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
+    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id,
     is_join_stored_record, is_members_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
-    merge_remote_join_records, member_from_join, member_stored_key, parse_auth_envelopes,
-    parse_join_request, replace_member_records, resolve_dec, resolve_dek, resolve_member_roster,
-    resolve_members_key, resolve_secrets_key, assess_connect_access, device_is_enrolled, explain_connect_blocked,
-    pending_join_for_device, ConnectAccessStatus,
-    roster_add_member, user_stored_records, vault_has_multi_device_records,
+    member_from_join, member_stored_key, merge_remote_join_records, parse_auth_envelopes,
+    parse_join_request, pending_join_for_device, replace_member_records, resolve_dec, resolve_dek,
+    resolve_member_roster, resolve_members_key, resolve_secrets_key, roster_add_member,
+    user_stored_records, vault_has_multi_device_records,
 };
 
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
