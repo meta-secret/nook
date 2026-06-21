@@ -13,6 +13,15 @@ crate-type = ["cdylib", "rlib"]
 nook-core = { path = "../nook-core" }
 serde_json = "=1.0.150"
 wasm-bindgen = "=0.2.125"
+getrandom = { version = "=0.2.17", features = ["js"] }
+rexie = "0.6.2"
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Headers", "Request", "RequestInit", "RequestMode", "Response", "Window"] }
+base64 = "0.21.7"
+hex = "0.4.3"
+serde = { version = "1.0.228", features = ["derive"] }
 
 [lints]
 workspace = true

@@ -22,6 +22,14 @@ nook-core -> nook-wasm -> nook-web
 - **Layering**: Primitives (shadcn-svelte) ➔ Components ➔ App Shell ➔ UI Logic.
 - **Constraints**: Consumes the generated wasm package in `src/lib/nook-wasm/`. Direct imports of Rust structures must go through bindgen.
 
+## Secret Manager Storage & Encryption Flow
+
+Nook implements a Zero-Knowledge client-side secret manager:
+- **Core Engine:** Encryption and decryption are performed using the `age` format inside `nook-core`.
+- **Database Layout:** The vault is stored as an encrypted JSONL string representation.
+- **Boundary Operations:** The `NookVaultManager` in `nook-wasm` coordinates all state changes. It performs local IndexedDB operations (via `rexie`) and network operations to GitHub (via `web-sys` fetch) directly in Rust/Wasm, keeping the frontend thin and stateless.
+
+
 ---
 
 ## Command Surface & Tooling
