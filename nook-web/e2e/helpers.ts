@@ -49,11 +49,28 @@ const GITHUB_VAULT_PATH = 'nook-vault.yaml'
 
 /** UI actions we control should complete in a couple of seconds. */
 export const UI_TIMEOUT_MS = 5_000
-/** Background vault sync runs every 10s — only use for notification/sync tests. */
-export const NOTIFICATION_TIMEOUT_MS = 15_000
+
+function configuredVaultSyncIntervalMs(): number {
+  const parsed = Number(process.env.VITE_VAULT_SYNC_INTERVAL_MS)
+  if (Number.isFinite(parsed) && parsed >= 250) return parsed
+  return 10_000
+}
+
+function configuredGithubPollIntervalMs(): number {
+  const parsed = Number(process.env.NOOK_GITHUB_POLL_MS)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return 250
+}
+
+/** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
+export const NOTIFICATION_TIMEOUT_MS = Math.max(
+  UI_TIMEOUT_MS,
+  configuredVaultSyncIntervalMs() * 4,
+)
+
 /** GitHub YAML should reflect our write almost immediately in CI. */
 const GITHUB_SYNC_TIMEOUT_MS = 5_000
-const GITHUB_SYNC_INTERVAL_MS = 250
+const GITHUB_SYNC_INTERVAL_MS = configuredGithubPollIntervalMs()
 
 const githubApiHeaders = (pat: string) => ({
   Authorization: `Bearer ${pat}`,

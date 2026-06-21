@@ -56,7 +56,15 @@ export class VaultState {
   lastSyncedAt = $state<SvelteDate | null>(null)
   isSyncing = $state(false)
 
-  static readonly SYNC_INTERVAL_MS = 10_000
+  /** Default 10s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
+  private static syncIntervalMs(): number {
+    const raw = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS
+    const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
+    if (Number.isFinite(parsed) && parsed >= 250) {
+      return parsed
+    }
+    return 10_000
+  }
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
   private syncTimer: ReturnType<typeof setInterval> | null = null
@@ -320,7 +328,7 @@ export class VaultState {
     }
     this.syncTimer = setInterval(() => {
       void this.syncFromStorage()
-    }, VaultState.SYNC_INTERVAL_MS)
+    }, VaultState.syncIntervalMs())
   }
 
   stopVaultSync() {
