@@ -47,11 +47,13 @@ export function createE2eGithubRepoName(): string {
 
 const GITHUB_VAULT_PATH = 'nook-vault.yaml'
 
-/** UI actions we control should complete quickly; long waits hide bugs. */
+/** UI actions we control should complete in a couple of seconds. */
 export const UI_TIMEOUT_MS = 5_000
-/** GitHub API round-trip budget when we just wrote the vault ourselves. */
-const GITHUB_SYNC_TIMEOUT_MS = 10_000
-const GITHUB_SYNC_INTERVAL_MS = 500
+/** Background vault sync runs every 10s — only use for notification/sync tests. */
+export const NOTIFICATION_TIMEOUT_MS = 15_000
+/** GitHub YAML should reflect our write almost immediately in CI. */
+const GITHUB_SYNC_TIMEOUT_MS = 5_000
+const GITHUB_SYNC_INTERVAL_MS = 250
 
 const githubApiHeaders = (pat: string) => ({
   Authorization: `Bearer ${pat}`,
@@ -223,9 +225,9 @@ export async function waitForEngine(page: Page) {
   const button = page
     .getByTestId('unlock-vault-btn')
     .or(page.getByTestId('sign-in-btn'))
-  await expect(button.first()).toBeVisible()
+  await expect(button.first()).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(button.first()).not.toContainText('Loading engine', {
-    timeout: 20_000,
+    timeout: UI_TIMEOUT_MS,
   })
   return button.first()
 }
@@ -236,7 +238,7 @@ async function assertGithubConnected(page: Page) {
     throw new Error(`GitHub connect failed: ${await error.textContent()}`)
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: 90_000,
+    timeout: UI_TIMEOUT_MS,
   })
 }
 
@@ -247,14 +249,16 @@ async function setupGithubProvider(page: Page, pat: string, repoName: string) {
 }
 
 export async function waitForVaultUnlocked(page: Page) {
-  await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function connectLocalVault(page: Page) {
   await page.goto('/')
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
-  ).toBeVisible({ timeout: 20_000 })
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
 
   if (await page.getByTestId('vault-panel').isVisible()) {
     return
@@ -264,7 +268,7 @@ export async function connectLocalVault(page: Page) {
   if (await unlockButton.isVisible()) {
     const autoUnlocked = await page
       .getByTestId('vault-panel')
-      .waitFor({ state: 'visible', timeout: 90_000 })
+      .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
       .then(() => true)
       .catch(() => false)
     if (autoUnlocked) {
@@ -274,16 +278,18 @@ export async function connectLocalVault(page: Page) {
     await button.click()
     await expect(
       page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: 20_000 })
+    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
   } else {
     await page.getByTestId('provider-option-local').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
     await expect(
       page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: 20_000 })
+    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
   }
-  await expect(page.getByTestId('vault-panel')).toBeVisible()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function connectGithubVault(
@@ -297,7 +303,7 @@ export async function connectGithubVault(
   await connectButton.click()
   await expect(
     page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-  ).toContainText('Connected to GitHub', { timeout: 90_000 })
+  ).toContainText('Connected to GitHub', { timeout: UI_TIMEOUT_MS })
   await assertGithubConnected(page)
 }
 
@@ -331,9 +337,11 @@ export async function connectGithubJoinerDevice(
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
-    timeout: 90_000,
+    timeout: UI_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible()
+  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function sendJoinRequest(
@@ -344,7 +352,7 @@ export async function sendJoinRequest(
   await page.getByTestId('join-enrollment-confirm').click()
   await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
     'Waiting for approval',
-    { timeout: 45_000 },
+    { timeout: UI_TIMEOUT_MS },
   )
 
   const snapshot = await waitForVaultYaml(
@@ -400,7 +408,7 @@ export async function unlockGithubVault(page: Page) {
   await page.goto('/')
   const vaultPanel = page.getByTestId('vault-panel')
   const autoUnlocked = await vaultPanel
-    .waitFor({ state: 'visible', timeout: 90_000 })
+    .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
     .then(() => true)
     .catch(() => false)
   if (autoUnlocked) {
@@ -412,7 +420,7 @@ export async function unlockGithubVault(page: Page) {
     await unlock.click()
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: 90_000,
+    timeout: UI_TIMEOUT_MS,
   })
 }
 
@@ -426,7 +434,9 @@ export async function openStorageSettings(page: Page) {
 /** Reconnect after reload — auto-unlocks when a saved provider exists. */
 export async function reconnectGithubVault(page: Page) {
   await page.goto('/')
-  await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function assertVaultReady(page: Page) {
@@ -441,11 +451,11 @@ export async function addSecret(page: Page, key: string, value: string) {
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await expect(row).toBeVisible({ timeout: 90_000 })
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(
     page.getByTestId('app-success').or(page.getByTestId('connect-success')),
   )
-    .toContainText('Secret saved successfully', { timeout: 5_000 })
+    .toContainText('Secret saved successfully', { timeout: UI_TIMEOUT_MS })
     .catch(() => undefined)
 }
 
@@ -457,25 +467,16 @@ export async function revealSecretValue(page: Page, key: string) {
   return (await code.textContent()) ?? ''
 }
 
-export async function waitForSecretOnDevice(
-  page: Page,
-  key: string,
-  timeoutMs = 60_000,
-) {
+export async function waitForSecretOnDevice(page: Page, key: string) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (await row.isVisible()) {
-      return
-    }
-    await page.reload()
-    await page.waitForLoadState('domcontentloaded')
-    if (!(await page.getByTestId('vault-panel').isVisible())) {
-      await waitForVaultUnlocked(page)
-    }
-    await sleep(2_000)
+  if (await row.isVisible()) {
+    return
   }
-  await expect(row).toBeVisible({ timeout: 5_000 })
+  const refresh = page.getByTestId('vault-sync-refresh-btn')
+  if (await refresh.isVisible()) {
+    await refresh.click()
+  }
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 export async function deleteSecret(page: Page, key: string) {
@@ -483,7 +484,7 @@ export async function deleteSecret(page: Page, key: string) {
   await row.getByRole('button', { name: 'Delete secret' }).click()
   await expect(page.getByTestId('app-success')).toContainText(
     'Secret deleted successfully',
-    { timeout: 45_000 },
+    { timeout: UI_TIMEOUT_MS },
   )
   await expect(row).toHaveCount(0)
 }

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { waitForEngine } from './helpers'
+import { UI_TIMEOUT_MS, waitForEngine } from './helpers'
 
 test.describe('vault connect flow', () => {
   test('connects local vault and opens vault directly', async ({ page }) => {
@@ -11,7 +11,7 @@ test.describe('vault connect flow', () => {
 
     await expect(
       page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: 20_000 })
+    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
   })
@@ -40,7 +40,7 @@ test.describe('vault connect flow', () => {
 
     await expect(
       page.getByTestId('connect-error').or(page.getByTestId('vault-panel')),
-    ).toBeVisible({ timeout: 20_000 })
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
   })
 
   test('shows login gate on first visit', async ({ page }) => {
@@ -57,12 +57,12 @@ test.describe('vault connect flow', () => {
     await page.getByTestId('provider-option-local').click()
     await (await waitForEngine(page)).click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: 20_000,
+      timeout: UI_TIMEOUT_MS,
     })
 
     await page.reload()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: 20_000,
+      timeout: UI_TIMEOUT_MS,
     })
   })
 })

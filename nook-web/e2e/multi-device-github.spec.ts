@@ -18,6 +18,7 @@ import {
   unlockGithubVault,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
+  NOTIFICATION_TIMEOUT_MS,
   waitForSecretOnDevice,
   waitForVaultYaml,
 } from './helpers'
@@ -27,7 +28,7 @@ const describeMultiDevice = githubPat ? test.describe : test.describe.skip
 
 describeMultiDevice('multi-device github vault', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(180_000)
+  test.setTimeout(60_000)
 
   let deviceA: Page
   let deviceB: Page
@@ -41,7 +42,7 @@ describeMultiDevice('multi-device github vault', () => {
   const joinerSecretValue = 'joiner-device-password-пароль'
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(240_000)
+    test.setTimeout(60_000)
     e2eRepo = createE2eGithubRepoName()
     console.log(`[e2e] multi-device repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
@@ -187,7 +188,7 @@ describeMultiDevice('multi-device github vault', () => {
 
 describeMultiDevice('multi-device approve from settings', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(180_000)
+  test.setTimeout(60_000)
 
   let deviceA: Page
   let deviceB: Page
@@ -196,7 +197,7 @@ describeMultiDevice('multi-device approve from settings', () => {
   let e2eRepo: string
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(240_000)
+    test.setTimeout(60_000)
     e2eRepo = createE2eGithubRepoName()
     console.log(`[e2e] multi-device settings repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
@@ -240,7 +241,7 @@ describeMultiDevice('multi-device approve from settings', () => {
 
 describeMultiDevice('multi-device join background sync', () => {
   test.describe.configure({ mode: 'serial' })
-  test.setTimeout(180_000)
+  test.setTimeout(60_000)
 
   let deviceA: Page
   let deviceB: Page
@@ -249,7 +250,7 @@ describeMultiDevice('multi-device join background sync', () => {
   let e2eRepo: string
 
   test.beforeAll(async ({ browser }) => {
-    test.setTimeout(240_000)
+    test.setTimeout(60_000)
     e2eRepo = createE2eGithubRepoName()
     console.log(`[e2e] join background sync repo: ${e2eRepo}`)
     await resetGithubVault(githubPat, e2eRepo)
@@ -281,10 +282,10 @@ describeMultiDevice('multi-device join background sync', () => {
     )
 
     await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible({
-      timeout: 25_000,
+      timeout: NOTIFICATION_TIMEOUT_MS,
     })
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: 5_000,
+      timeout: UI_TIMEOUT_MS,
     })
     await expect(
       deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
