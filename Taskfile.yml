@@ -225,9 +225,13 @@ tasks:
       - cd nook-web && bun run check
 
   _web:test:
-    desc: Run web tests.
+    desc: Run web unit and e2e tests.
+    deps:
+      - _wasm:build
     cmds:
       - cd nook-web && bun run test
+      - cd nook-web && bunx playwright install chromium
+      - cd nook-web && bun run test:e2e
 
   _web:lint:
     desc: Lint the web app.

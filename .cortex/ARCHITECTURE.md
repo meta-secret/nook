@@ -1,33 +1,134 @@
-# Nook Architecture
+# Nook System Architecture Specification
 
-Nook is organized as a monorepo with a one-way dependency flow:
-```text
-nook-core -> nook-wasm -> nook-web
-```
-
-## Architectural Domains
-
-### 1. nook-core (Crate)
-- **Role**: Domain Logic & Pure Rust.
-- **Layering**: Types ➔ Engine ➔ Core.
-- **Constraints**: No Wasm-bindgen or Web API dependencies. Completely portable and pure Rust.
-
-### 2. nook-wasm (Crate)
-- **Role**: JavaScript / Wasm Boundary Layer.
-- **Layering**: Bindings ➔ Conversions ➔ Wasm Exports.
-- **Constraints**: Thin translation layer. All domain logic remains in `nook-core`. Data passed across the boundary must be parsed and verified.
-
-### 3. nook-web (Svelte/Vite App)
-- **Role**: User Interface.
-- **Layering**: Primitives (shadcn-svelte) ➔ Components ➔ App Shell ➔ UI Logic.
-- **Constraints**: Consumes the generated wasm package in `src/lib/nook-wasm/`. Direct imports of Rust structures must go through bindgen.
+This document provides a comprehensive guide to Nook's architecture, package boundaries, data flows, and development environments. It serves as the primary technical context map for both human developers and autonomous AI coding agents.
 
 ---
 
-## Command Surface & Tooling
+## 1. Monorepo Structure & Dependency flow
 
-All developer environment commands run through [Taskfile.yml](/Users/bynull/coding/crypto/nook/Taskfile.yml) inside the containerized Docker environment.
-- Build image: Docker Buildx Bake (`docker-bake.hcl`).
-- Runner: Bun (`eslint`, `prettier`, `svelte-check`, `vitest`, `vite`).
-- Rust Toolchain: `1.96-bookworm`.
-- wasm-opt: Version 122+ to support WebAssembly reference types and avoid `table.grow` runtime issues.
+Nook is built as a modular monorepo using a strict, uni-directional dependency flow. This prevents architectural drift, guarantees separation of concerns, and isolates WebAssembly bindings from core domain code.
+
+```
++-------------------------------------------------------------+
+|                         nook-web                            |
+|             (Vite + Svelte 5 + TypeScript UI)               |
++-------------------------------------------------------------+
+                               |
+                               v (consumes generated bindings)
++-------------------------------------------------------------+
+|                         nook-wasm                           |
+|       (Rust-Wasm Bridge: I/O, session, wasm-bindgen)        |
++-------------------------------------------------------------+
+                               |
+                               v (core domain dependencies)
++-------------------------------------------------------------+
+|                         nook-core                           |
+|     (Pure Rust: crypto, formats, validation, passwords)       |
++-------------------------------------------------------------+
+```
+
+### Dependency Enforcements
+1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
+2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`.
+
+---
+
+## 2. Package Responsibilities & Layers
+
+### A. `nook-core` (The Domain Core)
+- **`Database`:** In-memory JSONL session (sorted KV records).
+- **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load.
+- **`vault_crypto`:** Session-scoped age encrypt/decrypt with cached scrypt identity/recipient.
+- **`validation`:** Storage mode, PAT, secret field validation; label search filter.
+- **`password`:** CSPRNG password generation via `getrandom`.
+- **Tests:** Unit tests in each module + `tests/vault_workflow.rs` for incremental save workflows.
+
+### B. `nook-wasm` (The Bridge Layer)
+- **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `VaultCrypto`, GitHub SHA.
+- **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
+- **Exported methods:** `connect`, `add_secret`, `delete_secret`, `filter_secrets`, `generate_password`, etc.
+- **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
+
+### C. `nook-web` (The Presentation Layer)
+- **Svelte 5 components:** Layout, forms, vault list UI.
+- **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, `localStorage` prefs.
+- **`nook.ts`:** WASM loader + thin record mapping.
+- **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
+
+---
+
+## 3. Detailed Data Flow & Execution Model
+
+### Connect
+```
+[Svelte] → VaultState.loadDb()
+         → NookVaultManager.connect(mode, pat)
+              → nook-core: validate_storage_mode, validate_github_pat
+              → load/create vault_secret_key (IndexedDB)
+              → VaultCrypto::new
+              → load nook-vault.yaml (IDB or GitHub)
+              → deserialize_stored → stored_armored cache
+              → decrypt values → decrypted_jsonl session
+```
+
+### Add Secret (incremental save)
+```
+[Svelte] → add_secret(key, value)
+         → validate_secret_label, validate_secret_value
+         → update decrypted_jsonl (Database)
+         → encrypt_value ONLY for this key → stored_armored
+         → serialize_stored(Yaml) from cache (no full re-encrypt)
+         → write encrypted_db / GitHub PUT
+```
+
+### Search
+```
+[Svelte] → filter_secrets(query)  [sync WASM call]
+         → nook-core::filter_secrets on session records
+         → UI re-renders via secretsCount reactivity trigger
+```
+
+---
+
+## 4. Storage & Cryptographic Specs
+
+| Layer | Format | Location |
+|-------|--------|----------|
+| Session (plaintext) | JSONL lines | WASM `decrypted_jsonl` only |
+| On-disk (ciphertext values) | YAML `secrets:` list | `nook-vault.yaml` / `encrypted_db` |
+| Encryption key | Hex string | IndexedDB `vault_secret_key` only |
+
+- **Per-record age armor** for values; labels plaintext in YAML.
+- **Legacy JSONL vault files** load via `from_stored_auto`; new writes use YAML.
+- **GitHub:** UTF-8 YAML file, base64 in API payloads (not hex blob).
+- **IndexedDB `encrypted_db`:** UTF-8 YAML text (not hex).
+
+---
+
+## 5. Boundary Error Propagation Model
+
+- All fallible WASM exports return `Result<T, wasm_bindgen::JsError>`.
+- `NookError` maps to JS `Error` with message string.
+- Svelte catches in `try/catch` on `VaultState` methods.
+
+---
+
+## 6. Testing Strategy
+
+| Package | Tests |
+|---------|-------|
+| `nook-core` | `cargo test -p nook-core` — unit + integration (`tests/vault_workflow.rs`) |
+| `nook-web` | Playwright e2e (`npm run test:e2e`); no vault domain unit tests in TS |
+| `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
+
+Domain logic changes **must** add or update Rust tests before merge.
+
+---
+
+## 7. The Engineering Harness
+
+All development tasks should run containerized via `Taskfile`:
+
+- **Build Target:** `wasm32-unknown-unknown` via `wasm-pack` → `nook-web/src/lib/nook-wasm/`
+- **Optimization:** `wasm-opt` v122+ in production pipeline
+- **Verify:** `task check` (fmt, clippy, `cargo test`, svelte-check, eslint, vitest, vite build)

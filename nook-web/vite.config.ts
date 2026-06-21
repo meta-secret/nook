@@ -2,9 +2,12 @@ import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 
+const viteBase =
+  typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
+
 // https://vite.dev/config/
 export default defineConfig({
-  base: Bun.env.VITE_BASE ?? '/',
+  base: viteBase ?? '/',
   plugins: [tailwindcss(), svelte()],
   resolve: {
     alias: {

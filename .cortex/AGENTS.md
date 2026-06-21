@@ -13,6 +13,7 @@ This is the system of record and entry point for all AI agents working in this r
 ## 3. Product Specifications (`product-specs/`)
 * [product-specs/index.md](product-specs/index.md) — Index of product specifications.
 * [product-specs/monorepo-setup.md](product-specs/monorepo-setup.md) — Monorepo setup spec.
+* [product-specs/password-manager.md](product-specs/password-manager.md) — Password Manager spec.
 
 ## 4. Execution Plans (`exec-plans/`)
 * [exec-plans/tech-debt-tracker.md](exec-plans/tech-debt-tracker.md) — Tech debt and refactoring tasks.

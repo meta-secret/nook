@@ -1,159 +1,200 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    Boxes,
-    CheckCircle2,
-    GitBranch,
-    Layers3,
-    TriangleAlert,
-  } from '@lucide/svelte'
-  import { Badge } from '$lib/components/ui/badge'
+  import { Lock, ShieldCheck, TriangleAlert, Settings, X } from '@lucide/svelte'
+  import { VaultState } from '$lib/vault.svelte'
+  import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import SecretVault from '$lib/components/SecretVault.svelte'
   import { Button } from '$lib/components/ui/button'
-  import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-  } from '$lib/components/ui/card'
-  import { Skeleton } from '$lib/components/ui/skeleton'
-  import { getProjectInitials } from '$lib/project-format'
-  import { loadNookSnapshot, type NookSnapshot } from '$lib/nook'
 
-  let snapshot: NookSnapshot | null = null
-  let loadError = ''
+  const vault = new VaultState()
 
   onMount(async () => {
-    try {
-      snapshot = await loadNookSnapshot()
-    } catch (error) {
-      loadError =
-        error instanceof Error ? error.message : 'Unable to load nook-wasm.'
-    }
+    await vault.init()
   })
+
+  async function handleConnect() {
+    await vault.loadDb()
+    if (vault.isAuthenticated) {
+      vault.closeSettings()
+    }
+  }
+
+  const shellWidth = 'max-w-xl'
 </script>
 
-<main class="min-h-svh bg-background">
-  <section
-    class="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:px-8"
-    aria-labelledby="page-title"
+<main class="dark min-h-svh bg-background text-foreground pb-16">
+  <header
+    class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="flex flex-col gap-6 border-b pb-8 md:flex-row md:items-end md:justify-between"
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {shellWidth}"
     >
-      <div class="space-y-5">
-        <Badge variant="outline">nook monorepo</Badge>
-        <div class="space-y-4">
-          <h1
-            id="page-title"
-            class="max-w-3xl text-4xl leading-tight font-semibold tracking-normal text-balance md:text-6xl"
-          >
-            Rust core, wasm bridge, Svelte surface.
-          </h1>
-          <p class="max-w-2xl text-base text-muted-foreground md:text-lg">
-            {snapshot?.summary ??
-              'Loading the wasm package generated from nook-core...'}
-          </p>
+      <div class="flex min-w-0 items-center gap-2.5">
+        <div
+          class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-accent-foreground"
+        >
+          <Lock class="size-4" />
         </div>
-
-        {#if loadError}
-          <div
-            class="flex w-fit max-w-full items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            role="alert"
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="text-base font-semibold tracking-tight text-foreground"
+            >nook</span
           >
-            <TriangleAlert class="size-4 shrink-0" />
-            <span>{loadError}</span>
-          </div>
+          <span
+            class="shrink-0 text-[10px] font-medium text-muted-foreground border border-border px-1 py-0.5 rounded-sm"
+            >v0.1.0</span
+          >
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {#if vault.isAuthenticated}
+          {#if vault.settingsOpen}
+            <Button
+              variant="outline"
+              size="sm"
+              class="border-border"
+              data-testid="storage-settings-close"
+              onclick={() => vault.closeSettings()}
+            >
+              Back to vault
+            </Button>
+          {:else}
+            <button
+              type="button"
+              onclick={() => vault.openSettings()}
+              class="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              data-testid="storage-status-chip"
+            >
+              {vault.storageMode === 'github' ? 'GitHub sync' : 'Local storage'}
+            </button>
+            <Button
+              variant="outline"
+              size="icon"
+              class="shrink-0 border-border"
+              aria-label="Storage settings"
+              data-testid="storage-settings-btn"
+              onclick={() => vault.openSettings()}
+            >
+              <Settings class="size-4" />
+            </Button>
+          {/if}
+        {:else}
+          <span
+            class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground"
+            data-testid="welcome-header-hint"
+          >
+            <ShieldCheck class="size-3 shrink-0" />
+            <span class="hidden sm:inline">Encrypted in your browser</span>
+            <span class="sm:hidden">Encrypted locally</span>
+          </span>
         {/if}
       </div>
+    </div>
+  </header>
 
-      <div class="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm">
-          <GitBranch />
-          Taskfile
-        </Button>
-        <Button size="sm">
-          <CheckCircle2 />
-          {snapshot ? 'wasm ready' : 'initializing'}
-        </Button>
+  <div
+    class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
+      ? 'py-8'
+      : 'py-5 sm:py-6'}"
+  >
+    {#if vault.errorMsg && vault.isAuthenticated}
+      <div
+        class="mb-6 flex items-start gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive animate-in fade-in slide-in-from-top-2"
+        role="alert"
+      >
+        <TriangleAlert class="size-5 shrink-0 text-destructive mt-0.5" />
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold">Action Failed</p>
+          <p class="mt-1 text-destructive/90">{vault.errorMsg}</p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-md p-1 text-destructive/70 transition-colors hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Dismiss error"
+          data-testid="dismiss-error-btn"
+          onclick={() => vault.dismissError()}
+        >
+          <X class="size-4" />
+        </button>
       </div>
-    </div>
+    {/if}
 
-    <div class="grid gap-4 md:grid-cols-3" aria-label="Workspace status">
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2 text-base">
-            <Boxes class="size-4" />
-            Projects
-          </CardTitle>
-          <CardDescription>Crates and web app in this workspace</CardDescription
-          >
-        </CardHeader>
-        <CardContent class="text-3xl font-semibold">
-          {snapshot?.projects.length ?? 0}
-        </CardContent>
-      </Card>
+    {#if vault.successMsg && vault.isAuthenticated}
+      <div
+        class="mb-6 flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/10 p-4 text-sm text-primary animate-in fade-in slide-in-from-top-2"
+        role="status"
+        data-testid="app-success"
+      >
+        <ShieldCheck class="size-5 shrink-0 text-primary mt-0.5" />
+        <div class="flex-1 min-w-0">
+          <p class="font-semibold">Success</p>
+          <p class="mt-1 text-primary/90">{vault.successMsg}</p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-md p-1 text-primary/70 transition-colors hover:bg-primary/10 hover:text-primary"
+          aria-label="Dismiss success"
+          data-testid="dismiss-success-btn"
+          onclick={() => vault.dismissSuccess()}
+        >
+          <X class="size-4" />
+        </button>
+      </div>
+    {/if}
 
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2 text-base">
-            <Layers3 class="size-4" />
-            Dependency Flow
-          </CardTitle>
-          <CardDescription>nook-core to nook-wasm to nook-web</CardDescription>
-        </CardHeader>
-        <CardContent class="text-3xl font-semibold">1-way</CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle class="flex items-center gap-2 text-base">
-            <CheckCircle2 class="size-4" />
-            Runtime
-          </CardTitle>
-          <CardDescription
-            >Loaded from the generated wasm package</CardDescription
-          >
-        </CardHeader>
-        <CardContent class="text-3xl font-semibold">
-          {snapshot ? 'ready' : 'loading'}
-        </CardContent>
-      </Card>
-    </div>
-
-    <section class="grid gap-4 md:grid-cols-3" aria-label="Workspace projects">
-      {#each snapshot?.projects ?? [] as project (project.name)}
-        <Card class="min-h-56">
-          <CardHeader>
-            <div
-              class="mb-6 grid size-12 place-items-center rounded-md bg-primary text-sm font-semibold text-primary-foreground"
-            >
-              {getProjectInitials(project.name)}
-            </div>
-            <CardTitle>{project.name}</CardTitle>
-            <CardDescription>{project.purpose}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Badge variant="secondary">{project.language}</Badge>
-          </CardContent>
-        </Card>
-      {/each}
-
-      {#if !snapshot && !loadError}
-        {#each [0, 1, 2] as index (index)}
-          <Card class="min-h-56" aria-hidden="true">
-            <CardHeader>
-              <Skeleton class="mb-6 size-12" />
-              <Skeleton class="h-5 w-28" />
-              <Skeleton class="h-4 w-full" />
-              <Skeleton class="h-4 w-4/5" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton class="h-6 w-20" />
-            </CardContent>
-          </Card>
-        {/each}
+    {#if vault.isAuthenticated}
+      {#if vault.settingsOpen}
+        <div data-testid="storage-settings-panel" class="w-full">
+          <AuthStorage
+            bind:storageMode={vault.storageMode}
+            bind:githubPat={vault.githubPat}
+            variant="panel"
+            isAuthenticated={vault.isAuthenticated}
+            isVerifying={vault.isVerifying}
+            isSaving={vault.isSaving}
+            isInitializing={vault.isInitializing}
+            errorMsg={vault.errorMsg}
+            successMsg={vault.successMsg}
+            secretsCount={vault.secrets.length}
+            onConnect={handleConnect}
+            onInitializeEmpty={() => vault.handleInitializeEmpty()}
+          />
+        </div>
+      {:else}
+        <SecretVault
+          isSaving={vault.isSaving}
+          secretsCount={vault.secrets.length}
+          storageMode={vault.storageMode}
+          onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
+          onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
+          onFilterSecrets={(query) => vault.filterSecrets(query)}
+          onGeneratePassword={(length, lowercase, uppercase, numbers, symbols) =>
+            vault.generatePassword(
+              length,
+              lowercase,
+              uppercase,
+              numbers,
+              symbols,
+            )}
+        />
       {/if}
-    </section>
-  </section>
+    {:else}
+      <div data-testid="vault-welcome" class="w-full">
+        <AuthStorage
+          bind:storageMode={vault.storageMode}
+          bind:githubPat={vault.githubPat}
+          variant="welcome"
+          isAuthenticated={vault.isAuthenticated}
+          isVerifying={vault.isVerifying}
+          isSaving={vault.isSaving}
+          isInitializing={vault.isInitializing}
+          errorMsg={vault.errorMsg}
+          successMsg={vault.successMsg}
+          secretsCount={vault.secrets.length}
+          onConnect={handleConnect}
+          onInitializeEmpty={() => vault.handleInitializeEmpty()}
+        />
+      </div>
+    {/if}
+  </div>
 </main>
