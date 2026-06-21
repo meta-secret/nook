@@ -1,5 +1,6 @@
 import {
   getVaultManager,
+  isoTimestamp,
   mapVaultSyncResult,
   mapWasmRecords,
   mapWasmJoinRequests,
@@ -67,7 +68,7 @@ export class VaultState {
       await this.manager.request_vault_access(
         this.storageMode,
         this.githubPat,
-        new Date().toISOString(),
+        isoTimestamp(),
       )
       this.saveConfig()
       await this.refreshDeviceState()
@@ -230,7 +231,7 @@ export class VaultState {
       await this.manager.request_vault_access(
         this.storageMode,
         this.githubPat,
-        new Date().toISOString(),
+        isoTimestamp(),
       )
       this.saveConfig()
       await this.refreshDeviceState()

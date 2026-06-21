@@ -1,5 +1,9 @@
 import type { NookVaultManager, NookSecretRecord } from './nook-wasm/nook_wasm'
 
+export function isoTimestamp(): string {
+  return new Date().toISOString()
+}
+
 export type SecretRecord = {
   key: string
   value: string
