@@ -904,6 +904,14 @@ mod tests {
     }
 
     #[test]
+    fn vault_without_auth_records_is_not_multi_device() {
+        let joiner = DeviceIdentity::generate().unwrap();
+        let join = create_join_request_record(&joiner, "2026-01-01T00:00:00Z").unwrap();
+        let records = vec![join];
+        assert!(!vault_has_multi_device_records(&records));
+    }
+
+    #[test]
     fn assess_connect_access_when_join_pending() {
         let keys = generate_vault_keys().unwrap();
         let (genesis, mut records) = genesis_vault(&keys);

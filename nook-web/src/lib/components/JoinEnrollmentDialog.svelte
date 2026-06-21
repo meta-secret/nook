@@ -24,6 +24,7 @@
     enrollMembersKey = $bindable(''),
     onConfirm,
     onEnrollWithKeys,
+    onCreateFreshVault,
     onCancel,
   }: {
     open: boolean
@@ -34,6 +35,7 @@
     enrollMembersKey?: string
     onConfirm?: () => void | Promise<void>
     onEnrollWithKeys?: () => void | Promise<void>
+    onCreateFreshVault?: () => void | Promise<void>
     onCancel: () => void
   } = $props()
 
@@ -221,6 +223,35 @@
               {/if}
             </div>
           {/if}
+
+          {#if onCreateFreshVault}
+            <div
+              class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
+            >
+              <p class="text-xs font-medium text-foreground">
+                Setting up from scratch?
+              </p>
+              <p class="text-[11px] leading-relaxed text-muted-foreground">
+                If you cleared this browser and remote storage, create a new
+                vault here. This replaces any existing vault file with a fresh
+                one for this browser.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                class="w-full border-border"
+                disabled={isBusy}
+                data-testid="create-fresh-vault-btn"
+                onclick={() => void onCreateFreshVault()}
+              >
+                {#if isBusy}
+                  Creating…
+                {:else}
+                  Create new vault
+                {/if}
+              </Button>
+            </div>
+          {/if}
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
             Open Nook on an enrolled device, approve this browser in
@@ -228,7 +259,7 @@
               >Storage & devices</strong
             >, then unlock again here.
           </p>
-          <div class="flex justify-end">
+          <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               data-testid="join-enrollment-dismiss"
@@ -237,6 +268,33 @@
               Got it
             </Button>
           </div>
+          {#if onCreateFreshVault}
+            <div
+              class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
+            >
+              <p class="text-xs font-medium text-foreground">
+                Starting over instead?
+              </p>
+              <p class="text-[11px] leading-relaxed text-muted-foreground">
+                Create a new vault if you reset storage and no longer have an
+                enrolled device to approve this browser.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                class="w-full border-border"
+                disabled={isBusy}
+                data-testid="create-fresh-vault-btn"
+                onclick={() => void onCreateFreshVault()}
+              >
+                {#if isBusy}
+                  Creating…
+                {:else}
+                  Create new vault
+                {/if}
+              </Button>
+            </div>
+          {/if}
         {/if}
       </CardContent>
     </Card>

@@ -200,19 +200,11 @@ impl NookVaultManager {
             return sync_result_access_status("new_vault");
         }
 
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-        let records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
-
         if self.members_key.is_empty() {
             self.last_synced_content = content.clone();
             let identity = self.ensure_device_identity().await?;
-            let status = match nook_core::assess_connect_access(&records, &identity) {
-                nook_core::ConnectAccessStatus::Ready => "ready",
-                nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-                nook_core::ConnectAccessStatus::JoinPending => "join_pending",
-            };
-            return sync_result_access_status(status);
+            let status = access_status_for_vault_content(&content, &identity)?;
+            return sync_result_access_status(&status);
         }
 
         let identity = self.device_identity()?;
@@ -470,19 +462,7 @@ impl NookVaultManager {
         }
 
         self.last_synced_content = content.clone();
-
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-        let records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
-
-        Ok(
-            match nook_core::assess_connect_access(&records, &identity) {
-                nook_core::ConnectAccessStatus::Ready => "ready",
-                nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-                nook_core::ConnectAccessStatus::JoinPending => "join_pending",
-            }
-            .to_owned(),
-        )
+        Ok(access_status_for_vault_content(&content, &identity)?)
     }
 
     // Connects to storage (loads, decrypts, and updates session state)
@@ -492,6 +472,24 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
     ) -> Result<js_sys::Array, JsError> {
+        self.connect_internal(storage_mode, github_pat, false).await
+    }
+
+    /// Replace storage with a fresh genesis vault for this device.
+    pub async fn connect_fresh(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+    ) -> Result<js_sys::Array, JsError> {
+        self.connect_internal(storage_mode, github_pat, true).await
+    }
+
+    async fn connect_internal(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        force_genesis: bool,
+    ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat).await?;
         let identity = self.ensure_device_identity().await?;
@@ -499,22 +497,10 @@ impl NookVaultManager {
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
-        self.stored_armored.clear();
-        if content.trim().is_empty() {
-            let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
-            self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
-            let genesis =
-                nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
-                    .map_err(NookError::Encryption)?;
-            self.stored_armored
-                .insert(genesis.key.clone(), genesis.value);
-            for member in
-                nook_core::genesis_members_records(&identity, &keys.members_key, "genesis")
-                    .map_err(NookError::Encryption)?
-            {
-                self.stored_armored.insert(member.key.clone(), member.value);
-            }
-            self.decrypted_jsonl = String::new();
+        let use_genesis = content_requires_genesis(&content, force_genesis)?;
+
+        if use_genesis {
+            self.initialize_genesis_vault(&identity)?;
         } else {
             let format =
                 nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
@@ -536,7 +522,7 @@ impl NookVaultManager {
 
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
-        if vault_file_missing {
+        if use_genesis || vault_file_missing {
             let _ = self.status_tx.send("GITHUB_INIT_START".to_owned());
             self.save_current_db().await?;
             let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
@@ -544,6 +530,28 @@ impl NookVaultManager {
 
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
+    }
+
+    fn initialize_genesis_vault(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<(), NookError> {
+        self.stored_armored.clear();
+        let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
+        self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
+        let genesis =
+            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)
+                .map_err(NookError::Encryption)?;
+        self.stored_armored
+            .insert(genesis.key.clone(), genesis.value);
+        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")
+            .map_err(NookError::Encryption)?
+        {
+            self.stored_armored.insert(member.key.clone(), member.value);
+        }
+        self.decrypted_jsonl = String::new();
+        self.last_synced_content.clear();
+        Ok(())
     }
 
     // Initialize an empty database
@@ -763,6 +771,42 @@ fn records_to_armored(records: &[nook_core::StoredSecretRecord]) -> HashMap<Stri
         .iter()
         .map(|record| (record.key.clone(), record.value.clone()))
         .collect()
+}
+
+fn content_requires_genesis(content: &str, force_genesis: bool) -> Result<bool, NookError> {
+    if force_genesis {
+        return Ok(true);
+    }
+    if content.trim().is_empty() {
+        return Ok(true);
+    }
+    let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
+    let records =
+        nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    Ok(!nook_core::vault_has_multi_device_records(&records))
+}
+
+fn access_status_for_vault_content(
+    content: &str,
+    identity: &nook_core::DeviceIdentity,
+) -> Result<String, NookError> {
+    if content.trim().is_empty() {
+        return Ok("new_vault".to_owned());
+    }
+    let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
+    let records =
+        nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
+    if !nook_core::vault_has_multi_device_records(&records) {
+        return Ok("new_vault".to_owned());
+    }
+    Ok(
+        match nook_core::assess_connect_access(&records, identity) {
+            nook_core::ConnectAccessStatus::Ready => "ready",
+            nook_core::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
+            nook_core::ConnectAccessStatus::JoinPending => "join_pending",
+        }
+        .to_owned(),
+    )
 }
 
 fn sync_result_unchanged() -> Result<JsValue, JsError> {

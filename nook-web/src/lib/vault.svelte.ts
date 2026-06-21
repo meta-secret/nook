@@ -363,10 +363,7 @@ export class VaultState {
 
     try {
       const raw = await this.enqueueStorage(() =>
-        this.manager!.sync_vault_from_storage(
-          this.storageMode,
-          this.githubPat,
-        ),
+        this.manager!.sync_vault_from_storage(this.storageMode, this.githubPat),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
     } catch {
@@ -450,6 +447,49 @@ export class VaultState {
         e instanceof Error ? e.message : 'Failed to approve join request.'
     } finally {
       this.isSaving = false
+    }
+  }
+
+  async createFreshVault() {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isVerifying = true
+    try {
+      await this.initDeviceIdentity()
+      const rawRecords = await this.enqueueStorage(async () => {
+        const connectPromise = this.manager!.connect_fresh(
+          this.storageMode,
+          this.githubPat,
+        )
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Connection timed out. Check your PAT, network, and try again.',
+                ),
+              ),
+            30_000,
+          )
+        })
+        return (await Promise.race([
+          connectPromise,
+          timeoutPromise,
+        ])) as NookSecretRecord[]
+      })
+      this.secrets = mapWasmRecords(rawRecords)
+      this.isAuthenticated = true
+      await this.ensureProviderSaved()
+      this.hydrateMultiDeviceState()
+      this.joinEnrollmentPrompt = 'none'
+      this.showSuccess('Created a new vault on this device.')
+    } catch (e: unknown) {
+      this.isAuthenticated = false
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to create a new vault.'
+    } finally {
+      this.isVerifying = false
     }
   }
 

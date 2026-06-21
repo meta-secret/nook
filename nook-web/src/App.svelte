@@ -239,6 +239,7 @@
     bind:enrollMembersKey={vault.enrollMembersKey}
     onConfirm={() => vault.confirmJoinRequest()}
     onEnrollWithKeys={() => vault.enrollAndConnect()}
+    onCreateFreshVault={() => vault.createFreshVault()}
     onCancel={() => vault.dismissJoinEnrollment()}
   />
 </main>
