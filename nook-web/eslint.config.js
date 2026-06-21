@@ -16,6 +16,12 @@ export default [
     },
   },
   {
+    files: ['**/*.ts', '**/*.svelte.ts'],
+    languageOptions: {
+      parser: ts.parser,
+    },
+  },
+  {
     files: ['**/*.svelte'],
     languageOptions: {
       parserOptions: {

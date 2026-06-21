@@ -7,10 +7,10 @@ description.workspace = true
 repository.workspace = true
 
 [dependencies]
-serde = { version = "=1.0.228", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 age = "0.11.3"
-hex = "=0.4.3"
-serde_json = "=1.0.150"
+hex = "0.4.3"
+serde_json = "1.0.150"
 
 [lints]
 workspace = true

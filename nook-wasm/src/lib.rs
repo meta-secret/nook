@@ -7,13 +7,10 @@
     clippy::collapsible_str_replace
 )]
 
+use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use wasm_bindgen::JsCast;
-use wasm_bindgen::JsValue;
-
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, RequestMode, Response};
+use wasm_bindgen::{JsError, JsValue};
 
 #[wasm_bindgen]
 pub struct NookSecretRecord {
@@ -137,7 +134,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
         github_path: String,
-    ) -> Result<js_sys::Array, JsValue> {
+    ) -> Result<js_sys::Array, JsError> {
         self.storage_mode = storage_mode;
         self.passphrase = passphrase;
         self.github_pat = github_pat;
@@ -149,7 +146,7 @@ impl NookVaultManager {
             match load_from_indexed_db().await {
                 Ok(Some(hex)) => hex,
                 Ok(None) => String::new(),
-                Err(e) => return Err(JsValue::from_str(&format!("IndexedDB load error: {}", e))),
+                Err(e) => return Err(JsError::new(&format!("IndexedDB load error: {}", e))),
             }
         } else {
             match fetch_github_file(&self.github_pat, &self.github_repo, &self.github_path).await {
@@ -158,7 +155,7 @@ impl NookVaultManager {
                     hex
                 }
                 Ok(None) => String::new(),
-                Err(e) => return Err(JsValue::from_str(&format!("GitHub load error: {}", e))),
+                Err(e) => return Err(JsError::new(&format!("GitHub load error: {}", e))),
             }
         };
 
@@ -166,14 +163,14 @@ impl NookVaultManager {
             self.decrypted_jsonl = String::new();
         } else {
             self.decrypted_jsonl = nook_core::decrypt(&encrypted_hex, &self.passphrase)
-                .map_err(|e| JsValue::from_str(&format!("Decryption failed: {}", e)))?;
+                .map_err(|e| JsError::new(&format!("Decryption failed: {}", e)))?;
         }
 
         self.get_records_as_array()
     }
 
     // Initialize an empty database
-    pub async fn initialize_empty(&mut self) -> Result<js_sys::Array, JsValue> {
+    pub async fn initialize_empty(&mut self) -> Result<js_sys::Array, JsError> {
         self.decrypted_jsonl = String::new();
         self.save_current_db().await?;
         self.get_records_as_array()
@@ -184,31 +181,31 @@ impl NookVaultManager {
         &mut self,
         key: String,
         value: String,
-    ) -> Result<js_sys::Array, JsValue> {
-        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(|e| JsValue::from_str(&e))?;
+    ) -> Result<js_sys::Array, JsError> {
+        let mut db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(|e| JsError::new(&e))?;
         db.insert(key, value);
-        let new_jsonl = db.to_jsonl().map_err(|e| JsValue::from_str(&e))?;
+        let new_jsonl = db.to_jsonl().map_err(|e| JsError::new(&e))?;
         self.decrypted_jsonl = new_jsonl;
         self.save_current_db().await?;
         self.get_records_as_array()
     }
 
     // Delete a secret
-    pub async fn delete_secret(&mut self, key: String) -> Result<js_sys::Array, JsValue> {
-        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(|e| JsValue::from_str(&e))?;
+    pub async fn delete_secret(&mut self, key: String) -> Result<js_sys::Array, JsError> {
+        let mut db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(|e| JsError::new(&e))?;
         db.remove(&key);
-        let new_jsonl = db.to_jsonl().map_err(|e| JsValue::from_str(&e))?;
+        let new_jsonl = db.to_jsonl().map_err(|e| JsError::new(&e))?;
         self.decrypted_jsonl = new_jsonl;
         self.save_current_db().await?;
         self.get_records_as_array()
     }
 
     // Helper: list secrets as array of NookSecretRecord
-    fn get_records_as_array(&self) -> Result<js_sys::Array, JsValue> {
-        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)
-            .map_err(|e| JsValue::from_str(&e))?;
+    fn get_records_as_array(&self) -> Result<js_sys::Array, JsError> {
+        let db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(|e| JsError::new(&e))?;
         let records = db.list();
         let array = js_sys::Array::new();
         for r in records {
@@ -219,14 +216,14 @@ impl NookVaultManager {
     }
 
     // Helper: Save current db to storage
-    async fn save_current_db(&mut self) -> Result<(), JsValue> {
+    async fn save_current_db(&mut self) -> Result<(), JsError> {
         let encrypted_hex = nook_core::encrypt(&self.decrypted_jsonl, &self.passphrase)
-            .map_err(|e| JsValue::from_str(&format!("Encryption failed: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Encryption failed: {}", e)))?;
 
         if self.storage_mode == "local" {
             save_to_indexed_db(&encrypted_hex)
                 .await
-                .map_err(|e| JsValue::from_str(&format!("IndexedDB save error: {}", e)))?;
+                .map_err(|e| JsError::new(&format!("IndexedDB save error: {}", e)))?;
         } else {
             let new_sha = write_github_file(
                 &self.github_pat,
@@ -236,7 +233,7 @@ impl NookVaultManager {
                 self.file_sha.as_deref(),
             )
             .await
-            .map_err(|e| JsValue::from_str(&format!("GitHub save error: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("GitHub save error: {}", e)))?;
             self.file_sha = Some(new_sha);
         }
         Ok(())
@@ -320,7 +317,7 @@ async fn save_to_indexed_db(hex: &str) -> Result<(), String> {
 }
 
 // -------------------------------------------------------------
-// GitHub API Storage Functions (via web_sys Fetch)
+// GitHub API Storage Functions (via gloo-net Request)
 // -------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -352,47 +349,29 @@ async fn fetch_github_file(
     repo: &str,
     path: &str,
 ) -> Result<Option<(String, String)>, String> {
-    let opts = RequestInit::new();
-    opts.set_method("GET");
-    opts.set_mode(RequestMode::Cors);
-
     let url = format!("https://api.github.com/repos/{}/contents/{}", repo, path);
-    let request = Request::new_with_str_and_init(&url, &opts)
-        .map_err(|e| format!("Failed to create request: {:?}", e))?;
-
-    let headers = request.headers();
-    headers
-        .set("Authorization", &format!("token {}", pat))
-        .map_err(|e| format!("Headers error: {:?}", e))?;
-    headers
-        .set("Accept", "application/vnd.github.v3+json")
-        .map_err(|e| format!("Headers error: {:?}", e))?;
-
-    let window = web_sys::window().ok_or("No window found")?;
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+    let response = Request::get(&url)
+        .header("Authorization", &format!("token {}", pat))
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
         .await
-        .map_err(|e| format!("Network request failed: {:?}", e))?;
+        .map_err(|e| format!("Network request failed: {}", e))?;
 
-    let resp: Response = resp_value
-        .dyn_into()
-        .map_err(|e| format!("Failed to cast response: {:?}", e))?;
-
-    if resp.status() == 404 {
+    if response.status() == 404 {
         return Ok(None);
     }
 
-    if !resp.ok() {
+    if !response.ok() {
         return Err(format!(
             "GitHub API responded with status {}",
-            resp.status()
+            response.status()
         ));
     }
 
-    let text = JsFuture::from(resp.text().map_err(|e| format!("{:?}", e))?)
+    let text = response
+        .text()
         .await
-        .map_err(|e| format!("Failed to get text: {:?}", e))?
-        .as_string()
-        .ok_or("Response is not text")?;
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
 
     let parsed: GitHubFileResponse =
         serde_json::from_str(&text).map_err(|e| format!("Failed to parse JSON: {}", e))?;
@@ -430,47 +409,28 @@ async fn write_github_file(
     let body_str =
         serde_json::to_string(&body).map_err(|e| format!("Failed to serialize body: {}", e))?;
 
-    let opts = RequestInit::new();
-    opts.set_method("PUT");
-    opts.set_mode(RequestMode::Cors);
-    opts.set_body(&JsValue::from_str(&body_str));
-
     let url = format!("https://api.github.com/repos/{}/contents/{}", repo, path);
-    let request = Request::new_with_str_and_init(&url, &opts)
-        .map_err(|e| format!("Failed to create request: {:?}", e))?;
-
-    let headers = request.headers();
-    headers
-        .set("Authorization", &format!("token {}", pat))
-        .map_err(|e| format!("Headers error: {:?}", e))?;
-    headers
-        .set("Accept", "application/vnd.github.v3+json")
-        .map_err(|e| format!("Headers error: {:?}", e))?;
-    headers
-        .set("Content-Type", "application/json")
-        .map_err(|e| format!("Headers error: {:?}", e))?;
-
-    let window = web_sys::window().ok_or("No window found")?;
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
+    let response = Request::put(&url)
+        .header("Authorization", &format!("token {}", pat))
+        .header("Accept", "application/vnd.github.v3+json")
+        .header("Content-Type", "application/json")
+        .body(body_str)
+        .map_err(|e| format!("Failed to set request body: {}", e))?
+        .send()
         .await
-        .map_err(|e| format!("Network request failed: {:?}", e))?;
+        .map_err(|e| format!("Network request failed: {}", e))?;
 
-    let resp: Response = resp_value
-        .dyn_into()
-        .map_err(|e| format!("Failed to cast response: {:?}", e))?;
-
-    if !resp.ok() {
+    if !response.ok() {
         return Err(format!(
             "GitHub API responded with status {}",
-            resp.status()
+            response.status()
         ));
     }
 
-    let text = JsFuture::from(resp.text().map_err(|e| format!("{:?}", e))?)
+    let text = response
+        .text()
         .await
-        .map_err(|e| format!("Failed to get text: {:?}", e))?
-        .as_string()
-        .ok_or("Response is not text")?;
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
 
     let parsed: GitHubPutResponse =
         serde_json::from_str(&text).map_err(|e| format!("Failed to parse JSON: {}", e))?;

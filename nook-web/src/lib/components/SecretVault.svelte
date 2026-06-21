@@ -1,0 +1,378 @@
+<script lang="ts">
+  import {
+    Search,
+    Lock,
+    Unlock,
+    Eye,
+    EyeOff,
+    Copy,
+    Check,
+    Trash2,
+    KeyRound,
+    Plus,
+    RefreshCw,
+  } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
+  import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+  } from '$lib/components/ui/card'
+  import type { SecretRecord } from '$lib/nook'
+
+  let {
+    secrets,
+    isAuthenticated,
+    isSaving,
+    onAddSecret,
+    onDeleteSecret,
+    onGoToAuth,
+  }: {
+    secrets: SecretRecord[]
+    isAuthenticated: boolean
+    isSaving: boolean
+    onAddSecret: (key: string, value: string) => Promise<void>
+    onDeleteSecret: (key: string) => Promise<void>
+    onGoToAuth: () => void
+  } = $props()
+
+  // Svelte 5 Local states
+  let newKey = $state('')
+  let newValue = $state('')
+  let searchPattern = $state('')
+  let revealSecrets = $state<Record<string, boolean>>({})
+  let copiedKey = $state<string | null>(null)
+
+  // Password Generator states
+  let genLength = $state(16)
+  let genUppercase = $state(true)
+  let genLowercase = $state(true)
+  let genNumbers = $state(true)
+  let genSymbols = $state(true)
+
+  async function handleSubmit(e: SubmitEvent) {
+    e.preventDefault()
+    if (!newKey || !newValue) return
+    await onAddSecret(newKey, newValue)
+    newKey = ''
+    newValue = ''
+  }
+
+  function generatePassword() {
+    let chars = ''
+    if (genLowercase) chars += 'abcdefghijklmnopqrstuvwxyz'
+    if (genUppercase) chars += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    if (genNumbers) chars += '0123456789'
+    if (genSymbols) chars += '!@#$%^&*()_+-=[]{}|;:,.<>?'
+
+    if (!chars) return
+
+    let result = ''
+    const array = new Uint32Array(genLength)
+    window.crypto.getRandomValues(array)
+    for (let i = 0; i < genLength; i++) {
+      result += chars[array[i] % chars.length]
+    }
+    newValue = result
+  }
+
+  async function copyToClipboard(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      copiedKey = key
+      setTimeout(() => {
+        if (copiedKey === key) copiedKey = null
+      }, 2000)
+    } catch (err) {
+      console.error('Copy failed:', err)
+    }
+  }
+
+  function toggleReveal(key: string) {
+    revealSecrets = {
+      ...revealSecrets,
+      [key]: !revealSecrets[key],
+    }
+  }
+
+  // Derived filtered secrets
+  let filteredSecrets = $derived(
+    secrets.filter((s) =>
+      s.key.toLowerCase().includes(searchPattern.toLowerCase()),
+    ),
+  )
+</script>
+
+<div class="animate-in fade-in duration-200">
+  {#if !isAuthenticated}
+    <!-- Unauthenticated Vault Lock View -->
+    <div
+      class="flex flex-col items-center justify-center border border-slate-800 bg-slate-900/30 rounded-xl p-16 text-center max-w-2xl mx-auto space-y-6"
+    >
+      <div
+        class="p-4 bg-indigo-600/10 rounded-full border border-indigo-500/20 text-indigo-400"
+      >
+        <Lock class="size-12" />
+      </div>
+      <div class="space-y-2">
+        <h2 class="text-2xl font-bold text-white">Vault is Locked</h2>
+        <p class="text-slate-400 max-w-md">
+          Please configure your master passphrase and select a storage provider
+          under the Auth & Storage tab to unlock the vault.
+        </p>
+      </div>
+      <Button
+        onclick={onGoToAuth}
+        class="bg-indigo-600 hover:bg-indigo-500 text-white"
+      >
+        Configure Storage Provider
+      </Button>
+    </div>
+  {:else}
+    <!-- Authenticated Vault Interface -->
+    <div class="grid gap-6 lg:grid-cols-3">
+      <!-- Left panel: Add Secret & Generator -->
+      <div class="space-y-6">
+        <!-- Add Secret Form -->
+        <Card class="bg-slate-900/40 border-slate-800/80">
+          <CardHeader>
+            <CardTitle class="text-white text-base">Add New Secret</CardTitle>
+            <CardDescription class="text-slate-400"
+              >Insert or update a key/value pair in your encrypted database.</CardDescription
+            >
+          </CardHeader>
+          <CardContent>
+            <form onsubmit={handleSubmit} class="space-y-4">
+              <div class="space-y-2">
+                <label
+                  class="text-xs font-semibold text-slate-400"
+                  for="secret-label">Label / Identifier</label
+                >
+                <input
+                  id="secret-label"
+                  type="text"
+                  bind:value={newKey}
+                  placeholder="e.g. github.com (personal)"
+                  required
+                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <label
+                  class="text-xs font-semibold text-slate-400"
+                  for="secret-value">Secret Value / Password</label
+                >
+                <input
+                  id="secret-value"
+                  type="text"
+                  bind:value={newValue}
+                  placeholder="Enter secret text"
+                  required
+                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                class="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
+                disabled={isSaving}
+              >
+                {#if isSaving}
+                  <RefreshCw class="size-4 animate-spin mr-2" />
+                  Saving...
+                {:else}
+                  <Plus class="size-4 mr-2" />
+                  Save Secret
+                {/if}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <!-- Password Generator -->
+        <Card class="bg-slate-900/40 border-slate-800/80">
+          <CardHeader class="pb-3">
+            <CardTitle class="text-white text-base flex items-center gap-2">
+              <KeyRound class="size-4 text-indigo-400" />
+              Password Generator
+            </CardTitle>
+            <CardDescription class="text-slate-400"
+              >Generate a cryptographically secure random password.</CardDescription
+            >
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="space-y-1.5">
+              <div
+                class="flex items-center justify-between text-xs font-semibold text-slate-400"
+              >
+                <span>Length</span>
+                <span class="text-indigo-400 font-bold">{genLength} chars</span>
+              </div>
+              <input
+                type="range"
+                min="8"
+                max="64"
+                bind:value={genLength}
+                class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <label
+                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  bind:checked={genLowercase}
+                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                />
+                a-z (lowercase)
+              </label>
+              <label
+                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  bind:checked={genUppercase}
+                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                />
+                A-Z (uppercase)
+              </label>
+              <label
+                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  bind:checked={genNumbers}
+                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                />
+                0-9 (numbers)
+              </label>
+              <label
+                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  bind:checked={genSymbols}
+                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                />
+                !@#$ (symbols)
+              </label>
+            </div>
+
+            <Button
+              variant="outline"
+              onclick={generatePassword}
+              class="w-full border-slate-800 text-slate-300 hover:bg-slate-900 mt-2"
+            >
+              <RefreshCw class="size-3.5 mr-2" />
+              Generate & Populate
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <!-- Right panel: Vault Secrets List -->
+      <div class="lg:col-span-2 space-y-4">
+        <!-- Search Bar -->
+        <div class="relative">
+          <Search class="absolute left-3 top-3 size-4 text-slate-500" />
+          <input
+            type="text"
+            bind:value={searchPattern}
+            placeholder="Search labels..."
+            class="flex h-10 w-full rounded-lg border border-slate-800 bg-slate-900/50 pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+          />
+        </div>
+
+        <!-- List Card -->
+        <Card class="bg-slate-900/40 border-slate-800/80">
+          <CardContent class="p-0">
+            {#if filteredSecrets.length === 0}
+              <div class="p-12 text-center text-slate-500 space-y-2">
+                <Unlock class="size-8 mx-auto text-slate-700" />
+                <p>No secrets matched your search.</p>
+                <p class="text-xs">
+                  Add new secrets on the left to fill your secure vault.
+                </p>
+              </div>
+            {:else}
+              <div class="divide-y divide-slate-800/60" role="list">
+                {#each filteredSecrets as secret (secret.key)}
+                  <div
+                    class="flex items-center justify-between p-4 hover:bg-slate-900/40 transition-colors"
+                    role="listitem"
+                  >
+                    <div class="space-y-1 pr-4 min-w-0 flex-1">
+                      <h3 class="text-sm font-semibold text-white truncate">
+                        {secret.key}
+                      </h3>
+                      <div class="flex items-center gap-2">
+                        {#if revealSecrets[secret.key]}
+                          <code
+                            class="text-xs font-mono text-indigo-300 break-all select-all"
+                            >{secret.value}</code
+                          >
+                        {:else}
+                          <span
+                            class="text-xs font-mono text-slate-600 tracking-wider"
+                            >••••••••••••••••</span
+                          >
+                        {/if}
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                      <!-- Toggle reveal -->
+                      <button
+                        onclick={() => toggleReveal(secret.key)}
+                        aria-label={revealSecrets[secret.key]
+                          ? 'Hide password'
+                          : 'Show password'}
+                        class="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-md transition-colors"
+                      >
+                        {#if revealSecrets[secret.key]}
+                          <EyeOff class="size-4" />
+                        {:else}
+                          <Eye class="size-4" />
+                        {/if}
+                      </button>
+
+                      <!-- Copy to clipboard -->
+                      <button
+                        onclick={() =>
+                          copyToClipboard(secret.value, secret.key)}
+                        aria-label="Copy password to clipboard"
+                        class="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-md transition-colors relative"
+                      >
+                        {#if copiedKey === secret.key}
+                          <Check
+                            class="size-4 text-emerald-400 animate-in zoom-in duration-200"
+                          />
+                        {:else}
+                          <Copy class="size-4" />
+                        {/if}
+                      </button>
+
+                      <!-- Delete -->
+                      <button
+                        onclick={() => onDeleteSecret(secret.key)}
+                        aria-label="Delete secret"
+                        class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-950/20 rounded-md transition-colors"
+                      >
+                        <Trash2 class="size-4" />
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  {/if}
+</div>
