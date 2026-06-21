@@ -1,0 +1,246 @@
+version: '3'
+
+vars:
+  DOCKER: '{{default "docker" .DOCKER}}'
+  DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
+  VITE_BASE: '{{default "/" .VITE_BASE}}'
+
+tasks:
+  default:
+    desc: Build every project.
+    cmds:
+      - task: build
+
+  setup:
+    desc: Build the Docker toolchain image and install project dependencies inside it.
+    cmds:
+      - task: docker:build
+      - task: web:install
+
+  build:
+    desc: Build Rust crates, wasm package, and web app in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _build }
+
+  test:
+    desc: Run all test suites in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _test }
+
+  lint:
+    desc: Run all linters in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _lint }
+
+  check:
+    desc: Run formatting, linting, tests, and builds in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _check }
+
+  format:
+    desc: Format all projects in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _format }
+
+  format:check:
+    desc: Check formatting for all projects in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _format:check }
+
+  rust:build:
+    desc: Build the Rust workspace in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:build }
+
+  rust:test:
+    desc: Test the Rust workspace in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:test }
+
+  rust:lint:
+    desc: Lint the Rust workspace in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:lint }
+
+  wasm:build:
+    desc: Build nook-wasm for the web app in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _wasm:build }
+
+  web:install:
+    desc: Install web dependencies in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:install }
+
+  web:build:
+    desc: Build the Svelte app in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:build }
+
+  web:check:
+    desc: Run Svelte and TypeScript checks in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:check }
+
+  web:test:
+    desc: Run web tests in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test }
+
+  web:lint:
+    desc: Lint the web app in Docker.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:lint }
+
+  web:dev:
+    desc: Start the Svelte dev server in Docker.
+    cmds:
+      - task: docker:web:dev
+
+  docker:build:
+    desc: Build the local Docker toolchain image with Buildx Bake.
+    env:
+      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+    cmds:
+      - '{{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+
+  docker:task:
+    internal: true
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -v "{{.ROOT_DIR}}:/workspace"
+        -w /workspace
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
+
+  docker:web:dev:
+    internal: true
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -p 5173:5173
+        -v "{{.ROOT_DIR}}:/workspace"
+        -w /workspace
+        {{.DOCKER_IMAGE}}
+        task _web:dev
+
+  _build:
+    desc: Build Rust crates, wasm package, and web app.
+    cmds:
+      - task: _rust:build
+      - task: _web:build
+
+  _test:
+    desc: Run all test suites.
+    cmds:
+      - task: _rust:test
+      - task: _web:check
+      - task: _web:test
+
+  _lint:
+    desc: Run all linters.
+    cmds:
+      - task: _rust:lint
+      - task: _web:lint
+
+  _check:
+    desc: Run formatting, linting, tests, and builds.
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
+      - task: _build
+
+  _format:
+    desc: Format all projects.
+    cmds:
+      - cargo fmt --all
+      - cd nook-web && bun run format
+
+  _format:check:
+    desc: Check formatting for all projects.
+    cmds:
+      - cargo fmt --all -- --check
+      - cd nook-web && bun run format:check
+
+  _rust:build:
+    desc: Build the Rust workspace.
+    cmds:
+      - cargo build --workspace
+
+  _rust:test:
+    desc: Test the Rust workspace.
+    cmds:
+      - cargo test --workspace
+
+  _rust:lint:
+    desc: Lint the Rust workspace.
+    cmds:
+      - cargo clippy --workspace --all-targets -- -D warnings
+
+  _wasm:build:
+    desc: Build nook-wasm for the web app.
+    cmds:
+      - wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm
+
+  _web:install:
+    desc: Install web dependencies.
+    cmds:
+      - cd nook-web && bun install
+
+  _web:build:
+    desc: Build the Svelte app.
+    deps:
+      - _wasm:build
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - cd nook-web && bun run build
+
+  _web:check:
+    desc: Run Svelte and TypeScript checks.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run check
+
+  _web:test:
+    desc: Run web tests.
+    cmds:
+      - cd nook-web && bun run test
+
+  _web:lint:
+    desc: Lint the web app.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run lint
+
+  _web:dev:
+    desc: Start the Svelte dev server.
+    deps:
+      - _wasm:build
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - cd nook-web && bun run dev -- --host 0.0.0.0

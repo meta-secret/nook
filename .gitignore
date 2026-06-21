@@ -1,0 +1,11 @@
+/target/
+/node_modules/
+/dist/
+/.DS_Store
+/.idea/
+
+nook-web/node_modules/
+nook-web/dist/
+nook-web/src/lib/nook-wasm/
+*.pdf
+
