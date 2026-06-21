@@ -132,6 +132,18 @@ export class VaultState {
       this.isInitializing = false
     }
     this.startVaultSync()
+    if (this.shouldAutoUnlock()) {
+      await this.loadDb()
+    }
+  }
+
+  private shouldAutoUnlock(): boolean {
+    return (
+      this.hasProviders &&
+      this.activeProvider !== null &&
+      this.loginSetupType === null &&
+      !this.addProviderOpen
+    )
   }
 
   async loadProviders() {
@@ -427,6 +439,7 @@ export class VaultState {
       this.hydrateMultiDeviceState()
       await this.syncFromStorage()
       this.showSuccess('Enrolled and connected to the vault.')
+      this.joinEnrollmentPrompt = 'none'
       this.closeSettings()
     } catch (e: unknown) {
       this.errorMsg =

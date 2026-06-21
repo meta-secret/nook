@@ -157,8 +157,6 @@
           <AuthStorage
             providers={vault.providers}
             activeProviderId={vault.activeProviderId}
-            bind:enrollSecretsKey={vault.enrollSecretsKey}
-            bind:enrollMembersKey={vault.enrollMembersKey}
             isAuthenticated={vault.isAuthenticated}
             isVerifying={vault.isVerifying}
             isSaving={vault.isSaving}
@@ -175,7 +173,6 @@
             onInitializeEmpty={() => vault.handleInitializeEmpty()}
             onApproveJoin={(id) => vault.approveJoin(id)}
             onRefreshJoins={() => vault.refreshDeviceState()}
-            onEnrollWithDec={() => vault.enrollAndConnect()}
           />
         </div>
       {:else}
@@ -220,12 +217,6 @@
         isInitializing={vault.isInitializing}
         errorMsg={vault.errorMsg}
         successMsg={vault.successMsg}
-        deviceId={vault.deviceId}
-        devicePublicKey={vault.devicePublicKey}
-        pendingJoins={vault.pendingJoins}
-        vaultMembers={vault.vaultMembers}
-        bind:enrollSecretsKey={vault.enrollSecretsKey}
-        bind:enrollMembersKey={vault.enrollMembersKey}
         onUnlock={handleUnlock}
         onSelectProvider={(id) => vault.selectProvider(id)}
         onBeginAddProvider={() => vault.beginAddProvider()}
@@ -233,9 +224,6 @@
         onBeginSetup={(type) => vault.beginProviderSetup(type)}
         onCancelSetup={() => vault.cancelProviderSetup()}
         onInitializeEmpty={() => vault.handleInitializeEmpty()}
-        onApproveJoin={(id) => vault.approveJoin(id)}
-        onEnrollWithDec={() => vault.enrollAndConnect()}
-        onRefreshJoins={() => vault.refreshDeviceState()}
       />
     {/if}
   </div>
@@ -247,7 +235,10 @@
       : 'needs_request'}
     deviceId={vault.deviceId}
     isBusy={vault.isVerifying}
+    bind:enrollSecretsKey={vault.enrollSecretsKey}
+    bind:enrollMembersKey={vault.enrollMembersKey}
     onConfirm={() => vault.confirmJoinRequest()}
+    onEnrollWithKeys={() => vault.enrollAndConnect()}
     onCancel={() => vault.dismissJoinEnrollment()}
   />
 </main>

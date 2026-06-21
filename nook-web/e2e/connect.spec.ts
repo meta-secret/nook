@@ -61,9 +61,6 @@ test.describe('vault connect flow', () => {
     })
 
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
-    await expect(page.getByTestId('saved-provider-local')).toBeVisible()
-    await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: 20_000,
     })

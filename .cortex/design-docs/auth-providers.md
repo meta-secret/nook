@@ -53,16 +53,18 @@ stateDiagram-v2
 
 | Component | When shown | Purpose |
 |-----------|------------|---------|
-| `LoginGate` | Vault locked | Provider picker, one-time GitHub PAT setup, unlock with saved providers |
+| `LoginGate` | Vault locked | Provider picker and one-time GitHub PAT setup only |
+| `JoinEnrollmentDialog` | Join needed | Send join request or transfer-key enrollment |
 | `SecretVault` | Authenticated | Primary app — secrets CRUD |
-| `AuthStorage` | Settings panel | List providers, reconnect, device enrollment |
+| `AuthStorage` | Settings panel | Providers, reconnect, devices & access |
 
 ### Copy & affordances
 
 - Title: **Sign in to nook**
 - No providers: *Choose a storage provider to access your encrypted vault.*
-- Has providers: *Unlock your vault with a saved storage provider.*
+- Has providers: *Your storage provider is saved — unlock to open your vault.* (auto-unlock on load when a saved active provider exists)
 - GitHub first setup: *Connect GitHub once — your token is saved in this browser.*
+- Device enrollment, join approvals, and transfer keys: **Storage & devices** (settings) and the **Join this vault** dialog — not on the login screen.
 
 ---
 

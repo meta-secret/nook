@@ -37,8 +37,8 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
 ### A. Login & Storage Provider Flow
 1. **Login gate (vault locked):** If no saved providers exist, the user sees a login screen with a provider list (Local, GitHub). This is the primary entry point — not a settings page.
 2. **First-time setup:** User picks a provider. GitHub requires a one-time PAT entry; local needs no credentials. On successful sign-in, the provider (including GitHub PAT) is saved to IndexedDB (`nook_auth`) and never re-prompted on return visits.
-3. **Return visits:** Saved providers are listed; user clicks **Unlock vault** — credentials load from IndexedDB automatically.
-4. **Settings (authenticated):** Storage & devices panel lists saved providers, supports reconnect, and hosts device enrollment. Adding providers uses the same login gate flow.
+3. **Return visits:** Saved providers unlock automatically on load when possible; otherwise use **Unlock vault**.
+4. **Settings (authenticated):** **Storage & devices** lists providers, device access (join approvals, enrolled devices), and reconnect. Transfer-key enrollment lives in the join dialog, not the login screen.
 5. **Encryption keys (auto-managed):** On first connect, vault keys are generated and written to the vault file. Device private key stays in IndexedDB (`device_identity_secret`). GitHub only stores the encrypted vault file.
 6. **Vault connection:** Rust validates storage mode and PAT before I/O, loads/decrypts the vault, or initializes empty storage.
 7. **Future:** Multiple providers per vault with replicated secret-store file and consistency — see [auth-providers.md](../design-docs/auth-providers.md).

@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { ShieldCheck, Smartphone, UserPlus, X } from '@lucide/svelte'
+  import {
+    ChevronDown,
+    ShieldCheck,
+    Smartphone,
+    UserPlus,
+    X,
+  } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     Card,
@@ -14,16 +20,24 @@
     variant,
     deviceId = '',
     isBusy = false,
+    enrollSecretsKey = $bindable(''),
+    enrollMembersKey = $bindable(''),
     onConfirm,
+    onEnrollWithKeys,
     onCancel,
   }: {
     open: boolean
     variant: 'needs_request' | 'pending'
     deviceId?: string
     isBusy?: boolean
+    enrollSecretsKey?: string
+    enrollMembersKey?: string
     onConfirm?: () => void | Promise<void>
+    onEnrollWithKeys?: () => void | Promise<void>
     onCancel: () => void
   } = $props()
+
+  let showTransferKeys = $state(false)
 
   function truncate(value: string, head = 10, tail = 8) {
     if (value.length <= head + tail + 3) return value
@@ -66,11 +80,11 @@
             </CardTitle>
             <CardDescription>
               {#if variant === 'needs_request'}
-                This browser is not enrolled yet. Send a join request to an
-                existing device.
+                This browser is not enrolled yet. Ask an existing device to
+                approve you, or use transfer keys if you have them.
               {:else}
-                Your join request was sent. Connect again after an enrolled
-                device approves it.
+                Your join request was sent. Try unlocking again after an
+                enrolled device approves you.
               {/if}
             </CardDescription>
           </div>
@@ -96,7 +110,7 @@
               class="font-medium text-foreground inline-flex items-center gap-1.5"
             >
               <Smartphone class="size-3.5" />
-              This device
+              This browser
             </p>
             <p class="mt-1 font-mono text-muted-foreground">
               {truncate(deviceId)}
@@ -106,9 +120,10 @@
 
         {#if variant === 'needs_request'}
           <p class="text-sm leading-relaxed text-muted-foreground">
-            An enrolled device will see your request and can approve access.
-            Your public key is shared in the vault until approval — no secrets
-            are exposed.
+            The usual path: send a join request. An enrolled device will see it
+            in <strong class="font-medium text-foreground"
+              >Storage & devices</strong
+            > and can approve access. No secrets are exposed.
           </p>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
@@ -134,12 +149,84 @@
               {/if}
             </Button>
           </div>
+
+          {#if onEnrollWithKeys}
+            <div class="rounded-lg border border-border bg-muted/20">
+              <button
+                type="button"
+                class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                data-testid="enroll-dec-toggle"
+                aria-expanded={showTransferKeys}
+                onclick={() => (showTransferKeys = !showTransferKeys)}
+              >
+                <span>Have transfer keys from another device?</span>
+                <ChevronDown
+                  class="size-3.5 shrink-0 transition-transform {showTransferKeys
+                    ? 'rotate-180'
+                    : ''}"
+                />
+              </button>
+
+              {#if showTransferKeys}
+                <div class="space-y-2 border-t border-border px-3 py-3">
+                  <p class="text-[11px] leading-relaxed text-muted-foreground">
+                    Paste the two keys copied from an enrolled device. This
+                    skips the approval step — only use if you already received
+                    them out of band.
+                  </p>
+                  <label
+                    class="text-xs font-medium text-muted-foreground"
+                    for="enroll-secrets-key"
+                  >
+                    Secrets key
+                  </label>
+                  <input
+                    id="enroll-secrets-key"
+                    type="password"
+                    bind:value={enrollSecretsKey}
+                    placeholder="64-character hex key"
+                    autocomplete="off"
+                    data-testid="enroll-secrets-key-input"
+                    class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+                  />
+                  <label
+                    class="text-xs font-medium text-muted-foreground"
+                    for="enroll-members-key"
+                  >
+                    Members key
+                  </label>
+                  <input
+                    id="enroll-members-key"
+                    type="password"
+                    bind:value={enrollMembersKey}
+                    placeholder="64-character hex key"
+                    autocomplete="off"
+                    data-testid="enroll-members-key-input"
+                    class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="w-full border-border"
+                    disabled={isBusy ||
+                      !enrollSecretsKey.trim() ||
+                      !enrollMembersKey.trim()}
+                    data-testid="enroll-with-keys-btn"
+                    onclick={() => void onEnrollWithKeys()}
+                  >
+                    Enroll with transfer keys
+                  </Button>
+                </div>
+              {/if}
+            </div>
+          {/if}
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
-            Open Nook on an enrolled device, approve this device in storage
-            settings, then click
-            <strong class="font-medium text-foreground">Connect vault</strong> here
-            again.
+            Open Nook on an enrolled device, approve this browser in
+            <strong class="font-medium text-foreground"
+              >Storage & devices</strong
+            >, then unlock again here.
           </p>
           <div class="flex justify-end">
             <Button

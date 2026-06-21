@@ -22,8 +22,6 @@
   let {
     providers,
     activeProviderId,
-    enrollSecretsKey = $bindable(''),
-    enrollMembersKey = $bindable(''),
     isAuthenticated,
     isVerifying,
     isSaving,
@@ -39,13 +37,10 @@
     onSelectProvider,
     onInitializeEmpty,
     onApproveJoin,
-    onEnrollWithDec,
     onRefreshJoins,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
-    enrollSecretsKey?: string
-    enrollMembersKey?: string
     isAuthenticated: boolean
     isVerifying: boolean
     isSaving: boolean
@@ -61,7 +56,6 @@
     onSelectProvider: (id: string) => void | Promise<void>
     onInitializeEmpty: () => void | Promise<void>
     onApproveJoin?: (deviceId: string) => void | Promise<void>
-    onEnrollWithDec?: () => void | Promise<void>
     onRefreshJoins?: () => void | Promise<void>
   } = $props()
 
@@ -221,10 +215,7 @@
         {pendingJoins}
         {vaultMembers}
         isBusy={isVerifying || isSaving || isInitializing}
-        bind:enrollSecretsKey
-        bind:enrollMembersKey
         {onApproveJoin}
-        {onEnrollWithDec}
         onRefresh={onRefreshJoins}
       />
     </CardContent>

@@ -9,12 +9,10 @@
     ChevronLeft,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import type { JoinRequest, VaultMember } from '$lib/nook'
   import {
     Card,
     CardContent,
@@ -33,23 +31,14 @@
     isInitializing,
     errorMsg,
     successMsg,
-    deviceId = '',
-    devicePublicKey = '',
-    pendingJoins = [] as JoinRequest[],
-    vaultMembers = [] as VaultMember[],
-    enrollSecretsKey = $bindable(''),
-    enrollMembersKey = $bindable(''),
+    addProviderOpen = false,
     onUnlock,
     onSelectProvider,
-    addProviderOpen = false,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
     onInitializeEmpty,
-    onApproveJoin,
-    onEnrollWithDec,
-    onRefreshJoins,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -60,23 +49,14 @@
     isInitializing: boolean
     errorMsg: string
     successMsg: string
-    deviceId?: string
-    devicePublicKey?: string
-    pendingJoins?: JoinRequest[]
-    vaultMembers?: VaultMember[]
-    enrollSecretsKey?: string
-    enrollMembersKey?: string
+    addProviderOpen?: boolean
     onUnlock: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
-    addProviderOpen?: boolean
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onInitializeEmpty?: () => void | Promise<void>
-    onApproveJoin?: (deviceId: string) => void | Promise<void>
-    onEnrollWithDec?: () => void | Promise<void>
-    onRefreshJoins?: () => void | Promise<void>
   } = $props()
 
   const githubPatUrl =
@@ -91,6 +71,7 @@
     (!hasProviders || addProviderOpen) && !showSetup,
   )
   const showGithubPat = $derived(showSetup && setupType === 'github')
+  const isUnlocking = $derived(isVerifying && showSavedProviders && !showSetup)
 </script>
 
 <div class="w-full animate-in fade-in duration-300" data-testid="login-gate">
@@ -114,8 +95,10 @@
           Sign in to nook
         </CardTitle>
         <CardDescription>
-          {#if showSavedProviders && !showSetup}
-            Unlock your vault with a saved storage provider.
+          {#if isUnlocking}
+            Unlocking your vault…
+          {:else if showSavedProviders && !showSetup}
+            Your storage provider is saved — unlock to open your vault.
           {:else if showProviderPicker && addProviderOpen}
             Add another storage provider for your vault.
           {:else if showSetup && setupType === 'github'}
@@ -318,21 +301,6 @@
           {/if}
         {/if}
 
-        {#if !showProviderPicker}
-          <DeviceEnrollment
-          {deviceId}
-          {devicePublicKey}
-          {pendingJoins}
-          {vaultMembers}
-          isBusy={isVerifying || isSaving || isInitializing}
-          bind:enrollSecretsKey
-          bind:enrollMembersKey
-          {onApproveJoin}
-          {onEnrollWithDec}
-          onRefresh={onRefreshJoins}
-        />
-        {/if}
-
         {#if errorMsg}
           <div
             class="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
@@ -359,13 +327,11 @@
               type="submit"
               class="sm:min-w-[180px]"
               data-testid="unlock-vault-btn"
+              disabled={isUnlocking}
             >
-              {#if isInitializing}
+              {#if isInitializing || isUnlocking}
                 <RefreshCw class="size-4 animate-spin" />
-                Loading engine…
-              {:else if isVerifying}
-                <RefreshCw class="size-4 animate-spin" />
-                Unlocking…
+                {isUnlocking ? 'Unlocking…' : 'Loading engine…'}
               {:else}
                 <ShieldCheck class="size-4" />
                 Unlock vault

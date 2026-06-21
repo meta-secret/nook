@@ -149,6 +149,14 @@ async function assertGithubConnected(page: Page) {
 
 export async function connectLocalVault(page: Page) {
   await page.goto('/')
+  await expect(
+    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
+  ).toBeVisible({ timeout: 20_000 })
+
+  if (await page.getByTestId('vault-panel').isVisible()) {
+    return
+  }
+
   const unlockButton = page.getByTestId('unlock-vault-btn')
   if (await unlockButton.isVisible()) {
     await unlockButton.click()
@@ -182,13 +190,10 @@ export async function openStorageSettings(page: Page) {
   await expect(page.getByTestId('vault-panel')).not.toBeVisible()
 }
 
-/** Reconnect after reload — PAT restored from IndexedDB auth providers. */
+/** Reconnect after reload — auto-unlocks when a saved provider exists. */
 export async function reconnectGithubVault(page: Page) {
-  await page.getByTestId('unlock-vault-btn').click()
-  await expect(
-    page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-  ).toContainText('Connected to GitHub', { timeout: 90_000 })
-  await assertVaultReady(page)
+  await page.goto('/')
+  await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout: 90_000 })
 }
 
 export async function assertVaultReady(page: Page) {
