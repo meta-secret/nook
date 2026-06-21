@@ -81,7 +81,7 @@ function configuredVaultSyncIntervalMs(): number {
 function configuredGithubPollIntervalMs(): number {
   const parsed = Number(process.env.NOOK_GITHUB_POLL_MS)
   if (Number.isFinite(parsed) && parsed > 0) return parsed
-  return 2_500
+  return 3_000
 }
 
 function configuredGithubSyncTimeoutMs(): number {

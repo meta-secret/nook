@@ -115,8 +115,8 @@ jobs:
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           # One repo per workflow run — all suites share it; vault YAML reset between suites.
           NOOK_GITHUB_E2E_REPO: nook-e2e-${{ github.run_id }}
-          # Slow polling to minimize PAT rate-limit usage (~5s between GitHub API polls).
-          NOOK_GITHUB_POLL_MS: '5000'
+          # Slow polling to minimize PAT rate-limit usage (~3s between GitHub API polls).
+          NOOK_GITHUB_POLL_MS: '3000'
           NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
 

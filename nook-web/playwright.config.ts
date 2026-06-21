@@ -8,7 +8,7 @@ dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 
 /** Fast GitHub sync in e2e — production default stays 10s via app code. */
 process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '1000'
-process.env.NOOK_GITHUB_POLL_MS ??= '2500'
+process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 export default defineConfig({
   testDir: 'e2e',
