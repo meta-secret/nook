@@ -50,7 +50,7 @@ jobs:
         run: task check
 
       - name: Build web for GitHub Pages
-        run: task web:build VITE_BASE="/${{ github.event.repository.name }}/"
+        run: task web:build VITE_BASE="/"
 
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
