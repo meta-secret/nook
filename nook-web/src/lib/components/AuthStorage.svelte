@@ -47,11 +47,12 @@
 <div class="grid gap-6 md:grid-cols-3 animate-in fade-in duration-200">
   <!-- Main config panel -->
   <div class="md:col-span-2 space-y-6">
-    <Card class="bg-slate-900/40 border-slate-800/80">
+    <Card class="bg-card text-card-foreground border-border">
       <CardHeader>
-        <CardTitle class="text-white">Credentials & Storage Providers</CardTitle
+        <CardTitle class="text-foreground"
+          >Credentials & Storage Providers</CardTitle
         >
-        <CardDescription class="text-slate-400"
+        <CardDescription class="text-muted-foreground"
           >Choose where to store your encrypted vault and configure your master
           passphrase.</CardDescription
         >
@@ -67,7 +68,7 @@
           <!-- Mode Toggle -->
           <div class="space-y-2">
             <label
-              class="text-sm font-medium text-slate-300"
+              class="text-sm font-medium text-foreground"
               for="storage-mode-select">Storage Target</label
             >
             <div class="grid grid-cols-2 gap-2" id="storage-mode-select">
@@ -75,8 +76,8 @@
                 type="button"
                 class="flex items-center justify-center gap-2 p-3 rounded-lg border text-sm font-medium transition-all {storageMode ===
                 'local'
-                  ? 'bg-indigo-600/10 border-indigo-500/50 text-indigo-400'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-300'}"
+                  ? 'bg-secondary text-secondary-foreground border-primary/50'
+                  : 'bg-transparent border-border text-muted-foreground hover:text-foreground'}"
                 onclick={() => (storageMode = 'local')}
               >
                 <Server class="size-4" />
@@ -86,8 +87,8 @@
                 type="button"
                 class="flex items-center justify-center gap-2 p-3 rounded-lg border text-sm font-medium transition-all {storageMode ===
                 'github'
-                  ? 'bg-indigo-600/10 border-indigo-500/50 text-indigo-400'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-300'}"
+                  ? 'bg-secondary text-secondary-foreground border-primary/50'
+                  : 'bg-transparent border-border text-muted-foreground hover:text-foreground'}"
                 onclick={() => (storageMode = 'github')}
               >
                 <GitBranch class="size-4" />
@@ -99,10 +100,11 @@
           <!-- Passphrase -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <label class="text-sm font-medium text-slate-300" for="passphrase"
-                >Master Passphrase</label
+              <label
+                class="text-sm font-medium text-foreground"
+                for="passphrase">Master Passphrase</label
               >
-              <span class="text-xs text-slate-500"
+              <span class="text-xs text-muted-foreground"
                 >Used for client-side age encryption</span
               >
             </div>
@@ -113,18 +115,18 @@
                 bind:value={passphrase}
                 placeholder="Enter master password key"
                 required
-                class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
 
           {#if storageMode === 'github'}
             <div
-              class="border-t border-slate-800/80 pt-5 space-y-4 animate-in fade-in duration-300"
+              class="border-t border-border pt-5 space-y-4 animate-in fade-in duration-300"
             >
               <!-- PAT -->
               <div class="space-y-2">
-                <label class="text-sm font-medium text-slate-300" for="pat"
+                <label class="text-sm font-medium text-foreground" for="pat"
                   >GitHub PAT (Personal Access Token)</label
                 >
                 <input
@@ -133,9 +135,9 @@
                   bind:value={githubPat}
                   placeholder="ghp_xxxxxxxxxxxx"
                   required
-                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
                 />
-                <p class="text-xs text-slate-500">
+                <p class="text-xs text-muted-foreground">
                   Requires `repo` scope to read and write files in private
                   repositories.
                 </p>
@@ -143,7 +145,7 @@
 
               <!-- Repository -->
               <div class="space-y-2">
-                <label class="text-sm font-medium text-slate-300" for="repo"
+                <label class="text-sm font-medium text-foreground" for="repo"
                   >GitHub Repository</label
                 >
                 <input
@@ -152,13 +154,13 @@
                   bind:value={githubRepo}
                   placeholder="owner/repository"
                   required
-                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
                 />
               </div>
 
               <!-- Path -->
               <div class="space-y-2">
-                <label class="text-sm font-medium text-slate-300" for="path"
+                <label class="text-sm font-medium text-foreground" for="path"
                   >File Storage Path</label
                 >
                 <input
@@ -167,7 +169,7 @@
                   bind:value={githubPath}
                   placeholder="nook-secrets.age"
                   required
-                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
                 />
               </div>
             </div>
@@ -176,7 +178,7 @@
           <div class="pt-2 flex gap-3">
             <Button
               type="submit"
-              class="bg-indigo-600 hover:bg-indigo-500 text-white flex-1"
+              class="bg-primary hover:bg-primary/90 text-primary-foreground flex-1"
               disabled={isVerifying}
             >
               {#if isVerifying}
@@ -193,7 +195,7 @@
                 variant="outline"
                 onclick={onInitializeEmpty}
                 disabled={isSaving}
-                class="border-slate-800 text-slate-300 hover:bg-slate-900"
+                class="border-border text-foreground hover:bg-accent"
               >
                 Initialize Vault
               </Button>
@@ -206,32 +208,33 @@
 
   <!-- Sidebar notes -->
   <div class="space-y-6">
-    <Card class="bg-slate-900/40 border-slate-800/80">
+    <Card class="bg-card text-card-foreground border-border">
       <CardHeader>
-        <CardTitle class="text-white text-sm">Security & Architecture</CardTitle
+        <CardTitle class="text-foreground text-sm"
+          >Security & Architecture</CardTitle
         >
       </CardHeader>
-      <CardContent class="text-xs text-slate-400 space-y-4">
+      <CardContent class="text-xs text-muted-foreground space-y-4">
         <div class="flex gap-2">
-          <ShieldCheck class="size-4 shrink-0 text-indigo-400 mt-0.5" />
+          <ShieldCheck class="size-4 shrink-0 text-primary mt-0.5" />
           <p>
-            <strong class="text-slate-200">Zero Knowledge:</strong> All data is encrypted
+            <strong class="text-foreground">Zero Knowledge:</strong> All data is encrypted
             and decrypted in WebAssembly directly in your browser. Passphrases and
             keys never leave your device.
           </p>
         </div>
         <div class="flex gap-2">
-          <KeyRound class="size-4 shrink-0 text-indigo-400 mt-0.5" />
+          <KeyRound class="size-4 shrink-0 text-primary mt-0.5" />
           <p>
-            <strong class="text-slate-200">Age Encryption:</strong> Employs the `age`
+            <strong class="text-foreground">Age Encryption:</strong> Employs the `age`
             format (via scrypt and x25519) to guard data. Compatible with the command-line
             `rage` utility.
           </p>
         </div>
         <div class="flex gap-2">
-          <Boxes class="size-4 shrink-0 text-indigo-400 mt-0.5" />
+          <Boxes class="size-4 shrink-0 text-primary mt-0.5" />
           <p>
-            <strong class="text-slate-200">IndexedDB:</strong> Stored locally using
+            <strong class="text-foreground">IndexedDB:</strong> Stored locally using
             the Rust-Wasm futures wrapper crate `rexie` for safe storage inside the
             browser.
           </p>
@@ -239,38 +242,40 @@
       </CardContent>
     </Card>
 
-    <Card class="bg-slate-900/40 border-slate-800/80">
+    <Card class="bg-card text-card-foreground border-border">
       <CardHeader>
-        <CardTitle class="text-white text-sm">Status Info</CardTitle>
+        <CardTitle class="text-foreground text-sm">Status Info</CardTitle>
       </CardHeader>
       <CardContent class="space-y-3">
         <div class="flex items-center justify-between text-sm">
-          <span class="text-slate-400">Vault Status:</span>
+          <span class="text-muted-foreground">Vault Status:</span>
           {#if isAuthenticated}
             <Badge
-              class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/10"
+              class="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/10"
               >Unlocked</Badge
             >
           {:else}
             <Badge
-              class="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/10"
+              class="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/10"
               >Locked</Badge
             >
           {/if}
         </div>
         <div class="flex items-center justify-between text-sm">
-          <span class="text-slate-400">Mode:</span>
-          <span class="text-white font-medium capitalize">{storageMode}</span>
+          <span class="text-muted-foreground">Mode:</span>
+          <span class="text-foreground font-medium capitalize"
+            >{storageMode}</span
+          >
         </div>
         {#if storageMode === 'github' && githubRepo}
           <div class="flex items-center justify-between text-sm">
-            <span class="text-slate-400">Repo:</span>
-            <span class="text-white font-mono text-xs">{githubRepo}</span>
+            <span class="text-muted-foreground">Repo:</span>
+            <span class="text-foreground font-mono text-xs">{githubRepo}</span>
           </div>
         {/if}
         <div class="flex items-center justify-between text-sm">
-          <span class="text-slate-400">Total Secrets:</span>
-          <span class="text-indigo-400 font-bold">{secretsCount}</span>
+          <span class="text-muted-foreground">Total Secrets:</span>
+          <span class="text-primary font-bold">{secretsCount}</span>
         </div>
       </CardContent>
     </Card>

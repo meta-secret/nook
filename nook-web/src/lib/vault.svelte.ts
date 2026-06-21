@@ -1,20 +1,11 @@
-import {
-  loadNookSnapshot,
-  getVaultManager,
-  mapWasmRecords,
-  type NookSnapshot,
-  type SecretRecord,
-} from '$lib/nook'
+import { getVaultManager, mapWasmRecords, type SecretRecord } from '$lib/nook'
 import type {
   NookVaultManager,
   NookSecretRecord,
 } from '$lib/nook-wasm/nook_wasm'
 
 export class VaultState {
-  snapshot = $state<NookSnapshot | null>(null)
-  loadError = $state('')
-
-  activeTab = $state<'dashboard' | 'auth' | 'secrets'>('dashboard')
+  activeTab = $state<'auth' | 'secrets'>('auth')
 
   // Storage settings
   storageMode = $state<'local' | 'github'>('local')
@@ -36,20 +27,12 @@ export class VaultState {
   isSaving = $state(false)
 
   async init() {
-    // Load workspace snapshot
-    try {
-      this.snapshot = await loadNookSnapshot()
-    } catch (error) {
-      this.loadError =
-        error instanceof Error ? error.message : 'Unable to load nook-wasm.'
-    }
-
     // Instantiate Rust Wasm Session Manager
     try {
       this.manager = await getVaultManager()
       this.startStatusListener()
     } catch (error) {
-      this.loadError =
+      this.errorMsg =
         error instanceof Error
           ? error.message
           : 'Failed to initialize Nook Session Manager.'

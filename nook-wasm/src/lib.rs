@@ -63,52 +63,6 @@ impl NookSecretRecord {
 }
 
 #[wasm_bindgen]
-pub struct WasmWorkspaceProject {
-    name: String,
-    purpose: String,
-    language: String,
-}
-
-#[wasm_bindgen]
-impl WasmWorkspaceProject {
-    #[wasm_bindgen(getter)]
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn purpose(&self) -> String {
-        self.purpose.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn language(&self) -> String {
-        self.language.clone()
-    }
-}
-
-#[wasm_bindgen(js_name = projectSummary)]
-#[must_use]
-pub fn project_summary() -> String {
-    nook_core::project_summary()
-}
-
-#[wasm_bindgen(js_name = workspaceProjects)]
-#[must_use]
-pub fn workspace_projects() -> js_sys::Array {
-    let list = nook_core::workspace_projects();
-    let array = js_sys::Array::new();
-    for p in list {
-        let wasm_proj = WasmWorkspaceProject {
-            name: p.name.to_owned(),
-            purpose: p.purpose.to_owned(),
-            language: p.language.to_owned(),
-        };
-        array.push(&JsValue::from(wasm_proj));
-    }
-    array
-}
-
 // Session state of our secret vault
 #[wasm_bindgen]
 pub struct NookVaultManager {

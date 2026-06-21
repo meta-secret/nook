@@ -109,23 +109,23 @@
   {#if !isAuthenticated}
     <!-- Unauthenticated Vault Lock View -->
     <div
-      class="flex flex-col items-center justify-center border border-slate-800 bg-slate-900/30 rounded-xl p-16 text-center max-w-2xl mx-auto space-y-6"
+      class="flex flex-col items-center justify-center border border-border bg-card rounded-xl p-16 text-center max-w-2xl mx-auto space-y-6"
     >
       <div
-        class="p-4 bg-indigo-600/10 rounded-full border border-indigo-500/20 text-indigo-400"
+        class="p-4 bg-accent text-accent-foreground rounded-full border border-border"
       >
         <Lock class="size-12" />
       </div>
       <div class="space-y-2">
-        <h2 class="text-2xl font-bold text-white">Vault is Locked</h2>
-        <p class="text-slate-400 max-w-md">
+        <h2 class="text-2xl font-bold text-foreground">Vault is Locked</h2>
+        <p class="text-muted-foreground max-w-md">
           Please configure your master passphrase and select a storage provider
           under the Auth & Storage tab to unlock the vault.
         </p>
       </div>
       <Button
         onclick={onGoToAuth}
-        class="bg-indigo-600 hover:bg-indigo-500 text-white"
+        class="bg-primary hover:bg-primary/90 text-primary-foreground"
       >
         Configure Storage Provider
       </Button>
@@ -136,10 +136,12 @@
       <!-- Left panel: Add Secret & Generator -->
       <div class="space-y-6">
         <!-- Add Secret Form -->
-        <Card class="bg-slate-900/40 border-slate-800/80">
+        <Card class="bg-card text-card-foreground border-border">
           <CardHeader>
-            <CardTitle class="text-white text-base">Add New Secret</CardTitle>
-            <CardDescription class="text-slate-400"
+            <CardTitle class="text-foreground text-base"
+              >Add New Secret</CardTitle
+            >
+            <CardDescription class="text-muted-foreground"
               >Insert or update a key/value pair in your encrypted database.</CardDescription
             >
           </CardHeader>
@@ -147,7 +149,7 @@
             <form onsubmit={handleSubmit} class="space-y-4">
               <div class="space-y-2">
                 <label
-                  class="text-xs font-semibold text-slate-400"
+                  class="text-xs font-semibold text-muted-foreground"
                   for="secret-label">Label / Identifier</label
                 >
                 <input
@@ -156,13 +158,13 @@
                   bind:value={newKey}
                   placeholder="e.g. github.com (personal)"
                   required
-                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
                 />
               </div>
 
               <div class="space-y-2">
                 <label
-                  class="text-xs font-semibold text-slate-400"
+                  class="text-xs font-semibold text-muted-foreground"
                   for="secret-value">Secret Value / Password</label
                 >
                 <input
@@ -171,13 +173,13 @@
                   bind:value={newValue}
                   placeholder="Enter secret text"
                   required
-                  class="flex h-10 w-full rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+                  class="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
                 />
               </div>
 
               <Button
                 type="submit"
-                class="w-full bg-indigo-600 hover:bg-indigo-500 text-white"
+                class="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 disabled={isSaving}
               >
                 {#if isSaving}
@@ -193,71 +195,73 @@
         </Card>
 
         <!-- Password Generator -->
-        <Card class="bg-slate-900/40 border-slate-800/80">
+        <Card class="bg-card text-card-foreground border-border">
           <CardHeader class="pb-3">
-            <CardTitle class="text-white text-base flex items-center gap-2">
-              <KeyRound class="size-4 text-indigo-400" />
+            <CardTitle
+              class="text-foreground text-base flex items-center gap-2"
+            >
+              <KeyRound class="size-4 text-primary" />
               Password Generator
             </CardTitle>
-            <CardDescription class="text-slate-400"
+            <CardDescription class="text-muted-foreground"
               >Generate a cryptographically secure random password.</CardDescription
             >
           </CardHeader>
           <CardContent class="space-y-4">
             <div class="space-y-1.5">
               <div
-                class="flex items-center justify-between text-xs font-semibold text-slate-400"
+                class="flex items-center justify-between text-xs font-semibold text-muted-foreground"
               >
                 <span>Length</span>
-                <span class="text-indigo-400 font-bold">{genLength} chars</span>
+                <span class="text-primary font-bold">{genLength} chars</span>
               </div>
               <input
                 type="range"
                 min="8"
                 max="64"
                 bind:value={genLength}
-                class="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                class="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
 
             <div class="grid grid-cols-2 gap-2.5">
               <label
-                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+                class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
               >
                 <input
                   type="checkbox"
                   bind:checked={genLowercase}
-                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                  class="rounded-sm border-border text-primary bg-background focus:ring-0"
                 />
                 a-z (lowercase)
               </label>
               <label
-                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+                class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
               >
                 <input
                   type="checkbox"
                   bind:checked={genUppercase}
-                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                  class="rounded-sm border-border text-primary bg-background focus:ring-0"
                 />
                 A-Z (uppercase)
               </label>
               <label
-                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+                class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
               >
                 <input
                   type="checkbox"
                   bind:checked={genNumbers}
-                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                  class="rounded-sm border-border text-primary bg-background focus:ring-0"
                 />
                 0-9 (numbers)
               </label>
               <label
-                class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+                class="flex items-center gap-2 text-xs text-foreground cursor-pointer"
               >
                 <input
                   type="checkbox"
                   bind:checked={genSymbols}
-                  class="rounded-sm border-slate-800 text-indigo-600 bg-slate-950 focus:ring-0"
+                  class="rounded-sm border-border text-primary bg-background focus:ring-0"
                 />
                 !@#$ (symbols)
               </label>
@@ -266,7 +270,7 @@
             <Button
               variant="outline"
               onclick={generatePassword}
-              class="w-full border-slate-800 text-slate-300 hover:bg-slate-900 mt-2"
+              class="w-full border-border text-foreground hover:bg-accent mt-2"
             >
               <RefreshCw class="size-3.5 mr-2" />
               Generate & Populate
@@ -279,46 +283,50 @@
       <div class="lg:col-span-2 space-y-4">
         <!-- Search Bar -->
         <div class="relative">
-          <Search class="absolute left-3 top-3 size-4 text-slate-500" />
+          <Search
+            class="absolute left-3 top-3 size-4 text-muted-foreground/60"
+          />
           <input
             type="text"
             bind:value={searchPattern}
             placeholder="Search labels..."
-            class="flex h-10 w-full rounded-lg border border-slate-800 bg-slate-900/50 pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/50"
+            class="flex h-10 w-full rounded-lg border border-border bg-background pl-10 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
         </div>
 
         <!-- List Card -->
-        <Card class="bg-slate-900/40 border-slate-800/80">
+        <Card class="bg-card text-card-foreground border-border">
           <CardContent class="p-0">
             {#if filteredSecrets.length === 0}
-              <div class="p-12 text-center text-slate-500 space-y-2">
-                <Unlock class="size-8 mx-auto text-slate-700" />
+              <div class="p-12 text-center text-muted-foreground space-y-2">
+                <Unlock class="size-8 mx-auto text-muted-foreground/40" />
                 <p>No secrets matched your search.</p>
                 <p class="text-xs">
                   Add new secrets on the left to fill your secure vault.
                 </p>
               </div>
             {:else}
-              <div class="divide-y divide-slate-800/60" role="list">
+              <div class="divide-y divide-border/60" role="list">
                 {#each filteredSecrets as secret (secret.key)}
                   <div
-                    class="flex items-center justify-between p-4 hover:bg-slate-900/40 transition-colors"
+                    class="flex items-center justify-between p-4 hover:bg-accent/40 transition-colors"
                     role="listitem"
                   >
                     <div class="space-y-1 pr-4 min-w-0 flex-1">
-                      <h3 class="text-sm font-semibold text-white truncate">
+                      <h3
+                        class="text-sm font-semibold text-foreground truncate"
+                      >
                         {secret.key}
                       </h3>
                       <div class="flex items-center gap-2">
                         {#if revealSecrets[secret.key]}
                           <code
-                            class="text-xs font-mono text-indigo-300 break-all select-all"
+                            class="text-xs font-mono text-primary break-all select-all"
                             >{secret.value}</code
                           >
                         {:else}
                           <span
-                            class="text-xs font-mono text-slate-600 tracking-wider"
+                            class="text-xs font-mono text-muted-foreground/40 tracking-wider"
                             >••••••••••••••••</span
                           >
                         {/if}
@@ -332,7 +340,7 @@
                         aria-label={revealSecrets[secret.key]
                           ? 'Hide password'
                           : 'Show password'}
-                        class="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-md transition-colors"
+                        class="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
                       >
                         {#if revealSecrets[secret.key]}
                           <EyeOff class="size-4" />
@@ -346,11 +354,11 @@
                         onclick={() =>
                           copyToClipboard(secret.value, secret.key)}
                         aria-label="Copy password to clipboard"
-                        class="p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-md transition-colors relative"
+                        class="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors relative"
                       >
                         {#if copiedKey === secret.key}
                           <Check
-                            class="size-4 text-emerald-400 animate-in zoom-in duration-200"
+                            class="size-4 text-emerald-500 animate-in zoom-in duration-200"
                           />
                         {:else}
                           <Copy class="size-4" />
@@ -361,7 +369,7 @@
                       <button
                         onclick={() => onDeleteSecret(secret.key)}
                         aria-label="Delete secret"
-                        class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-950/20 rounded-md transition-colors"
+                        class="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                       >
                         <Trash2 class="size-4" />
                       </button>
