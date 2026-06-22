@@ -1,4 +1,5 @@
 import type { NookVaultManager, NookSecretRecord } from './nook-wasm/nook_wasm'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 export function isoTimestamp(): string {
   return new Date().toISOString()
@@ -58,12 +59,12 @@ export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
   return {
     id: crypto.randomUUID(),
     type,
-    data: JSON.stringify(value),
+    data: stringifyYaml(value),
   }
 }
 
 export function parseVaultItem(record: SecretRecord): VaultItem {
-  const value = JSON.parse(record.data) as Record<string, unknown>
+  const value = parseYaml(record.data) as Record<string, unknown>
   if (record.type === 'login') {
     return {
       id: record.id,

@@ -638,7 +638,7 @@ impl NookVaultManager {
         let secret_type =
             nook_core::SecretType::parse(&secret_type).map_err(NookError::Database)?;
         let typed_value =
-            nook_core::SecretValue::from_json(secret_type, &data).map_err(NookError::Database)?;
+            nook_core::SecretValue::from_yaml(secret_type, &data).map_err(NookError::Database)?;
         let mut db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
         db.insert(id.clone(), typed_value);
@@ -825,7 +825,7 @@ impl NookVaultManager {
 fn records_to_array(records: Vec<nook_core::SecretRecord>) -> Result<js_sys::Array, NookError> {
     let array = js_sys::Array::new();
     for record in records {
-        let data = record.data.to_json().map_err(NookError::Serialization)?;
+        let data = record.data.to_yaml().map_err(NookError::Serialization)?;
         let wasm_record =
             NookSecretRecord::new(record.id, record.secret_type.as_str().to_owned(), data);
         array.push(&JsValue::from(wasm_record));

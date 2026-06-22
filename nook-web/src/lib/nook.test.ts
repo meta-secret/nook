@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { createVaultItemRecord, parseVaultItem } from './nook'
+import { parse as parseYaml } from 'yaml'
 
 describe('typed vault items', () => {
   test('round-trips each supported item type', () => {
@@ -28,7 +29,7 @@ describe('typed vault items', () => {
       const record = createVaultItemRecord(input)
       expect(parseVaultItem(record)).toMatchObject(input)
       expect(record.type).toBe(input.type)
-      expect(JSON.parse(record.data)).not.toHaveProperty('type')
+      expect(parseYaml(record.data)).not.toHaveProperty('type')
     }
   })
 })

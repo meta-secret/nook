@@ -19,7 +19,7 @@ fn api_key(value: &str) -> SecretValue {
 
 fn encrypted_api_key(crypto: &VaultCrypto, value: &str) -> String {
     crypto
-        .encrypt_value(&api_key(value).to_json().unwrap())
+        .encrypt_value(&api_key(value).to_yaml().unwrap())
         .unwrap()
 }
 

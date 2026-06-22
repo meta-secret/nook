@@ -99,25 +99,25 @@ pub enum SecretValue {
 }
 
 impl SecretValue {
-    pub fn from_json(secret_type: SecretType, json: &str) -> Result<Self, String> {
+    pub fn from_yaml(secret_type: SecretType, yaml: &str) -> Result<Self, String> {
         match secret_type {
-            SecretType::Login => serde_json::from_str(json)
+            SecretType::Login => serde_yaml::from_str(yaml)
                 .map(Self::Login)
                 .map_err(|error| format!("Invalid login payload: {error}")),
-            SecretType::ApiKey => serde_json::from_str(json)
+            SecretType::ApiKey => serde_yaml::from_str(yaml)
                 .map(Self::ApiKey)
                 .map_err(|error| format!("Invalid API key payload: {error}")),
-            SecretType::SeedPhrase => serde_json::from_str(json)
+            SecretType::SeedPhrase => serde_yaml::from_str(yaml)
                 .map(Self::SeedPhrase)
                 .map_err(|error| format!("Invalid seed phrase payload: {error}")),
         }
     }
 
-    pub fn to_json(&self) -> Result<String, String> {
+    pub fn to_yaml(&self) -> Result<String, String> {
         match self {
-            Self::Login(value) => serde_json::to_string(value),
-            Self::ApiKey(value) => serde_json::to_string(value),
-            Self::SeedPhrase(value) => serde_json::to_string(value),
+            Self::Login(value) => serde_yaml::to_string(value),
+            Self::ApiKey(value) => serde_yaml::to_string(value),
+            Self::SeedPhrase(value) => serde_yaml::to_string(value),
         }
         .map_err(|error| format!("Failed to serialize secret payload: {error}"))
     }
@@ -272,7 +272,7 @@ impl Database {
                 format!("Secret {} is missing required type metadata.", stored.key)
             })?;
             let decrypted = crypto.decrypt_value(&stored.value)?;
-            let value = SecretValue::from_json(secret_type, &decrypted)?;
+            let value = SecretValue::from_yaml(secret_type, &decrypted)?;
             records.insert(
                 stored.key.clone(),
                 SecretRecord {
@@ -299,7 +299,7 @@ impl Database {
         let mut stored_records = Vec::with_capacity(keys.len());
         for key in keys {
             let record = self.records.get(key).unwrap();
-            let value = record.data.to_json()?;
+            let value = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
                 key: key.clone(),
                 secret_type: Some(record.secret_type),
@@ -766,17 +766,35 @@ mod tests {
     }
 
     #[test]
+    fn typed_payload_yaml_preserves_multiline_notes() {
+        let value = SecretValue::Login(super::LoginSecret {
+            website_url: "https://example.com".to_owned(),
+            username: "alice".to_owned(),
+            password: "secret".to_owned(),
+            notes: "first line\nsecond line\nthird line".to_owned(),
+        });
+
+        let yaml = value.to_yaml().unwrap();
+        assert!(yaml.contains("notes: |-"));
+        assert!(yaml.contains("  second line"));
+        assert_eq!(
+            SecretValue::from_yaml(SecretType::Login, &yaml).unwrap(),
+            value
+        );
+    }
+
+    #[test]
     fn missing_or_mismatched_type_metadata_is_rejected() {
         let crypto = super::VaultCrypto::new(TEST_PASSPHRASE).unwrap();
-        let login_json = super::SecretValue::Login(super::LoginSecret {
+        let login_yaml = super::SecretValue::Login(super::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
             password: "secret".to_owned(),
             notes: String::new(),
         })
-        .to_json()
+        .to_yaml()
         .unwrap();
-        let ciphertext = crypto.encrypt_value(&login_json).unwrap();
+        let ciphertext = crypto.encrypt_value(&login_yaml).unwrap();
 
         let missing = StoredSecretRecord {
             key: "missing".to_owned(),
