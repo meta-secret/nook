@@ -22,6 +22,11 @@
     await vault.loadDb()
   }
 
+  async function handleProviderReconnect(id: string) {
+    await vault.selectProvider(id)
+    await vault.loadDb()
+  }
+
   const shellWidth = 'max-w-xl'
 </script>
 
@@ -130,16 +135,22 @@
                 isSaving={vault.isSaving}
                 isInitializing={vault.isInitializing}
                 errorMsg={vault.errorMsg}
-                successMsg={vault.successMsg}
                 deviceId={vault.deviceId}
                 devicePublicKey={vault.devicePublicKey}
                 pendingJoins={vault.pendingJoins}
                 vaultMembers={vault.vaultMembers}
+                addProviderOpen={vault.addProviderOpen}
+                bind:setupType={vault.loginSetupType}
+                bind:githubPat={vault.githubPat}
+                bind:githubRepo={vault.githubRepo}
                 onReconnect={handleUnlock}
-                onSelectProvider={(id) => vault.selectProvider(id)}
+                onSelectProvider={handleProviderReconnect}
+                onBeginAddProvider={() => vault.beginAddProvider()}
+                onCancelAddProvider={() => vault.cancelAddProvider()}
+                onBeginSetup={(type) => vault.beginProviderSetup(type)}
+                onCancelSetup={() => vault.cancelProviderSetup()}
                 onApproveJoin={(id) => vault.approveJoin(id)}
                 onRefreshJoins={() => vault.manualSync()}
-                bind:githubRepo={vault.githubRepo}
               />
             </div>
           {:else}
@@ -197,7 +208,7 @@
           errorMsg={vault.errorMsg}
           successMsg={vault.successMsg}
           onUnlock={handleUnlock}
-          onSelectProvider={(id) => vault.selectProvider(id)}
+          onSelectProvider={handleProviderReconnect}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(type) => vault.beginProviderSetup(type)}

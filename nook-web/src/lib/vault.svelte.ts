@@ -192,7 +192,7 @@ export class VaultState {
 
   private shouldAutoUnlock(): boolean {
     return (
-      this.hasProviders &&
+      this.providers.length === 1 &&
       this.activeProvider !== null &&
       this.loginSetupType === null &&
       !this.addProviderOpen

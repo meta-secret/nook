@@ -69,7 +69,8 @@ stateDiagram-v2
 - Provider picker uses compact list rows (not large cards) so many providers scale without wasting vertical space.
 - Primary action on setup: **Connect** (not “Sign in to nook”).
 - **Help** page (`HelpPage`) in header — architecture, multi-device security, join flow, vault file layout. Login gate shows `ProductIntro` callout with link.
-- Device enrollment, join approvals, and transfer keys: **Storage & devices** (settings) and the **Join this vault** dialog — not on the login screen.
+- **Storage & devices** (settings): saved provider list, **Add provider**, switch active provider + **Reconnect vault**.
+- Device enrollment, join approvals, and transfer keys: **Storage & devices** and the **Join this vault** dialog — not on the login screen.
 
 ---
 

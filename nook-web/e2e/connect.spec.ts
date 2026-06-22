@@ -64,6 +64,28 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
   })
 
+  test('add provider from storage settings while connected', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await page.getByTestId('provider-option-local').click()
+    await (await waitForEngine(page)).click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('storage-settings-btn').click()
+    await expect(page.getByTestId('settings-providers-list')).toBeVisible()
+    await page.getByTestId('add-provider-btn').click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await page.getByTestId('provider-option-github').click()
+    await expect(page.getByTestId('github-token-setup')).toBeVisible()
+    await page.getByTestId('cancel-add-provider-btn').click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await page.getByTestId('cancel-add-provider-btn').click()
+    await expect(page.getByTestId('settings-providers-list')).toBeVisible()
+  })
+
   test('unlock saved local provider without re-setup', async ({ page }) => {
     await page.goto('/')
     await page.getByTestId('provider-option-local').click()
