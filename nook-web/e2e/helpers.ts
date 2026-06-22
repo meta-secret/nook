@@ -267,7 +267,7 @@ export function uniqueSecretKey(prefix: string) {
 export async function waitForEngine(page: Page) {
   const button = page
     .getByTestId('unlock-vault-btn')
-    .or(page.getByTestId('sign-in-btn'))
+    .or(page.getByTestId('connect-provider-btn'))
   await expect(button.first()).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(button.first()).not.toContainText('Loading engine', {
     timeout: UI_TIMEOUT_MS,

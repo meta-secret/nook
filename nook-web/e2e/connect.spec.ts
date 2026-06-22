@@ -34,7 +34,7 @@ test.describe('vault connect flow', () => {
     await page.goto('/')
 
     await page.getByTestId('provider-option-local').click()
-    const connectButton = page.getByTestId('sign-in-btn')
+    const connectButton = page.getByTestId('connect-provider-btn')
     await expect(connectButton).toBeVisible()
     await connectButton.click({ force: true })
 
