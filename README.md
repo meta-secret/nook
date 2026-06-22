@@ -1,5 +1,7 @@
 # Nook
 
+[GitHub repository](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
+
 Nook is an open-source, browser-first password and secret manager. It encrypts
 credentials on your device and stores the encrypted vault somewhere you control:
 locally in the browser or in a private GitHub repository.
