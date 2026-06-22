@@ -2,13 +2,14 @@
 
 [GitHub repository](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
 
-Nook is an open-source, browser-first password and secret manager. It encrypts
-credentials on your device and stores the encrypted vault somewhere you control:
-locally in the browser or in a private GitHub repository.
+Nook stores website logins, API keys, and wallet seed phrases in an encrypted YAML
+file. You decide where that file is saved: in this browser's IndexedDB, or as
+`nook-vault.yaml` in your private GitHub repository.
 
-There is no Nook account and no central Nook server holding your vault. A browser
-becomes an enrolled device with its own local identity; the shared encrypted vault
-file is the source of truth.
+Nook has no application backend and no user accounts. Encryption and decryption run
+inside the browser. Each browser keeps its own private device key in IndexedDB; that
+key is never written to GitHub. To open the same vault in a new browser, the new
+browser sends a join request and a browser that already has access must approve it.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
