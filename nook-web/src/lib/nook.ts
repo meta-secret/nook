@@ -9,6 +9,115 @@ export type SecretRecord = {
   value: string
 }
 
+export type VaultItemType = 'login' | 'api-key' | 'seed-phrase'
+
+export type LoginVaultItem = {
+  id: string
+  type: 'login'
+  websiteUrl: string
+  username: string
+  password: string
+  notes: string
+}
+
+export type ApiKeyVaultItem = {
+  id: string
+  type: 'api-key'
+  websiteUrl: string
+  key: string
+  expiresAt: string
+}
+
+export type SeedPhraseVaultItem = {
+  id: string
+  type: 'seed-phrase'
+  name: string
+  seed: string
+}
+
+export type VaultItem = LoginVaultItem | ApiKeyVaultItem | SeedPhraseVaultItem
+
+export type VaultItemInput =
+  | Omit<LoginVaultItem, 'id'>
+  | Omit<ApiKeyVaultItem, 'id'>
+  | Omit<SeedPhraseVaultItem, 'id'>
+
+type StoredVaultItem = VaultItemInput & {
+  format: 'nook-vault-item'
+  version: 1
+}
+
+export function vaultItemTitle(item: VaultItem): string {
+  return item.type === 'seed-phrase' ? item.name : item.websiteUrl
+}
+
+export function vaultItemSecret(item: VaultItem): string {
+  if (item.type === 'login') return item.password
+  if (item.type === 'api-key') return item.key
+  return item.seed
+}
+
+export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
+  const stored: StoredVaultItem = {
+    ...item,
+    format: 'nook-vault-item',
+    version: 1,
+  }
+  const title = item.type === 'seed-phrase' ? item.name : item.websiteUrl
+  return {
+    key: `item:${title}:${crypto.randomUUID()}`,
+    value: JSON.stringify(stored),
+  }
+}
+
+export function parseVaultItem(record: SecretRecord): VaultItem {
+  try {
+    const stored = JSON.parse(record.value) as Record<string, unknown>
+    if (
+      stored.format === 'nook-vault-item' &&
+      stored.version === 1 &&
+      (stored.type === 'login' ||
+        stored.type === 'api-key' ||
+        stored.type === 'seed-phrase')
+    ) {
+      if (stored.type === 'login') {
+        return {
+          id: record.key,
+          type: 'login',
+          websiteUrl: String(stored.websiteUrl ?? ''),
+          username: String(stored.username ?? ''),
+          password: String(stored.password ?? ''),
+          notes: String(stored.notes ?? ''),
+        }
+      }
+      if (stored.type === 'api-key') {
+        return {
+          id: record.key,
+          type: 'api-key',
+          websiteUrl: String(stored.websiteUrl ?? ''),
+          key: String(stored.key ?? ''),
+          expiresAt: String(stored.expiresAt ?? ''),
+        }
+      }
+      return {
+        id: record.key,
+        type: 'seed-phrase',
+        name: String(stored.name ?? ''),
+        seed: String(stored.seed ?? ''),
+      }
+    }
+  } catch {
+    // Existing label/value records remain usable as API keys.
+  }
+  return {
+    id: record.key,
+    type: 'api-key',
+    websiteUrl: record.key,
+    key: record.value,
+    expiresAt: '',
+  }
+}
+
 export type JoinRequest = {
   device_id: string
   public_key: string

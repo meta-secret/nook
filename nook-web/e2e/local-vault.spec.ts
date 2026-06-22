@@ -29,7 +29,7 @@ test.describe('local vault', () => {
     const row = page.getByTestId('secret-row').filter({ hasText: key })
     await expect(row.getByText('••••••••••••••••')).toBeVisible()
 
-    await row.getByRole('button', { name: 'Show password' }).click()
+    await row.getByRole('button', { name: 'Show secret' }).click()
     await expect(row.getByText(value)).toBeVisible()
 
     await page.getByTestId('search-secrets').fill(key)
@@ -39,12 +39,8 @@ test.describe('local vault', () => {
 
     await page.getByTestId('search-secrets').fill('')
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await row
-      .getByRole('button', { name: 'Copy password to clipboard' })
-      .click()
-    await expect(
-      row.getByRole('button', { name: 'Copy password to clipboard' }),
-    ).toBeVisible()
+    await row.getByRole('button', { name: 'Copy secret' }).click()
+    await expect(row.getByRole('button', { name: 'Copy secret' })).toBeVisible()
 
     await deleteSecret(page, key)
   })
@@ -52,11 +48,50 @@ test.describe('local vault', () => {
   test('password generator fills the secret value field', async ({ page }) => {
     await assertVaultReady(page)
     await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-login').click()
     await page.getByTestId('password-generator-toggle').click()
     await page.getByTestId('secret-value').fill('')
     await page.getByTestId('generate-password-btn').click()
     const generated = await page.getByTestId('secret-value').inputValue()
     expect(generated.length).toBeGreaterThanOrEqual(8)
+  })
+
+  test('groups logins, API keys, and seed phrases', async ({ page }) => {
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-login').click()
+    await page.getByTestId('secret-label').fill('https://login.example.com')
+    await page.getByTestId('login-username').fill('alice')
+    await page.getByTestId('secret-value').fill('login-password')
+    await page.getByTestId('login-notes').fill('Personal account')
+    await page.getByTestId('save-secret-btn').click()
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-api-key').click()
+    await page.getByTestId('secret-label').fill('https://api.example.com')
+    await page.getByTestId('secret-value').fill('api-key-value')
+    await page.getByTestId('api-key-expiration').fill('2030-01-01')
+    await page.getByTestId('save-secret-btn').click()
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-seed-phrase').click()
+    await page.getByTestId('secret-label').fill('Main wallet')
+    await page
+      .getByTestId('secret-value')
+      .fill(
+        'abandon ability able about above absent absorb abstract absurd abuse access accident',
+      )
+    await page.getByTestId('save-secret-btn').click()
+
+    await expect(page.getByTestId('vault-group-login')).toContainText(
+      'login.example.com',
+    )
+    await expect(page.getByTestId('vault-group-login')).toContainText('alice')
+    await expect(page.getByTestId('vault-group-api-key')).toContainText(
+      'Expires 2030-01-01',
+    )
+    await expect(page.getByTestId('vault-group-seed-phrase')).toContainText(
+      'Main wallet',
+    )
   })
 
   test('persists secrets after reload', async ({ page }) => {
@@ -71,7 +106,7 @@ test.describe('local vault', () => {
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
     await expect(row).toBeVisible()
-    await row.getByRole('button', { name: 'Show password' }).click()
+    await row.getByRole('button', { name: 'Show secret' }).click()
     await expect(row.getByText(value)).toBeVisible()
 
     await deleteSecret(page, key)
