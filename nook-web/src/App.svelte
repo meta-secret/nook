@@ -35,7 +35,9 @@
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {shellWidth}"
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {vault.helpOpen
+        ? 'max-w-5xl'
+        : shellWidth}"
     >
       <div class="flex min-w-0 items-center gap-2.5">
         <div
@@ -134,9 +136,9 @@
   </header>
 
   <div
-    class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? 'py-8'
-      : 'py-5 sm:py-6'}"
+    class="mx-auto px-4 sm:px-6 {vault.helpOpen
+      ? 'max-w-5xl'
+      : shellWidth} {vault.isAuthenticated ? 'py-8' : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
       <HelpPage onClose={() => vault.closeHelp()} />
