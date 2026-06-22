@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { BookOpen, GitFork, Lock, ShieldCheck } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, GitFork, Lock } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -55,14 +55,12 @@
       </div>
 
       <div class="flex items-center gap-2">
-        {#if vault.helpOpen}
-          <span class="text-xs font-medium text-muted-foreground">Help</span>
-        {:else if vault.isAuthenticated}
+        {#if vault.isAuthenticated && !vault.helpOpen}
           {#if vault.settingsOpen}
             <Button
               variant="outline"
               size="sm"
-              class="border-border"
+              class="border-border text-xs text-muted-foreground"
               data-testid="storage-settings-close"
               onclick={() => vault.closeSettings()}
             >
@@ -72,7 +70,7 @@
             <button
               type="button"
               onclick={() => vault.openSettings()}
-              class="relative inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="relative inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               data-testid="storage-settings-btn"
             >
               {vault.activeProviderLabel}
@@ -86,33 +84,44 @@
               {/if}
             </button>
           {/if}
-        {:else}
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground"
-            data-testid="welcome-header-hint"
-          >
-            <ShieldCheck class="size-3 shrink-0" />
-            <span class="hidden sm:inline">Encrypted in your browser</span>
-            <span class="sm:hidden">Encrypted locally</span>
-          </span>
         {/if}
-        {#if !vault.helpOpen}
-          <a
-            href="https://github.com/meta-secret/nook"
-            target="_blank"
-            rel="noreferrer"
-            class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="Nook on GitHub — open source"
-            data-testid="github-source-link"
-          >
-            <GitFork class="size-3.5" />
-            <span class="hidden sm:inline">Open source</span>
-          </a>
+
+        {#if vault.isAuthenticated && !vault.helpOpen}
+          <span class="mx-0.5 h-4 border-l border-border" aria-hidden="true"
+          ></span>
+        {/if}
+
+        <a
+          href="https://github.com/meta-secret/nook"
+          target="_blank"
+          rel="noreferrer"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label="Nook on GitHub — open source"
+          title="Nook is open source on GitHub"
+          data-testid="github-source-link"
+        >
+          <GitFork class="size-3.5" />
+          <span class="hidden sm:inline">GitHub</span>
+        </a>
+
+        {#if vault.helpOpen}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            class="border-border"
+            class="border-border text-xs text-muted-foreground"
+            data-testid="help-header-close"
+            onclick={() => vault.closeHelp()}
+          >
+            <ArrowLeft class="size-3.5" />
+            <span class="hidden sm:inline">Back</span>
+          </Button>
+        {:else}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="border-border text-xs text-muted-foreground"
             data-testid="help-open-btn"
             onclick={() => vault.openHelp()}
           >
