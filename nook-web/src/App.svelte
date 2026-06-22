@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { BookOpen, Lock, ShieldCheck } from '@lucide/svelte'
+  import { BookOpen, GitFork, Lock, ShieldCheck } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -97,6 +97,17 @@
           </span>
         {/if}
         {#if !vault.helpOpen}
+          <a
+            href="https://github.com/meta-secret/nook"
+            target="_blank"
+            rel="noreferrer"
+            class="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            aria-label="Nook on GitHub — open source"
+            data-testid="github-source-link"
+          >
+            <GitFork class="size-3.5" />
+            <span class="hidden sm:inline">Open source</span>
+          </a>
           <Button
             type="button"
             variant="outline"

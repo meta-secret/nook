@@ -51,6 +51,10 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
+    await expect(page.getByTestId('github-source-link')).toHaveAttribute(
+      'href',
+      'https://github.com/meta-secret/nook',
+    )
   })
 
   test('opens help page from header', async ({ page }) => {
