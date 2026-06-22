@@ -1,3 +1,5 @@
+import { generateId } from '$lib/nook'
+
 export type StorageProviderType = 'local' | 'github'
 
 export const DEFAULT_GITHUB_REPO = 'nook'
@@ -59,7 +61,7 @@ function migrateFromLocalStorage(
 
   const type: StorageProviderType = mode === 'github' ? 'github' : 'local'
   const provider: StorageProvider = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     type,
     label: providerDefaultLabel(type),
     githubPat: type === 'github' ? pat : undefined,

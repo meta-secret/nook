@@ -1,4 +1,5 @@
 import {
+  generateId,
   getVaultManager,
   isoTimestamp,
   mapVaultSyncResult,
@@ -283,7 +284,7 @@ export class VaultState {
 
     if (isNewSetup) {
       const provider: StorageProvider = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         type,
         label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
@@ -307,7 +308,7 @@ export class VaultState {
       )
     } else {
       const provider: StorageProvider = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         type,
         label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,

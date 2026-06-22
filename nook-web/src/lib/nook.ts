@@ -5,6 +5,13 @@ export function isoTimestamp(): string {
   return new Date().toISOString()
 }
 
+/** Generate a compact, URL-safe random ID (64-bit, base64url, no padding). */
+export function generateId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  const base64 = btoa(String.fromCharCode(...bytes))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 export type SecretRecord = {
   id: string
   type: VaultItemType
@@ -57,7 +64,7 @@ export function vaultItemSecret(item: VaultItem): string {
 export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
   const { type, ...value } = item
   return {
-    id: crypto.randomUUID(),
+    id: generateId(),
     type,
     data: stringifyYaml(value),
   }

@@ -465,6 +465,13 @@ impl NookVaultManager {
         .map_err(Into::into)
     }
 
+    /// Compact, URL-safe random ID (64-bit, base64url, no padding — 11 chars).
+    pub fn generate_id(&self) -> Result<String, JsError> {
+        nook_core::generate_id()
+            .map_err(NookError::Database)
+            .map_err(Into::into)
+    }
+
     // Expose status channel stream to Svelte client
     pub async fn next_status(&self) -> Result<String, JsError> {
         let msg = self

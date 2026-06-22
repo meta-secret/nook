@@ -14,6 +14,14 @@ pub fn generate_symmetric_key() -> Result<String, String> {
     Ok(hex::encode(bytes))
 }
 
+/// Compact, URL-safe random ID (64-bit, base64url, no padding — 11 chars).
+pub fn generate_id() -> Result<String, String> {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    let mut bytes = [0u8; 8];
+    getrandom::getrandom(&mut bytes).map_err(|e| format!("Failed to generate id: {}", e))?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
 /// Back-compat alias for secret encryption key generation.
 pub fn generate_dec() -> Result<String, String> {
     generate_symmetric_key()
