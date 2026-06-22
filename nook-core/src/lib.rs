@@ -20,14 +20,13 @@ pub use multi_device::{
     device_is_enrolled, encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec,
     enroll_device_with_keys, ensure_self_in_roster, explain_connect_blocked, generate_dec,
     generate_id, generate_symmetric_key, generate_vault_keys, genesis_auth_record,
-    genesis_dec_record,
-    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id,
-    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
-    is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
-    member_from_join, member_stored_key, merge_remote_join_records, parse_auth_envelopes,
-    parse_join_request, pending_join_for_device, replace_member_records, resolve_dec, resolve_dek,
-    resolve_member_roster, resolve_members_key, resolve_secrets_key, roster_add_member,
-    user_stored_records, vault_has_multi_device_records,
+    genesis_dec_record, genesis_members_records, is_auth_id, is_auth_stored_record,
+    is_dec_stored_record, is_device_id, is_join_stored_record, is_members_stored_record,
+    is_reserved_device_label, is_vault_meta_record, join_record_key, list_join_requests,
+    member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
+    parse_auth_envelopes, parse_join_request, pending_join_for_device, replace_member_records,
+    resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
+    roster_add_member, user_stored_records, vault_has_multi_device_records,
 };
 
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
@@ -245,11 +244,7 @@ impl Database {
 
     #[must_use]
     pub fn list(&self) -> Vec<SecretRecord> {
-        let mut records: Vec<SecretRecord> = self
-            .records
-            .iter()
-            .map(|(_, record)| record.clone())
-            .collect();
+        let mut records: Vec<SecretRecord> = self.records.values().cloned().collect();
         records.sort_by(|a, b| a.id.cmp(&b.id));
         records
     }
