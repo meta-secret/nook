@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Lock, ShieldCheck } from '@lucide/svelte'
+  import { BookOpen, Lock, ShieldCheck } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import HelpPage from '$lib/components/HelpPage.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
@@ -49,7 +50,9 @@
       </div>
 
       <div class="flex items-center gap-2">
-        {#if vault.isAuthenticated}
+        {#if vault.helpOpen}
+          <span class="text-xs font-medium text-muted-foreground">Help</span>
+        {:else if vault.isAuthenticated}
           {#if vault.settingsOpen}
             <Button
               variant="outline"
@@ -88,6 +91,19 @@
             <span class="sm:hidden">Encrypted locally</span>
           </span>
         {/if}
+        {#if !vault.helpOpen}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="border-border"
+            data-testid="help-open-btn"
+            onclick={() => vault.openHelp()}
+          >
+            <BookOpen class="size-3.5" />
+            <span class="hidden sm:inline">Help</span>
+          </Button>
+        {/if}
       </div>
     </div>
   </header>
@@ -97,7 +113,9 @@
       ? 'py-8'
       : 'py-5 sm:py-6'}"
   >
-    {#if vault.isAuthenticated}
+    {#if vault.helpOpen}
+      <HelpPage onClose={() => vault.closeHelp()} />
+    {:else if vault.isAuthenticated}
       <div
         class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
       >
@@ -166,24 +184,27 @@
         />
       </div>
     {:else if vault.providersLoaded}
-      <LoginGate
-        providers={vault.providers}
-        activeProviderId={vault.activeProviderId}
-        bind:setupType={vault.loginSetupType}
-        bind:githubPat={vault.githubPat}
-        bind:githubRepo={vault.githubRepo}
-        addProviderOpen={vault.addProviderOpen}
-        isVerifying={vault.isVerifying}
-        isInitializing={vault.isInitializing}
-        errorMsg={vault.errorMsg}
-        successMsg={vault.successMsg}
-        onUnlock={handleUnlock}
-        onSelectProvider={(id) => vault.selectProvider(id)}
-        onBeginAddProvider={() => vault.beginAddProvider()}
-        onCancelAddProvider={() => vault.cancelAddProvider()}
-        onBeginSetup={(type) => vault.beginProviderSetup(type)}
-        onCancelSetup={() => vault.cancelProviderSetup()}
-      />
+      <div class="space-y-4">
+        <LoginGate
+          providers={vault.providers}
+          activeProviderId={vault.activeProviderId}
+          bind:setupType={vault.loginSetupType}
+          bind:githubPat={vault.githubPat}
+          bind:githubRepo={vault.githubRepo}
+          addProviderOpen={vault.addProviderOpen}
+          isVerifying={vault.isVerifying}
+          isInitializing={vault.isInitializing}
+          errorMsg={vault.errorMsg}
+          successMsg={vault.successMsg}
+          onUnlock={handleUnlock}
+          onSelectProvider={(id) => vault.selectProvider(id)}
+          onBeginAddProvider={() => vault.beginAddProvider()}
+          onCancelAddProvider={() => vault.cancelAddProvider()}
+          onBeginSetup={(type) => vault.beginProviderSetup(type)}
+          onCancelSetup={() => vault.cancelProviderSetup()}
+          onOpenHelp={() => vault.openHelp()}
+        />
+      </div>
     {/if}
   </div>
 

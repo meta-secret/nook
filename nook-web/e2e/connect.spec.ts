@@ -50,6 +50,18 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('provider-option-local')).toBeVisible()
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
+    await expect(page.getByTestId('product-intro')).toBeVisible()
+  })
+
+  test('opens help page from header', async ({ page }) => {
+    await page.goto('/')
+
+    await page.getByTestId('help-open-btn').click()
+    await expect(page.getByTestId('help-page')).toBeVisible()
+    await expect(page.getByTestId('help-section-decentralized')).toBeVisible()
+    await expect(page.getByTestId('help-section-join')).toBeVisible()
+    await page.getByTestId('help-close-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
   })
 
   test('unlock saved local provider without re-setup', async ({ page }) => {

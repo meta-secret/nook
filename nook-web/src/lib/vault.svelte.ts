@@ -25,6 +25,7 @@ import {
 
 export class VaultState {
   settingsOpen = $state(false)
+  helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
   activeProviderId = $state<string | null>(null)
@@ -433,12 +434,22 @@ export class VaultState {
   }
 
   openSettings() {
+    this.helpOpen = false
     this.settingsOpen = true
     void this.refreshDeviceState()
   }
 
   closeSettings() {
     this.settingsOpen = false
+  }
+
+  openHelp() {
+    this.settingsOpen = false
+    this.helpOpen = true
+  }
+
+  closeHelp() {
+    this.helpOpen = false
   }
 
   filterSecrets(query: string): SecretRecord[] {

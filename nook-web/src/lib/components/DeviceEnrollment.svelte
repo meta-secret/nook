@@ -56,9 +56,10 @@
         <Smartphone class="size-3.5" />
         Devices & access
       </p>
-      <p class="text-[11px] text-muted-foreground">
-        Approve new browsers that request access. Device details are only needed
-        when troubleshooting or sharing with another device.
+      <p class="text-[11px] text-muted-foreground text-pretty">
+        Each enrolled browser holds its own copy of the vault keys. Approve
+        joins to add trusted devices — more devices means more ways to unlock
+        and recover if one is unavailable.
       </p>
     </div>
     {#if onRefresh}

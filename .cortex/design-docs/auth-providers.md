@@ -68,6 +68,7 @@ stateDiagram-v2
 - GitHub setup: *Sign in to GitHub so nook can read/write the encrypted vault file — plaintext secrets never leave this browser.*
 - Provider picker uses compact list rows (not large cards) so many providers scale without wasting vertical space.
 - Primary action on setup: **Connect** (not “Sign in to nook”).
+- **Help** page (`HelpPage`) in header — architecture, multi-device security, join flow, vault file layout. Login gate shows `ProductIntro` callout with link.
 - Device enrollment, join approvals, and transfer keys: **Storage & devices** (settings) and the **Join this vault** dialog — not on the login screen.
 
 ---
