@@ -700,7 +700,7 @@ export class VaultState {
     }
   }
 
-  async handleAddSecret(key: string, type: VaultItemType, value: string) {
+  async handleAddSecret(id: string, type: VaultItemType, data: string) {
     if (!this.manager) return
     this.errorMsg = ''
     this.dismissSuccess()
@@ -711,9 +711,9 @@ export class VaultState {
     try {
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.add_secret(
-          key,
+          id,
           type,
-          value,
+          data,
         )) as NookSecretRecord[]
         this.secrets = mapWasmRecords(rawRecords)
       })
@@ -727,7 +727,7 @@ export class VaultState {
     }
   }
 
-  async handleDeleteSecret(key: string) {
+  async handleDeleteSecret(id: string) {
     if (!this.manager) return
     this.errorMsg = ''
     this.dismissSuccess()
@@ -738,7 +738,7 @@ export class VaultState {
     try {
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.delete_secret(
-          key,
+          id,
         )) as NookSecretRecord[]
         this.secrets = mapWasmRecords(rawRecords)
       })

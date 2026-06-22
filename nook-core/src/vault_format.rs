@@ -229,7 +229,7 @@ mod tests {
     fn jsonl_roundtrip_stored_records() {
         let records = sample_records();
         let stored = serialize_stored_jsonl(&records).unwrap();
-        assert!(stored.contains("\"key\":\"github.com\""));
+        assert!(stored.contains("\"id\":\"github.com\""));
         assert!(stored.lines().count() == 2);
 
         let parsed = deserialize_stored_jsonl(&stored).unwrap();

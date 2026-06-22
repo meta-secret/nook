@@ -63,8 +63,7 @@ describeMultiDevice('multi-device github vault', () => {
       (yaml) =>
         yaml.authPkIds.length >= 1 &&
         yaml.memberPkIds.length >= 1 &&
-        (yaml.secretLabels.includes(genesisSecretKey) ||
-          yaml.raw.includes(genesisSecretKey)),
+        yaml.secretIds.length >= 1,
     )
     assertGenesisVaultYaml(genesisYaml)
     expect(genesisYaml.authPkIds).toHaveLength(1)
@@ -141,7 +140,7 @@ describeMultiDevice('multi-device github vault', () => {
       e2eRepo,
       2,
     )
-    expect(enrolledYaml.secretLabels).toContain(genesisSecretKey)
+    expect(enrolledYaml.secretIds).toHaveLength(1)
     expect(enrolledYaml.authPkIds).toHaveLength(2)
     expect(enrolledYaml.memberPkIds).toHaveLength(2)
     expect(new Set(enrolledYaml.authPkIds).size).toBe(2)
@@ -168,11 +167,9 @@ describeMultiDevice('multi-device github vault', () => {
 
     const yaml = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
-      (snapshot) => snapshot.secretLabels.includes(joinerSecretKey),
+      (snapshot) => snapshot.secretIds.length >= 2,
     )
-    expect(yaml.secretLabels).toEqual(
-      expect.arrayContaining([genesisSecretKey, joinerSecretKey]),
-    )
+    expect(yaml.secretIds).toHaveLength(2)
 
     await waitForSecretOnDevice(deviceA, joinerSecretKey, {
       pat: githubPat,

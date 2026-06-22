@@ -3,7 +3,7 @@
 use nook_core::{
     ApiKeySecret, Database, PasswordOptions, SecretType, SecretValue, VaultCrypto, VaultFormat,
     deserialize_stored, filter_secrets, generate_password, serialize_stored, validate_connect,
-    validate_secret_label, validate_secret_value,
+    validate_secret_data, validate_secret_id,
 };
 use std::collections::HashMap;
 
@@ -63,8 +63,8 @@ fn incremental_add_secret_matches_full_reencrypt() {
     let db = sample_db();
     let mut armored = armored_cache_from_db(&db, &crypto);
 
-    let label = validate_secret_label("  api.example.com  ").unwrap();
-    validate_secret_value("generated-secret").unwrap();
+    let label = validate_secret_id("  api.example.com  ").unwrap();
+    validate_secret_data("generated-secret").unwrap();
     armored.insert(
         label.clone(),
         encrypted_api_key(&crypto, "generated-secret"),
@@ -78,9 +78,9 @@ fn incremental_add_secret_matches_full_reencrypt() {
         restored
             .list()
             .iter()
-            .find(|r| r.key == "api.example.com")
+            .find(|r| r.id == "api.example.com")
             .unwrap()
-            .value,
+            .data,
         api_key("generated-secret")
     );
     assert_eq!(armored.len(), reloaded_armored.len());
@@ -96,7 +96,7 @@ fn incremental_delete_secret() {
     let (restored, _) = load_vault(&yaml, &crypto);
 
     assert_eq!(restored.list().len(), 1);
-    assert_eq!(restored.list()[0].key, "github.com");
+    assert_eq!(restored.list()[0].id, "github.com");
 }
 
 #[test]
@@ -117,9 +117,9 @@ fn incremental_update_secret_replaces_armored_entry() {
         restored
             .list()
             .iter()
-            .find(|r| r.key == "github.com")
+            .find(|r| r.id == "github.com")
             .unwrap()
-            .value,
+            .data,
         api_key("new-password")
     );
 }
@@ -144,7 +144,7 @@ fn generated_password_can_be_stored_and_reloaded() {
 
     let yaml = save_armored_cache(&armored);
     let (restored, _) = load_vault(&yaml, &crypto);
-    assert_eq!(restored.list()[0].value, api_key(&password));
+    assert_eq!(restored.list()[0].data, api_key(&password));
 }
 
 #[test]
@@ -190,7 +190,7 @@ fn yaml_vault_survives_add_delete_add_cycle() {
     let (final_db, _) = load_vault(&final_yaml, &crypto);
 
     let records = final_db.list();
-    let keys: Vec<&str> = records.iter().map(|r| r.key.as_str()).collect();
+    let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(keys, vec!["github.com", "prod"]);
 }
 

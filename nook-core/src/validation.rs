@@ -56,20 +56,20 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
     }
 }
 
-pub fn validate_secret_label(key: &str) -> Result<String, String> {
-    let trimmed = key.trim();
+pub fn validate_secret_id(id: &str) -> Result<String, String> {
+    let trimmed = id.trim();
     if trimmed.is_empty() {
-        return Err("Secret label is required.".to_owned());
+        return Err("Secret id is required.".to_owned());
     }
     if is_device_id(trimmed) || is_auth_id(trimmed) {
-        return Err("Secret label cannot use a reserved device id.".to_owned());
+        return Err("Secret id cannot use a reserved device id.".to_owned());
     }
     Ok(trimmed.to_owned())
 }
 
-pub fn validate_secret_value(value: &str) -> Result<(), String> {
-    if value.is_empty() {
-        return Err("Secret value is required.".to_owned());
+pub fn validate_secret_data(data: &str) -> Result<(), String> {
+    if data.is_empty() {
+        return Err("Secret data is required.".to_owned());
     }
     Ok(())
 }
@@ -78,7 +78,7 @@ pub fn validate_secret_value(value: &str) -> Result<(), String> {
 pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
     let user_records: Vec<SecretRecord> = records
         .iter()
-        .filter(|record| !is_device_id(&record.key) && !is_auth_id(&record.key))
+        .filter(|record| !is_device_id(&record.id) && !is_auth_id(&record.id))
         .cloned()
         .collect();
     let needle = query.trim().to_lowercase();
@@ -88,7 +88,7 @@ pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord
 
     user_records
         .into_iter()
-        .filter(|record| record.key.to_lowercase().contains(&needle))
+        .filter(|record| record.id.to_lowercase().contains(&needle))
         .collect()
 }
 
@@ -108,14 +108,14 @@ mod tests {
     fn sample_records() -> Vec<SecretRecord> {
         vec![
             SecretRecord {
-                key: "github.com".to_owned(),
+                id: "github.com".to_owned(),
                 secret_type: SecretType::ApiKey,
-                value: value("a"),
+                data: value("a"),
             },
             SecretRecord {
-                key: "work-vpn".to_owned(),
+                id: "work-vpn".to_owned(),
                 secret_type: SecretType::ApiKey,
-                value: value("b"),
+                data: value("b"),
             },
         ]
     }
@@ -150,19 +150,19 @@ mod tests {
 
     #[test]
     fn validate_secret_fields() {
-        assert!(validate_secret_label("  ").is_err());
-        assert_eq!(validate_secret_label(" github ").unwrap(), "github");
-        assert!(validate_secret_value("").is_err());
-        assert!(validate_secret_value("x").is_ok());
-        assert!(validate_secret_label("abc123def4567890").is_err());
-        assert!(validate_secret_label(&"a".repeat(64)).is_err());
+        assert!(validate_secret_id("  ").is_err());
+        assert_eq!(validate_secret_id(" github ").unwrap(), "github");
+        assert!(validate_secret_data("").is_err());
+        assert!(validate_secret_data("x").is_ok());
+        assert!(validate_secret_id("abc123def4567890").is_err());
+        assert!(validate_secret_id(&"a".repeat(64)).is_err());
     }
 
     #[test]
     fn filter_secrets_case_insensitive() {
         let filtered = filter_secrets(&sample_records(), "GIT");
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].key, "github.com");
+        assert_eq!(filtered[0].id, "github.com");
     }
 
     #[test]
@@ -189,20 +189,20 @@ mod tests {
     fn filter_secrets_matches_substring_in_label() {
         let filtered = filter_secrets(&sample_records(), ".com");
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].key, "github.com");
+        assert_eq!(filtered[0].id, "github.com");
     }
 
     #[test]
-    fn validate_secret_value_allows_whitespace() {
-        assert!(validate_secret_value("   ").is_ok());
+    fn validate_secret_data_allows_whitespace() {
+        assert!(validate_secret_data("   ").is_ok());
     }
 
     #[test]
     fn filter_secrets_does_not_search_values() {
         let records = vec![SecretRecord {
-            key: "label".to_owned(),
+            id: "label".to_owned(),
             secret_type: SecretType::ApiKey,
-            value: value("find-me"),
+            data: value("find-me"),
         }];
         assert!(filter_secrets(&records, "find-me").is_empty());
     }

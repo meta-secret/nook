@@ -200,7 +200,7 @@ export async function waitForVaultYaml(
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretLabels.length}, joins=${joinCountFromYaml(yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(yaml)})`
     }
     await sleep(intervalMs)
   }
@@ -506,7 +506,7 @@ export async function addSecret(
     ? parseVaultYamlSnapshot(
         (await fetchGithubVaultYaml(github.pat, github.repoName)) ??
           'secrets: []',
-      ).secretLabels.length
+      ).secretIds.length
     : 0
   await assertVaultReady(page)
   await page.getByTestId('add-secret-btn').click()
@@ -520,7 +520,7 @@ export async function addSecret(
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) => yaml.secretLabels.length > beforeCount,
+      (yaml) => yaml.secretIds.length > beforeCount,
       { page },
     )
   }
@@ -540,10 +540,7 @@ export async function waitForSecretOnDevice(
   github?: GithubE2eTarget,
 ) {
   if (github) {
-    await waitForGithubVaultState(
-      github,
-      (yaml) => yaml.secretLabels.length > 0,
-    )
+    await waitForGithubVaultState(github, (yaml) => yaml.secretIds.length > 0)
   }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   if (await row.isVisible()) {
@@ -565,7 +562,7 @@ export async function deleteSecret(
     ? parseVaultYamlSnapshot(
         (await fetchGithubVaultYaml(github.pat, github.repoName)) ??
           'secrets: []',
-      ).secretLabels.length
+      ).secretIds.length
     : 0
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await row.getByRole('button', { name: 'Delete item' }).click()
@@ -573,7 +570,7 @@ export async function deleteSecret(
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) => yaml.secretLabels.length < beforeCount,
+      (yaml) => yaml.secretIds.length < beforeCount,
       { page },
     )
   }

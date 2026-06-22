@@ -45,25 +45,25 @@ pub enum NookError {
 
 #[wasm_bindgen]
 pub struct NookSecretRecord {
-    key: String,
+    id: String,
     secret_type: String,
-    value: String,
+    data: String,
 }
 
 #[wasm_bindgen]
 impl NookSecretRecord {
     #[wasm_bindgen(constructor)]
-    pub fn new(key: String, secret_type: String, value: String) -> Self {
+    pub fn new(id: String, secret_type: String, data: String) -> Self {
         Self {
-            key,
+            id,
             secret_type,
-            value,
+            data,
         }
     }
 
     #[wasm_bindgen(getter)]
-    pub fn key(&self) -> String {
-        self.key.clone()
+    pub fn id(&self) -> String {
+        self.id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
@@ -72,8 +72,8 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn value(&self) -> String {
-        self.value.clone()
+    pub fn data(&self) -> String {
+        self.data.clone()
     }
 }
 
@@ -628,20 +628,20 @@ impl NookVaultManager {
     // Add a secret
     pub async fn add_secret(
         &mut self,
-        key: String,
+        id: String,
         secret_type: String,
-        value: String,
+        data: String,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
-        let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
-        nook_core::validate_secret_value(&value).map_err(NookError::Database)?;
+        let id = nook_core::validate_secret_id(&id).map_err(NookError::Database)?;
+        nook_core::validate_secret_data(&data).map_err(NookError::Database)?;
         let secret_type =
             nook_core::SecretType::parse(&secret_type).map_err(NookError::Database)?;
         let typed_value =
-            nook_core::SecretValue::from_json(secret_type, &value).map_err(NookError::Database)?;
+            nook_core::SecretValue::from_json(secret_type, &data).map_err(NookError::Database)?;
         let mut db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
-        db.insert(key.clone(), typed_value);
+        db.insert(id.clone(), typed_value);
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
 
@@ -649,10 +649,10 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-            .encrypt_value(&value)
+            .encrypt_value(&data)
             .map_err(NookError::Encryption)?;
-        self.stored_armored.insert(key.clone(), armored);
-        self.secret_types.insert(key, secret_type);
+        self.stored_armored.insert(id.clone(), armored);
+        self.secret_types.insert(id, secret_type);
 
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
@@ -660,16 +660,16 @@ impl NookVaultManager {
     }
 
     // Delete a secret
-    pub async fn delete_secret(&mut self, key: String) -> Result<js_sys::Array, JsError> {
+    pub async fn delete_secret(&mut self, id: String) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
-        let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
+        let id = nook_core::validate_secret_id(&id).map_err(NookError::Database)?;
         let mut db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
-        db.remove(&key);
+        db.remove(&id);
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
-        self.stored_armored.remove(&key);
-        self.secret_types.remove(&key);
+        self.stored_armored.remove(&id);
+        self.secret_types.remove(&id);
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
@@ -825,9 +825,9 @@ impl NookVaultManager {
 fn records_to_array(records: Vec<nook_core::SecretRecord>) -> Result<js_sys::Array, NookError> {
     let array = js_sys::Array::new();
     for record in records {
-        let value = record.value.to_json().map_err(NookError::Serialization)?;
+        let data = record.data.to_json().map_err(NookError::Serialization)?;
         let wasm_record =
-            NookSecretRecord::new(record.key, record.secret_type.as_str().to_owned(), value);
+            NookSecretRecord::new(record.id, record.secret_type.as_str().to_owned(), data);
         array.push(&JsValue::from(wasm_record));
     }
     Ok(array)

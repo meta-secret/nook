@@ -1,34 +1,34 @@
 secrets:
-- key: github.com
+- id: github.com
   type: api-key
-  value: |
+  data: |
     -----BEGIN AGE ENCRYPTED FILE-----
-    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IHNjcnlwdCArVHl4UEJEY0Jud2lML21D
-    cEp0dTRnIDE1CjVVOFdCY3htM3hGNm1jM25ObkhKOS9zamVYRDdQeUFhNGoxT3h2
-    c285bUEKLS0tIDF2elVMRzJtN1A1V01qVXUrVHd5Mkd5Si9lUUFiQUtHRWg5VkZi
-    WnFkUTQKdMwj2qUaEE923mg8lW7vgDrQeWL7v5jFCg13ZErrue5IlVntyRLsr6fI
-    a4F3YNaLPJgFHyd83HE7Sz8ChC7//Dmu+U2SuonFjtp111672pXCUupiSYqYnDI5
-    i01POKrbl3I=
+    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IHNjcnlwdCBQbGNpZTFuUFZ4ZlMrNDhm
+    eXNROHB3IDE1CkF2Q1QyaEZKVXdqQlBQZElGeTFFclhkbGQweGNnOUk0VVJLRkpG
+    Q3AzWEEKLS0tIEdHb2ErelhqZWFUWUpjbm1nVVZkdW9KSGVtQklFWmk0MGNOVTJp
+    Y0tGdzAKQ7eQHWv23VtWy5iHZzo91dhcosa7yc9Hesn5mUwOpxuafvoWNeFVZJ4h
+    2J11OySYuh+EfHk0uowK7oUBeuV8FhwT1JuD/znp0gVgmXoKmkPZ8QmVjSPcD1tx
+    AWFo+njH7G0=
     -----END AGE ENCRYPTED FILE-----
-- key: notes
+- id: notes
   type: api-key
-  value: |
+  data: |
     -----BEGIN AGE ENCRYPTED FILE-----
-    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IHNjcnlwdCBvc2Q1VzZRRmg4WUtKVHlk
-    OW1sek53IDE1CmtiRlN6TWVTWTlXUGViRTJydFlpNS80ZlljNFpWamh5ajl3bkFI
-    YWpBTnMKLS0tIHhCQ2h4cVRrc2x3UXlRY1RaMjlOS1FnWmJnamJ0QlB5cWNWZkxa
-    Qy9yRVUKnGZnVghWYXJwQIjbpeK0CzamDjin37DIXhfEgmWsKi+t1s2dvj/2bRht
-    KZC3UrfPWoKqMZS8o+LMmWYYk+9ZAp+xkTSzLU21FRoBno7aj/4LOjMRNoYgQuNj
-    XdQHVvhUdZg2z9DOIOrMZfYouFR6sallYG3pIW6iLG637j+zog==
+    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IHNjcnlwdCB5blNDRnRNTXQ3WWFia0p3
+    SmR6Z3FRIDE1ClRkTDRhSlloS1hGSjgzdGhEc3JnQjBOWWdTQ3l2UzBKTFdkN2E4
+    UmR0RDQKLS0tIEwxOHhvTVVhMnB4S1h2TkhIcElWYjdBTnh5QS9CTE9hVUpTUEt1
+    MXUrKzAKXc8XOMTowqAlnG/2luETvEFfQdCAym2qzw+lo7GLf3aPSnXbw/zKAqHC
+    aLluhhIHHyYWBDlFeJcPO9bxANzZ0dLyOslCauTvIDVlOGj+jxOiOkI+wr5dTcP8
+    ryKMLh+ov1JwSjK6W4IZEqf9+zjXYsfS1sYiFWxDSxdGlh1Gyw==
     -----END AGE ENCRYPTED FILE-----
-- key: work-vpn
+- id: work-vpn
   type: api-key
-  value: |
+  data: |
     -----BEGIN AGE ENCRYPTED FILE-----
-    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IHNjcnlwdCBoV0liZnJJVWx2d1grbzBG
-    Y3FZbjBnIDE1CldmUTFDN2Y0Y2FhZFRVY1lMOU1GNmo2aDdrbG9iVFhMR0czeHZs
-    TVB4cWMKLS0tIE96ZmVLeHRYWlltSXR4OTFTclF6aFlpblJYV2xjQys4NlNOTmsz
-    WE9PNlUKSlCUbYI23v4rEW0CsMoonuistzHU8cw3nuzAErOk6qAYKS1XVUgVb4S4
-    oazi+7j8iKjJqoQREpLkX7Wrb1RjqfmbdXyMjNfACnWgF+RwIAOzTcUK9JcsWTgZ
-    EsoLhS6hTJvU3CkduVn3
+    YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IHNjcnlwdCBrdG14VlAxcC8vUWxJRnJx
+    eVhVdkZBIDE1CndVZGtRakw5ck9EQTc2eGxmV2g3SFNyZC9IMXJKN1kyaWNycGF0
+    YnlTVXcKLS0tIG1uSHJwZ0tDSlRYU2dGeHU3M0lsL3Y2WFFNY1lCdkFwUEJQcnNy
+    Tk8vNmsKepGo1zF3aT0UiacEIqvbcJvrcOwRYnSqeJ9CJ3YnwHghhuifHQhrBZsg
+    nE7dVgY8AfX614id9xeTWJcNJrZCZjZtK4rwmfprJoQYV4a+lLG3A6Acvw+PcjSe
+    grqeuPqh6+UDPUrmKziH
     -----END AGE ENCRYPTED FILE-----

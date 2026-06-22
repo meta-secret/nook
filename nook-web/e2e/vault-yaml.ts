@@ -2,9 +2,9 @@ import { parse as parseYaml } from 'yaml'
 
 /** Parsed shape of nook-vault.yaml (matches nook-core StoredVaultYaml). */
 type StoredSecretRecord = {
-  key: string
+  id: string
   type: 'login' | 'api-key' | 'seed-phrase'
-  value: string
+  data: string
 }
 
 type AuthYamlRecord = {
@@ -32,7 +32,7 @@ type JoinRequestJson = {
 
 export type VaultYamlSnapshot = {
   raw: string
-  secretLabels: string[]
+  secretIds: string[]
   authPkIds: string[]
   joinEntries: Array<{ deviceId: string; publicKey: string }>
   memberPkIds: string[]
@@ -52,16 +52,16 @@ function parseJoinValue(
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const vault = parseYaml(yaml) as StoredVaultYaml
 
-  const secretLabels = (vault.secrets ?? []).map((record) => record.key)
+  const secretIds = (vault.secrets ?? []).map((record) => record.id)
   const authPkIds = (vault.auth ?? []).map((record) => record.pk_id)
   const memberPkIds = (vault.members ?? []).map((record) => record.pk_id)
   const joinEntries = (vault.joins ?? []).map((record) =>
-    parseJoinValue(record.key, record.value),
+    parseJoinValue(record.id, record.data),
   )
 
   return {
     raw: yaml,
-    secretLabels,
+    secretIds,
     authPkIds,
     joinEntries,
     memberPkIds,

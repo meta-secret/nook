@@ -93,7 +93,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
         let user_records = user_stored_records(&loaded);
         let unlocked = Database::from_stored_records_with_crypto(&user_records, &crypto).unwrap();
         assert_eq!(unlocked.list().len(), 1);
-        assert_eq!(unlocked.list()[0].value, api_key("hunter2"));
+        assert_eq!(unlocked.list()[0].data, api_key("hunter2"));
     }
 }
 

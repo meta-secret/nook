@@ -1,3 +1,3 @@
-{"key":"github.com","type":"api-key","value":{"api-key":{"websiteUrl":"https://github.com","key":"hunter2","expiresAt":""}}}
-{"key":"notes","type":"api-key","value":{"api-key":{"websiteUrl":"https://notes.example.com","key":"multiline\nsecret\nwith\ttabs","expiresAt":""}}}
-{"key":"work-vpn","type":"api-key","value":{"api-key":{"websiteUrl":"https://vpn.example.com","key":"token-abc","expiresAt":""}}}
+{"id":"github.com","type":"api-key","data":{"api-key":{"websiteUrl":"https://github.com","key":"hunter2","expiresAt":""}}}
+{"id":"notes","type":"api-key","data":{"api-key":{"websiteUrl":"https://notes.example.com","key":"multiline\nsecret\nwith\ttabs","expiresAt":""}}}
+{"id":"work-vpn","type":"api-key","data":{"api-key":{"websiteUrl":"https://vpn.example.com","key":"token-abc","expiresAt":""}}}

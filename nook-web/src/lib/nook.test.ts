@@ -28,7 +28,7 @@ describe('typed vault items', () => {
       const record = createVaultItemRecord(input)
       expect(parseVaultItem(record)).toMatchObject(input)
       expect(record.type).toBe(input.type)
-      expect(JSON.parse(record.value)).not.toHaveProperty('type')
+      expect(JSON.parse(record.data)).not.toHaveProperty('type')
     }
   })
 })

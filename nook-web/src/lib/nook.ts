@@ -5,9 +5,9 @@ export function isoTimestamp(): string {
 }
 
 export type SecretRecord = {
-  key: string
+  id: string
   type: VaultItemType
-  value: string
+  data: string
 }
 
 export type VaultItemType = 'login' | 'api-key' | 'seed-phrase'
@@ -56,17 +56,17 @@ export function vaultItemSecret(item: VaultItem): string {
 export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
   const { type, ...value } = item
   return {
-    key: crypto.randomUUID(),
+    id: crypto.randomUUID(),
     type,
-    value: JSON.stringify(value),
+    data: JSON.stringify(value),
   }
 }
 
 export function parseVaultItem(record: SecretRecord): VaultItem {
-  const value = JSON.parse(record.value) as Record<string, unknown>
+  const value = JSON.parse(record.data) as Record<string, unknown>
   if (record.type === 'login') {
     return {
-      id: record.key,
+      id: record.id,
       type: 'login',
       websiteUrl: String(value.websiteUrl),
       username: String(value.username),
@@ -76,7 +76,7 @@ export function parseVaultItem(record: SecretRecord): VaultItem {
   }
   if (record.type === 'api-key') {
     return {
-      id: record.key,
+      id: record.id,
       type: 'api-key',
       websiteUrl: String(value.websiteUrl),
       key: String(value.key),
@@ -84,7 +84,7 @@ export function parseVaultItem(record: SecretRecord): VaultItem {
     }
   }
   return {
-    id: record.key,
+    id: record.id,
     type: 'seed-phrase',
     name: String(value.name),
     seed: String(value.seed),
@@ -182,8 +182,8 @@ export async function getVaultManager(): Promise<NookVaultManager> {
 export function mapWasmRecords(rawRecords: unknown): SecretRecord[] {
   const records = Array.from(rawRecords as ArrayLike<NookSecretRecord>)
   return records.map((r) => ({
-    key: r.key,
+    id: r.id,
     type: r.type as VaultItemType,
-    value: r.value,
+    data: r.data,
   }))
 }
