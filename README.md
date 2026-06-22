@@ -6,10 +6,11 @@ Nook stores website logins, API keys, and wallet seed phrases in an encrypted YA
 file. You decide where that file is saved: in this browser's IndexedDB, or as
 `nook-vault.yaml` in your private GitHub repository.
 
-Nook has no application backend and no user accounts. Encryption and decryption run
-inside the browser. Each browser keeps its own private device key in IndexedDB; that
-key is never written to GitHub. To open the same vault in a new browser, the new
-browser sends a join request and a browser that already has access must approve it.
+Nook is passwordless: there is no Nook login and no master password to create or
+remember. Instead, each approved browser becomes a key to the vault. Its private
+device key stays in that browser and is never written to GitHub. To open the vault in
+a new browser, the new device asks to join and a device that already has access must
+approve it.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -17,12 +18,28 @@ browser sends a join request and a browser that already has access must approve 
 
 ## Why Nook?
 
-Passwords give access to your digital life, but using a password manager usually
-means creating another account and trusting another service to store your vault,
-keep its servers available, and decide how you recover access.
+Most password managers protect everything with one master password. That password
+becomes the most important password you have: you must remember it, it can be
+phished, and forgetting it can lock you out of the vault.
 
-Nook is for people who want a useful password manager without handing over custody
-of the vault.
+Nook removes the master password entirely.
+
+On first use, the browser creates a cryptographic public/private keypair. Think of
+the private key as a physical key fitted to the vault's lock: it stays on that device
+and opens the vault automatically when you use Nook there. The matching public key
+lets an approved device encrypt vault access specifically for this browser, but
+cannot unlock the vault itself. There is no password to type, transmit, forget, or
+reset.
+
+Adding another device does not mean sharing login credentials. The new browser
+creates its own keypair and asks to join. A device that already opens the vault must
+approve the request; the vault keys are then encrypted specifically for the new
+device. Each approved device becomes another independent key to the same vault.
+
+This is passwordless, but it is not magical recovery. If every approved device is
+lost or its browser data is erased, there is no master password and no Nook support
+desk that can restore access. Enrolling a second device gives you a second key and a
+practical recovery path.
 
 You open Nook, save a login, API key, or wallet recovery phrase, and choose where the
 encrypted vault lives. Keep it only in this browser, or use a storage provider you
@@ -31,21 +48,21 @@ to services such as Google Drive, Proton Drive, Cloudflare R2, and other storage
 backends. Nook does not create a hosted account for you, and there is no Nook
 database that can be breached, suspended, or taken offline with your vault in it.
 
-That changes three important things:
+The result is:
 
+- **No master password and no Nook login.** Possession of an approved device—not a
+  credential remembered by you or stored by Nook—unlocks the vault.
+- **Your devices control access.** A new browser cannot decrypt the vault until one
+  of your approved devices grants it access.
 - **You choose where the vault lives.** Local mode keeps it on this device. GitHub
   mode gives you an encrypted file in your own private repository.
-- **You decide which devices can open it.** A new browser asks to join; a browser
-  you already trust approves it. Nook is not the gatekeeper.
 - **You can inspect the whole system.** The application, encryption flow, and vault
   format are open source. Your ability to understand your vault does not stop at a
   company's privacy policy.
 
-For example: save a GitHub login on your laptop, sync the encrypted vault to your
-repository, then open Nook on another computer. The second browser cannot read the
-vault by merely finding the file—it must request access, and your enrolled laptop
-must approve it. After approval, both browsers can open the same vault; their private
-device keys remain separate and local.
+A GitHub token or another provider credential only allows Nook to read and write the
+encrypted vault file. It is not a Nook login, it is not a master password, and it
+cannot decrypt the secrets by itself.
 
 ## What you can store
 
@@ -80,10 +97,10 @@ several saved vault providers, Nook asks which one you want to open.
 
 ### When you add another browser
 
-The new browser creates its own device key and places a join request in the encrypted
-vault. Open Nook on an already enrolled device, review the request, and approve it.
-The new browser then receives access to the vault keys encrypted specifically for
-that device.
+The new browser creates its own device key and places a join request in the shared
+vault file. Open Nook on an already enrolled device, review the request, and approve
+it. The new browser then receives access to the vault keys encrypted specifically
+for that device.
 
 Under the hood, the security-sensitive work runs in Rust compiled to WebAssembly.
 Secret data is represented as typed YAML, encrypted independently with
