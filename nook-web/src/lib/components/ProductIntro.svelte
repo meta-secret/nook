@@ -11,12 +11,9 @@
 >
   <p class="mb-2 font-medium text-foreground inline-flex items-center gap-1.5">
     <Info class="size-3.5 shrink-0" />
-    Passwordless by design
+    Why Nook?
   </p>
-  <ul class="list-disc space-y-1 pl-4 text-pretty">
-    <li>No master password. Your approved devices unlock the vault.</li>
-    <li>Your secrets are encrypted here and stored where you choose.</li>
-  </ul>
+  <p class="text-pretty">Learn how device keys, storage, and recovery work.</p>
   <Button
     type="button"
     variant="link"
@@ -25,6 +22,6 @@
     data-testid="product-intro-help-link"
     onclick={onOpenHelp}
   >
-    Why Nook and how it works
+    How Nook works
   </Button>
 </aside>

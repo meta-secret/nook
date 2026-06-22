@@ -94,11 +94,11 @@
           {#if showSavedProviders && !showSetup}
             Unlock your vault
           {:else if showProviderPicker}
-            A passwordless secret manager
+            Your device is the key
           {:else if showSetup}
             Connect to {setupType === 'github' ? 'GitHub' : 'this device'}
           {:else}
-            A passwordless secret manager
+            Your device is the key
           {/if}
         </CardTitle>
         {#if isUnlocking}
@@ -136,16 +136,15 @@
           </ul>
         {:else if showProviderPicker}
           <p class="text-sm font-medium text-foreground">
-            Decentralized by design. Your devices unlock the vault, and you
-            choose where it lives.
+            No master password. Your devices unlock the vault.
           </p>
           <ul
             class="mt-2 list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
             data-testid="login-gate-intro"
           >
-            <li>No Nook account or central vault server.</li>
-            <li>Your secrets are encrypted before they leave this browser.</li>
-            <li>Keep the vault here or sync it to a provider you control.</li>
+            <li>Passwordless access to your secrets.</li>
+            <li>Your secrets. Your storage. Your keys.</li>
+            <li>A decentralized vault for your secrets.</li>
           </ul>
         {/if}
       </div>

@@ -24,11 +24,10 @@
             class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
           >
             <BookOpen class="size-4 shrink-0" />
-            A passwordless secret manager
+            Your device is the key
           </CardTitle>
           <CardDescription class="text-pretty">
-            A passwordless secret manager where your devices hold the keys and
-            you control the storage.
+            No master password. Your devices unlock the vault.
           </CardDescription>
         </div>
         <Button
