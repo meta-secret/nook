@@ -200,7 +200,7 @@ export async function waitForVaultYaml(
       if (predicate(snapshot)) {
         return snapshot
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretLabels.length}, joins=${joinCountFromYaml(yaml)})`
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${joinCountFromYaml(yaml)})`
     }
     await sleep(intervalMs)
   }
@@ -502,9 +502,16 @@ export async function addSecret(
   value: string,
   github?: GithubE2eTarget,
 ) {
+  const beforeCount = github
+    ? parseVaultYamlSnapshot(
+        (await fetchGithubVaultYaml(github.pat, github.repoName)) ??
+          'secrets: []',
+      ).secretIds.length
+    : 0
   await assertVaultReady(page)
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
+  await page.getByTestId('item-type-api-key').click()
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()
@@ -513,7 +520,7 @@ export async function addSecret(
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) => yaml.secretLabels.includes(key) || yaml.raw.includes(key),
+      (yaml) => yaml.secretIds.length > beforeCount,
       { page },
     )
   }
@@ -521,7 +528,7 @@ export async function addSecret(
 
 export async function revealSecretValue(page: Page, key: string) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await row.getByRole('button', { name: 'Show password' }).click()
+  await row.getByRole('button', { name: 'Show secret' }).click()
   const code = row.locator('code')
   await expect(code).toBeVisible()
   return (await code.textContent()) ?? ''
@@ -533,10 +540,7 @@ export async function waitForSecretOnDevice(
   github?: GithubE2eTarget,
 ) {
   if (github) {
-    await waitForGithubVaultState(
-      github,
-      (yaml) => yaml.secretLabels.includes(key) || yaml.raw.includes(key),
-    )
+    await waitForGithubVaultState(github, (yaml) => yaml.secretIds.length > 0)
   }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   if (await row.isVisible()) {
@@ -554,13 +558,19 @@ export async function deleteSecret(
   key: string,
   github?: GithubE2eTarget,
 ) {
+  const beforeCount = github
+    ? parseVaultYamlSnapshot(
+        (await fetchGithubVaultYaml(github.pat, github.repoName)) ??
+          'secrets: []',
+      ).secretIds.length
+    : 0
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await row.getByRole('button', { name: 'Delete secret' }).click()
+  await row.getByRole('button', { name: 'Delete item' }).click()
   await expect(row).toHaveCount(0, { timeout: UI_TIMEOUT_MS })
   if (github) {
     await waitForGithubVaultState(
       github,
-      (yaml) => !yaml.secretLabels.includes(key) && !yaml.raw.includes(key),
+      (yaml) => yaml.secretIds.length < beforeCount,
       { page },
     )
   }

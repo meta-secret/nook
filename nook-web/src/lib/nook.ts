@@ -1,12 +1,102 @@
 import type { NookVaultManager, NookSecretRecord } from './nook-wasm/nook_wasm'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
 export function isoTimestamp(): string {
   return new Date().toISOString()
 }
 
+/** Generate a compact, URL-safe random ID (64-bit, base64url, no padding). */
+export function generateId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  const base64 = btoa(String.fromCharCode(...bytes))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
 export type SecretRecord = {
+  id: string
+  type: VaultItemType
+  data: string
+}
+
+export type VaultItemType = 'login' | 'api-key' | 'seed-phrase'
+
+export type LoginVaultItem = {
+  id: string
+  type: 'login'
+  websiteUrl: string
+  username: string
+  password: string
+  notes: string
+}
+
+export type ApiKeyVaultItem = {
+  id: string
+  type: 'api-key'
+  websiteUrl: string
   key: string
-  value: string
+  expiresAt: string
+}
+
+export type SeedPhraseVaultItem = {
+  id: string
+  type: 'seed-phrase'
+  name: string
+  seed: string
+}
+
+export type VaultItem = LoginVaultItem | ApiKeyVaultItem | SeedPhraseVaultItem
+
+export type VaultItemInput =
+  | Omit<LoginVaultItem, 'id'>
+  | Omit<ApiKeyVaultItem, 'id'>
+  | Omit<SeedPhraseVaultItem, 'id'>
+
+export function vaultItemTitle(item: VaultItem): string {
+  return item.type === 'seed-phrase' ? item.name : item.websiteUrl
+}
+
+export function vaultItemSecret(item: VaultItem): string {
+  if (item.type === 'login') return item.password
+  if (item.type === 'api-key') return item.key
+  return item.seed
+}
+
+export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
+  const { type, ...value } = item
+  return {
+    id: generateId(),
+    type,
+    data: stringifyYaml(value),
+  }
+}
+
+export function parseVaultItem(record: SecretRecord): VaultItem {
+  const value = parseYaml(record.data) as Record<string, unknown>
+  if (record.type === 'login') {
+    return {
+      id: record.id,
+      type: 'login',
+      websiteUrl: String(value.websiteUrl),
+      username: String(value.username),
+      password: String(value.password),
+      notes: String(value.notes),
+    }
+  }
+  if (record.type === 'api-key') {
+    return {
+      id: record.id,
+      type: 'api-key',
+      websiteUrl: String(value.websiteUrl),
+      key: String(value.key),
+      expiresAt: String(value.expiresAt),
+    }
+  }
+  return {
+    id: record.id,
+    type: 'seed-phrase',
+    name: String(value.name),
+    seed: String(value.seed),
+  }
 }
 
 export type JoinRequest = {
@@ -100,7 +190,8 @@ export async function getVaultManager(): Promise<NookVaultManager> {
 export function mapWasmRecords(rawRecords: unknown): SecretRecord[] {
   const records = Array.from(rawRecords as ArrayLike<NookSecretRecord>)
   return records.map((r) => ({
-    key: r.key,
-    value: r.value,
+    id: r.id,
+    type: r.type as VaultItemType,
+    data: r.data,
   }))
 }

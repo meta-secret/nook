@@ -142,6 +142,7 @@ fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
 fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
     StoredSecretRecord {
         key: record.pk_id,
+        secret_type: None,
         value: serde_json::to_string(&AuthEnvelopes {
             secrets_key: record.secrets_key,
             members_key: record.members_key,
@@ -153,6 +154,7 @@ fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
 fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
     StoredSecretRecord {
         key: crate::member_stored_key(&record.pk_id),
+        secret_type: None,
         value: record.ciphertext,
     }
 }
@@ -210,11 +212,13 @@ mod tests {
         vec![
             StoredSecretRecord {
                 key: "github.com".to_owned(),
+                secret_type: Some(crate::SecretType::Login),
                 value: "-----BEGIN AGE ENCRYPTED FILE-----\nline1\nline2\n-----END AGE ENCRYPTED FILE-----"
                     .to_owned(),
             },
             StoredSecretRecord {
                 key: "work-vpn".to_owned(),
+                secret_type: Some(crate::SecretType::ApiKey),
                 value: "-----BEGIN AGE ENCRYPTED FILE-----\nsecret\n-----END AGE ENCRYPTED FILE-----"
                     .to_owned(),
             },
@@ -225,7 +229,7 @@ mod tests {
     fn jsonl_roundtrip_stored_records() {
         let records = sample_records();
         let stored = serialize_stored_jsonl(&records).unwrap();
-        assert!(stored.contains("\"key\":\"github.com\""));
+        assert!(stored.contains("\"id\":\"github.com\""));
         assert!(stored.lines().count() == 2);
 
         let parsed = deserialize_stored_jsonl(&stored).unwrap();
@@ -409,6 +413,7 @@ not-json
         let records = vec![
             StoredSecretRecord {
                 key: "github.com".to_owned(),
+                secret_type: Some(crate::SecretType::Login),
                 value: "encrypted-user-secret".to_owned(),
             },
             auth_to_stored_record(AuthYamlRecord {
@@ -422,6 +427,7 @@ not-json
             }),
             StoredSecretRecord {
                 key: join_id.to_owned(),
+                secret_type: None,
                 value: format!(
                     r#"{{"device_id":"{join_id}","public_key":"age1test","requested_at":"2026-01-01T00:00:00Z"}}"#
                 ),
@@ -448,6 +454,7 @@ not-json
         let auth_id = "c".repeat(64);
         let records = vec![StoredSecretRecord {
             key: format!("member:{auth_id}"),
+            secret_type: None,
             value: "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
                 .to_owned(),
         }];

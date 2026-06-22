@@ -1,4 +1,5 @@
 import {
+  generateId,
   getVaultManager,
   isoTimestamp,
   mapVaultSyncResult,
@@ -7,6 +8,7 @@ import {
   mapWasmVaultMembers,
   type JoinRequest,
   type SecretRecord,
+  type VaultItemType,
   type VaultMember,
 } from '$lib/nook'
 import { SvelteDate } from 'svelte/reactivity'
@@ -282,7 +284,7 @@ export class VaultState {
 
     if (isNewSetup) {
       const provider: StorageProvider = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         type,
         label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
@@ -306,7 +308,7 @@ export class VaultState {
       )
     } else {
       const provider: StorageProvider = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         type,
         label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
@@ -699,7 +701,7 @@ export class VaultState {
     }
   }
 
-  async handleAddSecret(key: string, value: string) {
+  async handleAddSecret(id: string, type: VaultItemType, data: string) {
     if (!this.manager) return
     this.errorMsg = ''
     this.dismissSuccess()
@@ -710,8 +712,9 @@ export class VaultState {
     try {
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.add_secret(
-          key,
-          value,
+          id,
+          type,
+          data,
         )) as NookSecretRecord[]
         this.secrets = mapWasmRecords(rawRecords)
       })
@@ -725,7 +728,7 @@ export class VaultState {
     }
   }
 
-  async handleDeleteSecret(key: string) {
+  async handleDeleteSecret(id: string) {
     if (!this.manager) return
     this.errorMsg = ''
     this.dismissSuccess()
@@ -736,7 +739,7 @@ export class VaultState {
     try {
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.delete_secret(
-          key,
+          id,
         )) as NookSecretRecord[]
         this.secrets = mapWasmRecords(rawRecords)
       })

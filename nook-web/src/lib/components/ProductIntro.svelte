@@ -11,18 +11,9 @@
 >
   <p class="mb-2 font-medium text-foreground inline-flex items-center gap-1.5">
     <Info class="size-3.5 shrink-0" />
-    Decentralized secret manager
+    Why Nook?
   </p>
-  <ul class="list-disc space-y-1 pl-4 text-pretty">
-    <li>
-      No nook account — encrypt here, store the vault file on <em>your</em>
-      provider (GitHub or this device).
-    </li>
-    <li>
-      Enroll more browsers over time; each device gets keys so you have more
-      ways to unlock and recover access.
-    </li>
-  </ul>
+  <p class="text-pretty">Learn how device keys, storage, and recovery work.</p>
   <Button
     type="button"
     variant="link"
@@ -31,6 +22,6 @@
     data-testid="product-intro-help-link"
     onclick={onOpenHelp}
   >
-    Read architecture & join guide
+    How Nook works
   </Button>
 </aside>

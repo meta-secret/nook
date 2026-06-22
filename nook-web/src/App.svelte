@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { BookOpen, Lock, ShieldCheck } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, GitFork, Lock } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -35,7 +35,9 @@
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {shellWidth}"
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {vault.helpOpen
+        ? 'max-w-5xl'
+        : shellWidth}"
     >
       <div class="flex min-w-0 items-center gap-2.5">
         <div
@@ -55,14 +57,12 @@
       </div>
 
       <div class="flex items-center gap-2">
-        {#if vault.helpOpen}
-          <span class="text-xs font-medium text-muted-foreground">Help</span>
-        {:else if vault.isAuthenticated}
+        {#if vault.isAuthenticated && !vault.helpOpen}
           {#if vault.settingsOpen}
             <Button
               variant="outline"
               size="sm"
-              class="border-border"
+              class="border-border text-xs text-muted-foreground"
               data-testid="storage-settings-close"
               onclick={() => vault.closeSettings()}
             >
@@ -72,7 +72,7 @@
             <button
               type="button"
               onclick={() => vault.openSettings()}
-              class="relative inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="relative inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               data-testid="storage-settings-btn"
             >
               {vault.activeProviderLabel}
@@ -86,22 +86,44 @@
               {/if}
             </button>
           {/if}
-        {:else}
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground"
-            data-testid="welcome-header-hint"
-          >
-            <ShieldCheck class="size-3 shrink-0" />
-            <span class="hidden sm:inline">Encrypted in your browser</span>
-            <span class="sm:hidden">Encrypted locally</span>
-          </span>
         {/if}
-        {#if !vault.helpOpen}
+
+        {#if vault.isAuthenticated && !vault.helpOpen}
+          <span class="mx-0.5 h-4 border-l border-border" aria-hidden="true"
+          ></span>
+        {/if}
+
+        <a
+          href="https://github.com/meta-secret/nook"
+          target="_blank"
+          rel="noreferrer"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label="Nook on GitHub — open source"
+          title="Nook is open source on GitHub"
+          data-testid="github-source-link"
+        >
+          <GitFork class="size-3.5" />
+          <span class="hidden sm:inline">GitHub</span>
+        </a>
+
+        {#if vault.helpOpen}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            class="border-border"
+            class="border-border text-xs text-muted-foreground"
+            data-testid="help-header-close"
+            onclick={() => vault.closeHelp()}
+          >
+            <ArrowLeft class="size-3.5" />
+            <span class="hidden sm:inline">Back</span>
+          </Button>
+        {:else}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="border-border text-xs text-muted-foreground"
             data-testid="help-open-btn"
             onclick={() => vault.openHelp()}
           >
@@ -114,9 +136,9 @@
   </header>
 
   <div
-    class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? 'py-8'
-      : 'py-5 sm:py-6'}"
+    class="mx-auto px-4 sm:px-6 {vault.helpOpen
+      ? 'max-w-5xl'
+      : shellWidth} {vault.isAuthenticated ? 'py-8' : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
       <HelpPage onClose={() => vault.closeHelp()} />
@@ -163,8 +185,9 @@
             <SecretVault
               isSaving={vault.isSaving}
               secrets={vault.secrets}
-              onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
-              onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
+              onAddSecret={(id, type, data) =>
+                vault.handleAddSecret(id, type, data)}
+              onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
               onGeneratePassword={(
                 length,
                 lowercase,

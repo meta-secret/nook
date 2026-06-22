@@ -1,18 +1,32 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
 use nook_core::{
-    Database, PasswordOptions, VaultCrypto, VaultFormat, deserialize_stored, filter_secrets,
-    generate_password, serialize_stored, validate_connect, validate_secret_label,
-    validate_secret_value,
+    ApiKeySecret, Database, PasswordOptions, SecretType, SecretValue, VaultCrypto, VaultFormat,
+    deserialize_stored, filter_secrets, generate_password, serialize_stored, validate_connect,
+    validate_secret_data, validate_secret_id,
 };
 use std::collections::HashMap;
 
 const TEST_PASSPHRASE: &str = "deadbeefdeadbeefdeadbeefdeadbeef";
 
+fn api_key(value: &str) -> SecretValue {
+    SecretValue::ApiKey(ApiKeySecret {
+        website_url: "https://example.com".to_owned(),
+        key: value.to_owned(),
+        expires_at: String::new(),
+    })
+}
+
+fn encrypted_api_key(crypto: &VaultCrypto, value: &str) -> String {
+    crypto
+        .encrypt_value(&api_key(value).to_yaml().unwrap())
+        .unwrap()
+}
+
 fn sample_db() -> Database {
     let mut db = Database::new();
-    db.insert("github.com".to_owned(), "hunter2".to_owned());
-    db.insert("work-vpn".to_owned(), "token-abc".to_owned());
+    db.insert("github.com".to_owned(), api_key("hunter2"));
+    db.insert("work-vpn".to_owned(), api_key("token-abc"));
     db
 }
 
@@ -25,7 +39,11 @@ fn armored_cache_from_db(db: &Database, crypto: &VaultCrypto) -> HashMap<String,
 }
 
 fn save_armored_cache(armored: &HashMap<String, String>) -> String {
-    let records = Database::stored_records_from_armored(armored);
+    let secret_types = armored
+        .keys()
+        .map(|key| (key.clone(), SecretType::ApiKey))
+        .collect();
+    let records = Database::stored_records_from_armored(armored, &secret_types);
     serialize_stored(&records, VaultFormat::Yaml).unwrap()
 }
 
@@ -45,11 +63,11 @@ fn incremental_add_secret_matches_full_reencrypt() {
     let db = sample_db();
     let mut armored = armored_cache_from_db(&db, &crypto);
 
-    let label = validate_secret_label("  api.example.com  ").unwrap();
-    validate_secret_value("generated-secret").unwrap();
+    let label = validate_secret_id("  api.example.com  ").unwrap();
+    validate_secret_data("generated-secret").unwrap();
     armored.insert(
         label.clone(),
-        crypto.encrypt_value("generated-secret").unwrap(),
+        encrypted_api_key(&crypto, "generated-secret"),
     );
 
     let yaml = save_armored_cache(&armored);
@@ -60,10 +78,10 @@ fn incremental_add_secret_matches_full_reencrypt() {
         restored
             .list()
             .iter()
-            .find(|r| r.key == "api.example.com")
+            .find(|r| r.id == "api.example.com")
             .unwrap()
-            .value,
-        "generated-secret"
+            .data,
+        api_key("generated-secret")
     );
     assert_eq!(armored.len(), reloaded_armored.len());
 }
@@ -78,7 +96,7 @@ fn incremental_delete_secret() {
     let (restored, _) = load_vault(&yaml, &crypto);
 
     assert_eq!(restored.list().len(), 1);
-    assert_eq!(restored.list()[0].key, "github.com");
+    assert_eq!(restored.list()[0].id, "github.com");
 }
 
 #[test]
@@ -89,7 +107,7 @@ fn incremental_update_secret_replaces_armored_entry() {
 
     armored.insert(
         "github.com".to_owned(),
-        crypto.encrypt_value("new-password").unwrap(),
+        encrypted_api_key(&crypto, "new-password"),
     );
     assert_ne!(armored.get("github.com").unwrap(), &old);
 
@@ -99,10 +117,10 @@ fn incremental_update_secret_replaces_armored_entry() {
         restored
             .list()
             .iter()
-            .find(|r| r.key == "github.com")
+            .find(|r| r.id == "github.com")
             .unwrap()
-            .value,
-        "new-password"
+            .data,
+        api_key("new-password")
     );
 }
 
@@ -121,12 +139,12 @@ fn generated_password_can_be_stored_and_reloaded() {
     let mut armored = HashMap::new();
     armored.insert(
         "generated".to_owned(),
-        crypto.encrypt_value(&password).unwrap(),
+        encrypted_api_key(&crypto, &password),
     );
 
     let yaml = save_armored_cache(&armored);
     let (restored, _) = load_vault(&yaml, &crypto);
-    assert_eq!(restored.list()[0].value, password);
+    assert_eq!(restored.list()[0].data, api_key(&password));
 }
 
 #[test]
@@ -160,22 +178,19 @@ fn yaml_vault_survives_add_delete_add_cycle() {
     armored.remove("work-vpn");
     armored.insert(
         "staging".to_owned(),
-        crypto.encrypt_value("stage-pass").unwrap(),
+        encrypted_api_key(&crypto, "stage-pass"),
     );
     let mid = save_armored_cache(&armored);
     let (mid_db, mut mid_armored) = load_vault(&mid, &crypto);
     assert_eq!(mid_db.list().len(), 2);
 
     mid_armored.remove("staging");
-    mid_armored.insert(
-        "prod".to_owned(),
-        crypto.encrypt_value("prod-pass").unwrap(),
-    );
+    mid_armored.insert("prod".to_owned(), encrypted_api_key(&crypto, "prod-pass"));
     let final_yaml = save_armored_cache(&mid_armored);
     let (final_db, _) = load_vault(&final_yaml, &crypto);
 
     let records = final_db.list();
-    let keys: Vec<&str> = records.iter().map(|r| r.key.as_str()).collect();
+    let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(keys, vec!["github.com", "prod"]);
 }
 
@@ -183,7 +198,11 @@ fn yaml_vault_survives_add_delete_add_cycle() {
 fn stored_records_from_armored_matches_serialize_order() {
     let crypto = VaultCrypto::new(TEST_PASSPHRASE).unwrap();
     let armored = armored_cache_from_db(&sample_db(), &crypto);
-    let records = Database::stored_records_from_armored(&armored);
+    let secret_types = armored
+        .keys()
+        .map(|key| (key.clone(), SecretType::ApiKey))
+        .collect();
+    let records = Database::stored_records_from_armored(&armored, &secret_types);
 
     assert_eq!(records[0].key, "github.com");
     assert_eq!(records[1].key, "work-vpn");

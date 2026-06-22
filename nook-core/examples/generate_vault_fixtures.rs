@@ -2,9 +2,17 @@
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 
-use nook_core::{Database, VaultFormat};
+use nook_core::{ApiKeySecret, Database, SecretValue, VaultFormat};
 use std::fs;
 use std::path::PathBuf;
+
+fn api_key(website_url: &str, key: &str) -> SecretValue {
+    SecretValue::ApiKey(ApiKeySecret {
+        website_url: website_url.to_owned(),
+        key: key.to_owned(),
+        expires_at: String::new(),
+    })
+}
 
 fn main() -> Result<(), String> {
     let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures");
@@ -13,11 +21,17 @@ fn main() -> Result<(), String> {
     let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
 
     let mut db = Database::new();
-    db.insert("github.com".to_owned(), "hunter2".to_owned());
-    db.insert("work-vpn".to_owned(), "token-abc".to_owned());
+    db.insert(
+        "github.com".to_owned(),
+        api_key("https://github.com", "hunter2"),
+    );
+    db.insert(
+        "work-vpn".to_owned(),
+        api_key("https://vpn.example.com", "token-abc"),
+    );
     db.insert(
         "notes".to_owned(),
-        "multiline\nsecret\nwith\ttabs".to_owned(),
+        api_key("https://notes.example.com", "multiline\nsecret\nwith\ttabs"),
     );
 
     let session_jsonl = db.to_jsonl()?;

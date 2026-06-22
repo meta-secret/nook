@@ -19,7 +19,8 @@ pub use multi_device::{
     build_members_records, create_join_request_record, dec_auth_id, dec_auth_id_from_public_key,
     device_is_enrolled, encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec,
     enroll_device_with_keys, ensure_self_in_roster, explain_connect_blocked, generate_dec,
-    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
+    generate_id, generate_symmetric_key, generate_vault_keys, genesis_auth_record,
+    genesis_dec_record,
     genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id,
     is_join_stored_record, is_members_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
@@ -32,29 +33,129 @@ pub use multi_device::{
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use validation::{
     DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, filter_secrets,
-    validate_connect, validate_github_pat, validate_github_repo_name, validate_secret_label,
-    validate_secret_value, validate_storage_mode,
+    validate_connect, validate_github_pat, validate_github_repo_name, validate_secret_data,
+    validate_secret_id, validate_storage_mode,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{VaultFormat, deserialize_stored, detect_stored_format, serialize_stored};
 
-/// Plaintext secret (in memory only).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecretType {
+    Login,
+    ApiKey,
+    SeedPhrase,
+}
+
+impl SecretType {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "login" => Ok(Self::Login),
+            "api-key" => Ok(Self::ApiKey),
+            "seed-phrase" => Ok(Self::SeedPhrase),
+            _ => Err(format!("Unknown secret type: {value}")),
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Login => "login",
+            Self::ApiKey => "api-key",
+            Self::SeedPhrase => "seed-phrase",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginSecret {
+    pub website_url: String,
+    pub username: String,
+    pub password: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiKeySecret {
+    pub website_url: String,
+    pub key: String,
+    pub expires_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SeedPhraseSecret {
+    pub name: String,
+    pub seed: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecretValue {
+    Login(LoginSecret),
+    ApiKey(ApiKeySecret),
+    SeedPhrase(SeedPhraseSecret),
+}
+
+impl SecretValue {
+    pub fn from_yaml(secret_type: SecretType, yaml: &str) -> Result<Self, String> {
+        match secret_type {
+            SecretType::Login => serde_yaml::from_str(yaml)
+                .map(Self::Login)
+                .map_err(|error| format!("Invalid login payload: {error}")),
+            SecretType::ApiKey => serde_yaml::from_str(yaml)
+                .map(Self::ApiKey)
+                .map_err(|error| format!("Invalid API key payload: {error}")),
+            SecretType::SeedPhrase => serde_yaml::from_str(yaml)
+                .map(Self::SeedPhrase)
+                .map_err(|error| format!("Invalid seed phrase payload: {error}")),
+        }
+    }
+
+    pub fn to_yaml(&self) -> Result<String, String> {
+        match self {
+            Self::Login(value) => serde_yaml::to_string(value),
+            Self::ApiKey(value) => serde_yaml::to_string(value),
+            Self::SeedPhrase(value) => serde_yaml::to_string(value),
+        }
+        .map_err(|error| format!("Failed to serialize secret payload: {error}"))
+    }
+
+    #[must_use]
+    pub const fn secret_type(&self) -> SecretType {
+        match self {
+            Self::Login(_) => SecretType::Login,
+            Self::ApiKey(_) => SecretType::ApiKey,
+            Self::SeedPhrase(_) => SecretType::SeedPhrase,
+        }
+    }
+}
+
+/// Typed plaintext secret (in memory only).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRecord {
-    pub key: String,
-    pub value: String,
+    pub id: String,
+    #[serde(rename = "type")]
+    pub secret_type: SecretType,
+    pub data: SecretValue,
 }
 
 /// One record on disk — label is plaintext, `value` is armored age ciphertext.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StoredSecretRecord {
+    #[serde(rename = "id")]
     pub key: String,
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
+    pub secret_type: Option<SecretType>,
+    #[serde(rename = "data")]
     pub value: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct Database {
-    records: HashMap<String, String>,
+    records: HashMap<String, SecretRecord>,
 }
 
 impl Database {
@@ -74,7 +175,7 @@ impl Database {
             }
             let record: SecretRecord = serde_json::from_str(line)
                 .map_err(|e| format!("Failed to parse JSONL line: {}", e))?;
-            records.insert(record.key, record.value);
+            records.insert(record.id.clone(), record);
         }
         Ok(Self { records })
     }
@@ -106,11 +207,7 @@ impl Database {
         let mut keys: Vec<&String> = self.records.keys().collect();
         keys.sort();
         for key in keys {
-            let value = self.records.get(key).unwrap();
-            let record = SecretRecord {
-                key: key.clone(),
-                value: value.clone(),
-            };
+            let record = self.records.get(key).unwrap();
             let line = serde_json::to_string(&record)
                 .map_err(|e| format!("Failed to serialize record: {}", e))?;
             lines.push(line);
@@ -131,11 +228,18 @@ impl Database {
         self.to_stored(passphrase, VaultFormat::Yaml)
     }
 
-    pub fn insert(&mut self, key: String, value: String) {
-        self.records.insert(key, value);
+    pub fn insert(&mut self, id: String, data: SecretValue) {
+        self.records.insert(
+            id.clone(),
+            SecretRecord {
+                id,
+                secret_type: data.secret_type(),
+                data,
+            },
+        );
     }
 
-    pub fn remove(&mut self, key: &str) -> Option<String> {
+    pub fn remove(&mut self, key: &str) -> Option<SecretRecord> {
         self.records.remove(key)
     }
 
@@ -144,12 +248,9 @@ impl Database {
         let mut records: Vec<SecretRecord> = self
             .records
             .iter()
-            .map(|(k, v)| SecretRecord {
-                key: k.clone(),
-                value: v.clone(),
-            })
+            .map(|(_, record)| record.clone())
             .collect();
-        records.sort_by(|a, b| a.key.cmp(&b.key));
+        records.sort_by(|a, b| a.id.cmp(&b.id));
         records
     }
 
@@ -168,8 +269,19 @@ impl Database {
         let user_records = user_stored_records(stored_records);
         let mut records = HashMap::new();
         for stored in user_records {
-            let value = crypto.decrypt_value(&stored.value)?;
-            records.insert(stored.key.clone(), value);
+            let secret_type = stored.secret_type.ok_or_else(|| {
+                format!("Secret {} is missing required type metadata.", stored.key)
+            })?;
+            let decrypted = crypto.decrypt_value(&stored.value)?;
+            let value = SecretValue::from_yaml(secret_type, &decrypted)?;
+            records.insert(
+                stored.key.clone(),
+                SecretRecord {
+                    id: stored.key.clone(),
+                    secret_type,
+                    data: value,
+                },
+            );
         }
         Ok(Self { records })
     }
@@ -187,10 +299,12 @@ impl Database {
         keys.sort();
         let mut stored_records = Vec::with_capacity(keys.len());
         for key in keys {
-            let value = self.records.get(key).unwrap();
+            let record = self.records.get(key).unwrap();
+            let value = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
                 key: key.clone(),
-                value: crypto.encrypt_value(value)?,
+                secret_type: Some(record.secret_type),
+                value: crypto.encrypt_value(&value)?,
             });
         }
         Ok(stored_records)
@@ -200,12 +314,14 @@ impl Database {
     #[must_use]
     pub fn stored_records_from_armored(
         armored: &HashMap<String, String>,
+        secret_types: &HashMap<String, SecretType>,
     ) -> Vec<StoredSecretRecord> {
         let mut keys: Vec<&String> = armored.keys().collect();
         keys.sort();
         keys.into_iter()
             .map(|key| StoredSecretRecord {
                 key: key.clone(),
+                secret_type: secret_types.get(key).copied(),
                 value: armored.get(key).cloned().unwrap_or_default(),
             })
             .collect()
@@ -220,44 +336,48 @@ impl Default for Database {
 
 #[cfg(test)]
 mod tests {
-    use super::{Database, SecretRecord, StoredSecretRecord, VaultFormat};
+    use super::{
+        ApiKeySecret, Database, SecretRecord, SecretType, SecretValue, StoredSecretRecord,
+        VaultFormat,
+    };
 
     const TEST_PASSPHRASE: &str = "deadbeefdeadbeefdeadbeefdeadbeef";
 
+    fn api_key(value: &str) -> SecretValue {
+        SecretValue::ApiKey(ApiKeySecret {
+            website_url: "https://example.com".to_owned(),
+            key: value.to_owned(),
+            expires_at: String::new(),
+        })
+    }
+
     fn sample_db() -> Database {
         let mut db = Database::new();
-        db.insert("github.com".to_owned(), "hunter2".to_owned());
-        db.insert("work-vpn".to_owned(), "token-abc".to_owned());
+        db.insert("github.com".to_owned(), api_key("hunter2"));
+        db.insert("work-vpn".to_owned(), api_key("token-abc"));
         db
     }
 
     #[test]
     fn database_roundtrip() {
         let mut db = Database::new();
-        db.insert("foo".to_owned(), "bar".to_owned());
-        db.insert("hello".to_owned(), "world".to_owned());
+        db.insert("foo".to_owned(), api_key("bar"));
+        db.insert("hello".to_owned(), api_key("world"));
 
         let jsonl = db.to_jsonl().unwrap();
-        assert_eq!(
-            jsonl,
-            r#"{"key":"foo","value":"bar"}
-{"key":"hello","value":"world"}"#
-        );
-
         let parsed = Database::from_jsonl(&jsonl).unwrap();
-        assert_eq!(parsed.list().len(), 2);
+        assert_eq!(parsed.list(), db.list());
     }
 
     #[test]
     fn stored_jsonl_encrypts_values_only() {
-        let plaintext = r#"{"key":"github.com","value":"hunter2"}
-{"key":"work-vpn","value":"token-abc"}"#;
+        let plaintext = sample_db().to_jsonl().unwrap();
         let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
 
-        let db = Database::from_jsonl(plaintext).unwrap();
+        let db = Database::from_jsonl(&plaintext).unwrap();
         let stored = db.to_stored_jsonl(passphrase).unwrap();
 
-        assert!(stored.contains("\"key\":\"github.com\""));
+        assert!(stored.contains("\"id\":\"github.com\""));
         assert!(stored.contains("BEGIN AGE ENCRYPTED FILE"));
         assert!(!stored.contains("hunter2"));
         assert!(!stored.contains("token-abc"));
@@ -278,11 +398,10 @@ mod tests {
 
     #[test]
     fn stored_yaml_encrypts_values_only() {
-        let plaintext = r#"{"key":"github.com","value":"hunter2"}
-{"key":"work-vpn","value":"token-abc"}"#;
+        let plaintext = sample_db().to_jsonl().unwrap();
         let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
 
-        let db = Database::from_jsonl(plaintext).unwrap();
+        let db = Database::from_jsonl(&plaintext).unwrap();
         let stored = db.to_stored_yaml(passphrase).unwrap();
 
         assert!(stored.contains("github.com"));
@@ -301,9 +420,13 @@ mod tests {
 
     #[test]
     fn stored_auto_detects_jsonl_and_yaml() {
-        let plaintext = r#"{"key":"x","value":"y"}"#;
+        let plaintext = {
+            let mut db = Database::new();
+            db.insert("x".to_owned(), api_key("y"));
+            db.to_jsonl().unwrap()
+        };
         let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
-        let db = Database::from_jsonl(plaintext).unwrap();
+        let db = Database::from_jsonl(&plaintext).unwrap();
 
         let jsonl = db.to_stored_jsonl(passphrase).unwrap();
         let yaml = db.to_stored_yaml(passphrase).unwrap();
@@ -327,7 +450,7 @@ mod tests {
     #[test]
     fn to_stored_respects_format() {
         let mut db = Database::new();
-        db.insert("a".to_owned(), "1".to_owned());
+        db.insert("a".to_owned(), api_key("1"));
         let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
 
         let jsonl = db.to_stored(passphrase, VaultFormat::Jsonl).unwrap();
@@ -365,7 +488,7 @@ mod tests {
 
     #[test]
     fn wrong_passphrase_fails() {
-        let db = Database::from_jsonl(r#"{"key":"x","value":"y"}"#).unwrap();
+        let db = sample_db();
         let stored = db.to_stored_jsonl("correct-key").unwrap();
         assert!(Database::from_stored_jsonl(&stored, "wrong-key").is_err());
 
@@ -406,17 +529,17 @@ mod tests {
     #[test]
     fn insert_overwrites_duplicate_key() {
         let mut db = Database::new();
-        db.insert("site".to_owned(), "old".to_owned());
-        db.insert("site".to_owned(), "new".to_owned());
+        db.insert("site".to_owned(), api_key("old"));
+        db.insert("site".to_owned(), api_key("new"));
 
         assert_eq!(db.list().len(), 1);
-        assert_eq!(db.list()[0].value, "new");
+        assert_eq!(db.list()[0].data, api_key("new"));
     }
 
     #[test]
     fn remove_returns_previous_value() {
         let mut db = sample_db();
-        assert_eq!(db.remove("github.com"), Some("hunter2".to_owned()));
+        assert_eq!(db.remove("github.com").unwrap().data, api_key("hunter2"));
         assert_eq!(db.remove("github.com"), None);
         assert_eq!(db.list().len(), 1);
     }
@@ -424,23 +547,36 @@ mod tests {
     #[test]
     fn list_is_sorted_by_key() {
         let records = sample_db().list();
-        let keys: Vec<&str> = records.iter().map(|r| r.key.as_str()).collect();
+        let keys: Vec<&str> = records.iter().map(|r| r.id.as_str()).collect();
         assert_eq!(keys, vec!["github.com", "work-vpn"]);
     }
 
     #[test]
     fn from_jsonl_duplicate_keys_last_line_wins() {
-        let jsonl = r#"{"key":"dup","value":"first"}
-{"key":"dup","value":"second"}"#;
-        let db = Database::from_jsonl(jsonl).unwrap();
+        let first = SecretRecord {
+            id: "dup".to_owned(),
+            secret_type: SecretType::ApiKey,
+            data: api_key("first"),
+        };
+        let second = SecretRecord {
+            id: "dup".to_owned(),
+            secret_type: SecretType::ApiKey,
+            data: api_key("second"),
+        };
+        let jsonl = format!(
+            "{}\n{}",
+            serde_json::to_string(&first).unwrap(),
+            serde_json::to_string(&second).unwrap()
+        );
+        let db = Database::from_jsonl(&jsonl).unwrap();
         assert_eq!(db.list().len(), 1);
-        assert_eq!(db.list()[0].value, "second");
+        assert_eq!(db.list()[0].data, api_key("second"));
     }
 
     #[test]
     fn from_jsonl_rejects_invalid_json() {
         let err = Database::from_jsonl(
-            r#"{"key":"x","value":"y"}
+            r#"{"key":"x","type":"api-key","value":{}}
 {broken"#,
         )
         .unwrap_err();
@@ -452,32 +588,33 @@ mod tests {
         let key = "🔐 café.example.com";
         let value = "パスワード \"quotes\" \\ backslash\nline2";
         let mut db = Database::new();
-        db.insert(key.to_owned(), value.to_owned());
+        db.insert(key.to_owned(), api_key(value));
 
         let jsonl = db.to_jsonl().unwrap();
         let restored = Database::from_jsonl(&jsonl).unwrap();
         assert_eq!(
             restored.list(),
             vec![SecretRecord {
-                key: key.to_owned(),
-                value: value.to_owned(),
+                id: key.to_owned(),
+                secret_type: SecretType::ApiKey,
+                data: api_key(value),
             }]
         );
 
         let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
         let from_yaml = Database::from_stored_yaml(&stored_yaml, TEST_PASSPHRASE).unwrap();
-        assert_eq!(from_yaml.list()[0].key, key);
-        assert_eq!(from_yaml.list()[0].value, value);
+        assert_eq!(from_yaml.list()[0].id, key);
+        assert_eq!(from_yaml.list()[0].data, api_key(value));
     }
 
     #[test]
     fn empty_secret_value_roundtrip() {
         let mut db = Database::new();
-        db.insert("empty-value".to_owned(), String::new());
+        db.insert("empty-value".to_owned(), api_key(""));
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
-        assert_eq!(restored.list()[0].value, "");
+        assert_eq!(restored.list()[0].data, api_key(""));
     }
 
     #[test]
@@ -507,12 +644,12 @@ mod tests {
     #[test]
     fn mutate_through_stored_yaml_roundtrip() {
         let mut db = sample_db();
-        db.insert("new-entry".to_owned(), "added-later".to_owned());
+        db.insert("new-entry".to_owned(), api_key("added-later"));
         db.remove("work-vpn");
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
         let mut restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
-        restored.insert("another".to_owned(), "value".to_owned());
+        restored.insert("another".to_owned(), api_key("value"));
 
         let final_jsonl = restored.to_jsonl().unwrap();
         assert!(final_jsonl.contains("github.com"));
@@ -536,7 +673,7 @@ mod tests {
         let mut db = Database::new();
         db.insert(
             "notes".to_owned(),
-            "line-one\nline-two\nline-three".to_owned(),
+            api_key("line-one\nline-two\nline-three"),
         );
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
@@ -544,11 +681,14 @@ mod tests {
         assert!(!stored.contains("\\n"));
 
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
-        assert_eq!(restored.list()[0].value, "line-one\nline-two\nline-three");
+        assert_eq!(
+            restored.list()[0].data,
+            api_key("line-one\nline-two\nline-three")
+        );
     }
 
     #[test]
-    fn stored_jsonl_keys_remain_plaintext() {
+    fn stored_jsonl_ids_remain_plaintext() {
         let db = sample_db();
         let stored = db.to_stored_jsonl(TEST_PASSPHRASE).unwrap();
         let lines: Vec<StoredSecretRecord> = stored
@@ -573,7 +713,11 @@ mod tests {
         armored.insert("z-last".to_owned(), crypto.encrypt_value("z").unwrap());
         armored.insert("a-first".to_owned(), crypto.encrypt_value("a").unwrap());
 
-        let records = Database::stored_records_from_armored(&armored);
+        let secret_types = HashMap::from([
+            ("z-last".to_owned(), SecretType::ApiKey),
+            ("a-first".to_owned(), SecretType::ApiKey),
+        ]);
+        let records = Database::stored_records_from_armored(&armored, &secret_types);
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].key, "a-first");
         assert_eq!(records[1].key, "z-last");
@@ -584,7 +728,7 @@ mod tests {
     fn stored_records_from_armored_empty() {
         use std::collections::HashMap;
 
-        assert!(Database::stored_records_from_armored(&HashMap::new()).is_empty());
+        assert!(Database::stored_records_from_armored(&HashMap::new(), &HashMap::new()).is_empty());
     }
 
     #[test]
@@ -599,10 +743,80 @@ mod tests {
     }
 
     #[test]
-    fn validate_before_insert_rejects_blank_label() {
-        use crate::{validate_secret_label, validate_secret_value};
+    fn stored_type_is_plaintext_and_selects_decrypted_payload() {
+        let mut db = Database::new();
+        db.insert(
+            "login-id".to_owned(),
+            SecretValue::Login(super::LoginSecret {
+                website_url: "https://example.com".to_owned(),
+                username: "alice".to_owned(),
+                password: "private-password".to_owned(),
+                notes: String::new(),
+            }),
+        );
 
-        assert!(validate_secret_label("   ").is_err());
-        assert!(validate_secret_value("").is_err());
+        let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        assert!(stored.contains("type: login"));
+        assert!(!stored.contains("private-password"));
+        assert_eq!(
+            Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
+                .unwrap()
+                .list(),
+            db.list()
+        );
+    }
+
+    #[test]
+    fn typed_payload_yaml_preserves_multiline_notes() {
+        let value = SecretValue::Login(super::LoginSecret {
+            website_url: "https://example.com".to_owned(),
+            username: "alice".to_owned(),
+            password: "secret".to_owned(),
+            notes: "first line\nsecond line\nthird line".to_owned(),
+        });
+
+        let yaml = value.to_yaml().unwrap();
+        assert!(yaml.contains("notes: |-"));
+        assert!(yaml.contains("  second line"));
+        assert_eq!(
+            SecretValue::from_yaml(SecretType::Login, &yaml).unwrap(),
+            value
+        );
+    }
+
+    #[test]
+    fn missing_or_mismatched_type_metadata_is_rejected() {
+        let crypto = super::VaultCrypto::new(TEST_PASSPHRASE).unwrap();
+        let login_yaml = super::SecretValue::Login(super::LoginSecret {
+            website_url: "https://example.com".to_owned(),
+            username: "alice".to_owned(),
+            password: "secret".to_owned(),
+            notes: String::new(),
+        })
+        .to_yaml()
+        .unwrap();
+        let ciphertext = crypto.encrypt_value(&login_yaml).unwrap();
+
+        let missing = StoredSecretRecord {
+            key: "missing".to_owned(),
+            secret_type: None,
+            value: ciphertext.clone(),
+        };
+        assert!(Database::from_stored_records_with_crypto(&[missing], &crypto).is_err());
+
+        let mismatched = StoredSecretRecord {
+            key: "mismatched".to_owned(),
+            secret_type: Some(SecretType::SeedPhrase),
+            value: ciphertext,
+        };
+        assert!(Database::from_stored_records_with_crypto(&[mismatched], &crypto).is_err());
+    }
+
+    #[test]
+    fn validate_before_insert_rejects_blank_label() {
+        use crate::{validate_secret_data, validate_secret_id};
+
+        assert!(validate_secret_id("   ").is_err());
+        assert!(validate_secret_data("").is_err());
     }
 }

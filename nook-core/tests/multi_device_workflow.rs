@@ -1,12 +1,20 @@
 //! Multi-device vault keys workflow integration tests.
 
 use nook_core::{
-    Database, DeviceIdentity, VaultCrypto, VaultFormat, VaultKeys, approve_join_request,
-    create_join_request_record, deserialize_stored, enroll_device_with_keys, generate_vault_keys,
-    genesis_auth_record, genesis_members_records, list_join_requests, replace_member_records,
-    resolve_member_roster, resolve_members_key, resolve_secrets_key, serialize_stored,
-    user_stored_records,
+    ApiKeySecret, Database, DeviceIdentity, SecretValue, VaultCrypto, VaultFormat, VaultKeys,
+    approve_join_request, create_join_request_record, deserialize_stored, enroll_device_with_keys,
+    generate_vault_keys, genesis_auth_record, genesis_members_records, list_join_requests,
+    replace_member_records, resolve_member_roster, resolve_members_key, resolve_secrets_key,
+    serialize_stored, user_stored_records,
 };
+
+fn api_key(value: &str) -> SecretValue {
+    SecretValue::ApiKey(ApiKeySecret {
+        website_url: "https://example.com".to_owned(),
+        key: value.to_owned(),
+        expires_at: String::new(),
+    })
+}
 
 fn encrypt_user_secrets(db: &Database, crypto: &VaultCrypto) -> Vec<nook_core::StoredSecretRecord> {
     db.to_stored_records_with_crypto(crypto).unwrap()
@@ -30,7 +38,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
     let (genesis, mut records) = genesis_vault(&keys);
 
     let mut db = Database::new();
-    db.insert("github.com".to_owned(), "hunter2".to_owned());
+    db.insert("github.com".to_owned(), api_key("hunter2"));
     records.extend(encrypt_user_secrets(&db, &crypto));
 
     let device_two = DeviceIdentity::generate().unwrap();
@@ -85,7 +93,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
         let user_records = user_stored_records(&loaded);
         let unlocked = Database::from_stored_records_with_crypto(&user_records, &crypto).unwrap();
         assert_eq!(unlocked.list().len(), 1);
-        assert_eq!(unlocked.list()[0].value, "hunter2");
+        assert_eq!(unlocked.list()[0].data, api_key("hunter2"));
     }
 }
 
@@ -93,7 +101,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
 fn vault_without_auth_envelope_fails_to_resolve_secrets_key() {
     let crypto = VaultCrypto::new(&generate_vault_keys().unwrap().secrets_key).unwrap();
     let mut db = Database::new();
-    db.insert("site".to_owned(), "secret".to_owned());
+    db.insert("site".to_owned(), api_key("secret"));
     let records = encrypt_user_secrets(&db, &crypto);
 
     let device = DeviceIdentity::generate().unwrap();

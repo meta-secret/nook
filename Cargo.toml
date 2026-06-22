@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 description = "Rust core, wasm bindings, and Svelte web app for Nook."
-repository = "https://github.com/bynull/nook"
+repository = "https://github.com/meta-secret/nook"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

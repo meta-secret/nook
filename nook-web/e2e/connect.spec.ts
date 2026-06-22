@@ -51,6 +51,10 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
+    await expect(page.getByTestId('github-source-link')).toHaveAttribute(
+      'href',
+      'https://github.com/meta-secret/nook',
+    )
   })
 
   test('opens help page from header', async ({ page }) => {
@@ -58,8 +62,15 @@ test.describe('vault connect flow', () => {
 
     await page.getByTestId('help-open-btn').click()
     await expect(page.getByTestId('help-page')).toBeVisible()
+    await expect(page.getByTestId('help-navigation')).toBeVisible()
     await expect(page.getByTestId('help-section-decentralized')).toBeVisible()
     await expect(page.getByTestId('help-section-join')).toBeVisible()
+    const deviceKeysLink = page.getByRole('link', {
+      name: 'Your devices are the keys',
+    })
+    await expect(deviceKeysLink).toHaveAttribute('href', '#help-device-keys')
+    await deviceKeysLink.click()
+    await expect(page).toHaveURL(/#help-device-keys$/)
     await page.getByTestId('help-close-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
   })

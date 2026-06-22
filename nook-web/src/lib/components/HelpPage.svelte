@@ -24,11 +24,10 @@
             class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
           >
             <BookOpen class="size-4 shrink-0" />
-            How nook works
+            Your device is the key
           </CardTitle>
           <CardDescription class="text-pretty">
-            Architecture and design of our decentralized, offline-capable secret
-            manager — no hosted account required.
+            No master password. Your devices unlock the vault.
           </CardDescription>
         </div>
         <Button
@@ -45,25 +44,54 @@
       </div>
     </CardHeader>
 
-    <CardContent class="space-y-5 pt-4">
-      {#each HELP_SECTIONS as section (section.id)}
-        <section
-          class="space-y-2 rounded-lg border border-border bg-muted/20 p-4"
-          data-testid="help-section-{section.id}"
+    <CardContent
+      class="pt-4 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start lg:gap-5"
+    >
+      <aside class="mb-5 lg:sticky lg:top-20 lg:mb-0">
+        <p
+          class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          <h2 class="text-sm font-semibold text-foreground">{section.title}</h2>
-          <p class="text-sm leading-relaxed text-muted-foreground text-pretty">
-            {section.summary}
-          </p>
-          <ul
-            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          In this guide
+        </p>
+        <nav
+          aria-label="Help sections"
+          class="flex gap-2 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0"
+          data-testid="help-navigation"
+        >
+          {#each HELP_SECTIONS as section (section.id)}
+            <a
+              href="#help-{section.id}"
+              class="shrink-0 rounded-md border border-border bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:border-transparent lg:bg-transparent"
+            >
+              {section.title}
+            </a>
+          {/each}
+        </nav>
+      </aside>
+
+      <div class="space-y-5">
+        {#each HELP_SECTIONS as section (section.id)}
+          <section
+            id="help-{section.id}"
+            class="scroll-mt-20 space-y-2 rounded-lg border border-border bg-muted/20 p-4"
+            data-testid="help-section-{section.id}"
           >
-            {#each section.bullets as bullet, index (section.id + index)}
-              <li>{bullet}</li>
-            {/each}
-          </ul>
-        </section>
-      {/each}
+            <h2 class="text-sm font-semibold text-foreground">
+              {section.title}
+            </h2>
+            <p class="text-sm text-muted-foreground text-pretty">
+              {section.summary}
+            </p>
+            <ul
+              class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+            >
+              {#each section.bullets as bullet, index (section.id + index)}
+                <li>{bullet}</li>
+              {/each}
+            </ul>
+          </section>
+        {/each}
+      </div>
     </CardContent>
   </Card>
 </div>
