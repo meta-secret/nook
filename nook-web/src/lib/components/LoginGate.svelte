@@ -107,8 +107,7 @@
           >
         {:else if showSavedProviders && !showSetup}
           <CardDescription class="text-pretty">
-            Your provider is saved in this browser — unlock to decrypt and open
-            your vault.
+            Choose which saved provider to decrypt and open.
           </CardDescription>
         {:else if showProviderPicker && addProviderOpen}
           <ul
@@ -179,7 +178,9 @@
                       ? 'border-primary/40 bg-primary/5 text-foreground'
                       : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
                     data-testid="saved-provider-{provider.type}"
-                    onclick={() => onSelectProvider(provider.id)}
+                    disabled={isVerifying || isInitializing}
+                    aria-busy={isVerifying && provider.id === activeProviderId}
+                    onclick={() => void onSelectProvider(provider.id)}
                   >
                     {#if provider.type === 'github'}
                       <Cloud class="size-4 shrink-0" />
@@ -197,10 +198,15 @@
                       </span>
                     {/if}
                     {#if provider.id === activeProviderId}
-                      <span
-                        class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
-                        >Active</span
-                      >
+                      {#if isUnlocking}
+                        <RefreshCw class="size-3.5 shrink-0 animate-spin" />
+                        <span class="sr-only">Unlocking</span>
+                      {:else}
+                        <span
+                          class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
+                          >Last used</span
+                        >
+                      {/if}
                     {/if}
                   </button>
                 </li>
@@ -253,24 +259,7 @@
           </div>
         {/if}
 
-        {#if showSavedProviders}
-          <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="submit"
-              class="sm:min-w-[180px]"
-              data-testid="unlock-vault-btn"
-              disabled={isUnlocking}
-            >
-              {#if isInitializing || isUnlocking}
-                <RefreshCw class="size-4 animate-spin" />
-                {isUnlocking ? 'Unlocking…' : 'Loading engine…'}
-              {:else}
-                <ShieldCheck class="size-4" />
-                Unlock vault
-              {/if}
-            </Button>
-          </div>
-        {:else if showSetup}
+        {#if showSetup}
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="submit"

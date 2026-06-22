@@ -34,7 +34,6 @@
     isSaving,
     isInitializing,
     errorMsg,
-    successMsg,
     deviceId = '',
     devicePublicKey = '',
     pendingJoins = [] as JoinRequest[],
@@ -59,7 +58,6 @@
     isSaving: boolean
     isInitializing: boolean
     errorMsg: string
-    successMsg: string
     deviceId?: string
     devicePublicKey?: string
     pendingJoins?: JoinRequest[]
@@ -78,9 +76,6 @@
     onRefreshJoins?: () => void | Promise<void>
   } = $props()
 
-  const activeProvider = $derived(
-    providers.find((p) => p.id === activeProviderId) ?? null,
-  )
   const showSetup = $derived(setupType !== null)
   const addingProvider = $derived(addProviderOpen || showSetup)
 </script>
@@ -123,8 +118,8 @@
               Pick where to store another encrypted vault file. Each provider
               can point at a different vault.
             {:else}
-              Switch providers or add another. Tap a saved provider to make it
-              active, then Reconnect vault.
+              Tap a saved provider to switch and reconnect immediately, or add
+              another provider.
             {/if}
           </CardDescription>
         </div>
@@ -179,7 +174,10 @@
                         ? 'border-primary/40 bg-primary/5 text-foreground'
                         : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
                       data-testid="settings-provider-{provider.type}"
-                      onclick={() => onSelectProvider(provider.id)}
+                      disabled={isVerifying || isInitializing}
+                      aria-busy={isVerifying &&
+                        provider.id === activeProviderId}
+                      onclick={() => void onSelectProvider(provider.id)}
                     >
                       {#if provider.type === 'github'}
                         <Cloud class="size-4 shrink-0" />
@@ -197,10 +195,15 @@
                         </span>
                       {/if}
                       {#if provider.id === activeProviderId}
-                        <span
-                          class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
-                          >Active</span
-                        >
+                        {#if isVerifying}
+                          <RefreshCw class="size-3.5 shrink-0 animate-spin" />
+                          <span class="sr-only">Reconnecting</span>
+                        {:else}
+                          <span
+                            class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
+                            >Active</span
+                          >
+                        {/if}
                       {/if}
                     </button>
                   </li>
@@ -221,34 +224,6 @@
                 Add provider
               </Button>
             </div>
-
-            {#if activeProvider?.type === 'github'}
-              <div class="space-y-1.5 pt-1">
-                <label
-                  class="text-xs font-medium text-foreground"
-                  for="settings-github-repo-active"
-                >
-                  GitHub repository
-                </label>
-                <input
-                  id="settings-github-repo-active"
-                  type="text"
-                  bind:value={githubRepo}
-                  placeholder={DEFAULT_GITHUB_REPO}
-                  autocomplete="off"
-                  spellcheck="false"
-                  data-testid="settings-github-repo-input"
-                  class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
-                />
-                <p class="text-[11px] text-muted-foreground">
-                  Vault file:
-                  <span class="font-mono text-foreground/80"
-                    >username/{githubRepo.trim() ||
-                      DEFAULT_GITHUB_REPO}/nook-vault.yaml</span
-                  >. Token stays in IndexedDB — reconnect to apply repo changes.
-                </p>
-              </div>
-            {/if}
           </fieldset>
         {/if}
 
@@ -262,36 +237,24 @@
           </div>
         {/if}
 
-        {#if successMsg}
-          <div
-            class="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary"
-            role="status"
-            data-testid="connect-success"
-          >
-            {successMsg}
-          </div>
-        {/if}
-
-        {#if showSetup || !addProviderOpen}
+        {#if showSetup}
           <div
             class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
           >
             <Button
               type="submit"
               class="sm:min-w-[180px]"
-              data-testid={showSetup
-                ? 'connect-provider-btn'
-                : 'connect-vault-btn'}
+              data-testid="connect-provider-btn"
             >
               {#if isInitializing}
                 <RefreshCw class="size-4 animate-spin" />
                 Loading engine…
               {:else if isVerifying}
                 <RefreshCw class="size-4 animate-spin" />
-                {showSetup ? 'Connecting…' : 'Reconnecting…'}
+                Connecting…
               {:else}
                 <ShieldCheck class="size-4" />
-                {showSetup ? 'Connect' : 'Reconnect vault'}
+                Connect
               {/if}
             </Button>
           </div>

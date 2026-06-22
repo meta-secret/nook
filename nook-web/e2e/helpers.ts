@@ -265,9 +265,7 @@ export function uniqueSecretKey(prefix: string) {
 }
 
 export async function waitForEngine(page: Page) {
-  const button = page
-    .getByTestId('unlock-vault-btn')
-    .or(page.getByTestId('connect-provider-btn'))
+  const button = page.getByTestId('connect-provider-btn')
   await expect(button.first()).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await expect(button.first()).not.toContainText('Loading engine', {
     timeout: UI_TIMEOUT_MS,
@@ -307,18 +305,9 @@ export async function connectLocalVault(page: Page) {
     return
   }
 
-  const unlockButton = page.getByTestId('unlock-vault-btn')
-  if (await unlockButton.isVisible()) {
-    const autoUnlocked = await page
-      .getByTestId('vault-panel')
-      .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
-      .then(() => true)
-      .catch(() => false)
-    if (autoUnlocked) {
-      return
-    }
-    const button = await waitForEngine(page)
-    await button.click()
+  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
+  if (await savedLocalProvider.isVisible()) {
+    await savedLocalProvider.click()
     await expect(
       page.getByTestId('connect-success').or(page.getByTestId('app-success')),
     ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
@@ -479,10 +468,9 @@ export async function unlockGithubVault(page: Page) {
   if (autoUnlocked) {
     return
   }
-  const unlock = page.getByTestId('unlock-vault-btn')
-  if (await unlock.isVisible()) {
-    await waitForEngine(page)
-    await unlock.click()
+  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
+  if (await savedGithubProvider.isVisible()) {
+    await savedGithubProvider.click()
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
