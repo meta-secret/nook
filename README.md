@@ -16,16 +16,36 @@ file is the source of truth.
 
 ## Why Nook?
 
-Most password managers combine encryption, storage, identity, and synchronization
-behind one hosted account. Nook separates those concerns:
+Passwords give access to your digital life, but using a password manager usually
+means creating another account and trusting another service to store your vault,
+keep its servers available, and decide how you recover access.
 
-- **Your secrets:** plaintext stays inside the browser session.
-- **Your storage:** use IndexedDB locally or sync `nook-vault.yaml` to your own
-  private GitHub repository.
-- **Your devices:** each enrolled browser has a separate X25519 identity whose
-  private key never leaves that browser.
-- **Your source code:** the cryptography, vault format, synchronization, and UI are
-  inspectable in this repository under the MIT license.
+Nook is for people who want a useful password manager without handing over custody
+of the vault.
+
+You open Nook, save a login, API key, or wallet recovery phrase, and choose where the
+encrypted vault lives. Keep it only in this browser, or put it in a private GitHub
+repository you own. Nook does not create a hosted account for you, and there is no
+Nook database that can be breached, suspended, or taken offline with your vault in
+it.
+
+That changes three important things:
+
+- **You choose where the vault lives.** Local mode keeps it on this device. GitHub
+  mode gives you an encrypted file in your own private repository.
+- **You decide which devices can open it.** A new browser asks to join; a browser
+  you already trust approves it. Nook is not the gatekeeper.
+- **You can inspect the whole system.** The application, encryption flow, and vault
+  format are open source. Your ability to understand your vault does not stop at a
+  company's privacy policy.
+
+For example: save a GitHub login on your laptop, sync the encrypted vault to your
+repository, then open Nook on another computer. The second browser cannot read the
+vault by merely finding the file—it must request access, and your enrolled laptop
+must approve it. After approval, both browsers can open the same vault; their private
+device keys remain separate and local.
+
+## What you can store
 
 Nook currently supports three intentionally small item types:
 
@@ -41,25 +61,32 @@ generator.
 
 ## How it works
 
-1. You choose a storage provider: local browser storage or GitHub.
-2. Rust running as WebAssembly creates a device identity and vault encryption keys.
-3. Secret data is serialized as type-specific YAML and encrypted independently with
-   [age](https://age-encryption.org/).
-4. Nook writes the encrypted vault as readable YAML to IndexedDB or GitHub.
-5. An enrolled device unwraps the shared vault keys locally and decrypts records only
-   for the active browser session.
+### On your first device
 
-```mermaid
-flowchart LR
-  UI["Svelte UI"] --> WASM["Rust / WebAssembly session"]
-  WASM --> CORE["Typed vault + age encryption"]
-  CORE --> LOCAL["IndexedDB"]
-  CORE --> GH["Private GitHub repository"]
-```
+1. Choose **This device** if the vault should stay in this browser, or **GitHub** if
+   you want the encrypted file in a private repository.
+2. Add your credentials. Nook encrypts each item before saving anything to the
+   selected storage.
+3. The browser keeps a device key locally. That key is what allows this browser to
+   open the vault later.
 
-The Svelte UI does not implement cryptography or vault rules. It collects input,
-renders state, and calls the Rust/WASM boundary. Parsing and validation happen in
-Rust before data enters the vault.
+### When you come back
+
+The browser remembers the storage provider and uses its local device key to unlock
+the vault. Decrypted secrets exist only in the active browser session. If you have
+several saved vault providers, Nook asks which one you want to open.
+
+### When you add another browser
+
+The new browser creates its own device key and places a join request in the encrypted
+vault. Open Nook on an already enrolled device, review the request, and approve it.
+The new browser then receives access to the vault keys encrypted specifically for
+that device.
+
+Under the hood, the security-sensitive work runs in Rust compiled to WebAssembly.
+Secret data is represented as typed YAML, encrypted independently with
+[age](https://age-encryption.org/), and only then written to IndexedDB or GitHub. The
+Svelte interface never implements its own cryptography.
 
 ## Vault and trust model
 
