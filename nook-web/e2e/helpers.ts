@@ -75,7 +75,7 @@ export type GithubE2eTarget = { pat: string; repoName: string }
 function configuredVaultSyncIntervalMs(): number {
   const parsed = Number(process.env.VITE_VAULT_SYNC_INTERVAL_MS)
   if (Number.isFinite(parsed) && parsed >= 250) return parsed
-  return 10_000
+  return 30_000
 }
 
 function configuredGithubPollIntervalMs(): number {
