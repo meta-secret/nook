@@ -69,3 +69,12 @@ This document defines the strict development standards, architectural boundaries
   - Before committing, developers must run:
     1. `task format` - Automatically formats all Rust and JS/TS/Svelte files.
     2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and production builds.
+
+---
+
+## 6. Git & Pull Request Workflow
+
+- **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
+- **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
+- **Always open a pull request.** After pushing a branch, create a PR with a summary and test plan; do not merge or push to `main` yourself unless the user explicitly asks.
+- **Verify before requesting review.** Run `task format` and `task check` on the branch before opening or updating the PR.

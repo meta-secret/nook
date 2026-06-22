@@ -32,3 +32,6 @@ These files are the source of truth for how this project works.
 ### Tooling
 - Use `task` commands (via Docker) for build, check, format, and test. Do not run raw compiler commands unless debugging.
 - Keep changes minimal and scoped. Match existing naming, patterns, and file structure.
+
+### Git
+- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/rules.md` §6.
