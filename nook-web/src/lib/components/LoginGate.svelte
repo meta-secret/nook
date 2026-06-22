@@ -24,6 +24,7 @@
   } from '$lib/components/ui/card'
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import { cn } from '$lib/utils'
+  import ProductIntro from '$lib/components/ProductIntro.svelte'
 
   let {
     providers,
@@ -42,6 +43,7 @@
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
+    onOpenHelp,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -59,6 +61,7 @@
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
+    onOpenHelp?: () => void
   } = $props()
 
   const githubPatUrl =
@@ -148,6 +151,10 @@
             <li>
               Your encrypted vault file lives on your account — not on nook's
               servers.
+            </li>
+            <li>
+              Enroll more browsers later — each device holds keys, giving you
+              more ways to unlock and recover access.
             </li>
           </ul>
         {/if}
@@ -477,4 +484,7 @@
       </form>
     </CardContent>
   </Card>
+  {#if showProviderPicker && !addProviderOpen && onOpenHelp}
+    <ProductIntro {onOpenHelp} />
+  {/if}
 </div>

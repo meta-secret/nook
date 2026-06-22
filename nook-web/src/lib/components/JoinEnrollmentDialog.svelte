@@ -80,10 +80,10 @@
                 Waiting for approval
               {/if}
             </CardTitle>
-            <CardDescription>
+            <CardDescription class="text-pretty">
               {#if variant === 'needs_request'}
-                This browser is not enrolled yet. Ask an existing device to
-                approve you, or use transfer keys if you have them.
+                This browser is not enrolled yet. Join links your device to the
+                vault without a central nook account.
               {:else}
                 Your join request was sent. Try unlocking again after an
                 enrolled device approves you.
@@ -121,12 +121,29 @@
         {/if}
 
         {#if variant === 'needs_request'}
-          <p class="text-sm leading-relaxed text-muted-foreground">
-            The usual path: send a join request. An enrolled device will see it
-            in <strong class="font-medium text-foreground"
-              >Storage & devices</strong
-            > and can approve access. No secrets are exposed.
-          </p>
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm leading-relaxed text-muted-foreground text-pretty"
+            data-testid="join-enrollment-explainer"
+          >
+            <li>
+              Join is required so only trusted browsers receive vault keys —
+              reading the encrypted file from GitHub is not enough.
+            </li>
+            <li>
+              Send a request; an enrolled device approves it under
+              <strong class="font-medium text-foreground"
+                >Storage & devices</strong
+              >.
+            </li>
+            <li>
+              Approval wraps the vault keys for this browser’s public key — no
+              plaintext secrets are shared.
+            </li>
+            <li>
+              More enrolled devices mean more recovery paths if one browser is
+              lost.
+            </li>
+          </ul>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
