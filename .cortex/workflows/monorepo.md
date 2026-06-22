@@ -2,6 +2,7 @@
 
 Use this workflow for feature work that touches more than one package.
 
+0. Branch from `main`, never push to `main` — open a pull request for all changes (see [rules.md](../rules.md) §6).
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic in `nook-core`; keep wasm-specific conversion in `nook-wasm`.
 3. Expose only small JavaScript-friendly functions from `nook-wasm`.
