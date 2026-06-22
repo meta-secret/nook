@@ -4,6 +4,9 @@
 # PR previews deploy to Cloudflare Pages (one subdomain per PR, e.g.
 # https://pr-123.nook.pages.dev) because GitHub Pages previews resolve to the
 # production custom domain (nokey.sh) and cannot serve /nook/pr123 paths.
+#
+# deploy-preview runs in parallel with build/e2e (no needs:) and uses
+# continue-on-error so a preview is still attempted when tests fail.
 
 name: CI
 
@@ -64,13 +67,6 @@ jobs:
 
       - name: Build web for GitHub Pages
         run: task web:build VITE_BASE="${{ env.VITE_BASE }}"
-
-      - name: Upload preview artifact
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: nook-web-dist
-          path: nook-web/dist
 
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -135,21 +131,41 @@ jobs:
 
   deploy-preview:
     name: Deploy preview
-    needs: build
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
+      packages: write
       pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download preview artifact
-        uses: actions/download-artifact@v4
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          name: nook-web-dist
-          path: nook-web/dist
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Cache Env
+        run: |
+          echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build toolchain and web app for preview
+        run: |
+          task setup
+          task web:build VITE_BASE=/
+        env:
+          CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
+          CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -181,6 +197,7 @@ jobs:
           echo "deployment-url=$deployment_url" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
+        if: steps.deploy.outputs.deployment-url != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PREVIEW_URL: ${{ steps.deploy.outputs.deployment-url }}

@@ -94,23 +94,63 @@
           </button>
         {/if}
         <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
-          Sign in to nook
-        </CardTitle>
-        <CardDescription>
-          {#if isUnlocking}
-            Unlocking your vault…
-          {:else if showSavedProviders && !showSetup}
-            Your storage provider is saved — unlock to open your vault.
-          {:else if showProviderPicker && addProviderOpen}
-            Add another storage provider for your vault.
-          {:else if showSetup && setupType === 'github'}
-            Create a GitHub token first, then paste it below to connect.
+          {#if showSavedProviders && !showSetup}
+            Unlock your vault
+          {:else if showProviderPicker}
+            Choose where to store secrets
           {:else if showSetup}
-            Set up local storage on this device.
+            Connect to {setupType === 'github' ? 'GitHub' : 'this device'}
           {:else}
-            Choose a storage provider to access your encrypted vault.
+            Choose where to store secrets
           {/if}
-        </CardDescription>
+        </CardTitle>
+        {#if isUnlocking}
+          <CardDescription class="text-pretty"
+            >Unlocking your vault…</CardDescription
+          >
+        {:else if showSavedProviders && !showSetup}
+          <CardDescription class="text-pretty">
+            Your provider is saved in this browser — unlock to decrypt and open
+            your vault.
+          </CardDescription>
+        {:else if showProviderPicker && addProviderOpen}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          >
+            <li>Nook encrypts secrets in this browser first.</li>
+            <li>
+              Connect another provider — the vault file is stored on that
+              account.
+            </li>
+          </ul>
+        {:else if showSetup && setupType === 'github'}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          >
+            <li>Sign in to GitHub with a personal access token.</li>
+            <li>Nook syncs only the encrypted vault file to your repo.</li>
+            <li>Plaintext secrets never leave this browser.</li>
+          </ul>
+        {:else if showSetup}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          >
+            <li>Encrypted vault stays in browser storage on this device.</li>
+            <li>No provider account or sign-in required.</li>
+          </ul>
+        {:else if showProviderPicker}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+            data-testid="login-gate-intro"
+          >
+            <li>Nook encrypts your secrets on this device first.</li>
+            <li>Connect a storage provider and sign in to that platform.</li>
+            <li>
+              Your encrypted vault file lives on your account — not on nook's
+              servers.
+            </li>
+          </ul>
+        {/if}
       </div>
     </CardHeader>
 
@@ -182,37 +222,45 @@
           </div>
         {:else if showProviderPicker}
           <fieldset class="space-y-2">
-            <legend class="text-xs font-medium text-foreground">
-              Choose a provider
-            </legend>
-            <div class="grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                class="flex flex-col items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-left transition-colors hover:border-primary/30 hover:bg-accent"
-                data-testid="provider-option-local"
-                onclick={() => onBeginSetup('local')}
-              >
-                <HardDrive class="size-4 text-foreground" />
-                <span class="text-sm font-medium text-foreground"
-                  >This device</span
+            <legend class="sr-only">Choose a storage provider</legend>
+            <ul class="space-y-1.5" data-testid="provider-picker-list">
+              <li>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+                  data-testid="provider-option-local"
+                  onclick={() => onBeginSetup('local')}
                 >
-                <span class="text-xs text-muted-foreground">
-                  Local IndexedDB — no sign-in required.
-                </span>
-              </button>
-              <button
-                type="button"
-                class="flex flex-col items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-left transition-colors hover:border-primary/30 hover:bg-accent"
-                data-testid="provider-option-github"
-                onclick={() => onBeginSetup('github')}
-              >
-                <Cloud class="size-4 text-foreground" />
-                <span class="text-sm font-medium text-foreground">GitHub</span>
-                <span class="text-xs text-muted-foreground">
-                  Sync encrypted vault to a GitHub repo (default: nook).
-                </span>
-              </button>
-            </div>
+                  <HardDrive class="size-4 shrink-0 text-foreground" />
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-medium text-foreground"
+                      >This device</span
+                    >
+                    <span class="block truncate text-xs text-muted-foreground">
+                      Encrypted vault in browser storage — no provider login
+                    </span>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+                  data-testid="provider-option-github"
+                  onclick={() => onBeginSetup('github')}
+                >
+                  <Cloud class="size-4 shrink-0 text-foreground" />
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-sm font-medium text-foreground"
+                      >GitHub</span
+                    >
+                    <span class="block truncate text-xs text-muted-foreground">
+                      Sign in to GitHub — sync encrypted vault to your repo
+                    </span>
+                  </span>
+                </button>
+              </li>
+            </ul>
           </fieldset>
         {:else}
           <div
@@ -348,7 +396,7 @@
                       class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
                     />
                     <p class="text-[11px] text-muted-foreground">
-                      Saved in this browser after first sign-in. Syncs to
+                      Saved in this browser after you connect. Syncs to
                       <span class="font-mono text-foreground/80"
                         >username/{githubRepo.trim() ||
                           DEFAULT_GITHUB_REPO}/nook-vault.yaml</span
@@ -360,7 +408,7 @@
             </div>
           {:else if setupType === 'github'}
             <p class="text-xs text-muted-foreground">
-              Token saved in this browser. Click sign in to unlock your vault.
+              Token saved in this browser. Click Connect to open your vault.
             </p>
           {:else}
             <p class="text-xs text-muted-foreground">
@@ -411,17 +459,17 @@
             <Button
               type="submit"
               class="sm:min-w-[180px]"
-              data-testid="sign-in-btn"
+              data-testid="connect-provider-btn"
             >
               {#if isInitializing}
                 <RefreshCw class="size-4 animate-spin" />
                 Loading engine…
               {:else if isVerifying}
                 <RefreshCw class="size-4 animate-spin" />
-                Signing in…
+                Connecting…
               {:else}
                 <ShieldCheck class="size-4" />
-                Sign in
+                Connect
               {/if}
             </Button>
           </div>

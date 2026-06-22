@@ -60,10 +60,14 @@ stateDiagram-v2
 
 ### Copy & affordances
 
-- Title: **Sign in to nook**
-- No providers: *Choose a storage provider to access your encrypted vault.*
-- Has providers: *Your storage provider is saved — unlock to open your vault.* (auto-unlock on load when a saved active provider exists)
-- GitHub first setup: *Connect GitHub once — your token is saved in this browser.*
+- Title (no providers): **Choose where to store secrets**
+- Title (saved providers): **Unlock your vault**
+- Title (setup): **Connect to {provider}**
+- No providers: explain zero-knowledge — nook encrypts locally; user connects and signs in to their storage provider so the encrypted vault lives on their account.
+- Has providers: *Your provider is saved in this browser — unlock to decrypt and open your vault.*
+- GitHub setup: *Sign in to GitHub so nook can read/write the encrypted vault file — plaintext secrets never leave this browser.*
+- Provider picker uses compact list rows (not large cards) so many providers scale without wasting vertical space.
+- Primary action on setup: **Connect** (not “Sign in to nook”).
 - Device enrollment, join approvals, and transfer keys: **Storage & devices** (settings) and the **Join this vault** dialog — not on the login screen.
 
 ---
