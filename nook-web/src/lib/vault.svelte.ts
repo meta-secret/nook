@@ -7,6 +7,7 @@ import {
   mapWasmVaultMembers,
   type JoinRequest,
   type SecretRecord,
+  type VaultItemType,
   type VaultMember,
 } from '$lib/nook'
 import { SvelteDate } from 'svelte/reactivity'
@@ -699,7 +700,7 @@ export class VaultState {
     }
   }
 
-  async handleAddSecret(key: string, value: string) {
+  async handleAddSecret(key: string, type: VaultItemType, value: string) {
     if (!this.manager) return
     this.errorMsg = ''
     this.dismissSuccess()
@@ -711,6 +712,7 @@ export class VaultState {
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.add_secret(
           key,
+          type,
           value,
         )) as NookSecretRecord[]
         this.secrets = mapWasmRecords(rawRecords)

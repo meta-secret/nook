@@ -95,16 +95,27 @@ pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{ApiKeySecret, SecretType, SecretValue};
+
+    fn value(key: &str) -> SecretValue {
+        SecretValue::ApiKey(ApiKeySecret {
+            website_url: "https://example.com".to_owned(),
+            key: key.to_owned(),
+            expires_at: String::new(),
+        })
+    }
 
     fn sample_records() -> Vec<SecretRecord> {
         vec![
             SecretRecord {
                 key: "github.com".to_owned(),
-                value: "a".to_owned(),
+                secret_type: SecretType::ApiKey,
+                value: value("a"),
             },
             SecretRecord {
                 key: "work-vpn".to_owned(),
-                value: "b".to_owned(),
+                secret_type: SecretType::ApiKey,
+                value: value("b"),
             },
         ]
     }
@@ -190,7 +201,8 @@ mod tests {
     fn filter_secrets_does_not_search_values() {
         let records = vec![SecretRecord {
             key: "label".to_owned(),
-            value: "find-me".to_owned(),
+            secret_type: SecretType::ApiKey,
+            value: value("find-me"),
         }];
         assert!(filter_secrets(&records, "find-me").is_empty());
     }

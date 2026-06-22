@@ -27,17 +27,8 @@ describe('typed vault items', () => {
     for (const input of inputs) {
       const record = createVaultItemRecord(input)
       expect(parseVaultItem(record)).toMatchObject(input)
-      expect(record.key).toContain('item:')
+      expect(record.type).toBe(input.type)
+      expect(JSON.parse(record.value)).not.toHaveProperty('type')
     }
-  })
-
-  test('opens legacy label/value secrets as API keys', () => {
-    expect(parseVaultItem({ key: 'github.com', value: 'ghp_legacy' })).toEqual({
-      id: 'github.com',
-      type: 'api-key',
-      websiteUrl: 'github.com',
-      key: 'ghp_legacy',
-      expiresAt: '',
-    })
   })
 })

@@ -3,6 +3,7 @@ import { parse as parseYaml } from 'yaml'
 /** Parsed shape of nook-vault.yaml (matches nook-core StoredVaultYaml). */
 type StoredSecretRecord = {
   key: string
+  type: 'login' | 'api-key' | 'seed-phrase'
   value: string
 }
 

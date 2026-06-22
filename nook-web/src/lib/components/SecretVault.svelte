@@ -37,7 +37,11 @@
   }: {
     isSaving: boolean
     secrets?: SecretRecord[]
-    onAddSecret: (key: string, value: string) => Promise<void>
+    onAddSecret: (
+      key: string,
+      type: VaultItemType,
+      value: string,
+    ) => Promise<void>
     onDeleteSecret: (key: string) => Promise<void>
     onGeneratePassword: (
       length: number,
@@ -162,7 +166,7 @@
     }
 
     const record = createVaultItemRecord(item)
-    await onAddSecret(record.key, record.value)
+    await onAddSecret(record.key, record.type, record.value)
     closeAddSecret()
   }
 

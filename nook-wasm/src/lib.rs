@@ -46,19 +46,29 @@ pub enum NookError {
 #[wasm_bindgen]
 pub struct NookSecretRecord {
     key: String,
+    secret_type: String,
     value: String,
 }
 
 #[wasm_bindgen]
 impl NookSecretRecord {
     #[wasm_bindgen(constructor)]
-    pub fn new(key: String, value: String) -> Self {
-        Self { key, value }
+    pub fn new(key: String, secret_type: String, value: String) -> Self {
+        Self {
+            key,
+            secret_type,
+            value,
+        }
     }
 
     #[wasm_bindgen(getter)]
     pub fn key(&self) -> String {
         self.key.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = "type")]
+    pub fn secret_type(&self) -> String {
+        self.secret_type.clone()
     }
 
     #[wasm_bindgen(getter)]
@@ -80,6 +90,7 @@ pub struct NookVaultManager {
     device_identity_secret: String,
     crypto: Option<nook_core::VaultCrypto>,
     stored_armored: HashMap<String, String>,
+    secret_types: HashMap<String, nook_core::SecretType>,
     decrypted_jsonl: String,
     file_sha: Option<String>,
     last_synced_content: String,
@@ -105,6 +116,7 @@ impl NookVaultManager {
             device_identity_secret: String::new(),
             crypto: None,
             stored_armored: HashMap::new(),
+            secret_types: HashMap::new(),
             decrypted_jsonl: String::new(),
             file_sha: None,
             last_synced_content: String::new(),
@@ -217,10 +229,12 @@ impl NookVaultManager {
         let fresh_records =
             nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
         nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
-        let (jsonl, armored, secrets_key, members_key) = load_stored_vault(&content, &identity)?;
+        let (jsonl, armored, secret_types, secrets_key, members_key) =
+            load_stored_vault(&content, &identity)?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.decrypted_jsonl = jsonl;
         self.stored_armored = armored;
+        self.secret_types = secret_types;
         self.last_synced_content = content.clone();
         sync_result_session(self, true)
     }
@@ -300,6 +314,7 @@ impl NookVaultManager {
         );
 
         self.stored_armored = records_to_armored(&records);
+        self.secret_types = records_to_secret_types(&records);
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
         Ok(())
@@ -341,16 +356,18 @@ impl NookVaultManager {
         records.extend(members);
 
         self.stored_armored = records_to_armored(&records);
+        self.secret_types = records_to_secret_types(&records);
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
 
         let updated =
             nook_core::serialize_stored(&records, format).map_err(NookError::Encryption)?;
-        let (jsonl, armored, resolved_secrets_key, resolved_members_key) =
+        let (jsonl, armored, secret_types, resolved_secrets_key, resolved_members_key) =
             load_stored_vault(&updated, &identity)?;
         self.apply_vault_keys(&resolved_secrets_key, &resolved_members_key)?;
         self.decrypted_jsonl = jsonl;
         self.stored_armored = armored;
+        self.secret_types = secret_types;
         Ok(self.get_records_as_array()?)
     }
 
@@ -531,11 +548,12 @@ impl NookVaultManager {
                 return Err(NookError::Database(message).into());
             }
             let _ = self.status_tx.send("DECRYPT_START".to_owned());
-            let (jsonl, armored, secrets_key, members_key) =
+            let (jsonl, armored, secret_types, secrets_key, members_key) =
                 load_stored_vault(&content, &identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             self.decrypted_jsonl = jsonl;
             self.stored_armored = armored;
+            self.secret_types = secret_types;
             self.maybe_sync_self_into_roster(&identity).await?;
             let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
             self.last_synced_content = content.clone();
@@ -571,6 +589,7 @@ impl NookVaultManager {
             self.stored_armored.insert(member.key.clone(), member.value);
         }
         self.decrypted_jsonl = String::new();
+        self.secret_types.clear();
         self.last_synced_content.clear();
         Ok(())
     }
@@ -582,9 +601,11 @@ impl NookVaultManager {
         self.stored_armored.retain(|key, value| {
             nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
                 key: key.clone(),
+                secret_type: None,
                 value: value.clone(),
             })
         });
+        self.secret_types.clear();
         if self.needs_genesis_persist() {
             let identity = self.device_identity()?;
             let secrets_key = self.secrets_key.clone();
@@ -608,14 +629,19 @@ impl NookVaultManager {
     pub async fn add_secret(
         &mut self,
         key: String,
+        secret_type: String,
         value: String,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
         let key = nook_core::validate_secret_label(&key).map_err(NookError::Database)?;
         nook_core::validate_secret_value(&value).map_err(NookError::Database)?;
+        let secret_type =
+            nook_core::SecretType::parse(&secret_type).map_err(NookError::Database)?;
+        let typed_value =
+            nook_core::SecretValue::from_json(secret_type, &value).map_err(NookError::Database)?;
         let mut db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
-        db.insert(key.clone(), value.clone());
+        db.insert(key.clone(), typed_value);
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
 
@@ -625,7 +651,8 @@ impl NookVaultManager {
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
             .encrypt_value(&value)
             .map_err(NookError::Encryption)?;
-        self.stored_armored.insert(key, armored);
+        self.stored_armored.insert(key.clone(), armored);
+        self.secret_types.insert(key, secret_type);
 
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
@@ -642,6 +669,7 @@ impl NookVaultManager {
         let new_jsonl = db.to_jsonl().map_err(NookError::Database)?;
         self.decrypted_jsonl = new_jsonl;
         self.stored_armored.remove(&key);
+        self.secret_types.remove(&key);
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
@@ -656,7 +684,10 @@ impl NookVaultManager {
 
     async fn save_current_db(&mut self) -> Result<(), NookError> {
         let _ = self.status_tx.send("SAVE_START".to_owned());
-        let records = nook_core::Database::stored_records_from_armored(&self.stored_armored);
+        let records = nook_core::Database::stored_records_from_armored(
+            &self.stored_armored,
+            &self.secret_types,
+        );
         let stored = nook_core::serialize_stored(&records, nook_core::VaultFormat::Yaml)
             .map_err(NookError::Encryption)?;
 
@@ -712,7 +743,7 @@ impl NookVaultManager {
     }
 
     fn stored_records_snapshot(&self) -> Vec<nook_core::StoredSecretRecord> {
-        nook_core::Database::stored_records_from_armored(&self.stored_armored)
+        nook_core::Database::stored_records_from_armored(&self.stored_armored, &self.secret_types)
     }
 
     fn needs_genesis_persist(&self) -> bool {
@@ -794,7 +825,9 @@ impl NookVaultManager {
 fn records_to_array(records: Vec<nook_core::SecretRecord>) -> Result<js_sys::Array, NookError> {
     let array = js_sys::Array::new();
     for record in records {
-        let wasm_record = NookSecretRecord::new(record.key, record.value);
+        let value = record.value.to_json().map_err(NookError::Serialization)?;
+        let wasm_record =
+            NookSecretRecord::new(record.key, record.secret_type.as_str().to_owned(), value);
         array.push(&JsValue::from(wasm_record));
     }
     Ok(array)
@@ -804,6 +837,19 @@ fn records_to_armored(records: &[nook_core::StoredSecretRecord]) -> HashMap<Stri
     records
         .iter()
         .map(|record| (record.key.clone(), record.value.clone()))
+        .collect()
+}
+
+fn records_to_secret_types(
+    records: &[nook_core::StoredSecretRecord],
+) -> HashMap<String, nook_core::SecretType> {
+    records
+        .iter()
+        .filter_map(|record| {
+            record
+                .secret_type
+                .map(|secret_type| (record.key.clone(), secret_type))
+        })
         .collect()
 }
 
@@ -885,7 +931,16 @@ fn wasm_iso_timestamp() -> String {
 fn load_stored_vault(
     content: &str,
     identity: &nook_core::DeviceIdentity,
-) -> Result<(String, HashMap<String, String>, String, String), NookError> {
+) -> Result<
+    (
+        String,
+        HashMap<String, String>,
+        HashMap<String, nook_core::SecretType>,
+        String,
+        String,
+    ),
+    NookError,
+> {
     let format = nook_core::detect_stored_format(content).map_err(NookError::Decryption)?;
     let stored_records =
         nook_core::deserialize_stored(content, format).map_err(NookError::Decryption)?;
@@ -898,12 +953,12 @@ fn load_stored_vault(
     for record in &stored_records {
         armored.insert(record.key.clone(), record.value.clone());
     }
-    let user_records =
-        nook_core::user_stored_records(&nook_core::Database::stored_records_from_armored(&armored));
+    let user_records = nook_core::user_stored_records(&stored_records);
     let db = nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)
         .map_err(NookError::Decryption)?;
     let jsonl = db.to_jsonl().map_err(NookError::Database)?;
-    Ok((jsonl, armored, secrets_key, members_key))
+    let secret_types = records_to_secret_types(&stored_records);
+    Ok((jsonl, armored, secret_types, secrets_key, members_key))
 }
 
 // -------------------------------------------------------------

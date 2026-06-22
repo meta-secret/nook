@@ -163,7 +163,8 @@
             <SecretVault
               isSaving={vault.isSaving}
               secrets={vault.secrets}
-              onAddSecret={(key, value) => vault.handleAddSecret(key, value)}
+              onAddSecret={(key, type, value) =>
+                vault.handleAddSecret(key, type, value)}
               onDeleteSecret={(key) => vault.handleDeleteSecret(key)}
               onGeneratePassword={(
                 length,

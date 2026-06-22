@@ -247,6 +247,7 @@ pub fn merge_remote_join_records<S: BuildHasher>(
     armored.retain(|_, value| {
         !is_join_stored_record(&StoredSecretRecord {
             key: String::new(),
+            secret_type: None,
             value: value.clone(),
         })
     });
@@ -326,6 +327,7 @@ pub fn build_members_records(
         let entry = member_to_entry(member);
         records.push(StoredSecretRecord {
             key: member_stored_key(&entry.pk_id),
+            secret_type: None,
             value: encrypt_member_entry(&entry, members_key)?,
         });
     }
@@ -384,6 +386,7 @@ pub fn auth_record(
 ) -> Result<StoredSecretRecord, String> {
     Ok(StoredSecretRecord {
         key: pk_id.to_owned(),
+        secret_type: None,
         value: serde_json::to_string(&AuthEnvelopes {
             secrets_key: encrypt_for_recipient(secrets_key.as_bytes(), recipient_public)?,
             members_key: encrypt_for_recipient(members_key.as_bytes(), recipient_public)?,
@@ -424,6 +427,7 @@ pub fn create_join_request_record(
     };
     Ok(StoredSecretRecord {
         key: join_record_key(identity.device_id()),
+        secret_type: None,
         value: serde_json::to_string(&request)
             .map_err(|e| format!("Failed to serialize join request: {}", e))?,
     })
@@ -795,6 +799,7 @@ mod tests {
         let (genesis, mut records) = genesis_vault(&keys);
         records.push(StoredSecretRecord {
             key: "site".to_owned(),
+            secret_type: Some(crate::SecretType::ApiKey),
             value: "cipher".to_owned(),
         });
         let users = user_stored_records(&records);
@@ -960,6 +965,7 @@ mod tests {
             .iter()
             .map(|(key, value)| StoredSecretRecord {
                 key: key.clone(),
+                secret_type: None,
                 value: value.clone(),
             })
             .collect()

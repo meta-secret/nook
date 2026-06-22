@@ -6,6 +6,7 @@ export function isoTimestamp(): string {
 
 export type SecretRecord = {
   key: string
+  type: VaultItemType
   value: string
 }
 
@@ -42,11 +43,6 @@ export type VaultItemInput =
   | Omit<ApiKeyVaultItem, 'id'>
   | Omit<SeedPhraseVaultItem, 'id'>
 
-type StoredVaultItem = VaultItemInput & {
-  format: 'nook-vault-item'
-  version: 1
-}
-
 export function vaultItemTitle(item: VaultItem): string {
   return item.type === 'seed-phrase' ? item.name : item.websiteUrl
 }
@@ -58,63 +54,40 @@ export function vaultItemSecret(item: VaultItem): string {
 }
 
 export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
-  const stored: StoredVaultItem = {
-    ...item,
-    format: 'nook-vault-item',
-    version: 1,
-  }
-  const title = item.type === 'seed-phrase' ? item.name : item.websiteUrl
+  const { type, ...value } = item
   return {
-    key: `item:${title}:${crypto.randomUUID()}`,
-    value: JSON.stringify(stored),
+    key: crypto.randomUUID(),
+    type,
+    value: JSON.stringify(value),
   }
 }
 
 export function parseVaultItem(record: SecretRecord): VaultItem {
-  try {
-    const stored = JSON.parse(record.value) as Record<string, unknown>
-    if (
-      stored.format === 'nook-vault-item' &&
-      stored.version === 1 &&
-      (stored.type === 'login' ||
-        stored.type === 'api-key' ||
-        stored.type === 'seed-phrase')
-    ) {
-      if (stored.type === 'login') {
-        return {
-          id: record.key,
-          type: 'login',
-          websiteUrl: String(stored.websiteUrl ?? ''),
-          username: String(stored.username ?? ''),
-          password: String(stored.password ?? ''),
-          notes: String(stored.notes ?? ''),
-        }
-      }
-      if (stored.type === 'api-key') {
-        return {
-          id: record.key,
-          type: 'api-key',
-          websiteUrl: String(stored.websiteUrl ?? ''),
-          key: String(stored.key ?? ''),
-          expiresAt: String(stored.expiresAt ?? ''),
-        }
-      }
-      return {
-        id: record.key,
-        type: 'seed-phrase',
-        name: String(stored.name ?? ''),
-        seed: String(stored.seed ?? ''),
-      }
+  const value = JSON.parse(record.value) as Record<string, unknown>
+  if (record.type === 'login') {
+    return {
+      id: record.key,
+      type: 'login',
+      websiteUrl: String(value.websiteUrl),
+      username: String(value.username),
+      password: String(value.password),
+      notes: String(value.notes),
     }
-  } catch {
-    // Existing label/value records remain usable as API keys.
+  }
+  if (record.type === 'api-key') {
+    return {
+      id: record.key,
+      type: 'api-key',
+      websiteUrl: String(value.websiteUrl),
+      key: String(value.key),
+      expiresAt: String(value.expiresAt),
+    }
   }
   return {
     id: record.key,
-    type: 'api-key',
-    websiteUrl: record.key,
-    key: record.value,
-    expiresAt: '',
+    type: 'seed-phrase',
+    name: String(value.name),
+    seed: String(value.seed),
   }
 }
 
@@ -210,6 +183,7 @@ export function mapWasmRecords(rawRecords: unknown): SecretRecord[] {
   const records = Array.from(rawRecords as ArrayLike<NookSecretRecord>)
   return records.map((r) => ({
     key: r.key,
+    type: r.type as VaultItemType,
     value: r.value,
   }))
 }
