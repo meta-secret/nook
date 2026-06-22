@@ -104,27 +104,53 @@
             Choose where to store secrets
           {/if}
         </CardTitle>
-        <CardDescription class="text-pretty">
-          {#if isUnlocking}
-            Unlocking your vault…
-          {:else if showSavedProviders && !showSetup}
+        {#if isUnlocking}
+          <CardDescription class="text-pretty"
+            >Unlocking your vault…</CardDescription
+          >
+        {:else if showSavedProviders && !showSetup}
+          <CardDescription class="text-pretty">
             Your provider is saved in this browser — unlock to decrypt and open
             your vault.
-          {:else if showProviderPicker && addProviderOpen}
-            Add another provider. Nook encrypts secrets here first, then stores
-            the vault file on the account you connect.
-          {:else if showSetup && setupType === 'github'}
-            Sign in to GitHub so nook can read and write your encrypted vault
-            file — plaintext secrets never leave this browser.
-          {:else if showSetup}
-            Keep the encrypted vault on this device only. No provider account
-            needed.
-          {:else}
-            Nook encrypts your secrets on this device. Connect a storage
-            provider and sign in to that platform so your encrypted vault lives
-            on your account — not on nook's servers.
-          {/if}
-        </CardDescription>
+          </CardDescription>
+        {:else if showProviderPicker && addProviderOpen}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          >
+            <li>Nook encrypts secrets in this browser first.</li>
+            <li>
+              Connect another provider — the vault file is stored on that
+              account.
+            </li>
+          </ul>
+        {:else if showSetup && setupType === 'github'}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          >
+            <li>Sign in to GitHub with a personal access token.</li>
+            <li>Nook syncs only the encrypted vault file to your repo.</li>
+            <li>Plaintext secrets never leave this browser.</li>
+          </ul>
+        {:else if showSetup}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+          >
+            <li>Encrypted vault stays in browser storage on this device.</li>
+            <li>No provider account or sign-in required.</li>
+          </ul>
+        {:else if showProviderPicker}
+          <ul
+            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
+            data-testid="login-gate-intro"
+          >
+            <li>Nook encrypts your secrets on this device first.</li>
+            <li>Connect a storage provider and sign in to that platform.</li>
+            <li>
+              Your encrypted vault file lives on your account — not on nook's
+              servers.
+            </li>
+          </ul>
+        {/if}
       </div>
     </CardHeader>
 
