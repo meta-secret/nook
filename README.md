@@ -25,10 +25,11 @@ Nook is for people who want a useful password manager without handing over custo
 of the vault.
 
 You open Nook, save a login, API key, or wallet recovery phrase, and choose where the
-encrypted vault lives. Keep it only in this browser, or put it in a private GitHub
-repository you own. Nook does not create a hosted account for you, and there is no
-Nook database that can be breached, suspended, or taken offline with your vault in
-it.
+encrypted vault lives. Keep it only in this browser, or use a storage provider you
+already trust. GitHub is supported today; the provider model is intended to expand
+to services such as Google Drive, Proton Drive, Cloudflare R2, and other storage
+backends. Nook does not create a hosted account for you, and there is no Nook
+database that can be breached, suspended, or taken offline with your vault in it.
 
 That changes three important things:
 
