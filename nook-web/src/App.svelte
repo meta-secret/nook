@@ -135,11 +135,18 @@
                 devicePublicKey={vault.devicePublicKey}
                 pendingJoins={vault.pendingJoins}
                 vaultMembers={vault.vaultMembers}
+                addProviderOpen={vault.addProviderOpen}
+                bind:setupType={vault.loginSetupType}
+                bind:githubPat={vault.githubPat}
+                bind:githubRepo={vault.githubRepo}
                 onReconnect={handleUnlock}
                 onSelectProvider={(id) => vault.selectProvider(id)}
+                onBeginAddProvider={() => vault.beginAddProvider()}
+                onCancelAddProvider={() => vault.cancelAddProvider()}
+                onBeginSetup={(type) => vault.beginProviderSetup(type)}
+                onCancelSetup={() => vault.cancelProviderSetup()}
                 onApproveJoin={(id) => vault.approveJoin(id)}
                 onRefreshJoins={() => vault.manualSync()}
-                bind:githubRepo={vault.githubRepo}
               />
             </div>
           {:else}
