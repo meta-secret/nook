@@ -2,8 +2,8 @@
 
 [GitHub repository](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
 
-Nook stores website logins, API keys, and wallet seed phrases in an encrypted YAML
-file. You decide where that file is saved: in this browser's IndexedDB, or as
+Nook stores website logins, API keys, and wallet seed phrases in an encrypted
+database. The database can stay in this browser's IndexedDB or be synchronized as
 `nook-vault.yaml` in your private GitHub repository.
 
 Nook is passwordless: there is no Nook login and no master password to create or
