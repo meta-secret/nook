@@ -7,10 +7,8 @@ database. The database can stay in this browser's IndexedDB or be synchronized a
 `nook-vault.yaml` in your private GitHub repository.
 
 Nook is passwordless: there is no Nook login and no master password to create or
-remember. Instead, each approved browser becomes a key to the vault. Its private
-device key stays in that browser and is never written to GitHub. To open the vault in
-a new browser, the new device asks to join and a device that already has access must
-approve it.
+remember. Instead, each approved browser acts as a key to the vault. To open the
+vault on a new device, approve it from one that already has access.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -24,17 +22,10 @@ phished, and forgetting it can lock you out of the vault.
 
 Nook removes the master password entirely.
 
-On first use, the browser creates a cryptographic public/private keypair. Think of
-the private key as a physical key fitted to the vault's lock: it stays on that device
-and opens the vault automatically when you use Nook there. The matching public key
-lets an approved device encrypt vault access specifically for this browser, but
-cannot unlock the vault itself. There is no password to type, transmit, forget, or
-reset.
-
-Adding another device does not mean sharing login credentials. The new browser
-creates its own keypair and asks to join. A device that already opens the vault must
-approve the request; the vault keys are then encrypted specifically for the new
-device. Each approved device becomes another independent key to the same vault.
+Your approved devices are the keys. Open Nook on one of them and the vault opens—no
+password to type, transmit, forget, or reset. When you want access on another device,
+approve it from a device that already opens the vault. You never share login
+credentials between them.
 
 This is passwordless, but it is not magical recovery. If every approved device is
 lost or its browser data is erased, there is no master password and no Nook support
@@ -101,6 +92,17 @@ The new browser creates its own device key and places a join request in the shar
 vault file. Open Nook on an already enrolled device, review the request, and approve
 it. The new browser then receives access to the vault keys encrypted specifically
 for that device.
+
+### Technical details
+
+On first use, the browser creates a cryptographic public/private keypair. The private
+key stays on that device and acts like a physical key fitted to the vault's lock. The
+matching public key lets an approved device grant vault access specifically to this
+browser, but cannot unlock the vault itself.
+
+Each additional browser creates its own keypair. When an enrolled device approves
+its join request, the vault keys are encrypted specifically for the new device. No
+private key or login credential is shared between devices.
 
 Under the hood, the security-sensitive work runs in Rust compiled to WebAssembly.
 Secret data is represented as typed YAML, encrypted independently with
