@@ -24,11 +24,11 @@
             class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
           >
             <BookOpen class="size-4 shrink-0" />
-            How nook works
+            A passwordless secret manager
           </CardTitle>
           <CardDescription class="text-pretty">
-            Architecture and design of our decentralized, offline-capable secret
-            manager — no hosted account required.
+            A passwordless secret manager where your devices hold the keys and
+            you control the storage.
           </CardDescription>
         </div>
         <Button
@@ -52,7 +52,7 @@
           data-testid="help-section-{section.id}"
         >
           <h2 class="text-sm font-semibold text-foreground">{section.title}</h2>
-          <p class="text-sm leading-relaxed text-muted-foreground text-pretty">
+          <p class="text-sm text-muted-foreground text-pretty">
             {section.summary}
           </p>
           <ul
