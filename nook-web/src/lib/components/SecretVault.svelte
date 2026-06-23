@@ -190,7 +190,7 @@
         {#each groups as group (group.site)}
           {@const Icon = getGroupIcon(group.items)}
           <Card
-            class="overflow-hidden border-border bg-card shadow-xs"
+            class="gap-0 overflow-hidden border-border bg-card py-0 shadow-xs"
             data-testid="vault-site-group"
           >
             <!-- Group Header -->
