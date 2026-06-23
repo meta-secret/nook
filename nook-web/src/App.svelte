@@ -57,7 +57,7 @@
     >
       <div class="flex min-w-0 items-center gap-3">
         <div
-          class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md"
+          class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/80 bg-card shadow-xs dark:border-transparent"
         >
           <img
             src="/nook-logo.png"
