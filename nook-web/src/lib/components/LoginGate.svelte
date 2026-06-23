@@ -6,6 +6,7 @@
     ShieldCheck,
     Plus,
     ChevronLeft,
+    QrCode,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
@@ -42,6 +43,7 @@
     onBeginSetup,
     onCancelSetup,
     onOpenHelp,
+    onUseEnrollmentCode,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -60,7 +62,11 @@
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onOpenHelp?: () => void
+    onUseEnrollmentCode?: (code: string) => void | Promise<void>
   } = $props()
+
+  let enrollmentCodeFormOpen = $state(false)
+  let enrollmentCodeInput = $state('')
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
@@ -276,6 +282,79 @@
           </div>
         {/if}
       </form>
+
+      {#if onUseEnrollmentCode && (showProviderPicker || showSavedProviders)}
+        <div class="mt-5 border-t border-border/60 pt-4">
+          {#if !enrollmentCodeFormOpen}
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="open-enrollment-code-btn"
+              onclick={() => {
+                enrollmentCodeFormOpen = true
+              }}
+            >
+              <QrCode class="size-3.5" />
+              Have an enrollment code from another device?
+            </button>
+          {:else}
+            <form
+              class="space-y-3"
+              onsubmit={(e) => {
+                e.preventDefault()
+                if (!onUseEnrollmentCode) return
+                const trimmed = enrollmentCodeInput.trim()
+                if (!trimmed) return
+                void onUseEnrollmentCode(trimmed)
+              }}
+            >
+              <div class="flex items-start justify-between gap-2">
+                <div class="space-y-1">
+                  <h4
+                    class="text-xs font-semibold text-foreground inline-flex items-center gap-1.5"
+                  >
+                    <QrCode class="size-3.5 text-primary" /> Enroll with code
+                  </h4>
+                  <p class="text-xs text-muted-foreground text-pretty">
+                    Paste the code from an enrolled device. Provider credentials
+                    and password are unpacked locally.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="text-xs text-muted-foreground hover:text-foreground"
+                  onclick={() => {
+                    enrollmentCodeFormOpen = false
+                    enrollmentCodeInput = ''
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+              <textarea
+                rows="3"
+                class="w-full font-mono text-[11px] leading-relaxed rounded-md border border-border bg-background p-2 focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Paste enrollment code here…"
+                bind:value={enrollmentCodeInput}
+                data-testid="enrollment-code-input"></textarea>
+              <div class="flex justify-end">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isVerifying || !enrollmentCodeInput.trim()}
+                  data-testid="submit-enrollment-code-btn"
+                >
+                  {#if isVerifying}
+                    <RefreshCw class="size-3.5 animate-spin" /> Enrolling…
+                  {:else}
+                    <ShieldCheck class="size-3.5" /> Enroll
+                  {/if}
+                </Button>
+              </div>
+            </form>
+          {/if}
+        </div>
+      {/if}
     </CardContent>
   </Card>
   {#if showProviderPicker && !addProviderOpen && onOpenHelp}

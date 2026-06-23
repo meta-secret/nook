@@ -1,6 +1,6 @@
 use crate::{
-    AuthEnvelopes, StoredSecretRecord, is_auth_stored_record, is_join_stored_record,
-    is_members_stored_record,
+    AuthEnvelopes, PasswordEnvelope, StoredSecretRecord, is_auth_stored_record,
+    is_join_stored_record, is_members_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -127,6 +127,10 @@ struct StoredVaultYaml {
     joins: Vec<StoredSecretRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     members: Vec<MembersYamlRecord>,
+    /// Optional alternate unwrap path: scrypt envelope of `secrets_key` +
+    /// `members_key`. Absent for keys-only vaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    password_envelope: Option<PasswordEnvelope>,
 }
 
 fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
@@ -183,14 +187,30 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
 }
 
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> Result<String, String> {
-    let vault = partition_yaml_records(records);
+    serialize_stored_yaml_with_envelope(records, None)
+}
+
+/// Serialize records together with an optional password envelope.
+pub fn serialize_stored_yaml_with_envelope(
+    records: &[StoredSecretRecord],
+    envelope: Option<&PasswordEnvelope>,
+) -> Result<String, String> {
+    let mut vault = partition_yaml_records(records);
+    vault.password_envelope = envelope.cloned();
     serde_yaml::to_string(&vault).map_err(|e| format!("Failed to serialize stored YAML: {}", e))
 }
 
 pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, String> {
+    Ok(deserialize_stored_yaml_with_envelope(stored)?.0)
+}
+
+/// Deserialize records and (optional) password envelope side-by-side.
+pub fn deserialize_stored_yaml_with_envelope(
+    stored: &str,
+) -> Result<(Vec<StoredSecretRecord>, Option<PasswordEnvelope>), String> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), None));
     }
 
     if let Ok(vault) = serde_yaml::from_str::<StoredVaultYaml>(trimmed) {
@@ -198,10 +218,28 @@ pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, 
         records.extend(vault.auth.into_iter().map(auth_to_stored_record));
         records.extend(vault.joins);
         records.extend(vault.members.into_iter().map(members_to_stored_record));
-        return Ok(records);
+        return Ok((records, vault.password_envelope));
     }
 
     Err("Failed to parse stored YAML: expected secrets/auth/joins/members sections".to_string())
+}
+
+/// Read just the password envelope from a stored vault (any format), without
+/// failing on records that fail to parse beyond the envelope section.
+pub fn read_password_envelope(stored: &str) -> Result<Option<PasswordEnvelope>, String> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    // JSONL has no envelope section by design — password envelope is YAML-only.
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Ok(None);
+    }
+
+    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
+        .map_err(|e| format!("Failed to parse stored YAML for envelope: {}", e))?;
+    Ok(vault.password_envelope)
 }
 
 #[cfg(test)]
@@ -469,6 +507,63 @@ not-json
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key, format!("member:{auth_id}"));
+    }
+
+    #[test]
+    fn yaml_password_envelope_roundtrip() {
+        use crate::{
+            attach_password_envelope, multi_device::VaultKeys, resolve_keys_from_password,
+        };
+
+        let keys = VaultKeys {
+            secrets_key: "d".repeat(64),
+            members_key: "e".repeat(64),
+        };
+        let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
+
+        let yaml = serialize_stored_yaml_with_envelope(&[], Some(&envelope)).unwrap();
+        assert!(yaml.contains("password_envelope:"));
+        assert!(yaml.contains("scrypt"));
+        assert!(yaml.contains("BEGIN AGE ENCRYPTED FILE"));
+
+        // YAML block scalars add a trailing newline; age decryption tolerates it,
+        // so the round-trip must preserve decrypt behaviour even if the
+        // ciphertext string differs by trailing whitespace.
+        let (records, parsed_envelope) = deserialize_stored_yaml_with_envelope(&yaml).unwrap();
+        assert!(records.is_empty());
+        let parsed = parsed_envelope.expect("envelope present");
+        assert_eq!(parsed.version, envelope.version);
+        assert_eq!(parsed.kdf, envelope.kdf);
+        assert_eq!(parsed.work_factor, envelope.work_factor);
+        assert_eq!(
+            resolve_keys_from_password(&parsed, "correct horse battery staple").unwrap(),
+            keys
+        );
+
+        let read = read_password_envelope(&yaml)
+            .unwrap()
+            .expect("envelope present");
+        assert_eq!(
+            resolve_keys_from_password(&read, "correct horse battery staple").unwrap(),
+            keys
+        );
+    }
+
+    #[test]
+    fn yaml_without_envelope_returns_none() {
+        let records = sample_records();
+        let yaml = serialize_stored_yaml(&records).unwrap();
+        assert!(!yaml.contains("password_envelope"));
+
+        let (_, envelope) = deserialize_stored_yaml_with_envelope(&yaml).unwrap();
+        assert!(envelope.is_none());
+        assert_eq!(read_password_envelope(&yaml).unwrap(), None);
+    }
+
+    #[test]
+    fn jsonl_format_ignores_password_envelope() {
+        let jsonl = serialize_stored_jsonl(&sample_records()).unwrap();
+        assert_eq!(read_password_envelope(&jsonl).unwrap(), None);
     }
 
     #[test]

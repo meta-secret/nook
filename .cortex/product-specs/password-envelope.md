@@ -1,0 +1,283 @@
+# Password Envelope & QR-Based Device Join
+
+A member device may attach an optional **password envelope** to the vault file
+so the same `secrets_key` + `members_key` can be unwrapped with either
+(a) a per-device X25519 identity (default) or (b) a user-supplied password.
+
+This unlocks a one-step QR enrollment flow: an enrolled device emits a QR
+containing `{auth_provider_creds, password}`; a new device scans, decrypts
+the vault, generates its own keypair, writes its own `auth:` row plus a
+`members:` entry, and is immediately part of the vault — no approval
+round-trip required.
+
+**Related:**
+[decentralized-auth.md](decentralized-auth.md) §2 (key hierarchy),
+[auth-providers.md](../design-docs/auth-providers.md) §3 (UI states),
+[ARCHITECTURE.md](../ARCHITECTURE.md) §4 (storage table).
+
+---
+
+## 1. Goals
+
+- **Password as an alternative unwrap path** — never the primary one. Keys
+  remain the default; password is an explicit opt-in per vault.
+- **One-step join** — a new device with the QR payload can self-enroll
+  without a second device confirming. No `joins:` row, no
+  `JoinEnrollmentDialog`, no "approve on other device" hop.
+- **No plaintext DEK exposure** — the QR carries a password, not the raw
+  `secrets_key` / `members_key`. The shared secret is human-rotatable.
+- **Reversible** — owner can remove the password envelope at any time to
+  fall back to keys-only mode.
+- **Zero new trust assumptions** — password derivation runs entirely in
+  the browser (Wasm); the password is never sent to any provider.
+
+---
+
+## 2. Key hierarchy (extended)
+
+```mermaid
+flowchart TB
+  subgraph local["Local only (IndexedDB)"]
+    DI["Device identity secret (X25519)"]
+  end
+
+  subgraph vault_file["Vault file (synced)"]
+    AUTH["auth: pk_id + secrets_key + members_key<br/>(age envelopes to device pk)"]
+    PWENV["password_envelope: kdf params + ciphertext<br/>(age scrypt envelope of {secrets_key, members_key})"]
+    SEC["secrets: user secrets<br/>(values encrypted with secrets_key)"]
+    MEM["members: pk_id + ciphertext<br/>(members_key-encrypted)"]
+  end
+
+  PASS["User password<br/>(typed or scanned from QR)"]
+
+  DI -->|"unwrap own auth row"| AUTH
+  PASS -->|"scrypt derive → unwrap"| PWENV
+  AUTH --> SEC
+  AUTH --> MEM
+  PWENV -.->|"alternate path to same keys"| SEC
+  PWENV -.-> MEM
+```
+
+The password envelope and the per-device auth envelopes wrap **the same**
+`secrets_key` + `members_key`. Either path yields identical keys; the
+ciphertext under `secrets:` and `members:` is unchanged.
+
+---
+
+## 3. Vault file additions
+
+A new optional top-level YAML section:
+
+```yaml
+password_envelope:
+  version: 1
+  kdf: scrypt
+  work_factor: 18           # age default; configurable
+  ciphertext: |
+    -----BEGIN AGE ENCRYPTED FILE-----
+    # plaintext JSON: {"secrets_key":"<32B base64>","members_key":"<32B base64>"}
+    -----END AGE ENCRYPTED FILE-----
+```
+
+- `password_envelope:` is **optional**. Vaults without it behave exactly as
+  today.
+- At most **one** envelope per vault file. Rotating the password rewrites
+  this single record.
+- Uses the **same `age` crate already in `nook-core`** —
+  `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
+  decryption (see `nook-core/src/vault_crypto.rs`). No new crypto
+  dependency, no separate scrypt crate, fully `wasm32-unknown-unknown`
+  compatible. The salt and work factor are embedded in the age header,
+  so the `kdf` / `work_factor` YAML hints are redundant — kept only for
+  tooling/visibility.
+- **Work factor differs from the existing per-record encryption.**
+  `VaultCrypto` uses `log_n = 15` because its passphrase is a 128-bit
+  random hex string (no brute-force surface). The password envelope's
+  passphrase is human-chosen, so it must use age's default ~1 s target
+  (`log_n ≈ 18`) via `Recipient::set_work_factor(18)` — *do not* reuse
+  the `PROGRAMMATIC_SCRYPT_LOG_N` constant here.
+- Plaintext under the envelope is a compact JSON object — never the full
+  vault, never any user secret values.
+
+### Existing sections — unchanged
+
+`auth:`, `joins:`, `secrets:`, `members:` keep the schemas described in
+[decentralized-auth.md](decentralized-auth.md) §3. The password envelope
+does not replace per-device auth rows; both coexist.
+
+---
+
+## 4. Flows
+
+### 4.1 Set password (existing member)
+
+```
+[Svelte] → VaultState.setVaultPassword(password)
+         → NookVaultManager.set_password(password)
+              → resolve_secrets_key() + resolve_members_key() from auth row
+              → derive scrypt recipient(password)
+              → age-encrypt {secrets_key, members_key} → password_envelope
+              → write vault to storage
+```
+
+Preconditions: device is already enrolled (has its own `auth:` row).
+Postcondition: `password_envelope:` present; any device with the password
+can now self-enroll.
+
+### 4.2 Rotate password
+
+Same as 4.1 — re-encrypt the same `secrets_key` + `members_key` with a new
+password. The underlying DEK / MEK are **not** rotated by a password change.
+Full key rotation is a separate operation (out of scope for this spec).
+
+### 4.3 Remove password envelope
+
+```
+[Svelte] → VaultState.removeVaultPassword()
+         → NookVaultManager.remove_password()
+              → drop password_envelope section
+              → write vault
+```
+
+Vault returns to keys-only mode.
+
+### 4.4 QR-based device join (the headline use case)
+
+QR payload (JSON, then base64url, then a single-frame QR):
+
+```json
+{
+  "v": 1,
+  "provider": {
+    "type": "github",
+    "pat": "<token>",
+    "repo": "user/nook-vault"
+  },
+  "password": "<password>",
+  "issued_at": "2026-06-23T07:00:00Z",
+  "expires_at": "2026-06-23T07:10:00Z"
+}
+```
+
+New device flow:
+
+```
+[Svelte] scan QR → parse + validate expires_at
+        → save provider credentials in nook_auth (active provider)
+        → NookVaultManager.connect_with_password(provider, password)
+              → fetch vault file via provider creds
+              → derive scrypt identity(password)
+              → unwrap password_envelope → {secrets_key, members_key}
+              → generate this-device X25519 keypair (IndexedDB)
+              → encrypt secrets_key + members_key to own pk → new auth row
+              → encrypt {pk_id, pk} with members_key → new members row
+              → write vault back via provider
+              → VaultCrypto::new(secrets_key) → decrypt session
+```
+
+No `joins:` row is created. No approval is needed. The new device is
+immediately a first-class member.
+
+### 4.5 Password-only unlock (no QR)
+
+A user who already trusts a device may type the password directly on a
+fresh device. UX is identical to 4.4 minus the QR scan; the user supplies
+provider credentials + password through the existing login forms.
+
+---
+
+## 5. Security model
+
+### 5.1 Threat coverage
+
+| Threat | Mitigation |
+|---|---|
+| QR captured in transit (screen photo, MITM screenshot) | Short `expires_at` (≤10 min); password is rotatable post-join; provider PAT scope is user-controlled. |
+| Weak password brute force on a leaked vault file | Scrypt work factor ≥18 (age default ≈ 1s on a laptop). UI enforces a minimum entropy floor. |
+| Stolen vault file alone | Same as today — `secrets:` ciphertext is bound to `secrets_key`; password envelope adds a brute-force path that is gated by scrypt cost. |
+| Compromise of one device | That device's `auth:` row can be removed by any other enrolled device (future revocation work); password can be rotated independently. |
+| Password reuse across services | UI warns and recommends generating a random password; password manager irony noted in copy. |
+
+### 5.2 Non-goals
+
+- Password is **not** a recovery mechanism for a vault whose `auth:` rows
+  are all lost. If the password envelope is absent and no device retains
+  its identity, the vault is unrecoverable — same as today.
+- Password is **not** a per-secret access control. It unlocks the entire
+  vault, identical to the existing keys.
+- No server-side password verification — the only check is "does the
+  scrypt-derived key decrypt the envelope".
+
+### 5.3 Required UI guardrails
+
+- Setting a password shows a clear warning: *"This password unlocks your
+  entire vault. Anyone with the password and your storage provider
+  credentials can read all secrets."*
+- QR generation requires a recent re-auth (password or device unlock
+  challenge) within the last 60 s.
+- QR contains a one-time nonce; the issuing device records it locally so
+  the user sees "QR consumed by device X" after a successful join.
+
+---
+
+## 6. Core API (`nook-core::multi_device`)
+
+| Function | Role |
+|---|---|
+| `attach_password_envelope(secrets_key, members_key, password) -> PasswordEnvelope` | Build the envelope from already-resolved keys. |
+| `resolve_keys_from_password(envelope, password) -> (secrets_key, members_key)` | Inverse of attach; used during QR enrollment. |
+| `drop_password_envelope(vault)` | Remove the envelope section. |
+| `enroll_with_password(envelope, password, device_pk) -> (auth_row, members_row)` | Compose 4.4 in core; Wasm only orchestrates I/O. |
+
+All scrypt work happens in `nook-core` (pure Rust, Wasm-compatible).
+
+---
+
+## 7. WASM bridge additions (`nook-wasm`)
+
+| Method | Returns |
+|---|---|
+| `set_vault_password(password)` | `Result<(), JsError>` |
+| `remove_vault_password()` | `Result<(), JsError>` |
+| `connect_with_password(mode, provider_creds, password)` | `Result<(), JsError>` |
+| `has_password_envelope() -> bool` | sync |
+| `issue_join_qr(password) -> string` | Base64url JSON payload (no I/O — UI shows in QR component). |
+
+`connect_with_password` replaces the existing `connect` only for the
+password path; key-based connect is untouched.
+
+---
+
+## 8. Phase plan
+
+| Phase | Scope | Status |
+|---|---|---|
+| P0 | Spec, design review, threat model sign-off | Done |
+| P1 | `nook-core`: envelope format (`password_envelope.rs`), YAML serde round-trip, unit tests | Done |
+| P2 | `nook-wasm`: `setVaultPassword` / `removeVaultPassword` / `hasPasswordEnvelope` / `verifyVaultPassword` / `connectWithPassword` | Done |
+| P3 | `nook-web`: `VaultPasswordCard` (set / rotate / remove) in **Vault info** settings | Done |
+| P4 | `nook-web`: enrollment-code issuer with QR + paste-to-enroll on `LoginGate`. (Live camera scanning deferred — paste/scan-via-phone path covers desktop browsers without camera APIs.) | Done |
+| P5 | E2E tests: QR round-trip across two browser contexts | Planned |
+
+The approval-based join (`joins:` + `JoinEnrollmentDialog`) remains
+available as the fallback for vaults that opt out of the password envelope.
+
+---
+
+## 9. Open questions
+
+- **KDF choice — settled.** Scrypt via the existing `age` crate
+  (`age::scrypt::{Recipient, Identity}`) is the only option that keeps us
+  inside a single audited crypto dependency and stays Wasm-compatible
+  (same primitive `vault_crypto.rs` uses today). Argon2id would require
+  a new crate and a non-age envelope format, which is out of scope.
+- **Work factor tuning:** target ~1 s on a 2024 mid-tier laptop. Make it
+  a per-vault stored field so future hardware can be re-tuned without
+  client lockout.
+- **QR size budget:** with PAT (~40 chars) + repo + password + metadata,
+  payload should fit in a single frame at error correction level Q.
+  Confirm during P4.
+- **Revoking a leaked QR before expiry:** rotate the password; old QR
+  becomes useless because its embedded password no longer decrypts the
+  envelope.
+

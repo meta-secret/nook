@@ -129,3 +129,17 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 | 5 | `secrets_key` + `members_key` auth, members roster | Done |
 | 6 | OOB key transfer UX (copy from enrolled device) | Planned |
 | 7 | Device-to-device messaging channel | Planned |
+
+---
+
+## 7. Optional password envelope (cross-link)
+
+Devices may attach a **password envelope** to the vault — a second
+unwrap path for the same `secrets_key` + `members_key`, gated by a
+user-supplied password instead of (or in addition to) a per-device
+X25519 identity. The envelope is the foundation of the one-step QR
+join flow that bypasses `joins:` and approval altogether.
+
+See [password-envelope.md](password-envelope.md) for the full spec,
+threat model, and phase plan. Keys remain the default; the password
+envelope is opt-in per vault.

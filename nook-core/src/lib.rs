@@ -6,6 +6,7 @@
 
 mod multi_device;
 mod password;
+mod password_envelope;
 mod validation;
 mod vault_crypto;
 mod vault_format;
@@ -30,13 +31,20 @@ pub use multi_device::{
 };
 
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
+pub use password_envelope::{
+    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, attach_password_envelope,
+    resolve_keys_from_password, verify_password,
+};
 pub use validation::{
     DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, filter_secrets,
     validate_connect, validate_github_pat, validate_github_repo_name, validate_secret_data,
     validate_secret_id, validate_storage_mode,
 };
 pub use vault_crypto::VaultCrypto;
-pub use vault_format::{VaultFormat, deserialize_stored, detect_stored_format, serialize_stored};
+pub use vault_format::{
+    VaultFormat, deserialize_stored, deserialize_stored_yaml_with_envelope, detect_stored_format,
+    read_password_envelope, serialize_stored, serialize_stored_yaml_with_envelope,
+};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]

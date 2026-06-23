@@ -11,6 +11,13 @@ import {
   type VaultItemType,
   type VaultMember,
 } from '$lib/nook'
+import {
+  ENROLLMENT_CODE_TTL_MS,
+  decodeEnrollmentPayload,
+  encodeEnrollmentPayload,
+  isEnrollmentCodeExpired,
+  type EnrollmentCodePayloadV1,
+} from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
 import type {
   NookVaultManager,
@@ -58,6 +65,13 @@ export class VaultState {
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
   lastSyncedAt = $state<SvelteDate | null>(null)
   isSyncing = $state(false)
+
+  hasPasswordEnvelope = $state(false)
+  isPasswordBusy = $state(false)
+  passwordError = $state('')
+  enrollmentCode = $state('')
+  enrollmentCodeExpiresAt = $state<string | null>(null)
+  loginEnrollmentCode = $state('')
 
   /** Default 30s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
   private static syncIntervalMs(): number {
@@ -393,6 +407,16 @@ export class VaultState {
     } catch {
       this.vaultMembers = []
     }
+    this.refreshPasswordEnvelopeState()
+  }
+
+  private refreshPasswordEnvelopeState() {
+    if (!this.manager) return
+    try {
+      this.hasPasswordEnvelope = this.manager.hasPasswordEnvelope()
+    } catch {
+      this.hasPasswordEnvelope = false
+    }
   }
 
   async syncFromStorage(options?: { force?: boolean }) {
@@ -698,6 +722,162 @@ export class VaultState {
     } catch (e: unknown) {
       this.isAuthenticated = false
       this.errorMsg = e instanceof Error ? e.message : String(e)
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async setVaultPassword(password: string): Promise<void> {
+    if (!this.manager) {
+      this.passwordError = 'Vault engine is not available.'
+      return
+    }
+    if (!this.isAuthenticated) {
+      this.passwordError = 'Unlock the vault before setting a password.'
+      return
+    }
+    this.passwordError = ''
+    this.isPasswordBusy = true
+    try {
+      await this.enqueueStorage(() => this.manager!.setVaultPassword(password))
+      this.refreshPasswordEnvelopeState()
+      this.showSuccess(
+        this.hasPasswordEnvelope
+          ? 'Vault password updated.'
+          : 'Vault password set.',
+      )
+    } catch (e: unknown) {
+      this.passwordError =
+        e instanceof Error ? e.message : 'Failed to set vault password.'
+      throw e
+    } finally {
+      this.isPasswordBusy = false
+    }
+  }
+
+  async removeVaultPassword(): Promise<void> {
+    if (!this.manager) return
+    this.passwordError = ''
+    this.isPasswordBusy = true
+    try {
+      await this.enqueueStorage(() => this.manager!.removeVaultPassword())
+      this.refreshPasswordEnvelopeState()
+      this.enrollmentCode = ''
+      this.enrollmentCodeExpiresAt = null
+      this.showSuccess('Vault password removed.')
+    } catch (e: unknown) {
+      this.passwordError =
+        e instanceof Error ? e.message : 'Failed to remove vault password.'
+      throw e
+    } finally {
+      this.isPasswordBusy = false
+    }
+  }
+
+  /**
+   * Issue a base64url-encoded enrollment payload (provider creds + password)
+   * for the joining device to scan or paste. The password is verified against
+   * the current envelope before any payload is generated.
+   */
+  issueEnrollmentCode(password: string): string {
+    if (!this.manager) {
+      throw new Error('Vault engine is not available.')
+    }
+    if (!this.hasPasswordEnvelope) {
+      throw new Error(
+        'Set a vault password first; enrollment codes wrap that password.',
+      )
+    }
+    if (!this.manager.verifyVaultPassword(password)) {
+      throw new Error('Password does not match the vault.')
+    }
+    const issuedAt = new SvelteDate()
+    const expiresAt = new SvelteDate(
+      issuedAt.getTime() + ENROLLMENT_CODE_TTL_MS,
+    )
+    const provider: EnrollmentCodePayloadV1['provider'] =
+      this.storageMode === 'github'
+        ? {
+            type: 'github',
+            pat: this.githubPat.trim(),
+            repo: this.githubRepo.trim(),
+          }
+        : { type: 'local' }
+    if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
+      throw new Error(
+        'GitHub provider is missing credentials. Reconnect and try again.',
+      )
+    }
+    const payload: EnrollmentCodePayloadV1 = {
+      v: 1,
+      provider,
+      password,
+      issued_at: issuedAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    }
+    const code = encodeEnrollmentPayload(payload)
+    this.enrollmentCode = code
+    this.enrollmentCodeExpiresAt = payload.expires_at
+    return code
+  }
+
+  clearEnrollmentCode() {
+    this.enrollmentCode = ''
+    this.enrollmentCodeExpiresAt = null
+  }
+
+  /**
+   * Joining-side: parse an enrollment code, restore provider credentials, and
+   * self-enrol via `connectWithPassword`. Skips approval entirely.
+   */
+  async connectWithEnrollmentCode(code: string): Promise<void> {
+    if (!this.manager) {
+      this.errorMsg = 'Vault engine is not available.'
+      return
+    }
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isVerifying = true
+    try {
+      const payload = decodeEnrollmentPayload(code)
+      if (isEnrollmentCodeExpired(payload)) {
+        throw new Error(
+          'This enrollment code has expired. Ask for a fresh code.',
+        )
+      }
+
+      if (payload.provider.type === 'github') {
+        this.storageMode = 'github'
+        this.githubPat = payload.provider.pat
+        this.githubRepo = payload.provider.repo
+        this.loginSetupType = 'github'
+      } else {
+        this.storageMode = 'local'
+        this.loginSetupType = 'local'
+      }
+
+      await this.initDeviceIdentity()
+
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.connectWithPassword(
+          ...this.wasmGithubArgs(),
+          payload.password,
+        ),
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      this.isAuthenticated = true
+      await this.ensureProviderSaved()
+      this.hydrateMultiDeviceState()
+      this.joinEnrollmentPrompt = 'none'
+      this.loginEnrollmentCode = ''
+      this.showSuccess('Enrolled this device via enrollment code.')
+      this.startVaultSync()
+    } catch (e: unknown) {
+      this.isAuthenticated = false
+      this.errorMsg =
+        e instanceof Error
+          ? e.message
+          : 'Failed to enroll with the provided code.'
     } finally {
       this.isVerifying = false
     }

@@ -60,7 +60,9 @@
           class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/80 bg-card shadow-xs dark:border-transparent"
         >
           <img
-            src={colorMode === 'dark' ? '/nook-logo-dark.png' : '/nook-logo-light.png'}
+            src={colorMode === 'dark'
+              ? '/nook-logo-dark.png'
+              : '/nook-logo-light.png'}
             alt="Nook logo"
             class="size-full object-contain"
           />
@@ -209,6 +211,11 @@
                 bind:setupType={vault.loginSetupType}
                 bind:githubPat={vault.githubPat}
                 bind:githubRepo={vault.githubRepo}
+                hasPasswordEnvelope={vault.hasPasswordEnvelope}
+                isPasswordBusy={vault.isPasswordBusy}
+                passwordError={vault.passwordError}
+                enrollmentCode={vault.enrollmentCode}
+                enrollmentCodeExpiresAt={vault.enrollmentCodeExpiresAt}
                 onReconnect={handleUnlock}
                 onSelectProvider={handleProviderReconnect}
                 onBeginAddProvider={() => vault.beginAddProvider()}
@@ -216,6 +223,10 @@
                 onBeginSetup={(type) => vault.beginProviderSetup(type)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
                 onApproveJoin={(id) => vault.approveJoin(id)}
+                onSetVaultPassword={(pw) => vault.setVaultPassword(pw)}
+                onRemoveVaultPassword={() => vault.removeVaultPassword()}
+                onIssueEnrollmentCode={(pw) => vault.issueEnrollmentCode(pw)}
+                onClearEnrollmentCode={() => vault.clearEnrollmentCode()}
               />
             </div>
           {:else}
@@ -281,6 +292,7 @@
           onBeginSetup={(type) => vault.beginProviderSetup(type)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onOpenHelp={() => vault.openHelp()}
+          onUseEnrollmentCode={(code) => vault.connectWithEnrollmentCode(code)}
         />
       </div>
     {/if}

@@ -13,6 +13,7 @@
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
+  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
@@ -36,6 +37,11 @@
     setupType = $bindable(null as StorageProviderType | null),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
+    hasPasswordEnvelope = false,
+    isPasswordBusy = false,
+    passwordError = '',
+    enrollmentCode = '',
+    enrollmentCodeExpiresAt = null as string | null,
     onReconnect,
     onSelectProvider,
     onBeginAddProvider,
@@ -43,6 +49,10 @@
     onBeginSetup,
     onCancelSetup,
     onApproveJoin,
+    onSetVaultPassword,
+    onRemoveVaultPassword,
+    onIssueEnrollmentCode,
+    onClearEnrollmentCode,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -59,6 +69,11 @@
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
+    hasPasswordEnvelope?: boolean
+    isPasswordBusy?: boolean
+    passwordError?: string
+    enrollmentCode?: string
+    enrollmentCodeExpiresAt?: string | null
     onReconnect: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -66,6 +81,10 @@
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onApproveJoin?: (deviceId: string) => void | Promise<void>
+    onSetVaultPassword?: (password: string) => void | Promise<void>
+    onRemoveVaultPassword?: () => void | Promise<void>
+    onIssueEnrollmentCode?: (password: string) => string | void
+    onClearEnrollmentCode?: () => void
   } = $props()
 
   const showSetup = $derived(setupType !== null)
@@ -296,6 +315,21 @@
   {/if}
 
   {#if !addingProvider}
+    {#if isAuthenticated && onSetVaultPassword && onRemoveVaultPassword && onIssueEnrollmentCode && onClearEnrollmentCode}
+      <hr class="border-border/60" />
+      <VaultPasswordCard
+        {hasPasswordEnvelope}
+        isBusy={isPasswordBusy}
+        {passwordError}
+        {enrollmentCode}
+        {enrollmentCodeExpiresAt}
+        onSetPassword={onSetVaultPassword}
+        onRemovePassword={onRemoveVaultPassword}
+        onIssueCode={onIssueEnrollmentCode}
+        onClearCode={onClearEnrollmentCode}
+      />
+    {/if}
+
     <hr class="border-border/60" />
     <DeviceEnrollment
       {deviceId}

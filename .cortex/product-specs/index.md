@@ -7,3 +7,4 @@ Product specs detail the user-facing and system-level requirements.
 | [monorepo-setup.md](monorepo-setup.md) | Spec for monorepo structure, tooling & containerized workflow | Verified |
 | [password-manager.md](password-manager.md) | Spec for password & secret manager with zero-knowledge Wasm engine | Verified |
 | [decentralized-auth.md](decentralized-auth.md) | Multi-device keys, vault sections, join/approve/enroll flows | Verified |
+| [password-envelope.md](password-envelope.md) | Optional password envelope for `secrets_key`/`members_key` and one-step QR-based device join | Implemented (P1–P4) |

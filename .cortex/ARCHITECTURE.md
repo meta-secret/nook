@@ -99,6 +99,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 | Session (plaintext user secrets) | JSONL lines | WASM `decrypted_jsonl` only |
 | On-disk user secrets | YAML `secrets:` list | Values encrypted with `secrets_key` |
 | On-disk key envelopes | YAML `auth:` list | `pk_id` → age-armored `secrets_key` + `members_key` |
+| On-disk password envelope (optional) | YAML `password_envelope:` record | scrypt-derived age envelope of `{secrets_key, members_key}`; alternate unwrap path for QR-based join (see [password-envelope.md](product-specs/password-envelope.md)) |
 | Member catalog | YAML `members:` list | `pk_id` + `members_key`-encrypted `{pk_id, pk}` |
 | Pending joins | YAML `joins:` list | `device_id` → JSON (includes `public_key` while pending) |
 | Device identity (X25519 private) | age secret string | IndexedDB `device_identity_secret` only |
