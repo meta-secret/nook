@@ -60,7 +60,7 @@
           class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/80 bg-card shadow-xs dark:border-transparent"
         >
           <img
-            src="/nook-logo.png"
+            src={colorMode === 'dark' ? '/nook-logo-dark.png' : '/nook-logo-light.png'}
             alt="Nook logo"
             class="size-full object-contain"
           />
