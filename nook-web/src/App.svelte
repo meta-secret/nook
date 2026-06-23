@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, GitFork, Lock } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, GitFork } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -41,9 +41,13 @@
     >
       <div class="flex min-w-0 items-center gap-2.5">
         <div
-          class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-accent-foreground"
+          class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-white"
         >
-          <Lock class="size-4" />
+          <img
+            src="/nook-logo-icon.png"
+            alt="Nook logo"
+            class="size-full object-cover"
+          />
         </div>
         <div class="flex min-w-0 items-center gap-2">
           <span class="text-base font-semibold tracking-tight text-foreground"
