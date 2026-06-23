@@ -135,7 +135,13 @@
           Cancel
         </Button>
       {:else}
-        <Button size="sm" data-testid="add-secret-btn" onclick={openAddSecret}>
+        <Button
+          size="sm"
+          variant="outline"
+          class="border-border bg-background text-foreground hover:bg-accent"
+          data-testid="add-secret-btn"
+          onclick={openAddSecret}
+        >
           <Plus class="size-3.5" />
           Add item
         </Button>

@@ -106,7 +106,7 @@
 
         <button
           type="button"
-          class="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-3 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex size-10 items-center justify-center rounded-lg border border-border bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label={colorMode === 'dark'
             ? 'Switch to light mode'
             : 'Switch to dark mode'}
@@ -127,13 +127,17 @@
           href="https://github.com/meta-secret/nook"
           target="_blank"
           rel="noreferrer"
-          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground {vault.isAuthenticated
+            ? 'w-10'
+            : 'px-3.5'}"
           aria-label="Nook on GitHub — open source"
           title="Nook is open source on GitHub"
           data-testid="github-source-link"
         >
           <GitFork class="size-4" />
-          <span class="hidden sm:inline">GitHub</span>
+          <span class={vault.isAuthenticated ? 'sr-only' : 'hidden sm:inline'}
+            >GitHub</span
+          >
         </a>
 
         {#if vault.helpOpen}
