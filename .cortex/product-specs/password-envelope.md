@@ -19,8 +19,10 @@ round-trip required.
 
 ## 1. Goals
 
-- **Password as an alternative unwrap path** — never the primary one. Keys
-  remain the default; password is an explicit opt-in per vault.
+- **Password as an alternative unwrap path** — keys remain the default
+  (per-device X25519 envelopes), but once set, the password is a
+  first-class, **reusable** unlock method on any device for as long as
+  the user keeps it active.
 - **One-step join** — a new device with the QR payload can self-enroll
   without a second device confirming. No `joins:` row, no
   `JoinEnrollmentDialog`, no "approve on other device" hop.
@@ -153,11 +155,20 @@ QR payload (JSON, then base64url, then a single-frame QR):
     "pat": "<token>",
     "repo": "user/nook-vault"
   },
-  "password": "<password>",
-  "issued_at": "2026-06-23T07:00:00Z",
-  "expires_at": "2026-06-23T07:10:00Z"
+  "password": "<password>"
 }
 ```
+
+The payload **carries the storage provider's credentials** (e.g. GitHub
+PAT and repo) so the joining device needs zero manual configuration —
+no token to copy, no repo URL to retype. A vault stored locally
+(IndexedDB) issues `{ "type": "local" }` and the joining device just
+materialises a fresh local vault unlocked with the password.
+
+Payloads do **not** carry an expiration: the vault password is the
+long-lived credential and is the source of truth for revocation. If a
+QR is suspected leaked, rotate the password — old codes stop
+decrypting the envelope and are useless.
 
 New device flow:
 
@@ -180,9 +191,21 @@ immediately a first-class member.
 
 ### 4.5 Password-only unlock (no QR)
 
-A user who already trusts a device may type the password directly on a
-fresh device. UX is identical to 4.4 minus the QR scan; the user supplies
-provider credentials + password through the existing login forms.
+A user who already trusts a device may type the password directly on any
+device — fresh or already-enrolled. UX path on the login screen:
+
+```
+[Svelte] LoginGate → "Unlock with vault password instead"
+        → user picks (or has) an active provider and types the password
+        → VaultState.unlockWithPassword(password)
+              → NookVaultManager.connectWithPassword(provider_creds, password)
+```
+
+The password unlock is a **first-class login method**, not just a
+one-time bootstrap. On an already-enrolled device the call re-writes
+this device's own auth row from the password-resolved keys (no-op for
+correctly-enrolled devices); on an unknown device it self-enrols
+identically to the QR flow.
 
 ---
 
@@ -192,8 +215,8 @@ provider credentials + password through the existing login forms.
 
 | Threat | Mitigation |
 |---|---|
-| QR captured in transit (screen photo, MITM screenshot) | Short `expires_at` (≤10 min); password is rotatable post-join; provider PAT scope is user-controlled. |
-| Weak password brute force on a leaked vault file | Scrypt work factor ≥18 (age default ≈ 1s on a laptop). UI enforces a minimum entropy floor. |
+| QR captured in transit (screen photo, MITM screenshot) | The user rotates the password — old codes stop decrypting the envelope. Provider PAT scope is user-controlled and can be revoked at GitHub. |
+| Weak password brute force on a leaked vault file | Scrypt work factor ≥18 (age default ≈ 1s on a laptop). UI enforces a minimum entropy floor (12 chars). |
 | Stolen vault file alone | Same as today — `secrets:` ciphertext is bound to `secrets_key`; password envelope adds a brute-force path that is gated by scrypt cost. |
 | Compromise of one device | That device's `auth:` row can be removed by any other enrolled device (future revocation work); password can be rotated independently. |
 | Password reuse across services | UI warns and recommends generating a random password; password manager irony noted in copy. |
@@ -210,13 +233,14 @@ provider credentials + password through the existing login forms.
 
 ### 5.3 Required UI guardrails
 
-- Setting a password shows a clear warning: *"This password unlocks your
-  entire vault. Anyone with the password and your storage provider
-  credentials can read all secrets."*
-- QR generation requires a recent re-auth (password or device unlock
-  challenge) within the last 60 s.
-- QR contains a one-time nonce; the issuing device records it locally so
-  the user sees "QR consumed by device X" after a successful join.
+- Setting a password shows a clear warning: *"Anyone with the password
+  and your storage provider credentials can read the entire vault."*
+- Issuing an enrollment code requires re-typing the vault password,
+  which is verified locally against the envelope before the payload is
+  ever rendered. This guards against an unattended-device drive-by.
+- Rotating the password invalidates **every** outstanding enrollment
+  code in one operation. This is the primary revocation primitive — no
+  per-code TTL is needed.
 
 ---
 
@@ -277,7 +301,9 @@ available as the fallback for vaults that opt out of the password envelope.
 - **QR size budget:** with PAT (~40 chars) + repo + password + metadata,
   payload should fit in a single frame at error correction level Q.
   Confirm during P4.
-- **Revoking a leaked QR before expiry:** rotate the password; old QR
-  becomes useless because its embedded password no longer decrypts the
-  envelope.
+- **Multi-provider QR payloads.** Today a code carries one provider's
+  credentials. Future: emit a payload containing every active provider
+  the issuer has, so the joining device adopts the full provider set in
+  one step (foundation for the multi-provider replication phase in
+  [auth-providers.md](../design-docs/auth-providers.md) §5).
 

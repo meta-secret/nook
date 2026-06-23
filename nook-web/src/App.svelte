@@ -215,7 +215,6 @@
                 isPasswordBusy={vault.isPasswordBusy}
                 passwordError={vault.passwordError}
                 enrollmentCode={vault.enrollmentCode}
-                enrollmentCodeExpiresAt={vault.enrollmentCodeExpiresAt}
                 onReconnect={handleUnlock}
                 onSelectProvider={handleProviderReconnect}
                 onBeginAddProvider={() => vault.beginAddProvider()}
@@ -293,6 +292,8 @@
           onCancelSetup={() => vault.cancelProviderSetup()}
           onOpenHelp={() => vault.openHelp()}
           onUseEnrollmentCode={(code) => vault.connectWithEnrollmentCode(code)}
+          onUnlockWithPassword={(password) =>
+            vault.unlockWithPassword(password)}
         />
       </div>
     {/if}

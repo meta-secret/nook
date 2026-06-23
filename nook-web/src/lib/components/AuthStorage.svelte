@@ -41,7 +41,6 @@
     isPasswordBusy = false,
     passwordError = '',
     enrollmentCode = '',
-    enrollmentCodeExpiresAt = null as string | null,
     onReconnect,
     onSelectProvider,
     onBeginAddProvider,
@@ -73,7 +72,6 @@
     isPasswordBusy?: boolean
     passwordError?: string
     enrollmentCode?: string
-    enrollmentCodeExpiresAt?: string | null
     onReconnect: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -322,7 +320,6 @@
         isBusy={isPasswordBusy}
         {passwordError}
         {enrollmentCode}
-        {enrollmentCodeExpiresAt}
         onSetPassword={onSetVaultPassword}
         onRemovePassword={onRemoveVaultPassword}
         onIssueCode={onIssueEnrollmentCode}

@@ -12,10 +12,8 @@ import {
   type VaultMember,
 } from '$lib/nook'
 import {
-  ENROLLMENT_CODE_TTL_MS,
   decodeEnrollmentPayload,
   encodeEnrollmentPayload,
-  isEnrollmentCodeExpired,
   type EnrollmentCodePayloadV1,
 } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
@@ -70,7 +68,6 @@ export class VaultState {
   isPasswordBusy = $state(false)
   passwordError = $state('')
   enrollmentCode = $state('')
-  enrollmentCodeExpiresAt = $state<string | null>(null)
   loginEnrollmentCode = $state('')
 
   /** Default 30s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
@@ -763,7 +760,6 @@ export class VaultState {
       await this.enqueueStorage(() => this.manager!.removeVaultPassword())
       this.refreshPasswordEnvelopeState()
       this.enrollmentCode = ''
-      this.enrollmentCodeExpiresAt = null
       this.showSuccess('Vault password removed.')
     } catch (e: unknown) {
       this.passwordError =
@@ -777,7 +773,8 @@ export class VaultState {
   /**
    * Issue a base64url-encoded enrollment payload (provider creds + password)
    * for the joining device to scan or paste. The password is verified against
-   * the current envelope before any payload is generated.
+   * the current envelope before any payload is generated. Codes do not
+   * expire — rotate the vault password to invalidate them.
    */
   issueEnrollmentCode(password: string): string {
     if (!this.manager) {
@@ -791,10 +788,6 @@ export class VaultState {
     if (!this.manager.verifyVaultPassword(password)) {
       throw new Error('Password does not match the vault.')
     }
-    const issuedAt = new SvelteDate()
-    const expiresAt = new SvelteDate(
-      issuedAt.getTime() + ENROLLMENT_CODE_TTL_MS,
-    )
     const provider: EnrollmentCodePayloadV1['provider'] =
       this.storageMode === 'github'
         ? {
@@ -812,18 +805,59 @@ export class VaultState {
       v: 1,
       provider,
       password,
-      issued_at: issuedAt.toISOString(),
-      expires_at: expiresAt.toISOString(),
     }
     const code = encodeEnrollmentPayload(payload)
     this.enrollmentCode = code
-    this.enrollmentCodeExpiresAt = payload.expires_at
     return code
   }
 
   clearEnrollmentCode() {
     this.enrollmentCode = ''
-    this.enrollmentCodeExpiresAt = null
+  }
+
+  /**
+   * Unlock the active provider's vault with just a password. Works for any
+   * scenario where the vault carries a `password_envelope:`:
+   *
+   * - First-time enrolment on this device (writes own auth row + members
+   *   entry).
+   * - Re-unlocking an already-enrolled device when the user prefers the
+   *   password path over the device-identity path.
+   *
+   * Requires the active provider's credentials to already be configured.
+   */
+  async unlockWithPassword(password: string): Promise<void> {
+    if (!this.manager) {
+      this.errorMsg = 'Vault engine is not available.'
+      return
+    }
+    if (this.isVerifying) return
+    if (this.storageMode === 'github' && !this.githubPat.trim()) {
+      this.errorMsg = 'Configure GitHub credentials before unlocking.'
+      return
+    }
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isVerifying = true
+    try {
+      await this.initDeviceIdentity()
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.connectWithPassword(...this.wasmGithubArgs(), password),
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      this.isAuthenticated = true
+      await this.ensureProviderSaved()
+      this.hydrateMultiDeviceState()
+      this.joinEnrollmentPrompt = 'none'
+      this.showSuccess('Vault unlocked with password.')
+      this.startVaultSync()
+    } catch (e: unknown) {
+      this.isAuthenticated = false
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to unlock with password.'
+    } finally {
+      this.isVerifying = false
+    }
   }
 
   /**
@@ -840,11 +874,6 @@ export class VaultState {
     this.isVerifying = true
     try {
       const payload = decodeEnrollmentPayload(code)
-      if (isEnrollmentCodeExpired(payload)) {
-        throw new Error(
-          'This enrollment code has expired. Ask for a fresh code.',
-        )
-      }
 
       if (payload.provider.type === 'github') {
         this.storageMode = 'github'

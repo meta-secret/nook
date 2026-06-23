@@ -5,6 +5,10 @@
  * with the user-typed vault password into a compact base64url-encoded JSON
  * blob. The joining device decodes this, restores the provider, and calls
  * `connectWithPassword` — see `.cortex/product-specs/password-envelope.md`.
+ *
+ * Codes do **not** carry an expiration: the password itself is the
+ * long-lived credential. If a code is suspected leaked, rotate the vault
+ * password — old codes stop decrypting the envelope.
  */
 
 export type EnrollmentCodePayloadV1 = {
@@ -17,11 +21,7 @@ export type EnrollmentCodePayloadV1 = {
         repo: string
       }
   password: string
-  issued_at: string
-  expires_at: string
 }
-
-export const ENROLLMENT_CODE_TTL_MS = 10 * 60 * 1000
 
 export function encodeEnrollmentPayload(
   payload: EnrollmentCodePayloadV1,
@@ -48,15 +48,6 @@ export function decodeEnrollmentPayload(code: string): EnrollmentCodePayloadV1 {
   return validatePayload(parsed)
 }
 
-export function isEnrollmentCodeExpired(
-  payload: EnrollmentCodePayloadV1,
-  now: Date = new Date(),
-): boolean {
-  const expires = Date.parse(payload.expires_at)
-  if (!Number.isFinite(expires)) return true
-  return now.getTime() > expires
-}
-
 function validatePayload(value: unknown): EnrollmentCodePayloadV1 {
   if (
     typeof value !== 'object' ||
@@ -79,9 +70,6 @@ function validatePayload(value: unknown): EnrollmentCodePayloadV1 {
   }
   if (typeof obj.password !== 'string' || obj.password.length === 0) {
     throw new Error('Enrollment code is missing a password.')
-  }
-  if (typeof obj.issued_at !== 'string' || typeof obj.expires_at !== 'string') {
-    throw new Error('Enrollment code is missing timing fields.')
   }
   return value as EnrollmentCodePayloadV1
 }

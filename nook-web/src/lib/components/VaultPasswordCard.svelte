@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import {
     KeyRound,
     Lock,
@@ -20,7 +19,6 @@
     isBusy,
     passwordError,
     enrollmentCode,
-    enrollmentCodeExpiresAt,
     onSetPassword,
     onRemovePassword,
     onIssueCode,
@@ -30,7 +28,6 @@
     isBusy: boolean
     passwordError: string
     enrollmentCode: string
-    enrollmentCodeExpiresAt: string | null
     onSetPassword: (password: string) => void | Promise<void>
     onRemovePassword: () => void | Promise<void>
     onIssueCode: (password: string) => string | void
@@ -46,8 +43,6 @@
   let localError = $state('')
   let copied = $state(false)
   let qrDataUrl = $state('')
-
-  const formattedExpiry = $derived(formatExpiry(enrollmentCodeExpiresAt))
 
   $effect(() => {
     void enrollmentCode
@@ -140,28 +135,6 @@
       // best-effort
     }
   }
-
-  function formatExpiry(iso: string | null): string {
-    if (!iso) return ''
-    const ms = Date.parse(iso)
-    if (!Number.isFinite(ms)) return ''
-    const delta = ms - Date.now()
-    if (delta <= 0) return 'expired'
-    const minutes = Math.max(1, Math.round(delta / 60_000))
-    return `expires in ~${minutes}m`
-  }
-
-  let tick = $state(0)
-  onMount(() => {
-    const t = setInterval(() => {
-      tick++
-    }, 30_000)
-    return () => clearInterval(t)
-  })
-  $effect(() => {
-    void tick
-    // recompute formattedExpiry by touching the input deps
-  })
 </script>
 
 <section
@@ -432,7 +405,8 @@
           <div class="flex items-start justify-between gap-3">
             <p class="text-xs text-muted-foreground text-pretty">
               Scan with the joining device, or copy the code and paste it into
-              its login screen. {formattedExpiry}.
+              its login screen. The code stays valid until you rotate the
+              password.
             </p>
             <button
               type="button"
