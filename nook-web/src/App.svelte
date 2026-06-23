@@ -28,6 +28,7 @@
   }
 
   const shellWidth = 'max-w-xl'
+  const appVersion = '0.1.0'
 </script>
 
 <main class="dark min-h-svh bg-background text-foreground">
@@ -48,12 +49,6 @@
             alt="Nook logo"
             class="size-full object-contain"
           />
-        </div>
-        <div class="flex min-w-0 items-center gap-2">
-          <span
-            class="shrink-0 rounded-sm border border-border/70 px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/80"
-            >v0.1.0</span
-          >
         </div>
       </div>
 
@@ -213,6 +208,7 @@
           isSyncing={vault.isSyncing || vault.isSaving}
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
+          {appVersion}
           onRefresh={() => vault.manualSync()}
           onDismissSuccess={() => vault.dismissSuccess()}
           onDismissError={() => vault.dismissError()}

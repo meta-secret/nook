@@ -15,6 +15,7 @@
     isSyncing = false,
     successMsg = '',
     errorMsg = '',
+    appVersion = '',
     onRefresh,
     onDismissSuccess,
     onDismissError,
@@ -25,6 +26,7 @@
     isSyncing?: boolean
     successMsg?: string
     errorMsg?: string
+    appVersion?: string
     onRefresh?: () => void | Promise<void>
     onDismissSuccess?: () => void
     onDismissError?: () => void
@@ -81,6 +83,15 @@
         >
           Synced {formatLastSync(lastSyncedAt)}
         </span>
+        {#if appVersion}
+          <span
+            class="hidden text-muted-foreground sm:inline"
+            aria-hidden="true">·</span
+          >
+          <span class="shrink-0 text-muted-foreground/80">
+            v{appVersion}
+          </span>
+        {/if}
       </div>
 
       {#if onRefresh}
