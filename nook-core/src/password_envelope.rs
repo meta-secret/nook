@@ -26,7 +26,7 @@ pub const PASSWORD_SCRYPT_LOG_N: u8 = 18;
 
 /// Recommended minimum password length. UI layers should enforce a stricter
 /// entropy policy; this is the absolute floor below which we refuse to wrap.
-pub const PASSWORD_MIN_LENGTH: usize = 12;
+pub const PASSWORD_MIN_LENGTH: usize = 5;
 
 /// On-disk password envelope. Salt + KDF params are embedded in the age
 /// header; the `kdf` / `work_factor` fields are redundant hints for tooling.
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn short_password_rejected() {
-        let err = attach_password_envelope(&sample_keys(), "short").unwrap_err();
+        let err = attach_password_envelope(&sample_keys(), "abc").unwrap_err();
         assert!(err.contains("at least"));
     }
 

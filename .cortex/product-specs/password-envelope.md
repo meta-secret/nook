@@ -243,7 +243,7 @@ identically to the QR flow.
 | Threat | Mitigation |
 |---|---|
 | QR captured in transit (screen photo, MITM screenshot) | The user rotates the password — old codes stop decrypting the envelope. Provider PAT scope is user-controlled and can be revoked at GitHub. |
-| Weak password brute force on a leaked vault file | Scrypt work factor ≥18 (age default ≈ 1s on a laptop). UI enforces a minimum entropy floor (12 chars). |
+| Weak password brute force on a leaked vault file | Scrypt work factor ≥18 (age default ≈ 1s on a laptop). UI enforces a minimum length floor of 5 chars — the user is expected to pick a strong password (or use Nook's generator); this floor only blocks empty/typo entries. |
 | Stolen vault file alone | Same as today — `secrets:` ciphertext is bound to `secrets_key`; password envelope adds a brute-force path that is gated by scrypt cost. |
 | Compromise of one device | That device's `auth:` row can be removed by any other enrolled device (future revocation work); password can be rotated independently. |
 | Password reuse across services | UI warns and recommends generating a random password; password manager irony noted in copy. |

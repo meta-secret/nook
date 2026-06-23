@@ -82,8 +82,8 @@
 
   async function submitSetPassword() {
     localError = ''
-    if (passwordInput.length < 12) {
-      localError = 'Password must be at least 12 characters.'
+    if (passwordInput.length < 5) {
+      localError = 'Password must be at least 5 characters.'
       return
     }
     if (passwordInput !== confirmInput) {
@@ -246,7 +246,7 @@
           type={showPassword ? 'text' : 'password'}
           class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           bind:value={passwordInput}
-          minlength="12"
+          minlength="5"
           autocomplete="new-password"
           data-testid="vault-password-input"
           required
@@ -274,7 +274,7 @@
           <input type="checkbox" bind:checked={showPassword} />
           Show
         </label>
-        <span class="text-muted-foreground">Minimum 12 characters.</span>
+        <span class="text-muted-foreground">Minimum 5 characters.</span>
       </div>
       {#if localError || passwordError}
         <p class="text-xs text-destructive" data-testid="vault-password-error">
