@@ -131,9 +131,7 @@
             </li>
             <li>
               Send a request; an enrolled device approves it under
-              <strong class="font-medium text-foreground"
-                >Storage & devices</strong
-              >.
+              <strong class="font-medium text-foreground">Vault info</strong>.
             </li>
             <li>
               Approval wraps the vault keys for this browser’s public key — no
@@ -272,9 +270,8 @@
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
             Open Nook on an enrolled device, approve this browser in
-            <strong class="font-medium text-foreground"
-              >Storage & devices</strong
-            >, then unlock again here.
+            <strong class="font-medium text-foreground">Vault info</strong>,
+            then unlock again here.
           </p>
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button

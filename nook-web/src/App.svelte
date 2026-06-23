@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, GitFork, Lock } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, Moon, Info, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -12,8 +12,15 @@
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
+  type ColorMode = 'light' | 'dark'
+  const THEME_STORAGE_KEY = 'nook_color_mode'
+  let colorMode = $state<ColorMode>('dark')
 
   onMount(() => {
+    const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
+    if (savedMode === 'light' || savedMode === 'dark') {
+      colorMode = savedMode
+    }
     void vault.init()
     return () => vault.stopVaultSync()
   })
@@ -27,32 +34,36 @@
     await vault.loadDb()
   }
 
+  function toggleColorMode() {
+    colorMode = colorMode === 'dark' ? 'light' : 'dark'
+    localStorage.setItem(THEME_STORAGE_KEY, colorMode)
+  }
+
   const shellWidth = 'max-w-xl'
+  const appVersion = '0.1.0'
 </script>
 
-<main class="dark min-h-svh bg-background text-foreground">
+<main
+  class="min-h-svh bg-background text-foreground"
+  class:dark={colorMode === 'dark'}
+>
   <header
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {vault.helpOpen
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {vault.helpOpen
         ? 'max-w-5xl'
         : shellWidth}"
     >
-      <div class="flex min-w-0 items-center gap-2.5">
+      <div class="flex min-w-0 items-center gap-3">
         <div
-          class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-accent-foreground"
+          class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/80 bg-card shadow-xs dark:border-transparent"
         >
-          <Lock class="size-4" />
-        </div>
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="text-base font-semibold tracking-tight text-foreground"
-            >nook</span
-          >
-          <span
-            class="shrink-0 text-[10px] font-medium text-muted-foreground border border-border px-1 py-0.5 rounded-sm"
-            >v0.1.0</span
-          >
+          <img
+            src={colorMode === 'dark' ? '/nook-logo-dark.png' : '/nook-logo-light.png'}
+            alt="Nook logo"
+            class="size-full object-contain"
+          />
         </div>
       </div>
 
@@ -62,7 +73,7 @@
             <Button
               variant="outline"
               size="sm"
-              class="border-border text-xs text-muted-foreground"
+              class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground"
               data-testid="storage-settings-close"
               onclick={() => vault.closeSettings()}
             >
@@ -72,10 +83,11 @@
             <button
               type="button"
               onclick={() => vault.openSettings()}
-              class="relative inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="relative inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               data-testid="storage-settings-btn"
             >
-              {vault.activeProviderLabel}
+              <Info class="size-4 shrink-0 text-muted-foreground/80" />
+              <span>Vault info</span>
               {#if vault.pendingJoins.length > 0}
                 <span
                   class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
@@ -93,17 +105,49 @@
           ></span>
         {/if}
 
+        <button
+          type="button"
+          class="inline-flex size-10 items-center justify-center rounded-lg border border-border bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={colorMode === 'dark'
+            ? 'Switch to light mode'
+            : 'Switch to dark mode'}
+          title={colorMode === 'dark'
+            ? 'Switch to light mode'
+            : 'Switch to dark mode'}
+          data-testid="theme-toggle-btn"
+          onclick={toggleColorMode}
+        >
+          {#if colorMode === 'dark'}
+            <Sun class="size-4" />
+          {:else}
+            <Moon class="size-4" />
+          {/if}
+        </button>
+
         <a
           href="https://github.com/meta-secret/nook"
           target="_blank"
           rel="noreferrer"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground {vault.isAuthenticated
+            ? 'w-10'
+            : 'px-3.5'}"
           aria-label="Nook on GitHub — open source"
           title="Nook is open source on GitHub"
           data-testid="github-source-link"
         >
-          <GitFork class="size-3.5" />
-          <span class="hidden sm:inline">GitHub</span>
+          <svg
+            class="size-4"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.86 8.36 6.84 9.72.5.09.68-.22.68-.49 0-.24-.01-.89-.01-1.75-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.36 1.12 2.93.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.32 9.32 0 0 1 12 6.98c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.13 10.13 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
+            />
+          </svg>
+          <span class={vault.isAuthenticated ? 'sr-only' : 'hidden sm:inline'}
+            >GitHub</span
+          >
         </a>
 
         {#if vault.helpOpen}
@@ -111,11 +155,11 @@
             type="button"
             variant="outline"
             size="sm"
-            class="border-border text-xs text-muted-foreground"
+            class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground [&_svg]:size-4"
             data-testid="help-header-close"
             onclick={() => vault.closeHelp()}
           >
-            <ArrowLeft class="size-3.5" />
+            <ArrowLeft class="size-4" />
             <span class="hidden sm:inline">Back</span>
           </Button>
         {:else}
@@ -123,11 +167,11 @@
             type="button"
             variant="outline"
             size="sm"
-            class="border-border text-xs text-muted-foreground"
+            class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground [&_svg]:size-4"
             data-testid="help-open-btn"
             onclick={() => vault.openHelp()}
           >
-            <BookOpen class="size-3.5" />
+            <BookOpen class="size-4" />
             <span class="hidden sm:inline">Help</span>
           </Button>
         {/if}
@@ -172,7 +216,6 @@
                 onBeginSetup={(type) => vault.beginProviderSetup(type)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
                 onApproveJoin={(id) => vault.approveJoin(id)}
-                onRefreshJoins={() => vault.manualSync()}
               />
             </div>
           {:else}
@@ -212,6 +255,7 @@
           isSyncing={vault.isSyncing || vault.isSaving}
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
+          {appVersion}
           onRefresh={() => vault.manualSync()}
           onDismissSuccess={() => vault.dismissSuccess()}
           onDismissError={() => vault.dismissError()}
