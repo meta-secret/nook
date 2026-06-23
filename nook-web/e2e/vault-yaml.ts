@@ -18,11 +18,26 @@ type MembersYamlRecord = {
   ciphertext: string
 }
 
+type PasswordEnvelopeYaml = {
+  version?: number
+  kdf?: string
+  work_factor?: number
+  ciphertext?: string
+}
+
+type UnlockYaml = {
+  type?: string
+  envelope?: PasswordEnvelopeYaml
+}
+
 type StoredVaultYaml = {
   secrets?: StoredSecretRecord[]
   auth?: AuthYamlRecord[]
   joins?: StoredSecretRecord[]
   members?: MembersYamlRecord[]
+  unlock?: UnlockYaml
+  /** Legacy field — pre-enum vaults wrote the envelope at the top level. */
+  password_envelope?: PasswordEnvelopeYaml
 }
 
 type JoinRequestJson = {
@@ -36,6 +51,8 @@ export type VaultYamlSnapshot = {
   authPkIds: string[]
   joinEntries: Array<{ deviceId: string; publicKey: string }>
   memberPkIds: string[]
+  unlockMode: 'keys' | 'password'
+  hasPasswordEnvelope: boolean
 }
 
 function parseJoinValue(
@@ -59,12 +76,26 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     parseJoinValue(record.id, record.data),
   )
 
+  // Resolve the unlock variant. The modern schema lives under `unlock.type`;
+  // pre-enum vaults are detected via a legacy top-level `password_envelope:`.
+  const explicit = vault.unlock?.type
+  const hasModernPasswordEnvelope =
+    explicit === 'password' && vault.unlock?.envelope !== undefined
+  const hasLegacyPasswordEnvelope = vault.password_envelope !== undefined
+  const hasPasswordEnvelope =
+    hasModernPasswordEnvelope || hasLegacyPasswordEnvelope
+  const unlockMode: 'keys' | 'password' = hasPasswordEnvelope
+    ? 'password'
+    : 'keys'
+
   return {
     raw: yaml,
     secretIds,
     authPkIds,
     joinEntries,
     memberPkIds,
+    unlockMode,
+    hasPasswordEnvelope,
   }
 }
 

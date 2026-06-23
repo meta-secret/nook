@@ -797,7 +797,17 @@ export class VaultState {
         'Set a vault password first; enrollment codes wrap that password.',
       )
     }
-    if (!this.manager.verifyVaultPassword(password)) {
+    // `verifyVaultPassword` returns false on a wrong password but can also
+    // throw if the underlying age decryptor panics on certain scrypt
+    // failures inside the wasm runtime — treat both as "wrong password" so
+    // the UI message stays predictable.
+    let verified: boolean
+    try {
+      verified = this.manager.verifyVaultPassword(password)
+    } catch {
+      verified = false
+    }
+    if (!verified) {
       throw new Error('Password does not match the vault.')
     }
     const provider: EnrollmentCodePayloadV1['provider'] =

@@ -246,10 +246,8 @@
           type={showPassword ? 'text' : 'password'}
           class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           bind:value={passwordInput}
-          minlength="5"
           autocomplete="new-password"
           data-testid="vault-password-input"
-          required
         />
       </div>
       <div class="space-y-1.5">
@@ -266,7 +264,6 @@
           bind:value={confirmInput}
           autocomplete="new-password"
           data-testid="vault-password-confirm"
-          required
         />
       </div>
       <div class="flex items-center justify-between text-xs">
