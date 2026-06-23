@@ -80,7 +80,7 @@ impl NookSecretRecord {
 // Session state of our secret vault
 #[wasm_bindgen]
 pub struct NookVaultManager {
-    storage_mode: String,
+    storage_mode: nook_core::StorageMode,
     github_pat: String,
     github_repo: String,
     github_path: String,
@@ -110,7 +110,8 @@ impl NookVaultManager {
     pub fn new() -> Self {
         let (status_tx, status_rx) = flume::unbounded();
         Self {
-            storage_mode: String::new(),
+            // Default to local until `prepare_storage` parses the incoming tag.
+            storage_mode: nook_core::StorageMode::Local,
             github_pat: String::new(),
             github_repo: String::new(),
             github_path: String::new(),
@@ -133,7 +134,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(getter)]
     pub fn storage_mode(&self) -> String {
-        self.storage_mode.clone()
+        self.storage_mode.to_string()
     }
 
     #[wasm_bindgen(getter)]
@@ -937,23 +938,26 @@ impl NookVaultManager {
         let stored = nook_core::serialize_stored_yaml_with_unlock(&records, &self.unlock)
             .map_err(NookError::Encryption)?;
 
-        if self.storage_mode == "local" {
-            let _ = self.status_tx.send("IDB_SAVE_START".to_owned());
-            save_to_indexed_db(&stored).await?;
-            let _ = self.status_tx.send("IDB_SAVE_SUCCESS".to_owned());
-        } else {
-            let _ = self.status_tx.send("GITHUB_SAVE_START".to_owned());
-            let new_sha = write_github_text_file_with_retry(
-                &self.github_pat,
-                &self.github_repo,
-                &self.github_path,
-                &stored,
-                self.file_sha.clone(),
-            )
-            .await?;
-            self.file_sha = Some(new_sha);
-            self.github_root_empty = false;
-            let _ = self.status_tx.send("GITHUB_SAVE_SUCCESS".to_owned());
+        match self.storage_mode {
+            nook_core::StorageMode::Local => {
+                let _ = self.status_tx.send("IDB_SAVE_START".to_owned());
+                save_to_indexed_db(&stored).await?;
+                let _ = self.status_tx.send("IDB_SAVE_SUCCESS".to_owned());
+            }
+            nook_core::StorageMode::Github => {
+                let _ = self.status_tx.send("GITHUB_SAVE_START".to_owned());
+                let new_sha = write_github_text_file_with_retry(
+                    &self.github_pat,
+                    &self.github_repo,
+                    &self.github_path,
+                    &stored,
+                    self.file_sha.clone(),
+                )
+                .await?;
+                self.file_sha = Some(new_sha);
+                self.github_root_empty = false;
+                let _ = self.status_tx.send("GITHUB_SAVE_SUCCESS".to_owned());
+            }
         }
         self.last_synced_content = stored;
         Ok(())
@@ -1014,29 +1018,33 @@ impl NookVaultManager {
         github_pat: &str,
         github_repo_name: &str,
     ) -> Result<(), NookError> {
-        nook_core::validate_storage_mode(storage_mode).map_err(NookError::Database)?;
-        self.storage_mode = storage_mode.to_owned();
-        if self.storage_mode == nook_core::STORAGE_MODE_GITHUB {
-            self.github_pat =
-                nook_core::validate_github_pat(github_pat).map_err(NookError::GitHub)?;
-        } else {
-            self.github_pat = String::new();
-        }
+        // Parse the incoming tag once at the boundary so the rest of the
+        // method pattern-matches on `StorageMode` instead of comparing
+        // strings.
+        let mode = nook_core::StorageMode::parse(storage_mode).map_err(NookError::Database)?;
+        self.storage_mode = mode;
         self.file_sha = None;
 
-        if self.storage_mode == "github" {
-            let repo_name = nook_core::validate_github_repo_name(github_repo_name)
-                .map_err(NookError::Database)?;
-            let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
-            let username = fetch_github_username(&self.github_pat).await?;
-            let new_repo = format!("{}/{}", username, repo_name);
-            if self.github_repo != new_repo {
-                self.github_root_empty = false;
+        match mode {
+            nook_core::StorageMode::Local => {
+                self.github_pat = String::new();
             }
-            self.github_repo = new_repo;
-            self.github_path = "nook-vault.yaml".to_owned();
-            let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
-            ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
+            nook_core::StorageMode::Github => {
+                self.github_pat =
+                    nook_core::validate_github_pat(github_pat).map_err(NookError::GitHub)?;
+                let repo_name = nook_core::validate_github_repo_name(github_repo_name)
+                    .map_err(NookError::Database)?;
+                let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
+                let username = fetch_github_username(&self.github_pat).await?;
+                let new_repo = format!("{}/{}", username, repo_name);
+                if self.github_repo != new_repo {
+                    self.github_root_empty = false;
+                }
+                self.github_repo = new_repo;
+                self.github_path = "nook-vault.yaml".to_owned();
+                let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
+                ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
+            }
         }
         Ok(())
     }
@@ -1054,27 +1062,30 @@ impl NookVaultManager {
         &mut self,
         vault_file_missing: &mut bool,
     ) -> Result<String, NookError> {
-        let content = if self.storage_mode == "local" {
-            let _ = self.status_tx.send("IDB_LOAD_START".to_owned());
-            let stored = load_from_indexed_db().await?;
-            let _ = self.status_tx.send("IDB_LOAD_SUCCESS".to_owned());
-            stored.unwrap_or_default()
-        } else {
-            let _ = self.status_tx.send("GITHUB_FETCH_START".to_owned());
-            let res = fetch_github_vault(
-                &self.github_pat,
-                &self.github_repo,
-                &self.github_path,
-                Some(&mut self.github_root_empty),
-            )
-            .await?;
-            let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
-            if let Some((content, sha)) = res {
-                self.file_sha = Some(sha);
-                content
-            } else {
-                *vault_file_missing = true;
-                String::new()
+        let content = match self.storage_mode {
+            nook_core::StorageMode::Local => {
+                let _ = self.status_tx.send("IDB_LOAD_START".to_owned());
+                let stored = load_from_indexed_db().await?;
+                let _ = self.status_tx.send("IDB_LOAD_SUCCESS".to_owned());
+                stored.unwrap_or_default()
+            }
+            nook_core::StorageMode::Github => {
+                let _ = self.status_tx.send("GITHUB_FETCH_START".to_owned());
+                let res = fetch_github_vault(
+                    &self.github_pat,
+                    &self.github_repo,
+                    &self.github_path,
+                    Some(&mut self.github_root_empty),
+                )
+                .await?;
+                let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
+                if let Some((content, sha)) = res {
+                    self.file_sha = Some(sha);
+                    content
+                } else {
+                    *vault_file_missing = true;
+                    String::new()
+                }
             }
         };
         self.capture_vault_unlock(&content);

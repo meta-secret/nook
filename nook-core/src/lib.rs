@@ -36,7 +36,7 @@ pub use password_envelope::{
     attach_password_envelope, resolve_keys_from_password, verify_password,
 };
 pub use validation::{
-    DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, filter_secrets,
+    DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets,
     validate_connect, validate_github_pat, validate_github_repo_name, validate_secret_data,
     validate_secret_id, validate_storage_mode,
 };
