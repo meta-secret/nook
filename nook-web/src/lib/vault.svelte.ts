@@ -827,6 +827,7 @@ export class VaultState {
       v: 1,
       provider,
       password,
+      issued_at: isoTimestamp(),
     }
     const code = encodeEnrollmentPayload(payload)
     this.enrollmentCode = code

@@ -6,9 +6,11 @@
  * blob. The joining device decodes this, restores the provider, and calls
  * `connectWithPassword` — see `.cortex/product-specs/password-envelope.md`.
  *
- * Codes do **not** carry an expiration: the password itself is the
- * long-lived credential. If a code is suspected leaked, rotate the vault
- * password — old codes stop decrypting the envelope.
+ * The payload carries an `issued_at` timestamp purely as audit metadata
+ * (so the UI can show "issued X minutes ago" and the user can identify
+ * stale codes by sight). It is **not** an expiration: the vault password
+ * is the long-lived credential and rotating it is the only revocation
+ * primitive.
  */
 
 export type EnrollmentCodePayloadV1 = {
@@ -21,6 +23,8 @@ export type EnrollmentCodePayloadV1 = {
         repo: string
       }
   password: string
+  /** ISO 8601 UTC timestamp; informational, not enforced. */
+  issued_at: string
 }
 
 export function encodeEnrollmentPayload(
@@ -70,6 +74,9 @@ function validatePayload(value: unknown): EnrollmentCodePayloadV1 {
   }
   if (typeof obj.password !== 'string' || obj.password.length === 0) {
     throw new Error('Enrollment code is missing a password.')
+  }
+  if (typeof obj.issued_at !== 'string' || obj.issued_at.length === 0) {
+    throw new Error('Enrollment code is missing the issued_at timestamp.')
   }
   return value as EnrollmentCodePayloadV1
 }

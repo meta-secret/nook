@@ -13,6 +13,7 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import QRCode from 'qrcode'
+  import { decodeEnrollmentPayload } from '$lib/enrollment-code'
 
   let {
     hasPasswordEnvelope,
@@ -43,6 +44,26 @@
   let localError = $state('')
   let copied = $state(false)
   let qrDataUrl = $state('')
+
+  const issuedAt = $derived.by(() => {
+    if (!enrollmentCode) return null
+    try {
+      return decodeEnrollmentPayload(enrollmentCode).issued_at
+    } catch {
+      return null
+    }
+  })
+  const issuedAgo = $derived.by(() => {
+    if (!issuedAt) return ''
+    const ms = Date.parse(issuedAt)
+    if (!Number.isFinite(ms)) return ''
+    const delta = Date.now() - ms
+    if (delta < 60_000) return 'issued just now'
+    const minutes = Math.round(delta / 60_000)
+    if (minutes < 60) return `issued ${minutes}m ago`
+    const hours = Math.round(minutes / 60)
+    return `issued ${hours}h ago`
+  })
 
   $effect(() => {
     void enrollmentCode
@@ -403,7 +424,14 @@
             <p class="text-xs text-muted-foreground text-pretty">
               Scan with the joining device, or copy the code and paste it into
               its login screen. The code stays valid until you rotate the
-              password.
+              password.{#if issuedAgo}
+                <span
+                  class="ml-1 text-muted-foreground/80"
+                  data-testid="enrollment-code-issued-ago"
+                >
+                  ({issuedAgo})
+                </span>
+              {/if}
             </p>
             <button
               type="button"

@@ -182,7 +182,8 @@ QR payload (JSON, then base64url, then a single-frame QR):
     "pat": "<token>",
     "repo": "user/nook-vault"
   },
-  "password": "<password>"
+  "password": "<password>",
+  "issued_at": "2026-06-23T07:00:00Z"
 }
 ```
 
@@ -192,10 +193,12 @@ no token to copy, no repo URL to retype. A vault stored locally
 (IndexedDB) issues `{ "type": "local" }` and the joining device just
 materialises a fresh local vault unlocked with the password.
 
-Payloads do **not** carry an expiration: the vault password is the
-long-lived credential and is the source of truth for revocation. If a
-QR is suspected leaked, rotate the password — old codes stop
-decrypting the envelope and are useless.
+`issued_at` is **audit metadata, not an expiration**. The UI uses it
+to render "issued 5m ago" hints so the user can recognise stale codes
+by sight, but the joining device never rejects a code based on its
+age. The vault password is the long-lived credential and rotating it
+is the only revocation primitive — old codes stop decrypting the
+envelope and are useless.
 
 New device flow:
 

@@ -132,22 +132,31 @@ test.describe('vault password envelope (local)', () => {
     expect(code.length).toBeGreaterThan(40)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
-    // The code decodes to the expected payload shape (v=1, local provider,
-    // password) — no clock-sensitive expiry fields.
+    // The code decodes to the expected payload shape: v=1, local provider,
+    // the password, and an informational `issued_at` timestamp (audit
+    // metadata only — there is no `expires_at`).
     const json = JSON.parse(
       Buffer.from(code, 'base64url').toString('utf8'),
     ) as {
       v: number
       provider: { type: string }
       password: string
+      issued_at: string
       expires_at?: unknown
-      issued_at?: unknown
     }
     expect(json.v).toBe(1)
     expect(json.provider.type).toBe('local')
     expect(json.password).toBe('hunter2-secure')
+    expect(typeof json.issued_at).toBe('string')
+    expect(Date.parse(json.issued_at)).not.toBeNaN()
+    // Recently issued (within the last 60 seconds).
+    expect(Math.abs(Date.now() - Date.parse(json.issued_at))).toBeLessThan(
+      60_000,
+    )
     expect(json.expires_at).toBeUndefined()
-    expect(json.issued_at).toBeUndefined()
+
+    // The UI surfaces the timestamp as audit info next to the code.
+    await expect(page.getByTestId('enrollment-code-issued-ago')).toBeVisible()
 
     // Copy-to-clipboard button works.
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])

@@ -117,12 +117,16 @@ describePasswordEnvelope('vault password envelope (github)', () => {
       v: number
       provider: { type: string; pat?: string; repo?: string }
       password: string
+      issued_at: string
     }
     expect(json.v).toBe(1)
     expect(json.provider.type).toBe('github')
     expect(json.provider.pat).toBe(githubPat)
     expect(json.provider.repo).toContain(e2eRepo)
     expect(json.password).toBe(vaultPassword)
+    // Audit metadata only — no expiration field.
+    expect(typeof json.issued_at).toBe('string')
+    expect(Date.parse(json.issued_at)).not.toBeNaN()
 
     // Persist the code for the next test.
     test.info().annotations.push({ type: 'enrollment-code', description: code })
