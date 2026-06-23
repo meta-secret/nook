@@ -11,19 +11,30 @@
 
 use crate::NookError;
 
+/// This browser's persisted device identity — the stable id we use across
+/// reloads plus the X25519 secret string that decrypts our own `auth:`
+/// envelopes (in keys-mode vaults).
+pub(crate) struct DeviceIdentityRecord {
+    pub(crate) device_id: String,
+    pub(crate) secret: String,
+}
+
 // -------------------------------------------------------------
 // IndexedDB Storage Functions (via rexie)
 // -------------------------------------------------------------
 
-pub(crate) async fn load_or_create_device_identity() -> Result<(String, String), NookError> {
+pub(crate) async fn load_or_create_device_identity() -> Result<DeviceIdentityRecord, NookError> {
     if let Some(existing) = load_device_identity_from_indexed_db().await? {
         return Ok(existing);
     }
     let identity = nook_core::DeviceIdentity::generate().map_err(NookError::Encryption)?;
-    Ok((identity.device_id().to_owned(), identity.secret_string()))
+    Ok(DeviceIdentityRecord {
+        device_id: identity.device_id().to_owned(),
+        secret: identity.secret_string(),
+    })
 }
 
-async fn load_device_identity_from_indexed_db() -> Result<Option<(String, String)>, NookError> {
+async fn load_device_identity_from_indexed_db() -> Result<Option<DeviceIdentityRecord>, NookError> {
     let rexie = rexie::Rexie::builder("nook_db")
         .version(1)
         .add_object_store(rexie::ObjectStore::new("vault"))
@@ -73,7 +84,7 @@ async fn load_device_identity_from_indexed_db() -> Result<Option<(String, String
         .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {:?}", e)))?;
     let secret: String = serde_wasm_bindgen::from_value(secret_value)
         .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {:?}", e)))?;
-    Ok(Some((device_id, secret)))
+    Ok(Some(DeviceIdentityRecord { device_id, secret }))
 }
 
 pub(crate) async fn save_device_identity_to_indexed_db(

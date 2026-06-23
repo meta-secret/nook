@@ -11,6 +11,14 @@
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
+/// A vault file fetched from GitHub: its UTF-8 contents plus the blob `sha`
+/// the API returned so subsequent writes can submit it for optimistic
+/// concurrency.
+pub(crate) struct GitHubVaultFile {
+    pub(crate) content: String,
+    pub(crate) sha: String,
+}
+
 // -------------------------------------------------------------
 // GitHub API Storage Functions (via reqwest Client)
 // -------------------------------------------------------------
@@ -172,7 +180,7 @@ pub(crate) async fn fetch_github_vault(
     repo: &str,
     path: &str,
     root_empty: Option<&mut bool>,
-) -> Result<Option<(String, String)>, NookError> {
+) -> Result<Option<GitHubVaultFile>, NookError> {
     if root_empty.as_ref().is_some_and(|flag| **flag) {
         return Ok(None);
     }
@@ -248,7 +256,10 @@ pub(crate) async fn fetch_github_vault(
     let vault_content = String::from_utf8(decoded_bytes)
         .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
 
-    Ok(Some((vault_content, parsed.sha)))
+    Ok(Some(GitHubVaultFile {
+        content: vault_content,
+        sha: parsed.sha,
+    }))
 }
 
 async fn write_github_text_file(
@@ -317,8 +328,8 @@ pub(crate) async fn write_github_text_file_with_retry(
             Err(NookError::GitHub(message))
                 if attempt < 2 && (message.contains("422") || message.contains("409")) =>
             {
-                if let Ok(Some((_, fresh_sha))) = fetch_github_vault(pat, repo, path, None).await {
-                    sha = Some(fresh_sha);
+                if let Ok(Some(file)) = fetch_github_vault(pat, repo, path, None).await {
+                    sha = Some(file.sha);
                 }
             }
             Err(err) => return Err(err),

@@ -1066,9 +1066,9 @@ impl NookVaultManager {
 
     async fn ensure_device_identity(&mut self) -> Result<nook_core::DeviceIdentity, NookError> {
         if self.device_identity_secret.is_empty() {
-            let (device_id, device_identity_secret) = load_or_create_device_identity().await?;
-            self.device_id = device_id;
-            self.device_identity_secret = device_identity_secret;
+            let identity = load_or_create_device_identity().await?;
+            self.device_id = identity.device_id;
+            self.device_identity_secret = identity.secret;
         }
         self.device_identity()
     }
@@ -1094,9 +1094,9 @@ impl NookVaultManager {
                 )
                 .await?;
                 let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
-                if let Some((content, sha)) = res {
-                    self.file_sha = Some(sha);
-                    content
+                if let Some(file) = res {
+                    self.file_sha = Some(file.sha);
+                    file.content
                 } else {
                     *vault_file_missing = true;
                     String::new()
