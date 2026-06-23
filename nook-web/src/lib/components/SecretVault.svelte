@@ -186,7 +186,7 @@
         </CardContent>
       </Card>
     {:else}
-      <div class="space-y-4">
+      <div class="space-y-3">
         {#each groups as group (group.site)}
           {@const Icon = getGroupIcon(group.items)}
           <Card
@@ -195,12 +195,12 @@
           >
             <!-- Group Header -->
             <div
-              class="flex items-center gap-3 bg-muted/10 border-b border-border/50 px-4 py-3"
+              class="flex items-center gap-2.5 bg-muted/10 border-b border-border/50 px-3 py-2.5"
             >
               <div
-                class="flex size-7 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground"
+                class="flex size-6 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground"
               >
-                <Icon class="size-4" />
+                <Icon class="size-3.5" />
               </div>
               <h3
                 class="text-sm font-semibold text-foreground tracking-wide truncate"
@@ -217,7 +217,7 @@
             </div>
 
             <!-- Group Items List -->
-            <CardContent class="p-4 space-y-4 divide-y divide-border/45">
+            <CardContent class="space-y-3 divide-y divide-border/45 p-3">
               {#each group.items as item, index (item.id)}
                 <SecretDetailRow
                   {item}

@@ -36,13 +36,13 @@
 
 <div data-testid="vault-group-{item.type}">
   <div
-    class="pt-4 first:pt-0"
+    class="pt-3 first:pt-0"
     class:border-t={index > 0}
     role="listitem"
     data-testid="secret-row"
   >
     <!-- Item Section Header -->
-    <div class="flex items-center justify-between pb-2 mb-2">
+    <div class="mb-1.5 flex items-center justify-between pb-1">
       <span
         class="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
       >
@@ -77,7 +77,7 @@
     </div>
 
     <!-- Item Structured Details -->
-    <div class="space-y-2">
+    <div class="space-y-1.5">
       {#if item.type === 'login'}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
           <span class="text-muted-foreground/70 font-medium">Website</span>
