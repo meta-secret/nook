@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, GitFork } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, GitFork, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -12,8 +12,15 @@
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
+  type ColorMode = 'light' | 'dark'
+  const THEME_STORAGE_KEY = 'nook_color_mode'
+  let colorMode = $state<ColorMode>('dark')
 
   onMount(() => {
+    const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
+    if (savedMode === 'light' || savedMode === 'dark') {
+      colorMode = savedMode
+    }
     void vault.init()
     return () => vault.stopVaultSync()
   })
@@ -27,11 +34,19 @@
     await vault.loadDb()
   }
 
+  function toggleColorMode() {
+    colorMode = colorMode === 'dark' ? 'light' : 'dark'
+    localStorage.setItem(THEME_STORAGE_KEY, colorMode)
+  }
+
   const shellWidth = 'max-w-xl'
   const appVersion = '0.1.0'
 </script>
 
-<main class="dark min-h-svh bg-background text-foreground">
+<main
+  class="min-h-svh bg-background text-foreground"
+  class:dark={colorMode === 'dark'}
+>
   <header
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
@@ -88,6 +103,25 @@
           <span class="mx-0.5 h-4 border-l border-border" aria-hidden="true"
           ></span>
         {/if}
+
+        <button
+          type="button"
+          class="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-3 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={colorMode === 'dark'
+            ? 'Switch to light mode'
+            : 'Switch to dark mode'}
+          title={colorMode === 'dark'
+            ? 'Switch to light mode'
+            : 'Switch to dark mode'}
+          data-testid="theme-toggle-btn"
+          onclick={toggleColorMode}
+        >
+          {#if colorMode === 'dark'}
+            <Sun class="size-4" />
+          {:else}
+            <Moon class="size-4" />
+          {/if}
+        </button>
 
         <a
           href="https://github.com/meta-secret/nook"
