@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 760" role="img" aria-labelledby="title desc">
+  <title id="title">nook logo</title>
+  <desc id="desc">Minimal nook logo: rounded house-like mark above lowercase nook wordmark.</desc>
+  <style>
+    :root { color-scheme: light dark; }
+    .logo { fill: #111317; }
+    @media (prefers-color-scheme: dark) {
+      .logo { fill: #ffffff; }
+    }
+  </style>
+
+  <!-- icon -->
+  <path class="logo" fill-rule="evenodd" d="
+    M320 64
+    C344 64 362 78 380 92
+    L492 180
+    C512 196 524 220 524 246
+    L524 354
+    C524 388 496 416 462 416
+    L393 416
+    L393 322
+    C393 282 360 249 320 249
+    C280 249 247 282 247 322
+    L247 416
+    L178 416
+    C144 416 116 388 116 354
+    L116 246
+    C116 220 128 196 148 180
+    L260 92
+    C278 78 296 64 320 64
+    Z
+  "/>
+
+  <!-- wordmark: geometric approximation, converted to paths -->
+  <g class="logo" transform="translate(72 500)">
+    <!-- n -->
+    <path d="M0 150 L0 68 C0 25 28 0 72 0 C116 0 144 25 144 68 L144 150 L112 150 L112 70 C112 45 97 29 72 29 C47 29 32 45 32 70 L32 150 Z"/>
+    <!-- o -->
+    <path fill-rule="evenodd" d="M224 0 C270 0 304 32 304 75 C304 118 270 150 224 150 C178 150 144 118 144 75 C144 32 178 0 224 0 Z M224 29 C198 29 177 49 177 75 C177 101 198 121 224 121 C250 121 271 101 271 75 C271 49 250 29 224 29 Z"/>
+    <!-- o -->
+    <path fill-rule="evenodd" d="M384 0 C430 0 464 32 464 75 C464 118 430 150 384 150 C338 150 304 118 304 75 C304 32 338 0 384 0 Z M384 29 C358 29 337 49 337 75 C337 101 358 121 384 121 C410 121 431 101 431 75 C431 49 410 29 384 29 Z"/>
+    <!-- k -->
+    <path d="M496 -34 L528 -34 L528 74 L598 5 L639 5 L568 75 L642 150 L598 150 L528 80 L528 150 L496 150 Z"/>
+  </g>
+</svg>

@@ -35,26 +35,23 @@
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="mx-auto flex items-center justify-between gap-4 px-4 py-3 sm:px-6 {vault.helpOpen
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {vault.helpOpen
         ? 'max-w-5xl'
         : shellWidth}"
     >
-      <div class="flex min-w-0 items-center gap-2.5">
+      <div class="flex min-w-0 items-center gap-3">
         <div
-          class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-white"
+          class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md"
         >
           <img
-            src="/nook-logo-icon.png"
+            src="/nook-logo.png"
             alt="Nook logo"
-            class="size-full object-cover"
+            class="size-full object-contain"
           />
         </div>
         <div class="flex min-w-0 items-center gap-2">
-          <span class="text-base font-semibold tracking-tight text-foreground"
-            >nook</span
-          >
           <span
-            class="shrink-0 text-[10px] font-medium text-muted-foreground border border-border px-1 py-0.5 rounded-sm"
+            class="shrink-0 rounded-sm border border-border/70 px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/80"
             >v0.1.0</span
           >
         </div>
@@ -66,7 +63,7 @@
             <Button
               variant="outline"
               size="sm"
-              class="border-border text-xs text-muted-foreground"
+              class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground"
               data-testid="storage-settings-close"
               onclick={() => vault.closeSettings()}
             >
@@ -76,7 +73,7 @@
             <button
               type="button"
               onclick={() => vault.openSettings()}
-              class="relative inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              class="relative inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               data-testid="storage-settings-btn"
             >
               {vault.activeProviderLabel}
@@ -101,12 +98,12 @@
           href="https://github.com/meta-secret/nook"
           target="_blank"
           rel="noreferrer"
-          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Nook on GitHub — open source"
           title="Nook is open source on GitHub"
           data-testid="github-source-link"
         >
-          <GitFork class="size-3.5" />
+          <GitFork class="size-4" />
           <span class="hidden sm:inline">GitHub</span>
         </a>
 
@@ -115,11 +112,11 @@
             type="button"
             variant="outline"
             size="sm"
-            class="border-border text-xs text-muted-foreground"
+            class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground [&_svg]:size-4"
             data-testid="help-header-close"
             onclick={() => vault.closeHelp()}
           >
-            <ArrowLeft class="size-3.5" />
+            <ArrowLeft class="size-4" />
             <span class="hidden sm:inline">Back</span>
           </Button>
         {:else}
@@ -127,11 +124,11 @@
             type="button"
             variant="outline"
             size="sm"
-            class="border-border text-xs text-muted-foreground"
+            class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground [&_svg]:size-4"
             data-testid="help-open-btn"
             onclick={() => vault.openHelp()}
           >
-            <BookOpen class="size-3.5" />
+            <BookOpen class="size-4" />
             <span class="hidden sm:inline">Help</span>
           </Button>
         {/if}
