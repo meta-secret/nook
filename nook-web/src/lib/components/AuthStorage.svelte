@@ -81,7 +81,7 @@
     onApproveJoin?: (deviceId: string) => void | Promise<void>
     onSetVaultPassword?: (password: string) => void | Promise<void>
     onRemoveVaultPassword?: () => void | Promise<void>
-    onIssueEnrollmentCode?: (password: string) => string | void
+    onIssueEnrollmentCode?: (password: string) => Promise<string | void>
     onClearEnrollmentCode?: () => void
   } = $props()
 

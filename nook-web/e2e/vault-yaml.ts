@@ -53,6 +53,13 @@ export type VaultYamlSnapshot = {
   memberPkIds: string[]
   unlockMode: 'keys' | 'password'
   hasPasswordEnvelope: boolean
+  /**
+   * Raw ciphertext of the active password envelope (when present). Useful
+   * for waiting on password-rotation propagation: every rotation produces a
+   * fresh ciphertext (scrypt nonce + random salt), so a poll that compares
+   * against a previously-captured value is a reliable "rotated yet?" check.
+   */
+  passwordEnvelopeCiphertext: string | null
 }
 
 function parseJoinValue(
@@ -79,14 +86,18 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   // Resolve the unlock variant. The modern schema lives under `unlock.type`;
   // pre-enum vaults are detected via a legacy top-level `password_envelope:`.
   const explicit = vault.unlock?.type
-  const hasModernPasswordEnvelope =
-    explicit === 'password' && vault.unlock?.envelope !== undefined
-  const hasLegacyPasswordEnvelope = vault.password_envelope !== undefined
-  const hasPasswordEnvelope =
-    hasModernPasswordEnvelope || hasLegacyPasswordEnvelope
+  const modernEnvelope =
+    explicit === 'password' ? vault.unlock?.envelope : undefined
+  const legacyEnvelope = vault.password_envelope
+  const activeEnvelope = modernEnvelope ?? legacyEnvelope
+  const hasPasswordEnvelope = activeEnvelope !== undefined
   const unlockMode: 'keys' | 'password' = hasPasswordEnvelope
     ? 'password'
     : 'keys'
+  const passwordEnvelopeCiphertext =
+    typeof activeEnvelope?.ciphertext === 'string'
+      ? activeEnvelope.ciphertext.trim()
+      : null
 
   return {
     raw: yaml,
@@ -96,6 +107,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     memberPkIds,
     unlockMode,
     hasPasswordEnvelope,
+    passwordEnvelopeCiphertext,
   }
 }
 

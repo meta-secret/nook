@@ -41,6 +41,10 @@ impl NookVaultManager {
         }
 
         if self.members_key.is_empty() {
+            // No active session yet — this is the first remote read we're
+            // accepting, so adopt its unlock mode before deciding which
+            // pre-flight status to report.
+            self.capture_vault_unlock(&content);
             self.last_synced_content = content.clone();
             if self.unlock.is_password() {
                 return sync_result_access_status("password_required");
@@ -49,6 +53,13 @@ impl NookVaultManager {
             let status = access_status_for_vault_content(&content, &identity)?;
             return sync_result_access_status(&status);
         }
+
+        // We DO have an active session. Deliberately do NOT call
+        // `capture_vault_unlock` here: GitHub is eventually consistent,
+        // and a poll that races our own write returns the *pre-write*
+        // YAML — which would downgrade a freshly-set password envelope
+        // back to keys mode. The active session is authoritative; remote
+        // mode changes are picked up via explicit reconnect.
 
         let identity = self.device_identity()?;
         let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;

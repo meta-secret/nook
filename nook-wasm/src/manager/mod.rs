@@ -175,10 +175,16 @@ impl NookVaultManager {
             .map_err(NookError::Encryption)
     }
 
-    /// Pull the active unlock mode from the stored YAML and stash it in
-    /// session state. Called after every successful fetch so writes always
-    /// re-emit the same mode — devices unaware of password mode cannot
-    /// silently downgrade the vault to keys mode.
+    /// Pull the active unlock mode from a freshly-accepted vault YAML and
+    /// stash it in session state.
+    ///
+    /// Callers should only invoke this with content they intend to adopt
+    /// as the new authoritative state (e.g. after the first connect or
+    /// after `sync_vault_from_storage` confirms the remote content
+    /// differs from our last saved snapshot). Calling on every poll
+    /// blindly is unsafe: GitHub is eventually-consistent, so a poll can
+    /// race with our own write and return the pre-write YAML, which
+    /// would clobber a freshly-set password envelope back to keys mode.
     pub(in crate::manager) fn capture_vault_unlock(&mut self, content: &str) {
         if let Ok(unlock) = nook_core::read_vault_unlock(content) {
             self.unlock = unlock;
@@ -299,7 +305,6 @@ impl NookVaultManager {
                 }
             }
         };
-        self.capture_vault_unlock(&content);
         Ok(content)
     }
 }

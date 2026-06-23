@@ -38,8 +38,11 @@ describeGithub('github vault', () => {
 
   test('connects and shows vault after github sync', async () => {
     await expect(vaultPage.getByTestId('vault-panel')).toBeVisible()
-    await expect(vaultPage.getByTestId('storage-settings-btn')).toContainText(
-      'GitHub',
+    // The status bar shows the active GitHub repo as proof the vault is
+    // synced (the header's Vault info button is a generic label, not
+    // provider-specific).
+    await expect(vaultPage.getByTestId('vault-status-bar')).toContainText(
+      e2eRepo,
     )
   })
 

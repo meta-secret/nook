@@ -107,6 +107,8 @@ impl NookVaultManager {
         if vault_missing || content.trim().is_empty() {
             return Err(NookError::Database("No vault found to join.".to_owned()).into());
         }
+        // Fresh join attempt — adopt the remote unlock mode.
+        self.capture_vault_unlock(&content);
 
         let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let mut records =
@@ -151,6 +153,8 @@ impl NookVaultManager {
         if vault_missing || content.trim().is_empty() {
             return Err(NookError::Database("No vault found to join.".to_owned()).into());
         }
+        // Fresh enrolment — adopt the remote unlock mode.
+        self.capture_vault_unlock(&content);
 
         let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let mut records =

@@ -31,7 +31,7 @@
     enrollmentCode: string
     onSetPassword: (password: string) => void | Promise<void>
     onRemovePassword: () => void | Promise<void>
-    onIssueCode: (password: string) => string | void
+    onIssueCode: (password: string) => Promise<string | void>
     onClearCode: () => void
   } = $props()
 
@@ -129,14 +129,14 @@
     }
   }
 
-  function submitIssueCode() {
+  async function submitIssueCode() {
     localError = ''
     if (!passwordInput) {
       localError = 'Enter the vault password to issue a code.'
       return
     }
     try {
-      onIssueCode(passwordInput)
+      await onIssueCode(passwordInput)
       passwordInput = ''
       confirmInput = ''
     } catch (e: unknown) {
@@ -368,7 +368,7 @@
           class="space-y-3"
           onsubmit={(event) => {
             event.preventDefault()
-            submitIssueCode()
+            void submitIssueCode()
           }}
         >
           <p class="text-xs text-muted-foreground text-pretty">
@@ -390,7 +390,6 @@
               bind:value={passwordInput}
               autocomplete="current-password"
               data-testid="issue-code-password-input"
-              required
             />
           </div>
           {#if localError}

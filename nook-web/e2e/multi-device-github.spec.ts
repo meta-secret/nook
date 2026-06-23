@@ -184,7 +184,9 @@ describeMultiDevice('multi-device github vault', () => {
     await expect(deviceA.getByTestId('device-enrollment-panel')).toBeVisible()
     await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()
     await expect(deviceA.getByTestId('vault-member-row')).toHaveCount(2)
-    await expect(deviceA.getByText('(this browser)')).toBeVisible()
+    // The current device's row carries a "Current" badge in the members
+    // list (replaces the older inline "(this browser)" label).
+    await expect(deviceA.getByText('Current', { exact: true })).toBeVisible()
 
     await deviceA.getByTestId('device-details-toggle').click()
     await expect(deviceA.getByTestId('device-id')).not.toHaveText('—')

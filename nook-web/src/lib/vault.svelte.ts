@@ -353,7 +353,12 @@ export class VaultState {
       void this.syncFromStorage()
     }
     this.syncTimer = setInterval(() => {
-      if (this.isVerifying || this.isSaving || this.isSyncing) {
+      if (
+        this.isVerifying ||
+        this.isSaving ||
+        this.isSyncing ||
+        this.isPasswordBusy
+      ) {
         return
       }
       if (!this.isAuthenticated && this.joinEnrollmentPrompt === 'none') {
@@ -400,21 +405,42 @@ export class VaultState {
     }
   }
 
-  private hydrateMultiDeviceState() {
+  /**
+   * Read multi-device state + unlock mode from the wasm manager.
+   *
+   * Async because every call into the wasm manager (even sync `&self`
+   * methods) shares the same wasm-bindgen borrow with in-flight async
+   * `&mut self` calls like `sync_vault_from_storage`. Routing through
+   * `enqueueStorage` guarantees these reads observe a quiescent
+   * manager rather than racing it.
+   */
+  private async hydrateMultiDeviceState(): Promise<void> {
     if (!this.manager || !this.isAuthenticated) return
     try {
-      this.pendingJoins = mapWasmJoinRequests(this.manager.list_pending_joins())
-      this.vaultMembers = mapWasmVaultMembers(this.manager.list_vault_members())
+      const snapshot = await this.enqueueStorage(async () => {
+        await Promise.resolve()
+        return {
+          pendingJoins: this.manager!.list_pending_joins(),
+          vaultMembers: this.manager!.list_vault_members(),
+          unlockMode: this.manager!.vaultUnlockMode(),
+        }
+      })
+      this.pendingJoins = mapWasmJoinRequests(snapshot.pendingJoins)
+      this.vaultMembers = mapWasmVaultMembers(snapshot.vaultMembers)
+      this.unlockMode = snapshot.unlockMode === 'password' ? 'password' : 'keys'
     } catch {
       this.vaultMembers = []
+      this.unlockMode = 'keys'
     }
-    this.refreshPasswordEnvelopeState()
   }
 
-  private refreshPasswordEnvelopeState() {
+  private async refreshPasswordEnvelopeState(): Promise<void> {
     if (!this.manager) return
     try {
-      const mode = this.manager.vaultUnlockMode()
+      const mode = await this.enqueueStorage(async () => {
+        await Promise.resolve()
+        return this.manager!.vaultUnlockMode()
+      })
       this.unlockMode = mode === 'password' ? 'password' : 'keys'
     } catch {
       this.unlockMode = 'keys'
@@ -453,7 +479,7 @@ export class VaultState {
       }
       await this.syncFromStorage({ force: true })
       if (this.isAuthenticated) {
-        this.hydrateMultiDeviceState()
+        void this.hydrateMultiDeviceState()
       } else {
         this.pendingJoins = []
         this.vaultMembers = []
@@ -530,7 +556,7 @@ export class VaultState {
         this.manager!.approve_join_request(joinDeviceId),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.hydrateMultiDeviceState()
+      void this.hydrateMultiDeviceState()
       this.showSuccess(
         'Device approved. They can now connect from their browser.',
       )
@@ -572,7 +598,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
-      this.hydrateMultiDeviceState()
+      void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess('Created a new vault on this device.')
     } catch (e: unknown) {
@@ -606,7 +632,7 @@ export class VaultState {
       this.enrollSecretsKey = ''
       this.enrollMembersKey = ''
       await this.ensureProviderSaved()
-      this.hydrateMultiDeviceState()
+      void this.hydrateMultiDeviceState()
       await this.syncFromStorage()
       this.showSuccess('Enrolled and connected to the vault.')
       this.joinEnrollmentPrompt = 'none'
@@ -690,7 +716,7 @@ export class VaultState {
         return
       }
       if (accessStatus === 'password_required') {
-        this.refreshPasswordEnvelopeState()
+        void this.refreshPasswordEnvelopeState()
         this.errorMsg =
           'This vault unlocks with a password. Choose "Unlock with vault password" below.'
         return
@@ -717,7 +743,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
-      this.hydrateMultiDeviceState()
+      void this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
         this.showSuccess('Local vault loaded from IndexedDB.')
@@ -749,7 +775,7 @@ export class VaultState {
     this.isPasswordBusy = true
     try {
       await this.enqueueStorage(() => this.manager!.setVaultPassword(password))
-      this.refreshPasswordEnvelopeState()
+      void this.refreshPasswordEnvelopeState()
       this.showSuccess(
         wasAlreadyPassword
           ? 'Vault password updated.'
@@ -770,7 +796,7 @@ export class VaultState {
     this.isPasswordBusy = true
     try {
       await this.enqueueStorage(() => this.manager!.removeVaultPassword())
-      this.refreshPasswordEnvelopeState()
+      void this.refreshPasswordEnvelopeState()
       this.enrollmentCode = ''
       this.showSuccess('Vault password removed.')
     } catch (e: unknown) {
@@ -784,54 +810,74 @@ export class VaultState {
 
   /**
    * Issue a base64url-encoded enrollment payload (provider creds + password)
-   * for the joining device to scan or paste. The password is verified against
-   * the current envelope before any payload is generated. Codes do not
-   * expire — rotate the vault password to invalidate them.
+   * for the joining device to scan or paste. The password is verified
+   * against the current envelope before any payload is generated. Codes do
+   * not expire — rotate the vault password to invalidate them.
+   *
+   * Async because the wasm manager has `&mut self` background tasks
+   * (`sync_vault_from_storage`); the verify call has to go through the
+   * shared storage chain or wasm-bindgen rejects it as a recursive borrow.
    */
-  issueEnrollmentCode(password: string): string {
+  async issueEnrollmentCode(password: string): Promise<string> {
     if (!this.manager) {
       throw new Error('Vault engine is not available.')
     }
-    if (!this.hasPasswordEnvelope) {
-      throw new Error(
-        'Set a vault password first; enrollment codes wrap that password.',
-      )
-    }
-    // `verifyVaultPassword` returns false on a wrong password but can also
-    // throw if the underlying age decryptor panics on certain scrypt
-    // failures inside the wasm runtime — treat both as "wrong password" so
-    // the UI message stays predictable.
-    let verified: boolean
+    // Block the background sync timer for the duration: each verify call
+    // takes ~1s of scrypt CPU, and wasm-bindgen aliases the manager
+    // borrow if a sync_vault_from_storage future is still pending.
+    this.isPasswordBusy = true
+    // Drain any in-flight async wasm operation and wait one event-loop
+    // turn so wasm-bindgen's RefMut on the manager is observably released
+    // before we issue sync `&self` calls. Without this, scrypt verify
+    // races a background `sync_vault_from_storage` and trips the
+    // aliasing detector.
+    await this.storageChain
+    await new Promise((resolve) => setTimeout(resolve, 0))
     try {
-      verified = this.manager.verifyVaultPassword(password)
-    } catch {
-      verified = false
+      const liveMode = this.manager.vaultUnlockMode()
+      if (liveMode !== 'password') {
+        throw new Error(
+          'Set a vault password first; enrollment codes wrap that password.',
+        )
+      }
+      // `verifyVaultPassword` returns false on a wrong password but can
+      // also throw if the underlying age decryptor panics on certain
+      // scrypt failures inside the wasm runtime — treat both as "wrong
+      // password" so the UI message stays predictable.
+      let verified: boolean
+      try {
+        verified = this.manager.verifyVaultPassword(password)
+      } catch {
+        verified = false
+      }
+      if (!verified) {
+        throw new Error('Password does not match the vault.')
+      }
+      const provider: EnrollmentCodePayloadV1['provider'] =
+        this.storageMode === 'github'
+          ? {
+              type: 'github',
+              pat: this.githubPat.trim(),
+              repo: this.githubRepo.trim(),
+            }
+          : { type: 'local' }
+      if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
+        throw new Error(
+          'GitHub provider is missing credentials. Reconnect and try again.',
+        )
+      }
+      const payload: EnrollmentCodePayloadV1 = {
+        v: 1,
+        provider,
+        password,
+        issued_at: isoTimestamp(),
+      }
+      const code = encodeEnrollmentPayload(payload)
+      this.enrollmentCode = code
+      return code
+    } finally {
+      this.isPasswordBusy = false
     }
-    if (!verified) {
-      throw new Error('Password does not match the vault.')
-    }
-    const provider: EnrollmentCodePayloadV1['provider'] =
-      this.storageMode === 'github'
-        ? {
-            type: 'github',
-            pat: this.githubPat.trim(),
-            repo: this.githubRepo.trim(),
-          }
-        : { type: 'local' }
-    if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
-      throw new Error(
-        'GitHub provider is missing credentials. Reconnect and try again.',
-      )
-    }
-    const payload: EnrollmentCodePayloadV1 = {
-      v: 1,
-      provider,
-      password,
-      issued_at: isoTimestamp(),
-    }
-    const code = encodeEnrollmentPayload(payload)
-    this.enrollmentCode = code
-    return code
   }
 
   clearEnrollmentCode() {
@@ -870,7 +916,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
-      this.hydrateMultiDeviceState()
+      void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess('Vault unlocked with password.')
       this.startVaultSync()
@@ -919,7 +965,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
-      this.hydrateMultiDeviceState()
+      void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.loginEnrollmentCode = ''
       this.showSuccess('Enrolled this device via enrollment code.')

@@ -131,6 +131,9 @@ impl NookVaultManager {
             )
             .into());
         }
+        // Fresh enrolment via password — adopt the remote unlock mode so
+        // the match below sees the envelope.
+        self.capture_vault_unlock(&content);
 
         let envelope = match &self.unlock {
             nook_core::VaultUnlock::Password { envelope } => envelope.clone(),
