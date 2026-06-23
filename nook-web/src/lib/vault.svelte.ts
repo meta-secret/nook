@@ -203,7 +203,9 @@ export class VaultState {
 
   async loadProviders() {
     const snapshot = await loadAuthProviders()
-    this.providers = snapshot.providers
+    this.providers = snapshot.providers.map((p) =>
+      p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
+    )
     this.activeProviderId =
       snapshot.activeProviderId ?? snapshot.providers[0]?.id ?? null
     this.providersLoaded = true

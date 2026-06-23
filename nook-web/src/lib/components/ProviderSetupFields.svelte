@@ -29,7 +29,7 @@
   >
     {#if setupType === 'github'}
       <Cloud class="size-4 shrink-0 text-foreground" />
-      <span class="font-medium text-foreground">GitHub sync</span>
+      <span class="font-medium text-foreground">GitHub</span>
     {:else}
       <HardDrive class="size-4 shrink-0 text-foreground" />
       <span class="font-medium text-foreground">This device</span>

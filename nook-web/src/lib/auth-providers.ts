@@ -155,7 +155,7 @@ export function providerDefaultLabel(
 ): string {
   if (type === 'github') {
     const repo = githubRepo?.trim() || DEFAULT_GITHUB_REPO
-    return repo === DEFAULT_GITHUB_REPO ? 'GitHub sync' : `GitHub · ${repo}`
+    return repo === DEFAULT_GITHUB_REPO ? 'GitHub' : `GitHub · ${repo}`
   }
   return 'This device'
 }

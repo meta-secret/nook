@@ -74,15 +74,6 @@
           />
         {/if}
         <span class="truncate font-medium text-foreground">{storageLabel}</span>
-        <span class="hidden text-muted-foreground sm:inline" aria-hidden="true"
-          >·</span
-        >
-        <span
-          class="shrink-0 text-muted-foreground"
-          data-testid="vault-last-sync"
-        >
-          Synced {formatLastSync(lastSyncedAt)}
-        </span>
         {#if appVersion}
           <span
             class="hidden text-muted-foreground sm:inline"
@@ -92,22 +83,46 @@
             v{appVersion}
           </span>
         {/if}
+        <span class="hidden text-muted-foreground sm:inline" aria-hidden="true"
+          >·</span
+        >
+        <span
+          class="shrink-0 text-muted-foreground"
+          data-testid="vault-last-sync"
+        >
+          {storageMode === 'github' ? 'Synced' : 'Saved'}
+          {formatLastSync(lastSyncedAt)}
+        </span>
       </div>
 
       {#if onRefresh}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          class="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
-          disabled={isSyncing}
-          data-testid="vault-sync-refresh-btn"
-          aria-label="Refresh vault from storage"
-          onclick={() => void onRefresh()}
-        >
-          <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
-          <span class="ml-1">Refresh</span>
-        </Button>
+        <div class="group relative inline-block">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            class="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
+            disabled={isSyncing}
+            data-testid="vault-sync-refresh-btn"
+            aria-label={storageMode === 'github'
+              ? 'Sync vault with GitHub'
+              : 'Refresh vault from browser storage'}
+            onclick={() => void onRefresh()}
+          >
+            <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
+            <span class="ml-1"
+              >{storageMode === 'github' ? 'Sync' : 'Refresh'}</span
+            >
+          </Button>
+          <div
+            class="pointer-events-none absolute bottom-full right-0 z-50 mb-2 rounded-md border border-border bg-popover px-2.5 py-1 text-[11px] font-medium text-popover-foreground opacity-0 shadow-md transition-opacity duration-200 group-hover:opacity-100 whitespace-nowrap"
+            role="tooltip"
+          >
+            {storageMode === 'github'
+              ? 'Synchronize latest changes with your storage provider'
+              : 'Reload latest changes from browser storage'}
+          </div>
+        </div>
       {/if}
     </div>
 

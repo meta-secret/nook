@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, Moon, Sun } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, Moon, Info, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -86,7 +86,8 @@
               class="relative inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               data-testid="storage-settings-btn"
             >
-              {vault.activeProviderLabel}
+              <Info class="size-4 shrink-0 text-muted-foreground/80" />
+              <span>Vault info</span>
               {#if vault.pendingJoins.length > 0}
                 <span
                   class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
@@ -215,7 +216,6 @@
                 onBeginSetup={(type) => vault.beginProviderSetup(type)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
                 onApproveJoin={(id) => vault.approveJoin(id)}
-                onRefreshJoins={() => vault.manualSync()}
               />
             </div>
           {:else}
