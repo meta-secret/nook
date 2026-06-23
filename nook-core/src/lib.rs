@@ -32,8 +32,8 @@ pub use multi_device::{
 
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use password_envelope::{
-    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, attach_password_envelope,
-    resolve_keys_from_password, verify_password,
+    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, VaultUnlock,
+    attach_password_envelope, resolve_keys_from_password, verify_password,
 };
 pub use validation::{
     DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, filter_secrets,
@@ -42,8 +42,8 @@ pub use validation::{
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{
-    VaultFormat, deserialize_stored, deserialize_stored_yaml_with_envelope, detect_stored_format,
-    read_password_envelope, serialize_stored, serialize_stored_yaml_with_envelope,
+    VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
+    read_vault_unlock, serialize_stored, serialize_stored_yaml_with_unlock,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

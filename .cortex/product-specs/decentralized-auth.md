@@ -132,14 +132,18 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 
 ---
 
-## 7. Optional password envelope (cross-link)
+## 7. Password unlock mode (cross-link)
 
-Devices may attach a **password envelope** to the vault — a second
-unwrap path for the same `secrets_key` + `members_key`, gated by a
-user-supplied password instead of (or in addition to) a per-device
-X25519 identity. The envelope is the foundation of the one-step QR
-join flow that bypasses `joins:` and approval altogether.
+The vault picks **one** unlock variant from the `VaultUnlock` enum:
 
-See [password-envelope.md](password-envelope.md) for the full spec,
-threat model, and phase plan. Keys remain the default; the password
-envelope is opt-in per vault.
+- `Keys` — everything in this document applies (per-device `auth:` rows,
+  `joins:` requests, approve flow).
+- `Password { envelope }` — none of `auth:` / `joins:` exist; any device
+  that knows the password self-enrols by writing a `members:` entry and
+  using the password to unwrap `secrets_key` + `members_key`.
+
+The two are mutually exclusive at every layer (Rust enum, YAML
+serialiser, runtime invariants). Switching modes is a deliberate
+operation that drops the artifacts of the previous mode. See
+[password-envelope.md](password-envelope.md) for the full spec, threat
+model, and phase plan.

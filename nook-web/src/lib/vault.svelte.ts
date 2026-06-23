@@ -64,11 +64,15 @@ export class VaultState {
   lastSyncedAt = $state<SvelteDate | null>(null)
   isSyncing = $state(false)
 
-  hasPasswordEnvelope = $state(false)
+  unlockMode = $state<'keys' | 'password'>('keys')
   isPasswordBusy = $state(false)
   passwordError = $state('')
   enrollmentCode = $state('')
   loginEnrollmentCode = $state('')
+
+  get hasPasswordEnvelope(): boolean {
+    return this.unlockMode === 'password'
+  }
 
   /** Default 30s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
   private static syncIntervalMs(): number {
@@ -410,9 +414,10 @@ export class VaultState {
   private refreshPasswordEnvelopeState() {
     if (!this.manager) return
     try {
-      this.hasPasswordEnvelope = this.manager.hasPasswordEnvelope()
+      const mode = this.manager.vaultUnlockMode()
+      this.unlockMode = mode === 'password' ? 'password' : 'keys'
     } catch {
-      this.hasPasswordEnvelope = false
+      this.unlockMode = 'keys'
     }
   }
 
@@ -684,6 +689,12 @@ export class VaultState {
         this.startVaultSync()
         return
       }
+      if (accessStatus === 'password_required') {
+        this.refreshPasswordEnvelopeState()
+        this.errorMsg =
+          'This vault unlocks with a password. Choose "Unlock with vault password" below.'
+        return
+      }
 
       const rawRecords = await this.enqueueStorage(async () => {
         const connectPromise = this.manager!.connect(...this.wasmGithubArgs())
@@ -733,15 +744,16 @@ export class VaultState {
       this.passwordError = 'Unlock the vault before setting a password.'
       return
     }
+    const wasAlreadyPassword = this.hasPasswordEnvelope
     this.passwordError = ''
     this.isPasswordBusy = true
     try {
       await this.enqueueStorage(() => this.manager!.setVaultPassword(password))
       this.refreshPasswordEnvelopeState()
       this.showSuccess(
-        this.hasPasswordEnvelope
+        wasAlreadyPassword
           ? 'Vault password updated.'
-          : 'Vault password set.',
+          : 'Vault now unlocks with this password. Per-device keys were dropped.',
       )
     } catch (e: unknown) {
       this.passwordError =

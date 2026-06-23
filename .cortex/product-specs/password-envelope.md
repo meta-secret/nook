@@ -1,14 +1,20 @@
-# Password Envelope & QR-Based Device Join
+# Password Unlock & QR-Based Device Join
 
-A member device may attach an optional **password envelope** to the vault file
-so the same `secrets_key` + `members_key` can be unwrapped with either
-(a) a per-device X25519 identity (default) or (b) a user-supplied password.
+A vault selects **exactly one** unlock method via the `VaultUnlock` enum:
 
-This unlocks a one-step QR enrollment flow: an enrolled device emits a QR
-containing `{auth_provider_creds, password}`; a new device scans, decrypts
-the vault, generates its own keypair, writes its own `auth:` row plus a
-`members:` entry, and is immediately part of the vault — no approval
-round-trip required.
+- `VaultUnlock::Keys` — per-device X25519 envelopes in the `auth:` section
+  plus the join/approve flow. The historical default.
+- `VaultUnlock::Password { envelope }` — a single scrypt-wrapped envelope of
+  `{secrets_key, members_key}`. Any device that knows the password can
+  self-enrol; no per-device auth rows exist.
+
+Future modes (hardware token, social recovery, …) plug in as new variants
+without touching the storage layout.
+
+Password mode is the foundation of the one-step QR enrolment flow: an
+enrolled device emits a QR containing `{auth_provider_creds, password}`;
+a new device scans, decrypts the vault, adds itself to the members
+roster, and is immediately a first-class member — no approval round-trip.
 
 **Related:**
 [decentralized-auth.md](decentralized-auth.md) §2 (key hierarchy),
@@ -19,11 +25,14 @@ round-trip required.
 
 ## 1. Goals
 
-- **Password as an alternative unwrap path** — keys remain the default
-  (per-device X25519 envelopes), but once set, the password is a
-  first-class, **reusable** unlock method on any device for as long as
-  the user keeps it active.
-- **One-step join** — a new device with the QR payload can self-enroll
+- **Unlock mode is a first-class, mutually-exclusive choice.** The vault
+  picks one variant of `VaultUnlock` and that variant alone governs how
+  the vault keys are unwrapped. No half-states, no "both at once".
+- **Password unlock is reusable.** Once a vault is in password mode, the
+  password is the unlock primitive everywhere: first-time join, re-unlock
+  after sign-out, syncing changes across browsers — same single
+  credential.
+- **One-step join** — a new device with the QR payload self-enrols
   without a second device confirming. No `joins:` row, no
   `JoinEnrollmentDialog`, no "approve on other device" hop.
 - **No plaintext DEK exposure** — the QR carries a password, not the raw
@@ -68,23 +77,34 @@ ciphertext under `secrets:` and `members:` is unchanged.
 
 ## 3. Vault file additions
 
-A new optional top-level YAML section:
+A new top-level YAML section names the active unlock mode using a tagged
+union:
 
 ```yaml
-password_envelope:
-  version: 1
-  kdf: scrypt
-  work_factor: 18           # age default; configurable
-  ciphertext: |
-    -----BEGIN AGE ENCRYPTED FILE-----
-    # plaintext JSON: {"secrets_key":"<32B base64>","members_key":"<32B base64>"}
-    -----END AGE ENCRYPTED FILE-----
+# Keys mode (historical default)
+unlock:
+  type: keys
+
+# Password mode (mutex with keys: no auth: section, no joins: section)
+unlock:
+  type: password
+  envelope:
+    version: 1
+    kdf: scrypt
+    work_factor: 18
+    ciphertext: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      # plaintext JSON: {"secrets_key":"<32B base64>","members_key":"<32B base64>"}
+      -----END AGE ENCRYPTED FILE-----
 ```
 
-- `password_envelope:` is **optional**. Vaults without it behave exactly as
-  today.
-- At most **one** envelope per vault file. Rotating the password rewrites
-  this single record.
+- **Strict mutex.** The serialiser refuses to emit `auth:` or `joins:`
+  rows when `unlock.type == password`, and vice versa: `unlock.envelope`
+  is only present in password mode.
+- **Legacy migration.** Vaults written before the enum carry a top-level
+  `password_envelope:` field. The deserialiser maps that onto
+  `VaultUnlock::Password` on read; the next write emits the new schema
+  and drops the legacy field.
 - Uses the **same `age` crate already in `nook-core`** —
   `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
   decryption (see `nook-core/src/vault_crypto.rs`). No new crypto
@@ -101,11 +121,18 @@ password_envelope:
 - Plaintext under the envelope is a compact JSON object — never the full
   vault, never any user secret values.
 
-### Existing sections — unchanged
+### Mode-switch effects
 
-`auth:`, `joins:`, `secrets:`, `members:` keep the schemas described in
-[decentralized-auth.md](decentralized-auth.md) §3. The password envelope
-does not replace per-device auth rows; both coexist.
+| From → To | Effect |
+|---|---|
+| Keys → Password | All `auth:` rows are dropped; pending `joins:` are dropped; envelope is added; `members:` roster is preserved. Every device must now unlock with the password. |
+| Password → Keys | Envelope is dropped; a fresh `auth:` row is written for **this** device only. Other devices must re-enrol via the standard join/approve flow. |
+
+### Existing sections
+
+`secrets:` and `members:` keep their schemas in both modes. `auth:` and
+`joins:` exist **only** in keys mode (see
+[decentralized-auth.md](decentralized-auth.md) §3).
 
 ---
 
@@ -244,14 +271,17 @@ identically to the QR flow.
 
 ---
 
-## 6. Core API (`nook-core::multi_device`)
+## 6. Core API (`nook-core`)
 
-| Function | Role |
+| Item | Role |
 |---|---|
-| `attach_password_envelope(secrets_key, members_key, password) -> PasswordEnvelope` | Build the envelope from already-resolved keys. |
-| `resolve_keys_from_password(envelope, password) -> (secrets_key, members_key)` | Inverse of attach; used during QR enrollment. |
-| `drop_password_envelope(vault)` | Remove the envelope section. |
-| `enroll_with_password(envelope, password, device_pk) -> (auth_row, members_row)` | Compose 4.4 in core; Wasm only orchestrates I/O. |
+| `enum VaultUnlock { Keys, Password { envelope } }` | The single source of truth for which unlock variant the vault is in. Serialised as a YAML tagged union (`type: keys` / `type: password`). |
+| `attach_password_envelope(keys, password) -> PasswordEnvelope` | Build the envelope from already-resolved `secrets_key` + `members_key`. |
+| `resolve_keys_from_password(envelope, password) -> VaultKeys` | Inverse of attach; used during password unlock and QR enrolment. |
+| `verify_password(envelope, password) -> bool` | Side-effect-free password check (does not expose the unwrapped keys). |
+| `serialize_stored_yaml_with_unlock(records, unlock) -> String` | Mutex-enforcing serialiser: drops `auth:` / `joins:` in password mode. |
+| `deserialize_stored_yaml_with_unlock(yaml) -> (records, VaultUnlock)` | Reads the modern schema; auto-migrates legacy `password_envelope:` top-level fields. |
+| `read_vault_unlock(yaml) -> VaultUnlock` | Cheap helper for "is this vault password-mode?" without unwinding records. |
 
 All scrypt work happens in `nook-core` (pure Rust, Wasm-compatible).
 
@@ -259,16 +289,18 @@ All scrypt work happens in `nook-core` (pure Rust, Wasm-compatible).
 
 ## 7. WASM bridge additions (`nook-wasm`)
 
-| Method | Returns |
+| Method | Role |
 |---|---|
-| `set_vault_password(password)` | `Result<(), JsError>` |
-| `remove_vault_password()` | `Result<(), JsError>` |
-| `connect_with_password(mode, provider_creds, password)` | `Result<(), JsError>` |
-| `has_password_envelope() -> bool` | sync |
-| `issue_join_qr(password) -> string` | Base64url JSON payload (no I/O — UI shows in QR component). |
+| `vaultUnlockMode() -> "keys" \| "password"` | Mode tag for UI routing. |
+| `setVaultPassword(password)` | Switch the vault to password mode: build the envelope from the active session keys, drop every `auth:` row and pending `joins:`, save. |
+| `removeVaultPassword()` | Switch back to keys mode: write this device's own `auth:` row from session keys, drop the envelope, save. |
+| `verifyVaultPassword(password) -> bool` | Local password check; returns false in keys mode. |
+| `connectWithPassword(mode, creds, password)` | Self-enrolment via password: fetch, unwrap envelope, add this device to `members:`, save. Errors in keys mode. |
 
-`connect_with_password` replaces the existing `connect` only for the
-password path; key-based connect is untouched.
+The keys-mode `connect()` short-circuits with a clear error when the
+vault is in password mode (and `assess_vault_connect()` returns
+`"password_required"` so the UI can offer the password-unlock affordance
+proactively).
 
 ---
 

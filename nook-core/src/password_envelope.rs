@@ -1,9 +1,17 @@
-//! Optional password-based wrap of `secrets_key` + `members_key`.
+//! Password-based wrap of `secrets_key` + `members_key`.
 //!
 //! Provides an alternative unwrap path to the per-device X25519 auth rows so
 //! a new device can self-enroll using only a user-supplied password (typically
-//! delivered out-of-band via QR). Keys remain the default; this envelope is
-//! always optional.
+//! delivered out-of-band via QR).
+//!
+//! A vault picks **exactly one** unlock mode via `VaultUnlock`:
+//! - `Keys`: per-device `auth:` envelopes + join/approve flow (the historical
+//!   default).
+//! - `Password { envelope }`: scrypt-wrapped `{secrets_key, members_key}` —
+//!   any device that knows the password can self-enrol.
+//!
+//! Future variants (hardware token, social recovery, …) extend the enum
+//! without altering the storage layout.
 //!
 //! See `.cortex/product-specs/password-envelope.md` for the full design.
 
@@ -28,6 +36,50 @@ pub struct PasswordEnvelope {
     pub kdf: String,
     pub work_factor: u8,
     pub ciphertext: String,
+}
+
+/// The vault's active unlock mechanism — mutually exclusive across variants.
+///
+/// Serialised as YAML with `type:` tag plus per-variant data:
+///
+/// ```yaml
+/// unlock:
+///   type: keys
+/// # OR
+/// unlock:
+///   type: password
+///   envelope: { version, kdf, work_factor, ciphertext }
+/// ```
+///
+/// Designed so future unlock modes (hardware token, recovery share, …) plug
+/// in as new variants without touching the rest of the storage format.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum VaultUnlock {
+    /// Per-device X25519 envelopes in the `auth:` section. The historical
+    /// default. Devices join via the `joins:` request + approval flow.
+    #[default]
+    Keys,
+    /// Single scrypt-wrapped envelope of `{secrets_key, members_key}`. Any
+    /// device that knows the password can self-enrol without approval.
+    Password { envelope: PasswordEnvelope },
+}
+
+impl VaultUnlock {
+    /// True when the vault is in password-unlock mode.
+    #[must_use]
+    pub fn is_password(&self) -> bool {
+        matches!(self, Self::Password { .. })
+    }
+
+    /// Borrow the password envelope if this is the password variant.
+    #[must_use]
+    pub fn password_envelope(&self) -> Option<&PasswordEnvelope> {
+        match self {
+            Self::Password { envelope } => Some(envelope),
+            Self::Keys => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -215,5 +267,36 @@ mod tests {
         let a = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
         let b = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
         assert_ne!(a.ciphertext, b.ciphertext);
+    }
+
+    #[test]
+    fn vault_unlock_keys_variant_serialises_with_type_tag() {
+        let yaml = serde_yaml::to_string(&VaultUnlock::Keys).unwrap();
+        assert!(yaml.contains("type: keys"));
+        assert!(!yaml.contains("envelope:"));
+
+        let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(parsed, VaultUnlock::Keys);
+        assert!(!parsed.is_password());
+        assert!(parsed.password_envelope().is_none());
+    }
+
+    #[test]
+    fn vault_unlock_password_variant_roundtrips() {
+        let envelope =
+            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
+        let value = VaultUnlock::Password {
+            envelope: envelope.clone(),
+        };
+        let yaml = serde_yaml::to_string(&value).unwrap();
+        assert!(yaml.contains("type: password"));
+        assert!(yaml.contains("envelope:"));
+
+        let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
+        assert!(parsed.is_password());
+        assert_eq!(
+            parsed.password_envelope().map(|e| e.ciphertext.trim()),
+            Some(envelope.ciphertext.trim()),
+        );
     }
 }
