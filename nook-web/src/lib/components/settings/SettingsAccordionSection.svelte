@@ -61,7 +61,9 @@
   </button>
 
   {#if open}
-    <div class="border-t border-border/40 px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4">
+    <div
+      class="border-t border-border/40 px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4"
+    >
       {@render children?.()}
     </div>
   {/if}
