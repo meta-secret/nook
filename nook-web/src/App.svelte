@@ -51,6 +51,7 @@
 
   const shellWidth = 'max-w-xl'
   const appVersion = '0.1.0'
+  let secretsAddOpen = $state(false)
 </script>
 
 <main
@@ -61,9 +62,7 @@
     class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
-      class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {vault.helpOpen
-        ? 'max-w-5xl'
-        : shellWidth}"
+      class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
     >
       <div class="flex min-w-0 items-center gap-3">
         <NookLogo {colorMode} size="sm" class="rounded-lg overflow-hidden" />
@@ -145,13 +144,9 @@
   </header>
 
   <div
-    class="mx-auto px-4 sm:px-6 {vault.helpOpen
-      ? 'max-w-5xl'
-      : shellWidth} {vault.isAuthenticated && !vault.helpOpen
-      ? 'pb-24 pt-8'
-      : vault.isAuthenticated
-        ? 'py-8'
-        : 'py-5 sm:py-6'}"
+    class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
+      ? 'py-8'
+      : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
       <HelpPage onClose={() => vault.closeHelp()} />
@@ -206,6 +201,9 @@
             <SecretVault
               isSaving={vault.isSaving}
               secrets={vault.secrets}
+              onAddModeChange={(open) => {
+                secretsAddOpen = open
+              }}
               onAddSecret={(id, type, data) =>
                 vault.handleAddSecret(id, type, data)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
@@ -226,18 +224,26 @@
             />
           {/if}
         </div>
-        <VaultStatusBar
-          storageMode={vault.storageMode}
-          githubRepo={vault.githubRepo}
-          lastSyncedAt={vault.lastSyncedAt}
-          isSyncing={vault.isSyncing || vault.isSaving}
-          successMsg={vault.successMsg}
-          errorMsg={vault.errorMsg}
-          {appVersion}
-          onRefresh={() => vault.manualSync()}
-          onDismissSuccess={() => vault.dismissSuccess()}
-          onDismissError={() => vault.dismissError()}
-        />
+        {#if !secretsAddOpen}
+          <VaultStatusBar
+            storageMode={vault.storageMode}
+            githubRepo={vault.githubRepo}
+            lastSyncedAt={vault.lastSyncedAt}
+            isSyncing={vault.isSyncing || vault.isSaving}
+            successMsg={vault.successMsg}
+            errorMsg={vault.errorMsg}
+            {appVersion}
+            onRefresh={() => vault.manualSync()}
+            onDismissSuccess={() => vault.dismissSuccess()}
+            onDismissError={() => vault.dismissError()}
+          />
+          <VaultBottomNav
+            settingsOpen={vault.settingsOpen}
+            pendingJoinCount={vault.pendingJoins.length}
+            onSelectSecrets={() => vault.closeSettings()}
+            onSelectSettings={() => vault.openSettings()}
+          />
+        {/if}
       </div>
     {:else if vault.providersLoaded}
       <div class="space-y-4">
@@ -274,15 +280,6 @@
       </div>
     {/if}
   </div>
-
-  {#if vault.isAuthenticated && !vault.helpOpen}
-    <VaultBottomNav
-      settingsOpen={vault.settingsOpen}
-      pendingJoinCount={vault.pendingJoins.length}
-      onSelectSecrets={() => vault.closeSettings()}
-      onSelectSettings={() => vault.openSettings()}
-    />
-  {/if}
 
   <JoinEnrollmentDialog
     open={vault.joinEnrollmentPrompt !== 'none'}

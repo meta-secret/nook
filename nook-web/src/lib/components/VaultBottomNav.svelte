@@ -15,30 +15,30 @@
 </script>
 
 <nav
-  class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+  class="border-t border-border bg-muted/40"
   aria-label="Vault views"
   data-testid="vault-bottom-nav"
 >
-  <div class="mx-auto flex max-w-xl px-2">
+  <div class="flex">
     <button
       type="button"
       aria-current={!settingsOpen ? 'page' : undefined}
-      class="relative flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-2.5 text-center transition-colors {!settingsOpen
-        ? 'text-primary'
-        : 'text-muted-foreground hover:text-foreground'}"
+      class="relative flex flex-1 flex-col items-center gap-1 px-2 py-3 text-center transition-colors {!settingsOpen
+        ? 'bg-background text-primary'
+        : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
       data-testid="vault-secrets-tab"
       onclick={() => onSelectSecrets?.()}
     >
       <KeyRound class="size-5 shrink-0" />
-      <span class="text-[11px] font-medium leading-none">Secrets</span>
+      <span class="text-xs font-medium leading-none">Secrets</span>
     </button>
     <button
       type="button"
       aria-current={settingsOpen ? 'page' : undefined}
       aria-label="Vault settings"
-      class="relative flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-2.5 text-center transition-colors {settingsOpen
-        ? 'text-primary'
-        : 'text-muted-foreground hover:text-foreground'}"
+      class="relative flex flex-1 flex-col items-center gap-1 border-l border-border/60 px-2 py-3 text-center transition-colors {settingsOpen
+        ? 'bg-background text-primary'
+        : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
       data-testid="vault-settings-tab"
       onclick={() => onSelectSettings?.()}
     >
@@ -53,7 +53,7 @@
           </span>
         {/if}
       </span>
-      <span class="text-[11px] font-medium leading-none">Settings</span>
+      <span class="text-xs font-medium leading-none">Settings</span>
     </button>
   </div>
 </nav>
