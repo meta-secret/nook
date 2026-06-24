@@ -1,5 +1,6 @@
 use crate::{
-    AuthEnvelopes, PasswordEnvelope, StoredSecretRecord, VaultUnlock, is_auth_stored_record,
+    AuthEnvelopes, PasswordEnvelope, PasswordUnlockEntry, StoredSecretRecord,
+    VaultUnlock, is_auth_stored_record, LEGACY_PASSWORD_ENTRY_LABEL,
     is_join_stored_record, is_members_stored_record,
 };
 use serde::{Deserialize, Serialize};
@@ -137,6 +138,9 @@ struct StoredVaultYaml {
     joins: Vec<StoredSecretRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     members: Vec<MembersYamlRecord>,
+    /// Optional backup passwords — coexist with `auth:` device-key unlock.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    password_entries: Vec<PasswordUnlockEntry>,
     /// **Legacy** field — pre-enum vaults stored the envelope at the top
     /// level alongside `auth:`. Read-only: we migrate this into `unlock` on
     /// load and never write it again.
@@ -198,26 +202,61 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
 }
 
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> Result<String, String> {
-    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys)
+    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[])
 }
 
-/// Serialize records together with the active unlock mode. Enforces the
-/// keys-vs-password mutex: password mode strips any stray `auth:`/`joins:`
-/// rows from the flat record list to keep the stored file consistent.
+/// Serialize records together with unlock metadata. Backup passwords live in
+/// `password_entries` alongside `auth:` device-key rows; `unlock.type` stays
+/// `keys` for hybrid vaults.
 pub fn serialize_stored_yaml_with_unlock(
     records: &[StoredSecretRecord],
     unlock: &VaultUnlock,
+    password_entries: &[PasswordUnlockEntry],
 ) -> Result<String, String> {
     let mut vault = partition_yaml_records(records);
-    vault.unlock = unlock.clone();
-    if vault.unlock.is_password() {
-        // Strict mutex: password mode has no per-device auth rows and no
-        // pending joins. Belt-and-braces clearing in case the caller forgot.
-        vault.auth.clear();
-        vault.joins.clear();
-    }
+    vault.unlock = normalize_unlock_for_write(unlock);
+    vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
     serde_yaml::to_string(&vault).map_err(|e| format!("Failed to serialize stored YAML: {}", e))
+}
+
+fn normalize_unlock_for_write(unlock: &VaultUnlock) -> VaultUnlock {
+    match unlock {
+        VaultUnlock::Passwords { .. } => VaultUnlock::Keys,
+        other => other.clone(),
+    }
+}
+
+fn extract_password_entries(vault: &StoredVaultYaml) -> Vec<PasswordUnlockEntry> {
+    if !vault.password_entries.is_empty() {
+        return vault.password_entries.clone();
+    }
+    if let VaultUnlock::Passwords { entries } = &vault.unlock {
+        return entries.clone();
+    }
+    if let Some(envelope) = &vault.password_envelope {
+        return vec![PasswordUnlockEntry {
+            id: "legacy".to_owned(),
+            label: LEGACY_PASSWORD_ENTRY_LABEL.to_owned(),
+            created_at: String::new(),
+            envelope: envelope.clone(),
+        }];
+    }
+    Vec::new()
+}
+
+/// Read labelled backup passwords without unwinding the full record list.
+pub fn read_vault_password_entries(stored: &str) -> Result<Vec<PasswordUnlockEntry>, String> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Ok(Vec::new());
+    }
+    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
+        .map_err(|e| format!("Failed to parse stored YAML for password entries: {}", e))?;
+    Ok(extract_password_entries(&vault))
 }
 
 pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, String> {
@@ -272,15 +311,20 @@ pub fn read_vault_unlock(stored: &str) -> Result<VaultUnlock, String> {
 /// Bridge from the on-disk YAML view (which may carry both legacy and
 /// modern fields) to the canonical `VaultUnlock` enum.
 fn resolve_unlock_with_legacy(vault: &StoredVaultYaml) -> VaultUnlock {
-    // Modern field wins when explicitly set to `Password`.
-    if let VaultUnlock::Password { .. } = &vault.unlock {
+    if !vault.auth.is_empty() {
+        return VaultUnlock::Keys;
+    }
+    if let VaultUnlock::Passwords { .. } = &vault.unlock {
         return vault.unlock.clone();
     }
-    // Legacy: top-level `password_envelope:` alongside an empty `unlock:`
-    // (or default `keys`). Migrate it into the enum.
     if let Some(envelope) = &vault.password_envelope {
-        return VaultUnlock::Password {
-            envelope: envelope.clone(),
+        return VaultUnlock::Passwords {
+            entries: vec![PasswordUnlockEntry {
+                id: "legacy".to_owned(),
+                label: LEGACY_PASSWORD_ENTRY_LABEL.to_owned(),
+                created_at: String::new(),
+                envelope: envelope.clone(),
+            }],
         };
     }
     VaultUnlock::Keys
@@ -554,7 +598,7 @@ not-json
     }
 
     #[test]
-    fn yaml_password_unlock_roundtrip() {
+    fn yaml_password_entries_roundtrip_with_keys_unlock() {
         use crate::{
             attach_password_envelope, multi_device::VaultKeys, resolve_keys_from_password,
         };
@@ -564,32 +608,33 @@ not-json
             members_key: "e".repeat(64),
         };
         let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
-        let unlock = VaultUnlock::Password {
+        let entry = PasswordUnlockEntry {
+            id: "pw-1".to_owned(),
+            label: "test password".to_owned(),
+            created_at: "2026-06-23T00:00:00Z".to_owned(),
             envelope: envelope.clone(),
         };
 
-        let yaml = serialize_stored_yaml_with_unlock(&[], &unlock).unwrap();
+        let yaml =
+            serialize_stored_yaml_with_unlock(&[], &VaultUnlock::Keys, std::slice::from_ref(&entry))
+                .unwrap();
         assert!(yaml.contains("unlock:"));
-        assert!(yaml.contains("type: password"));
-        assert!(yaml.contains("envelope:"));
-        // Strict mutex: no auth/joins sections in password mode.
-        assert!(!yaml.contains("\nauth:"));
-        assert!(!yaml.contains("\njoins:"));
-        // Legacy top-level field is never written by the new serialiser.
+        assert!(yaml.contains("type: keys"));
+        assert!(yaml.contains("password_entries:"));
         assert!(!yaml.starts_with("password_envelope:"));
 
-        let (records, parsed_unlock) = deserialize_stored_yaml_with_unlock(&yaml).unwrap();
-        assert!(records.is_empty());
-        let parsed_envelope = parsed_unlock.password_envelope().expect("envelope present");
+        let parsed_entries = read_vault_password_entries(&yaml).unwrap();
+        assert_eq!(parsed_entries.len(), 1);
+        let parsed_envelope = parsed_entries[0].envelope.clone();
         assert_eq!(parsed_envelope.version, envelope.version);
         assert_eq!(parsed_envelope.kdf, envelope.kdf);
         assert_eq!(
-            resolve_keys_from_password(parsed_envelope, "correct horse battery staple").unwrap(),
+            resolve_keys_from_password(&parsed_envelope, "correct horse battery staple").unwrap(),
             keys
         );
 
         let read = read_vault_unlock(&yaml).unwrap();
-        assert!(read.is_password());
+        assert_eq!(read, VaultUnlock::Keys);
     }
 
     #[test]
@@ -618,8 +663,14 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         // Re-serialising migrates to the new schema and drops the legacy field.
         let (records, parsed_unlock) = deserialize_stored_yaml_with_unlock(legacy).unwrap();
         assert!(records.is_empty());
-        let rewritten = serialize_stored_yaml_with_unlock(&records, &parsed_unlock).unwrap();
-        assert!(rewritten.contains("type: password"));
+        let rewritten = serialize_stored_yaml_with_unlock(
+            &records,
+            &parsed_unlock,
+            &crate::read_vault_password_entries(legacy).unwrap(),
+        )
+        .unwrap();
+        assert!(rewritten.contains("type: keys"));
+        assert!(rewritten.contains("password_entries:"));
         assert!(!rewritten.starts_with("password_envelope:"));
     }
 

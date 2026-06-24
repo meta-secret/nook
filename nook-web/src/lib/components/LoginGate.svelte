@@ -7,6 +7,9 @@
     Plus,
     ChevronLeft,
     QrCode,
+    KeyRound,
+    Trash2,
+    UserRound,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
@@ -24,6 +27,7 @@
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
     providers,
@@ -45,9 +49,16 @@
     onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
+    loginUnlockMode = 'unknown',
+    passwordEntries = [] as VaultPasswordEntrySummary[],
+    selectedPasswordEntryId = $bindable(null as string | null),
+    onRemoveProvider,
+    loginPasswordPrompt = false,
+    onConsumeLoginPasswordPrompt,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
+    loginUnlockMode?: 'unknown' | 'keys' | 'password'
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
@@ -64,8 +75,44 @@
     onCancelSetup: () => void
     onOpenHelp?: () => void
     onUseEnrollmentCode?: (code: string) => void | Promise<void>
-    onUnlockWithPassword?: (password: string) => void | Promise<void>
+    onUnlockWithPassword?: (entryId: string, password: string) => void | Promise<void>
+    onRemoveProvider?: (id: string) => void | Promise<void>
+    loginPasswordPrompt?: boolean
+    passwordEntries?: VaultPasswordEntrySummary[]
+    selectedPasswordEntryId?: string | null
+    onConsumeLoginPasswordPrompt?: () => void
   } = $props()
+
+  $effect(() => {
+    if (loginPasswordPrompt) {
+      passwordFormOpen = true
+      enrollmentCodeFormOpen = false
+      if (passwordEntries.length === 1 && !selectedPasswordEntryId) {
+        selectedPasswordEntryId = passwordEntries[0]!.id
+      }
+      onConsumeLoginPasswordPrompt?.()
+    }
+  })
+
+  $effect(() => {
+    if (
+      passwordFormOpen &&
+      passwordEntries.length === 1 &&
+      !selectedPasswordEntryId
+    ) {
+      selectedPasswordEntryId = passwordEntries[0]!.id
+    }
+  })
+
+  function confirmRemoveProvider(provider: StorageProvider) {
+    if (!onRemoveProvider) return
+    const ok = confirm(
+      `Remove "${provider.label}" from saved providers? Your vault file on storage is not deleted.`,
+    )
+    if (ok) {
+      void onRemoveProvider(provider.id)
+    }
+  }
 
   let enrollmentCodeFormOpen = $state(false)
   let enrollmentCodeInput = $state('')
@@ -80,10 +127,24 @@
   const showProviderPicker = $derived(
     (!hasProviders || addProviderOpen) && !showSetup,
   )
-  const isUnlocking = $derived(isVerifying && showSavedProviders && !showSetup)
+  const isUnlocking = $derived(
+    isVerifying && showSavedProviders && !showSetup,
+  )
+  const showEnrollmentAccess = $derived(
+    Boolean(onUseEnrollmentCode) &&
+      (showProviderPicker || showSavedProviders || showSetup),
+  )
+  const showVaultPasswordAccess = $derived(
+    Boolean(onUnlockWithPassword) &&
+      passwordEntries.length > 0 &&
+      (showProviderPicker || showSavedProviders || showSetup),
+  )
 </script>
 
-<div class="w-full animate-in fade-in duration-300" data-testid="login-gate">
+<div
+  class="w-full space-y-4 animate-in fade-in duration-300"
+  data-testid="login-gate"
+>
   <Card
     class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
   >
@@ -117,7 +178,8 @@
           >
         {:else if showSavedProviders && !showSetup}
           <CardDescription class="text-pretty">
-            Choose which saved provider to decrypt and open.
+            Default: choose a provider — Nook unlocks with this browser's device
+            keys.
           </CardDescription>
         {:else if showProviderPicker && addProviderOpen}
           <ul
@@ -130,13 +192,10 @@
             </li>
           </ul>
         {:else if showSetup && setupType === 'github'}
-          <ul
-            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
-          >
-            <li>Sign in to GitHub with a personal access token.</li>
-            <li>Nook syncs only the encrypted vault file to your repo.</li>
-            <li>Plaintext secrets never leave this browser.</li>
-          </ul>
+          <CardDescription class="text-pretty">
+            Sign in with a personal access token — plaintext secrets never leave
+            this browser.
+          </CardDescription>
         {:else if showSetup}
           <ul
             class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
@@ -176,10 +235,10 @@
             </legend>
             <ul class="space-y-2" data-testid="saved-providers-list">
               {#each providers as provider (provider.id)}
-                <li>
+                <li class="flex items-stretch gap-2">
                   <button
                     type="button"
-                    class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors {provider.id ===
+                    class="flex min-w-0 flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors {provider.id ===
                     activeProviderId
                       ? 'border-primary/40 bg-primary/5 text-foreground'
                       : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
@@ -215,12 +274,38 @@
                       {/if}
                     {/if}
                   </button>
+                  {#if onRemoveProvider}
+                    <button
+                      type="button"
+                      class="inline-flex shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                      aria-label="Remove {provider.label}"
+                      data-testid="remove-provider-{provider.id}"
+                      disabled={isVerifying || isInitializing}
+                      onclick={() => confirmRemoveProvider(provider)}
+                    >
+                      <Trash2 class="size-3.5" />
+                    </button>
+                  {/if}
                 </li>
               {/each}
             </ul>
           </fieldset>
 
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <Button
+              type="submit"
+              class="sm:min-w-[160px]"
+              data-testid="unlock-vault-btn"
+              disabled={isVerifying || isInitializing || !activeProviderId}
+            >
+              {#if isUnlocking}
+                <RefreshCw class="size-4 animate-spin" />
+                Unlocking…
+              {:else}
+                <ShieldCheck class="size-4" />
+                Unlock vault
+              {/if}
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -286,160 +371,243 @@
           </div>
         {/if}
       </form>
-
-      {#if (onUseEnrollmentCode || onUnlockWithPassword) && (showProviderPicker || showSavedProviders || showSetup)}
-        <div class="mt-5 border-t border-border/60 pt-4 space-y-2">
-          {#if onUnlockWithPassword && !passwordFormOpen && (showSavedProviders || showSetup)}
-            <div>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-                data-testid="open-password-unlock-btn"
-                onclick={() => {
-                  passwordFormOpen = true
-                  enrollmentCodeFormOpen = false
-                }}
-              >
-                <ShieldCheck class="size-3.5" />
-                Unlock with vault password instead
-              </button>
-            </div>
-          {/if}
-
-          {#if onUnlockWithPassword && passwordFormOpen}
-            <form
-              class="space-y-3"
-              onsubmit={(e) => {
-                e.preventDefault()
-                if (!onUnlockWithPassword) return
-                const trimmed = passwordInput.trim()
-                if (!trimmed) return
-                void onUnlockWithPassword(trimmed)
-              }}
-            >
-              <div class="flex items-start justify-between gap-2">
-                <div class="space-y-1">
-                  <h4
-                    class="text-xs font-semibold text-foreground inline-flex items-center gap-1.5"
-                  >
-                    <ShieldCheck class="size-3.5 text-primary" /> Unlock with password
-                  </h4>
-                  <p class="text-xs text-muted-foreground text-pretty">
-                    Decrypts the active provider's vault using its password
-                    envelope. Works whether this device is already enrolled or
-                    joining for the first time.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="text-xs text-muted-foreground hover:text-foreground"
-                  onclick={() => {
-                    passwordFormOpen = false
-                    passwordInput = ''
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-              <input
-                type="password"
-                class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Vault password"
-                bind:value={passwordInput}
-                autocomplete="current-password"
-                data-testid="login-password-input"
-                required
-              />
-              <div class="flex justify-end">
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={isVerifying || !passwordInput.trim()}
-                  data-testid="submit-password-unlock-btn"
-                >
-                  {#if isVerifying}
-                    <RefreshCw class="size-3.5 animate-spin" /> Unlocking…
-                  {:else}
-                    <ShieldCheck class="size-3.5" /> Unlock
-                  {/if}
-                </Button>
-              </div>
-            </form>
-          {/if}
-
-          {#if onUseEnrollmentCode && !enrollmentCodeFormOpen && (showProviderPicker || showSavedProviders)}
-            <button
-              type="button"
-              class="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-              data-testid="open-enrollment-code-btn"
-              onclick={() => {
-                enrollmentCodeFormOpen = true
-                passwordFormOpen = false
-              }}
-            >
-              <QrCode class="size-3.5" />
-              Have an enrollment code from another device?
-            </button>
-          {:else if onUseEnrollmentCode && enrollmentCodeFormOpen}
-            <form
-              class="space-y-3"
-              onsubmit={(e) => {
-                e.preventDefault()
-                if (!onUseEnrollmentCode) return
-                const trimmed = enrollmentCodeInput.trim()
-                if (!trimmed) return
-                void onUseEnrollmentCode(trimmed)
-              }}
-            >
-              <div class="flex items-start justify-between gap-2">
-                <div class="space-y-1">
-                  <h4
-                    class="text-xs font-semibold text-foreground inline-flex items-center gap-1.5"
-                  >
-                    <QrCode class="size-3.5 text-primary" /> Enroll with code
-                  </h4>
-                  <p class="text-xs text-muted-foreground text-pretty">
-                    Paste the code from an enrolled device. Provider credentials
-                    and password are unpacked locally.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="text-xs text-muted-foreground hover:text-foreground"
-                  onclick={() => {
-                    enrollmentCodeFormOpen = false
-                    enrollmentCodeInput = ''
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-              <textarea
-                rows="3"
-                class="w-full font-mono text-[11px] leading-relaxed rounded-md border border-border bg-background p-2 focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Paste enrollment code here…"
-                bind:value={enrollmentCodeInput}
-                data-testid="enrollment-code-input"></textarea>
-              <div class="flex justify-end">
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={isVerifying || !enrollmentCodeInput.trim()}
-                  data-testid="submit-enrollment-code-btn"
-                >
-                  {#if isVerifying}
-                    <RefreshCw class="size-3.5 animate-spin" /> Enrolling…
-                  {:else}
-                    <ShieldCheck class="size-3.5" /> Enroll
-                  {/if}
-                </Button>
-              </div>
-            </form>
-          {/if}
-        </div>
-      {/if}
     </CardContent>
   </Card>
+
+  {#if showVaultPasswordAccess}
+    <Card
+      class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
+      data-testid="vault-password-login-panel"
+    >
+      <CardHeader class="border-b border-border/60 pb-4 pt-5">
+        <div class="space-y-1">
+          <CardTitle
+            class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
+          >
+            <KeyRound class="size-4 text-primary" />
+            Backup unlock
+          </CardTitle>
+          <CardDescription class="text-pretty">
+            Only if device keys on this browser no longer work. Connect a
+            provider above first, then pick a labelled backup password.
+          </CardDescription>
+        </div>
+      </CardHeader>
+
+      <CardContent class="pt-4">
+        {#if !passwordFormOpen}
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 text-left transition-colors hover:opacity-90"
+            data-testid="open-password-unlock-btn"
+            onclick={() => {
+              passwordFormOpen = true
+              enrollmentCodeFormOpen = false
+            }}
+          >
+            <KeyRound class="mt-0.5 size-4 shrink-0 text-primary" />
+            <span class="min-w-0 flex-1 space-y-1">
+              <span class="block text-sm font-semibold text-foreground">
+                Unlock with backup password
+              </span>
+              <span class="block text-xs text-muted-foreground text-pretty">
+                {#if passwordEntries.length > 0}
+                  {passwordEntries.length}
+                  {passwordEntries.length === 1 ? 'password' : 'passwords'} on this
+                  vault — pick one and enter its password.
+                {:else}
+                  Connect a provider above first, then choose a labelled password
+                  entry.
+                {/if}
+              </span>
+            </span>
+          </button>
+        {:else if onUnlockWithPassword}
+          <form
+            class="space-y-4"
+            onsubmit={(e) => {
+              e.preventDefault()
+              if (!onUnlockWithPassword || !selectedPasswordEntryId) return
+              const trimmed = passwordInput.trim()
+              if (!trimmed) return
+              void onUnlockWithPassword(selectedPasswordEntryId, trimmed)
+            }}
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-1">
+                <h3 class="text-sm font-semibold text-foreground">
+                  Choose a password
+                </h3>
+                <p class="text-xs text-muted-foreground text-pretty">
+                  Like macOS login — pick an identity, then enter its password.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                onclick={() => {
+                  passwordFormOpen = false
+                  passwordInput = ''
+                }}
+              >
+                Back
+              </button>
+            </div>
+
+            {#if passwordEntries.length > 0}
+              <ul class="space-y-2" data-testid="login-password-entry-list">
+                {#each passwordEntries as entry (entry.id)}
+                  <li>
+                    <button
+                      type="button"
+                      class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors {selectedPasswordEntryId ===
+                      entry.id
+                        ? 'border-primary/40 bg-primary/5 text-foreground'
+                        : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
+                      data-testid="login-password-entry-{entry.id}"
+                      onclick={() => {
+                        selectedPasswordEntryId = entry.id
+                      }}
+                    >
+                      <UserRound class="size-4 shrink-0 text-primary" />
+                      <span class="truncate font-medium">{entry.label}</span>
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {:else}
+              <p class="text-xs text-muted-foreground">
+                No password entries found yet. Connect your storage provider above,
+                or add a password from an unlocked device.
+              </p>
+            {/if}
+
+            <input
+              type="password"
+              class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Password for selected entry"
+              bind:value={passwordInput}
+              autocomplete="current-password"
+              data-testid="login-password-input"
+              required
+            />
+            <div class="flex justify-end">
+              <Button
+                type="submit"
+                disabled={isVerifying ||
+                  !passwordInput.trim() ||
+                  !selectedPasswordEntryId}
+                data-testid="submit-password-unlock-btn"
+              >
+                {#if isVerifying}
+                  <RefreshCw class="size-4 animate-spin" /> Unlocking…
+                {:else}
+                  <ShieldCheck class="size-4" /> Unlock vault
+                {/if}
+              </Button>
+            </div>
+          </form>
+        {/if}
+      </CardContent>
+    </Card>
+  {/if}
+
+  {#if showEnrollmentAccess}
+    <Card
+      class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
+      data-testid="enrollment-login-panel"
+    >
+      <CardHeader class="border-b border-border/60 pb-4 pt-5">
+        <div class="space-y-1">
+          <CardTitle
+            class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
+          >
+            <QrCode class="size-4 text-primary" />
+            Join from another device
+          </CardTitle>
+          <CardDescription class="text-pretty">
+            Scan a QR code or paste an enrollment link from a device that is
+            already unlocked. Provider credentials travel inside the code.
+          </CardDescription>
+        </div>
+      </CardHeader>
+
+      <CardContent class="pt-4">
+        {#if !enrollmentCodeFormOpen}
+          <button
+            type="button"
+            class="flex w-full items-start gap-3 text-left transition-colors hover:opacity-90"
+            data-testid="open-enrollment-code-btn"
+            onclick={() => {
+              enrollmentCodeFormOpen = true
+              passwordFormOpen = false
+            }}
+          >
+            <QrCode class="mt-0.5 size-4 shrink-0 text-primary" />
+            <span class="min-w-0 flex-1 space-y-1">
+              <span class="block text-sm font-semibold text-foreground">
+                Enroll with QR or code
+              </span>
+              <span class="block text-xs text-muted-foreground text-pretty">
+                Adds this browser as a trusted device — no approval round-trip.
+              </span>
+            </span>
+          </button>
+        {:else if onUseEnrollmentCode}
+          <form
+            class="space-y-4"
+            onsubmit={(e) => {
+              e.preventDefault()
+              if (!onUseEnrollmentCode) return
+              const trimmed = enrollmentCodeInput.trim()
+              if (!trimmed) return
+              void onUseEnrollmentCode(trimmed)
+            }}
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-1">
+                <h3 class="text-sm font-semibold text-foreground">
+                  Paste enrollment link or code
+                </h3>
+                <p class="text-xs text-muted-foreground text-pretty">
+                  Provider credentials and vault password are unpacked locally.
+                </p>
+              </div>
+              <button
+                type="button"
+                class="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+                onclick={() => {
+                  enrollmentCodeFormOpen = false
+                  enrollmentCodeInput = ''
+                }}
+              >
+                Back
+              </button>
+            </div>
+            <textarea
+              rows="4"
+              class="w-full font-mono text-xs leading-relaxed rounded-md border border-border bg-background p-3 focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Paste enrollment link or code here…"
+              bind:value={enrollmentCodeInput}
+              data-testid="enrollment-code-input"></textarea>
+            <div class="flex justify-end">
+              <Button
+                type="submit"
+                disabled={isVerifying || !enrollmentCodeInput.trim()}
+                data-testid="submit-enrollment-code-btn"
+              >
+                {#if isVerifying}
+                  <RefreshCw class="size-4 animate-spin" /> Enrolling…
+                {:else}
+                  <ShieldCheck class="size-4" /> Enroll this device
+                {/if}
+              </Button>
+            </div>
+          </form>
+        {/if}
+      </CardContent>
+    </Card>
+  {/if}
   {#if showProviderPicker && !addProviderOpen && onOpenHelp}
     <ProductIntro {onOpenHelp} />
   {/if}

@@ -3,6 +3,8 @@
   import { ArrowLeft, BookOpen, Moon, Info, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
+  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
@@ -27,6 +29,10 @@
 
   async function handleUnlock() {
     await vault.loadDb()
+  }
+
+  async function handleLoginProviderSelect(id: string) {
+    await vault.reconnectProviderOnLogin(id)
   }
 
   async function handleProviderReconnect(id: string) {
@@ -57,14 +63,14 @@
     >
       <div class="flex min-w-0 items-center gap-3">
         <div
-          class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/80 bg-card shadow-xs dark:border-transparent"
+          class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg"
         >
           <img
             src={colorMode === 'dark'
               ? '/nook-logo-dark.png'
               : '/nook-logo-light.png'}
             alt="Nook logo"
-            class="size-full object-contain"
+            class="size-full object-contain dark:brightness-110 dark:contrast-105 dark:saturate-110 dark:drop-shadow-[0_0_10px_rgba(62,233,214,0.12)]"
           />
         </div>
       </div>
@@ -194,7 +200,7 @@
       >
         <div class="space-y-4 p-4 sm:p-5">
           {#if vault.settingsOpen}
-            <div data-testid="storage-settings-panel" class="w-full">
+            <div data-testid="storage-settings-panel" class="w-full space-y-5">
               <AuthStorage
                 providers={vault.providers}
                 activeProviderId={vault.activeProviderId}
@@ -203,29 +209,39 @@
                 isSaving={vault.isSaving}
                 isInitializing={vault.isInitializing}
                 errorMsg={vault.errorMsg}
-                deviceId={vault.deviceId}
-                devicePublicKey={vault.devicePublicKey}
-                pendingJoins={vault.pendingJoins}
-                vaultMembers={vault.vaultMembers}
                 addProviderOpen={vault.addProviderOpen}
                 bind:setupType={vault.loginSetupType}
                 bind:githubPat={vault.githubPat}
                 bind:githubRepo={vault.githubRepo}
-                hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                isPasswordBusy={vault.isPasswordBusy}
-                passwordError={vault.passwordError}
-                enrollmentCode={vault.enrollmentCode}
                 onReconnect={handleUnlock}
                 onSelectProvider={handleProviderReconnect}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
                 onBeginSetup={(type) => vault.beginProviderSetup(type)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
+                onRemoveProvider={(id) => vault.removeProvider(id)}
+              />
+
+              <VaultPasswordCard
+                passwordEntries={vault.passwordEntries}
+                isBusy={vault.isPasswordBusy}
+                passwordError={vault.passwordError}
+                enrollmentCode={vault.enrollmentCode}
+                onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
+                onUpdatePassword={(id, pw) =>
+                  vault.updateVaultPasswordEntry(id, pw)}
+                onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
+                onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
+                onClearCode={() => vault.clearEnrollmentCode()}
+              />
+
+              <DeviceEnrollment
+                deviceId={vault.deviceId}
+                devicePublicKey={vault.devicePublicKey}
+                pendingJoins={vault.pendingJoins}
+                vaultMembers={vault.vaultMembers}
+                isBusy={vault.isSaving || vault.isVerifying}
                 onApproveJoin={(id) => vault.approveJoin(id)}
-                onSetVaultPassword={(pw) => vault.setVaultPassword(pw)}
-                onRemoveVaultPassword={() => vault.removeVaultPassword()}
-                onIssueEnrollmentCode={(pw) => vault.issueEnrollmentCode(pw)}
-                onClearEnrollmentCode={() => vault.clearEnrollmentCode()}
               />
             </div>
           {:else}
@@ -276,6 +292,10 @@
         <LoginGate
           providers={vault.providers}
           activeProviderId={vault.activeProviderId}
+          loginUnlockMode={vault.loginUnlockMode}
+          loginPasswordPrompt={vault.loginPasswordPrompt}
+          passwordEntries={vault.passwordEntries}
+          bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
           bind:setupType={vault.loginSetupType}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
@@ -285,15 +305,17 @@
           errorMsg={vault.errorMsg}
           successMsg={vault.successMsg}
           onUnlock={handleUnlock}
-          onSelectProvider={handleProviderReconnect}
+          onSelectProvider={handleLoginProviderSelect}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(type) => vault.beginProviderSetup(type)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onOpenHelp={() => vault.openHelp()}
           onUseEnrollmentCode={(code) => vault.connectWithEnrollmentCode(code)}
-          onUnlockWithPassword={(password) =>
-            vault.unlockWithPassword(password)}
+          onUnlockWithPassword={(entryId, password) =>
+            vault.unlockWithPassword(entryId, password)}
+          onRemoveProvider={(id) => vault.removeProvider(id)}
+          onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
         />
       </div>
     {/if}

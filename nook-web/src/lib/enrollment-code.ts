@@ -23,9 +23,13 @@ export type EnrollmentCodePayloadV1 = {
         repo: string
       }
   password: string
+  /** Which labelled password entry this code unlocks (optional for legacy codes). */
+  entry_id?: string
   /** ISO 8601 UTC timestamp; informational, not enforced. */
   issued_at: string
 }
+
+const ENROLLMENT_HASH_PREFIX = '#enroll='
 
 export function encodeEnrollmentPayload(
   payload: EnrollmentCodePayloadV1,
@@ -34,8 +38,94 @@ export function encodeEnrollmentPayload(
   return base64UrlEncode(new TextEncoder().encode(json))
 }
 
+/** App root used in QR links (`origin` + Vite `BASE_URL`, or `VITE_PUBLIC_APP_URL`). */
+export function getEnrollmentLinkBase(): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim()
+  if (configured) {
+    return configured.replace(/\/$/, '')
+  }
+  const basePath = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
+  return `${window.location.origin}${basePath}`
+}
+
+/** Deep link scanned from a QR code — opens the browser and carries the raw code in the hash. */
+export function buildEnrollmentLink(
+  code: string,
+  baseUrl = getEnrollmentLinkBase(),
+): string {
+  const base = baseUrl.replace(/\/$/, '')
+  return `${base}/${ENROLLMENT_HASH_PREFIX}${encodeURIComponent(code)}`
+}
+
+/** Accept raw base64url codes or full enrollment links (hash or query param). */
+export function normalizeEnrollmentCode(input: string): string {
+  const trimmed = input.trim()
+  if (trimmed.length === 0) {
+    return trimmed
+  }
+
+  if (trimmed.includes('://')) {
+    try {
+      const url = new URL(trimmed)
+      const fromQuery = url.searchParams.get('enroll')
+      if (fromQuery) {
+        return decodeURIComponent(fromQuery)
+      }
+      if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
+        return decodeURIComponent(url.hash.slice(ENROLLMENT_HASH_PREFIX.length))
+      }
+    } catch {
+      // Fall through — treat as raw code.
+    }
+  }
+
+  if (trimmed.startsWith(ENROLLMENT_HASH_PREFIX)) {
+    return decodeURIComponent(trimmed.slice(ENROLLMENT_HASH_PREFIX.length))
+  }
+
+  const queryMatch = trimmed.match(/[?&]enroll=([^&#]+)/)
+  if (queryMatch) {
+    return decodeURIComponent(queryMatch[1]!)
+  }
+
+  return trimmed
+}
+
+/**
+ * Read an enrollment code from the current page URL (hash or query), then
+ * strip it from the address bar so secrets do not linger in history.
+ */
+export function consumeEnrollmentFromLocation(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const url = new URL(window.location.href)
+  let raw: string | null = null
+
+  if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
+    raw = decodeURIComponent(url.hash.slice(ENROLLMENT_HASH_PREFIX.length))
+    url.hash = ''
+  } else {
+    raw = url.searchParams.get('enroll')
+    if (raw) {
+      url.searchParams.delete('enroll')
+    }
+  }
+
+  if (!raw) {
+    return null
+  }
+
+  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  return normalizeEnrollmentCode(raw)
+}
+
 export function decodeEnrollmentPayload(code: string): EnrollmentCodePayloadV1 {
-  const cleaned = code.trim()
+  const cleaned = normalizeEnrollmentCode(code)
   if (cleaned.length === 0) {
     throw new Error('Enrollment code is empty.')
   }

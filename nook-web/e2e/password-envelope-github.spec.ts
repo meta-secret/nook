@@ -70,28 +70,29 @@ describePasswordEnvelope('vault password envelope (github)', () => {
   test('attaching a password switches the vault to password unlock mode', async () => {
     await openStorageSettings(deviceA)
     await expect(deviceA.getByTestId('vault-password-status')).toContainText(
-      'Disabled',
+      'None',
     )
 
     await deviceA.getByTestId('set-vault-password-btn').click()
+    await deviceA.getByTestId('vault-password-label').fill('GitHub vault')
     await deviceA.getByTestId('vault-password-input').fill(vaultPassword)
     await deviceA.getByTestId('vault-password-confirm').fill(vaultPassword)
     await deviceA.getByTestId('submit-vault-password').click()
 
     await expect(deviceA.getByTestId('vault-password-status')).toContainText(
-      'Enabled',
+      '1 password',
       { timeout: UI_TIMEOUT_MS },
     )
 
-    // The remote YAML reflects the mutex: `unlock.type = password`, no
-    // `auth:` or `joins:` sections.
+    // Hybrid model: backup password coexists with device-key auth rows.
     const yaml = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
-      (snapshot) => snapshot.unlockMode === 'password',
+      (snapshot) =>
+        snapshot.hasPasswordEnvelope && snapshot.authPkIds.length >= 1,
     )
-    expect(yaml.unlockMode).toBe('password')
+    expect(yaml.unlockMode).toBe('keys')
     expect(yaml.hasPasswordEnvelope).toBe(true)
-    expect(yaml.authPkIds).toHaveLength(0)
+    expect(yaml.authPkIds.length).toBeGreaterThanOrEqual(1)
     expect(yaml.joinEntries).toHaveLength(0)
     // Members roster survives the mode switch.
     expect(yaml.memberPkIds.length).toBeGreaterThanOrEqual(1)
@@ -163,14 +164,15 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const revealed = await revealSecretValue(deviceB, sharedSecretKey)
     expect(revealed).toBe(sharedSecretValue)
 
-    // Remote vault is still in password mode, still no auth/joins rows,
-    // and device B has been added to the members roster.
+    // Remote vault keeps device-key auth; device B gets an auth row via
+    // password backup unlock and is added to the members roster.
     const yaml = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
       (snapshot) => snapshot.memberPkIds.length >= 2,
     )
-    expect(yaml.unlockMode).toBe('password')
-    expect(yaml.authPkIds).toHaveLength(0)
+    expect(yaml.unlockMode).toBe('keys')
+    expect(yaml.hasPasswordEnvelope).toBe(true)
+    expect(yaml.authPkIds.length).toBeGreaterThanOrEqual(1)
     expect(yaml.joinEntries).toHaveLength(0)
     expect(yaml.memberPkIds.length).toBeGreaterThanOrEqual(2)
   })
@@ -185,7 +187,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
 
     const before = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
-      (snapshot) => snapshot.unlockMode === 'password',
+      (snapshot) => snapshot.hasPasswordEnvelope,
     )
     const oldEnvelope = before.passwordEnvelopeCiphertext
     expect(oldEnvelope).not.toBeNull()
@@ -204,7 +206,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceA.getByTestId('vault-password-confirm').fill('rotated-pw-9')
     await deviceA.getByTestId('submit-vault-password').click()
     await expect(deviceA.getByTestId('vault-password-status')).toContainText(
-      'Enabled',
+      '1 password',
       { timeout: UI_TIMEOUT_MS },
     )
 
@@ -215,7 +217,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const after = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
       (snapshot) =>
-        snapshot.unlockMode === 'password' &&
+        snapshot.hasPasswordEnvelope &&
         snapshot.passwordEnvelopeCiphertext !== null &&
         snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
     )
@@ -223,7 +225,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     expect(after.passwordEnvelopeCiphertext).not.toBeNull()
   })
 
-  test('removing the password switches back to keys mode', async () => {
+  test('removing the backup password leaves device-key unlock intact', async () => {
     // Settings panel is still open from the previous test; only re-open
     // when it's been closed.
     if (!(await deviceA.getByTestId('storage-settings-panel').isVisible())) {
@@ -232,14 +234,11 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceA.getByTestId('remove-vault-password-btn').click()
     await deviceA.getByTestId('confirm-remove-vault-password').click()
     await expect(deviceA.getByTestId('vault-password-status')).toContainText(
-      'Disabled',
+      'None',
       { timeout: UI_TIMEOUT_MS },
     )
 
-    // Vault file now back in keys mode with a single auth row (device A
-    // re-emits its own). Device B's earlier password-mode session does
-    // NOT have an auth row, by design — that's the documented trade-off
-    // when switching modes.
+    // Vault file stays in keys mode; only the backup password section is removed.
     const yaml = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
       (snapshot) =>

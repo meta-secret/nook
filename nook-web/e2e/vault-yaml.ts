@@ -25,9 +25,16 @@ type PasswordEnvelopeYaml = {
   ciphertext?: string
 }
 
+type PasswordEntryYaml = {
+  id?: string
+  label?: string
+  envelope?: PasswordEnvelopeYaml
+}
+
 type UnlockYaml = {
   type?: string
   envelope?: PasswordEnvelopeYaml
+  entries?: PasswordEntryYaml[]
 }
 
 type StoredVaultYaml = {
@@ -36,6 +43,7 @@ type StoredVaultYaml = {
   joins?: StoredSecretRecord[]
   members?: MembersYamlRecord[]
   unlock?: UnlockYaml
+  password_entries?: PasswordEntryYaml[]
   /** Legacy field — pre-enum vaults wrote the envelope at the top level. */
   password_envelope?: PasswordEnvelopeYaml
 }
@@ -73,6 +81,22 @@ function parseJoinValue(
   }
 }
 
+function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
+  if (vault.password_entries && vault.password_entries.length > 0) {
+    return vault.password_entries
+  }
+  if (vault.unlock?.entries && vault.unlock.entries.length > 0) {
+    return vault.unlock.entries
+  }
+  if (vault.unlock?.type === 'password' && vault.unlock.envelope) {
+    return [{ envelope: vault.unlock.envelope }]
+  }
+  if (vault.password_envelope) {
+    return [{ envelope: vault.password_envelope }]
+  }
+  return []
+}
+
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const vault = parseYaml(yaml) as StoredVaultYaml
 
@@ -83,17 +107,13 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     parseJoinValue(record.id, record.data),
   )
 
-  // Resolve the unlock variant. The modern schema lives under `unlock.type`;
-  // pre-enum vaults are detected via a legacy top-level `password_envelope:`.
-  const explicit = vault.unlock?.type
-  const modernEnvelope =
-    explicit === 'password' ? vault.unlock?.envelope : undefined
-  const legacyEnvelope = vault.password_envelope
-  const activeEnvelope = modernEnvelope ?? legacyEnvelope
-  const hasPasswordEnvelope = activeEnvelope !== undefined
-  const unlockMode: 'keys' | 'password' = hasPasswordEnvelope
-    ? 'password'
-    : 'keys'
+  const passwordEntries = collectPasswordEntries(vault)
+  const hasPasswordEnvelope = passwordEntries.length > 0
+  // Device-key auth rows are primary. Password-only vaults (legacy mutex) have
+  // no auth section; hybrid vaults keep auth alongside password_entries.
+  const unlockMode: 'keys' | 'password' =
+    authPkIds.length > 0 ? 'keys' : hasPasswordEnvelope ? 'password' : 'keys'
+  const activeEnvelope = passwordEntries[0]?.envelope
   const passwordEnvelopeCiphertext =
     typeof activeEnvelope?.ciphertext === 'string'
       ? activeEnvelope.ciphertext.trim()

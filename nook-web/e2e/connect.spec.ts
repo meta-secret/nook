@@ -49,6 +49,8 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toBeVisible()
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
+    await expect(page.getByTestId('open-enrollment-code-btn')).toBeVisible()
+    await expect(page.getByTestId('vault-password-login-panel')).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
@@ -109,5 +111,34 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+  })
+
+  test('removes a saved provider from vault settings', async ({ page }) => {
+    await page.goto('/')
+    await page.getByTestId('provider-option-local').click()
+    await (await waitForEngine(page)).click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('storage-settings-btn').click()
+    const localProvider = page.getByTestId('settings-provider-local')
+    await expect(localProvider).toBeVisible()
+
+    const providerId = await localProvider.evaluate((el) => {
+      const row = el.closest('li')
+      const removeBtn = row?.querySelector('[data-testid^="remove-provider-"]')
+      return removeBtn?.getAttribute('data-testid')?.replace('remove-provider-', '')
+    })
+    expect(providerId).toBeTruthy()
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByTestId(`remove-provider-${providerId}`).click()
+
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('settings-provider-local')).toHaveCount(0)
   })
 })

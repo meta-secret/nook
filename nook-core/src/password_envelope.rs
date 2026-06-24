@@ -7,8 +7,8 @@
 //! A vault picks **exactly one** unlock mode via `VaultUnlock`:
 //! - `Keys`: per-device `auth:` envelopes + join/approve flow (the historical
 //!   default).
-//! - `Password { envelope }`: scrypt-wrapped `{secrets_key, members_key}` —
-//!   any device that knows the password can self-enrol.
+//! - `Passwords { entries }`: one or more scrypt-wrapped envelopes, each with a
+//!   user-chosen label — any matching password unlocks the same vault keys.
 //!
 //! Future variants (hardware token, social recovery, …) extend the enum
 //! without altering the storage layout.
@@ -27,6 +27,19 @@ pub const PASSWORD_SCRYPT_LOG_N: u8 = 18;
 /// Recommended minimum password length. UI layers should enforce a stricter
 /// entropy policy; this is the absolute floor below which we refuse to wrap.
 pub const PASSWORD_MIN_LENGTH: usize = 5;
+
+/// A labelled password unlock slot. Each entry wraps the same vault keys with
+/// a distinct password so devices (or people) can maintain separate credentials.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PasswordUnlockEntry {
+    pub id: String,
+    pub label: String,
+    pub created_at: String,
+    pub envelope: PasswordEnvelope,
+}
+
+/// Default label used when migrating a legacy single-envelope vault.
+pub const LEGACY_PASSWORD_ENTRY_LABEL: &str = "Vault password";
 
 /// On-disk password envelope. Salt + KDF params are embedded in the age
 /// header; the `kdf` / `work_factor` fields are redundant hints for tooling.
@@ -48,38 +61,140 @@ pub struct PasswordEnvelope {
 /// # OR
 /// unlock:
 ///   type: password
-///   envelope: { version, kdf, work_factor, ciphertext }
+///   entries:
+///     - id: ...
+///       label: "john's password"
+///       created_at: ...
+///       envelope: { version, kdf, work_factor, ciphertext }
 /// ```
 ///
-/// Designed so future unlock modes (hardware token, recovery share, …) plug
-/// in as new variants without touching the rest of the storage format.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type", rename_all = "lowercase")]
+/// Legacy vaults may still carry a single `envelope:` under `type: password`;
+/// those are migrated into a one-entry `entries` list on read.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultUnlock {
-    /// Per-device X25519 envelopes in the `auth:` section. The historical
-    /// default. Devices join via the `joins:` request + approval flow.
-    #[default]
     Keys,
-    /// Single scrypt-wrapped envelope of `{secrets_key, members_key}`. Any
-    /// device that knows the password can self-enrol without approval.
-    Password { envelope: PasswordEnvelope },
+    Passwords { entries: Vec<PasswordUnlockEntry> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum VaultUnlockTagged {
+    Keys,
+    Password {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        entries: Vec<PasswordUnlockEntry>,
+        #[serde(default, skip_serializing)]
+        envelope: Option<PasswordEnvelope>,
+    },
+}
+
+impl Serialize for VaultUnlock {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Keys => VaultUnlockTagged::Keys.serialize(serializer),
+            Self::Passwords { entries } => VaultUnlockTagged::Password {
+                entries: entries.clone(),
+                envelope: None,
+            }
+            .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for VaultUnlock {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let tagged = VaultUnlockTagged::deserialize(deserializer)?;
+        Ok(match tagged {
+            VaultUnlockTagged::Keys => Self::Keys,
+            VaultUnlockTagged::Password { entries, envelope } => {
+                if !entries.is_empty() {
+                    Self::Passwords { entries }
+                } else if let Some(envelope) = envelope {
+                    Self::Passwords {
+                        entries: vec![legacy_password_entry(envelope)],
+                    }
+                } else {
+                    Self::Keys
+                }
+            }
+        })
+    }
+}
+
+impl Default for VaultUnlock {
+    fn default() -> Self {
+        Self::Keys
+    }
+}
+
+fn legacy_password_entry(envelope: PasswordEnvelope) -> PasswordUnlockEntry {
+    PasswordUnlockEntry {
+        id: "legacy".to_owned(),
+        label: LEGACY_PASSWORD_ENTRY_LABEL.to_owned(),
+        created_at: String::new(),
+        envelope,
+    }
 }
 
 impl VaultUnlock {
-    /// True when the vault is in password-unlock mode.
     #[must_use]
     pub fn is_password(&self) -> bool {
-        matches!(self, Self::Password { .. })
+        matches!(self, Self::Passwords { .. })
     }
 
-    /// Borrow the password envelope if this is the password variant.
     #[must_use]
-    pub fn password_envelope(&self) -> Option<&PasswordEnvelope> {
+    pub fn password_entries(&self) -> &[PasswordUnlockEntry] {
         match self {
-            Self::Password { envelope } => Some(envelope),
-            Self::Keys => None,
+            Self::Passwords { entries } => entries.as_slice(),
+            Self::Keys => &[],
         }
     }
+
+    #[must_use]
+    pub fn password_entry(&self, id: &str) -> Option<&PasswordUnlockEntry> {
+        self.password_entries()
+            .iter()
+            .find(|entry| entry.id == id)
+    }
+
+    #[must_use]
+    pub fn password_envelope(&self) -> Option<&PasswordEnvelope> {
+        self.password_entries().first().map(|entry| &entry.envelope)
+    }
+}
+
+/// Build a new labelled password entry from resolved vault keys.
+pub fn create_password_entry(
+    keys: &VaultKeys,
+    id: &str,
+    label: &str,
+    created_at: &str,
+    password: &str,
+) -> Result<PasswordUnlockEntry, String> {
+    let trimmed_label = label.trim();
+    if trimmed_label.is_empty() {
+        return Err("Password label cannot be empty.".to_owned());
+    }
+    Ok(PasswordUnlockEntry {
+        id: id.to_owned(),
+        label: trimmed_label.to_owned(),
+        created_at: created_at.to_owned(),
+        envelope: attach_password_envelope(keys, password)?,
+    })
+}
+
+/// Resolve keys using a specific password entry.
+pub fn resolve_keys_from_entry(
+    entry: &PasswordUnlockEntry,
+    password: &str,
+) -> Result<VaultKeys, String> {
+    resolve_keys_from_password(&entry.envelope, password)
+}
+
+/// Verify a password against a specific entry.
+#[must_use]
+pub fn verify_password_entry(entry: &PasswordUnlockEntry, password: &str) -> bool {
+    resolve_keys_from_entry(entry, password).is_ok()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -285,18 +400,38 @@ mod tests {
     fn vault_unlock_password_variant_roundtrips() {
         let envelope =
             attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
-        let value = VaultUnlock::Password {
-            envelope: envelope.clone(),
+        let value = VaultUnlock::Passwords {
+            entries: vec![PasswordUnlockEntry {
+                id: "entry-1".to_owned(),
+                label: "john's password".to_owned(),
+                created_at: "2026-06-23T00:00:00Z".to_owned(),
+                envelope: envelope.clone(),
+            }],
         };
         let yaml = serde_yaml::to_string(&value).unwrap();
         assert!(yaml.contains("type: password"));
-        assert!(yaml.contains("envelope:"));
+        assert!(yaml.contains("entries:"));
+        assert!(yaml.contains("john's password"));
 
         let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
         assert!(parsed.is_password());
+        assert_eq!(parsed.password_entries().len(), 1);
         assert_eq!(
             parsed.password_envelope().map(|e| e.ciphertext.trim()),
             Some(envelope.ciphertext.trim()),
         );
+    }
+
+    #[test]
+    fn legacy_single_envelope_deserialises_to_one_entry() {
+        let envelope =
+            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
+        let unlock = VaultUnlock::Passwords {
+            entries: vec![legacy_password_entry(envelope)],
+        };
+        let yaml = serde_yaml::to_string(&unlock).unwrap();
+        let reparsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
+        assert!(reparsed.is_password());
+        assert_eq!(reparsed.password_entries().len(), 1);
     }
 }

@@ -1,53 +1,70 @@
-//! Password unlock mode — `set` / `remove` / `verify` / `connectWithPassword`.
+//! Backup password entries — parallel to device-key unlock.
 //!
-//! All five methods enforce the `VaultUnlock` strict-mutex invariant:
-//! switching to password drops every `auth:` / `joins:` row, switching back
-//! writes only this device's auth row. `connectWithPassword` is the
-//! self-enrolment path used by QR-based device joins.
+//! Passwords are optional recovery credentials stored alongside `auth:` rows.
+//! Adding a password never removes device keys. Unlocking via password writes
+//! (or refreshes) this device's auth row so device-key unlock works again.
 
 use super::NookVaultManager;
 use crate::NookError;
 use crate::conversion::{records_to_armored, records_to_secret_types, wasm_iso_timestamp};
 use crate::storage::indexed_db::save_device_identity_to_indexed_db;
+use serde::Serialize;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[derive(Serialize)]
+struct PasswordEntrySummary {
+    id: String,
+    label: String,
+    created_at: String,
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// String tag of the active unlock mode: `"keys"` or `"password"`. Lets
-    /// the web layer render mode-aware UI without exposing the enum shape.
     #[wasm_bindgen(js_name = "vaultUnlockMode")]
     pub fn vault_unlock_mode(&self) -> String {
-        match &self.unlock {
-            nook_core::VaultUnlock::Keys => "keys",
-            nook_core::VaultUnlock::Password { .. } => "password",
-        }
-        .to_owned()
+        // Device keys are always the primary unlock path; backup passwords
+        // coexist in `password_entries` without changing the mode tag.
+        "keys".to_owned()
     }
 
-    /// Verify a password decrypts the current envelope. Used to guard issuing
-    /// an enrollment code so the user has just confirmed possession.
-    /// Returns false when the vault is not in password mode.
+    #[wasm_bindgen(js_name = "listVaultPasswordEntries")]
+    pub fn list_vault_password_entries(&self) -> Result<js_sys::Array, JsError> {
+        Ok(password_entry_summaries_to_js(&self.password_entries)?)
+    }
+
+    #[wasm_bindgen(js_name = "fetchVaultPasswordEntries")]
+    pub async fn fetch_vault_password_entries(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<js_sys::Array, JsError> {
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        let mut vault_missing = false;
+        let content = self.fetch_vault_content(&mut vault_missing).await?;
+        if vault_missing || content.trim().is_empty() {
+            return Ok(js_sys::Array::new());
+        }
+        let entries =
+            nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;
+        Ok(password_entry_summaries_to_js(&entries)?)
+    }
+
     #[wasm_bindgen(js_name = "verifyVaultPassword")]
-    pub fn verify_vault_password(&self, password: &str) -> bool {
-        match &self.unlock {
-            nook_core::VaultUnlock::Password { envelope } => {
-                nook_core::verify_password(envelope, password)
-            }
-            nook_core::VaultUnlock::Keys => false,
+    pub fn verify_vault_password(&self, entry_id: &str, password: &str) -> bool {
+        match self.password_entries.iter().find(|entry| entry.id == entry_id) {
+            Some(entry) => nook_core::verify_password_entry(entry, password),
+            None => false,
         }
     }
 
-    /// Switch the vault to password unlock mode. Wraps the active
-    /// `secrets_key` + `members_key` with a scrypt-derived key and **drops
-    /// every per-device auth row plus any pending joins** — the mutex
-    /// invariant of `VaultUnlock`. Devices will then unlock with the
-    /// password instead of their device identity.
-    #[wasm_bindgen(js_name = "setVaultPassword")]
-    pub async fn set_vault_password(&mut self, password: String) -> Result<(), JsError> {
+    #[wasm_bindgen(js_name = "addVaultPassword")]
+    pub async fn add_vault_password(&mut self, label: String, password: String) -> Result<(), JsError> {
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             return Err(NookError::Database(
-                "Vault must be unlocked before setting a password.".to_owned(),
+                "Vault must be unlocked before adding a password.".to_owned(),
             )
             .into());
         }
@@ -55,66 +72,75 @@ impl NookVaultManager {
             secrets_key: self.secrets_key.clone(),
             members_key: self.members_key.clone(),
         };
-        let envelope =
-            nook_core::attach_password_envelope(&keys, &password).map_err(NookError::Encryption)?;
+        let entry = nook_core::create_password_entry(
+            &keys,
+            &nook_core::generate_id().map_err(NookError::Database)?,
+            &label,
+            &wasm_iso_timestamp(),
+            &password,
+        )
+        .map_err(NookError::Encryption)?;
 
-        // Strict mutex: drop every auth row and pending join from the flat
-        // record cache before flipping the mode. `members:` rows survive —
-        // they're encrypted with `members_key`, not the per-device pk, and
-        // remain a useful enrolment roster.
-        self.stored_armored.retain(|key, value| {
-            let record = nook_core::StoredSecretRecord {
-                key: key.clone(),
-                secret_type: None,
-                value: value.clone(),
-            };
-            !nook_core::is_auth_stored_record(&record) && !nook_core::is_join_stored_record(&record)
-        });
-        self.secret_types
-            .retain(|key, _| self.stored_armored.contains_key(key));
-
-        self.unlock = nook_core::VaultUnlock::Password { envelope };
-        self.save_current_db().await?;
-        Ok(())
-    }
-
-    /// Switch the vault back to keys unlock mode. Drops the envelope,
-    /// writes a fresh `auth:` row for **this** device only — other devices
-    /// that previously unlocked via password must re-enrol via the standard
-    /// join/approve flow (or temporarily restore password mode).
-    #[wasm_bindgen(js_name = "removeVaultPassword")]
-    pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
-        if !self.unlock.is_password() {
-            return Ok(());
-        }
-        if self.secrets_key.is_empty() || self.members_key.is_empty() {
-            return Err(NookError::Database(
-                "Vault must be unlocked before removing the password.".to_owned(),
-            )
-            .into());
-        }
-        let identity = self.device_identity()?;
-        let secrets_key = self.secrets_key.clone();
-        let members_key = self.members_key.clone();
-        let auth = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)
-            .map_err(NookError::Encryption)?;
-        self.stored_armored.insert(auth.key.clone(), auth.value);
-
+        self.password_entries.push(entry);
         self.unlock = nook_core::VaultUnlock::Keys;
         self.save_current_db().await?;
         Ok(())
     }
 
-    /// Self-enrol a new device using only a password + storage credentials.
-    /// Fetches the vault, unwraps the envelope, generates / loads this
-    /// device's identity, writes its own auth row + members entry, persists
-    /// the vault, and unlocks the session — no approval round-trip.
+    #[wasm_bindgen(js_name = "setVaultPassword")]
+    pub async fn set_vault_password(&mut self, password: String) -> Result<(), JsError> {
+        self.add_vault_password("Vault password".to_owned(), password)
+            .await
+    }
+
+    #[wasm_bindgen(js_name = "updateVaultPasswordEntry")]
+    pub async fn update_vault_password_entry(
+        &mut self,
+        entry_id: String,
+        password: String,
+    ) -> Result<(), JsError> {
+        if self.secrets_key.is_empty() || self.members_key.is_empty() {
+            return Err(NookError::Database(
+                "Vault must be unlocked before updating a password.".to_owned(),
+            )
+            .into());
+        }
+        let keys = nook_core::VaultKeys {
+            secrets_key: self.secrets_key.clone(),
+            members_key: self.members_key.clone(),
+        };
+        let target = self
+            .password_entries
+            .iter_mut()
+            .find(|entry| entry.id == entry_id)
+            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+        target.envelope =
+            nook_core::attach_password_envelope(&keys, &password).map_err(NookError::Encryption)?;
+        self.save_current_db().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
+    pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
+        self.password_entries.retain(|entry| entry.id != entry_id);
+        self.save_current_db().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = "removeVaultPassword")]
+    pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
+        self.password_entries.clear();
+        self.save_current_db().await?;
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = "connectWithPassword")]
     pub async fn connect_with_password(
         &mut self,
         storage_mode: String,
         github_pat: String,
         github_repo: String,
+        entry_id: String,
         password: String,
     ) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
@@ -131,39 +157,40 @@ impl NookVaultManager {
             )
             .into());
         }
-        // Fresh enrolment via password — adopt the remote unlock mode so
-        // the match below sees the envelope.
         self.capture_vault_unlock(&content);
 
-        let envelope = match &self.unlock {
-            nook_core::VaultUnlock::Password { envelope } => envelope.clone(),
-            nook_core::VaultUnlock::Keys => {
-                return Err(NookError::Decryption(
-                    "This vault has no password set. Ask an enrolled device to attach a password."
-                        .to_owned(),
+        let entry = self
+            .password_entries
+            .iter()
+            .find(|entry| {
+                if entry_id.trim().is_empty() {
+                    true
+                } else {
+                    entry.id == entry_id
+                }
+            })
+            .or_else(|| self.password_entries.first())
+            .ok_or_else(|| {
+                NookError::Decryption(
+                    "No backup password found on this vault.".to_owned(),
                 )
-                .into());
-            }
-        };
-        let keys = nook_core::resolve_keys_from_password(&envelope, &password)
+            })?
+            .clone();
+        let keys = nook_core::resolve_keys_from_entry(&entry, &password)
             .map_err(NookError::Decryption)?;
 
         let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let mut records =
             nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
 
-        // Strict mutex: password mode has no per-device auth rows and no
-        // pending joins. Drop any stragglers so this device's write keeps
-        // the vault consistent with the enum invariant.
-        records.retain(|record| {
-            !nook_core::is_auth_stored_record(record) && !nook_core::is_join_stored_record(record)
-        });
+        records.retain(|record| !nook_core::is_join_stored_record(record));
 
-        // Ensure this device appears in the members: roster (so the UI can
-        // show "who has joined"). Members rows are encrypted with
-        // members_key, not with any per-device pk, so they're still
-        // meaningful in password mode.
         let auth_id = nook_core::dec_auth_id(&identity);
+        let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
+            .map_err(NookError::Encryption)?;
+        records.retain(|record| !nook_core::is_auth_stored_record(record) || record.key != auth_id);
+        records.push(auth);
+
         let self_member_key = nook_core::member_stored_key(&auth_id);
         records.retain(|record| {
             !nook_core::is_members_stored_record(record) || record.key != self_member_key
@@ -183,13 +210,10 @@ impl NookVaultManager {
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
         self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
+        self.unlock = nook_core::VaultUnlock::Keys;
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
 
-        // Materialise the decrypted session from our own in-memory armored
-        // state directly — `load_stored_vault` requires a `Keys`-mode vault
-        // because it unwraps via the device identity, which is unavailable
-        // (and unnecessary) when the unlock mode is `Password`.
         let crypto =
             nook_core::VaultCrypto::new(&keys.secrets_key).map_err(NookError::Encryption)?;
         let stored_records = self.stored_records_snapshot();
@@ -200,4 +224,22 @@ impl NookVaultManager {
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records_as_array()?)
     }
+}
+
+fn password_entry_summaries_to_js(
+    entries: &[nook_core::PasswordUnlockEntry],
+) -> Result<js_sys::Array, JsError> {
+    let array = js_sys::Array::new();
+    for entry in entries {
+        let summary = PasswordEntrySummary {
+            id: entry.id.clone(),
+            label: entry.label.clone(),
+            created_at: entry.created_at.clone(),
+        };
+        array.push(
+            &serde_wasm_bindgen::to_value(&summary)
+                .map_err(|e| NookError::Database(e.to_string()))?,
+        );
+    }
+    Ok(array)
 }

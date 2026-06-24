@@ -38,9 +38,6 @@ impl NookVaultManager {
         // First boot for this session — adopt the remote unlock mode.
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
-        if self.unlock.is_password() {
-            return Ok("password_required".to_owned());
-        }
         Ok(access_status_for_vault_content(&content, &identity)?)
     }
 
@@ -86,17 +83,6 @@ impl NookVaultManager {
         // the mode-aware branches below see the right variant.
         if !content.trim().is_empty() {
             self.capture_vault_unlock(&content);
-        }
-
-        // Password-mode vaults reject the keys-based connect path: there is
-        // no per-device auth row to unwrap. The web layer routes the user to
-        // `connectWithPassword` instead.
-        if !force_genesis && !content.trim().is_empty() && self.unlock.is_password() {
-            return Err(NookError::Decryption(
-                "This vault uses password unlock. Choose \"Unlock with vault password\" instead."
-                    .to_owned(),
-            )
-            .into());
         }
 
         let use_genesis = content_requires_genesis(&content, force_genesis)?;

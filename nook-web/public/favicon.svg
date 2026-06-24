@@ -1,57 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="nook">
   <style>
     :root { color-scheme: light dark; }
-    .bg  { fill: #111317; }
-    .fg  { fill: none; stroke: #ffffff; }
-    .dot { fill: #ffffff; }
+    .bg { fill: #0a0a0a; }
+    .bow { fill: #161616; stroke: #2a2a2a; }
+    .chip { fill: #111111; stroke: #333333; }
+    .blade { fill: #161616; }
+    .infinity { fill: none; stroke: #3ee9d6; }
     @media (prefers-color-scheme: light) {
-      .bg  { fill: #ffffff; }
-      .fg  { fill: none; stroke: #111317; }
-      .dot { fill: #111317; }
+      .bg { fill: #ffffff; }
+      .bow { fill: #f3f4f6; stroke: #d1d5db; }
+      .chip { fill: #ffffff; stroke: #9ca3af; }
+      .blade { fill: #e5e7eb; }
+      .infinity { stroke: #0d9488; }
     }
   </style>
 
-  <!-- background -->
-  <rect class="bg" width="100" height="100" rx="20"/>
+  <rect class="bg" width="100" height="100" rx="22" />
 
-  <!-- house outline -->
-  <path class="fg" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" fill="none" d="
-    M50 12
-    L22 34
-    C18 37 16 42 16 47
-    L16 72
-    C16 77 20 81 25 81
-    L38 81
-    L38 60
-    C38 53.4 43.4 48 50 48
-    C56.6 48 62 53.4 62 60
-    L62 81
-    L75 81
-    C80 81 84 77 84 72
-    L84 47
-    C84 42 82 37 78 34
-    Z
-  "/>
+  <!-- key bow -->
+  <rect
+    class="bow"
+    x="24"
+    y="16"
+    width="52"
+    height="44"
+    rx="10"
+    stroke-width="1.5"
+  />
+  <circle class="bg" cx="50" cy="22" r="4.5" />
 
-  <!-- top hanging trace: vertical line down from roof peak + open circle -->
-  <line class="fg" stroke-width="3" stroke-linecap="round" x1="50" y1="12" x2="50" y2="30"/>
-  <circle class="fg" stroke-width="3" cx="50" cy="34" r="4"/>
+  <!-- chip -->
+  <rect
+    class="chip"
+    x="34"
+    y="28"
+    width="32"
+    height="28"
+    rx="4"
+    stroke-width="1.2"
+  />
 
-  <!-- left circuit: vertical spine + 3 horizontal arms with dots -->
-  <line class="fg" stroke-width="2.5" stroke-linecap="round" x1="30" y1="42" x2="30" y2="62"/>
-  <!-- arm 1 -->
-  <line class="fg" stroke-width="2.5" stroke-linecap="round" x1="30" y1="46" x2="20" y2="46"/>
-  <circle class="dot" cx="18.5" cy="46" r="2.5"/>
-  <!-- arm 2 -->
-  <line class="fg" stroke-width="2.5" stroke-linecap="round" x1="30" y1="53" x2="20" y2="53"/>
-  <circle class="dot" cx="18.5" cy="53" r="2.5"/>
-  <!-- arm 3 -->
-  <line class="fg" stroke-width="2.5" stroke-linecap="round" x1="30" y1="60" x2="20" y2="60"/>
-  <circle class="dot" cx="18.5" cy="60" r="2.5"/>
+  <!-- infinity mark (the linked "oo" from the wordmark) -->
+  <path
+    class="infinity"
+    fill="none"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M 38 42
+       C 38 36 44 35 50 42
+       C 56 49 62 48 62 42
+       C 62 36 56 35 50 42
+       C 44 49 38 48 38 42 Z"
+  />
 
-  <!-- right circuit: diagonal trace from upper-right area down to a node -->
-  <polyline class="fg" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="70,38 70,56 62,64"/>
-  <circle class="dot" cx="62" cy="66" r="2.5"/>
-  <!-- upper node -->
-  <circle class="fg" stroke-width="2.5" cx="70" cy="35" r="3.5"/>
+  <!-- key blade -->
+  <path
+    class="blade"
+    d="M 44 60 L 44 78 L 47 78 L 47 74 L 50 74 L 50 82 L 53 82 L 53 74 L 56 74 L 56 78 L 59 78 L 59 60 Z"
+  />
 </svg>

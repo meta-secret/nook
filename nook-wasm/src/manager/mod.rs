@@ -52,10 +52,10 @@ pub struct NookVaultManager {
     pub(in crate::manager) last_synced_content: String,
     /// Cached empty-repo listing from GitHub (`GET .../contents/` → 404).
     pub(in crate::manager) github_root_empty: bool,
-    /// Active unlock mode for this vault — exactly one variant at a time.
-    /// Captured on every vault read; re-emitted on every YAML save so writes
-    /// from devices unaware of the mode cannot drop it silently.
+    /// Active unlock mode for this vault.
     pub(in crate::manager) unlock: nook_core::VaultUnlock,
+    /// Backup password entries — parallel to device-key auth rows.
+    pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
     pub(in crate::manager) status_tx: flume::Sender<String>,
     pub(in crate::manager) status_rx: flume::Receiver<String>,
 }
@@ -79,6 +79,7 @@ impl NookVaultManager {
             stored_armored: HashMap::new(),
             secret_types: HashMap::new(),
             unlock: nook_core::VaultUnlock::Keys,
+            password_entries: Vec::new(),
             decrypted_jsonl: String::new(),
             file_sha: None,
             last_synced_content: String::new(),
@@ -140,8 +141,12 @@ impl NookVaultManager {
             &self.stored_armored,
             &self.secret_types,
         );
-        let stored = nook_core::serialize_stored_yaml_with_unlock(&records, &self.unlock)
-            .map_err(NookError::Encryption)?;
+        let stored = nook_core::serialize_stored_yaml_with_unlock(
+            &records,
+            &self.unlock,
+            &self.password_entries,
+        )
+        .map_err(NookError::Encryption)?;
 
         match self.storage_mode {
             nook_core::StorageMode::Local => {
@@ -188,6 +193,9 @@ impl NookVaultManager {
     pub(in crate::manager) fn capture_vault_unlock(&mut self, content: &str) {
         if let Ok(unlock) = nook_core::read_vault_unlock(content) {
             self.unlock = unlock;
+        }
+        if let Ok(entries) = nook_core::read_vault_password_entries(content) {
+            self.password_entries = entries;
         }
     }
 

@@ -8,19 +8,16 @@
     Plus,
     ChevronLeft,
     ChevronDown,
+    Trash2,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
-  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
-  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
   import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
-  import type { JoinRequest, VaultMember } from '$lib/nook'
-
   let {
     providers,
     activeProviderId,
@@ -29,29 +26,17 @@
     isSaving,
     isInitializing,
     errorMsg,
-    deviceId = '',
-    devicePublicKey = '',
-    pendingJoins = [] as JoinRequest[],
-    vaultMembers = [] as VaultMember[],
     addProviderOpen = false,
     setupType = $bindable(null as StorageProviderType | null),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
-    hasPasswordEnvelope = false,
-    isPasswordBusy = false,
-    passwordError = '',
-    enrollmentCode = '',
     onReconnect,
     onSelectProvider,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
-    onApproveJoin,
-    onSetVaultPassword,
-    onRemoveVaultPassword,
-    onIssueEnrollmentCode,
-    onClearEnrollmentCode,
+    onRemoveProvider,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -60,30 +45,32 @@
     isSaving: boolean
     isInitializing: boolean
     errorMsg: string
-    deviceId?: string
-    devicePublicKey?: string
-    pendingJoins?: JoinRequest[]
-    vaultMembers?: VaultMember[]
     addProviderOpen?: boolean
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
-    hasPasswordEnvelope?: boolean
-    isPasswordBusy?: boolean
-    passwordError?: string
-    enrollmentCode?: string
     onReconnect: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
-    onApproveJoin?: (deviceId: string) => void | Promise<void>
-    onSetVaultPassword?: (password: string) => void | Promise<void>
-    onRemoveVaultPassword?: () => void | Promise<void>
-    onIssueEnrollmentCode?: (password: string) => Promise<string | void>
-    onClearEnrollmentCode?: () => void
+    onRemoveProvider?: (id: string) => void | Promise<void>
   } = $props()
+
+  function confirmRemoveProvider(provider: StorageProvider) {
+    if (!onRemoveProvider) return
+    const signedOutNote =
+      isAuthenticated && provider.id === activeProviderId
+        ? ' You will be signed out of the vault in this browser.'
+        : ''
+    const ok = confirm(
+      `Remove "${provider.label}" from saved providers?${signedOutNote} Your vault file on storage is not deleted.`,
+    )
+    if (ok) {
+      void onRemoveProvider(provider.id)
+    }
+  }
 
   const showSetup = $derived(setupType !== null)
   const addingProvider = $derived(addProviderOpen || showSetup)
@@ -134,7 +121,7 @@
         <h2
           class="text-base font-semibold text-foreground inline-flex items-center gap-1.5 group-hover:text-primary transition-colors"
         >
-          Vault info
+          Storage providers
           <ChevronDown
             class="size-4 text-muted-foreground transition-transform duration-200 {storageProvidersExpanded
               ? 'rotate-180'
@@ -142,8 +129,8 @@
           />
         </h2>
         <p class="text-xs text-muted-foreground text-pretty">
-          Configure storage providers, enrolled devices, and browser
-          authorization.
+          Where your encrypted vault file is stored. Switch providers without
+          changing vault keys or password.
         </p>
       </div>
       {#if isAuthenticated}
@@ -190,10 +177,10 @@
             {:else}
               <ul class="space-y-2.5" data-testid="settings-providers-list">
                 {#each providers as provider (provider.id)}
-                  <li>
+                  <li class="flex items-stretch gap-2">
                     <button
                       type="button"
-                      class="group flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all duration-200 {provider.id ===
+                      class="group flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all duration-200 {provider.id ===
                       activeProviderId
                         ? 'border-primary/30 bg-primary/5 shadow-xs'
                         : 'border-border bg-card hover:bg-accent/40 hover:border-border/80 hover:shadow-xs'}"
@@ -257,6 +244,18 @@
                         {/if}
                       </div>
                     </button>
+                    {#if onRemoveProvider}
+                      <button
+                        type="button"
+                        class="inline-flex shrink-0 items-center justify-center rounded-xl border border-border bg-card px-3 text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        aria-label="Remove {provider.label}"
+                        data-testid="remove-provider-{provider.id}"
+                        disabled={isVerifying || isInitializing}
+                        onclick={() => confirmRemoveProvider(provider)}
+                      >
+                        <Trash2 class="size-4" />
+                      </button>
+                    {/if}
                   </li>
                 {/each}
               </ul>
@@ -310,31 +309,5 @@
         {/if}
       </form>
     </div>
-  {/if}
-
-  {#if !addingProvider}
-    {#if isAuthenticated && onSetVaultPassword && onRemoveVaultPassword && onIssueEnrollmentCode && onClearEnrollmentCode}
-      <hr class="border-border/60" />
-      <VaultPasswordCard
-        {hasPasswordEnvelope}
-        isBusy={isPasswordBusy}
-        {passwordError}
-        {enrollmentCode}
-        onSetPassword={onSetVaultPassword}
-        onRemovePassword={onRemoveVaultPassword}
-        onIssueCode={onIssueEnrollmentCode}
-        onClearCode={onClearEnrollmentCode}
-      />
-    {/if}
-
-    <hr class="border-border/60" />
-    <DeviceEnrollment
-      {deviceId}
-      {devicePublicKey}
-      {pendingJoins}
-      {vaultMembers}
-      isBusy={isSaving || isVerifying}
-      {onApproveJoin}
-    />
   {/if}
 </div>
