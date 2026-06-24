@@ -12,22 +12,22 @@
     class?: string
   } = $props()
 
+  const src = $derived(
+    colorMode === 'dark'
+      ? '/nook-logo-dark-transparent.png'
+      : '/nook-logo-light.png',
+  )
+
   const sizeClass = $derived(
     size === 'lg' ? 'size-24' : size === 'md' ? 'size-14' : 'size-10',
   )
-
-  const bg = $derived(colorMode === 'dark' ? '#111317' : '#ffffff')
-  const fg = $derived(colorMode === 'dark' ? '#ffffff' : '#111317')
 </script>
 
 <div
   class="nook-logo relative inline-flex shrink-0 items-center justify-center {sizeClass} {className}"
   data-testid="nook-logo"
 >
-  <svg
-    class="pointer-events-none absolute size-0 overflow-hidden"
-    aria-hidden="true"
-  >
+  <svg class="pointer-events-none absolute size-0 overflow-hidden" aria-hidden="true">
     <defs>
       <filter
         id="nook-logo-dark-filter"
@@ -37,18 +37,65 @@
         height="180%"
         color-interpolation-filters="sRGB"
       >
-        <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="glow" />
+        <feColorMatrix
+          in="SourceGraphic"
+          type="matrix"
+          values="1.05 0 0 0 0.01
+                  0 1.05 0 0 0.01
+                  0 0 1.08 0 0.02
+                  0 0 0 1 0"
+          result="boost"
+        />
+        <feGaussianBlur in="boost" stdDeviation="2.5" result="glow" />
         <feColorMatrix
           in="glow"
           type="matrix"
           values="0 0 0 0 0.12
                   0 0 0 0 0.78
                   0 0 0 0 0.72
-                  0 0 0 0.35 0"
+                  0 0 0 0.45 0"
           result="tealGlow"
         />
+        <feOffset in="tealGlow" dx="0" dy="1" result="glowShift" />
+        <feGaussianBlur in="boost" stdDeviation="0.6" result="shadow" />
+        <feOffset in="shadow" dx="0" dy="1.5" result="shadowShift" />
+        <feColorMatrix
+          in="shadowShift"
+          type="matrix"
+          values="0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0.35 0"
+          result="dropShadow"
+        />
         <feMerge>
-          <feMergeNode in="tealGlow" />
+          <feMergeNode in="glowShift" />
+          <feMergeNode in="dropShadow" />
+          <feMergeNode in="boost" />
+        </feMerge>
+      </filter>
+
+      <filter
+        id="nook-logo-light-filter"
+        x="-30%"
+        y="-30%"
+        width="160%"
+        height="160%"
+        color-interpolation-filters="sRGB"
+      >
+        <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur" />
+        <feOffset in="blur" dx="0" dy="1" result="offset" />
+        <feColorMatrix
+          in="offset"
+          type="matrix"
+          values="0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0 0
+                  0 0 0 0.18 0"
+          result="shadow"
+        />
+        <feMerge>
+          <feMergeNode in="shadow" />
           <feMergeNode in="SourceGraphic" />
         </feMerge>
       </filter>
@@ -57,101 +104,17 @@
 
   {#if colorMode === 'dark'}
     <div
-      class="pointer-events-none absolute inset-[-20%] rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(62,233,214,0.12),transparent_68%)]"
+      class="pointer-events-none absolute inset-[-20%] rounded-full bg-[radial-gradient(circle_at_50%_45%,rgba(62,233,214,0.14),transparent_68%)]"
       aria-hidden="true"
     ></div>
   {/if}
 
-  <svg
-    viewBox="0 0 100 100"
-    role="img"
-    aria-label="Nook logo"
-    class="relative z-10 size-full"
-    style:filter={colorMode === 'dark' ? 'url(#nook-logo-dark-filter)' : undefined}
-  >
-    <rect width="100" height="100" rx="20" fill={bg} />
-    <path
-      stroke={fg}
-      stroke-width="4"
-      stroke-linejoin="round"
-      stroke-linecap="round"
-      fill="none"
-      d="
-        M50 12
-        L22 34
-        C18 37 16 42 16 47
-        L16 72
-        C16 77 20 81 25 81
-        L38 81
-        L38 60
-        C38 53.4 43.4 48 50 48
-        C56.6 48 62 53.4 62 60
-        L62 81
-        L75 81
-        C80 81 84 77 84 72
-        L84 47
-        C84 42 82 37 78 34
-        Z
-      "
-    />
-    <line
-      stroke={fg}
-      stroke-width="3"
-      stroke-linecap="round"
-      x1="50"
-      y1="12"
-      x2="50"
-      y2="30"
-    />
-    <circle stroke={fg} stroke-width="3" fill="none" cx="50" cy="34" r="4" />
-    <line
-      stroke={fg}
-      stroke-width="2.5"
-      stroke-linecap="round"
-      x1="30"
-      y1="42"
-      x2="30"
-      y2="62"
-    />
-    <line
-      stroke={fg}
-      stroke-width="2.5"
-      stroke-linecap="round"
-      x1="30"
-      y1="46"
-      x2="20"
-      y2="46"
-    />
-    <circle fill={fg} cx="18.5" cy="46" r="2.5" />
-    <line
-      stroke={fg}
-      stroke-width="2.5"
-      stroke-linecap="round"
-      x1="30"
-      y1="53"
-      x2="20"
-      y2="53"
-    />
-    <circle fill={fg} cx="18.5" cy="53" r="2.5" />
-    <line
-      stroke={fg}
-      stroke-width="2.5"
-      stroke-linecap="round"
-      x1="30"
-      y1="60"
-      x2="20"
-      y2="60"
-    />
-    <circle fill={fg} cx="18.5" cy="60" r="2.5" />
-    <polyline
-      stroke={fg}
-      stroke-width="2.5"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      fill="none"
-      points="70,38 70,56 62,64"
-    />
-    <circle fill={fg} cx="62" cy="66" r="2.5" />
-    <circle stroke={fg} stroke-width="2.5" fill="none" cx="70" cy="35" r="3.5" />
-  </svg>
+  <img
+    {src}
+    alt="Nook logo"
+    class="relative z-10 size-full object-contain"
+    style:filter={colorMode === 'dark'
+      ? 'url(#nook-logo-dark-filter)'
+      : 'url(#nook-logo-light-filter)'}
+  />
 </div>

@@ -1,7 +1,7 @@
 # Nook
 
 <p align="center">
-  <img src="nook-web/public/nook-real-auto.svg" alt="Nook logo" width="240">
+  <img src="nook-web/public/nook-logo-dark-transparent.png" alt="Nook logo" width="240">
 </p>
 
 [GitHub repository](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
