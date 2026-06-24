@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, Moon, Info, Sun } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
-  import AuthStorage from '$lib/components/AuthStorage.svelte'
-  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
-  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
+  import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
+  import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
@@ -33,7 +32,11 @@
   }
 
   async function handleLoginProviderSelect(id: string) {
-    await vault.reconnectProviderOnLogin(id)
+    await vault.selectLoginProvider(id)
+  }
+
+  async function handleLoginProviderConnect() {
+    await vault.connectLoginProvider()
   }
 
   async function handleProviderReconnect(id: string) {
@@ -67,43 +70,6 @@
       </div>
 
       <div class="flex items-center gap-2">
-        {#if vault.isAuthenticated && !vault.helpOpen}
-          {#if vault.settingsOpen}
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground"
-              data-testid="storage-settings-close"
-              onclick={() => vault.closeSettings()}
-            >
-              Back to vault
-            </Button>
-          {:else}
-            <button
-              type="button"
-              onclick={() => vault.openSettings()}
-              class="relative inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              data-testid="storage-settings-btn"
-            >
-              <Info class="size-4 shrink-0 text-muted-foreground/80" />
-              <span>Vault info</span>
-              {#if vault.pendingJoins.length > 0}
-                <span
-                  class="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
-                  data-testid="pending-joins-badge"
-                >
-                  {vault.pendingJoins.length}
-                </span>
-              {/if}
-            </button>
-          {/if}
-        {/if}
-
-        {#if vault.isAuthenticated && !vault.helpOpen}
-          <span class="mx-0.5 h-4 border-l border-border" aria-hidden="true"
-          ></span>
-        {/if}
-
         <button
           type="button"
           class="inline-flex size-10 items-center justify-center rounded-lg border border-border bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -181,7 +147,11 @@
   <div
     class="mx-auto px-4 sm:px-6 {vault.helpOpen
       ? 'max-w-5xl'
-      : shellWidth} {vault.isAuthenticated ? 'py-8' : 'py-5 sm:py-6'}"
+      : shellWidth} {vault.isAuthenticated && !vault.helpOpen
+      ? 'pb-24 pt-8'
+      : vault.isAuthenticated
+        ? 'py-8'
+        : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
       <HelpPage onClose={() => vault.closeHelp()} />
@@ -191,50 +161,41 @@
       >
         <div class="space-y-4 p-4 sm:p-5">
           {#if vault.settingsOpen}
-            <div data-testid="storage-settings-panel" class="w-full space-y-5">
-              <AuthStorage
-                providers={vault.providers}
-                activeProviderId={vault.activeProviderId}
-                isAuthenticated={vault.isAuthenticated}
-                isVerifying={vault.isVerifying}
-                isSaving={vault.isSaving}
-                isInitializing={vault.isInitializing}
-                errorMsg={vault.errorMsg}
-                addProviderOpen={vault.addProviderOpen}
-                bind:setupType={vault.loginSetupType}
-                bind:githubPat={vault.githubPat}
-                bind:githubRepo={vault.githubRepo}
-                onReconnect={handleUnlock}
-                onSelectProvider={handleProviderReconnect}
-                onBeginAddProvider={() => vault.beginAddProvider()}
-                onCancelAddProvider={() => vault.cancelAddProvider()}
-                onBeginSetup={(type) => vault.beginProviderSetup(type)}
-                onCancelSetup={() => vault.cancelProviderSetup()}
-                onRemoveProvider={(id) => vault.removeProvider(id)}
-              />
-
-              <VaultPasswordCard
-                passwordEntries={vault.passwordEntries}
-                isBusy={vault.isPasswordBusy}
-                passwordError={vault.passwordError}
-                enrollmentCode={vault.enrollmentCode}
-                onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-                onUpdatePassword={(id, pw) =>
-                  vault.updateVaultPasswordEntry(id, pw)}
-                onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-                onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
-                onClearCode={() => vault.clearEnrollmentCode()}
-              />
-
-              <DeviceEnrollment
-                deviceId={vault.deviceId}
-                devicePublicKey={vault.devicePublicKey}
-                pendingJoins={vault.pendingJoins}
-                vaultMembers={vault.vaultMembers}
-                isBusy={vault.isSaving || vault.isVerifying}
-                onApproveJoin={(id) => vault.approveJoin(id)}
-              />
-            </div>
+            <VaultSettingsAccordion
+              providers={vault.providers}
+              activeProviderId={vault.activeProviderId}
+              isAuthenticated={vault.isAuthenticated}
+              isVerifying={vault.isVerifying}
+              isSaving={vault.isSaving}
+              isInitializing={vault.isInitializing}
+              errorMsg={vault.errorMsg}
+              addProviderOpen={vault.addProviderOpen}
+              bind:setupType={vault.loginSetupType}
+              bind:githubPat={vault.githubPat}
+              bind:githubRepo={vault.githubRepo}
+              passwordEntries={vault.passwordEntries}
+              isPasswordBusy={vault.isPasswordBusy}
+              passwordError={vault.passwordError}
+              enrollmentCode={vault.enrollmentCode}
+              deviceId={vault.deviceId}
+              devicePublicKey={vault.devicePublicKey}
+              pendingJoins={vault.pendingJoins}
+              vaultMembers={vault.vaultMembers}
+              onReconnect={handleUnlock}
+              onSelectProvider={handleProviderReconnect}
+              onBeginAddProvider={() => vault.beginAddProvider()}
+              onCancelAddProvider={() => vault.cancelAddProvider()}
+              onBeginSetup={(type) => vault.beginProviderSetup(type)}
+              onCancelSetup={() => vault.cancelProviderSetup()}
+              onRemoveProvider={(id) => vault.removeProvider(id)}
+              onLockVault={() => vault.lockVault()}
+              onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
+              onUpdatePassword={(id, pw) => vault.updateVaultPasswordEntry(id, pw)}
+              onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
+              onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
+              onClearCode={() => vault.clearEnrollmentCode()}
+              onApproveJoin={(id) => vault.approveJoin(id)}
+            />
           {:else}
             <PendingJoinsBanner
               pendingJoins={vault.pendingJoins}
@@ -283,7 +244,7 @@
         <LoginGate
           providers={vault.providers}
           activeProviderId={vault.activeProviderId}
-          loginUnlockMode={vault.loginUnlockMode}
+          loginFlowStep={vault.loginFlowStep}
           loginPasswordPrompt={vault.loginPasswordPrompt}
           passwordEntries={vault.passwordEntries}
           bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
@@ -297,6 +258,8 @@
           successMsg={vault.successMsg}
           onUnlock={handleUnlock}
           onSelectProvider={handleLoginProviderSelect}
+          onConnectProvider={handleLoginProviderConnect}
+          onBackToLoginProvider={() => vault.backToLoginProviderStep()}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(type) => vault.beginProviderSetup(type)}
@@ -311,6 +274,15 @@
       </div>
     {/if}
   </div>
+
+  {#if vault.isAuthenticated && !vault.helpOpen}
+    <VaultBottomNav
+      settingsOpen={vault.settingsOpen}
+      pendingJoinCount={vault.pendingJoins.length}
+      onSelectSecrets={() => vault.closeSettings()}
+      onSelectSettings={() => vault.openSettings()}
+    />
+  {/if}
 
   <JoinEnrollmentDialog
     open={vault.joinEnrollmentPrompt !== 'none'}

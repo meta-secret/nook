@@ -1,10 +1,13 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
 import {
   addSecret,
+  addVaultPassword,
   assertVaultReady,
   connectGithubGenesisDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
+  expandLoginEnrollmentPanel,
+  expandSettingsSection,
   finishE2eGithubSuite,
   githubPat,
   openStorageSettings,
@@ -73,11 +76,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
       'None',
     )
 
-    await deviceA.getByTestId('set-vault-password-btn').click()
-    await deviceA.getByTestId('vault-password-label').fill('GitHub vault')
-    await deviceA.getByTestId('vault-password-input').fill(vaultPassword)
-    await deviceA.getByTestId('vault-password-confirm').fill(vaultPassword)
-    await deviceA.getByTestId('submit-vault-password').click()
+    await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
 
     await expect(deviceA.getByTestId('vault-password-status')).toContainText(
       '1 password',
@@ -148,6 +147,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
+    await expandLoginEnrollmentPanel(deviceB)
     await deviceB.getByTestId('open-enrollment-code-btn').click()
     await deviceB.getByTestId('enrollment-code-input').fill(code)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()

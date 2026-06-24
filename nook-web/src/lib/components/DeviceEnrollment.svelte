@@ -16,6 +16,7 @@
     vaultMembers = [] as VaultMember[],
     isBusy,
     onApproveJoin,
+    embedded = false,
   }: {
     deviceId: string
     devicePublicKey: string
@@ -23,10 +24,10 @@
     vaultMembers?: VaultMember[]
     isBusy: boolean
     onApproveJoin?: (deviceId: string) => void | Promise<void>
+    embedded?: boolean
   } = $props()
 
   let showTechnicalDetails = $state(false)
-  let expanded = $state(true)
 
   function getCurrentDeviceName(): string {
     const ua = navigator.userAgent
@@ -61,7 +62,7 @@
   }
 </script>
 
-<div class="space-y-4 pt-1" data-testid="device-enrollment-panel">
+<div class="w-full space-y-4" data-testid="device-enrollment-panel">
   {#if vaultMembers.length <= 1}
     <div
       class="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-normal text-amber-600 dark:text-amber-400 flex items-start gap-2"
@@ -75,32 +76,6 @@
     </div>
   {/if}
 
-  <div class="flex items-start justify-between gap-3">
-    <button
-      type="button"
-      class="flex-1 space-y-1 text-left group transition-colors focus:outline-hidden"
-      onclick={() => (expanded = !expanded)}
-    >
-      <h3
-        class="text-sm font-semibold text-foreground inline-flex items-center gap-1.5 group-hover:text-primary transition-colors"
-      >
-        <Smartphone class="size-4" />
-        Devices & access
-        <ChevronDown
-          class="size-4 text-muted-foreground transition-transform duration-200 {expanded
-            ? 'rotate-180'
-            : ''}"
-        />
-      </h3>
-      <p class="text-xs text-muted-foreground text-pretty">
-        Each enrolled browser holds its own copy of the vault keys. Approve
-        joins to add trusted devices — more devices means more ways to unlock
-        and recover if one is unavailable.
-      </p>
-    </button>
-  </div>
-
-  {#if expanded}
     {#if pendingJoins.length > 0 || vaultMembers.length > 0}
       <div class="space-y-3">
         <ul class="space-y-2.5" data-testid="vault-members-list">
@@ -249,5 +224,4 @@
         </dl>
       {/if}
     </div>
-  {/if}
 </div>

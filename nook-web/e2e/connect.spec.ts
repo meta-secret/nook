@@ -49,7 +49,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toBeVisible()
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
-    await expect(page.getByTestId('open-enrollment-code-btn')).toBeVisible()
+    await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-fieldset')).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
@@ -87,7 +87,7 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('storage-settings-btn').click()
+    await page.getByTestId('vault-settings-tab').click()
     await expect(page.getByTestId('settings-providers-list')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -121,7 +121,7 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('storage-settings-btn').click()
+    await page.getByTestId('vault-settings-tab').click()
     const localProvider = page.getByTestId('settings-provider-local')
     await expect(localProvider).toBeVisible()
 

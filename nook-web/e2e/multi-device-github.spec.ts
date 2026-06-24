@@ -9,6 +9,7 @@ import {
   connectGithubJoinerDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
+  expandSettingsSection,
   githubPat,
   openStorageSettings,
   resetGithubVault,
@@ -181,6 +182,7 @@ describeMultiDevice('multi-device github vault', () => {
 
   test('storage settings lists enrolled members with public key fingerprints', async () => {
     await openStorageSettings(deviceA)
+    await expandSettingsSection(deviceA, 'devices')
     await expect(deviceA.getByTestId('device-enrollment-panel')).toBeVisible()
     await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()
     await expect(deviceA.getByTestId('vault-member-row')).toHaveCount(2)
@@ -192,7 +194,7 @@ describeMultiDevice('multi-device github vault', () => {
     await expect(deviceA.getByTestId('device-id')).not.toHaveText('—')
     await expect(deviceA.getByTestId('device-public-key')).not.toHaveText('—')
 
-    await deviceA.getByTestId('storage-settings-close').click()
+    await deviceA.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(deviceA)
   })
 })

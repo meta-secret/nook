@@ -130,8 +130,8 @@
               reading the encrypted file from GitHub is not enough.
             </li>
             <li>
-              Send a request; an enrolled device approves it under
-              <strong class="font-medium text-foreground">Vault info</strong>.
+              Send a request;               an enrolled device approves it under
+              <strong class="font-medium text-foreground">Vault settings</strong>.
             </li>
             <li>
               Approval wraps the vault keys for this browser’s public key — no
@@ -270,7 +270,7 @@
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
             Open Nook on an enrolled device, approve this browser in
-            <strong class="font-medium text-foreground">Vault info</strong>,
+            <strong class="font-medium text-foreground">Vault settings</strong>,
             then unlock again here.
           </p>
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">

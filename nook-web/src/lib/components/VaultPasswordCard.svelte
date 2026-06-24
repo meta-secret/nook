@@ -31,6 +31,7 @@
     onRemovePassword,
     onIssueCode,
     onClearCode,
+    embedded = false,
   }: {
     passwordEntries: VaultPasswordEntrySummary[]
     isBusy: boolean
@@ -44,6 +45,7 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
+    embedded?: boolean
   } = $props()
 
   type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
@@ -209,21 +211,25 @@
   }
 </script>
 
-<section
-  class="rounded-xl border border-border/60 bg-card/60 p-4 sm:p-5"
+<svelte:element
+  this={embedded ? 'div' : 'section'}
+  class={embedded
+    ? undefined
+    : 'rounded-xl border border-dashed border-border/70 bg-muted/15 p-4 sm:p-5'}
   data-testid="vault-password-card"
 >
+  {#if !embedded}
   <header class="flex items-start justify-between gap-3 mb-3">
     <div class="space-y-0.5">
-      <h3
-        class="inline-flex items-center gap-2 text-sm font-semibold text-foreground"
+      <h2
+        class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
       >
         <KeyRound class="size-4 text-primary" />
-        Vault passwords
-      </h3>
+        Backup unlock passwords
+      </h2>
       <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-        Optional backup for when device keys are lost. Device keys remain the
-        default way to unlock on enrolled browsers.
+        Recovery if device keys are lost — used on the login screen after you
+        lock the vault, not when connecting to storage.
       </p>
     </div>
     <span
@@ -241,6 +247,7 @@
       {/if}
     </span>
   </header>
+  {/if}
 
   {#if !hasPasswords}
     <div
@@ -586,4 +593,4 @@
       {/if}
     </div>
   {/if}
-</section>
+</svelte:element>

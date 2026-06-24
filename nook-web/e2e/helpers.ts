@@ -308,6 +308,7 @@ export async function connectLocalVault(page: Page) {
   const savedLocalProvider = page.getByTestId('saved-provider-local').first()
   if (await savedLocalProvider.isVisible()) {
     await savedLocalProvider.click()
+    await page.getByTestId('login-connect-provider-btn').click()
     await page.getByTestId('unlock-vault-btn').click()
     await expect(
       page.getByTestId('connect-success').or(page.getByTestId('app-success')),
@@ -440,6 +441,7 @@ export async function approveJoinFromSettings(
   expectedMembers: number,
 ) {
   await openStorageSettings(page)
+  await expandSettingsSection(page, 'devices')
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
 
   if (!(await row.isVisible())) {
@@ -453,7 +455,7 @@ export async function approveJoinFromSettings(
     expectedMembers,
   )
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await page.getByTestId('storage-settings-close').click()
+  await page.getByTestId('vault-secrets-tab').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -472,6 +474,7 @@ export async function unlockGithubVault(page: Page) {
   const savedGithubProvider = page.getByTestId('saved-provider-github').first()
   if (await savedGithubProvider.isVisible()) {
     await savedGithubProvider.click()
+    await page.getByTestId('login-connect-provider-btn').click()
     await page.getByTestId('unlock-vault-btn').click()
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -479,11 +482,52 @@ export async function unlockGithubVault(page: Page) {
   })
 }
 
+/** Expand the login enrollment accordion on the login gate. */
+export async function expandLoginEnrollmentPanel(page: Page) {
+  const toggle = page.getByTestId('login-enrollment-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+}
+
 /** Open storage settings (must already be connected). */
 export async function openStorageSettings(page: Page) {
-  await page.getByTestId('storage-settings-btn').click()
+  await page.getByTestId('vault-settings-tab').click()
   await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
   await expect(page.getByTestId('vault-panel')).not.toBeVisible()
+}
+
+const SETTINGS_SECTION_TEST_IDS = {
+  storage: 'storage-providers-section',
+  unlock: 'vault-unlock-section',
+  devices: 'devices-access-section',
+} as const
+
+export type SettingsSection = keyof typeof SETTINGS_SECTION_TEST_IDS
+
+/** Expand one vault settings accordion section (only one open at a time). */
+export async function expandSettingsSection(
+  page: Page,
+  section: SettingsSection,
+) {
+  const sectionEl = page.getByTestId(SETTINGS_SECTION_TEST_IDS[section])
+  const toggle = sectionEl.getByRole('button').first()
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+}
+
+export async function addVaultPassword(
+  page: Page,
+  label: string,
+  password: string,
+) {
+  await expandSettingsSection(page, 'unlock')
+  await page.getByTestId('set-vault-password-btn').click()
+  await page.getByTestId('vault-password-label').fill(label)
+  await page.getByTestId('vault-password-input').fill(password)
+  await page.getByTestId('vault-password-confirm').fill(password)
+  await page.getByTestId('submit-vault-password').click()
 }
 
 /** Reconnect after reload — auto-unlocks when a saved provider exists. */
@@ -499,6 +543,25 @@ export async function assertVaultReady(page: Page) {
 }
 
 /** Pick device keys or backup password on the login gate unlock form. */
+export async function connectLoginProvider(page: Page) {
+  const authorizationStep = page.getByTestId('login-wizard-authorization-step')
+  if (await authorizationStep.isVisible()) {
+    return
+  }
+  const savedList = page.getByTestId('saved-providers-list')
+  if (await savedList.isVisible()) {
+    const provider = page
+      .getByTestId('saved-provider-local')
+      .or(page.getByTestId('saved-provider-github'))
+      .first()
+    if (await provider.isVisible()) {
+      await provider.click()
+    }
+  }
+  await page.getByTestId('login-connect-provider-btn').click()
+  await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
 export async function selectLoginUnlockMethod(
   page: Page,
   method: 'keys' | 'password',
@@ -511,6 +574,7 @@ export async function unlockVaultOnLogin(
   page: Page,
   opts?: { password?: string; entryLabel?: string },
 ) {
+  await connectLoginProvider(page)
   if (opts?.password) {
     await selectLoginUnlockMethod(page, 'password')
     if (opts.entryLabel) {
@@ -556,9 +620,9 @@ export async function disableLoginAutoUnlock(page: Page) {
             return
           }
           snapshot.providers.push({
-            id: 'e2e-dummy-github',
-            type: 'github',
-            label: 'GitHub (e2e dummy)',
+            id: 'e2e-dummy-local',
+            type: 'local',
+            label: 'This device (e2e)',
             createdAt: new Date().toISOString(),
           })
           const putReq = store.put(snapshot, 'providers')

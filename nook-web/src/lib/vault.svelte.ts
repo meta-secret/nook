@@ -72,6 +72,8 @@ export class VaultState {
   unlockMode = $state<'keys' | 'password'>('keys')
   /** Remote vault unlock mode detected on the login screen (before session open). */
   loginUnlockMode = $state<'unknown' | 'keys' | 'password'>('unknown')
+  /** Login gate phase: connect to storage, then authorize to decrypt. */
+  loginFlowStep = $state<'connection' | 'authorization'>('connection')
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false)
   isPasswordBusy = $state(false)
@@ -214,9 +216,6 @@ export class VaultState {
       }
     } else {
       await this.refreshDeviceState()
-      if (this.activeProvider && !this.isAuthenticated) {
-        void this.probeLoginUnlockMode()
-      }
     }
 
     if (this.pendingEnrollmentFromUrl && !this.isAuthenticated) {
@@ -331,20 +330,20 @@ export class VaultState {
     await this.refreshPasswordEntriesList()
   }
 
-  async refreshPasswordEntriesList(): Promise<void> {
-    if (!this.manager) return
+  async refreshPasswordEntriesList(): Promise<boolean> {
+    if (!this.manager) return false
     try {
       if (this.isAuthenticated) {
         this.passwordEntries = mapWasmPasswordEntries(
           this.manager.listVaultPasswordEntries(),
         )
         this.unlockMode = 'keys'
-        return
+        return true
       }
       if (this.storageMode === 'github' && !this.githubPat.trim()) {
         this.passwordEntries = []
         this.loginUnlockMode = 'unknown'
-        return
+        return false
       }
       const raw = await this.enqueueStorage(() =>
         this.manager!.fetchVaultPasswordEntries(...this.wasmGithubArgs()),
@@ -357,19 +356,54 @@ export class VaultState {
       ) {
         this.selectedPasswordEntryId = this.passwordEntries[0]!.id
       }
+      return true
     } catch {
       if (!this.isAuthenticated) {
         this.loginUnlockMode = 'unknown'
       }
       this.passwordEntries = []
+      return false
     }
   }
 
-  /** Login gate: pick provider, then unlock (keys connect or password prompt). */
-  async reconnectProviderOnLogin(id: string): Promise<void> {
+  /** Login gate step 1: highlight a saved provider without reaching storage yet. */
+  async selectLoginProvider(id: string): Promise<void> {
+    if (this.activeProviderId !== id) {
+      this.loginFlowStep = 'connection'
+      this.passwordEntries = []
+      this.selectedPasswordEntryId = null
+      this.loginUnlockMode = 'unknown'
+    }
     await this.selectProvider(id)
-    await this.refreshPasswordEntriesList()
-    await this.loadDb()
+  }
+
+  /** Login gate step 1 → 2: reach the vault file and load password-entry metadata. */
+  async connectLoginProvider(): Promise<void> {
+    if (!this.activeProviderId) {
+      this.errorMsg = 'Choose a storage provider.'
+      return
+    }
+    this.errorMsg = ''
+    this.isVerifying = true
+    try {
+      const ok = await this.refreshPasswordEntriesList()
+      if (!ok) {
+        this.errorMsg =
+          'Could not reach the vault on this provider. Check credentials and try again.'
+        return
+      }
+      this.loginFlowStep = 'authorization'
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  backToLoginProviderStep() {
+    this.loginFlowStep = 'connection'
+    this.passwordEntries = []
+    this.selectedPasswordEntryId = null
+    this.loginUnlockMode = 'unknown'
+    this.errorMsg = ''
   }
 
   private clearUnlockedSession() {
@@ -412,8 +446,11 @@ export class VaultState {
     this.applyActiveProviderCredentials()
     await this.persistProviders()
 
-    if (!this.isAuthenticated && this.activeProvider) {
-      void this.probeLoginUnlockMode()
+    if (!this.isAuthenticated) {
+      this.loginFlowStep = 'connection'
+      this.passwordEntries = []
+      this.selectedPasswordEntryId = null
+      this.loginUnlockMode = 'unknown'
     }
 
     this.showSuccess(`Removed ${target.label}.`)
@@ -615,6 +652,15 @@ export class VaultState {
 
   closeSettings() {
     this.settingsOpen = false
+  }
+
+  /** End the in-memory session and return to the login gate (device keys stay in this browser). */
+  lockVault() {
+    this.clearUnlockedSession()
+    this.loginFlowStep = 'connection'
+    this.passwordEntries = []
+    this.selectedPasswordEntryId = null
+    this.loginUnlockMode = 'unknown'
   }
 
   openHelp() {

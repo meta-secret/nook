@@ -1,35 +1,17 @@
 import { expect, test } from '@playwright/test'
 import {
   addSecret,
+  addVaultPassword,
   assertVaultReady,
   clearBrowserVault,
   connectLocalVault,
+  expandSettingsSection,
   openStorageSettings,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForVaultUnlocked,
 } from './helpers'
-
-/**
- * Local-vault coverage for the password-envelope feature.
- *
- * Exercises everything that does not require a second device or a GitHub
- * provider: set / rotate / remove backup password, enrollment-code issuance,
- * QR rendering, and hybrid coexistence with device-key unlock.
- */
-
-async function addVaultPassword(
-  page: import('@playwright/test').Page,
-  label: string,
-  password: string,
-) {
-  await page.getByTestId('set-vault-password-btn').click()
-  await page.getByTestId('vault-password-label').fill(label)
-  await page.getByTestId('vault-password-input').fill(password)
-  await page.getByTestId('vault-password-confirm').fill(password)
-  await page.getByTestId('submit-vault-password').click()
-}
 
 test.describe('vault password envelope (local)', () => {
   test.beforeEach(async ({ page }) => {
@@ -49,6 +31,7 @@ test.describe('vault password envelope (local)', () => {
   test('adds backup passwords without replacing device-key unlock', async ({ page }) => {
     await assertVaultReady(page)
     await openStorageSettings(page)
+    await expandSettingsSection(page, 'unlock')
 
     const card = page.getByTestId('vault-password-card')
     const status = page.getByTestId('vault-password-status')
@@ -143,6 +126,7 @@ test.describe('vault password envelope (local)', () => {
 
   test('rejects short passwords client-side', async ({ page }) => {
     await openStorageSettings(page)
+    await expandSettingsSection(page, 'unlock')
     await page.getByTestId('set-vault-password-btn').click()
     await page.getByTestId('vault-password-label').fill('Short test')
 
@@ -159,6 +143,7 @@ test.describe('vault password envelope (local)', () => {
 
   test('rejects mismatched password / confirmation', async ({ page }) => {
     await openStorageSettings(page)
+    await expandSettingsSection(page, 'unlock')
     await page.getByTestId('set-vault-password-btn').click()
     await page.getByTestId('vault-password-label').fill('Mismatch test')
     await page.getByTestId('vault-password-input').fill('correct-horse')
@@ -272,7 +257,7 @@ test.describe('vault password envelope (local)', () => {
     await page.getByTestId('confirm-remove-vault-password').click()
     await expect(page.getByTestId('vault-password-status')).toContainText('None')
 
-    await page.getByTestId('storage-settings-close').click()
+    await page.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(page)
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
