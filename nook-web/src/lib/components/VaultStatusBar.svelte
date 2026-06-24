@@ -16,6 +16,9 @@
     successMsg = '',
     errorMsg = '',
     appVersion = '',
+    label,
+    showSyncStatus = true,
+    showStorageIcon = true,
     onRefresh,
     onDismissSuccess,
     onDismissError,
@@ -27,6 +30,9 @@
     successMsg?: string
     errorMsg?: string
     appVersion?: string
+    label?: string
+    showSyncStatus?: boolean
+    showStorageIcon?: boolean
     onRefresh?: () => void | Promise<void>
     onDismissSuccess?: () => void
     onDismissError?: () => void
@@ -51,8 +57,9 @@
     return `${Math.floor(mins / 60)}h ago`
   }
 
-  const storageLabel = $derived(
-    storageMode === 'github' ? githubRepo.trim() || 'GitHub' : 'This device',
+  const statusLabel = $derived(
+    label ??
+      (storageMode === 'github' ? githubRepo.trim() || 'GitHub' : 'This device'),
   )
 </script>
 
@@ -65,15 +72,20 @@
       class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs"
     >
       <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
-        {#if storageMode === 'github'}
-          <Cloud class="size-3.5 shrink-0 text-primary/80" aria-hidden="true" />
-        {:else}
-          <HardDrive
-            class="size-3.5 shrink-0 text-primary/80"
-            aria-hidden="true"
-          />
+        {#if showStorageIcon}
+          {#if storageMode === 'github'}
+            <Cloud
+              class="size-3.5 shrink-0 text-primary/80"
+              aria-hidden="true"
+            />
+          {:else}
+            <HardDrive
+              class="size-3.5 shrink-0 text-primary/80"
+              aria-hidden="true"
+            />
+          {/if}
         {/if}
-        <span class="truncate font-medium text-foreground">{storageLabel}</span>
+        <span class="truncate font-medium text-foreground">{statusLabel}</span>
         {#if appVersion}
           <span
             class="hidden text-muted-foreground sm:inline"
@@ -83,16 +95,19 @@
             v{appVersion}
           </span>
         {/if}
-        <span class="hidden text-muted-foreground sm:inline" aria-hidden="true"
-          >·</span
-        >
-        <span
-          class="shrink-0 text-muted-foreground"
-          data-testid="vault-last-sync"
-        >
-          {storageMode === 'github' ? 'Synced' : 'Saved'}
-          {formatLastSync(lastSyncedAt)}
-        </span>
+        {#if showSyncStatus}
+          <span
+            class="hidden text-muted-foreground sm:inline"
+            aria-hidden="true">·</span
+          >
+          <span
+            class="shrink-0 text-muted-foreground"
+            data-testid="vault-last-sync"
+          >
+            {storageMode === 'github' ? 'Synced' : 'Saved'}
+            {formatLastSync(lastSyncedAt)}
+          </span>
+        {/if}
       </div>
 
       {#if onRefresh}

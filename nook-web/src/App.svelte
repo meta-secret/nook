@@ -163,6 +163,9 @@
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
           {appVersion}
+          label={vault.isAuthenticated ? undefined : 'Nook'}
+          showSyncStatus={vault.isAuthenticated}
+          showStorageIcon={vault.isAuthenticated}
           onDismissSuccess={() => vault.dismissSuccess()}
           onDismissError={() => vault.dismissError()}
         />
@@ -300,6 +303,9 @@
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
           {appVersion}
+          label="Nook"
+          showSyncStatus={false}
+          showStorageIcon={false}
           onDismissSuccess={() => vault.dismissSuccess()}
           onDismissError={() => vault.dismissError()}
         />
