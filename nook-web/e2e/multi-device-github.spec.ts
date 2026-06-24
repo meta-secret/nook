@@ -9,7 +9,6 @@ import {
   connectGithubJoinerDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
-  expandSettingsSection,
   githubPat,
   openStorageSettings,
   resetGithubVault,
@@ -112,13 +111,12 @@ describeMultiDevice('multi-device github vault', () => {
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible()
     await expect(
       deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
     ).toBeVisible()
   })
 
-  test('device A sees pending join badge and approves from banner', async () => {
+  test('device A sees pending join and approves from banner', async () => {
     const target = { pat: githubPat, repoName: e2eRepo }
     const join = (
       await waitForGithubVaultState(
@@ -127,9 +125,6 @@ describeMultiDevice('multi-device github vault', () => {
       )
     ).joinEntries[0]
 
-    await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -180,20 +175,11 @@ describeMultiDevice('multi-device github vault', () => {
     expect(revealed).toBe(joinerSecretValue)
   })
 
-  test('storage settings lists enrolled members with public key fingerprints', async () => {
+  test('settings keeps storage and password management separate from device onboarding', async () => {
     await openStorageSettings(deviceA)
-    await expandSettingsSection(deviceA, 'devices')
-    await expect(deviceA.getByTestId('device-enrollment-panel')).toBeVisible()
-    await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()
-    await expect(deviceA.getByTestId('vault-member-row')).toHaveCount(2)
-    // The current device's row carries a "Current" badge in the members
-    // list (replaces the older inline "(this browser)" label).
-    await expect(deviceA.getByText('Current', { exact: true })).toBeVisible()
-
-    await deviceA.getByTestId('device-details-toggle').click()
-    await expect(deviceA.getByTestId('device-id')).not.toHaveText('—')
-    await expect(deviceA.getByTestId('device-public-key')).not.toHaveText('—')
-
+    await expect(deviceA.getByTestId('storage-providers-section')).toBeVisible()
+    await expect(deviceA.getByTestId('vault-unlock-section')).toBeVisible()
+    await expect(deviceA.getByTestId('devices-access-section')).toHaveCount(0)
     await deviceA.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(deviceA)
   })
@@ -230,7 +216,7 @@ describeMultiDevice('multi-device approve from settings', () => {
     await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
-  test('approves join from Storage & devices panel', async () => {
+  test('approves join from vault banner', async () => {
     await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
     const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
 
@@ -299,11 +285,8 @@ describeMultiDevice('multi-device join background sync', () => {
       (snapshot) => snapshot.joinEntries.length === 1,
     )
 
-    await expect(deviceA.getByTestId('pending-joins-badge')).toBeVisible({
-      timeout: NOTIFICATION_TIMEOUT_MS,
-    })
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      timeout: NOTIFICATION_TIMEOUT_MS,
     })
     await expect(
       deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),

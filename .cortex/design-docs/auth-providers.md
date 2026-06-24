@@ -70,9 +70,8 @@ stateDiagram-v2
 - Provider picker uses compact list rows (not large cards) so many providers scale without wasting vertical space.
 - Primary action on setup: **Connect** (not “Sign in to nook”).
 - **Help** page (`HelpPage`) in header — architecture, multi-device security, join flow, vault file layout. Login gate shows `ProductIntro` callout with link.
-- **Storage & devices** (settings): saved provider list, **Add provider**, switch active provider + **Reconnect vault**.
-- **Onboard another device** (settings): generate a QR/link for one-step bootstrap. The QR bundles the active provider credentials and a selected vault password, so the new browser can fetch the vault and self-enroll without a separate approval hop.
-- Device enrollment and join approvals still live under **Devices & access** and the **Join this vault** dialog. They are the approval-based fallback, not the primary QR onboarding flow.
+- **Settings**: saved provider list, **Add provider**, switch active provider + **Reconnect vault**, plus vault password management.
+- **Onboard**: a standalone bottom-nav page with two dropdowns — auth provider and vault password — plus one primary **Onboard Device** action. It generates a QR/link for one-step bootstrap. The QR bundles the selected provider credentials and selected vault password, so the new browser can fetch the vault and self-enroll without a separate approval hop.
 
 ### 3.1 Two-step unlock (storage provider × unlock method)
 
@@ -111,7 +110,7 @@ First connect (genesis) uses **setup** → provider credentials form → WASM `c
 
 **Auto-unlock:** When exactly one saved provider exists and device keys work, `VaultState` may unlock on load without showing the wizard. The wizard still models connect-then-authorize for manual login, password recovery, and multi-provider setups.
 
-**Enrollment QR** is surfaced through the authenticated bottom-nav **Onboard** item. It opens **Onboard another device** in settings. Users choose an existing vault password or create a new one, then generate a QR/link that bundles provider credentials *and* that password for one-shot device bootstrap — not the normal wizard pattern.
+**Enrollment QR** is surfaced through the authenticated bottom-nav **Onboard** item. It is its own page, not a settings section. Users choose an auth provider, choose an existing vault password, re-type that password, then click **Onboard Device** to generate a QR/link that bundles provider credentials *and* that password for one-shot device bootstrap — not the normal wizard pattern.
 
 ```mermaid
 flowchart TB

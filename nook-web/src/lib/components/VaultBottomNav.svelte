@@ -3,15 +3,13 @@
 
   let {
     settingsOpen = false,
-    settingsSection = 'storage' as 'storage' | 'onboard' | 'devices',
-    pendingJoinCount = 0,
+    settingsSection = 'storage' as 'storage' | 'onboard',
     onSelectSecrets,
     onSelectOnboard,
     onSelectSettings,
   }: {
     settingsOpen?: boolean
-    settingsSection?: 'storage' | 'onboard' | 'devices'
-    pendingJoinCount?: number
+    settingsSection?: 'storage' | 'onboard'
     onSelectSecrets?: () => void
     onSelectOnboard?: () => void
     onSelectSettings?: () => void
@@ -65,17 +63,7 @@
       data-testid="vault-settings-tab"
       onclick={() => onSelectSettings?.()}
     >
-      <span class="relative">
-        <Settings2 class="size-5 shrink-0" />
-        {#if pendingJoinCount > 0}
-          <span
-            class="absolute -top-1.5 -right-2 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground"
-            data-testid="pending-joins-badge"
-          >
-            {pendingJoinCount}
-          </span>
-        {/if}
-      </span>
+      <Settings2 class="size-5 shrink-0" />
       <span class="text-xs font-medium leading-none">Settings</span>
     </button>
   </div>

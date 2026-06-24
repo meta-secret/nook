@@ -9,6 +9,7 @@
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
+  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -176,7 +177,18 @@
         class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
       >
         <div class="space-y-4 p-4 sm:p-5">
-          {#if vault.settingsOpen}
+          {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
+            <OnboardDevice
+              providers={vault.providers}
+              activeProviderId={vault.activeProviderId}
+              passwordEntries={vault.passwordEntries}
+              enrollmentCode={vault.enrollmentCode}
+              isBusy={vault.isPasswordBusy}
+              onIssueCode={(entryId, pw, providerId) =>
+                vault.issueEnrollmentCode(entryId, pw, providerId)}
+              onClearCode={() => vault.clearEnrollmentCode()}
+            />
+          {:else if vault.settingsOpen}
             <VaultSettingsAccordion
               providers={vault.providers}
               activeProviderId={vault.activeProviderId}
@@ -189,14 +201,9 @@
               bind:githubPat={vault.githubPat}
               bind:githubRepo={vault.githubRepo}
               passwordEntries={vault.passwordEntries}
-              activeSection={vault.settingsSection}
               isPasswordBusy={vault.isPasswordBusy}
               passwordError={vault.passwordError}
               enrollmentCode={vault.enrollmentCode}
-              deviceId={vault.deviceId}
-              devicePublicKey={vault.devicePublicKey}
-              pendingJoins={vault.pendingJoins}
-              vaultMembers={vault.vaultMembers}
               onReconnect={handleUnlock}
               onSelectProvider={handleProviderReconnect}
               onBeginAddProvider={() => vault.beginAddProvider()}
@@ -211,7 +218,6 @@
               onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
               onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
               onClearCode={() => vault.clearEnrollmentCode()}
-              onApproveJoin={(id) => vault.approveJoin(id)}
             />
           {:else}
             <PendingJoinsBanner
@@ -262,7 +268,6 @@
           <VaultBottomNav
             settingsOpen={vault.settingsOpen}
             settingsSection={vault.settingsSection}
-            pendingJoinCount={vault.pendingJoins.length}
             onSelectSecrets={() => vault.closeSettings()}
             onSelectOnboard={() => vault.openSettings('onboard')}
             onSelectSettings={() => vault.openSettings()}

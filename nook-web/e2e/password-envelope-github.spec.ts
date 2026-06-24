@@ -6,6 +6,7 @@ import {
   connectGithubGenesisDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
+  expandSettingsSection,
   expandLoginEnrollmentPanel,
   finishE2eGithubSuite,
   githubPat,
@@ -100,11 +101,11 @@ describePasswordEnvelope('vault password envelope (github)', () => {
   })
 
   test('device A issues an enrollment code carrying github credentials', async () => {
-    await deviceA.getByTestId('issue-enrollment-code-btn').click()
-    await deviceA.getByTestId('issue-code-password-input').fill(vaultPassword)
-    await deviceA.getByTestId('generate-enrollment-code-btn').click()
+    await deviceA.getByTestId('vault-onboard-tab').click()
+    await deviceA.getByTestId('onboard-password-input').fill(vaultPassword)
+    await deviceA.getByTestId('onboard-device-submit').click()
 
-    const codeArea = deviceA.getByTestId('enrollment-code-text')
+    const codeArea = deviceA.getByTestId('onboard-code')
     await expect(codeArea).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const code = (await codeArea.inputValue()).trim()
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
@@ -134,7 +135,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
 
   test('device B self-enrols via the pasted code without approval', async () => {
     // Recover the code emitted in the previous test. (Tests are serial.)
-    const codeArea = deviceA.getByTestId('enrollment-code-text')
+    const codeArea = deviceA.getByTestId('onboard-code')
     const code = (await codeArea.inputValue()).trim()
     expect(code.length).toBeGreaterThan(40)
 
@@ -191,15 +192,8 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const oldEnvelope = before.passwordEnvelopeCiphertext
     expect(oldEnvelope).not.toBeNull()
 
-    // Clear any open issue-code panel so the Rotate action is available.
-    if (
-      await deviceA
-        .getByRole('button', { name: 'Done' })
-        .isVisible()
-        .catch(() => false)
-    ) {
-      await deviceA.getByRole('button', { name: 'Done' }).click()
-    }
+    await openStorageSettings(deviceA)
+    await expandSettingsSection(deviceA, 'unlock')
     await deviceA.getByTestId('rotate-vault-password-btn').click()
     await deviceA.getByTestId('vault-password-input').fill('rotated-pw-9')
     await deviceA.getByTestId('vault-password-confirm').fill('rotated-pw-9')

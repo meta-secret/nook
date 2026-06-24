@@ -170,13 +170,13 @@ test.describe('vault password envelope (local)', () => {
       '1 password',
     )
 
-    await page.getByTestId('issue-enrollment-code-btn').click()
-    await page.getByTestId('issue-code-password-input').fill('wrong-typo-99')
-    await page.getByTestId('generate-enrollment-code-btn').click()
-    await expect(page.getByTestId('issue-code-error')).toContainText(
+    await page.getByTestId('vault-onboard-tab').click()
+    await page.getByTestId('onboard-password-input').fill('wrong-typo-99')
+    await page.getByTestId('onboard-device-submit').click()
+    await expect(page.getByTestId('onboard-error')).toContainText(
       'does not match',
     )
-    await expect(page.getByTestId('enrollment-code-text')).toHaveCount(0)
+    await expect(page.getByTestId('onboard-code')).toHaveCount(0)
 
     // NOTE: We intentionally do not chain a "now try the correct password"
     // assertion onto the same page. The wasm `age` 0.11.3 scrypt decryptor
@@ -196,10 +196,10 @@ test.describe('vault password envelope (local)', () => {
       '1 password',
     )
 
-    await page.getByTestId('issue-enrollment-code-btn').click()
-    await page.getByTestId('issue-code-password-input').fill('hunter2-secure')
-    await page.getByTestId('generate-enrollment-code-btn').click()
-    const codeText = page.getByTestId('enrollment-code-text')
+    await page.getByTestId('vault-onboard-tab').click()
+    await page.getByTestId('onboard-password-input').fill('hunter2-secure')
+    await page.getByTestId('onboard-device-submit').click()
+    const codeText = page.getByTestId('onboard-code')
     await expect(codeText).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const code = (await codeText.inputValue()).trim()
     expect(code.length).toBeGreaterThan(40)
@@ -229,17 +229,17 @@ test.describe('vault password envelope (local)', () => {
     expect(json.expires_at).toBeUndefined()
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
-    const link = (await page.getByTestId('enrollment-code-link').textContent())!
+    const link = (await page.getByTestId('onboard-link').textContent())!
     expect(link).toContain('#enroll=')
     expect(decodeURIComponent(link.split('#enroll=')[1]!)).toBe(code)
 
     // The UI surfaces the timestamp as audit info next to the code.
-    await expect(page.getByTestId('enrollment-code-issued-ago')).toBeVisible()
+    await expect(page.getByText('Issued')).toBeVisible()
 
     // Copy-to-clipboard button works.
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
-    await page.getByTestId('copy-enrollment-code-btn').click()
-    await expect(page.getByTestId('copy-enrollment-code-btn')).toContainText(
+    await page.getByTestId('copy-onboard-link-btn').click()
+    await expect(page.getByTestId('copy-onboard-link-btn')).toContainText(
       'Copied',
     )
   })
@@ -288,11 +288,11 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openStorageSettings(pageA)
     await addVaultPassword(pageA, 'Link test', 'link-pass')
-    await pageA.getByTestId('issue-enrollment-code-btn').click()
-    await pageA.getByTestId('issue-code-password-input').fill('link-pass')
-    await pageA.getByTestId('generate-enrollment-code-btn').click()
+    await pageA.getByTestId('vault-onboard-tab').click()
+    await pageA.getByTestId('onboard-password-input').fill('link-pass')
+    await pageA.getByTestId('onboard-device-submit').click()
     const link = (await pageA
-      .getByTestId('enrollment-code-link')
+      .getByTestId('onboard-link')
       .textContent())!.trim()
     expect(link).toContain('#enroll=')
 

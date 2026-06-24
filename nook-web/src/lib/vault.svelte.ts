@@ -37,7 +37,7 @@ import {
 
 export class VaultState {
   settingsOpen = $state(false)
-  settingsSection = $state<'storage' | 'onboard' | 'devices'>('storage')
+  settingsSection = $state<'storage' | 'onboard'>('storage')
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -642,7 +642,7 @@ export class VaultState {
     }
   }
 
-  openSettings(section: 'storage' | 'onboard' | 'devices' = 'storage') {
+  openSettings(section: 'storage' | 'onboard' = 'storage') {
     this.helpOpen = false
     this.settingsSection = section
     this.settingsOpen = true
@@ -1037,6 +1037,7 @@ export class VaultState {
   async issueEnrollmentCode(
     entryId: string,
     password: string,
+    providerId = this.activeProviderId ?? '',
   ): Promise<string> {
     if (!this.manager) {
       throw new Error('Vault engine is not available.')
@@ -1071,12 +1072,16 @@ export class VaultState {
       if (!verified) {
         throw new Error('Password does not match the vault.')
       }
+      const selectedProvider = this.providers.find((p) => p.id === providerId)
+      if (!selectedProvider) {
+        throw new Error('Choose an auth provider.')
+      }
       const provider: EnrollmentCodePayloadV1['provider'] =
-        this.storageMode === 'github'
+        selectedProvider.type === 'github'
           ? {
               type: 'github',
-              pat: this.githubPat.trim(),
-              repo: this.githubRepo.trim(),
+              pat: selectedProvider.githubPat?.trim() ?? '',
+              repo: selectedProvider.githubRepo?.trim() ?? '',
             }
           : { type: 'local' }
       if (provider.type === 'github' && (!provider.pat || !provider.repo)) {

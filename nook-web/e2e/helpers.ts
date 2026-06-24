@@ -438,25 +438,8 @@ export async function approveJoinFromSettings(
   target: GithubE2eTarget,
   expectedMembers: number,
 ) {
-  await openStorageSettings(page)
-  await expandSettingsSection(page, 'devices')
-  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
-
-  if (!(await row.isVisible())) {
-    await page.getByTestId('refresh-joins-btn').click()
-  }
-  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(
-    target.pat,
-    target.repoName,
-    expectedMembers,
-  )
-  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
   await page.getByTestId('vault-secrets-tab').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await approveJoinFromBanner(page, deviceId, target, expectedMembers)
 }
 
 export async function unlockGithubVault(page: Page) {
@@ -497,9 +480,7 @@ export async function openStorageSettings(page: Page) {
 
 const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
-  unlock: 'vault-onboard-section',
-  onboard: 'vault-onboard-section',
-  devices: 'devices-access-section',
+  unlock: 'vault-unlock-section',
 } as const
 
 export type SettingsSection = keyof typeof SETTINGS_SECTION_TEST_IDS

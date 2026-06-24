@@ -31,6 +31,7 @@
     onIssueCode,
     onClearCode,
     embedded = false,
+    allowIssueCode = true,
   }: {
     passwordEntries: VaultPasswordEntrySummary[]
     isBusy: boolean
@@ -45,6 +46,7 @@
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
     embedded?: boolean
+    allowIssueCode?: boolean
   } = $props()
 
   type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
@@ -254,15 +256,14 @@
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">
-        Create a vault password before onboarding another device. The QR link
-        will include your storage provider access and this password, so use a
-        long, unique value.
+        Create a vault password to unlock from another browser or generate an
+        onboarding QR from the Onboard page. Use a long, unique value.
       </span>
     </div>
   {:else}
     <p class="mb-4 text-xs text-muted-foreground text-pretty">
-      Choose an existing vault password to generate a QR/link for the new
-      device, or create a new password just for this onboarding flow.
+      These passwords can unlock the vault and can be selected on the Onboard
+      page when you generate a QR/link for another device.
     </p>
   {/if}
 
@@ -301,20 +302,22 @@
               >
                 <RefreshCw class="size-4" />
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="h-9 px-2.5"
-                disabled={isBusy}
-                data-testid={entry.id === passwordEntries[0]?.id
-                  ? 'issue-enrollment-code-btn'
-                  : undefined}
-                onclick={() => openPanel('issue', entry.id)}
-              >
-                <QrCode class="size-4" />
-                <span class="hidden sm:inline">Generate QR</span>
-              </Button>
+              {#if allowIssueCode}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="h-9 px-2.5"
+                  disabled={isBusy}
+                  data-testid={entry.id === passwordEntries[0]?.id
+                    ? 'issue-enrollment-code-btn'
+                    : undefined}
+                  onclick={() => openPanel('issue', entry.id)}
+                >
+                  <QrCode class="size-4" />
+                  <span class="hidden sm:inline">Generate QR</span>
+                </Button>
+              {/if}
               <Button
                 type="button"
                 variant="ghost"
@@ -342,7 +345,7 @@
       onclick={() => openPanel('add')}
     >
       <Plus class="size-4" />
-      {hasPasswords ? 'Create another password' : 'Create onboarding password'}
+      {hasPasswords ? 'Create another password' : 'Create vault password'}
     </Button>
   {/if}
 

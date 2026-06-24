@@ -1,17 +1,13 @@
 <script lang="ts">
-  import { CheckCircle2, Lock, QrCode, Smartphone } from '@lucide/svelte'
+  import { CheckCircle2, Lock, ShieldCheck } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
-  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
-
-  type SettingsSection = 'storage' | 'onboard' | 'devices'
 
   let {
     providers,
@@ -25,14 +21,9 @@
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     passwordEntries,
-    activeSection: initialSection = 'storage',
     isPasswordBusy,
     passwordError,
     enrollmentCode,
-    deviceId,
-    devicePublicKey,
-    pendingJoins,
-    vaultMembers,
     onReconnect,
     onSelectProvider,
     onBeginAddProvider,
@@ -46,7 +37,6 @@
     onRemovePassword,
     onIssueCode,
     onClearCode,
-    onApproveJoin,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -59,14 +49,9 @@
     githubPat: string
     githubRepo: string
     passwordEntries: VaultPasswordEntrySummary[]
-    activeSection?: SettingsSection
     isPasswordBusy: boolean
     passwordError: string
     enrollmentCode: string
-    deviceId: string
-    devicePublicKey: string
-    pendingJoins: JoinRequest[]
-    vaultMembers: VaultMember[]
     onReconnect: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -83,38 +68,21 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
-    onApproveJoin?: (deviceId: string) => void | Promise<void>
   } = $props()
 
-  let activeSection = $state<SettingsSection>(initialSection)
-
+  let activeSection = $state<'storage' | 'passwords'>('storage')
   const hasPasswords = $derived(passwordEntries.length > 0)
-  const showUnlockSections = $derived(!addProviderOpen && setupType === null)
-
-  $effect(() => {
-    if (addProviderOpen || setupType !== null) {
-      activeSection = 'storage'
-    }
-  })
-
-  $effect(() => {
-    if (!addProviderOpen && setupType === null) {
-      activeSection = initialSection
-    }
-  })
-
-  function openSection(section: SettingsSection) {
-    activeSection = section
-  }
 </script>
 
 <div class="space-y-2" data-testid="storage-settings-panel">
   <SettingsAccordionSection
     title="Storage providers"
-    subtitle="Where your vault file lives — not how you unlock it"
+    subtitle="Where your vault file lives"
     open={activeSection === 'storage'}
     testId="storage-providers-section"
-    onToggle={() => openSection('storage')}
+    onToggle={() => {
+      activeSection = 'storage'
+    }}
   >
     {#snippet badge()}
       {#if isAuthenticated}
@@ -150,73 +118,44 @@
     />
   </SettingsAccordionSection>
 
-  {#if showUnlockSections}
-    <SettingsAccordionSection
-      title="Onboard another device"
-      subtitle="Generate QR or link with provider access and a vault password"
-      open={activeSection === 'onboard'}
-      testId="vault-onboard-section"
-      onToggle={() => openSection('onboard')}
-    >
-      {#snippet badge()}
-        <span
-          class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
-            ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-            : 'border-border bg-muted/40 text-muted-foreground'}"
-          data-testid="vault-password-status"
-        >
-          {#if hasPasswords}
-            <QrCode class="size-3" />
-            {passwordEntries.length}
-            {passwordEntries.length === 1 ? 'password' : 'passwords'}
-          {:else}
-            <Lock class="size-3" />
-            None
-          {/if}
-        </span>
-      {/snippet}
-      <VaultPasswordCard
-        embedded
-        {passwordEntries}
-        isBusy={isPasswordBusy}
-        {passwordError}
-        {enrollmentCode}
-        {onAddPassword}
-        {onUpdatePassword}
-        {onRemovePassword}
-        {onIssueCode}
-        {onClearCode}
-      />
-    </SettingsAccordionSection>
-
-    <SettingsAccordionSection
-      title="Devices & access"
-      subtitle="Browsers enrolled with device keys"
-      open={activeSection === 'devices'}
-      testId="devices-access-section"
-      onToggle={() => openSection('devices')}
-    >
-      {#snippet badge()}
-        {#if pendingJoins.length > 0}
-          <span
-            class="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-            data-testid="pending-joins-settings-badge"
-          >
-            {pendingJoins.length} pending
-          </span>
+  <SettingsAccordionSection
+    title="Vault passwords"
+    subtitle="Passwords available for unlock and device onboarding"
+    open={activeSection === 'passwords'}
+    testId="vault-unlock-section"
+    onToggle={() => {
+      activeSection = 'passwords'
+    }}
+  >
+    {#snippet badge()}
+      <span
+        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+          : 'border-border bg-muted/40 text-muted-foreground'}"
+        data-testid="vault-password-status"
+      >
+        {#if hasPasswords}
+          <ShieldCheck class="size-3" />
+          {passwordEntries.length}
+          {passwordEntries.length === 1 ? 'password' : 'passwords'}
         {:else}
-          <Smartphone class="size-4 shrink-0 text-muted-foreground" />
+          <Lock class="size-3" />
+          None
         {/if}
-      {/snippet}
-      <DeviceEnrollment
-        embedded
-        {deviceId}
-        {devicePublicKey}
-        {pendingJoins}
-        {vaultMembers}
-        isBusy={isSaving || isVerifying}
-        {onApproveJoin}
-      />
-    </SettingsAccordionSection>
-  {/if}
+      </span>
+    {/snippet}
+    <VaultPasswordCard
+      embedded
+      {passwordEntries}
+      isBusy={isPasswordBusy}
+      {passwordError}
+      {enrollmentCode}
+      {onAddPassword}
+      {onUpdatePassword}
+      {onRemovePassword}
+      {onIssueCode}
+      {onClearCode}
+      allowIssueCode={false}
+    />
+  </SettingsAccordionSection>
 </div>
