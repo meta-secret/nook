@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { ArrowLeft, Plus, Search, Globe, Braces, Sprout, StickyNote } from '@lucide/svelte'
+  import {
+    ArrowLeft,
+    Plus,
+    Search,
+    Globe,
+    Braces,
+    Sprout,
+    StickyNote,
+  } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'

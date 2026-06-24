@@ -2,7 +2,6 @@
   import {
     KeyRound,
     Lock,
-    LockOpen,
     QrCode,
     RefreshCw,
     ShieldAlert,
@@ -219,34 +218,34 @@
   data-testid="vault-password-card"
 >
   {#if !embedded}
-  <header class="flex items-start justify-between gap-3 mb-3">
-    <div class="space-y-0.5">
-      <h2
-        class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
+    <header class="flex items-start justify-between gap-3 mb-3">
+      <div class="space-y-0.5">
+        <h2
+          class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
+        >
+          <KeyRound class="size-4 text-primary" />
+          Backup unlock passwords
+        </h2>
+        <p class="text-xs text-muted-foreground text-pretty max-w-prose">
+          Recovery if device keys are lost — used on the login screen after you
+          lock the vault, not when connecting to storage.
+        </p>
+      </div>
+      <span
+        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+          : 'border-border bg-muted/40 text-muted-foreground'}"
+        data-testid="vault-password-status"
       >
-        <KeyRound class="size-4 text-primary" />
-        Backup unlock passwords
-      </h2>
-      <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-        Recovery if device keys are lost — used on the login screen after you
-        lock the vault, not when connecting to storage.
-      </p>
-    </div>
-    <span
-      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
-        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-        : 'border-border bg-muted/40 text-muted-foreground'}"
-      data-testid="vault-password-status"
-    >
-      {#if hasPasswords}
-        <ShieldCheck class="size-3" />
-        {passwordEntries.length}
-        {passwordEntries.length === 1 ? 'password' : 'passwords'}
-      {:else}
-        <Lock class="size-3" /> None
-      {/if}
-    </span>
-  </header>
+        {#if hasPasswords}
+          <ShieldCheck class="size-3" />
+          {passwordEntries.length}
+          {passwordEntries.length === 1 ? 'password' : 'passwords'}
+        {:else}
+          <Lock class="size-3" /> None
+        {/if}
+      </span>
+    </header>
   {/if}
 
   {#if !hasPasswords}
@@ -443,7 +442,8 @@
   {#if panel === 'remove' && activeEntry}
     <div class="space-y-3">
       <p class="text-xs text-muted-foreground text-pretty">
-        Remove <span class="font-medium text-foreground">{activeEntry.label}</span
+        Remove <span class="font-medium text-foreground"
+          >{activeEntry.label}</span
         >? Other passwords stay active. If this is the last password, the vault
         returns to device-key unlock for this browser.
       </p>
@@ -512,7 +512,12 @@
             </p>
           {/if}
           <div class="flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onclick={closePanel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onclick={closePanel}
+            >
               Cancel
             </Button>
             <Button

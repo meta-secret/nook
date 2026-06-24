@@ -4,19 +4,35 @@
 
   let {
     value = $bindable(''),
-    rows = 12,
     placeholder = '',
     testId = 'secret-value',
+    minHeight = 'min-h-[24rem]',
   }: {
     value?: string
-    rows?: number
     placeholder?: string
     testId?: string
+    minHeight?: string
   } = $props()
 
   let tab = $state<'write' | 'preview'>('write')
 
   const previewHtml = $derived(renderMarkdown(value))
+
+  let textareaEl: HTMLTextAreaElement | undefined = $state()
+
+  function adjustHeight() {
+    if (textareaEl) {
+      textareaEl.style.height = 'auto'
+      textareaEl.style.height = `${textareaEl.scrollHeight}px`
+    }
+  }
+
+  // Adjust height whenever tab or value changes
+  $effect(() => {
+    if (tab === 'write' && value !== undefined) {
+      setTimeout(adjustHeight, 0)
+    }
+  })
 </script>
 
 <div
@@ -56,31 +72,25 @@
     </button>
   </div>
 
-  <div class="relative min-h-[12rem]">
-    <textarea
-      id="secure-note-body"
-      data-testid={testId}
-      bind:value
-      {rows}
-      {placeholder}
-      aria-hidden={tab !== 'write'}
-      class="absolute inset-0 block w-full resize-y border-0 bg-transparent px-3 py-2 font-mono text-sm leading-relaxed focus:outline-hidden focus:ring-0 {tab !==
-      'write'
-        ? 'pointer-events-none opacity-0'
-        : ''}"
-    ></textarea>
-    <div
-      role="tabpanel"
-      aria-hidden={tab !== 'preview'}
-      class="absolute inset-0 overflow-y-auto px-3 py-2 {tab !== 'preview'
-        ? 'pointer-events-none opacity-0'
-        : ''}"
-    >
-      {#if value.trim()}
-        <MarkdownBody html={previewHtml} testId="markdown-preview" />
-      {:else}
-        <p class="text-sm text-muted-foreground">Nothing to preview</p>
-      {/if}
-    </div>
+  <div class="{minHeight} flex flex-col">
+    {#if tab === 'write'}
+      <textarea
+        bind:this={textareaEl}
+        id="secure-note-body"
+        data-testid={testId}
+        bind:value
+        {placeholder}
+        oninput={adjustHeight}
+        class="block w-full {minHeight} resize-none border-0 bg-transparent px-3 py-2 font-mono text-sm leading-relaxed focus:outline-hidden focus:ring-0"
+      ></textarea>
+    {:else}
+      <div role="tabpanel" class="{minHeight} px-3 py-2 overflow-y-auto">
+        {#if value.trim()}
+          <MarkdownBody html={previewHtml} testId="markdown-preview" />
+        {:else}
+          <p class="text-sm text-muted-foreground">Nothing to preview</p>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>

@@ -31,7 +31,9 @@
   <Card
     class="gap-0 border-border bg-card/80 py-0 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
   >
-    <CardHeader class="border-b border-border/60 space-y-0 gap-0 px-4 pb-2 pt-3 sm:px-5">
+    <CardHeader
+      class="border-b border-border/60 space-y-0 gap-0 px-4 pb-2 pt-3 sm:px-5"
+    >
       <div class="flex items-start justify-between gap-2">
         <div class="space-y-0.5">
           <CardTitle

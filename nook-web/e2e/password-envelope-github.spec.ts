@@ -7,7 +7,6 @@ import {
   createE2eGithubRepoName,
   createIsolatedContext,
   expandLoginEnrollmentPanel,
-  expandSettingsSection,
   finishE2eGithubSuite,
   githubPat,
   openStorageSettings,

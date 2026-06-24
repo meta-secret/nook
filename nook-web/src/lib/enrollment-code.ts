@@ -104,7 +104,7 @@ export function consumeEnrollmentFromLocation(): string | null {
   }
 
   const url = new URL(window.location.href)
-  let raw: string | null = null
+  let raw: string | null
 
   if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
     raw = decodeURIComponent(url.hash.slice(ENROLLMENT_HASH_PREFIX.length))

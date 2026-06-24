@@ -186,7 +186,9 @@
           <Braces class="size-5" />
         </div>
         <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground">API key</span>
+          <span class="block text-sm font-semibold text-foreground"
+            >API key</span
+          >
           <span class="mt-0.5 block text-xs text-muted-foreground"
             >Token or auth key</span
           >
@@ -253,7 +255,8 @@
 
     {#if selectedType === 'login' || selectedType === 'api-key'}
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label">Website URL</label>
+        <label class="text-xs font-medium" for="secret-label">Website URL</label
+        >
         <input
           id="secret-label"
           type="text"
@@ -382,7 +385,8 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="api-key-expiration"
-          >Expiration <span class="text-muted-foreground">(optional)</span></label
+          >Expiration <span class="text-muted-foreground">(optional)</span
+          ></label
         >
         <input
           id="api-key-expiration"
@@ -407,7 +411,8 @@
         />
       </div>
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-value">Seed phrase</label>
+        <label class="text-xs font-medium" for="secret-value">Seed phrase</label
+        >
         <textarea
           id="secret-value"
           data-testid="secret-value"
@@ -436,7 +441,10 @@
         <span class="text-xs font-medium"
           >Note <span class="text-muted-foreground">(Markdown)</span></span
         >
-        <MarkdownEditor bind:value={noteBody} placeholder="Write anything — headings, lists, and code blocks are supported." />
+        <MarkdownEditor
+          bind:value={noteBody}
+          placeholder="Write anything — headings, lists, and code blocks are supported."
+        />
       </div>
     {/if}
 

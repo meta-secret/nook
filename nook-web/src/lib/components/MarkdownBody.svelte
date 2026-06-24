@@ -10,10 +10,8 @@
   } = $props()
 </script>
 
-<div
-  class="markdown-body nook-markdown {className}"
-  data-testid={testId}
->
+<div class="markdown-body nook-markdown {className}" data-testid={testId}>
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
   {@html html}
 </div>
 
@@ -46,18 +44,5 @@
 
   :global(.nook-markdown.markdown-body strong) {
     font-weight: 600;
-  }
-
-  :global(:root:not(.dark) .nook-markdown.markdown-body) {
-    color: var(--foreground);
-  }
-
-  :global(:root:not(.dark) .nook-markdown.markdown-body h1),
-  :global(:root:not(.dark) .nook-markdown.markdown-body h2),
-  :global(:root:not(.dark) .nook-markdown.markdown-body h3),
-  :global(:root:not(.dark) .nook-markdown.markdown-body h4),
-  :global(:root:not(.dark) .nook-markdown.markdown-body h5),
-  :global(:root:not(.dark) .nook-markdown.markdown-body h6) {
-    color: var(--foreground);
   }
 </style>

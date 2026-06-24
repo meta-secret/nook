@@ -18,7 +18,6 @@ test.describe('vault password envelope (local)', () => {
     page.on('console', (msg) => {
       const text = msg.text()
       if (text.includes('[nook]') || msg.type() === 'error') {
-        // eslint-disable-next-line no-console
         console.log(`[browser ${msg.type()}] ${text}`)
       }
     })
@@ -28,7 +27,9 @@ test.describe('vault password envelope (local)', () => {
     await connectLocalVault(page)
   })
 
-  test('adds backup passwords without replacing device-key unlock', async ({ page }) => {
+  test('adds backup passwords without replacing device-key unlock', async ({
+    page,
+  }) => {
     await assertVaultReady(page)
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')
@@ -138,7 +139,9 @@ test.describe('vault password envelope (local)', () => {
     const error = page.getByTestId('vault-password-error')
     await expect(error).toBeVisible()
     await expect(error).toContainText('at least 5')
-    await expect(page.getByTestId('vault-password-status')).toContainText('None')
+    await expect(page.getByTestId('vault-password-status')).toContainText(
+      'None',
+    )
   })
 
   test('rejects mismatched password / confirmation', async ({ page }) => {
@@ -153,7 +156,9 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-password-error')).toContainText(
       'do not match',
     )
-    await expect(page.getByTestId('vault-password-status')).toContainText('None')
+    await expect(page.getByTestId('vault-password-status')).toContainText(
+      'None',
+    )
   })
 
   test('issuing an enrollment code rejects the wrong password', async ({
@@ -255,7 +260,9 @@ test.describe('vault password envelope (local)', () => {
 
     await page.getByTestId('remove-vault-password-btn').click()
     await page.getByTestId('confirm-remove-vault-password').click()
-    await expect(page.getByTestId('vault-password-status')).toContainText('None')
+    await expect(page.getByTestId('vault-password-status')).toContainText(
+      'None',
+    )
 
     await page.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(page)
@@ -284,9 +291,9 @@ test.describe('enrollment link deep link (local)', () => {
     await pageA.getByTestId('issue-enrollment-code-btn').click()
     await pageA.getByTestId('issue-code-password-input').fill('link-pass')
     await pageA.getByTestId('generate-enrollment-code-btn').click()
-    const link = (
-      await pageA.getByTestId('enrollment-code-link').textContent()
-    )!.trim()
+    const link = (await pageA
+      .getByTestId('enrollment-code-link')
+      .textContent())!.trim()
     expect(link).toContain('#enroll=')
 
     const pageB = await context.newPage()

@@ -189,7 +189,8 @@
               onRemoveProvider={(id) => vault.removeProvider(id)}
               onLockVault={() => vault.lockVault()}
               onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-              onUpdatePassword={(id, pw) => vault.updateVaultPasswordEntry(id, pw)}
+              onUpdatePassword={(id, pw) =>
+                vault.updateVaultPasswordEntry(id, pw)}
               onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
               onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
               onClearCode={() => vault.clearEnrollmentCode()}

@@ -70,10 +70,13 @@ pub struct PasswordEnvelope {
 ///
 /// Legacy vaults may still carry a single `envelope:` under `type: password`;
 /// those are migrated into a one-entry `entries` list on read.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum VaultUnlock {
+    #[default]
     Keys,
-    Passwords { entries: Vec<PasswordUnlockEntry> },
+    Passwords {
+        entries: Vec<PasswordUnlockEntry>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -121,12 +124,6 @@ impl<'de> Deserialize<'de> for VaultUnlock {
     }
 }
 
-impl Default for VaultUnlock {
-    fn default() -> Self {
-        Self::Keys
-    }
-}
-
 fn legacy_password_entry(envelope: PasswordEnvelope) -> PasswordUnlockEntry {
     PasswordUnlockEntry {
         id: "legacy".to_owned(),
@@ -152,9 +149,7 @@ impl VaultUnlock {
 
     #[must_use]
     pub fn password_entry(&self, id: &str) -> Option<&PasswordUnlockEntry> {
-        self.password_entries()
-            .iter()
-            .find(|entry| entry.id == id)
+        self.password_entries().iter().find(|entry| entry.id == id)
     }
 
     #[must_use]

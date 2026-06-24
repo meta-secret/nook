@@ -1,9 +1,5 @@
 <script lang="ts">
-  import {
-    RefreshCw,
-    ShieldCheck,
-    ChevronLeft,
-  } from '@lucide/svelte'
+  import { RefreshCw, ShieldCheck, ChevronLeft } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     StorageProvider,
@@ -74,7 +70,10 @@
     onCancelSetup: () => void
     onOpenHelp?: () => void
     onUseEnrollmentCode?: (code: string) => void | Promise<void>
-    onUnlockWithPassword?: (entryId: string, password: string) => void | Promise<void>
+    onUnlockWithPassword?: (
+      entryId: string,
+      password: string,
+    ) => void | Promise<void>
     onRemoveProvider?: (id: string) => void | Promise<void>
     loginPasswordPrompt?: boolean
     passwordEntries?: VaultPasswordEntrySummary[]
@@ -87,12 +86,8 @@
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
-  const showWizard = $derived(
-    hasProviders && !showSetup && !addProviderOpen,
-  )
-  const showProviderSetup = $derived(
-    !showSetup && !showWizard,
-  )
+  const showWizard = $derived(hasProviders && !showSetup && !addProviderOpen)
+  const showProviderSetup = $derived(!showSetup && !showWizard)
   const activeProvider = $derived(
     providers.find((p) => p.id === activeProviderId) ?? null,
   )
@@ -100,7 +95,10 @@
     isVerifying && showWizard && loginFlowStep === 'connection' && !showSetup,
   )
   const isUnlocking = $derived(
-    isVerifying && showWizard && loginFlowStep === 'authorization' && !showSetup,
+    isVerifying &&
+      showWizard &&
+      loginFlowStep === 'authorization' &&
+      !showSetup,
   )
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
@@ -125,7 +123,7 @@
       {isInitializing}
       bind:open={manageProvidersOpen}
       {onRemoveProvider}
-      onBeginAddProvider={onBeginAddProvider}
+      {onBeginAddProvider}
     />
   {/if}
 
@@ -133,9 +131,9 @@
     class="gap-0 border-border bg-card/80 py-0 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
   >
     <CardHeader
-      class="{showWizard
-        ? 'border-b-0 px-4 pb-1 pt-3'
-        : 'border-b border-border/60 px-6 pb-4 pt-5'}"
+      class={showWizard
+        ? 'border-b-0 px-5 pb-1 pt-3 sm:px-6'
+        : 'border-b border-border/60 px-6 pb-4 pt-5'}
     >
       <div class="space-y-1">
         {#if addProviderOpen && showWizard}
@@ -192,7 +190,9 @@
       </div>
     </CardHeader>
 
-    <CardContent class={showWizard ? 'px-4 pb-4 pt-0' : 'px-6 pt-4'}>
+    <CardContent
+      class={showWizard ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6' : 'px-6 pt-4'}
+    >
       {#if showWizard}
         <LoginWizard
           step={loginFlowStep}
@@ -206,7 +206,7 @@
           {isConnecting}
           {isUnlocking}
           {loginPasswordPrompt}
-          onSelectProvider={onSelectProvider}
+          {onSelectProvider}
           onConnect={() => onConnectProvider?.()}
           onBackToConnection={onBackToLoginProvider}
           {onUnlock}
@@ -214,13 +214,9 @@
           {onConsumeLoginPasswordPrompt}
         />
       {:else if showSetup && setupType}
-        <form
-          novalidate
-          onsubmit={handleFirstConnectSubmit}
-          class="space-y-4"
-        >
+        <form novalidate onsubmit={handleFirstConnectSubmit} class="space-y-4">
           <ProviderSetupFields
-            setupType={setupType}
+            {setupType}
             bind:githubPat
             bind:githubRepo
             idPrefix="login"
@@ -252,8 +248,8 @@
           {isVerifying}
           {isInitializing}
           addingProvider={addProviderOpen}
-          onBeginSetup={onBeginSetup}
-          onCancelAddProvider={onCancelAddProvider}
+          {onBeginSetup}
+          {onCancelAddProvider}
           {onRemoveProvider}
         />
       {/if}

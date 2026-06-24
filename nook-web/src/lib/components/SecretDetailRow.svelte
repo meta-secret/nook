@@ -326,8 +326,9 @@
                 <MarkdownContent source={item.note} />
               </div>
             {:else}
-              <span class="font-mono text-foreground" data-testid="revealed-secret"
-                >••••••••••••••••</span
+              <span
+                class="font-mono text-foreground"
+                data-testid="revealed-secret">••••••••••••••••</span
               >
             {/if}
             <button

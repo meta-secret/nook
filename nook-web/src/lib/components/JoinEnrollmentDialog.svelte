@@ -130,8 +130,9 @@
               reading the encrypted file from GitHub is not enough.
             </li>
             <li>
-              Send a request;               an enrolled device approves it under
-              <strong class="font-medium text-foreground">Vault settings</strong>.
+              Send a request; an enrolled device approves it under
+              <strong class="font-medium text-foreground">Vault settings</strong
+              >.
             </li>
             <li>
               Approval wraps the vault keys for this browser’s public key — no

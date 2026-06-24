@@ -45,7 +45,10 @@
     onConnect: () => void | Promise<void>
     onBackToConnection?: () => void
     onUnlock: () => void | Promise<void>
-    onUnlockWithPassword?: (entryId: string, password: string) => void | Promise<void>
+    onUnlockWithPassword?: (
+      entryId: string,
+      password: string,
+    ) => void | Promise<void>
     onConsumeLoginPasswordPrompt?: () => void
   } = $props()
 
@@ -92,7 +95,8 @@
         {/if}
       </span>
       <span class="min-w-0 flex-1">
-        <span class="block text-sm font-medium text-foreground">Connection</span>
+        <span class="block text-sm font-medium text-foreground">Connection</span
+        >
         {#if connectionDone && activeProvider}
           <span class="block truncate text-xs text-muted-foreground">
             {providerStorageDetail(activeProvider)}

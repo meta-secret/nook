@@ -106,15 +106,15 @@ test.describe('local vault', () => {
     await page.getByTestId('secret-value').fill(noteBody)
     await page.getByTestId('markdown-tab-preview').click()
     await expect(page.getByTestId('markdown-preview')).toContainText('Recovery')
+    await expect(page.getByTestId('markdown-preview').locator('h1')).toHaveText(
+      'Recovery',
+    )
     await expect(
-      page.getByTestId('markdown-preview').locator('h1'),
-    ).toHaveText('Recovery')
-    await expect(page.getByTestId('markdown-preview').locator('strong')).toHaveText(
-      'backup',
-    )
-    await expect(page.getByTestId('markdown-preview').locator('ul li')).toHaveCount(
-      1,
-    )
+      page.getByTestId('markdown-preview').locator('strong'),
+    ).toHaveText('backup')
+    await expect(
+      page.getByTestId('markdown-preview').locator('ul li'),
+    ).toHaveCount(1)
     await page.getByTestId('save-secret-btn').click()
 
     const row = page.getByTestId('secret-row').filter({ hasText: title })

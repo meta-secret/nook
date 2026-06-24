@@ -117,8 +117,7 @@
             class="w-full font-mono text-xs leading-relaxed rounded-md border border-border bg-background p-3 focus:outline-none focus:ring-2 focus:ring-ring"
             placeholder="Paste enrollment link or code here…"
             bind:value={enrollmentCodeInput}
-            data-testid="enrollment-code-input"
-          ></textarea>
+            data-testid="enrollment-code-input"></textarea>
           <div class="flex justify-end">
             <Button
               type="submit"

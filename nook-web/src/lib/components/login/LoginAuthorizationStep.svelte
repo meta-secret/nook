@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    KeyRound,
-    RefreshCw,
-    ShieldCheck,
-    UserRound,
-  } from '@lucide/svelte'
+  import { KeyRound, RefreshCw, ShieldCheck, UserRound } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
@@ -26,7 +21,10 @@
     isUnlocking?: boolean
     loginPasswordPrompt?: boolean
     onUnlock: () => void | Promise<void>
-    onUnlockWithPassword?: (entryId: string, password: string) => void | Promise<void>
+    onUnlockWithPassword?: (
+      entryId: string,
+      password: string,
+    ) => void | Promise<void>
     onConsumeLoginPasswordPrompt?: () => void
   } = $props()
 
@@ -116,10 +114,10 @@
           type="button"
           role="radio"
           aria-checked={unlockMethod === 'password'}
-        class="flex items-center gap-2.5 border-t border-border/40 px-3 py-3 text-left text-sm transition-colors sm:border-t-0 sm:border-l {unlockMethod ===
-        'password'
-          ? 'bg-primary/[0.06] text-foreground'
-          : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
+          class="flex items-center gap-2.5 border-t border-border/40 px-3 py-3 text-left text-sm transition-colors sm:border-t-0 sm:border-l {unlockMethod ===
+          'password'
+            ? 'bg-primary/[0.06] text-foreground'
+            : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
           data-testid="login-unlock-method-password"
           disabled={isVerifying || isInitializing}
           onclick={() => {
@@ -133,7 +131,9 @@
     </div>
 
     {#if isPasswordUnlock}
-      <div class="space-y-2.5 rounded-md border border-border/50 bg-muted/15 p-3">
+      <div
+        class="space-y-2.5 rounded-md border border-border/50 bg-muted/15 p-3"
+      >
         <ul class="space-y-1.5" data-testid="login-password-entry-list">
           {#each passwordEntries as entry (entry.id)}
             <li>

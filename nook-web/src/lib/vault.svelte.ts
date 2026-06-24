@@ -350,10 +350,7 @@ export class VaultState {
       )
       this.passwordEntries = mapWasmPasswordEntries(raw)
       this.loginUnlockMode = 'keys'
-      if (
-        this.passwordEntries.length === 1 &&
-        !this.selectedPasswordEntryId
-      ) {
+      if (this.passwordEntries.length === 1 && !this.selectedPasswordEntryId) {
         this.selectedPasswordEntryId = this.passwordEntries[0]!.id
       }
       return true

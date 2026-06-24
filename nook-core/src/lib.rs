@@ -16,8 +16,7 @@ mod vault_format;
 pub use database::Database;
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
-    SeedPhraseSecret,
-    StoredSecretRecord,
+    SeedPhraseSecret, StoredSecretRecord,
 };
 
 pub use multi_device::{
@@ -40,8 +39,7 @@ pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, ge
 pub use password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
     PasswordUnlockEntry, VaultUnlock, attach_password_envelope, create_password_entry,
-    resolve_keys_from_entry, resolve_keys_from_password, verify_password,
-    verify_password_entry,
+    resolve_keys_from_entry, resolve_keys_from_password, verify_password, verify_password_entry,
 };
 pub use validation::{
     DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets,
@@ -50,7 +48,7 @@ pub use validation::{
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{
-    VaultFormat,     deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
+    VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
     read_vault_password_entries, read_vault_unlock, serialize_stored,
     serialize_stored_yaml_with_unlock,
 };
