@@ -497,7 +497,8 @@ export async function openStorageSettings(page: Page) {
 
 const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
-  unlock: 'vault-unlock-section',
+  unlock: 'vault-onboard-section',
+  onboard: 'vault-onboard-section',
   devices: 'devices-access-section',
 } as const
 

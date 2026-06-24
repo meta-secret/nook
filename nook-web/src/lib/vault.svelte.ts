@@ -37,6 +37,7 @@ import {
 
 export class VaultState {
   settingsOpen = $state(false)
+  settingsSection = $state<'storage' | 'onboard' | 'devices'>('storage')
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -641,8 +642,9 @@ export class VaultState {
     }
   }
 
-  openSettings() {
+  openSettings(section: 'storage' | 'onboard' | 'devices' = 'storage') {
     this.helpOpen = false
+    this.settingsSection = section
     this.settingsOpen = true
     void this.refreshDeviceState()
   }

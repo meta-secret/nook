@@ -71,7 +71,8 @@ stateDiagram-v2
 - Primary action on setup: **Connect** (not “Sign in to nook”).
 - **Help** page (`HelpPage`) in header — architecture, multi-device security, join flow, vault file layout. Login gate shows `ProductIntro` callout with link.
 - **Storage & devices** (settings): saved provider list, **Add provider**, switch active provider + **Reconnect vault**.
-- Device enrollment, join approvals, and transfer keys: **Storage & devices** and the **Join this vault** dialog — not on the login screen.
+- **Onboard another device** (settings): generate a QR/link for one-step bootstrap. The QR bundles the active provider credentials and a selected vault password, so the new browser can fetch the vault and self-enroll without a separate approval hop.
+- Device enrollment and join approvals still live under **Devices & access** and the **Join this vault** dialog. They are the approval-based fallback, not the primary QR onboarding flow.
 
 ### 3.1 Two-step unlock (storage provider × unlock method)
 
@@ -110,7 +111,7 @@ First connect (genesis) uses **setup** → provider credentials form → WASM `c
 
 **Auto-unlock:** When exactly one saved provider exists and device keys work, `VaultState` may unlock on load without showing the wizard. The wizard still models connect-then-authorize for manual login, password recovery, and multi-provider setups.
 
-**Enrollment QR** remains a separate card: it bundles provider credentials *and* a backup password for one-shot device bootstrap — not the normal wizard pattern.
+**Enrollment QR** is surfaced as **Onboard another device** from the authenticated vault. Users choose an existing vault password or create a new one, then generate a QR/link that bundles provider credentials *and* that password for one-shot device bootstrap — not the normal wizard pattern.
 
 ```mermaid
 flowchart TB

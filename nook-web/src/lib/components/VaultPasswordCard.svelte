@@ -224,11 +224,11 @@
           class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
         >
           <KeyRound class="size-4 text-primary" />
-          Backup unlock passwords
+          Onboard another device
         </h2>
         <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-          Recovery if device keys are lost — used on the login screen after you
-          lock the vault, not when connecting to storage.
+          Generate a QR/link that carries provider access and a vault password
+          so another browser can join this vault.
         </p>
       </div>
       <span
@@ -254,10 +254,16 @@
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">
-        Anyone who knows a vault password and your storage credentials can read
-        the entire vault. Use a long, unique password for each entry.
+        Create a vault password before onboarding another device. The QR link
+        will include your storage provider access and this password, so use a
+        long, unique value.
       </span>
     </div>
+  {:else}
+    <p class="mb-4 text-xs text-muted-foreground text-pretty">
+      Choose an existing vault password to generate a QR/link for the new
+      device, or create a new password just for this onboarding flow.
+    </p>
   {/if}
 
   {#if panel === 'idle'}
@@ -307,6 +313,7 @@
                 onclick={() => openPanel('issue', entry.id)}
               >
                 <QrCode class="size-4" />
+                <span class="hidden sm:inline">Generate QR</span>
               </Button>
               <Button
                 type="button"
@@ -335,7 +342,7 @@
       onclick={() => openPanel('add')}
     >
       <Plus class="size-4" />
-      {hasPasswords ? 'Add another password' : 'Add vault password'}
+      {hasPasswords ? 'Create another password' : 'Create onboarding password'}
     </Button>
   {/if}
 
@@ -488,7 +495,7 @@
           <p class="text-xs text-muted-foreground text-pretty">
             Re-type the password for <span class="font-medium text-foreground"
               >{activeEntry.label}</span
-            > to issue an enrollment code.
+            > to generate a QR/link for the new device.
           </p>
           <div class="space-y-1.5">
             <label
@@ -525,7 +532,7 @@
               size="sm"
               data-testid="generate-enrollment-code-btn"
             >
-              <QrCode class="size-3.5" /> Generate code
+              <QrCode class="size-3.5" /> Generate QR/link
             </Button>
           </div>
         </form>
@@ -535,7 +542,7 @@
         >
           <div class="flex items-start justify-between gap-3">
             <p class="text-xs text-muted-foreground text-pretty">
-              Scan with the joining device to open Nook, or copy the link.
+              Scan this QR with the new device to open Nook, or copy the link.
               {#if issuedAgo}
                 <span
                   class="ml-1 text-muted-foreground/80"

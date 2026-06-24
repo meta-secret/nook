@@ -2,6 +2,7 @@
   import {
     ArrowLeft,
     Plus,
+    QrCode,
     Search,
     Globe,
     Braces,
@@ -26,6 +27,7 @@
     onDeleteSecret,
     onGeneratePassword,
     onAddModeChange,
+    onOnboardDevice,
   }: {
     isSaving: boolean
     secrets?: SecretRecord[]
@@ -43,6 +45,7 @@
       symbols: boolean,
     ) => string
     onAddModeChange?: (open: boolean) => void
+    onOnboardDevice?: () => void
   } = $props()
 
   let searchPattern = $state('')
@@ -171,7 +174,7 @@
     </div>
   {:else}
     <div class="space-y-4">
-      <div class="flex items-center justify-between gap-3">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 class="text-base font-semibold text-foreground">Vault</h2>
           <p class="text-xs text-muted-foreground">
@@ -182,16 +185,30 @@
             {/if}
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          class="border-border bg-background text-foreground hover:bg-accent"
-          data-testid="add-secret-btn"
-          onclick={openAddSecret}
-        >
-          <Plus class="size-3.5" />
-          Add item
-        </Button>
+        <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
+          {#if onOnboardDevice}
+            <Button
+              size="sm"
+              variant="outline"
+              class="flex-1 border-border bg-background text-foreground hover:bg-accent sm:flex-none"
+              data-testid="onboard-device-btn"
+              onclick={onOnboardDevice}
+            >
+              <QrCode class="size-3.5" />
+              Onboard device
+            </Button>
+          {/if}
+          <Button
+            size="sm"
+            variant="outline"
+            class="flex-1 border-border bg-background text-foreground hover:bg-accent sm:flex-none"
+            data-testid="add-secret-btn"
+            onclick={openAddSecret}
+          >
+            <Plus class="size-3.5" />
+            Add item
+          </Button>
+        </div>
       </div>
 
       <div class="relative">

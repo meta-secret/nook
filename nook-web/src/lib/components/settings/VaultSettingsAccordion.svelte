@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle2, Lock, ShieldCheck, Smartphone } from '@lucide/svelte'
+  import { CheckCircle2, Lock, QrCode, Smartphone } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
@@ -11,7 +11,7 @@
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
-  type SettingsSection = 'storage' | 'unlock' | 'devices'
+  type SettingsSection = 'storage' | 'onboard' | 'devices'
 
   let {
     providers,
@@ -25,6 +25,7 @@
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     passwordEntries,
+    activeSection: initialSection = 'storage',
     isPasswordBusy,
     passwordError,
     enrollmentCode,
@@ -58,6 +59,7 @@
     githubPat: string
     githubRepo: string
     passwordEntries: VaultPasswordEntrySummary[]
+    activeSection?: SettingsSection
     isPasswordBusy: boolean
     passwordError: string
     enrollmentCode: string
@@ -84,7 +86,7 @@
     onApproveJoin?: (deviceId: string) => void | Promise<void>
   } = $props()
 
-  let activeSection = $state<SettingsSection>('storage')
+  let activeSection = $state<SettingsSection>(initialSection)
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const showUnlockSections = $derived(!addProviderOpen && setupType === null)
@@ -92,6 +94,12 @@
   $effect(() => {
     if (addProviderOpen || setupType !== null) {
       activeSection = 'storage'
+    }
+  })
+
+  $effect(() => {
+    if (!addProviderOpen && setupType === null) {
+      activeSection = initialSection
     }
   })
 
@@ -144,11 +152,11 @@
 
   {#if showUnlockSections}
     <SettingsAccordionSection
-      title="Backup unlock passwords"
-      subtitle="Recovery if device keys are lost"
-      open={activeSection === 'unlock'}
-      testId="vault-unlock-section"
-      onToggle={() => openSection('unlock')}
+      title="Onboard another device"
+      subtitle="Generate QR or link with provider access and a vault password"
+      open={activeSection === 'onboard'}
+      testId="vault-onboard-section"
+      onToggle={() => openSection('onboard')}
     >
       {#snippet badge()}
         <span
@@ -158,7 +166,7 @@
           data-testid="vault-password-status"
         >
           {#if hasPasswords}
-            <ShieldCheck class="size-3" />
+            <QrCode class="size-3" />
             {passwordEntries.length}
             {passwordEntries.length === 1 ? 'password' : 'passwords'}
           {:else}

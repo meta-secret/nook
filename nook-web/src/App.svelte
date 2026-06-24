@@ -189,6 +189,7 @@
               bind:githubPat={vault.githubPat}
               bind:githubRepo={vault.githubRepo}
               passwordEntries={vault.passwordEntries}
+              activeSection={vault.settingsSection}
               isPasswordBusy={vault.isPasswordBusy}
               passwordError={vault.passwordError}
               enrollmentCode={vault.enrollmentCode}
@@ -225,6 +226,7 @@
               onAddModeChange={(open) => {
                 secretsAddOpen = open
               }}
+              onOnboardDevice={() => vault.openSettings('onboard')}
               onAddSecret={(id, type, data) =>
                 vault.handleAddSecret(id, type, data)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
