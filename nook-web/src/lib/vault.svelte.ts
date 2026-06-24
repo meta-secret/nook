@@ -868,12 +868,26 @@ export class VaultState {
 
       if (accessStatus === 'needs_enrollment') {
         await this.ensureProviderSaved()
+        const hasPasswordFallback = await this.refreshPasswordEntriesList()
+        if (hasPasswordFallback && this.passwordEntries.length > 0) {
+          this.loginFlowStep = 'authorization'
+          this.loginPasswordPrompt = true
+          this.joinEnrollmentPrompt = 'none'
+          return
+        }
         this.joinEnrollmentPrompt = 'needs_request'
         this.startVaultSync()
         return
       }
       if (accessStatus === 'join_pending') {
         await this.ensureProviderSaved()
+        const hasPasswordFallback = await this.refreshPasswordEntriesList()
+        if (hasPasswordFallback && this.passwordEntries.length > 0) {
+          this.loginFlowStep = 'authorization'
+          this.loginPasswordPrompt = true
+          this.joinEnrollmentPrompt = 'none'
+          return
+        }
         this.joinEnrollmentPrompt = 'pending'
         this.startVaultSync()
         return
