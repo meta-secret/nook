@@ -27,7 +27,10 @@
   class="nook-logo relative inline-flex shrink-0 items-center justify-center {sizeClass} {className}"
   data-testid="nook-logo"
 >
-  <svg class="pointer-events-none absolute size-0 overflow-hidden" aria-hidden="true">
+  <svg
+    class="pointer-events-none absolute size-0 overflow-hidden"
+    aria-hidden="true"
+  >
     <defs>
       <filter
         id="nook-logo-dark-filter"

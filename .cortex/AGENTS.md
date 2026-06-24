@@ -2,9 +2,17 @@
 
 This is the system of record and entry point for all AI agents working in this repository. Follow the links below for deep context on Nook's architecture, design, and standards.
 
+## ⛔ Non-negotiable: squash merge every PR
+
+**All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).
+
+## ⛔ Non-negotiable: never kill the Docker daemon
+
+**Do not stop, restart, or `kill` Docker Desktop / `dockerd`.** Stop individual **containers** only (`docker stop <id>`). Never use `killall docker`, `pkill docker`, or `lsof … | xargs kill` on ports Docker forwards (e.g. `:5173` for `task web:dev`). Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
+
 ## 1. Rules & Architectural Layout
 * [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
-* [rules.md](rules.md) — Golden Principles and hard coding/tooling constraints.
+* [rules.md](rules.md) — Golden Principles and hard coding/tooling constraints (**§6: squash merge every PR**).
 
 ## 2. Design Specs & Beliefs (`design-docs/`)
 * [design-docs/index.md](design-docs/index.md) — Index of design specifications and status.
@@ -22,3 +30,8 @@ This is the system of record and entry point for all AI agents working in this r
 ## 5. Technology Cheat Sheets (`references/`)
 * [references/rust-wasm.md](references/rust-wasm.md) — Rust-Wasm binding conventions.
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
+
+## 6. Workflows (`workflows/`)
+* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy** and PR checklist.
+* [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
+* [workflows/quality.md](workflows/quality.md) — Quality gates and release.

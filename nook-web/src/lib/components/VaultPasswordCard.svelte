@@ -2,7 +2,6 @@
   import {
     KeyRound,
     Lock,
-    LockOpen,
     QrCode,
     RefreshCw,
     ShieldAlert,
@@ -219,39 +218,39 @@
   data-testid="vault-password-card"
 >
   {#if !embedded}
-  <header class="flex items-start justify-between gap-3 mb-3">
-    <div class="space-y-0.5">
-      <h2
-        class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
+    <header class="flex items-start justify-between gap-3 mb-3">
+      <div class="space-y-0.5">
+        <h2
+          class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
+        >
+          <KeyRound class="size-4 text-primary" />
+          Backup unlock passwords
+        </h2>
+        <p class="text-xs text-muted-foreground text-pretty max-w-prose">
+          Recovery if device keys are lost — used on the login screen after you
+          lock the vault, not when connecting to storage.
+        </p>
+      </div>
+      <span
+        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+          : 'border-border bg-muted/40 text-muted-foreground'}"
+        data-testid="vault-password-status"
       >
-        <KeyRound class="size-4 text-primary" />
-        Backup unlock passwords
-      </h2>
-      <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-        Recovery if device keys are lost — used on the login screen after you
-        lock the vault, not when connecting to storage.
-      </p>
-    </div>
-    <span
-      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
-        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-        : 'border-border bg-muted/40 text-muted-foreground'}"
-      data-testid="vault-password-status"
-    >
-      {#if hasPasswords}
-        <ShieldCheck class="size-3" />
-        {passwordEntries.length}
-        {passwordEntries.length === 1 ? 'password' : 'passwords'}
-      {:else}
-        <Lock class="size-3" /> None
-      {/if}
-    </span>
-  </header>
+        {#if hasPasswords}
+          <ShieldCheck class="size-3" />
+          {passwordEntries.length}
+          {passwordEntries.length === 1 ? 'password' : 'passwords'}
+        {:else}
+          <Lock class="size-3" /> None
+        {/if}
+      </span>
+    </header>
   {/if}
 
   {#if !hasPasswords}
     <div
-      class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 mb-3 flex items-start gap-2"
+      class="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">
@@ -263,10 +262,10 @@
 
   {#if panel === 'idle'}
     {#if passwordEntries.length > 0}
-      <ul class="space-y-2 mb-3" data-testid="vault-password-list">
+      <ul class="mb-4 space-y-3" data-testid="vault-password-list">
         {#each passwordEntries as entry (entry.id)}
           <li
-            class="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/60 px-3 py-2.5"
+            class="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/60 px-4 py-3"
             data-testid="vault-password-entry-{entry.id}"
           >
             <div class="flex min-w-0 items-center gap-2.5">
@@ -276,7 +275,7 @@
                   {entry.label}
                 </p>
                 {#if entry.created_at}
-                  <p class="text-[10px] text-muted-foreground">
+                  <p class="text-xs text-muted-foreground">
                     Added {entry.created_at.slice(0, 10)}
                   </p>
                 {/if}
@@ -287,40 +286,40 @@
                 type="button"
                 variant="ghost"
                 size="sm"
-                class="h-8 px-2"
+                class="h-9 px-2.5"
                 disabled={isBusy}
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'rotate-vault-password-btn'
                   : undefined}
                 onclick={() => openPanel('rotate', entry.id)}
               >
-                <RefreshCw class="size-3.5" />
+                <RefreshCw class="size-4" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                class="h-8 px-2"
+                class="h-9 px-2.5"
                 disabled={isBusy}
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'issue-enrollment-code-btn'
                   : undefined}
                 onclick={() => openPanel('issue', entry.id)}
               >
-                <QrCode class="size-3.5" />
+                <QrCode class="size-4" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                class="h-8 px-2 text-destructive hover:text-destructive"
+                class="h-9 px-2.5 text-destructive hover:text-destructive"
                 disabled={isBusy}
                 data-testid={entry.id === passwordEntries[0]?.id
                   ? 'remove-vault-password-btn'
                   : undefined}
                 onclick={() => openPanel('remove', entry.id)}
               >
-                <Trash2 class="size-3.5" />
+                <Trash2 class="size-4" />
               </Button>
             </div>
           </li>
@@ -335,14 +334,14 @@
       data-testid="set-vault-password-btn"
       onclick={() => openPanel('add')}
     >
-      <Plus class="size-3.5" />
+      <Plus class="size-4" />
       {hasPasswords ? 'Add another password' : 'Add vault password'}
     </Button>
   {/if}
 
   {#if panel === 'add' || panel === 'rotate'}
     <form
-      class="space-y-3"
+      class="space-y-4"
       onsubmit={(event) => {
         event.preventDefault()
         void (panel === 'add' ? submitAddPassword() : submitRotatePassword())
@@ -352,14 +351,14 @@
         <div class="space-y-1.5">
           <label
             for="vault-pw-label"
-            class="text-xs font-medium text-muted-foreground"
+            class="text-sm font-medium text-muted-foreground"
           >
             Label
           </label>
           <input
             id="vault-pw-label"
             type="text"
-            class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             placeholder="John's MacBook"
             bind:value={labelInput}
             data-testid="vault-password-label"
@@ -373,13 +372,13 @@
         </p>
       {/if}
       <div class="space-y-1.5">
-        <label for="vault-pw" class="text-xs font-medium text-muted-foreground">
+        <label for="vault-pw" class="text-sm font-medium text-muted-foreground">
           {panel === 'add' ? 'Password' : 'New password'}
         </label>
         <input
           id="vault-pw"
           type={showPassword ? 'text' : 'password'}
-          class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           bind:value={passwordInput}
           autocomplete="new-password"
           data-testid="vault-password-input"
@@ -388,14 +387,14 @@
       <div class="space-y-1.5">
         <label
           for="vault-pw-confirm"
-          class="text-xs font-medium text-muted-foreground"
+          class="text-sm font-medium text-muted-foreground"
         >
           Confirm password
         </label>
         <input
           id="vault-pw-confirm"
           type={showPassword ? 'text' : 'password'}
-          class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           bind:value={confirmInput}
           autocomplete="new-password"
           data-testid="vault-password-confirm"
@@ -443,7 +442,8 @@
   {#if panel === 'remove' && activeEntry}
     <div class="space-y-3">
       <p class="text-xs text-muted-foreground text-pretty">
-        Remove <span class="font-medium text-foreground">{activeEntry.label}</span
+        Remove <span class="font-medium text-foreground"
+          >{activeEntry.label}</span
         >? Other passwords stay active. If this is the last password, the vault
         returns to device-key unlock for this browser.
       </p>
@@ -476,10 +476,10 @@
   {/if}
 
   {#if panel === 'issue' && activeEntry}
-    <div class="space-y-3">
+    <div class="space-y-4">
       {#if !enrollmentCode}
         <form
-          class="space-y-3"
+          class="space-y-4"
           onsubmit={(event) => {
             event.preventDefault()
             void submitIssueCode()
@@ -493,14 +493,14 @@
           <div class="space-y-1.5">
             <label
               for="issue-pw"
-              class="text-xs font-medium text-muted-foreground"
+              class="text-sm font-medium text-muted-foreground"
             >
               Password for {activeEntry.label}
             </label>
             <input
               id="issue-pw"
               type="password"
-              class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               bind:value={passwordInput}
               autocomplete="current-password"
               data-testid="issue-code-password-input"
@@ -512,7 +512,12 @@
             </p>
           {/if}
           <div class="flex items-center justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onclick={closePanel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onclick={closePanel}
+            >
               Cancel
             </Button>
             <Button

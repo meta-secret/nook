@@ -35,3 +35,4 @@ These files are the source of truth for how this project works.
 
 ### Git
 - Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/rules.md` §6.
+- **Squash merge only.** Every PR merged into `main` MUST use squash merge (`gh pr merge --squash` or GitHub **Squash and merge**). Never merge commit or rebase merge. See `.cortex/workflows/pull-requests.md`.

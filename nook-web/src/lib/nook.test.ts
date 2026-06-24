@@ -23,6 +23,11 @@ describe('typed vault items', () => {
         name: 'Main wallet',
         seed: 'one two three four',
       },
+      {
+        type: 'secure-note' as const,
+        title: 'Recovery steps',
+        note: '# Steps\n\n1. First\n2. Second',
+      },
     ]
 
     for (const input of inputs) {

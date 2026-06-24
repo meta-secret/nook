@@ -46,10 +46,9 @@
     <div class="space-y-5" data-testid="github-token-setup">
       <div class="space-y-2">
         <p class="text-sm text-foreground text-pretty">
-          Nook needs a classic personal access token (<span
-            class="font-mono">ghp_</span
-          >) with <span class="font-mono">repo</span> scope to sync your vault
-          file.
+          Nook needs a classic personal access token (<span class="font-mono"
+            >ghp_</span
+          >) with <span class="font-mono">repo</span> scope to sync your vault file.
         </p>
         <a
           href={githubPatUrl}
@@ -110,7 +109,8 @@
           <p class="text-[11px] text-muted-foreground text-pretty">
             Stored in this browser only. Syncs to
             <span class="font-mono text-foreground/80"
-              >username/{githubRepo.trim() || DEFAULT_GITHUB_REPO}/nook-vault.yaml</span
+              >username/{githubRepo.trim() ||
+                DEFAULT_GITHUB_REPO}/nook-vault.yaml</span
             >.
           </p>
         </div>

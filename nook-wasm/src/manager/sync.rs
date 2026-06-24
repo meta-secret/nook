@@ -8,8 +8,8 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::conversion::{
-    LoadedVault, access_status_for_vault_content, load_stored_vault, records_to_armored,
-    records_to_secret_types, sync_result_access_status, sync_result_session, sync_result_unchanged,
+    LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
+    sync_result_session, sync_result_unchanged,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::JsValue;

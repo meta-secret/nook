@@ -5,7 +5,6 @@ import {
   connectLocalVault,
   connectLoginProvider,
   disableLoginAutoUnlock,
-  expandSettingsSection,
   openStorageSettings,
   selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
@@ -74,13 +73,13 @@ test.describe('login unlock flow (provider + method)', () => {
       'aria-checked',
       'true',
     )
-    await expect(
-      page.getByTestId('login-unlock-method-password'),
-    ).toBeVisible()
+    await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
     await expect(page.getByTestId('login-password-input')).not.toBeVisible()
   })
 
-  test('defaults to device keys and unlocks after connect', async ({ page }) => {
+  test('defaults to device keys and unlocks after connect', async ({
+    page,
+  }) => {
     await disableLoginAutoUnlock(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
@@ -116,8 +115,12 @@ test.describe('login unlock flow (provider + method)', () => {
       page.getByTestId('login-unlock-method-password'),
     ).toHaveAttribute('aria-checked', 'true')
     const entryList = page.getByTestId('login-password-entry-list')
-    await expect(entryList.getByRole('button', { name: 'Personal' })).toBeVisible()
-    await expect(entryList.getByRole('button', { name: 'Travel' })).toBeVisible()
+    await expect(
+      entryList.getByRole('button', { name: 'Personal' }),
+    ).toBeVisible()
+    await expect(
+      entryList.getByRole('button', { name: 'Travel' }),
+    ).toBeVisible()
     await expect(page.getByTestId('login-password-input')).toBeVisible()
   })
 

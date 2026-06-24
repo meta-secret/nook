@@ -50,7 +50,9 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('provider-option-local')).toBeVisible()
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
-    await expect(page.getByTestId('login-unlock-method-fieldset')).not.toBeVisible()
+    await expect(
+      page.getByTestId('login-unlock-method-fieldset'),
+    ).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
@@ -124,7 +126,9 @@ test.describe('vault connect flow', () => {
     const providerId = await localProvider.evaluate((el) => {
       const row = el.closest('li')
       const removeBtn = row?.querySelector('[data-testid^="remove-provider-"]')
-      return removeBtn?.getAttribute('data-testid')?.replace('remove-provider-', '')
+      return removeBtn
+        ?.getAttribute('data-testid')
+        ?.replace('remove-provider-', '')
     })
     expect(providerId).toBeTruthy()
 

@@ -4,7 +4,9 @@ export type VaultPasswordEntrySummary = {
   created_at: string
 }
 
-export function mapWasmPasswordEntries(raw: unknown): VaultPasswordEntrySummary[] {
+export function mapWasmPasswordEntries(
+  raw: unknown,
+): VaultPasswordEntrySummary[] {
   if (!Array.isArray(raw)) {
     return []
   }

@@ -20,3 +20,5 @@ Use this workflow for quality, CI, and deployment changes.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
 10. Verify locally with `task check`.
+11. **Docker:** Never kill the Docker daemon (`killall docker`, `pkill docker`, etc.). Stop only specific containers (`docker stop <id>`). See [rules.md §5 — Docker daemon](rules.md#docker-daemon--never-kill-it).
+12. **Local web dev:** `task web:install` then `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.

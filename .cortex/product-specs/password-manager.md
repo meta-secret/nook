@@ -52,7 +52,8 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
    - The user enters a key (label) and value.
    - Rust validates non-empty label (trimmed) and non-empty value.
    - Clicking **Save Secret** inserts into the in-memory session, encrypts **only the changed record**, updates the armored cache, serializes to YAML, and writes to storage.
-6. **Deleting Secrets:**
+6. **No in-place edit:** Vault items are **immutable** after save. There is no edit form or `update_secret` in the UI. To fix a mistake or update content, the user **adds a new item and deletes the old one**. A future `replace_secret(old_id, new_item)` WASM call should perform add + delete in a **single** `save_current_db` so storage never holds duplicates if the second step fails mid-flight.
+7. **Deleting Secrets:**
    - Removes the record from session and armored cache, re-serializes YAML, and saves — no full-vault re-encryption.
 
 ### C. Cryptographically Secure Password Generator

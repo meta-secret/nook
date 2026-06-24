@@ -1,7 +1,17 @@
 <script lang="ts">
-  import { ChevronDown, ChevronLeft, Cloud, HardDrive, Plus, Settings2 } from '@lucide/svelte'
+  import {
+    ChevronDown,
+    ChevronLeft,
+    Cloud,
+    HardDrive,
+    Plus,
+    Settings2,
+  } from '@lucide/svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
-  import type { StorageProvider, StorageProviderType } from '$lib/auth-providers'
+  import type {
+    StorageProvider,
+    StorageProviderType,
+  } from '$lib/auth-providers'
   import { providerStorageDetail } from '$lib/auth-providers'
 
   let {
@@ -97,7 +107,9 @@
     >
       <Settings2 class="size-5 shrink-0 text-muted-foreground" />
       <span class="min-w-0 flex-1 text-base">
-        <span class="font-semibold text-foreground">Manage storage providers</span>
+        <span class="font-semibold text-foreground"
+          >Manage storage providers</span
+        >
         {#if providers.length > 0}
           <span class="text-sm text-muted-foreground">
             · {providers.length} saved
@@ -129,7 +141,9 @@
               {#if provider.type === 'github'}
                 <Cloud class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               {:else}
-                <HardDrive class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <HardDrive
+                  class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                />
               {/if}
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm font-medium text-foreground">

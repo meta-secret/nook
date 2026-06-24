@@ -2,10 +2,10 @@
 //!
 //! - `SecretType` — the tag stored alongside each record so the UI knows which
 //!   schema the (encrypted) payload follows after decryption.
-//! - `LoginSecret`, `ApiKeySecret`, `SeedPhraseSecret` — the three concrete
-//!   payload shapes Nook currently supports. Adding a new shape means a new
-//!   variant + struct here, plus a `from_yaml` arm.
-//! - `SecretValue` — typed enum over the three shapes; the in-memory
+//! - `LoginSecret`, `ApiKeySecret`, `SeedPhraseSecret`, `SecureNoteSecret` —
+//!   the concrete payload shapes Nook currently supports. Adding a new shape
+//!   means a new variant + struct here, plus a `from_yaml` arm.
+//! - `SecretValue` — typed enum over the shapes; the in-memory
 //!   representation that flows through the wasm bridge.
 //! - `SecretRecord` — `(id, type, data)` plaintext triple for the session.
 //! - `StoredSecretRecord` — the on-disk shape: same triple but `value` is an
@@ -19,6 +19,7 @@ pub enum SecretType {
     Login,
     ApiKey,
     SeedPhrase,
+    SecureNote,
 }
 
 impl SecretType {
@@ -27,6 +28,7 @@ impl SecretType {
             "login" => Ok(Self::Login),
             "api-key" => Ok(Self::ApiKey),
             "seed-phrase" => Ok(Self::SeedPhrase),
+            "secure-note" => Ok(Self::SecureNote),
             _ => Err(format!("Unknown secret type: {value}")),
         }
     }
@@ -37,6 +39,7 @@ impl SecretType {
             Self::Login => "login",
             Self::ApiKey => "api-key",
             Self::SeedPhrase => "seed-phrase",
+            Self::SecureNote => "secure-note",
         }
     }
 }
@@ -66,11 +69,19 @@ pub struct SeedPhraseSecret {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SecureNoteSecret {
+    pub title: String,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretValue {
     Login(LoginSecret),
     ApiKey(ApiKeySecret),
     SeedPhrase(SeedPhraseSecret),
+    SecureNote(SecureNoteSecret),
 }
 
 impl SecretValue {
@@ -85,6 +96,9 @@ impl SecretValue {
             SecretType::SeedPhrase => serde_yaml::from_str(yaml)
                 .map(Self::SeedPhrase)
                 .map_err(|error| format!("Invalid seed phrase payload: {error}")),
+            SecretType::SecureNote => serde_yaml::from_str(yaml)
+                .map(Self::SecureNote)
+                .map_err(|error| format!("Invalid secure note payload: {error}")),
         }
     }
 
@@ -93,6 +107,7 @@ impl SecretValue {
             Self::Login(value) => serde_yaml::to_string(value),
             Self::ApiKey(value) => serde_yaml::to_string(value),
             Self::SeedPhrase(value) => serde_yaml::to_string(value),
+            Self::SecureNote(value) => serde_yaml::to_string(value),
         }
         .map_err(|error| format!("Failed to serialize secret payload: {error}"))
     }
@@ -103,6 +118,7 @@ impl SecretValue {
             Self::Login(_) => SecretType::Login,
             Self::ApiKey(_) => SecretType::ApiKey,
             Self::SeedPhrase(_) => SecretType::SeedPhrase,
+            Self::SecureNote(_) => SecretType::SecureNote,
         }
     }
 }

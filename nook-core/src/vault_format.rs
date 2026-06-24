@@ -1,7 +1,7 @@
 use crate::{
-    AuthEnvelopes, PasswordEnvelope, PasswordUnlockEntry, StoredSecretRecord,
-    VaultUnlock, is_auth_stored_record, LEGACY_PASSWORD_ENTRY_LABEL,
-    is_join_stored_record, is_members_stored_record,
+    AuthEnvelopes, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope, PasswordUnlockEntry,
+    StoredSecretRecord, VaultUnlock, is_auth_stored_record, is_join_stored_record,
+    is_members_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -222,8 +222,7 @@ pub fn serialize_stored_yaml_with_unlock(
 
 fn normalize_unlock_for_write(unlock: &VaultUnlock) -> VaultUnlock {
     match unlock {
-        VaultUnlock::Passwords { .. } => VaultUnlock::Keys,
-        other => other.clone(),
+        VaultUnlock::Passwords { .. } | VaultUnlock::Keys => VaultUnlock::Keys,
     }
 }
 
@@ -615,9 +614,12 @@ not-json
             envelope: envelope.clone(),
         };
 
-        let yaml =
-            serialize_stored_yaml_with_unlock(&[], &VaultUnlock::Keys, std::slice::from_ref(&entry))
-                .unwrap();
+        let yaml = serialize_stored_yaml_with_unlock(
+            &[],
+            &VaultUnlock::Keys,
+            std::slice::from_ref(&entry),
+        )
+        .unwrap();
         assert!(yaml.contains("unlock:"));
         assert!(yaml.contains("type: keys"));
         assert!(yaml.contains("password_entries:"));

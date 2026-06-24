@@ -4,7 +4,10 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
-  import type { StorageProvider, StorageProviderType } from '$lib/auth-providers'
+  import type {
+    StorageProvider,
+    StorageProviderType,
+  } from '$lib/auth-providers'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
@@ -73,7 +76,10 @@
     onRemoveProvider?: (id: string) => void | Promise<void>
     onLockVault?: () => void
     onAddPassword: (label: string, password: string) => void | Promise<void>
-    onUpdatePassword: (entryId: string, password: string) => void | Promise<void>
+    onUpdatePassword: (
+      entryId: string,
+      password: string,
+    ) => void | Promise<void>
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void

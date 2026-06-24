@@ -3,6 +3,7 @@
     Globe,
     Braces,
     Sprout,
+    StickyNote,
     Eye,
     EyeOff,
     Trash2,
@@ -10,6 +11,7 @@
     Check,
   } from '@lucide/svelte'
   import type { VaultItem } from '$lib/nook'
+  import MarkdownContent from './MarkdownContent.svelte'
 
   let {
     item,
@@ -50,8 +52,10 @@
           <Globe class="size-3 text-primary/70" /> Login
         {:else if item.type === 'api-key'}
           <Braces class="size-3 text-primary/70" /> API key
-        {:else}
+        {:else if item.type === 'seed-phrase'}
           <Sprout class="size-3 text-primary/70" /> Seed phrase
+        {:else}
+          <StickyNote class="size-3 text-primary/70" /> Secure note
         {/if}
       </span>
       <div class="flex items-center gap-0.5">
@@ -235,7 +239,7 @@
             </div>
           </div>
         {/if}
-      {:else}
+      {:else if item.type === 'seed-phrase'}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
           <span class="text-muted-foreground/70 font-medium">Account</span>
           <div
@@ -276,6 +280,62 @@
               onclick={() =>
                 void onCopyToClipboard(item.seed, item.id, 'secret')}
               aria-label="Copy secret"
+              class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
+            >
+              {#if copiedKey === `${item.id}-secret`}<Check
+                  class="size-3 text-emerald-500"
+                />{:else}<Copy class="size-3" />{/if}
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
+          <span class="text-muted-foreground/70 font-medium">Title</span>
+          <div
+            class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
+          >
+            <span class="truncate text-foreground"
+              >{item.title || 'No title'}</span
+            >
+            {#if item.title}
+              <button
+                type="button"
+                onclick={() =>
+                  void onCopyToClipboard(item.title, item.id, 'title')}
+                aria-label="Copy title"
+                class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
+              >
+                {#if copiedKey === `${item.id}-title`}<Check
+                    class="size-3 text-emerald-500"
+                  />{:else}<Copy class="size-3" />{/if}
+              </button>
+            {/if}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
+          <span class="text-muted-foreground/70 font-medium pt-1">Note</span>
+          <div
+            class="flex items-start justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2.5 py-1.5 transition-colors border border-border/20"
+          >
+            {#if revealSecrets[item.id]}
+              <div
+                class="min-w-0 flex-1 text-[11px] leading-relaxed text-foreground"
+                data-testid="revealed-secret"
+              >
+                <MarkdownContent source={item.note} />
+              </div>
+            {:else}
+              <span
+                class="font-mono text-foreground"
+                data-testid="revealed-secret">••••••••••••••••</span
+              >
+            {/if}
+            <button
+              type="button"
+              onclick={() =>
+                void onCopyToClipboard(item.note, item.id, 'secret')}
+              aria-label="Copy note"
               class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
             >
               {#if copiedKey === `${item.id}-secret`}<Check

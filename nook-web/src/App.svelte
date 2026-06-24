@@ -49,7 +49,11 @@
     localStorage.setItem(THEME_STORAGE_KEY, colorMode)
   }
 
-  const shellWidth = 'max-w-xl'
+  const compactShellWidth = 'max-w-xl'
+  const authenticatedShellWidth = 'max-w-5xl'
+  const shellWidth = $derived(
+    vault.isAuthenticated ? authenticatedShellWidth : compactShellWidth,
+  )
   const appVersion = '0.1.0'
   let secretsAddOpen = $state(false)
 </script>
@@ -185,7 +189,8 @@
               onRemoveProvider={(id) => vault.removeProvider(id)}
               onLockVault={() => vault.lockVault()}
               onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-              onUpdatePassword={(id, pw) => vault.updateVaultPasswordEntry(id, pw)}
+              onUpdatePassword={(id, pw) =>
+                vault.updateVaultPasswordEntry(id, pw)}
               onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
               onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
               onClearCode={() => vault.clearEnrollmentCode()}

@@ -18,7 +18,7 @@ export type SecretRecord = {
   data: string
 }
 
-export type VaultItemType = 'login' | 'api-key' | 'seed-phrase'
+export type VaultItemType = 'login' | 'api-key' | 'seed-phrase' | 'secure-note'
 
 export type LoginVaultItem = {
   id: string
@@ -44,21 +44,36 @@ export type SeedPhraseVaultItem = {
   seed: string
 }
 
-export type VaultItem = LoginVaultItem | ApiKeyVaultItem | SeedPhraseVaultItem
+export type SecureNoteVaultItem = {
+  id: string
+  type: 'secure-note'
+  title: string
+  note: string
+}
+
+export type VaultItem =
+  | LoginVaultItem
+  | ApiKeyVaultItem
+  | SeedPhraseVaultItem
+  | SecureNoteVaultItem
 
 export type VaultItemInput =
   | Omit<LoginVaultItem, 'id'>
   | Omit<ApiKeyVaultItem, 'id'>
   | Omit<SeedPhraseVaultItem, 'id'>
+  | Omit<SecureNoteVaultItem, 'id'>
 
 export function vaultItemTitle(item: VaultItem): string {
-  return item.type === 'seed-phrase' ? item.name : item.websiteUrl
+  if (item.type === 'seed-phrase') return item.name
+  if (item.type === 'secure-note') return item.title
+  return item.websiteUrl
 }
 
 export function vaultItemSecret(item: VaultItem): string {
   if (item.type === 'login') return item.password
   if (item.type === 'api-key') return item.key
-  return item.seed
+  if (item.type === 'seed-phrase') return item.seed
+  return item.note
 }
 
 export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
@@ -91,11 +106,19 @@ export function parseVaultItem(record: SecretRecord): VaultItem {
       expiresAt: String(value.expiresAt),
     }
   }
+  if (record.type === 'seed-phrase') {
+    return {
+      id: record.id,
+      type: 'seed-phrase',
+      name: String(value.name),
+      seed: String(value.seed),
+    }
+  }
   return {
     id: record.id,
-    type: 'seed-phrase',
-    name: String(value.name),
-    seed: String(value.seed),
+    type: 'secure-note',
+    title: String(value.title),
+    note: String(value.note),
   }
 }
 

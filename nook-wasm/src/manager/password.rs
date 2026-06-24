@@ -30,7 +30,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "listVaultPasswordEntries")]
     pub fn list_vault_password_entries(&self) -> Result<js_sys::Array, JsError> {
-        Ok(password_entry_summaries_to_js(&self.password_entries)?)
+        password_entry_summaries_to_js(&self.password_entries)
     }
 
     #[wasm_bindgen(js_name = "fetchVaultPasswordEntries")]
@@ -49,19 +49,27 @@ impl NookVaultManager {
         }
         let entries =
             nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;
-        Ok(password_entry_summaries_to_js(&entries)?)
+        password_entry_summaries_to_js(&entries)
     }
 
     #[wasm_bindgen(js_name = "verifyVaultPassword")]
     pub fn verify_vault_password(&self, entry_id: &str, password: &str) -> bool {
-        match self.password_entries.iter().find(|entry| entry.id == entry_id) {
+        match self
+            .password_entries
+            .iter()
+            .find(|entry| entry.id == entry_id)
+        {
             Some(entry) => nook_core::verify_password_entry(entry, password),
             None => false,
         }
     }
 
     #[wasm_bindgen(js_name = "addVaultPassword")]
-    pub async fn add_vault_password(&mut self, label: String, password: String) -> Result<(), JsError> {
+    pub async fn add_vault_password(
+        &mut self,
+        label: String,
+        password: String,
+    ) -> Result<(), JsError> {
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             return Err(NookError::Database(
                 "Vault must be unlocked before adding a password.".to_owned(),
@@ -171,13 +179,11 @@ impl NookVaultManager {
             })
             .or_else(|| self.password_entries.first())
             .ok_or_else(|| {
-                NookError::Decryption(
-                    "No backup password found on this vault.".to_owned(),
-                )
+                NookError::Decryption("No backup password found on this vault.".to_owned())
             })?
             .clone();
-        let keys = nook_core::resolve_keys_from_entry(&entry, &password)
-            .map_err(NookError::Decryption)?;
+        let keys =
+            nook_core::resolve_keys_from_entry(&entry, &password).map_err(NookError::Decryption)?;
 
         let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
         let mut records =
