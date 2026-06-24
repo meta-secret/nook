@@ -68,7 +68,7 @@
 
 <div
   class={isQuiet
-    ? 'border-t border-border/50 bg-transparent px-1 py-2'
+    ? 'border-t border-border bg-transparent px-1 py-2'
     : 'border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5'}
   data-testid="vault-status-bar"
 >
