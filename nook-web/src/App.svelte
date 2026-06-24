@@ -226,7 +226,6 @@
               onAddModeChange={(open) => {
                 secretsAddOpen = open
               }}
-              onOnboardDevice={() => vault.openSettings('onboard')}
               onAddSecret={(id, type, data) =>
                 vault.handleAddSecret(id, type, data)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
@@ -262,8 +261,10 @@
         {#if !secretsAddOpen}
           <VaultBottomNav
             settingsOpen={vault.settingsOpen}
+            settingsSection={vault.settingsSection}
             pendingJoinCount={vault.pendingJoins.length}
             onSelectSecrets={() => vault.closeSettings()}
+            onSelectOnboard={() => vault.openSettings('onboard')}
             onSelectSettings={() => vault.openSettings()}
           />
         {/if}

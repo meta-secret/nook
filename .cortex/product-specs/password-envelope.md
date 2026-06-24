@@ -315,14 +315,14 @@ proactively).
 | P1 | `nook-core`: envelope format (`password_envelope.rs`), YAML serde round-trip, unit tests | Done |
 | P2 | `nook-wasm`: `setVaultPassword` / `removeVaultPassword` / `hasPasswordEnvelope` / `verifyVaultPassword` / `connectWithPassword` | Done |
 | P3 | `nook-web`: `VaultPasswordCard` (set / rotate / remove) in **Onboard another device** settings | Done |
-| P4 | `nook-web`: authenticated **Onboard device** shortcut, enrollment-code issuer with QR/link, and paste-to-enroll on `LoginGate`. (Live camera scanning deferred — paste/scan-via-phone path covers desktop browsers without camera APIs.) | Done |
+| P4 | `nook-web`: authenticated **Onboard** bottom-nav item, enrollment-code issuer with QR/link, and paste-to-enroll on `LoginGate`. (Live camera scanning deferred — paste/scan-via-phone path covers desktop browsers without camera APIs.) | Done |
 | P5 | E2E tests: QR round-trip across two browser contexts | Planned |
 
 The approval-based join (`joins:` + `JoinEnrollmentDialog`) remains
 available as the fallback for vaults that opt out of the password envelope.
 
-Authenticated UI contract: the vault header exposes **Onboard device**. It opens
-Settings directly to **Onboard another device**, where the user chooses an
+Authenticated UI contract: the bottom nav exposes **Onboard** between **Vault**
+and **Settings**. It opens Settings directly to **Onboard another device**, where the user chooses an
 existing vault password or creates a new one before generating the QR/link. The
 QR payload contains provider credentials and the selected password, not raw
 vault keys.

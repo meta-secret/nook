@@ -111,7 +111,7 @@ First connect (genesis) uses **setup** → provider credentials form → WASM `c
 
 **Auto-unlock:** When exactly one saved provider exists and device keys work, `VaultState` may unlock on load without showing the wizard. The wizard still models connect-then-authorize for manual login, password recovery, and multi-provider setups.
 
-**Enrollment QR** is surfaced as **Onboard another device** from the authenticated vault. Users choose an existing vault password or create a new one, then generate a QR/link that bundles provider credentials *and* that password for one-shot device bootstrap — not the normal wizard pattern.
+**Enrollment QR** is surfaced through the authenticated bottom-nav **Onboard** item. It opens **Onboard another device** in settings. Users choose an existing vault password or create a new one, then generate a QR/link that bundles provider credentials *and* that password for one-shot device bootstrap — not the normal wizard pattern.
 
 ```mermaid
 flowchart TB

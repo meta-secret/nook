@@ -2,7 +2,6 @@
   import {
     ArrowLeft,
     Plus,
-    QrCode,
     Search,
     Globe,
     Braces,
@@ -27,7 +26,6 @@
     onDeleteSecret,
     onGeneratePassword,
     onAddModeChange,
-    onOnboardDevice,
   }: {
     isSaving: boolean
     secrets?: SecretRecord[]
@@ -45,7 +43,6 @@
       symbols: boolean,
     ) => string
     onAddModeChange?: (open: boolean) => void
-    onOnboardDevice?: () => void
   } = $props()
 
   let searchPattern = $state('')
@@ -176,28 +173,15 @@
     <div class="space-y-4">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 class="text-base font-semibold text-foreground">Vault</h2>
-          <p class="text-xs text-muted-foreground">
+          <p class="text-sm font-semibold text-foreground">
             {visibleItemCount}
             {visibleItemCount === 1 ? 'item' : 'items'}
             {#if searchPattern.trim() && visibleItemCount !== items.length}
-              <span class="text-muted-foreground/70"> of {items.length}</span>
+              <span class="text-muted-foreground"> of {items.length}</span>
             {/if}
           </p>
         </div>
         <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
-          {#if onOnboardDevice}
-            <Button
-              size="sm"
-              variant="outline"
-              class="flex-1 border-border bg-background text-foreground hover:bg-accent sm:flex-none"
-              data-testid="onboard-device-btn"
-              onclick={onOnboardDevice}
-            >
-              <QrCode class="size-3.5" />
-              Onboard device
-            </Button>
-          {/if}
           <Button
             size="sm"
             variant="outline"
