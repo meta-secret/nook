@@ -52,7 +52,7 @@
     "clsx": "2.1.1",
     "dompurify": "3.2.4",
     "github-markdown-css": "5.8.1",
-    "markdown-it": "14.1.0",
+    "markdown-it": "14.2.0",
     "qrcode": "^1.5.4",
     "tailwind-merge": "3.6.0",
     "tailwind-variants": "3.2.2",
