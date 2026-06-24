@@ -82,7 +82,7 @@
       return
     }
     QRCode.toDataURL(enrollmentLink, {
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'H',
       margin: 1,
       width: 240,
       color: { dark: '#111317', light: '#ffffff' },
