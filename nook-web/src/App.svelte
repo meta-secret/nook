@@ -49,7 +49,7 @@
     localStorage.setItem(THEME_STORAGE_KEY, colorMode)
   }
 
-  const compactShellWidth = 'max-w-xl'
+  const compactShellWidth = 'max-w-5xl'
   const authenticatedShellWidth = 'max-w-5xl'
   const shellWidth = $derived(
     vault.isAuthenticated ? authenticatedShellWidth : compactShellWidth,

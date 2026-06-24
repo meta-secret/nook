@@ -191,7 +191,9 @@
     </CardHeader>
 
     <CardContent
-      class={showWizard ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6' : 'px-6 pt-4'}
+      class={showWizard
+        ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6'
+        : 'px-6 pb-5 pt-4 sm:pb-6'}
     >
       {#if showWizard}
         <LoginWizard
