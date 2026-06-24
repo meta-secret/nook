@@ -3,6 +3,7 @@
     Globe,
     Braces,
     Sprout,
+    StickyNote,
     ArrowLeft,
     KeyRound,
     RefreshCw,
@@ -15,6 +16,7 @@
     type VaultItemInput,
     type VaultItemType,
   } from '$lib/nook'
+  import MarkdownEditor from './MarkdownEditor.svelte'
 
   let {
     isSaving,
@@ -49,6 +51,8 @@
   let expiresAt = $state('')
   let accountName = $state('')
   let seedPhrase = $state('')
+  let noteTitle = $state('')
+  let noteBody = $state('')
 
   let genLength = $state(20)
   let genUppercase = $state(true)
@@ -63,7 +67,9 @@
         ? 'New API key'
         : selectedType === 'seed-phrase'
           ? 'New seed phrase'
-          : 'Add item',
+          : selectedType === 'secure-note'
+            ? 'New secure note'
+            : 'Add item',
   )
 
   function resetForm() {
@@ -76,6 +82,8 @@
     expiresAt = ''
     accountName = ''
     seedPhrase = ''
+    noteTitle = ''
+    noteBody = ''
     showPasswordOptions = false
   }
 
@@ -104,11 +112,18 @@
         key: apiKey,
         expiresAt,
       }
-    } else {
+    } else if (selectedType === 'seed-phrase') {
       item = {
         type: 'seed-phrase',
         name: accountName.trim(),
         seed: seedPhrase.trim(),
+      }
+    } else {
+      if (!noteBody.trim()) return
+      item = {
+        type: 'secure-note',
+        title: noteTitle.trim(),
+        note: noteBody,
       }
     }
 
@@ -195,6 +210,27 @@
           >
           <span class="mt-0.5 block text-xs text-muted-foreground"
             >BIP39 recovery</span
+          >
+        </span>
+        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+      </button>
+      <button
+        type="button"
+        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
+        data-testid="item-type-secure-note"
+        onclick={() => (selectedType = 'secure-note')}
+      >
+        <div
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
+        >
+          <StickyNote class="size-5" />
+        </div>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground"
+            >Secure note</span
+          >
+          <span class="mt-0.5 block text-xs text-muted-foreground"
+            >Private text (Markdown)</span
           >
         </span>
         <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
@@ -356,7 +392,7 @@
           class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
         />
       </div>
-    {:else}
+    {:else if selectedType === 'seed-phrase'}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >Account name</label
@@ -383,6 +419,24 @@
           placeholder="Enter 12 or 24 words"
           class="flex w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
         ></textarea>
+      </div>
+    {:else}
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="secret-label">Title</label>
+        <input
+          id="secret-label"
+          data-testid="secret-label"
+          bind:value={noteTitle}
+          placeholder="Recovery instructions"
+          required
+          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+        />
+      </div>
+      <div class="space-y-1.5">
+        <span class="text-xs font-medium"
+          >Note <span class="text-muted-foreground">(Markdown)</span></span
+        >
+        <MarkdownEditor bind:value={noteBody} placeholder="Write anything — headings, lists, and code blocks are supported." />
       </div>
     {/if}
 

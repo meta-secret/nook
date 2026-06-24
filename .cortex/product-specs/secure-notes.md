@@ -12,7 +12,7 @@ Add **secure notes** as a first-class vault item type alongside login, API key, 
 
 | Area | Notes |
 |---|---|
-| Core (`secret_types.rs`) | `SecretType::SecureNote`, `SecureNoteSecret { title, body, tags? }` |
+| Core (`secret_types.rs`) | `SecretType::SecureNote`, `SecureNoteSecret { title, note }` |
 | Wasm bridge | Serialize/deserialize + validation in Rust |
 | Web UI | Type picker entry, add form, `SecretDetailRow` rendering |
 | E2E | Add/save/search/delete smoke test |

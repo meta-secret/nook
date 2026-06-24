@@ -94,6 +94,41 @@ test.describe('local vault', () => {
     )
   })
 
+  test('adds, reveals, and deletes a secure note with markdown', async ({
+    page,
+  }) => {
+    const title = uniqueSecretKey('e2e-note')
+    const noteBody = '# Recovery\n\n- step one\n\nUse **backup** code `1234`.'
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-secure-note').click()
+    await page.getByTestId('secret-label').fill(title)
+    await page.getByTestId('secret-value').fill(noteBody)
+    await page.getByTestId('markdown-tab-preview').click()
+    await expect(page.getByTestId('markdown-preview')).toContainText('Recovery')
+    await expect(
+      page.getByTestId('markdown-preview').locator('h1'),
+    ).toHaveText('Recovery')
+    await expect(page.getByTestId('markdown-preview').locator('strong')).toHaveText(
+      'backup',
+    )
+    await expect(page.getByTestId('markdown-preview').locator('ul li')).toHaveCount(
+      1,
+    )
+    await page.getByTestId('save-secret-btn').click()
+
+    const row = page.getByTestId('secret-row').filter({ hasText: title })
+    await expect(page.getByTestId('vault-group-secure-note')).toBeVisible()
+    await expect(row).toBeVisible()
+
+    await row.getByRole('button', { name: 'Show secret' }).click()
+    await expect(row.getByRole('heading', { name: 'Recovery' })).toBeVisible()
+    await expect(row.getByText('backup')).toBeVisible()
+    await expect(row.getByText('1234')).toBeVisible()
+
+    await deleteSecret(page, title)
+  })
+
   test('persists secrets after reload', async ({ page }) => {
     const key = uniqueSecretKey('e2e-local-persist')
     const value = 'persist-me'

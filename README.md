@@ -11,6 +11,7 @@ Nook is a passwordless vault for:
 - Website logins
 - API keys
 - Wallet seed phrases
+- Secure notes (Markdown)
 
 Your secrets are stored in an encrypted database. Keep it in this browser or sync it
 to your private GitHub repository.
@@ -47,16 +48,19 @@ approved device, you lose the vault. Approve at least two devices.
 
 ## What you can store
 
-Nook currently supports three intentionally small item types:
+Nook supports four typed item kinds:
 
 | Type | Fields |
 |---|---|
 | Login | Website URL, username, password, optional notes |
 | API key | Website URL, key, optional expiration date |
 | BIP39 seed phrase | Account name, seed phrase |
+| Secure note | Title, note (Markdown) |
 
-Items are grouped by type and searchable. Secret values stay masked until revealed.
-Nook also includes a secure password generator.
+Items are grouped in the vault and searchable. Secret values stay masked until
+revealed. Secure notes use a GitHub-style **Edit / Preview** editor; preview and
+display render Markdown in the browser (`markdown-it` + GitHub markdown CSS). Nook also includes
+a secure password generator.
 
 ## How it works
 
@@ -72,7 +76,8 @@ Nook also includes a secure password generator.
 ### When you come back
 
 - Nook remembers your storage provider.
-- This browser uses its device key to unlock the vault.
+- This browser uses its device key to unlock the vault (or an optional labelled
+  backup password if you configured one).
 - Decrypted secrets exist only in the active browser session.
 - If you saved several providers, Nook asks which vault to open.
 
@@ -122,8 +127,19 @@ notes: |-
   Recovery codes are stored offline.
 ```
 
-The plaintext `type` tells Rust which exact structure to deserialize. Missing type
-metadata or data that does not match its declared type is rejected.
+A `secure-note` decrypts to title + Markdown body:
+
+```yaml
+title: Recovery instructions
+note: |
+  ## Steps
+
+  Call support with reference **ABC-123**.
+```
+
+The plaintext `type` tells Rust which exact structure to deserialize (`login`,
+`api-key`, `seed-phrase`, or `secure-note`). Missing type metadata or data that
+does not match its declared type is rejected.
 
 The complete vault also contains:
 
@@ -169,8 +185,8 @@ nook-web  →  nook-wasm  →  nook-core
 ```
 
 - **`nook-core`** — typed secret model, YAML/JSONL vault formats, age encryption,
-  device enrollment, validation, search, and password generation. It has no browser
-  dependencies and is tested natively.
+  device enrollment, validation, search, and password generation. It has no
+  browser dependencies and is tested natively.
 - **`nook-wasm`** — `wasm-bindgen` bridge and session manager. It connects the core
   to IndexedDB and the GitHub REST API, caches encrypted records, and exposes small
   JavaScript-friendly operations.
@@ -184,7 +200,9 @@ Deeper documentation lives in [`.cortex/`](.cortex/):
 
 - [Architecture](.cortex/ARCHITECTURE.md)
 - [Password manager specification](.cortex/product-specs/password-manager.md)
+- [Secure notes](.cortex/product-specs/secure-notes.md)
 - [Decentralized multi-device authentication](.cortex/product-specs/decentralized-auth.md)
+- [Optional backup password & enrollment QR](.cortex/product-specs/password-envelope.md)
 - [Storage providers and login UX](.cortex/design-docs/auth-providers.md)
 - [Engineering principles](.cortex/design-docs/core-beliefs.md)
 
@@ -218,7 +236,7 @@ task check                 # format, lint, tests, diagnostics, and builds
 task build                 # Rust, WASM, and production web build
 task web:dev               # local Vite development server
 task web:test              # web unit tests
-task web:test:e2e:local    # local Playwright suite (connect, login unlock, password envelope)
+task web:test:e2e:local    # local Playwright suite (vault CRUD, connect, login unlock, password envelope)
 task web:test:e2e          # complete Playwright suite; GitHub PAT required
 ```
 

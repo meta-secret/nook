@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import 'github-markdown-css/github-markdown-dark.css';
 
 @custom-variant dark (&:is(.dark *));
 

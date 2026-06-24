@@ -15,7 +15,8 @@ mod vault_format;
 
 pub use database::Database;
 pub use secret_types::{
-    ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SeedPhraseSecret,
+    ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
+    SeedPhraseSecret,
     StoredSecretRecord,
 };
 

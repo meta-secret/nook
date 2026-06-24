@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Plus, Search, Globe, Braces, Sprout } from '@lucide/svelte'
+  import { ArrowLeft, Plus, Search, Globe, Braces, Sprout, StickyNote } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
@@ -57,6 +57,9 @@
     if (item.type === 'seed-phrase') {
       return item.name.trim() || 'Unnamed Seed Phrase'
     }
+    if (item.type === 'secure-note') {
+      return item.title.trim() || 'Unnamed Note'
+    }
     const url = item.websiteUrl.trim()
     if (!url) return 'No Website'
     try {
@@ -70,7 +73,8 @@
   function getGroupIcon(items: VaultItem[]) {
     if (items.some((item) => item.type === 'login')) return Globe
     if (items.some((item) => item.type === 'api-key')) return Braces
-    return Sprout
+    if (items.some((item) => item.type === 'seed-phrase')) return Sprout
+    return StickyNote
   }
 
   const groups = $derived.by(() => {
@@ -97,8 +101,10 @@
     } else if (item.type === 'api-key') {
       fields.push(item.websiteUrl.trim())
       if (item.expiresAt) fields.push(item.expiresAt)
-    } else {
+    } else if (item.type === 'seed-phrase') {
       fields.push(item.name.trim())
+    } else {
+      fields.push(item.title.trim())
     }
     return fields.some((field) => field.toLowerCase().includes(needle))
   }
@@ -204,7 +210,7 @@
             </p>
             <p class="text-xs">
               {items.length === 0
-                ? 'Add a login, API key, or seed phrase to get started.'
+                ? 'Add a login, API key, seed phrase, or secure note to get started.'
                 : 'Try a different search term.'}
             </p>
           </CardContent>
