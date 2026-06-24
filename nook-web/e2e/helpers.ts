@@ -308,6 +308,7 @@ export async function connectLocalVault(page: Page) {
   const savedLocalProvider = page.getByTestId('saved-provider-local').first()
   if (await savedLocalProvider.isVisible()) {
     await savedLocalProvider.click()
+    await page.getByTestId('unlock-vault-btn').click()
     await expect(
       page.getByTestId('connect-success').or(page.getByTestId('app-success')),
     ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
@@ -471,6 +472,7 @@ export async function unlockGithubVault(page: Page) {
   const savedGithubProvider = page.getByTestId('saved-provider-github').first()
   if (await savedGithubProvider.isVisible()) {
     await savedGithubProvider.click()
+    await page.getByTestId('unlock-vault-btn').click()
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -494,6 +496,84 @@ export async function reconnectGithubVault(page: Page) {
 
 export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible()
+}
+
+/** Pick device keys or backup password on the login gate unlock form. */
+export async function selectLoginUnlockMethod(
+  page: Page,
+  method: 'keys' | 'password',
+) {
+  await page.getByTestId(`login-unlock-method-${method}`).click()
+}
+
+/** Unlock from the login gate — optional password when device keys are unavailable. */
+export async function unlockVaultOnLogin(
+  page: Page,
+  opts?: { password?: string; entryLabel?: string },
+) {
+  if (opts?.password) {
+    await selectLoginUnlockMethod(page, 'password')
+    if (opts.entryLabel) {
+      await page
+        .getByTestId('login-password-entry-list')
+        .getByRole('button', { name: opts.entryLabel })
+        .click()
+    }
+    await page.getByTestId('login-password-input').fill(opts.password)
+  }
+  await page.getByTestId('unlock-vault-btn').click()
+}
+
+/**
+ * Add a second saved provider so `VaultState.shouldAutoUnlock()` stays false
+ * and the login gate remains visible after reload.
+ */
+export async function disableLoginAutoUnlock(page: Page) {
+  await page.evaluate(() => {
+    return new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('nook_auth', 1)
+      request.onerror = () =>
+        reject(request.error ?? new Error('idb open failed'))
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('auth', 'readwrite')
+        const store = tx.objectStore('auth')
+        const getReq = store.get('providers')
+        getReq.onerror = () =>
+          reject(getReq.error ?? new Error('idb read failed'))
+        getReq.onsuccess = () => {
+          const snapshot = getReq.result as {
+            providers: Array<{
+              id: string
+              type: string
+              label: string
+              createdAt: string
+            }>
+            activeProviderId: string | null
+          } | null
+          if (!snapshot?.providers?.length) {
+            reject(new Error('No saved providers in nook_auth.'))
+            return
+          }
+          snapshot.providers.push({
+            id: 'e2e-dummy-github',
+            type: 'github',
+            label: 'GitHub (e2e dummy)',
+            createdAt: new Date().toISOString(),
+          })
+          const putReq = store.put(snapshot, 'providers')
+          putReq.onerror = () =>
+            reject(putReq.error ?? new Error('idb write failed'))
+          putReq.onsuccess = () => undefined
+        }
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+      }
+    })
+  })
 }
 
 export async function addSecret(

@@ -50,7 +50,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('provider-option-local')).toBeVisible()
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
     await expect(page.getByTestId('open-enrollment-code-btn')).toBeVisible()
-    await expect(page.getByTestId('vault-password-login-panel')).not.toBeVisible()
+    await expect(page.getByTestId('login-unlock-method-fieldset')).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(

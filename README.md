@@ -218,7 +218,7 @@ task check                 # format, lint, tests, diagnostics, and builds
 task build                 # Rust, WASM, and production web build
 task web:dev               # local Vite development server
 task web:test              # web unit tests
-task web:test:e2e:local    # local-vault Playwright suite
+task web:test:e2e:local    # local Playwright suite (connect, login unlock, password envelope)
 task web:test:e2e          # complete Playwright suite; GitHub PAT required
 ```
 

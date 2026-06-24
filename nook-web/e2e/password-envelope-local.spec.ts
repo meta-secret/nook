@@ -7,6 +7,7 @@ import {
   openStorageSettings,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
+  unlockVaultOnLogin,
   waitForVaultUnlocked,
 } from './helpers'
 
@@ -126,7 +127,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('vault-password-login-panel')).toBeVisible({
+    await expect(page.getByTestId('login-unlock-method-fieldset')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     // Dismiss the join prompt — backup password is the recovery path here.
@@ -134,10 +135,7 @@ test.describe('vault password envelope (local)', () => {
     if (await joinClose.isVisible()) {
       await joinClose.click()
     }
-    await page.getByTestId('open-password-unlock-btn').click()
-    await expect(page.getByTestId('login-password-entry-list')).toBeVisible()
-    await page.getByTestId('login-password-input').fill('reload-pass')
-    await page.getByTestId('submit-password-unlock-btn').click()
+    await unlockVaultOnLogin(page, { password: 'reload-pass' })
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

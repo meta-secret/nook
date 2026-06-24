@@ -134,8 +134,8 @@ members:  members_key-encrypted catalog entries
 
 | Package | Tests |
 |---------|-------|
-| `nook-core` | `cargo test -p nook-core` — unit + integration (`tests/vault_workflow.rs`) |
-| `nook-web` | Playwright e2e (`npm run test:e2e`); no vault domain unit tests in TS |
+| `nook-core` | `task rust:test` — unit + integration (`tests/vault_workflow.rs`) |
+| `nook-web` | Playwright e2e via `task web:test:e2e:local` (no PAT) or `task web:test:e2e` (full suite); no vault domain unit tests in TS |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
 
 Domain logic changes **must** add or update Rust tests before merge.

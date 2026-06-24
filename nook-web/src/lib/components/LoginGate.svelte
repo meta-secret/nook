@@ -83,9 +83,13 @@
     onConsumeLoginPasswordPrompt?: () => void
   } = $props()
 
+  type UnlockMethod = 'keys' | 'password'
+
+  let unlockMethod = $state<UnlockMethod>('keys')
+
   $effect(() => {
     if (loginPasswordPrompt) {
-      passwordFormOpen = true
+      unlockMethod = 'password'
       enrollmentCodeFormOpen = false
       if (passwordEntries.length === 1 && !selectedPasswordEntryId) {
         selectedPasswordEntryId = passwordEntries[0]!.id
@@ -96,13 +100,30 @@
 
   $effect(() => {
     if (
-      passwordFormOpen &&
+      unlockMethod === 'password' &&
       passwordEntries.length === 1 &&
       !selectedPasswordEntryId
     ) {
       selectedPasswordEntryId = passwordEntries[0]!.id
     }
   })
+
+  $effect(() => {
+    if (unlockMethod === 'password' && passwordEntries.length === 0) {
+      unlockMethod = 'keys'
+    }
+  })
+
+  function handleUnlockSubmit() {
+    if (unlockMethod === 'password' && onUnlockWithPassword) {
+      if (!selectedPasswordEntryId) return
+      const trimmed = passwordInput.trim()
+      if (!trimmed) return
+      void onUnlockWithPassword(selectedPasswordEntryId, trimmed)
+      return
+    }
+    void onUnlock()
+  }
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
@@ -116,7 +137,6 @@
 
   let enrollmentCodeFormOpen = $state(false)
   let enrollmentCodeInput = $state('')
-  let passwordFormOpen = $state(false)
   let passwordInput = $state('')
 
   const hasProviders = $derived(providers.length > 0)
@@ -134,10 +154,11 @@
     Boolean(onUseEnrollmentCode) &&
       (showProviderPicker || showSavedProviders || showSetup),
   )
-  const showVaultPasswordAccess = $derived(
-    Boolean(onUnlockWithPassword) &&
-      passwordEntries.length > 0 &&
-      (showProviderPicker || showSavedProviders || showSetup),
+  const showPasswordUnlockOption = $derived(
+    Boolean(onUnlockWithPassword) && passwordEntries.length > 0,
+  )
+  const isPasswordUnlock = $derived(
+    showSavedProviders && unlockMethod === 'password' && showPasswordUnlockOption,
   )
 </script>
 
@@ -178,8 +199,8 @@
           >
         {:else if showSavedProviders && !showSetup}
           <CardDescription class="text-pretty">
-            Default: choose a provider — Nook unlocks with this browser's device
-            keys.
+            Two steps: pick where your vault lives, then how to decrypt it.
+            Device keys are the default unlock method.
           </CardDescription>
         {:else if showProviderPicker && addProviderOpen}
           <ul
@@ -224,14 +245,14 @@
         novalidate
         onsubmit={(e) => {
           e.preventDefault()
-          void onUnlock()
+          handleUnlockSubmit()
         }}
         class="space-y-4"
       >
         {#if showSavedProviders}
           <fieldset class="space-y-2">
             <legend class="text-xs font-medium text-foreground">
-              Saved providers
+              1. Storage provider
             </legend>
             <ul class="space-y-2" data-testid="saved-providers-list">
               {#each providers as provider (provider.id)}
@@ -291,12 +312,102 @@
             </ul>
           </fieldset>
 
+          <fieldset class="space-y-3" data-testid="login-unlock-method-fieldset">
+            <legend class="text-xs font-medium text-foreground">
+              2. Unlock with
+            </legend>
+            <div
+              class="flex flex-wrap gap-2"
+              role="radiogroup"
+              aria-label="Unlock method"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={unlockMethod === 'keys'}
+                class="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors {unlockMethod ===
+                'keys'
+                  ? 'border-primary/40 bg-primary/5 text-foreground'
+                  : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
+                data-testid="login-unlock-method-keys"
+                disabled={isVerifying || isInitializing}
+                onclick={() => {
+                  unlockMethod = 'keys'
+                  passwordInput = ''
+                }}
+              >
+                <ShieldCheck class="size-4 shrink-0" />
+                This device's keys
+              </button>
+              {#if showPasswordUnlockOption}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={unlockMethod === 'password'}
+                  class="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors {unlockMethod ===
+                  'password'
+                    ? 'border-primary/40 bg-primary/5 text-foreground'
+                    : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
+                  data-testid="login-unlock-method-password"
+                  disabled={isVerifying || isInitializing}
+                  onclick={() => {
+                    unlockMethod = 'password'
+                  }}
+                >
+                  <KeyRound class="size-4 shrink-0" />
+                  Backup password
+                </button>
+              {/if}
+            </div>
+
+            {#if isPasswordUnlock}
+              <div class="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+                <p class="text-xs text-muted-foreground text-pretty">
+                  Pick a labelled password entry, then enter its password.
+                </p>
+                <ul class="space-y-2" data-testid="login-password-entry-list">
+                  {#each passwordEntries as entry (entry.id)}
+                    <li>
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors {selectedPasswordEntryId ===
+                        entry.id
+                          ? 'border-primary/40 bg-primary/5 text-foreground'
+                          : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
+                        data-testid="login-password-entry-{entry.id}"
+                        onclick={() => {
+                          selectedPasswordEntryId = entry.id
+                        }}
+                      >
+                        <UserRound class="size-4 shrink-0 text-primary" />
+                        <span class="truncate font-medium">{entry.label}</span>
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+                <input
+                  type="password"
+                  class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Password for selected entry"
+                  bind:value={passwordInput}
+                  autocomplete="current-password"
+                  data-testid="login-password-input"
+                  required
+                />
+              </div>
+            {/if}
+          </fieldset>
+
           <div class="flex flex-wrap items-center gap-2">
             <Button
               type="submit"
               class="sm:min-w-[160px]"
               data-testid="unlock-vault-btn"
-              disabled={isVerifying || isInitializing || !activeProviderId}
+              disabled={isVerifying ||
+                isInitializing ||
+                !activeProviderId ||
+                (isPasswordUnlock &&
+                  (!selectedPasswordEntryId || !passwordInput.trim()))}
             >
               {#if isUnlocking}
                 <RefreshCw class="size-4 animate-spin" />
@@ -374,144 +485,6 @@
     </CardContent>
   </Card>
 
-  {#if showVaultPasswordAccess}
-    <Card
-      class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
-      data-testid="vault-password-login-panel"
-    >
-      <CardHeader class="border-b border-border/60 pb-4 pt-5">
-        <div class="space-y-1">
-          <CardTitle
-            class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
-          >
-            <KeyRound class="size-4 text-primary" />
-            Backup unlock
-          </CardTitle>
-          <CardDescription class="text-pretty">
-            Only if device keys on this browser no longer work. Connect a
-            provider above first, then pick a labelled backup password.
-          </CardDescription>
-        </div>
-      </CardHeader>
-
-      <CardContent class="pt-4">
-        {#if !passwordFormOpen}
-          <button
-            type="button"
-            class="flex w-full items-start gap-3 text-left transition-colors hover:opacity-90"
-            data-testid="open-password-unlock-btn"
-            onclick={() => {
-              passwordFormOpen = true
-              enrollmentCodeFormOpen = false
-            }}
-          >
-            <KeyRound class="mt-0.5 size-4 shrink-0 text-primary" />
-            <span class="min-w-0 flex-1 space-y-1">
-              <span class="block text-sm font-semibold text-foreground">
-                Unlock with backup password
-              </span>
-              <span class="block text-xs text-muted-foreground text-pretty">
-                {#if passwordEntries.length > 0}
-                  {passwordEntries.length}
-                  {passwordEntries.length === 1 ? 'password' : 'passwords'} on this
-                  vault — pick one and enter its password.
-                {:else}
-                  Connect a provider above first, then choose a labelled password
-                  entry.
-                {/if}
-              </span>
-            </span>
-          </button>
-        {:else if onUnlockWithPassword}
-          <form
-            class="space-y-4"
-            onsubmit={(e) => {
-              e.preventDefault()
-              if (!onUnlockWithPassword || !selectedPasswordEntryId) return
-              const trimmed = passwordInput.trim()
-              if (!trimmed) return
-              void onUnlockWithPassword(selectedPasswordEntryId, trimmed)
-            }}
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div class="space-y-1">
-                <h3 class="text-sm font-semibold text-foreground">
-                  Choose a password
-                </h3>
-                <p class="text-xs text-muted-foreground text-pretty">
-                  Like macOS login — pick an identity, then enter its password.
-                </p>
-              </div>
-              <button
-                type="button"
-                class="shrink-0 text-xs font-medium text-muted-foreground hover:text-foreground"
-                onclick={() => {
-                  passwordFormOpen = false
-                  passwordInput = ''
-                }}
-              >
-                Back
-              </button>
-            </div>
-
-            {#if passwordEntries.length > 0}
-              <ul class="space-y-2" data-testid="login-password-entry-list">
-                {#each passwordEntries as entry (entry.id)}
-                  <li>
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors {selectedPasswordEntryId ===
-                      entry.id
-                        ? 'border-primary/40 bg-primary/5 text-foreground'
-                        : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
-                      data-testid="login-password-entry-{entry.id}"
-                      onclick={() => {
-                        selectedPasswordEntryId = entry.id
-                      }}
-                    >
-                      <UserRound class="size-4 shrink-0 text-primary" />
-                      <span class="truncate font-medium">{entry.label}</span>
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            {:else}
-              <p class="text-xs text-muted-foreground">
-                No password entries found yet. Connect your storage provider above,
-                or add a password from an unlocked device.
-              </p>
-            {/if}
-
-            <input
-              type="password"
-              class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Password for selected entry"
-              bind:value={passwordInput}
-              autocomplete="current-password"
-              data-testid="login-password-input"
-              required
-            />
-            <div class="flex justify-end">
-              <Button
-                type="submit"
-                disabled={isVerifying ||
-                  !passwordInput.trim() ||
-                  !selectedPasswordEntryId}
-                data-testid="submit-password-unlock-btn"
-              >
-                {#if isVerifying}
-                  <RefreshCw class="size-4 animate-spin" /> Unlocking…
-                {:else}
-                  <ShieldCheck class="size-4" /> Unlock vault
-                {/if}
-              </Button>
-            </div>
-          </form>
-        {/if}
-      </CardContent>
-    </Card>
-  {/if}
-
   {#if showEnrollmentAccess}
     <Card
       class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
@@ -540,7 +513,6 @@
             data-testid="open-enrollment-code-btn"
             onclick={() => {
               enrollmentCodeFormOpen = true
-              passwordFormOpen = false
             }}
           >
             <QrCode class="mt-0.5 size-4 shrink-0 text-primary" />
