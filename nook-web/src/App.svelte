@@ -11,6 +11,7 @@
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
+  import NookLogo from '$lib/components/NookLogo.svelte'
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
@@ -62,17 +63,7 @@
         : shellWidth}"
     >
       <div class="flex min-w-0 items-center gap-3">
-        <div
-          class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg"
-        >
-          <img
-            src={colorMode === 'dark'
-              ? '/nook-logo-dark.png'
-              : '/nook-logo-light.png'}
-            alt="Nook logo"
-            class="size-full object-contain dark:brightness-110 dark:contrast-105 dark:saturate-110 dark:drop-shadow-[0_0_10px_rgba(62,233,214,0.12)]"
-          />
-        </div>
+        <NookLogo {colorMode} size="sm" class="rounded-lg overflow-hidden" />
       </div>
 
       <div class="flex items-center gap-2">
