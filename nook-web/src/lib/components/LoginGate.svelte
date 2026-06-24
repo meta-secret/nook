@@ -278,14 +278,14 @@
     </CardContent>
   </Card>
 
+  {#if !hasProviders && !showSetup && onOpenHelp}
+    <ProductIntro {onOpenHelp} />
+  {/if}
   {#if showEnrollmentAccess}
     <LoginEnrollmentPanel
       bind:open={enrollmentPanelOpen}
       {isVerifying}
       {onUseEnrollmentCode}
     />
-  {/if}
-  {#if !hasProviders && !showSetup && onOpenHelp}
-    <ProductIntro {onOpenHelp} />
   {/if}
 </div>
