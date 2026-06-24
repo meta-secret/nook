@@ -19,6 +19,7 @@
     label,
     showSyncStatus = true,
     showStorageIcon = true,
+    variant = 'panel',
     onRefresh,
     onDismissSuccess,
     onDismissError,
@@ -33,6 +34,7 @@
     label?: string
     showSyncStatus?: boolean
     showStorageIcon?: boolean
+    variant?: 'panel' | 'quiet'
     onRefresh?: () => void | Promise<void>
     onDismissSuccess?: () => void
     onDismissError?: () => void
@@ -61,15 +63,20 @@
     label ??
       (storageMode === 'github' ? githubRepo.trim() || 'GitHub' : 'This device'),
   )
+  const isQuiet = $derived(variant === 'quiet')
 </script>
 
 <div
-  class="border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5"
+  class={isQuiet
+    ? 'border-t border-border/50 bg-transparent px-1 py-2'
+    : 'border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5'}
   data-testid="vault-status-bar"
 >
   <div class="flex flex-col gap-2">
     <div
-      class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs"
+      class={isQuiet
+        ? 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px]'
+        : 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs'}
     >
       <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
         {#if showStorageIcon}

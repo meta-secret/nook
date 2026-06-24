@@ -166,6 +166,7 @@
           label={vault.isAuthenticated ? undefined : 'Nook'}
           showSyncStatus={vault.isAuthenticated}
           showStorageIcon={vault.isAuthenticated}
+          variant={vault.isAuthenticated ? 'panel' : 'quiet'}
           onDismissSuccess={() => vault.dismissSuccess()}
           onDismissError={() => vault.dismissError()}
         />
@@ -306,6 +307,7 @@
           label="Nook"
           showSyncStatus={false}
           showStorageIcon={false}
+          variant="quiet"
           onDismissSuccess={() => vault.dismissSuccess()}
           onDismissError={() => vault.dismissError()}
         />
