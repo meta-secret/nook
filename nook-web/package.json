@@ -50,7 +50,7 @@
   "dependencies": {
     "@lucide/svelte": "1.21.0",
     "clsx": "2.1.1",
-    "dompurify": "3.2.4",
+    "dompurify": "3.4.11",
     "github-markdown-css": "5.8.1",
     "markdown-it": "14.1.0",
     "qrcode": "^1.5.4",
