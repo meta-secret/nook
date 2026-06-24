@@ -209,10 +209,6 @@ export async function waitForVaultYaml(
 }
 
 async function assertNoVaultErrors(page: Page) {
-  const connectError = page.getByTestId('connect-error')
-  if (await connectError.isVisible()) {
-    throw new Error(`Connect failed: ${await connectError.textContent()}`)
-  }
   const vaultError = page.getByTestId('vault-error')
   if (await vaultError.isVisible()) {
     throw new Error(`Vault error: ${await vaultError.textContent()}`)
@@ -274,7 +270,7 @@ export async function waitForEngine(page: Page) {
 }
 
 async function assertGithubConnected(page: Page) {
-  const error = page.getByTestId('connect-error')
+  const error = page.getByTestId('vault-error')
   if (await error.isVisible()) {
     throw new Error(`GitHub connect failed: ${await error.textContent()}`)
   }
@@ -310,16 +306,18 @@ export async function connectLocalVault(page: Page) {
     await savedLocalProvider.click()
     await page.getByTestId('login-connect-provider-btn').click()
     await page.getByTestId('unlock-vault-btn').click()
-    await expect(
-      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
   } else {
     await page.getByTestId('provider-option-local').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
-    await expect(
-      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,

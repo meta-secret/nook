@@ -153,7 +153,20 @@
       : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
-      <HelpPage onClose={() => vault.closeHelp()} />
+      <div class="space-y-4">
+        <HelpPage onClose={() => vault.closeHelp()} />
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
+          {appVersion}
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
+        />
+      </div>
     {:else if vault.isAuthenticated}
       <div
         class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
@@ -167,7 +180,6 @@
               isVerifying={vault.isVerifying}
               isSaving={vault.isSaving}
               isInitializing={vault.isInitializing}
-              errorMsg={vault.errorMsg}
               addProviderOpen={vault.addProviderOpen}
               bind:setupType={vault.loginSetupType}
               bind:githubPat={vault.githubPat}
@@ -229,19 +241,19 @@
             />
           {/if}
         </div>
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
+          {appVersion}
+          onRefresh={() => vault.manualSync()}
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
+        />
         {#if !secretsAddOpen}
-          <VaultStatusBar
-            storageMode={vault.storageMode}
-            githubRepo={vault.githubRepo}
-            lastSyncedAt={vault.lastSyncedAt}
-            isSyncing={vault.isSyncing || vault.isSaving}
-            successMsg={vault.successMsg}
-            errorMsg={vault.errorMsg}
-            {appVersion}
-            onRefresh={() => vault.manualSync()}
-            onDismissSuccess={() => vault.dismissSuccess()}
-            onDismissError={() => vault.dismissError()}
-          />
           <VaultBottomNav
             settingsOpen={vault.settingsOpen}
             pendingJoinCount={vault.pendingJoins.length}
@@ -265,8 +277,6 @@
           addProviderOpen={vault.addProviderOpen}
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
-          errorMsg={vault.errorMsg}
-          successMsg={vault.successMsg}
           onUnlock={handleUnlock}
           onSelectProvider={handleLoginProviderSelect}
           onConnectProvider={handleLoginProviderConnect}
@@ -281,6 +291,17 @@
             vault.unlockWithPassword(entryId, password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}
           onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
+        />
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
+          {appVersion}
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
         />
       </div>
     {/if}

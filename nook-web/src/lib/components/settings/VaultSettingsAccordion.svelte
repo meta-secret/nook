@@ -20,7 +20,6 @@
     isVerifying,
     isSaving,
     isInitializing,
-    errorMsg,
     addProviderOpen = false,
     setupType = $bindable(null as StorageProviderType | null),
     githubPat = $bindable(''),
@@ -54,7 +53,6 @@
     isVerifying: boolean
     isSaving: boolean
     isInitializing: boolean
-    errorMsg: string
     addProviderOpen?: boolean
     setupType?: StorageProviderType | null
     githubPat: string
@@ -129,7 +127,6 @@
       {isVerifying}
       {isSaving}
       {isInitializing}
-      {errorMsg}
       {addProviderOpen}
       bind:setupType
       bind:githubPat

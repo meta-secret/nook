@@ -13,7 +13,19 @@
     <Info class="size-3.5 shrink-0" />
     Why Nook?
   </p>
-  <p class="text-pretty">Learn how device keys, storage, and recovery work.</p>
+  <div class="space-y-1.5">
+    <p class="text-base font-semibold leading-snug text-foreground">
+      Your device is the key
+    </p>
+    <p class="text-pretty">
+      No master password. Your devices unlock the vault.
+    </p>
+    <ul class="list-disc space-y-1 pl-5 text-pretty">
+      <li>Passwordless access to your secrets.</li>
+      <li>Your secrets. Your storage. Your keys.</li>
+      <li>A decentralized vault for your secrets.</li>
+    </ul>
+  </div>
   <Button
     type="button"
     variant="link"

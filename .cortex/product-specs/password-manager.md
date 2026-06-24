@@ -8,6 +8,11 @@ This document defines the functional and technical specifications for Nook's Zer
 
 The Nook Password Manager is a client-side, zero-knowledge secret vault. It enables users to secure and organize credentials locally in their browser or synchronize them to their private GitHub repositories.
 
+The product promise is: **Your device is the key.** There is no master password;
+approved devices unlock the vault. Nook provides passwordless access to your
+secrets while keeping the model decentralized: your secrets, your storage, your
+keys.
+
 ### Core Goals
 - **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
 - **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, validation, password generation, and cryptographic operations are encapsulated in Rust (`nook-core` + `nook-wasm`).

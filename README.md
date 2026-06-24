@@ -25,14 +25,19 @@ the vault.
 
 ## Why Nook?
 
+**Your device is the key.** No master password. Your devices unlock the vault.
+
 Most password managers give you one master password. You must remember it. It can be
 phished. If you lose it, you may lose the vault.
 
 Nook uses your devices instead:
 
+- **Passwordless access to your secrets.** Approved devices unlock the vault.
+- **Your secrets. Your storage. Your keys.** Keep the encrypted vault locally or in
+  storage you control.
+- **A decentralized vault for your secrets.** There is no Nook account or central
+  account server.
 - **No master password.** Nothing to remember, type, or reset.
-- **No Nook account.** Nook has no central account server.
-- **Devices are your keys.** An approved device opens the vault.
 - **You approve new devices.** Use a device that already has access.
 - **You choose the storage.** Keep the vault local or use your own provider.
 - **The code is open source.** You can inspect how Nook works.

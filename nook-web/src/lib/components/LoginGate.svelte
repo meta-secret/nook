@@ -28,8 +28,6 @@
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
     isInitializing,
-    errorMsg,
-    successMsg,
     addProviderOpen = false,
     onUnlock,
     onSelectProvider,
@@ -57,8 +55,6 @@
     githubRepo: string
     isVerifying: boolean
     isInitializing: boolean
-    errorMsg: string
-    successMsg: string
     addProviderOpen?: boolean
     onUnlock: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
@@ -125,6 +121,10 @@
       {onRemoveProvider}
       {onBeginAddProvider}
     />
+  {/if}
+
+  {#if !hasProviders && !showSetup && onOpenHelp}
+    <ProductIntro {onOpenHelp} />
   {/if}
 
   <Card
@@ -255,32 +255,9 @@
           {onRemoveProvider}
         />
       {/if}
-
-      {#if errorMsg}
-        <div
-          class="mt-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-          data-testid="connect-error"
-        >
-          {errorMsg}
-        </div>
-      {/if}
-
-      {#if successMsg}
-        <div
-          class="mt-4 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary"
-          role="status"
-          data-testid="connect-success"
-        >
-          {successMsg}
-        </div>
-      {/if}
     </CardContent>
   </Card>
 
-  {#if !hasProviders && !showSetup && onOpenHelp}
-    <ProductIntro {onOpenHelp} />
-  {/if}
   {#if showEnrollmentAccess}
     <LoginEnrollmentPanel
       bind:open={enrollmentPanelOpen}
