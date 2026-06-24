@@ -7,19 +7,18 @@
     CheckCircle2,
     Plus,
     ChevronLeft,
-    ChevronDown,
+    Trash2,
+    Lock,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
-  import DeviceEnrollment from '$lib/components/DeviceEnrollment.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
   import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
-  import type { JoinRequest, VaultMember } from '$lib/nook'
-
+  import { providerStorageDetail } from '$lib/auth-providers'
   let {
     providers,
     activeProviderId,
@@ -28,11 +27,8 @@
     isSaving,
     isInitializing,
     errorMsg,
-    deviceId = '',
-    devicePublicKey = '',
-    pendingJoins = [] as JoinRequest[],
-    vaultMembers = [] as VaultMember[],
     addProviderOpen = false,
+    embedded = false,
     setupType = $bindable(null as StorageProviderType | null),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
@@ -42,7 +38,8 @@
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
-    onApproveJoin,
+    onRemoveProvider,
+    onLockVault,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -51,11 +48,8 @@
     isSaving: boolean
     isInitializing: boolean
     errorMsg: string
-    deviceId?: string
-    devicePublicKey?: string
-    pendingJoins?: JoinRequest[]
-    vaultMembers?: VaultMember[]
     addProviderOpen?: boolean
+    embedded?: boolean
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
@@ -65,15 +59,29 @@
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
-    onApproveJoin?: (deviceId: string) => void | Promise<void>
+    onRemoveProvider?: (id: string) => void | Promise<void>
+    onLockVault?: () => void
   } = $props()
+
+  function confirmRemoveProvider(provider: StorageProvider) {
+    if (!onRemoveProvider) return
+    const signedOutNote =
+      isAuthenticated && provider.id === activeProviderId
+        ? ' You will be signed out of the vault in this browser.'
+        : ''
+    const ok = confirm(
+      `Remove "${provider.label}" from saved providers?${signedOutNote} Your vault file on storage is not deleted.`,
+    )
+    if (ok) {
+      void onRemoveProvider(provider.id)
+    }
+  }
 
   const showSetup = $derived(setupType !== null)
   const addingProvider = $derived(addProviderOpen || showSetup)
-  let storageProvidersExpanded = $state(true)
 </script>
 
-<div class="w-full animate-in fade-in duration-300 space-y-5">
+<div class="w-full animate-in fade-in duration-300 space-y-4">
   {#if addingProvider}
     <div
       class="flex items-start justify-between gap-3 border-b border-border/60 pb-4"
@@ -107,42 +115,13 @@
         </p>
       </div>
     </div>
-  {:else}
-    <button
-      type="button"
-      class="flex w-full items-start justify-between gap-3 border-b border-border/60 pb-4 text-left group transition-colors focus:outline-hidden"
-      onclick={() => (storageProvidersExpanded = !storageProvidersExpanded)}
-    >
-      <div class="space-y-1">
-        <h2
-          class="text-base font-semibold text-foreground inline-flex items-center gap-1.5 group-hover:text-primary transition-colors"
-        >
-          Vault info
-          <ChevronDown
-            class="size-4 text-muted-foreground transition-transform duration-200 {storageProvidersExpanded
-              ? 'rotate-180'
-              : ''}"
-          />
-        </h2>
-        <p class="text-xs text-muted-foreground text-pretty">
-          Configure storage providers, enrolled devices, and browser
-          authorization.
-        </p>
-      </div>
-      {#if isAuthenticated}
-        <span
-          class="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500"
-          data-testid="connected-badge"
-        >
-          <CheckCircle2 class="size-3" />
-          Connected
-        </span>
-      {/if}
-    </button>
+  {:else if !embedded}
+    <p class="text-xs text-muted-foreground text-pretty">
+      Switch providers without changing device keys or backup passwords.
+    </p>
   {/if}
 
-  {#if storageProvidersExpanded || addingProvider}
-    <div class="space-y-4">
+  <div class="space-y-4">
       <form
         novalidate
         onsubmit={(e) => {
@@ -163,99 +142,99 @@
           <ProviderPicker onSelect={onBeginSetup} />
         {:else}
           <fieldset class="space-y-2">
-            <legend class="text-xs font-medium text-foreground">
-              Saved providers
-            </legend>
             {#if providers.length === 0}
               <p class="text-xs text-muted-foreground">
                 No providers saved yet.
               </p>
             {:else}
-              <ul class="space-y-2.5" data-testid="settings-providers-list">
+              <ul class="divide-y divide-border/60" data-testid="settings-providers-list">
                 {#each providers as provider (provider.id)}
-                  <li>
+                  <li class="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
                     <button
                       type="button"
-                      class="group flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-all duration-200 {provider.id ===
+                      class="group flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors {provider.id ===
                       activeProviderId
-                        ? 'border-primary/30 bg-primary/5 shadow-xs'
-                        : 'border-border bg-card hover:bg-accent/40 hover:border-border/80 hover:shadow-xs'}"
+                        ? 'text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'}"
                       data-testid="settings-provider-{provider.type}"
                       disabled={isVerifying || isInitializing}
                       aria-busy={isVerifying &&
                         provider.id === activeProviderId}
                       onclick={() => void onSelectProvider(provider.id)}
                     >
-                      <div class="flex items-center gap-3 min-w-0">
-                        <div
-                          class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-primary"
+                      {#if provider.type === 'github'}
+                        <Cloud class="size-4 shrink-0 text-primary" />
+                      {:else}
+                        <HardDrive class="size-4 shrink-0 text-primary" />
+                      {/if}
+                      <span class="min-w-0 flex-1">
+                        <span class="block truncate font-medium text-sm">
+                          {provider.label}
+                        </span>
+                        <span
+                          class="block truncate font-mono text-[11px] text-muted-foreground"
                         >
-                          {#if provider.type === 'github'}
-                            <Cloud class="size-4.5" />
-                          {:else}
-                            <HardDrive class="size-4.5" />
-                          {/if}
-                        </div>
-                        <div class="flex flex-col min-w-0">
-                          <span
-                            class="font-medium text-foreground text-sm truncate"
-                          >
-                            {provider.label}
-                          </span>
-                          <span
-                            class="text-xs text-muted-foreground truncate mt-0.5"
-                          >
-                            {#if provider.type === 'github'}
-                              {provider.githubRepo ?? DEFAULT_GITHUB_REPO}
-                            {:else}
-                              IndexedDB browser storage
-                            {/if}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div class="shrink-0 flex items-center gap-2">
-                        {#if provider.id === activeProviderId}
-                          {#if isVerifying}
-                            <span
-                              class="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary"
-                            >
-                              <RefreshCw class="size-3 animate-spin" />
-                              Connecting
-                            </span>
-                          {:else}
-                            <span
-                              class="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
-                            >
-                              <CheckCircle2 class="size-3" />
-                              Active
-                            </span>
-                          {/if}
+                          {providerStorageDetail(provider)}
+                        </span>
+                      </span>
+                      {#if provider.id === activeProviderId}
+                        {#if isVerifying}
+                          <RefreshCw class="size-3.5 shrink-0 animate-spin text-primary" />
                         {:else}
                           <span
-                            class="text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity duration-200 mr-1"
+                            class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
                           >
-                            Switch
+                            <CheckCircle2 class="size-3" />
+                            Active
                           </span>
                         {/if}
-                      </div>
+                      {:else}
+                        <span
+                          class="shrink-0 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          Switch
+                        </span>
+                      {/if}
                     </button>
+                    {#if provider.id === activeProviderId && isAuthenticated && onLockVault}
+                      <button
+                        type="button"
+                        class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-primary disabled:opacity-50"
+                        aria-label="Lock vault"
+                        title="Lock vault"
+                        data-testid="lock-vault-btn"
+                        disabled={isVerifying || isInitializing}
+                        onclick={() => onLockVault()}
+                      >
+                        <Lock class="size-4" />
+                      </button>
+                    {/if}
+                    {#if onRemoveProvider}
+                      <button
+                        type="button"
+                        class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        aria-label="Remove {provider.label}"
+                        data-testid="remove-provider-{provider.id}"
+                        disabled={isVerifying || isInitializing}
+                        onclick={() => confirmRemoveProvider(provider)}
+                      >
+                        <Trash2 class="size-4" />
+                      </button>
+                    {/if}
                   </li>
                 {/each}
               </ul>
             {/if}
 
-            <div class="pt-1.5">
-              <button
-                type="button"
-                class="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border/80 bg-muted/20 py-3.5 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent/50 hover:text-foreground hover:border-border hover:shadow-xs"
-                data-testid="add-provider-btn"
-                onclick={() => onBeginAddProvider?.()}
-              >
-                <Plus class="size-4 text-muted-foreground" />
-                Add storage provider
-              </button>
-            </div>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              data-testid="add-provider-btn"
+              onclick={() => onBeginAddProvider?.()}
+            >
+              <Plus class="size-4" />
+              Add storage provider
+            </button>
           </fieldset>
         {/if}
 
@@ -292,18 +271,5 @@
           </div>
         {/if}
       </form>
-    </div>
-  {/if}
-
-  {#if !addingProvider}
-    <hr class="border-border/60" />
-    <DeviceEnrollment
-      {deviceId}
-      {devicePublicKey}
-      {pendingJoins}
-      {vaultMembers}
-      isBusy={isSaving || isVerifying}
-      {onApproveJoin}
-    />
-  {/if}
+  </div>
 </div>

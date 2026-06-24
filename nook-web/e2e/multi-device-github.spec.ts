@@ -9,6 +9,7 @@ import {
   connectGithubJoinerDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
+  expandSettingsSection,
   githubPat,
   openStorageSettings,
   resetGithubVault,
@@ -181,16 +182,19 @@ describeMultiDevice('multi-device github vault', () => {
 
   test('storage settings lists enrolled members with public key fingerprints', async () => {
     await openStorageSettings(deviceA)
+    await expandSettingsSection(deviceA, 'devices')
     await expect(deviceA.getByTestId('device-enrollment-panel')).toBeVisible()
     await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()
     await expect(deviceA.getByTestId('vault-member-row')).toHaveCount(2)
-    await expect(deviceA.getByText('(this browser)')).toBeVisible()
+    // The current device's row carries a "Current" badge in the members
+    // list (replaces the older inline "(this browser)" label).
+    await expect(deviceA.getByText('Current', { exact: true })).toBeVisible()
 
     await deviceA.getByTestId('device-details-toggle').click()
     await expect(deviceA.getByTestId('device-id')).not.toHaveText('—')
     await expect(deviceA.getByTestId('device-public-key')).not.toHaveText('—')
 
-    await deviceA.getByTestId('storage-settings-close').click()
+    await deviceA.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(deviceA)
   })
 })

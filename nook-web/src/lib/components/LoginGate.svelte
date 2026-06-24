@@ -1,10 +1,7 @@
 <script lang="ts">
   import {
-    Cloud,
-    HardDrive,
     RefreshCw,
     ShieldCheck,
-    Plus,
     ChevronLeft,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -21,8 +18,11 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
-  import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import LoginWizard from '$lib/components/login/LoginWizard.svelte'
+  import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
+  import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
+  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
     providers,
@@ -37,14 +37,25 @@
     addProviderOpen = false,
     onUnlock,
     onSelectProvider,
+    onConnectProvider,
+    onBackToLoginProvider,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
     onOpenHelp,
+    onUseEnrollmentCode,
+    onUnlockWithPassword,
+    loginFlowStep = 'connection',
+    passwordEntries = [] as VaultPasswordEntrySummary[],
+    selectedPasswordEntryId = $bindable(null as string | null),
+    onRemoveProvider,
+    loginPasswordPrompt = false,
+    onConsumeLoginPasswordPrompt,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
+    loginFlowStep?: 'connection' | 'authorization'
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
@@ -55,31 +66,79 @@
     addProviderOpen?: boolean
     onUnlock: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
+    onConnectProvider?: () => void | Promise<void>
+    onBackToLoginProvider?: () => void
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onOpenHelp?: () => void
+    onUseEnrollmentCode?: (code: string) => void | Promise<void>
+    onUnlockWithPassword?: (entryId: string, password: string) => void | Promise<void>
+    onRemoveProvider?: (id: string) => void | Promise<void>
+    loginPasswordPrompt?: boolean
+    passwordEntries?: VaultPasswordEntrySummary[]
+    selectedPasswordEntryId?: string | null
+    onConsumeLoginPasswordPrompt?: () => void
   } = $props()
+
+  let manageProvidersOpen = $state(false)
+  let enrollmentPanelOpen = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
-  const showSavedProviders = $derived(
+  const showWizard = $derived(
     hasProviders && !showSetup && !addProviderOpen,
   )
-  const showProviderPicker = $derived(
-    (!hasProviders || addProviderOpen) && !showSetup,
+  const showProviderSetup = $derived(
+    !showSetup && !showWizard,
   )
-  const isUnlocking = $derived(isVerifying && showSavedProviders && !showSetup)
+  const activeProvider = $derived(
+    providers.find((p) => p.id === activeProviderId) ?? null,
+  )
+  const isConnecting = $derived(
+    isVerifying && showWizard && loginFlowStep === 'connection' && !showSetup,
+  )
+  const isUnlocking = $derived(
+    isVerifying && showWizard && loginFlowStep === 'authorization' && !showSetup,
+  )
+  const showEnrollmentAccess = $derived(
+    Boolean(onUseEnrollmentCode) &&
+      (showProviderSetup || showWizard || showSetup),
+  )
+
+  function handleFirstConnectSubmit(e: Event) {
+    e.preventDefault()
+    void onUnlock()
+  }
 </script>
 
-<div class="w-full animate-in fade-in duration-300" data-testid="login-gate">
+<div
+  class="w-full space-y-3 animate-in fade-in duration-300"
+  data-testid="login-gate"
+>
+  {#if showWizard}
+    <LoginProviderManagement
+      variant="manage"
+      {providers}
+      {isVerifying}
+      {isInitializing}
+      bind:open={manageProvidersOpen}
+      {onRemoveProvider}
+      onBeginAddProvider={onBeginAddProvider}
+    />
+  {/if}
+
   <Card
-    class="border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
+    class="gap-0 border-border bg-card/80 py-0 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
   >
-    <CardHeader class="border-b border-border/60 pb-4 pt-5">
+    <CardHeader
+      class="{showWizard
+        ? 'border-b-0 px-4 pb-1 pt-3'
+        : 'border-b border-border/60 px-6 pb-4 pt-5'}"
+    >
       <div class="space-y-1">
-        {#if addProviderOpen}
+        {#if addProviderOpen && showWizard}
           <button
             type="button"
             class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -90,172 +149,83 @@
             Back to saved providers
           </button>
         {/if}
+
         <CardTitle class="text-lg font-semibold tracking-tight text-foreground">
-          {#if showSavedProviders && !showSetup}
+          {#if showWizard}
             Unlock your vault
-          {:else if showProviderPicker}
-            Your device is the key
           {:else if showSetup}
             Connect to {setupType === 'github' ? 'GitHub' : 'this device'}
+          {:else if !hasProviders}
+            Set up storage
+          {:else if addProviderOpen}
+            Add storage provider
           {:else}
-            Your device is the key
+            Set up storage
           {/if}
         </CardTitle>
         {#if isUnlocking}
-          <CardDescription class="text-pretty"
-            >Unlocking your vault…</CardDescription
-          >
-        {:else if showSavedProviders && !showSetup}
+          <CardDescription class="text-pretty">Unlocking…</CardDescription>
+        {:else if isConnecting}
+          <CardDescription class="text-pretty">Connecting…</CardDescription>
+        {:else if showWizard}
           <CardDescription class="text-pretty">
-            Choose which saved provider to decrypt and open.
+            Connect to storage, then get access.
           </CardDescription>
-        {:else if showProviderPicker && addProviderOpen}
-          <ul
-            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
-          >
-            <li>Nook encrypts secrets in this browser first.</li>
-            <li>
-              Connect another provider — the vault file is stored on that
-              account.
-            </li>
-          </ul>
         {:else if showSetup && setupType === 'github'}
-          <ul
-            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
-          >
-            <li>Sign in to GitHub with a personal access token.</li>
-            <li>Nook syncs only the encrypted vault file to your repo.</li>
-            <li>Plaintext secrets never leave this browser.</li>
-          </ul>
+          <CardDescription class="text-pretty">
+            Sign in with a personal access token — plaintext secrets never leave
+            this browser.
+          </CardDescription>
         {:else if showSetup}
-          <ul
-            class="list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
-          >
-            <li>Encrypted vault stays in browser storage on this device.</li>
-            <li>No provider account or sign-in required.</li>
-          </ul>
-        {:else if showProviderPicker}
-          <p class="text-sm font-medium text-foreground">
-            No master password. Your devices unlock the vault.
-          </p>
-          <ul
-            class="mt-2 list-disc space-y-1.5 pl-4 text-sm text-muted-foreground text-pretty"
-            data-testid="login-gate-intro"
-          >
-            <li>Passwordless access to your secrets.</li>
-            <li>Your secrets. Your storage. Your keys.</li>
-            <li>A decentralized vault for your secrets.</li>
-          </ul>
+          <CardDescription class="text-pretty">
+            Encrypted vault stays in browser storage on this device.
+          </CardDescription>
+        {:else if !hasProviders}
+          <CardDescription class="text-pretty">
+            Add a provider first — then you can connect and unlock.
+          </CardDescription>
+        {:else if addProviderOpen}
+          <CardDescription class="text-pretty">
+            Another encrypted vault file on a different provider.
+          </CardDescription>
         {/if}
       </div>
     </CardHeader>
 
-    <CardContent class="pt-4">
-      <form
-        novalidate
-        onsubmit={(e) => {
-          e.preventDefault()
-          void onUnlock()
-        }}
-        class="space-y-4"
-      >
-        {#if showSavedProviders}
-          <fieldset class="space-y-2">
-            <legend class="text-xs font-medium text-foreground">
-              Saved providers
-            </legend>
-            <ul class="space-y-2" data-testid="saved-providers-list">
-              {#each providers as provider (provider.id)}
-                <li>
-                  <button
-                    type="button"
-                    class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors {provider.id ===
-                    activeProviderId
-                      ? 'border-primary/40 bg-primary/5 text-foreground'
-                      : 'border-border bg-muted/30 text-muted-foreground hover:bg-accent hover:text-foreground'}"
-                    data-testid="saved-provider-{provider.type}"
-                    disabled={isVerifying || isInitializing}
-                    aria-busy={isVerifying && provider.id === activeProviderId}
-                    onclick={() => void onSelectProvider(provider.id)}
-                  >
-                    {#if provider.type === 'github'}
-                      <Cloud class="size-4 shrink-0" />
-                    {:else}
-                      <HardDrive class="size-4 shrink-0" />
-                    {/if}
-                    <span class="min-w-0 flex-1 truncate font-medium">
-                      {provider.label}
-                    </span>
-                    {#if provider.type === 'github'}
-                      <span
-                        class="shrink-0 font-mono text-[10px] text-muted-foreground"
-                      >
-                        {provider.githubRepo ?? DEFAULT_GITHUB_REPO}
-                      </span>
-                    {/if}
-                    {#if provider.id === activeProviderId}
-                      {#if isUnlocking}
-                        <RefreshCw class="size-3.5 shrink-0 animate-spin" />
-                        <span class="sr-only">Unlocking</span>
-                      {:else}
-                        <span
-                          class="shrink-0 text-[10px] font-medium uppercase tracking-wide text-primary"
-                          >Last used</span
-                        >
-                      {/if}
-                    {/if}
-                  </button>
-                </li>
-              {/each}
-            </ul>
-          </fieldset>
-
-          <div class="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="border-border"
-              data-testid="add-provider-btn"
-              onclick={() => onBeginAddProvider?.()}
-            >
-              <Plus class="size-3.5" />
-              Add provider
-            </Button>
-          </div>
-        {:else if showProviderPicker}
-          <ProviderPicker onSelect={onBeginSetup} />
-        {:else if setupType}
+    <CardContent class={showWizard ? 'px-4 pb-4 pt-0' : 'px-6 pt-4'}>
+      {#if showWizard}
+        <LoginWizard
+          step={loginFlowStep}
+          {providers}
+          {activeProviderId}
+          {activeProvider}
+          {passwordEntries}
+          bind:selectedPasswordEntryId
+          {isVerifying}
+          {isInitializing}
+          {isConnecting}
+          {isUnlocking}
+          {loginPasswordPrompt}
+          onSelectProvider={onSelectProvider}
+          onConnect={() => onConnectProvider?.()}
+          onBackToConnection={onBackToLoginProvider}
+          {onUnlock}
+          {onUnlockWithPassword}
+          {onConsumeLoginPasswordPrompt}
+        />
+      {:else if showSetup && setupType}
+        <form
+          novalidate
+          onsubmit={handleFirstConnectSubmit}
+          class="space-y-4"
+        >
           <ProviderSetupFields
-            {setupType}
+            setupType={setupType}
             bind:githubPat
             bind:githubRepo
             idPrefix="login"
             {onCancelSetup}
           />
-        {/if}
-
-        {#if errorMsg}
-          <div
-            class="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-            role="alert"
-            data-testid="connect-error"
-          >
-            {errorMsg}
-          </div>
-        {/if}
-
-        {#if successMsg}
-          <div
-            class="rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary"
-            role="status"
-            data-testid="connect-success"
-          >
-            {successMsg}
-          </div>
-        {/if}
-
-        {#if showSetup}
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="submit"
@@ -274,11 +244,50 @@
               {/if}
             </Button>
           </div>
-        {/if}
-      </form>
+        </form>
+      {:else if showProviderSetup}
+        <LoginProviderManagement
+          variant="setup"
+          {providers}
+          {isVerifying}
+          {isInitializing}
+          addingProvider={addProviderOpen}
+          onBeginSetup={onBeginSetup}
+          onCancelAddProvider={onCancelAddProvider}
+          {onRemoveProvider}
+        />
+      {/if}
+
+      {#if errorMsg}
+        <div
+          class="mt-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          role="alert"
+          data-testid="connect-error"
+        >
+          {errorMsg}
+        </div>
+      {/if}
+
+      {#if successMsg}
+        <div
+          class="mt-4 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary"
+          role="status"
+          data-testid="connect-success"
+        >
+          {successMsg}
+        </div>
+      {/if}
     </CardContent>
   </Card>
-  {#if showProviderPicker && !addProviderOpen && onOpenHelp}
+
+  {#if showEnrollmentAccess}
+    <LoginEnrollmentPanel
+      bind:open={enrollmentPanelOpen}
+      {isVerifying}
+      {onUseEnrollmentCode}
+    />
+  {/if}
+  {#if !hasProviders && !showSetup && onOpenHelp}
     <ProductIntro {onOpenHelp} />
   {/if}
 </div>

@@ -2,15 +2,58 @@ use crate::SecretRecord;
 use crate::is_auth_id;
 use crate::is_device_id;
 
-pub const STORAGE_MODE_LOCAL: &str = "local";
-pub const STORAGE_MODE_GITHUB: &str = "github";
+/// Backend that persists the encrypted vault file.
+///
+/// New backends (S3, IPFS, …) plug in as new variants — the rest of the
+/// pipeline pattern-matches on the enum rather than threading raw strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StorageMode {
+    /// `IndexedDB` on this device only.
+    Local,
+    /// GitHub repository (authenticated with a PAT).
+    Github,
+}
+
+impl StorageMode {
+    /// Canonical short tag used at every cross-language boundary (wasm-bindgen
+    /// arguments, `IndexedDB` JSON, GitHub PR descriptions, log lines).
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::Github => "github",
+        }
+    }
+
+    /// Parse a tag string (typically arriving from the JS layer) into the
+    /// enum. Unknown values are rejected at the boundary so no caller has
+    /// to defend against typos downstream.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "local" => Ok(Self::Local),
+            "github" => Ok(Self::Github),
+            other => Err(format!("Unknown storage mode: {other}")),
+        }
+    }
+}
+
+impl std::fmt::Display for StorageMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// String tags retained for places where a `&'static str` is more
+/// convenient than the enum (test fixtures, JSON keys). New code should
+/// prefer `StorageMode::Local.as_str()` / `StorageMode::Github.as_str()`.
+pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
+pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
 
+/// Boundary helper: confirms a raw string is a known storage mode. Prefer
+/// `StorageMode::parse` when you also want the parsed value.
 pub fn validate_storage_mode(mode: &str) -> Result<(), String> {
-    match mode {
-        STORAGE_MODE_LOCAL | STORAGE_MODE_GITHUB => Ok(()),
-        _ => Err(format!("Unknown storage mode: {mode}")),
-    }
+    StorageMode::parse(mode).map(|_| ())
 }
 
 pub fn validate_github_pat(pat: &str) -> Result<String, String> {
@@ -46,13 +89,15 @@ pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
     Ok(repo)
 }
 
-/// Validates connect inputs. Returns trimmed GitHub PAT when mode is `github`.
+/// Validates connect inputs. Returns trimmed GitHub PAT when mode is `Github`.
+///
+/// Accepts a string-typed `storage_mode` purely as a boundary convenience
+/// for callers crossing FFI; the canonical internal type is `StorageMode`.
 pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<String>, String> {
-    validate_storage_mode(storage_mode)?;
-    if storage_mode == STORAGE_MODE_GITHUB {
-        Ok(Some(validate_github_pat(github_pat)?))
-    } else {
-        Ok(None)
+    let mode = StorageMode::parse(storage_mode)?;
+    match mode {
+        StorageMode::Github => Ok(Some(validate_github_pat(github_pat)?)),
+        StorageMode::Local => Ok(None),
     }
 }
 
@@ -173,6 +218,22 @@ mod tests {
     #[test]
     fn validate_storage_mode_rejects_unknown() {
         assert!(validate_storage_mode("s3").is_err());
+    }
+
+    #[test]
+    fn storage_mode_roundtrips_through_string_tag() {
+        assert_eq!(StorageMode::Local.as_str(), "local");
+        assert_eq!(StorageMode::Github.as_str(), "github");
+        assert_eq!(StorageMode::parse("local").unwrap(), StorageMode::Local);
+        assert_eq!(StorageMode::parse("github").unwrap(), StorageMode::Github);
+        assert!(StorageMode::parse("s3").is_err());
+        assert_eq!(format!("{}", StorageMode::Local), "local");
+    }
+
+    #[test]
+    fn storage_mode_consts_match_enum() {
+        assert_eq!(STORAGE_MODE_LOCAL, StorageMode::Local.as_str());
+        assert_eq!(STORAGE_MODE_GITHUB, StorageMode::Github.as_str());
     }
 
     #[test]

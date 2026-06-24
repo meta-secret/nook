@@ -160,6 +160,24 @@ export function providerDefaultLabel(
   return 'This device'
 }
 
+/** Safe PAT hint for provider lists — never shows the full token. */
+export function maskGithubPat(pat: string | undefined): string {
+  const trimmed = pat?.trim() ?? ''
+  if (!trimmed) return 'No token saved'
+  const prefixLen = trimmed.startsWith('github_pat_') ? 14 : 10
+  if (trimmed.length <= prefixLen) return '••••'
+  return `${trimmed.slice(0, prefixLen)}…`
+}
+
+/** Secondary line for provider rows in management / picker UIs. */
+export function providerStorageDetail(provider: StorageProvider): string {
+  if (provider.type === 'local') {
+    return 'Vault in browser storage on this device'
+  }
+  const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+  return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat)}`
+}
+
 export async function deleteAuthProvidersDb(): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.deleteDatabase(DB_NAME)

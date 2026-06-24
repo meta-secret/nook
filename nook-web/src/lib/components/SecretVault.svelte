@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search, Plus, Globe, Braces, Sprout } from '@lucide/svelte'
+  import { ArrowLeft, Plus, Search, Globe, Braces, Sprout } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
@@ -17,6 +17,7 @@
     onAddSecret,
     onDeleteSecret,
     onGeneratePassword,
+    onAddModeChange,
   }: {
     isSaving: boolean
     secrets?: SecretRecord[]
@@ -33,6 +34,7 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
+    onAddModeChange?: (open: boolean) => void
   } = $props()
 
   let searchPattern = $state('')
@@ -44,8 +46,12 @@
   const filteredItems = $derived.by(() => {
     const needle = searchPattern.trim().toLowerCase()
     if (!needle) return items
-    return items.filter((item) => searchableText(item).includes(needle))
+    return items.filter((item) => itemMatchesSearch(item, needle))
   })
+
+  const visibleItemCount = $derived(
+    searchPattern.trim() ? filteredItems.length : items.length,
+  )
 
   function getSiteGroupKey(item: VaultItem): string {
     if (item.type === 'seed-phrase') {
@@ -84,22 +90,27 @@
       .sort((a, b) => a.site.localeCompare(b.site))
   })
 
-  function searchableText(item: VaultItem): string {
+  function itemMatchesSearch(item: VaultItem, needle: string): boolean {
+    const fields = [getSiteGroupKey(item)]
     if (item.type === 'login') {
-      return `${item.websiteUrl} ${item.username} ${item.notes}`.toLowerCase()
+      fields.push(item.websiteUrl.trim(), item.username.trim())
+    } else if (item.type === 'api-key') {
+      fields.push(item.websiteUrl.trim())
+      if (item.expiresAt) fields.push(item.expiresAt)
+    } else {
+      fields.push(item.name.trim())
     }
-    if (item.type === 'api-key') {
-      return `${item.websiteUrl} ${item.expiresAt}`.toLowerCase()
-    }
-    return item.name.toLowerCase()
+    return fields.some((field) => field.toLowerCase().includes(needle))
   }
 
   function openAddSecret() {
     addSecretOpen = true
+    onAddModeChange?.(true)
   }
 
   function closeAddSecret() {
     addSecretOpen = false
+    onAddModeChange?.(false)
   }
 
   async function copyToClipboard(text: string, id: string, field: string) {
@@ -116,25 +127,47 @@
 </script>
 
 <div class="animate-in fade-in duration-200" data-testid="vault-panel">
-  <div class="space-y-4">
-    <div class="flex items-center justify-between gap-3">
-      <div>
-        <h2 class="text-base font-semibold text-foreground">Vault</h2>
-        <p class="text-xs text-muted-foreground">
-          {items.length}
-          {items.length === 1 ? 'item' : 'items'}
-        </p>
-      </div>
-      {#if addSecretOpen}
-        <Button
-          size="sm"
-          variant="outline"
-          data-testid="add-secret-cancel-btn"
+  {#if addSecretOpen}
+    <div
+      class="animate-in fade-in slide-in-from-right-2 duration-200"
+      data-testid="add-secret-panel"
+    >
+      <div class="mb-5 flex items-center gap-3">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          data-testid="add-secret-back-btn"
           onclick={closeAddSecret}
         >
-          Cancel
-        </Button>
-      {:else}
+          <ArrowLeft class="size-4" />
+          Vault
+        </button>
+        <div class="min-w-0">
+          <h2 class="text-base font-semibold text-foreground">Add item</h2>
+          <p class="text-xs text-muted-foreground">Save a new secret</p>
+        </div>
+      </div>
+
+      <AddSecretForm
+        {isSaving}
+        {onAddSecret}
+        {onGeneratePassword}
+        onCancel={closeAddSecret}
+      />
+    </div>
+  {:else}
+    <div class="space-y-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-semibold text-foreground">Vault</h2>
+          <p class="text-xs text-muted-foreground">
+            {visibleItemCount}
+            {visibleItemCount === 1 ? 'item' : 'items'}
+            {#if searchPattern.trim() && visibleItemCount !== items.length}
+              <span class="text-muted-foreground/70"> of {items.length}</span>
+            {/if}
+          </p>
+        </div>
         <Button
           size="sm"
           variant="outline"
@@ -145,100 +178,84 @@
           <Plus class="size-3.5" />
           Add item
         </Button>
-      {/if}
-    </div>
+      </div>
 
-    {#if addSecretOpen}
-      <Card
-        class="border-border bg-card animate-in fade-in slide-in-from-top-2 duration-200"
-        data-testid="add-secret-panel"
-      >
-        <CardContent class="p-4">
-          <AddSecretForm
-            {isSaving}
-            {onAddSecret}
-            {onGeneratePassword}
-            onCancel={closeAddSecret}
-          />
-        </CardContent>
-      </Card>
-    {/if}
+      <div class="relative">
+        <Search class="absolute left-3 top-3 size-4 text-muted-foreground/60" />
+        <input
+          type="search"
+          bind:value={searchPattern}
+          data-testid="search-secrets"
+          placeholder="Search vault…"
+          class="flex h-10 w-full rounded-lg border border-border bg-background py-2 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+        />
+      </div>
 
-    <div class="relative">
-      <Search class="absolute left-3 top-3 size-4 text-muted-foreground/60" />
-      <input
-        type="search"
-        bind:value={searchPattern}
-        data-testid="search-secrets"
-        placeholder="Search vault…"
-        class="flex h-10 w-full rounded-lg border border-border bg-background py-2 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
-      />
-    </div>
-
-    {#if filteredItems.length === 0}
-      <Card class="border-border bg-card">
-        <CardContent
-          class="space-y-2 p-10 text-center text-muted-foreground"
-          data-testid="vault-empty-search"
-        >
-          <p>
-            {items.length === 0 ? 'Your vault is empty.' : 'No items matched.'}
-          </p>
-          <p class="text-xs">
-            {items.length === 0
-              ? 'Add a login, API key, or seed phrase to get started.'
-              : 'Try a different search term.'}
-          </p>
-        </CardContent>
-      </Card>
-    {:else}
-      <div class="space-y-3">
-        {#each groups as group (group.site)}
-          {@const Icon = getGroupIcon(group.items)}
-          <Card
-            class="gap-0 overflow-hidden border-border bg-card py-0 shadow-xs"
-            data-testid="vault-site-group"
+      {#if filteredItems.length === 0}
+        <Card class="border-border bg-card">
+          <CardContent
+            class="space-y-2 p-10 text-center text-muted-foreground"
+            data-testid="vault-empty-search"
           >
-            <!-- Group Header -->
-            <div
-              class="flex items-center gap-2.5 bg-muted/10 border-b border-border/50 px-3 py-2.5"
+            <p>
+              {items.length === 0
+                ? 'Your vault is empty.'
+                : 'No items matched.'}
+            </p>
+            <p class="text-xs">
+              {items.length === 0
+                ? 'Add a login, API key, or seed phrase to get started.'
+                : 'Try a different search term.'}
+            </p>
+          </CardContent>
+        </Card>
+      {:else}
+        <div class="space-y-3">
+          {#each groups as group (group.site)}
+            {@const Icon = getGroupIcon(group.items)}
+            <Card
+              class="gap-0 overflow-hidden border-border bg-card py-0 shadow-xs"
+              data-testid="vault-site-group"
             >
               <div
-                class="flex size-6 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground"
+                class="flex items-center gap-2.5 border-b border-border/50 bg-muted/10 px-3 py-2.5"
               >
-                <Icon class="size-3.5" />
-              </div>
-              <h3
-                class="text-sm font-semibold text-foreground tracking-wide truncate"
-              >
-                {group.site}
-              </h3>
-              {#if group.items.length > 1}
-                <span
-                  class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                <div
+                  class="flex size-6 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground"
                 >
-                  {group.items.length} items
-                </span>
-              {/if}
-            </div>
+                  <Icon class="size-3.5" />
+                </div>
+                <h3
+                  class="truncate text-sm font-semibold tracking-wide text-foreground"
+                >
+                  {group.site}
+                </h3>
+                {#if group.items.length > 1}
+                  <span
+                    class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  >
+                    {group.items.length} items
+                  </span>
+                {/if}
+              </div>
 
-            <!-- Group Items List -->
-            <CardContent class="space-y-3 divide-y divide-border/45 p-3">
-              {#each group.items as item, index (item.id)}
-                <SecretDetailRow
-                  {item}
-                  {index}
-                  {revealSecrets}
-                  {copiedKey}
-                  onToggleReveal={toggleReveal}
-                  {onDeleteSecret}
-                  onCopyToClipboard={copyToClipboard}
-                />
-              {/each}
-            </CardContent>
-          </Card>
-        {/each}
-      </div>
-    {/if}
-  </div>
+              <CardContent class="space-y-3 divide-y divide-border/45 p-3">
+                {#each group.items as item, index (item.id)}
+                  <SecretDetailRow
+                    {item}
+                    {index}
+                    {revealSecrets}
+                    {copiedKey}
+                    onToggleReveal={toggleReveal}
+                    {onDeleteSecret}
+                    onCopyToClipboard={copyToClipboard}
+                  />
+                {/each}
+              </CardContent>
+            </Card>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>

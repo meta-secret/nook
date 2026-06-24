@@ -49,6 +49,8 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toBeVisible()
     await expect(page.getByTestId('provider-option-github')).toBeVisible()
+    await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
+    await expect(page.getByTestId('login-unlock-method-fieldset')).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('product-intro')).toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
@@ -65,12 +67,8 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('help-navigation')).toBeVisible()
     await expect(page.getByTestId('help-section-decentralized')).toBeVisible()
     await expect(page.getByTestId('help-section-join')).toBeVisible()
-    const deviceKeysLink = page.getByRole('link', {
-      name: 'Your devices are the keys',
-    })
-    await expect(deviceKeysLink).toHaveAttribute('href', '#help-device-keys')
-    await deviceKeysLink.click()
-    await expect(page).toHaveURL(/#help-device-keys$/)
+    await page.getByTestId('help-navigation').selectOption('device-keys')
+    await expect(page.getByTestId('help-section-device-keys')).toBeVisible()
     await page.getByTestId('help-close-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
   })
@@ -85,7 +83,7 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('storage-settings-btn').click()
+    await page.getByTestId('vault-settings-tab').click()
     await expect(page.getByTestId('settings-providers-list')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -109,5 +107,34 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+  })
+
+  test('removes a saved provider from vault settings', async ({ page }) => {
+    await page.goto('/')
+    await page.getByTestId('provider-option-local').click()
+    await (await waitForEngine(page)).click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('vault-settings-tab').click()
+    const localProvider = page.getByTestId('settings-provider-local')
+    await expect(localProvider).toBeVisible()
+
+    const providerId = await localProvider.evaluate((el) => {
+      const row = el.closest('li')
+      const removeBtn = row?.querySelector('[data-testid^="remove-provider-"]')
+      return removeBtn?.getAttribute('data-testid')?.replace('remove-provider-', '')
+    })
+    expect(providerId).toBeTruthy()
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByTestId(`remove-provider-${providerId}`).click()
+
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('settings-provider-local')).toHaveCount(0)
   })
 })

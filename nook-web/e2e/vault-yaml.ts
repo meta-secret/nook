@@ -18,11 +18,34 @@ type MembersYamlRecord = {
   ciphertext: string
 }
 
+type PasswordEnvelopeYaml = {
+  version?: number
+  kdf?: string
+  work_factor?: number
+  ciphertext?: string
+}
+
+type PasswordEntryYaml = {
+  id?: string
+  label?: string
+  envelope?: PasswordEnvelopeYaml
+}
+
+type UnlockYaml = {
+  type?: string
+  envelope?: PasswordEnvelopeYaml
+  entries?: PasswordEntryYaml[]
+}
+
 type StoredVaultYaml = {
   secrets?: StoredSecretRecord[]
   auth?: AuthYamlRecord[]
   joins?: StoredSecretRecord[]
   members?: MembersYamlRecord[]
+  unlock?: UnlockYaml
+  password_entries?: PasswordEntryYaml[]
+  /** Legacy field — pre-enum vaults wrote the envelope at the top level. */
+  password_envelope?: PasswordEnvelopeYaml
 }
 
 type JoinRequestJson = {
@@ -36,6 +59,15 @@ export type VaultYamlSnapshot = {
   authPkIds: string[]
   joinEntries: Array<{ deviceId: string; publicKey: string }>
   memberPkIds: string[]
+  unlockMode: 'keys' | 'password'
+  hasPasswordEnvelope: boolean
+  /**
+   * Raw ciphertext of the active password envelope (when present). Useful
+   * for waiting on password-rotation propagation: every rotation produces a
+   * fresh ciphertext (scrypt nonce + random salt), so a poll that compares
+   * against a previously-captured value is a reliable "rotated yet?" check.
+   */
+  passwordEnvelopeCiphertext: string | null
 }
 
 function parseJoinValue(
@@ -49,6 +81,22 @@ function parseJoinValue(
   }
 }
 
+function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
+  if (vault.password_entries && vault.password_entries.length > 0) {
+    return vault.password_entries
+  }
+  if (vault.unlock?.entries && vault.unlock.entries.length > 0) {
+    return vault.unlock.entries
+  }
+  if (vault.unlock?.type === 'password' && vault.unlock.envelope) {
+    return [{ envelope: vault.unlock.envelope }]
+  }
+  if (vault.password_envelope) {
+    return [{ envelope: vault.password_envelope }]
+  }
+  return []
+}
+
 export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const vault = parseYaml(yaml) as StoredVaultYaml
 
@@ -59,12 +107,27 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     parseJoinValue(record.id, record.data),
   )
 
+  const passwordEntries = collectPasswordEntries(vault)
+  const hasPasswordEnvelope = passwordEntries.length > 0
+  // Device-key auth rows are primary. Password-only vaults (legacy mutex) have
+  // no auth section; hybrid vaults keep auth alongside password_entries.
+  const unlockMode: 'keys' | 'password' =
+    authPkIds.length > 0 ? 'keys' : hasPasswordEnvelope ? 'password' : 'keys'
+  const activeEnvelope = passwordEntries[0]?.envelope
+  const passwordEnvelopeCiphertext =
+    typeof activeEnvelope?.ciphertext === 'string'
+      ? activeEnvelope.ciphertext.trim()
+      : null
+
   return {
     raw: yaml,
     secretIds,
     authPkIds,
     joinEntries,
     memberPkIds,
+    unlockMode,
+    hasPasswordEnvelope,
+    passwordEnvelopeCiphertext,
   }
 }
 

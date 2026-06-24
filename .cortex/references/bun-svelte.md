@@ -6,6 +6,11 @@
 - Do not check in `package-lock.json` or `yarn.lock`.
 
 ## 2. Dev Server and Build
-- Start Vite dev server: `bun run dev -- --host 0.0.0.0` (accessible via port 5173).
-- Build the production assets: `bun run build` (outputs to `dist/`).
+- Start Vite dev server: `task web:dev` (Docker; port 5173).
+- Build the production assets: `task web:build` (outputs to `nook-web/dist/`).
 - The Svelte config is located in `svelte.config.js` and Vite config in `vite.config.ts`.
+
+## 3. E2e tests
+- Local Playwright suite (no GitHub PAT): `task web:test:e2e:local` — includes connect, local vault, login unlock flow, and password envelope specs.
+- Full suite (GitHub PAT required): `task web:test:e2e`.
+- Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.

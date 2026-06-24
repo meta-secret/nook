@@ -12,6 +12,7 @@ This document describes how Nook persists storage provider credentials, the logi
 - **Remember credentials:** GitHub PAT and provider choice persist in IndexedDB after first successful sign-in — no repeated token prompts.
 - **Multi-provider ready:** Data model supports multiple saved providers per browser; future work adds vault file replication across them with consistency.
 - **Separation of concerns:** Provider credentials (PAT) are UI/session config. Vault encryption keys remain in the vault file and device identity in `nook_db`.
+- **Two-step unlock UX:** Storage provider (where the vault file lives) and unlock method (how to decrypt it) are independent choices on the login screen — see §3.1.
 
 ---
 
@@ -53,7 +54,7 @@ stateDiagram-v2
 
 | Component | When shown | Purpose |
 |-----------|------------|---------|
-| `LoginGate` | Vault locked | Provider picker and one-time GitHub PAT setup only |
+| `LoginGate` | Vault locked | Provider picker, two-step unlock (storage + method), one-time GitHub PAT setup |
 | `JoinEnrollmentDialog` | Join needed | Send join request or transfer-key enrollment |
 | `SecretVault` | Authenticated | Primary app — secrets CRUD |
 | `AuthStorage` | Settings panel | Providers, reconnect, devices & access |
@@ -64,13 +65,63 @@ stateDiagram-v2
 - Title (saved providers): **Unlock your vault**
 - Title (setup): **Connect to {provider}**
 - No providers: explain zero-knowledge — nook encrypts locally; user connects and signs in to their storage provider so the encrypted vault lives on their account.
-- Has providers: *Your provider is saved in this browser — unlock to decrypt and open your vault.*
+- Has providers: *Two steps — pick storage provider, then unlock method (device keys by default).*
 - GitHub setup: *Sign in to GitHub so nook can read/write the encrypted vault file — plaintext secrets never leave this browser.*
 - Provider picker uses compact list rows (not large cards) so many providers scale without wasting vertical space.
 - Primary action on setup: **Connect** (not “Sign in to nook”).
 - **Help** page (`HelpPage`) in header — architecture, multi-device security, join flow, vault file layout. Login gate shows `ProductIntro` callout with link.
 - **Storage & devices** (settings): saved provider list, **Add provider**, switch active provider + **Reconnect vault**.
 - Device enrollment, join approvals, and transfer keys: **Storage & devices** and the **Join this vault** dialog — not on the login screen.
+
+### 3.1 Two-step unlock (storage provider × unlock method)
+
+Returning users with saved providers go through a **vertical accordion wizard** on the login gate. Both steps are always visible; only one panel expands at a time.
+
+| Step | UI component | Question | Default | Persistence |
+|------|--------------|----------|---------|-------------|
+| 1 **Connection** | `LoginConnectionStep` | Where is the encrypted vault file? | Last-used provider | `nook_auth.providers[]` |
+| 2 **Get access** | `LoginAuthorizationStep` | How do you decrypt it? | **This device's keys** | Device identity in `nook_db`; backup passwords in vault YAML |
+
+**Step 1 — Connection:** User picks a saved provider, then clicks **Continue**. Nook reaches the vault file on that storage (local IndexedDB or GitHub) and loads password-entry metadata. The vault is **not** decrypted yet.
+
+**Step 2 — Get access:** After a successful connection, the get-access panel expands automatically (connection collapses to a one-line summary). User picks device keys or a labelled backup password, then clicks **Unlock vault**. Click the connection row to expand it again and change provider.
+
+**Unlock methods (get access step)**
+
+- **This device's keys** — uses the browser's X25519 device identity to unwrap the vault's `auth:` row. Default. Calls WASM `connect(storageMode, githubPat, githubRepo)`.
+- **Backup password** — shown only after connection, when the remote vault has labelled `password_entries`. User picks an entry (macOS-style account list), enters its password, then unlocks. Calls WASM `connectWithPassword(..., entryId, password)`.
+
+Step 2 is only available after step 1 succeeds: provider credentials reach the vault file; the unlock method only affects decryption.
+
+**UI test ids:** `login-wizard`, `login-wizard-connection-toggle`, `login-wizard-authorization-toggle`, `login-wizard-connection-step`, `login-wizard-authorization-step`, `login-manage-providers-toggle`, `login-manage-providers-panel`, `login-connect-provider-btn`, `login-unlock-method-fieldset`, `login-unlock-method-keys`, `login-unlock-method-password`, `login-password-entry-list`, `login-password-input`, `unlock-vault-btn`, `add-provider-btn`, `remove-provider-{id}` (management panel only).
+
+**Login gate layout**
+
+| Saved providers? | Primary UI | Secondary |
+|------------------|------------|-----------|
+| None | `LoginProviderManagement` **setup** — pick local or GitHub (`login-provider-setup`) | — |
+| One or more | `LoginProviderManagement` **manage** — own block above unlock card, collapsed by default | `LoginWizard` — connection → get access |
+
+First connect (genesis) uses **setup** → provider credentials form → WASM `connect` saves the provider. Return visits use the wizard; management stays below the accordion.
+
+**Provider management:** Add/remove actions live in `LoginProviderManagement` (`manage` variant), not in the connection picker. Genesis and “add another” use the `setup` variant with `ProviderPicker`.
+
+**E2e verification (Taskfile):** `task web:test:e2e:local` runs the local Playwright suite, including `e2e/login-unlock-flow.spec.ts`. Do not invoke Playwright or `bun run test:e2e*` directly — use Taskfile targets so builds run in the Docker toolchain image.
+
+**Auto-unlock:** When exactly one saved provider exists and device keys work, `VaultState` may unlock on load without showing the wizard. The wizard still models connect-then-authorize for manual login, password recovery, and multi-provider setups.
+
+**Enrollment QR** remains a separate card: it bundles provider credentials *and* a backup password for one-shot device bootstrap — not the normal wizard pattern.
+
+```mermaid
+flowchart TB
+  subgraph login["Login wizard (saved providers)"]
+    P["1. Connection<br/>LoginConnectionStep"]
+    M["2. Get access<br/>LoginAuthorizationStep"]
+    P -->|"vault reachable"| M
+    M --> K["connect()"]
+    M --> PW["connectWithPassword()"]
+  end
+```
 
 ---
 

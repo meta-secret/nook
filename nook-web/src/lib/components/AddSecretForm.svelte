@@ -7,6 +7,7 @@
     KeyRound,
     RefreshCw,
     ChevronDown,
+    ChevronRight,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -54,6 +55,16 @@
   let genLowercase = $state(true)
   let genNumbers = $state(true)
   let genSymbols = $state(true)
+
+  const typeTitle = $derived(
+    selectedType === 'login'
+      ? 'New login'
+      : selectedType === 'api-key'
+        ? 'New API key'
+        : selectedType === 'seed-phrase'
+          ? 'New seed phrase'
+          : 'Add item',
+  )
 
   function resetForm() {
     selectedType = null
@@ -119,79 +130,94 @@
 </script>
 
 {#if selectedType === null}
-  <div class="space-y-3">
-    <div>
-      <h3 class="text-sm font-semibold text-foreground">
+  <div class="space-y-5">
+    <div class="space-y-1">
+      <h3 class="text-base font-semibold text-foreground">
         What are you saving?
       </h3>
-      <p class="text-xs text-muted-foreground">
-        Choose a type to see only the fields you need.
+      <p class="text-sm text-muted-foreground text-pretty">
+        Choose a type — the form shows only the fields you need.
       </p>
     </div>
-    <div class="grid gap-2 sm:grid-cols-3" data-testid="item-type-picker">
+    <div class="space-y-2" data-testid="item-type-picker">
       <button
         type="button"
-        class="rounded-lg border border-border bg-muted/20 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
         data-testid="item-type-login"
         onclick={() => (selectedType = 'login')}
       >
-        <Globe class="mb-3 size-5 text-primary" />
-        <span class="block text-sm font-medium">Login</span>
-        <span class="mt-1 block text-[11px] text-muted-foreground"
-          >Website account</span
+        <div
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
         >
+          <Globe class="size-5" />
+        </div>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground">Login</span>
+          <span class="mt-0.5 block text-xs text-muted-foreground"
+            >Website account</span
+          >
+        </span>
+        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
       </button>
       <button
         type="button"
-        class="rounded-lg border border-border bg-muted/20 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
         data-testid="item-type-api-key"
         onclick={() => (selectedType = 'api-key')}
       >
-        <Braces class="mb-3 size-5 text-primary" />
-        <span class="block text-sm font-medium">API key</span>
-        <span class="mt-1 block text-[11px] text-muted-foreground"
-          >Token or auth key</span
+        <div
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
         >
+          <Braces class="size-5" />
+        </div>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground">API key</span>
+          <span class="mt-0.5 block text-xs text-muted-foreground"
+            >Token or auth key</span
+          >
+        </span>
+        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
       </button>
       <button
         type="button"
-        class="rounded-lg border border-border bg-muted/20 p-3 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
         data-testid="item-type-seed-phrase"
         onclick={() => (selectedType = 'seed-phrase')}
       >
-        <Sprout class="mb-3 size-5 text-primary" />
-        <span class="block text-sm font-medium">Seed phrase</span>
-        <span class="mt-1 block text-[11px] text-muted-foreground"
-          >BIP39 recovery</span
+        <div
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
         >
+          <Sprout class="size-5" />
+        </div>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground"
+            >Seed phrase</span
+          >
+          <span class="mt-0.5 block text-xs text-muted-foreground"
+            >BIP39 recovery</span
+          >
+        </span>
+        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
       </button>
     </div>
   </div>
 {:else}
-  <form onsubmit={handleSubmit} class="space-y-4">
-    <button
-      type="button"
-      class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-      onclick={() => (selectedType = null)}
-    >
-      <ArrowLeft class="size-3.5" />
-      Change type
-    </button>
-
-    <div>
-      <h3 class="text-sm font-semibold text-foreground">
-        {selectedType === 'login'
-          ? 'New login'
-          : selectedType === 'api-key'
-            ? 'New API key'
-            : 'New seed phrase'}
-      </h3>
+  <form onsubmit={handleSubmit} class="space-y-5">
+    <div class="space-y-3">
+      <button
+        type="button"
+        class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        onclick={() => (selectedType = null)}
+      >
+        <ArrowLeft class="size-4" />
+        Change type
+      </button>
+      <h3 class="text-base font-semibold text-foreground">{typeTitle}</h3>
     </div>
 
     {#if selectedType === 'login' || selectedType === 'api-key'}
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label">Website URL</label
-        >
+        <label class="text-xs font-medium" for="secret-label">Website URL</label>
         <input
           id="secret-label"
           type="text"
@@ -199,13 +225,13 @@
           bind:value={websiteUrl}
           placeholder="https://example.com"
           required
-          class="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
         />
       </div>
     {/if}
 
     {#if selectedType === 'login'}
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="login-username"
             >Username</label
@@ -216,7 +242,7 @@
             bind:value={username}
             autocomplete="username"
             required
-            class="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+            class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
         </div>
         <div class="space-y-1.5">
@@ -228,7 +254,7 @@
             bind:value={password}
             autocomplete="new-password"
             required
-            class="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+            class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
         </div>
       </div>
@@ -240,30 +266,30 @@
           id="login-notes"
           data-testid="login-notes"
           bind:value={notes}
-          rows="2"
+          rows="3"
           class="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
         ></textarea>
       </div>
 
-      <div class="rounded-lg border border-border bg-muted/20">
+      <div class="rounded-xl border border-border bg-muted/15">
         <button
           type="button"
-          class="flex w-full items-center justify-between px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+          class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
           data-testid="password-generator-toggle"
           aria-expanded={showPasswordOptions}
           onclick={() => (showPasswordOptions = !showPasswordOptions)}
         >
-          <span class="inline-flex items-center gap-1.5">
-            <KeyRound class="size-3.5" /> Generate password
+          <span class="inline-flex items-center gap-2">
+            <KeyRound class="size-4" /> Generate password
           </span>
           <ChevronDown
-            class="size-3.5 transition-transform {showPasswordOptions
+            class="size-4 transition-transform {showPasswordOptions
               ? 'rotate-180'
               : ''}"
           />
         </button>
         {#if showPasswordOptions}
-          <div class="space-y-3 border-t border-border p-3">
+          <div class="space-y-3 border-t border-border px-4 py-3">
             <div class="flex items-center gap-3">
               <label class="text-xs text-muted-foreground" for="password-length"
                 >Length</label
@@ -312,7 +338,7 @@
           id="secret-value"
           data-testid="secret-value"
           bind:value={apiKey}
-          rows="3"
+          rows="4"
           required
           spellcheck="false"
           class="flex w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
@@ -320,15 +346,14 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="api-key-expiration"
-          >Expiration <span class="text-muted-foreground">(optional)</span
-          ></label
+          >Expiration <span class="text-muted-foreground">(optional)</span></label
         >
         <input
           id="api-key-expiration"
           type="date"
           data-testid="api-key-expiration"
           bind:value={expiresAt}
-          class="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
         />
       </div>
     {:else}
@@ -342,17 +367,16 @@
           bind:value={accountName}
           placeholder="Main wallet"
           required
-          class="flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
         />
       </div>
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-value">Seed phrase</label
-        >
+        <label class="text-xs font-medium" for="secret-value">Seed phrase</label>
         <textarea
           id="secret-value"
           data-testid="secret-value"
           bind:value={seedPhrase}
-          rows="4"
+          rows="5"
           required
           autocomplete="off"
           spellcheck="false"
@@ -362,16 +386,24 @@
       </div>
     {/if}
 
-    <div class="flex justify-end gap-2">
+    <div
+      class="flex flex-col-reverse gap-2 border-t border-border/60 pt-4 sm:flex-row sm:justify-end"
+    >
       <Button
         type="button"
         variant="outline"
+        class="sm:min-w-[7rem]"
         data-testid="add-secret-cancel-btn"
         onclick={handleCancel}
       >
         Cancel
       </Button>
-      <Button type="submit" disabled={isSaving} data-testid="save-secret-btn">
+      <Button
+        type="submit"
+        disabled={isSaving}
+        class="sm:min-w-[7rem]"
+        data-testid="save-secret-btn"
+      >
         {#if isSaving}
           <RefreshCw class="size-4 animate-spin" /> Saving…
         {:else}

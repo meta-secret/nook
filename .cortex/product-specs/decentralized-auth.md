@@ -129,3 +129,21 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 | 5 | `secrets_key` + `members_key` auth, members roster | Done |
 | 6 | OOB key transfer UX (copy from enrolled device) | Planned |
 | 7 | Device-to-device messaging channel | Planned |
+
+---
+
+## 7. Password unlock mode (cross-link)
+
+The vault picks **one** unlock variant from the `VaultUnlock` enum:
+
+- `Keys` — everything in this document applies (per-device `auth:` rows,
+  `joins:` requests, approve flow).
+- `Password { envelope }` — none of `auth:` / `joins:` exist; any device
+  that knows the password self-enrols by writing a `members:` entry and
+  using the password to unwrap `secrets_key` + `members_key`.
+
+The two are mutually exclusive at every layer (Rust enum, YAML
+serialiser, runtime invariants). Switching modes is a deliberate
+operation that drops the artifacts of the previous mode. See
+[password-envelope.md](password-envelope.md) for the full spec, threat
+model, and phase plan.

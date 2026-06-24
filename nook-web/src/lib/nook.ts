@@ -133,7 +133,12 @@ export function mapWasmVaultMembers(raw: unknown): VaultMember[] {
 
 export type VaultSyncResult = {
   changed: boolean
-  access_status?: 'ready' | 'new_vault' | 'needs_enrollment' | 'join_pending'
+  access_status?:
+    | 'ready'
+    | 'new_vault'
+    | 'needs_enrollment'
+    | 'join_pending'
+    | 'password_required'
 }
 
 export function mapVaultSyncResult(raw: unknown): VaultSyncResult & {

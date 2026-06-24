@@ -98,9 +98,10 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 |-------|--------|----------|
 | Session (plaintext user secrets) | JSONL lines | WASM `decrypted_jsonl` only |
 | On-disk user secrets | YAML `secrets:` list | Values encrypted with `secrets_key` |
-| On-disk key envelopes | YAML `auth:` list | `pk_id` → age-armored `secrets_key` + `members_key` |
+| Active unlock mode | YAML `unlock:` tagged union | Either `{type: keys}` (per-device envelopes) or `{type: password, envelope: …}` (scrypt-wrapped vault keys). Mutually exclusive. See [password-envelope.md](product-specs/password-envelope.md). |
+| On-disk key envelopes (keys mode only) | YAML `auth:` list | `pk_id` → age-armored `secrets_key` + `members_key` |
 | Member catalog | YAML `members:` list | `pk_id` + `members_key`-encrypted `{pk_id, pk}` |
-| Pending joins | YAML `joins:` list | `device_id` → JSON (includes `public_key` while pending) |
+| Pending joins (keys mode only) | YAML `joins:` list | `device_id` → JSON (includes `public_key` while pending) |
 | Device identity (X25519 private) | age secret string | IndexedDB `device_identity_secret` only |
 | Auth providers (GitHub PAT, labels) | JSON snapshot | IndexedDB `nook_auth` → `providers` key |
 
@@ -133,8 +134,8 @@ members:  members_key-encrypted catalog entries
 
 | Package | Tests |
 |---------|-------|
-| `nook-core` | `cargo test -p nook-core` — unit + integration (`tests/vault_workflow.rs`) |
-| `nook-web` | Playwright e2e (`npm run test:e2e`); no vault domain unit tests in TS |
+| `nook-core` | `task rust:test` — unit + integration (`tests/vault_workflow.rs`) |
+| `nook-web` | Playwright e2e via `task web:test:e2e:local` (no PAT) or `task web:test:e2e` (full suite); no vault domain unit tests in TS |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
 
 Domain logic changes **must** add or update Rust tests before merge.
