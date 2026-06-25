@@ -19,6 +19,10 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
+  import {
+    peekEnrollmentEntryId,
+    peekEnrollmentEntryLabel,
+  } from '$lib/enrollment-code'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
@@ -128,6 +132,8 @@
   {#if showQrOnboarding}
     <EnrollmentQrOnboardCard
       code={prefillEnrollmentCode}
+      passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
+      passwordEntryLabel={peekEnrollmentEntryLabel(prefillEnrollmentCode)}
       {isVerifying}
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}

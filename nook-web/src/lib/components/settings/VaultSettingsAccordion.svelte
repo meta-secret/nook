@@ -37,6 +37,7 @@
     onRemovePassword,
     onIssueCode,
     onClearCode,
+    accordionSection = $bindable('storage' as 'storage' | 'passwords'),
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -68,9 +69,9 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
+    accordionSection?: 'storage' | 'passwords'
   } = $props()
 
-  let activeSection = $state<'storage' | 'passwords'>('storage')
   const hasPasswords = $derived(passwordEntries.length > 0)
 </script>
 
@@ -78,10 +79,10 @@
   <SettingsAccordionSection
     title="Storage providers"
     subtitle="Where your vault file lives"
-    open={activeSection === 'storage'}
+    open={accordionSection === 'storage'}
     testId="storage-providers-section"
     onToggle={() => {
-      activeSection = 'storage'
+      accordionSection = 'storage'
     }}
   >
     {#snippet badge()}
@@ -121,10 +122,10 @@
   <SettingsAccordionSection
     title="Vault passwords"
     subtitle="Passwords available for unlock and device onboarding"
-    open={activeSection === 'passwords'}
+    open={accordionSection === 'passwords'}
     testId="vault-unlock-section"
     onToggle={() => {
-      activeSection = 'passwords'
+      accordionSection = 'passwords'
     }}
   >
     {#snippet badge()}
