@@ -60,10 +60,15 @@
   const authenticatedShellSpacing = $derived(
     secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
   )
+  const authenticatedShellMinHeight = $derived(
+    secretsAddOpen
+      ? 'min-h-[calc(100svh-5rem)] sm:min-h-[calc(100svh-7rem)]'
+      : 'min-h-[calc(100svh-11rem)] sm:min-h-[calc(100svh-7rem)]',
+  )
 </script>
 
 <main
-  class="flex min-h-svh flex-col bg-background text-foreground"
+  class="min-h-svh bg-background text-foreground"
   class:dark={colorMode === 'dark'}
 >
   <header
@@ -168,7 +173,7 @@
 
   <div
     class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? `${authenticatedShellSpacing} flex min-h-0 flex-1 flex-col`
+      ? authenticatedShellSpacing
       : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
@@ -193,10 +198,10 @@
       </div>
     {:else if vault.isAuthenticated}
       <div
-        class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+        class="flex w-full {authenticatedShellMinHeight} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
         data-testid="authenticated-shell"
       >
-        <div class="min-h-0 flex-1 overflow-y-auto">
+        <div class="min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div class="space-y-4 p-4 sm:p-5">
             {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
               <OnboardDevice
