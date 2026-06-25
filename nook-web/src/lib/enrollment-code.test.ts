@@ -2,29 +2,26 @@ import { describe, expect, test } from 'vitest'
 import {
   buildEnrollmentLink,
   decryptEnrollmentPayload,
-  encodeEnrollmentPayload,
   encryptEnrollmentPayload,
-  enrollmentCodeRequiresPassword,
   normalizeEnrollmentCode,
+  peekEnrollmentEntryId,
+  peekEnrollmentEntryLabel,
   peekEnrollmentIssuedAt,
-  type EnrollmentCodePayloadV1,
+  type EnrollmentIssueInput,
 } from './enrollment-code'
 
-const samplePayload: EnrollmentCodePayloadV1 = {
-  v: 1,
+const samplePayload: EnrollmentIssueInput = {
   provider: { type: 'local' },
-  password: 'hunter2',
+  entry_id: 'entry-local',
   issued_at: '2026-06-23T12:00:00Z',
 }
 
-const githubPayload: EnrollmentCodePayloadV1 = {
-  v: 1,
+const githubPayload: EnrollmentIssueInput = {
   provider: {
     type: 'github',
     pat: 'github_pat_11AAAAbbbbCCCC',
     repo: 'team-vault',
   },
-  password: 'vault-pass-99',
   entry_id: 'entry-1',
   issued_at: '2026-06-23T12:00:00Z',
 }
@@ -57,25 +54,30 @@ describe('enrollment-code links', () => {
   })
 })
 
-describe('encrypted enrollment payloads', () => {
-  test('encrypts with the vault password and round-trips', async () => {
-    const code = await encryptEnrollmentPayload(samplePayload, 'hunter2')
-    expect(enrollmentCodeRequiresPassword(code)).toBe(true)
-    await expect(decryptEnrollmentPayload(code, 'hunter2')).resolves.toEqual(
-      samplePayload,
+describe('enrollment payloads', () => {
+  test('encrypts provider creds and exposes entry_id without the password', async () => {
+    const code = await encryptEnrollmentPayload(
+      githubPayload,
+      'vault-pass-99',
+      'Work laptop',
     )
-  })
+    expect(peekEnrollmentEntryId(code)).toBe('entry-1')
+    expect(peekEnrollmentEntryLabel(code)).toBe('Work laptop')
+    expect(peekEnrollmentIssuedAt(code)).toBe('2026-06-23T12:00:00Z')
 
-  test('does not expose secrets in the outer QR envelope', async () => {
-    const code = await encryptEnrollmentPayload(githubPayload, 'vault-pass-99')
     const outer = decodeOuterJson(code)
     const serialized = JSON.stringify(outer)
-
-    expect(outer.v).toBe(2)
-    expect(serialized).not.toContain('hunter2')
     expect(serialized).not.toContain('vault-pass-99')
     expect(serialized).not.toContain('github_pat_11AAAAbbbbCCCC')
-    expect(peekEnrollmentIssuedAt(code)).toBe('2026-06-23T12:00:00Z')
+    expect(outer.entry_id).toBe('entry-1')
+    expect(outer.ct).toBeTruthy()
+
+    const decrypted = await decryptEnrollmentPayload(code, 'vault-pass-99')
+    expect(decrypted).toEqual({
+      provider: githubPayload.provider,
+      entry_id: 'entry-1',
+      issued_at: '2026-06-23T12:00:00Z',
+    })
   })
 
   test('rejects wrong vault passwords', async () => {
@@ -85,11 +87,14 @@ describe('encrypted enrollment payloads', () => {
     )
   })
 
-  test('legacy v1 plaintext codes still decrypt without a password', async () => {
-    const code = encodeEnrollmentPayload(samplePayload)
-    expect(enrollmentCodeRequiresPassword(code)).toBe(false)
-    await expect(decryptEnrollmentPayload(code, '')).resolves.toEqual(
-      samplePayload,
+  test('rejects malformed codes', async () => {
+    const malformed = btoa(JSON.stringify({ provider: { type: 'local' } }))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '')
+    await expect(decryptEnrollmentPayload(malformed, 'pw')).rejects.toThrow(
+      'Invalid enrollment code.',
     )
+    expect(peekEnrollmentEntryId(malformed)).toBeNull()
   })
 })

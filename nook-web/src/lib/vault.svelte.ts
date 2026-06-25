@@ -15,8 +15,8 @@ import {
   consumeEnrollmentFromLocation,
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
-  enrollmentCodeRequiresPassword,
-  type EnrollmentCodePayloadV1,
+  type EnrollmentIssueInput,
+  type EnrollmentProvider,
 } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
 import type {
@@ -39,6 +39,7 @@ import {
 export class VaultState {
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard'>('storage')
+  settingsAccordionSection = $state<'storage' | 'passwords'>('storage')
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -225,12 +226,8 @@ export class VaultState {
     if (this.pendingEnrollmentFromUrl && !this.isAuthenticated) {
       const code = this.pendingEnrollmentFromUrl
       this.pendingEnrollmentFromUrl = null
-      if (enrollmentCodeRequiresPassword(code)) {
-        this.prefillEnrollmentCode = code
-        this.enrollmentFromUrlPending = true
-      } else {
-        await this.connectWithEnrollmentCode(code)
-      }
+      this.prefillEnrollmentCode = code
+      this.enrollmentFromUrlPending = true
     }
   }
 
@@ -650,9 +647,15 @@ export class VaultState {
     }
   }
 
-  openSettings(section: 'storage' | 'onboard' = 'storage') {
+  openSettings(
+    section: 'storage' | 'onboard' = 'storage',
+    accordion: 'storage' | 'passwords' = 'storage',
+  ) {
     this.helpOpen = false
     this.settingsSection = section
+    if (section !== 'onboard') {
+      this.settingsAccordionSection = accordion
+    }
     this.settingsOpen = true
     void this.refreshDeviceState()
   }
@@ -1033,10 +1036,9 @@ export class VaultState {
   }
 
   /**
-   * Issue a base64url-encoded enrollment payload (provider creds + password)
-   * for the joining device to scan or paste. The password is verified
-   * against the current envelope before any payload is generated. Codes do
-   * not expire — rotate the vault password to invalidate them.
+   * Issue a base64url-encoded enrollment payload (provider creds + password
+   * entry id) for the joining device to scan or paste. The password is verified
+   * locally before any payload is generated but is not embedded in the QR.
    *
    * Async because the wasm manager has `&mut self` background tasks
    * (`sync_vault_from_storage`); the verify call has to go through the
@@ -1084,7 +1086,7 @@ export class VaultState {
       if (!selectedProvider) {
         throw new Error('Choose an auth provider.')
       }
-      const provider: EnrollmentCodePayloadV1['provider'] =
+      const provider: EnrollmentProvider =
         selectedProvider.type === 'github'
           ? {
               type: 'github',
@@ -1097,14 +1099,19 @@ export class VaultState {
           'GitHub provider is missing credentials. Reconnect and try again.',
         )
       }
-      const payload: EnrollmentCodePayloadV1 = {
-        v: 1,
+      const payload: EnrollmentIssueInput = {
         provider,
-        password,
         entry_id: entryId,
         issued_at: isoTimestamp(),
       }
-      const code = await encryptEnrollmentPayload(payload, password)
+      const selectedPassword = this.passwordEntries.find(
+        (e) => e.id === entryId,
+      )
+      const code = await encryptEnrollmentPayload(
+        payload,
+        password,
+        selectedPassword?.label ?? '',
+      )
       this.enrollmentCode = code
       this.activeEnrollmentEntryId = entryId
       return code
@@ -1179,6 +1186,14 @@ export class VaultState {
     this.isVerifying = true
     try {
       const payload = await decryptEnrollmentPayload(code, password)
+      const entryId = payload.entry_id.trim()
+      const unlockPassword = password.trim()
+      if (!entryId) {
+        throw new Error('Enrollment code is missing a vault password entry id.')
+      }
+      if (!unlockPassword) {
+        throw new Error('Enter the vault password for this onboarding QR.')
+      }
 
       if (payload.provider.type === 'github') {
         this.storageMode = 'github'
@@ -1195,8 +1210,8 @@ export class VaultState {
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.connectWithPassword(
           ...this.wasmGithubArgs(),
-          payload.entry_id ?? '',
-          payload.password,
+          entryId,
+          unlockPassword,
         ),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)

@@ -28,6 +28,8 @@
     isBusy,
     onIssueCode,
     onClearCode,
+    onOpenStorageSettings,
+    onOpenPasswordSettings,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -40,6 +42,8 @@
       providerId: string,
     ) => Promise<string | void>
     onClearCode: () => void
+    onOpenStorageSettings?: () => void
+    onOpenPasswordSettings?: () => void
   } = $props()
 
   let providerId = $state(activeProviderId ?? providers[0]?.id ?? '')
@@ -150,8 +154,8 @@
   <div class="space-y-1">
     <h2 class="text-base font-semibold text-foreground">Onboard Device</h2>
     <p class="text-xs text-muted-foreground text-pretty">
-      Generate a QR/link with provider access and a vault password for another
-      browser. The QR is encrypted with the vault password — share that password
+      Generate a QR/link with provider access and a vault password entry for
+      another browser. The QR does not contain the password — share it
       separately when onboarding.
     </p>
   </div>
@@ -165,14 +169,38 @@
   >
     <div class="space-y-4">
       <div class="space-y-1.5">
-        <p
-          id="onboard-provider-label"
-          class="text-sm font-medium text-muted-foreground"
-        >
-          Auth provider
-        </p>
+        <div class="flex items-baseline justify-between gap-2">
+          <p
+            id="onboard-provider-label"
+            class="text-sm font-medium text-muted-foreground"
+          >
+            Auth provider
+          </p>
+          {#if onOpenStorageSettings}
+            <button
+              type="button"
+              class="shrink-0 text-xs font-medium text-primary hover:underline"
+              data-testid="onboard-open-storage-settings"
+              onclick={() => onOpenStorageSettings()}
+            >
+              Add in Settings
+            </button>
+          {/if}
+        </div>
         {#if providers.length === 0}
-          <p class="text-xs text-muted-foreground">No providers saved.</p>
+          <p class="text-xs text-muted-foreground">
+            No providers saved.
+            {#if onOpenStorageSettings}
+              <button
+                type="button"
+                class="font-medium text-primary hover:underline"
+                data-testid="onboard-empty-providers-settings-link"
+                onclick={() => onOpenStorageSettings()}
+              >
+                Add one in Settings
+              </button>
+            {/if}
+          </p>
         {:else}
           <div
             class="space-y-1.5"
@@ -238,12 +266,24 @@
       </div>
 
       <div class="space-y-1.5">
-        <label
-          for="onboard-password-entry"
-          class="text-sm font-medium text-muted-foreground"
-        >
-          Vault password
-        </label>
+        <div class="flex items-baseline justify-between gap-2">
+          <label
+            for="onboard-password-entry"
+            class="text-sm font-medium text-muted-foreground"
+          >
+            Vault password
+          </label>
+          {#if onOpenPasswordSettings}
+            <button
+              type="button"
+              class="shrink-0 text-xs font-medium text-primary hover:underline"
+              data-testid="onboard-open-password-settings"
+              onclick={() => onOpenPasswordSettings()}
+            >
+              Add in Settings
+            </button>
+          {/if}
+        </div>
         <div class="relative">
           <select
             id="onboard-password-entry"
@@ -307,8 +347,19 @@
   {#if passwordEntries.length === 0}
     <p
       class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+      data-testid="onboard-missing-password-hint"
     >
-      Create a vault password in Settings before onboarding another device.
+      Create a vault password before onboarding another device.
+      {#if onOpenPasswordSettings}
+        <button
+          type="button"
+          class="ml-1 font-medium text-primary hover:underline"
+          data-testid="onboard-missing-password-settings-link"
+          onclick={() => onOpenPasswordSettings()}
+        >
+          Open vault passwords in Settings
+        </button>
+      {/if}
     </p>
   {/if}
 

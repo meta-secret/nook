@@ -113,13 +113,13 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const outer = JSON.parse(
       Buffer.from(code, 'base64url').toString('utf8'),
     ) as {
-      v: number
+      entry_id?: string
       provider?: { type: string; pat?: string; repo?: string }
       password?: string
       issued_at: string
       ct?: string
     }
-    expect(outer.v).toBe(2)
+    expect(outer.entry_id).toBeTruthy()
     expect(outer.provider).toBeUndefined()
     expect(outer.password).toBeUndefined()
     expect(outer.ct).toBeTruthy()
@@ -202,9 +202,8 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     )
 
     // GitHub serves the rotated envelope on the next read. A new
-    // ciphertext proves the rotation actually rewrote the file — any
-    // pre-rotation enrollment code embedded the old password, which no
-    // longer decrypts the new envelope.
+    // ciphertext proves the rotation actually rewrote the file — QR codes
+    // issued before rotation stop unlocking once the password changes.
     const after = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
       (snapshot) =>

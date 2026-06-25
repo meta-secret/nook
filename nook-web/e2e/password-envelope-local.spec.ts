@@ -208,18 +208,20 @@ test.describe('vault password envelope (local)', () => {
     const outer = JSON.parse(
       Buffer.from(code, 'base64url').toString('utf8'),
     ) as {
-      v: number
       issued_at: string
+      entry_id?: string
+      entry_label?: string
       ct?: string
       password?: string
       provider?: unknown
     }
-    expect(outer.v).toBe(2)
     expect(typeof outer.issued_at).toBe('string')
     expect(Date.parse(outer.issued_at)).not.toBeNaN()
     expect(Math.abs(Date.now() - Date.parse(outer.issued_at))).toBeLessThan(
       60_000,
     )
+    expect(outer.entry_id).toBeTruthy()
+    expect(outer.entry_label).toBe('Enrollment test')
     expect(outer.ct).toBeTruthy()
     expect(outer.password).toBeUndefined()
     expect(outer.provider).toBeUndefined()
@@ -295,6 +297,9 @@ test.describe('enrollment link deep link (local)', () => {
     await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await expect(
+      pageB.getByTestId('enrollment-password-entry-hint'),
+    ).toContainText('Link test')
     await pageB.getByTestId('enrollment-password-input').fill('link-pass')
     await pageB.getByTestId('submit-enrollment-code-btn').click()
     await waitForVaultUnlocked(pageB)

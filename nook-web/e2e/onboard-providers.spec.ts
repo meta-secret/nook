@@ -74,4 +74,29 @@ test.describe('onboard provider picker', () => {
     await expect(beta).toHaveAttribute('aria-checked', 'true')
     await expect(alpha).toHaveAttribute('aria-checked', 'false')
   })
+
+  test('links open the matching settings section', async ({ page }) => {
+    await page.getByTestId('vault-onboard-tab').click()
+    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
+
+    await page.getByTestId('onboard-open-storage-settings').click()
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await expect(
+      page
+        .getByTestId('storage-providers-section')
+        .locator('button[aria-expanded]'),
+    ).toHaveAttribute('aria-expanded', 'true')
+
+    await page.getByTestId('vault-onboard-tab').click()
+    await page.getByTestId('onboard-open-password-settings').click()
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await expect(
+      page.getByTestId('vault-unlock-section').locator('button[aria-expanded]'),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await expect(
+      page
+        .getByTestId('storage-providers-section')
+        .locator('button[aria-expanded]'),
+    ).toHaveAttribute('aria-expanded', 'false')
+  })
 })
