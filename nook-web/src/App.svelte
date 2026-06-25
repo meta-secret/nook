@@ -9,6 +9,7 @@
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
+  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -49,7 +50,7 @@
     localStorage.setItem(THEME_STORAGE_KEY, colorMode)
   }
 
-  const compactShellWidth = 'max-w-xl'
+  const compactShellWidth = 'max-w-5xl'
   const authenticatedShellWidth = 'max-w-5xl'
   const shellWidth = $derived(
     vault.isAuthenticated ? authenticatedShellWidth : compactShellWidth,
@@ -153,13 +154,41 @@
       : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
-      <HelpPage onClose={() => vault.closeHelp()} />
+      <div class="space-y-4">
+        <HelpPage onClose={() => vault.closeHelp()} />
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
+          {appVersion}
+          label={vault.isAuthenticated ? undefined : 'Nook'}
+          showSyncStatus={vault.isAuthenticated}
+          showStorageIcon={vault.isAuthenticated}
+          variant={vault.isAuthenticated ? 'panel' : 'quiet'}
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
+        />
+      </div>
     {:else if vault.isAuthenticated}
       <div
         class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
       >
         <div class="space-y-4 p-4 sm:p-5">
-          {#if vault.settingsOpen}
+          {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
+            <OnboardDevice
+              providers={vault.providers}
+              activeProviderId={vault.activeProviderId}
+              passwordEntries={vault.passwordEntries}
+              enrollmentCode={vault.enrollmentCode}
+              isBusy={vault.isPasswordBusy}
+              onIssueCode={(entryId, pw, providerId) =>
+                vault.issueEnrollmentCode(entryId, pw, providerId)}
+              onClearCode={() => vault.clearEnrollmentCode()}
+            />
+          {:else if vault.settingsOpen}
             <VaultSettingsAccordion
               providers={vault.providers}
               activeProviderId={vault.activeProviderId}
@@ -167,7 +196,6 @@
               isVerifying={vault.isVerifying}
               isSaving={vault.isSaving}
               isInitializing={vault.isInitializing}
-              errorMsg={vault.errorMsg}
               addProviderOpen={vault.addProviderOpen}
               bind:setupType={vault.loginSetupType}
               bind:githubPat={vault.githubPat}
@@ -176,10 +204,6 @@
               isPasswordBusy={vault.isPasswordBusy}
               passwordError={vault.passwordError}
               enrollmentCode={vault.enrollmentCode}
-              deviceId={vault.deviceId}
-              devicePublicKey={vault.devicePublicKey}
-              pendingJoins={vault.pendingJoins}
-              vaultMembers={vault.vaultMembers}
               onReconnect={handleUnlock}
               onSelectProvider={handleProviderReconnect}
               onBeginAddProvider={() => vault.beginAddProvider()}
@@ -194,7 +218,6 @@
               onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
               onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
               onClearCode={() => vault.clearEnrollmentCode()}
-              onApproveJoin={(id) => vault.approveJoin(id)}
             />
           {:else}
             <PendingJoinsBanner
@@ -229,23 +252,24 @@
             />
           {/if}
         </div>
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
+          {appVersion}
+          onRefresh={() => vault.manualSync()}
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
+        />
         {#if !secretsAddOpen}
-          <VaultStatusBar
-            storageMode={vault.storageMode}
-            githubRepo={vault.githubRepo}
-            lastSyncedAt={vault.lastSyncedAt}
-            isSyncing={vault.isSyncing || vault.isSaving}
-            successMsg={vault.successMsg}
-            errorMsg={vault.errorMsg}
-            {appVersion}
-            onRefresh={() => vault.manualSync()}
-            onDismissSuccess={() => vault.dismissSuccess()}
-            onDismissError={() => vault.dismissError()}
-          />
           <VaultBottomNav
             settingsOpen={vault.settingsOpen}
-            pendingJoinCount={vault.pendingJoins.length}
+            settingsSection={vault.settingsSection}
             onSelectSecrets={() => vault.closeSettings()}
+            onSelectOnboard={() => vault.openSettings('onboard')}
             onSelectSettings={() => vault.openSettings()}
           />
         {/if}
@@ -265,8 +289,6 @@
           addProviderOpen={vault.addProviderOpen}
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
-          errorMsg={vault.errorMsg}
-          successMsg={vault.successMsg}
           onUnlock={handleUnlock}
           onSelectProvider={handleLoginProviderSelect}
           onConnectProvider={handleLoginProviderConnect}
@@ -281,6 +303,21 @@
             vault.unlockWithPassword(entryId, password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}
           onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
+        />
+        <VaultStatusBar
+          storageMode={vault.storageMode}
+          githubRepo={vault.githubRepo}
+          lastSyncedAt={vault.lastSyncedAt}
+          isSyncing={vault.isSyncing || vault.isSaving}
+          successMsg={vault.successMsg}
+          errorMsg={vault.errorMsg}
+          {appVersion}
+          label="Nook"
+          showSyncStatus={false}
+          showStorageIcon={false}
+          variant="quiet"
+          onDismissSuccess={() => vault.dismissSuccess()}
+          onDismissError={() => vault.dismissError()}
         />
       </div>
     {/if}

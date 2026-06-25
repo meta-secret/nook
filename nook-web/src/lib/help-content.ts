@@ -12,11 +12,12 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'decentralized',
     title: 'Why Nook?',
     summary:
-      'A master password becomes the one password you cannot afford to forget or expose. Nook removes it.',
+      'Your device is the key. No master password: your approved devices unlock the vault.',
     bullets: [
-      'No master password to remember, type, or reset.',
+      'Passwordless access to your secrets.',
+      'Your secrets. Your storage. Your keys.',
+      'A decentralized vault for your secrets.',
       'No Nook account or central account server.',
-      'Your approved devices unlock the vault.',
       'The code and encryption flow are open source.',
     ],
   },

@@ -16,6 +16,10 @@
     successMsg = '',
     errorMsg = '',
     appVersion = '',
+    label,
+    showSyncStatus = true,
+    showStorageIcon = true,
+    variant = 'panel',
     onRefresh,
     onDismissSuccess,
     onDismissError,
@@ -27,6 +31,10 @@
     successMsg?: string
     errorMsg?: string
     appVersion?: string
+    label?: string
+    showSyncStatus?: boolean
+    showStorageIcon?: boolean
+    variant?: 'panel' | 'quiet'
     onRefresh?: () => void | Promise<void>
     onDismissSuccess?: () => void
     onDismissError?: () => void
@@ -51,29 +59,42 @@
     return `${Math.floor(mins / 60)}h ago`
   }
 
-  const storageLabel = $derived(
-    storageMode === 'github' ? githubRepo.trim() || 'GitHub' : 'This device',
+  const statusLabel = $derived(
+    label ??
+      (storageMode === 'github'
+        ? githubRepo.trim() || 'GitHub'
+        : 'This device'),
   )
+  const isQuiet = $derived(variant === 'quiet')
 </script>
 
 <div
-  class="border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5"
+  class={isQuiet
+    ? 'border-t border-foreground/15 bg-muted/20 px-3 py-2.5 dark:border-foreground/20 dark:bg-muted/10'
+    : 'border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5'}
   data-testid="vault-status-bar"
 >
   <div class="flex flex-col gap-2">
     <div
-      class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs"
+      class={isQuiet
+        ? 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-[11px]'
+        : 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs'}
     >
       <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
-        {#if storageMode === 'github'}
-          <Cloud class="size-3.5 shrink-0 text-primary/80" aria-hidden="true" />
-        {:else}
-          <HardDrive
-            class="size-3.5 shrink-0 text-primary/80"
-            aria-hidden="true"
-          />
+        {#if showStorageIcon}
+          {#if storageMode === 'github'}
+            <Cloud
+              class="size-3.5 shrink-0 text-primary/80"
+              aria-hidden="true"
+            />
+          {:else}
+            <HardDrive
+              class="size-3.5 shrink-0 text-primary/80"
+              aria-hidden="true"
+            />
+          {/if}
         {/if}
-        <span class="truncate font-medium text-foreground">{storageLabel}</span>
+        <span class="truncate font-medium text-foreground">{statusLabel}</span>
         {#if appVersion}
           <span
             class="hidden text-muted-foreground sm:inline"
@@ -83,16 +104,19 @@
             v{appVersion}
           </span>
         {/if}
-        <span class="hidden text-muted-foreground sm:inline" aria-hidden="true"
-          >·</span
-        >
-        <span
-          class="shrink-0 text-muted-foreground"
-          data-testid="vault-last-sync"
-        >
-          {storageMode === 'github' ? 'Synced' : 'Saved'}
-          {formatLastSync(lastSyncedAt)}
-        </span>
+        {#if showSyncStatus}
+          <span
+            class="hidden text-muted-foreground sm:inline"
+            aria-hidden="true">·</span
+          >
+          <span
+            class="shrink-0 text-muted-foreground"
+            data-testid="vault-last-sync"
+          >
+            {storageMode === 'github' ? 'Synced' : 'Saved'}
+            {formatLastSync(lastSyncedAt)}
+          </span>
+        {/if}
       </div>
 
       {#if onRefresh}

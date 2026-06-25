@@ -28,8 +28,6 @@
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
     isInitializing,
-    errorMsg,
-    successMsg,
     addProviderOpen = false,
     onUnlock,
     onSelectProvider,
@@ -57,8 +55,6 @@
     githubRepo: string
     isVerifying: boolean
     isInitializing: boolean
-    errorMsg: string
-    successMsg: string
     addProviderOpen?: boolean
     onUnlock: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
@@ -127,6 +123,10 @@
     />
   {/if}
 
+  {#if !hasProviders && !showSetup && onOpenHelp}
+    <ProductIntro {onOpenHelp} />
+  {/if}
+
   <Card
     class="gap-0 border-border bg-card/80 py-0 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
   >
@@ -191,7 +191,9 @@
     </CardHeader>
 
     <CardContent
-      class={showWizard ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6' : 'px-6 pt-4'}
+      class={showWizard
+        ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6'
+        : 'px-6 pb-5 pt-4 sm:pb-6'}
     >
       {#if showWizard}
         <LoginWizard
@@ -253,26 +255,6 @@
           {onRemoveProvider}
         />
       {/if}
-
-      {#if errorMsg}
-        <div
-          class="mt-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-          data-testid="connect-error"
-        >
-          {errorMsg}
-        </div>
-      {/if}
-
-      {#if successMsg}
-        <div
-          class="mt-4 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-primary"
-          role="status"
-          data-testid="connect-success"
-        >
-          {successMsg}
-        </div>
-      {/if}
     </CardContent>
   </Card>
 
@@ -282,8 +264,5 @@
       {isVerifying}
       {onUseEnrollmentCode}
     />
-  {/if}
-  {#if !hasProviders && !showSetup && onOpenHelp}
-    <ProductIntro {onOpenHelp} />
   {/if}
 </div>

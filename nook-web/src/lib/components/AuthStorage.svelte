@@ -25,7 +25,6 @@
     isAuthenticated,
     isVerifying,
     isInitializing,
-    errorMsg,
     addProviderOpen = false,
     embedded = false,
     setupType = $bindable(null as StorageProviderType | null),
@@ -46,7 +45,6 @@
     isVerifying: boolean
     isSaving: boolean
     isInitializing: boolean
-    errorMsg: string
     addProviderOpen?: boolean
     embedded?: boolean
     setupType?: StorageProviderType | null
@@ -237,16 +235,6 @@
             Add storage provider
           </button>
         </fieldset>
-      {/if}
-
-      {#if errorMsg}
-        <div
-          class="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="alert"
-          data-testid="connect-error"
-        >
-          {errorMsg}
-        </div>
       {/if}
 
       {#if showSetup}

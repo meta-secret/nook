@@ -1,4 +1,3 @@
-import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({
@@ -6,6 +5,8 @@ const md = new MarkdownIt({
   linkify: true,
   breaks: true,
 })
+
+md.disable('image')
 
 /** Render markdown to HTML (secure-note preview and display). Raw HTML in source is disabled. */
 export function renderMarkdown(source: string): string {
@@ -20,45 +21,5 @@ export function renderMarkdown(source: string): string {
     .replace(/<li>\[ \] /g, '<li><input type="checkbox" disabled /> ')
     .replace(/<li>\[x\] /g, '<li><input type="checkbox" checked disabled /> ')
 
-  // Sanitize the HTML to prevent XSS
-  return DOMPurify.sanitize(withChecklists, {
-    USE_PROFILES: { html: true },
-    ALLOWED_TAGS: [
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'h5',
-      'h6',
-      'p',
-      'br',
-      'hr',
-      'ul',
-      'ol',
-      'li',
-      'strong',
-      'em',
-      'del',
-      'code',
-      'pre',
-      'a',
-      'blockquote',
-      'table',
-      'thead',
-      'tbody',
-      'tr',
-      'th',
-      'td',
-      'input',
-    ],
-    ALLOWED_ATTR: [
-      'href',
-      'target',
-      'rel',
-      'title',
-      'type',
-      'checked',
-      'disabled',
-    ],
-  })
+  return withChecklists
 }

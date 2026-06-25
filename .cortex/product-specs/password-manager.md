@@ -8,6 +8,11 @@ This document defines the functional and technical specifications for Nook's Zer
 
 The Nook Password Manager is a client-side, zero-knowledge secret vault. It enables users to secure and organize credentials locally in their browser or synchronize them to their private GitHub repositories.
 
+The product promise is: **Your device is the key.** There is no master password;
+approved devices unlock the vault. Nook provides passwordless access to your
+secrets while keeping the model decentralized: your secrets, your storage, your
+keys.
+
 ### Core Goals
 - **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
 - **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, validation, password generation, and cryptographic operations are encapsulated in Rust (`nook-core` + `nook-wasm`).
@@ -38,7 +43,7 @@ The Nook Password Manager is a client-side, zero-knowledge secret vault. It enab
 1. **Login gate (vault locked):** If no saved providers exist, the user sees a provider list (Local, GitHub). This is the primary entry point — not a settings page.
 2. **First-time setup:** User picks a storage provider. GitHub requires a one-time PAT entry; local needs no credentials. On successful connect, the provider (including GitHub PAT) is saved to IndexedDB (`nook_auth`) and never re-prompted on return visits. The vault is created with **device keys** as the default unlock method.
 3. **Return visits:** When one saved provider exists and device keys work, the vault may auto-unlock on load. Otherwise the login gate shows a **two-step unlock form**: (1) storage provider, (2) unlock method — device keys (default) or a labelled backup password when the vault has `password_entries`. See [auth-providers.md](../design-docs/auth-providers.md) §3.1.
-4. **Settings (authenticated):** **Storage & devices** lists providers, device access (join approvals, enrolled devices), and reconnect. Transfer-key enrollment lives in the join dialog, not the login screen.
+4. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
 5. **Encryption keys (auto-managed):** On first connect, vault keys are generated and written to the vault file. Device private key stays in IndexedDB (`device_identity_secret`). GitHub only stores the encrypted vault file.
 6. **Vault connection:** Rust validates storage mode and PAT before I/O, loads/decrypts the vault, or initializes empty storage.
 7. **Future:** Multiple providers per vault with replicated secret-store file and consistency — see [auth-providers.md](../design-docs/auth-providers.md).

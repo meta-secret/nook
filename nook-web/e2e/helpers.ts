@@ -209,10 +209,6 @@ export async function waitForVaultYaml(
 }
 
 async function assertNoVaultErrors(page: Page) {
-  const connectError = page.getByTestId('connect-error')
-  if (await connectError.isVisible()) {
-    throw new Error(`Connect failed: ${await connectError.textContent()}`)
-  }
   const vaultError = page.getByTestId('vault-error')
   if (await vaultError.isVisible()) {
     throw new Error(`Vault error: ${await vaultError.textContent()}`)
@@ -274,7 +270,7 @@ export async function waitForEngine(page: Page) {
 }
 
 async function assertGithubConnected(page: Page) {
-  const error = page.getByTestId('connect-error')
+  const error = page.getByTestId('vault-error')
   if (await error.isVisible()) {
     throw new Error(`GitHub connect failed: ${await error.textContent()}`)
   }
@@ -310,16 +306,18 @@ export async function connectLocalVault(page: Page) {
     await savedLocalProvider.click()
     await page.getByTestId('login-connect-provider-btn').click()
     await page.getByTestId('unlock-vault-btn').click()
-    await expect(
-      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
   } else {
     await page.getByTestId('provider-option-local').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
-    await expect(
-      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
   }
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -440,25 +438,8 @@ export async function approveJoinFromSettings(
   target: GithubE2eTarget,
   expectedMembers: number,
 ) {
-  await openStorageSettings(page)
-  await expandSettingsSection(page, 'devices')
-  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
-
-  if (!(await row.isVisible())) {
-    await page.getByTestId('refresh-joins-btn').click()
-  }
-  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(
-    target.pat,
-    target.repoName,
-    expectedMembers,
-  )
-  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
   await page.getByTestId('vault-secrets-tab').click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await approveJoinFromBanner(page, deviceId, target, expectedMembers)
 }
 
 export async function unlockGithubVault(page: Page) {
@@ -500,7 +481,6 @@ export async function openStorageSettings(page: Page) {
 const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
   unlock: 'vault-unlock-section',
-  devices: 'devices-access-section',
 } as const
 
 export type SettingsSection = keyof typeof SETTINGS_SECTION_TEST_IDS
@@ -548,17 +528,23 @@ export async function connectLoginProvider(page: Page) {
   if (await authorizationStep.isVisible()) {
     return
   }
+  const connectButton = page.getByTestId('login-connect-provider-btn')
   const savedList = page.getByTestId('saved-providers-list')
   if (await savedList.isVisible()) {
-    const provider = page
-      .getByTestId('saved-provider-local')
-      .or(page.getByTestId('saved-provider-github'))
-      .first()
-    if (await provider.isVisible()) {
+    const connectReady = await connectButton
+      .isEnabled({ timeout: UI_TIMEOUT_MS })
+      .catch(() => false)
+    if (!connectReady) {
+      const provider = page
+        .getByTestId('saved-provider-local')
+        .or(page.getByTestId('saved-provider-github'))
+        .first()
+      await expect(provider).toBeVisible({ timeout: UI_TIMEOUT_MS })
       await provider.click()
+      await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
     }
   }
-  await page.getByTestId('login-connect-provider-btn').click()
+  await connectButton.click()
   await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 

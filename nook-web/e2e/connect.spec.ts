@@ -9,9 +9,10 @@ test.describe('vault connect flow', () => {
     const connectButton = await waitForEngine(page)
     await connectButton.click()
 
-    await expect(
-      page.getByTestId('connect-success').or(page.getByTestId('app-success')),
-    ).toContainText('Local vault loaded', { timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
   })
@@ -23,7 +24,7 @@ test.describe('vault connect flow', () => {
     const connectButton = await waitForEngine(page)
     await connectButton.click()
 
-    await expect(page.getByTestId('connect-error')).toContainText(
+    await expect(page.getByTestId('vault-error')).toContainText(
       'Enter a GitHub personal access token',
     )
   })
@@ -39,7 +40,7 @@ test.describe('vault connect flow', () => {
     await connectButton.click({ force: true })
 
     await expect(
-      page.getByTestId('connect-error').or(page.getByTestId('vault-panel')),
+      page.getByTestId('vault-error').or(page.getByTestId('vault-panel')),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
   })
 

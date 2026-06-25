@@ -31,6 +31,7 @@
     onIssueCode,
     onClearCode,
     embedded = false,
+    allowIssueCode = true,
   }: {
     passwordEntries: VaultPasswordEntrySummary[]
     isBusy: boolean
@@ -45,6 +46,7 @@
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
     embedded?: boolean
+    allowIssueCode?: boolean
   } = $props()
 
   type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
@@ -95,7 +97,7 @@
       return
     }
     QRCode.toDataURL(enrollmentLink, {
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'H',
       margin: 1,
       width: 240,
       color: { dark: '#111317', light: '#ffffff' },
@@ -224,11 +226,11 @@
           class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
         >
           <KeyRound class="size-4 text-primary" />
-          Backup unlock passwords
+          Onboard another device
         </h2>
         <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-          Recovery if device keys are lost — used on the login screen after you
-          lock the vault, not when connecting to storage.
+          Generate a QR/link that carries provider access and a vault password
+          so another browser can join this vault.
         </p>
       </div>
       <span
@@ -254,10 +256,15 @@
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">
-        Anyone who knows a vault password and your storage credentials can read
-        the entire vault. Use a long, unique password for each entry.
+        Create a vault password to unlock from another browser or generate an
+        onboarding QR from the Onboard page. Use a long, unique value.
       </span>
     </div>
+  {:else}
+    <p class="mb-4 text-xs text-muted-foreground text-pretty">
+      These passwords can unlock the vault and can be selected on the Onboard
+      page when you generate a QR/link for another device.
+    </p>
   {/if}
 
   {#if panel === 'idle'}
@@ -295,19 +302,22 @@
               >
                 <RefreshCw class="size-4" />
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="h-9 px-2.5"
-                disabled={isBusy}
-                data-testid={entry.id === passwordEntries[0]?.id
-                  ? 'issue-enrollment-code-btn'
-                  : undefined}
-                onclick={() => openPanel('issue', entry.id)}
-              >
-                <QrCode class="size-4" />
-              </Button>
+              {#if allowIssueCode}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="h-9 px-2.5"
+                  disabled={isBusy}
+                  data-testid={entry.id === passwordEntries[0]?.id
+                    ? 'issue-enrollment-code-btn'
+                    : undefined}
+                  onclick={() => openPanel('issue', entry.id)}
+                >
+                  <QrCode class="size-4" />
+                  <span class="hidden sm:inline">Generate QR</span>
+                </Button>
+              {/if}
               <Button
                 type="button"
                 variant="ghost"
@@ -335,7 +345,7 @@
       onclick={() => openPanel('add')}
     >
       <Plus class="size-4" />
-      {hasPasswords ? 'Add another password' : 'Add vault password'}
+      {hasPasswords ? 'Create another password' : 'Create vault password'}
     </Button>
   {/if}
 
@@ -488,7 +498,7 @@
           <p class="text-xs text-muted-foreground text-pretty">
             Re-type the password for <span class="font-medium text-foreground"
               >{activeEntry.label}</span
-            > to issue an enrollment code.
+            > to generate a QR/link for the new device.
           </p>
           <div class="space-y-1.5">
             <label
@@ -525,7 +535,7 @@
               size="sm"
               data-testid="generate-enrollment-code-btn"
             >
-              <QrCode class="size-3.5" /> Generate code
+              <QrCode class="size-3.5" /> Generate QR/link
             </Button>
           </div>
         </form>
@@ -535,7 +545,7 @@
         >
           <div class="flex items-start justify-between gap-3">
             <p class="text-xs text-muted-foreground text-pretty">
-              Scan with the joining device to open Nook, or copy the link.
+              Scan this QR with the new device to open Nook, or copy the link.
               {#if issuedAgo}
                 <span
                   class="ml-1 text-muted-foreground/80"
