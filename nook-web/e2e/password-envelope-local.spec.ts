@@ -205,28 +205,24 @@ test.describe('vault password envelope (local)', () => {
     expect(code.length).toBeGreaterThan(40)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
-    // The code decodes to the expected payload shape: v=1, local provider,
-    // the password, and an informational `issued_at` timestamp (audit
-    // metadata only — there is no `expires_at`).
-    const json = JSON.parse(
+    const outer = JSON.parse(
       Buffer.from(code, 'base64url').toString('utf8'),
     ) as {
       v: number
-      provider: { type: string }
-      password: string
       issued_at: string
-      expires_at?: unknown
+      ct?: string
+      password?: string
+      provider?: unknown
     }
-    expect(json.v).toBe(1)
-    expect(json.provider.type).toBe('local')
-    expect(json.password).toBe('hunter2-secure')
-    expect(typeof json.issued_at).toBe('string')
-    expect(Date.parse(json.issued_at)).not.toBeNaN()
-    // Recently issued (within the last 60 seconds).
-    expect(Math.abs(Date.now() - Date.parse(json.issued_at))).toBeLessThan(
+    expect(outer.v).toBe(2)
+    expect(typeof outer.issued_at).toBe('string')
+    expect(Date.parse(outer.issued_at)).not.toBeNaN()
+    expect(Math.abs(Date.now() - Date.parse(outer.issued_at))).toBeLessThan(
       60_000,
     )
-    expect(json.expires_at).toBeUndefined()
+    expect(outer.ct).toBeTruthy()
+    expect(outer.password).toBeUndefined()
+    expect(outer.provider).toBeUndefined()
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
     const link = (await page.getByTestId('onboard-link').textContent())!
@@ -296,6 +292,11 @@ test.describe('enrollment link deep link (local)', () => {
 
     const pageB = await context.newPage()
     await pageB.goto(link)
+    await expect(pageB.getByTestId('login-enrollment-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await pageB.getByTestId('enrollment-password-input').fill('link-pass')
+    await pageB.getByTestId('submit-enrollment-code-btn').click()
     await waitForVaultUnlocked(pageB)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()

@@ -110,24 +110,21 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const code = (await codeArea.inputValue()).trim()
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
-    // The decoded payload should embed the GitHub PAT + repo so the
-    // joining device needs zero manual configuration.
-    const json = JSON.parse(
+    const outer = JSON.parse(
       Buffer.from(code, 'base64url').toString('utf8'),
     ) as {
       v: number
-      provider: { type: string; pat?: string; repo?: string }
-      password: string
+      provider?: { type: string; pat?: string; repo?: string }
+      password?: string
       issued_at: string
+      ct?: string
     }
-    expect(json.v).toBe(1)
-    expect(json.provider.type).toBe('github')
-    expect(json.provider.pat).toBe(githubPat)
-    expect(json.provider.repo).toContain(e2eRepo)
-    expect(json.password).toBe(vaultPassword)
-    // Audit metadata only — no expiration field.
-    expect(typeof json.issued_at).toBe('string')
-    expect(Date.parse(json.issued_at)).not.toBeNaN()
+    expect(outer.v).toBe(2)
+    expect(outer.provider).toBeUndefined()
+    expect(outer.password).toBeUndefined()
+    expect(outer.ct).toBeTruthy()
+    expect(typeof outer.issued_at).toBe('string')
+    expect(Date.parse(outer.issued_at)).not.toBeNaN()
 
     // Persist the code for the next test.
     test.info().annotations.push({ type: 'enrollment-code', description: code })
@@ -150,6 +147,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await expandLoginEnrollmentPanel(deviceB)
     await deviceB.getByTestId('open-enrollment-code-btn').click()
     await deviceB.getByTestId('enrollment-code-input').fill(code)
+    await deviceB.getByTestId('enrollment-password-input').fill(vaultPassword)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
 
     await waitForVaultUnlocked(deviceB)

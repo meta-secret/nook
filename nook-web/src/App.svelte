@@ -298,7 +298,10 @@
           onBeginSetup={(type) => vault.beginProviderSetup(type)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onOpenHelp={() => vault.openHelp()}
-          onUseEnrollmentCode={(code) => vault.connectWithEnrollmentCode(code)}
+          onUseEnrollmentCode={(code, password) =>
+            vault.connectWithEnrollmentCode(code, password)}
+          prefillEnrollmentCode={vault.prefillEnrollmentCode}
+          enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
           onUnlockWithPassword={(entryId, password) =>
             vault.unlockWithPassword(entryId, password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}

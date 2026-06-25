@@ -46,6 +46,8 @@
     onRemoveProvider,
     loginPasswordPrompt = false,
     onConsumeLoginPasswordPrompt,
+    prefillEnrollmentCode = '',
+    enrollmentFromUrlPending = false,
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -65,7 +67,10 @@
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onOpenHelp?: () => void
-    onUseEnrollmentCode?: (code: string) => void | Promise<void>
+    onUseEnrollmentCode?: (
+      code: string,
+      password: string,
+    ) => void | Promise<void>
     onUnlockWithPassword?: (
       entryId: string,
       password: string,
@@ -75,10 +80,18 @@
     passwordEntries?: VaultPasswordEntrySummary[]
     selectedPasswordEntryId?: string | null
     onConsumeLoginPasswordPrompt?: () => void
+    prefillEnrollmentCode?: string
+    enrollmentFromUrlPending?: boolean
   } = $props()
 
   let manageProvidersOpen = $state(false)
   let enrollmentPanelOpen = $state(false)
+
+  $effect(() => {
+    if (enrollmentFromUrlPending && prefillEnrollmentCode) {
+      enrollmentPanelOpen = true
+    }
+  })
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
@@ -262,6 +275,8 @@
     <LoginEnrollmentPanel
       bind:open={enrollmentPanelOpen}
       {isVerifying}
+      initialCode={prefillEnrollmentCode}
+      openFormInitially={enrollmentFromUrlPending}
       {onUseEnrollmentCode}
     />
   {/if}

@@ -5,20 +5,36 @@
   let {
     open = $bindable(false),
     isVerifying,
+    initialCode = '',
+    openFormInitially = false,
     onUseEnrollmentCode,
   }: {
     open?: boolean
     isVerifying: boolean
-    onUseEnrollmentCode?: (code: string) => void | Promise<void>
+    initialCode?: string
+    openFormInitially?: boolean
+    onUseEnrollmentCode?: (
+      code: string,
+      password: string,
+    ) => void | Promise<void>
   } = $props()
 
   let enrollmentCodeFormOpen = $state(false)
   let enrollmentCodeInput = $state('')
+  let enrollmentPasswordInput = $state('')
 
   $effect(() => {
     if (!open) {
       enrollmentCodeFormOpen = false
       enrollmentCodeInput = ''
+      enrollmentPasswordInput = ''
+    }
+  })
+
+  $effect(() => {
+    if (open && openFormInitially && initialCode) {
+      enrollmentCodeFormOpen = true
+      enrollmentCodeInput = initialCode
     }
   })
 </script>
@@ -64,7 +80,8 @@
     >
       <p class="text-xs text-muted-foreground text-pretty">
         Scan a QR code or paste an enrollment link from a device that is already
-        unlocked. Provider credentials travel inside the code.
+        unlocked. The QR is encrypted with the vault password — share that
+        password separately.
       </p>
 
       {#if !enrollmentCodeFormOpen}
@@ -89,7 +106,7 @@
             e.preventDefault()
             const trimmed = enrollmentCodeInput.trim()
             if (!trimmed) return
-            void onUseEnrollmentCode(trimmed)
+            void onUseEnrollmentCode(trimmed, enrollmentPasswordInput)
           }}
         >
           <div class="flex items-start justify-between gap-3">
@@ -98,7 +115,7 @@
                 Paste enrollment link or code
               </h3>
               <p class="text-xs text-muted-foreground text-pretty">
-                Provider credentials and vault password are unpacked locally.
+                Enter the same vault password used when the QR was generated.
               </p>
             </div>
             <button
@@ -107,6 +124,7 @@
               onclick={() => {
                 enrollmentCodeFormOpen = false
                 enrollmentCodeInput = ''
+                enrollmentPasswordInput = ''
               }}
             >
               Back
@@ -118,10 +136,29 @@
             placeholder="Paste enrollment link or code here…"
             bind:value={enrollmentCodeInput}
             data-testid="enrollment-code-input"></textarea>
+          <div class="space-y-1.5">
+            <label
+              for="enrollment-password-input"
+              class="text-sm font-medium text-muted-foreground"
+            >
+              Vault password
+            </label>
+            <input
+              id="enrollment-password-input"
+              type="password"
+              class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Password that encrypted this QR"
+              bind:value={enrollmentPasswordInput}
+              autocomplete="current-password"
+              data-testid="enrollment-password-input"
+            />
+          </div>
           <div class="flex justify-end">
             <Button
               type="submit"
-              disabled={isVerifying || !enrollmentCodeInput.trim()}
+              disabled={isVerifying ||
+                !enrollmentCodeInput.trim() ||
+                !enrollmentPasswordInput.trim()}
               data-testid="submit-enrollment-code-btn"
             >
               {#if isVerifying}

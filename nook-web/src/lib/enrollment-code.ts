@@ -2,15 +2,13 @@
  * Enrollment-code payload for one-step QR-based device join.
  *
  * The issuing device packs its active storage-provider credentials together
- * with the user-typed vault password into a compact base64url-encoded JSON
- * blob. The joining device decodes this, restores the provider, and calls
+ * with the vault password into an encrypted envelope. The joining device
+ * decrypts with the same vault password, restores the provider, and calls
  * `connectWithPassword` — see `.cortex/product-specs/password-envelope.md`.
  *
- * The payload carries an `issued_at` timestamp purely as audit metadata
- * (so the UI can show "issued X minutes ago" and the user can identify
- * stale codes by sight). It is **not** an expiration: the vault password
- * is the long-lived credential and rotating it is the only revocation
- * primitive.
+ * v2 codes encrypt the inner payload with a key derived from the vault
+ * password (PBKDF2 + AES-GCM). v1 plaintext codes are still accepted on
+ * the joining side for backward compatibility.
  */
 
 export type EnrollmentCodePayloadV1 = {
@@ -29,13 +27,74 @@ export type EnrollmentCodePayloadV1 = {
   issued_at: string
 }
 
+export type EnrollmentCodeEnvelopeV2 = {
+  v: 2
+  /** ISO 8601 UTC timestamp; visible without decrypting. */
+  issued_at: string
+  kdf: 'pbkdf2-sha256'
+  iterations: number
+  salt: string
+  cipher: 'aes-gcm-256'
+  iv: string
+  ct: string
+}
+
 const ENROLLMENT_HASH_PREFIX = '#enroll='
+const PBKDF2_ITERATIONS = 210_000
 
 export function encodeEnrollmentPayload(
   payload: EnrollmentCodePayloadV1,
 ): string {
   const json = JSON.stringify(payload)
   return base64UrlEncode(new TextEncoder().encode(json))
+}
+
+export async function encryptEnrollmentPayload(
+  payload: EnrollmentCodePayloadV1,
+  password: string,
+): Promise<string> {
+  const trimmed = password.trim()
+  if (!trimmed) {
+    throw new Error('Vault password is required to encrypt the enrollment QR.')
+  }
+
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await deriveEnrollmentKey(trimmed, salt)
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload))
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    plaintext,
+  )
+
+  const envelope: EnrollmentCodeEnvelopeV2 = {
+    v: 2,
+    issued_at: payload.issued_at,
+    kdf: 'pbkdf2-sha256',
+    iterations: PBKDF2_ITERATIONS,
+    salt: base64UrlEncode(salt),
+    cipher: 'aes-gcm-256',
+    iv: base64UrlEncode(iv),
+    ct: base64UrlEncode(new Uint8Array(ciphertext)),
+  }
+
+  return base64UrlEncode(new TextEncoder().encode(JSON.stringify(envelope)))
+}
+
+export function enrollmentCodeRequiresPassword(code: string): boolean {
+  return peekEnrollmentEnvelope(code)?.v === 2
+}
+
+export function peekEnrollmentIssuedAt(code: string): string | null {
+  const envelope = peekEnrollmentEnvelope(code)
+  if (!envelope) {
+    return null
+  }
+  if (envelope.v === 2) {
+    return envelope.issued_at
+  }
+  return envelope.issued_at ?? null
 }
 
 /** App root used in QR links (`origin` + Vite `BASE_URL`, or `VITE_PUBLIC_APP_URL`). */
@@ -124,22 +183,116 @@ export function consumeEnrollmentFromLocation(): string | null {
   return normalizeEnrollmentCode(raw)
 }
 
+/**
+ * @deprecated Use `decryptEnrollmentPayload` — kept for legacy callers/tests.
+ */
 export function decodeEnrollmentPayload(code: string): EnrollmentCodePayloadV1 {
+  const envelope = peekEnrollmentEnvelope(code)
+  if (!envelope) {
+    throw new Error('Enrollment code is empty.')
+  }
+  if (envelope.v === 2) {
+    throw new Error(
+      'This enrollment code is encrypted. Enter the vault password to decrypt it.',
+    )
+  }
+  return validatePayload(envelope)
+}
+
+export async function decryptEnrollmentPayload(
+  code: string,
+  password: string,
+): Promise<EnrollmentCodePayloadV1> {
+  const envelope = peekEnrollmentEnvelope(code)
+  if (!envelope) {
+    throw new Error('Enrollment code is empty.')
+  }
+
+  if (envelope.v === 1) {
+    return validatePayload(envelope)
+  }
+
+  const trimmed = password.trim()
+  if (!trimmed) {
+    throw new Error('Enter the vault password that encrypted this QR.')
+  }
+
+  try {
+    const key = await deriveEnrollmentKey(
+      trimmed,
+      base64UrlDecode(envelope.salt),
+      envelope.iterations,
+    )
+    const iv = base64UrlDecode(envelope.iv)
+    const ciphertext = base64UrlDecode(envelope.ct)
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: bufferSource(iv) },
+      key,
+      bufferSource(ciphertext),
+    )
+    const parsed = JSON.parse(new TextDecoder().decode(plaintext)) as unknown
+    return validatePayload(parsed)
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Enrollment code')) {
+      throw e
+    }
+    const err = new Error(
+      'Vault password does not decrypt this enrollment code.',
+    )
+    if (e instanceof Error) {
+      err.cause = e
+    }
+    throw err
+  }
+}
+
+function peekEnrollmentEnvelope(
+  code: string,
+): EnrollmentCodePayloadV1 | EnrollmentCodeEnvelopeV2 | null {
   const cleaned = normalizeEnrollmentCode(code)
   if (cleaned.length === 0) {
-    throw new Error('Enrollment code is empty.')
+    return null
   }
   const bytes = base64UrlDecode(cleaned)
   let parsed: unknown
   try {
     parsed = JSON.parse(new TextDecoder().decode(bytes))
-  } catch (e) {
-    throw new Error(
-      `Enrollment code is not valid base64url JSON: ${e instanceof Error ? e.message : String(e)}`,
-      { cause: e },
-    )
+  } catch {
+    return null
   }
-  return validatePayload(parsed)
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null
+  }
+  const version = (parsed as { v?: unknown }).v
+  if (version === 2) {
+    return validateEnvelope(parsed)
+  }
+  if (version === 1) {
+    return validatePayload(parsed)
+  }
+  return null
+}
+
+function validateEnvelope(value: unknown): EnrollmentCodeEnvelopeV2 {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Unsupported enrollment code version.')
+  }
+  const obj = value as Record<string, unknown>
+  if (obj.v !== 2) {
+    throw new Error('Unsupported enrollment code version.')
+  }
+  if (obj.kdf !== 'pbkdf2-sha256' || obj.cipher !== 'aes-gcm-256') {
+    throw new Error('Unsupported enrollment encryption parameters.')
+  }
+  if (typeof obj.iterations !== 'number' || !Number.isFinite(obj.iterations)) {
+    throw new Error('Enrollment code is missing KDF parameters.')
+  }
+  for (const field of ['salt', 'iv', 'ct', 'issued_at'] as const) {
+    if (typeof obj[field] !== 'string' || obj[field].length === 0) {
+      throw new Error(`Enrollment code is missing ${field}.`)
+    }
+  }
+  return value as EnrollmentCodeEnvelopeV2
 }
 
 function validatePayload(value: unknown): EnrollmentCodePayloadV1 {
@@ -169,6 +322,39 @@ function validatePayload(value: unknown): EnrollmentCodePayloadV1 {
     throw new Error('Enrollment code is missing the issued_at timestamp.')
   }
   return value as EnrollmentCodePayloadV1
+}
+
+async function deriveEnrollmentKey(
+  password: string,
+  salt: Uint8Array,
+  iterations = PBKDF2_ITERATIONS,
+): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  )
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: bufferSource(salt),
+      iterations,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  )
+}
+
+function bufferSource(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {

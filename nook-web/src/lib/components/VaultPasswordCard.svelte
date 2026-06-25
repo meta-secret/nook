@@ -16,7 +16,7 @@
   import QRCode from 'qrcode'
   import {
     buildEnrollmentLink,
-    decodeEnrollmentPayload,
+    peekEnrollmentIssuedAt,
   } from '$lib/enrollment-code'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
@@ -68,11 +68,7 @@
 
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return null
-    try {
-      return decodeEnrollmentPayload(enrollmentCode).issued_at
-    } catch {
-      return null
-    }
+    return peekEnrollmentIssuedAt(enrollmentCode)
   })
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',

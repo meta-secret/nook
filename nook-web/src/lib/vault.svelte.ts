@@ -13,8 +13,9 @@ import {
 } from '$lib/nook'
 import {
   consumeEnrollmentFromLocation,
-  decodeEnrollmentPayload,
-  encodeEnrollmentPayload,
+  decryptEnrollmentPayload,
+  encryptEnrollmentPayload,
+  enrollmentCodeRequiresPassword,
   type EnrollmentCodePayloadV1,
 } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
@@ -80,6 +81,8 @@ export class VaultState {
   isPasswordBusy = $state(false)
   passwordError = $state('')
   enrollmentCode = $state('')
+  prefillEnrollmentCode = $state('')
+  enrollmentFromUrlPending = $state(false)
   loginEnrollmentCode = $state('')
   passwordEntries = $state<VaultPasswordEntrySummary[]>([])
   selectedPasswordEntryId = $state<string | null>(null)
@@ -222,7 +225,12 @@ export class VaultState {
     if (this.pendingEnrollmentFromUrl && !this.isAuthenticated) {
       const code = this.pendingEnrollmentFromUrl
       this.pendingEnrollmentFromUrl = null
-      await this.connectWithEnrollmentCode(code)
+      if (enrollmentCodeRequiresPassword(code)) {
+        this.prefillEnrollmentCode = code
+        this.enrollmentFromUrlPending = true
+      } else {
+        await this.connectWithEnrollmentCode(code)
+      }
     }
   }
 
@@ -1096,7 +1104,7 @@ export class VaultState {
         entry_id: entryId,
         issued_at: isoTimestamp(),
       }
-      const code = encodeEnrollmentPayload(payload)
+      const code = await encryptEnrollmentPayload(payload, password)
       this.enrollmentCode = code
       this.activeEnrollmentEntryId = entryId
       return code
@@ -1161,7 +1169,7 @@ export class VaultState {
    * Joining-side: parse an enrollment code, restore provider credentials, and
    * self-enrol via `connectWithPassword`. Skips approval entirely.
    */
-  async connectWithEnrollmentCode(code: string): Promise<void> {
+  async connectWithEnrollmentCode(code: string, password = ''): Promise<void> {
     if (!this.manager) {
       this.errorMsg = 'Vault engine is not available.'
       return
@@ -1170,7 +1178,7 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
-      const payload = decodeEnrollmentPayload(code)
+      const payload = await decryptEnrollmentPayload(code, password)
 
       if (payload.provider.type === 'github') {
         this.storageMode = 'github'
@@ -1198,6 +1206,8 @@ export class VaultState {
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.loginEnrollmentCode = ''
+      this.prefillEnrollmentCode = ''
+      this.enrollmentFromUrlPending = false
       this.showSuccess('Enrolled this device via enrollment code.')
       this.startVaultSync()
     } catch (e: unknown) {
