@@ -22,7 +22,6 @@ export function renderMarkdown(source: string): string {
 
   // Sanitize the HTML to prevent XSS
   return DOMPurify.sanitize(withChecklists, {
-    USE_PROFILES: { html: true },
     ALLOWED_TAGS: [
       'h1',
       'h2',
