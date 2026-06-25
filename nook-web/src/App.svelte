@@ -12,6 +12,7 @@
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
+  import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
@@ -60,6 +61,11 @@
   const authenticatedShellSpacing = $derived(
     secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
   )
+  const authenticatedShellSize = $derived(
+    secretsAddOpen
+      ? 'min-h-[calc(100svh-5rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]'
+      : 'min-h-[calc(100svh-11rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]',
+  )
 </script>
 
 <main
@@ -77,20 +83,7 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <div id="header-language-container">
-          <button
-            type="button"
-            class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 cursor-pointer"
-            aria-label="Toggle language"
-            title="Toggle language"
-            onclick={() => {
-              const nextLocale = vault.locale === 'en' ? 'ru' : 'en'
-              void vault.updateLocale(nextLocale)
-            }}
-          >
-            {vault.locale.toUpperCase()}
-          </button>
-        </div>
+        <HeaderLanguageSelect {vault} />
 
         <button
           type="button"
@@ -193,129 +186,134 @@
       </div>
     {:else if vault.isAuthenticated}
       <div
-        class="overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+        class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+        data-testid="authenticated-shell"
       >
-        <div class="space-y-4 p-4 sm:p-5">
-          {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
-            <OnboardDevice
-              {vault}
-              providers={vault.providers}
-              activeProviderId={vault.activeProviderId}
-              passwordEntries={vault.passwordEntries}
-              enrollmentCode={vault.enrollmentCode}
-              isBusy={vault.isPasswordBusy}
-              onIssueCode={(entryId, pw, providerId) =>
-                vault.issueEnrollmentCode(entryId, pw, providerId)}
-              onClearCode={() => vault.clearEnrollmentCode()}
-              onOpenStorageSettings={() =>
-                vault.openSettings('storage', 'storage')}
-              onOpenPasswordSettings={() =>
-                vault.openSettings('storage', 'passwords')}
-            />
-          {:else if vault.settingsOpen}
-            <VaultSettingsAccordion
-              {vault}
-              bind:accordionSection={vault.settingsAccordionSection}
-              providers={vault.providers}
-              activeProviderId={vault.activeProviderId}
-              isAuthenticated={vault.isAuthenticated}
-              isVerifying={vault.isVerifying}
-              isSaving={vault.isSaving}
-              isInitializing={vault.isInitializing}
-              addProviderOpen={vault.addProviderOpen}
-              bind:setupType={vault.loginSetupType}
-              bind:githubPat={vault.githubPat}
-              bind:githubRepo={vault.githubRepo}
-              passwordEntries={vault.passwordEntries}
-              isPasswordBusy={vault.isPasswordBusy}
-              passwordError={vault.passwordError}
-              enrollmentCode={vault.enrollmentCode}
-              deviceId={vault.deviceId}
-              devicePublicKey={vault.devicePublicKey}
-              pendingJoins={vault.pendingJoins}
-              vaultMembers={vault.vaultMembers}
-              hasPasswordEnvelope={vault.hasPasswordEnvelope}
-              onReconnect={handleUnlock}
-              onSelectProvider={handleProviderReconnect}
-              onBeginAddProvider={() => vault.beginAddProvider()}
-              onCancelAddProvider={() => vault.cancelAddProvider()}
-              onBeginSetup={(type) => vault.beginProviderSetup(type)}
-              onCancelSetup={() => vault.cancelProviderSetup()}
-              onRemoveProvider={(id) => vault.removeProvider(id)}
-              onLockVault={() => vault.lockVault()}
-              onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
-              onUpdatePassword={(id, pw) =>
-                vault.updateVaultPasswordEntry(id, pw)}
-              onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-              onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
-              onClearCode={() => vault.clearEnrollmentCode()}
-              onApproveJoin={(id) => vault.approveJoin(id)}
-              onDenyJoin={(id) => vault.denyJoin(id)}
-              onRenameDevice={(id, label) => vault.renameDevice(id, label)}
-              onRevokeDevice={(id) => vault.revokeDevice(id)}
-            />
-          {:else}
-            <PendingJoinsBanner
-              {vault}
-              pendingJoins={vault.pendingJoins}
-              isBusy={vault.isSaving || vault.isVerifying}
-              onApproveJoin={(id) => vault.approveJoin(id)}
-              onRefresh={() => vault.manualSync()}
-              onOpenDevicesSettings={() =>
-                vault.openSettings('storage', 'devices')}
-            />
-            <SecretVault
-              {vault}
-              isSaving={vault.isSaving}
-              secrets={vault.secrets}
-              onAddModeChange={(open) => {
-                secretsAddOpen = open
-              }}
-              onAddSecret={(id, type, data) =>
-                vault.handleAddSecret(id, type, data)}
-              onReplaceSecret={(oldId, type, data) =>
-                vault.handleReplaceSecret(oldId, type, data)}
-              onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
-              onGeneratePassword={(
-                length,
-                lowercase,
-                uppercase,
-                numbers,
-                symbols,
-              ) =>
-                vault.generatePassword(
+        <div class="shell-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <div class="space-y-4 p-4 sm:p-5">
+            {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
+              <OnboardDevice
+                {vault}
+                providers={vault.providers}
+                activeProviderId={vault.activeProviderId}
+                passwordEntries={vault.passwordEntries}
+                enrollmentCode={vault.enrollmentCode}
+                isBusy={vault.isPasswordBusy}
+                onIssueCode={(entryId, pw, providerId) =>
+                  vault.issueEnrollmentCode(entryId, pw, providerId)}
+                onClearCode={() => vault.clearEnrollmentCode()}
+                onOpenStorageSettings={() =>
+                  vault.openSettings('storage', 'storage')}
+                onOpenPasswordSettings={() =>
+                  vault.openSettings('storage', 'passwords')}
+              />
+            {:else if vault.settingsOpen}
+              <VaultSettingsAccordion
+                {vault}
+                bind:accordionSection={vault.settingsAccordionSection}
+                providers={vault.providers}
+                activeProviderId={vault.activeProviderId}
+                isAuthenticated={vault.isAuthenticated}
+                isVerifying={vault.isVerifying}
+                isSaving={vault.isSaving}
+                isInitializing={vault.isInitializing}
+                addProviderOpen={vault.addProviderOpen}
+                bind:setupType={vault.loginSetupType}
+                bind:githubPat={vault.githubPat}
+                bind:githubRepo={vault.githubRepo}
+                passwordEntries={vault.passwordEntries}
+                isPasswordBusy={vault.isPasswordBusy}
+                passwordError={vault.passwordError}
+                enrollmentCode={vault.enrollmentCode}
+                deviceId={vault.deviceId}
+                devicePublicKey={vault.devicePublicKey}
+                pendingJoins={vault.pendingJoins}
+                vaultMembers={vault.vaultMembers}
+                hasPasswordEnvelope={vault.hasPasswordEnvelope}
+                onReconnect={handleUnlock}
+                onSelectProvider={handleProviderReconnect}
+                onBeginAddProvider={() => vault.beginAddProvider()}
+                onCancelAddProvider={() => vault.cancelAddProvider()}
+                onBeginSetup={(type) => vault.beginProviderSetup(type)}
+                onCancelSetup={() => vault.cancelProviderSetup()}
+                onRemoveProvider={(id) => vault.removeProvider(id)}
+                onLockVault={() => vault.lockVault()}
+                onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
+                onUpdatePassword={(id, pw) =>
+                  vault.updateVaultPasswordEntry(id, pw)}
+                onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
+                onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
+                onClearCode={() => vault.clearEnrollmentCode()}
+                onApproveJoin={(id) => vault.approveJoin(id)}
+                onDenyJoin={(id) => vault.denyJoin(id)}
+                onRenameDevice={(id, label) => vault.renameDevice(id, label)}
+                onRevokeDevice={(id) => vault.revokeDevice(id)}
+              />
+            {:else}
+              <PendingJoinsBanner
+                {vault}
+                pendingJoins={vault.pendingJoins}
+                isBusy={vault.isSaving || vault.isVerifying}
+                onApproveJoin={(id) => vault.approveJoin(id)}
+                onRefresh={() => vault.manualSync()}
+                onOpenDevicesSettings={() =>
+                  vault.openSettings('storage', 'devices')}
+              />
+              <SecretVault
+                {vault}
+                isSaving={vault.isSaving}
+                secrets={vault.secrets}
+                onAddModeChange={(open) => {
+                  secretsAddOpen = open
+                }}
+                onAddSecret={(id, type, data) =>
+                  vault.handleAddSecret(id, type, data)}
+                onReplaceSecret={(oldId, type, data) =>
+                  vault.handleReplaceSecret(oldId, type, data)}
+                onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
+                onGeneratePassword={(
                   length,
                   lowercase,
                   uppercase,
                   numbers,
                   symbols,
-                )}
+                ) =>
+                  vault.generatePassword(
+                    length,
+                    lowercase,
+                    uppercase,
+                    numbers,
+                    symbols,
+                  )}
+              />
+            {/if}
+          </div>
+        </div>
+        <div class="shrink-0">
+          <VaultStatusBar
+            {vault}
+            storageMode={vault.storageMode}
+            githubRepo={vault.githubRepo}
+            lastSyncedAt={vault.lastSyncedAt}
+            isSyncing={vault.isSyncing || vault.isSaving}
+            successMsg={vault.successMsg}
+            errorMsg={vault.errorMsg}
+            {appVersion}
+            onRefresh={() => vault.manualSync()}
+            onDismissSuccess={() => vault.dismissSuccess()}
+            onDismissError={() => vault.dismissError()}
+          />
+          {#if !secretsAddOpen}
+            <VaultBottomNav
+              {vault}
+              settingsOpen={vault.settingsOpen}
+              settingsSection={vault.settingsSection}
+              onSelectSecrets={() => vault.closeSettings()}
+              onSelectOnboard={() => vault.openSettings('onboard')}
+              onSelectSettings={() => vault.openSettings()}
             />
           {/if}
         </div>
-        <VaultStatusBar
-          {vault}
-          storageMode={vault.storageMode}
-          githubRepo={vault.githubRepo}
-          lastSyncedAt={vault.lastSyncedAt}
-          isSyncing={vault.isSyncing || vault.isSaving}
-          successMsg={vault.successMsg}
-          errorMsg={vault.errorMsg}
-          {appVersion}
-          onRefresh={() => vault.manualSync()}
-          onDismissSuccess={() => vault.dismissSuccess()}
-          onDismissError={() => vault.dismissError()}
-        />
-        {#if !secretsAddOpen}
-          <VaultBottomNav
-            {vault}
-            settingsOpen={vault.settingsOpen}
-            settingsSection={vault.settingsSection}
-            onSelectSecrets={() => vault.closeSettings()}
-            onSelectOnboard={() => vault.openSettings('onboard')}
-            onSelectSettings={() => vault.openSettings()}
-          />
-        {/if}
       </div>
     {:else if vault.providersLoaded}
       <div class="space-y-4">
