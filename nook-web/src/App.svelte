@@ -12,6 +12,7 @@
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
+  import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import { Button } from '$lib/components/ui/button'
 
   const vault = new VaultState()
@@ -62,8 +63,8 @@
   )
   const authenticatedShellSize = $derived(
     secretsAddOpen
-      ? 'min-h-[calc(100svh-5rem)] sm:min-h-0 sm:h-[min(32rem,calc(100svh-7rem))]'
-      : 'min-h-[calc(100svh-11rem)] sm:min-h-0 sm:h-[min(32rem,calc(100svh-7rem))]',
+      ? 'min-h-[calc(100svh-5rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]'
+      : 'min-h-[calc(100svh-11rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]',
   )
 </script>
 
@@ -82,20 +83,7 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <div id="header-language-container">
-          <button
-            type="button"
-            class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 cursor-pointer"
-            aria-label="Toggle language"
-            title="Toggle language"
-            onclick={() => {
-              const nextLocale = vault.locale === 'en' ? 'ru' : 'en'
-              void vault.updateLocale(nextLocale)
-            }}
-          >
-            {vault.locale.toUpperCase()}
-          </button>
-        </div>
+        <HeaderLanguageSelect {vault} />
 
         <button
           type="button"
@@ -201,7 +189,7 @@
         class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
         data-testid="authenticated-shell"
       >
-        <div class="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div class="shell-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div class="space-y-4 p-4 sm:p-5">
             {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
               <OnboardDevice
