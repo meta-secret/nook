@@ -2,13 +2,17 @@
   import { ChevronDown, QrCode, RefreshCw, ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
 
+  import type { VaultState } from '$lib/vault.svelte'
+
   let {
+    vault,
     open = $bindable(false),
     isVerifying,
     initialCode = '',
     openFormInitially = false,
     onUseEnrollmentCode,
   }: {
+    vault: VaultState
     open?: boolean
     isVerifying: boolean
     initialCode?: string
@@ -58,11 +62,11 @@
     <QrCode class="size-5 shrink-0 text-muted-foreground" />
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-semibold text-foreground">
-        Join from another device
+        {vault.t('login.join_device')}
       </span>
       {#if !open}
         <span class="block truncate text-xs text-muted-foreground">
-          QR or enrollment link
+          {vault.t('login.qr_or_link')}
         </span>
       {/if}
     </span>
@@ -79,9 +83,7 @@
       data-testid="login-enrollment-panel"
     >
       <p class="text-xs text-muted-foreground text-pretty">
-        Scan a QR code or paste an enrollment link from a device that is already
-        unlocked. The QR carries provider access and a vault password entry id —
-        enter the password on this device to finish onboarding.
+        {vault.t('login.join_instructions')}
       </p>
 
       {#if !enrollmentCodeFormOpen}
@@ -94,10 +96,10 @@
           }}
         >
           <QrCode class="size-4" />
-          Enroll with QR or code
+          {vault.t('login.enroll_qr_code')}
         </button>
         <p class="text-xs text-muted-foreground text-pretty">
-          Adds this browser as a trusted device — no approval round-trip.
+          {vault.t('login.enroll_qr_desc')}
         </p>
       {:else if onUseEnrollmentCode}
         <form
@@ -112,10 +114,10 @@
           <div class="flex items-start justify-between gap-3">
             <div class="space-y-1">
               <h3 class="text-sm font-semibold text-foreground">
-                Paste enrollment link or code
+                {vault.t('login.paste_link')}
               </h3>
               <p class="text-xs text-muted-foreground text-pretty">
-                Enter the vault password for the entry referenced in the QR.
+                {vault.t('login.paste_desc')}
               </p>
             </div>
             <button
@@ -127,13 +129,13 @@
                 enrollmentPasswordInput = ''
               }}
             >
-              Back
+              {vault.t('common.back')}
             </button>
           </div>
           <textarea
             rows="4"
             class="w-full font-mono text-xs leading-relaxed rounded-md border border-border bg-background p-3 focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="Paste enrollment link or code here…"
+            placeholder={vault.t('login.paste_placeholder')}
             bind:value={enrollmentCodeInput}
             data-testid="enrollment-code-input"></textarea>
           <div class="space-y-1.5">
@@ -141,13 +143,13 @@
               for="enrollment-password-input"
               class="text-sm font-medium text-muted-foreground"
             >
-              Vault password
+              {vault.t('onboard_device.vault_password')}
             </label>
             <input
               id="enrollment-password-input"
               type="password"
               class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Vault password for this onboarding QR"
+              placeholder={vault.t('login.password_placeholder_qr')}
               bind:value={enrollmentPasswordInput}
               autocomplete="current-password"
               data-testid="enrollment-password-input"
@@ -162,9 +164,11 @@
               data-testid="submit-enrollment-code-btn"
             >
               {#if isVerifying}
-                <RefreshCw class="size-4 animate-spin" /> Enrolling…
+                <RefreshCw class="size-4 animate-spin" />
+                {vault.t('login.enrolling')}
               {:else}
-                <ShieldCheck class="size-4" /> Enroll this device
+                <ShieldCheck class="size-4" />
+                {vault.t('login.enroll_device_btn')}
               {/if}
             </Button>
           </div>

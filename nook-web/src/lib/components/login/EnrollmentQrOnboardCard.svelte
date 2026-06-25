@@ -9,13 +9,17 @@
     CardTitle,
   } from '$lib/components/ui/card'
 
+  import type { VaultState } from '$lib/vault.svelte'
+
   let {
+    vault,
     code,
     passwordEntryId = null,
     passwordEntryLabel = null,
     isVerifying,
     onSubmit,
   }: {
+    vault: VaultState
     code: string
     passwordEntryId?: string | null
     passwordEntryLabel?: string | null
@@ -42,12 +46,10 @@
       class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
     >
       <QrCode class="size-5 shrink-0 text-primary" />
-      Finish device onboarding
+      {vault.t('login.finish_device_onboarding')}
     </CardTitle>
     <CardDescription class="text-pretty">
-      This device scanned an onboarding QR. Enter the vault password to decrypt
-      provider access, generate this browser's device keys, and unlock the
-      vault.
+      {vault.t('login.onboarding_card_desc')}
     </CardDescription>
   </CardHeader>
 
@@ -65,7 +67,7 @@
           class="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
           data-testid="enrollment-password-entry-hint"
         >
-          Vault password
+          {vault.t('onboard_device.vault_password')}
           {#if passwordEntryLabel}
             <span class="font-medium text-foreground">{passwordEntryLabel}</span
             >
@@ -81,21 +83,20 @@
           class="text-sm font-medium text-muted-foreground inline-flex items-center gap-1.5"
         >
           <KeyRound class="size-3.5" />
-          Vault password
+          {vault.t('onboard_device.vault_password')}
         </label>
         <input
           id="enrollment-scan-password"
           bind:this={passwordField}
           type="password"
           class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Password for the vault entry shown in the QR"
+          placeholder={vault.t('login.password_entry_placeholder')}
           bind:value={passwordInput}
           autocomplete="current-password"
           data-testid="enrollment-password-input"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          The password is not stored in the QR. Provider credentials are applied
-          automatically after you enter it.
+          {vault.t('login.password_help_text')}
         </p>
       </div>
 
@@ -108,10 +109,10 @@
         >
           {#if isVerifying}
             <RefreshCw class="size-4 animate-spin" />
-            Onboarding…
+            {vault.t('login.onboarding_progress')}
           {:else}
             <ShieldCheck class="size-4" />
-            Finish onboarding
+            {vault.t('login.finish_onboarding')}
           {/if}
         </Button>
       </div>

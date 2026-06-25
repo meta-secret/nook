@@ -1,8 +1,16 @@
 <script lang="ts">
   import { BookOpen, ChevronDown, Info } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import type { VaultState } from '$lib/vault.svelte'
 
-  let { onOpenHelp }: { onOpenHelp: () => void } = $props()
+  let {
+    vault,
+    onOpenHelp,
+  }: {
+    vault: VaultState
+    onOpenHelp: () => void
+  } = $props()
+
   let open = $state(false)
 </script>
 
@@ -24,11 +32,11 @@
     <Info class="size-5 shrink-0 text-muted-foreground" />
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-semibold text-foreground">
-        Why Nook?
+        {vault.t('product_intro.why_nook')}
       </span>
       {#if !open}
         <span class="block truncate text-xs text-muted-foreground">
-          Your device is the key
+          {vault.t('product_intro.device_is_key')}
         </span>
       {/if}
     </span>
@@ -45,15 +53,15 @@
       data-testid="product-intro-panel"
     >
       <p class="text-base font-semibold leading-snug text-foreground">
-        Your device is the key
+        {vault.t('product_intro.device_is_key')}
       </p>
       <p class="text-pretty">
-        No master password. Your devices unlock the vault.
+        {vault.t('product_intro.no_master_pw')}
       </p>
       <ul class="list-disc space-y-1 pl-5 text-pretty">
-        <li>Passwordless access to your secrets.</li>
-        <li>Your secrets. Your storage. Your keys.</li>
-        <li>A decentralized vault for your secrets.</li>
+        <li>{vault.t('product_intro.bullet1')}</li>
+        <li>{vault.t('product_intro.bullet2')}</li>
+        <li>{vault.t('product_intro.bullet3')}</li>
       </ul>
       <Button
         type="button"
@@ -64,7 +72,7 @@
         onclick={onOpenHelp}
       >
         <BookOpen class="size-4" />
-        How Nook works
+        {vault.t('product_intro.how_works')}
       </Button>
     </div>
   {/if}

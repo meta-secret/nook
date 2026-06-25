@@ -46,6 +46,12 @@ pub enum NookError {
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn get_translation_catalog(locale: &str) -> String {
+    nook_core::get_translation_catalog(locale).to_owned()
+}
+
+#[wasm_bindgen]
 pub struct NookSecretRecord {
     id: String,
     secret_type: String,

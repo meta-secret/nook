@@ -7,8 +7,10 @@
     TriangleAlert,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     storageMode,
     githubRepo = '',
     lastSyncedAt = null as Date | null,
@@ -24,6 +26,7 @@
     onDismissSuccess,
     onDismissError,
   }: {
+    vault?: VaultState
     storageMode: 'local' | 'github'
     githubRepo?: string
     lastSyncedAt?: Date | null
@@ -50,20 +53,32 @@
   })
 
   function formatLastSync(at: Date | null): string {
-    if (!at) return 'not yet'
+    if (!at) return vault ? vault.t('status_bar.not_yet') : 'not yet'
     const secs = Math.max(0, Math.floor((now - at.getTime()) / 1000))
-    if (secs < 5) return 'just now'
-    if (secs < 60) return `${secs}s ago`
+    if (secs < 5) return vault ? vault.t('status_bar.just_now') : 'just now'
+    if (secs < 60)
+      return vault
+        ? vault.t('status_bar.secs_ago', { secs: String(secs) })
+        : `${secs}s ago`
     const mins = Math.floor(secs / 60)
-    if (mins < 60) return `${mins}m ago`
-    return `${Math.floor(mins / 60)}h ago`
+    if (mins < 60)
+      return vault
+        ? vault.t('status_bar.mins_ago', { mins: String(mins) })
+        : `${mins}m ago`
+    return vault
+      ? vault.t('status_bar.hours_ago', {
+          hours: String(Math.floor(mins / 60)),
+        })
+      : `${Math.floor(mins / 60)}h ago`
   }
 
   const statusLabel = $derived(
     label ??
       (storageMode === 'github'
         ? githubRepo.trim() || 'GitHub'
-        : 'This device'),
+        : vault
+          ? vault.t('provider_picker.this_device')
+          : 'This device'),
   )
   const isQuiet = $derived(variant === 'quiet')
 </script>
@@ -113,7 +128,13 @@
             class="shrink-0 text-muted-foreground"
             data-testid="vault-last-sync"
           >
-            {storageMode === 'github' ? 'Synced' : 'Saved'}
+            {storageMode === 'github'
+              ? vault
+                ? vault.t('status_bar.synced')
+                : 'Synced'
+              : vault
+                ? vault.t('status_bar.saved')
+                : 'Saved'}
             {formatLastSync(lastSyncedAt)}
           </span>
         {/if}
@@ -129,13 +150,23 @@
             disabled={isSyncing}
             data-testid="vault-sync-refresh-btn"
             aria-label={storageMode === 'github'
-              ? 'Sync vault with GitHub'
-              : 'Refresh vault from browser storage'}
+              ? vault
+                ? vault.t('status_bar.sync_aria_github')
+                : 'Sync vault with GitHub'
+              : vault
+                ? vault.t('status_bar.refresh_aria_local')
+                : 'Refresh vault from browser storage'}
             onclick={() => void onRefresh()}
           >
             <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
             <span class="ml-1"
-              >{storageMode === 'github' ? 'Sync' : 'Refresh'}</span
+              >{storageMode === 'github'
+                ? vault
+                  ? vault.t('status_bar.sync')
+                  : 'Sync'
+                : vault
+                  ? vault.t('status_bar.refresh')
+                  : 'Refresh'}</span
             >
           </Button>
           <div
@@ -143,8 +174,12 @@
             role="tooltip"
           >
             {storageMode === 'github'
-              ? 'Synchronize latest changes with your storage provider'
-              : 'Reload latest changes from browser storage'}
+              ? vault
+                ? vault.t('status_bar.sync_tooltip_github')
+                : 'Synchronize latest changes with your storage provider'
+              : vault
+                ? vault.t('status_bar.refresh_tooltip_local')
+                : 'Reload latest changes from browser storage'}
           </div>
         </div>
       {/if}

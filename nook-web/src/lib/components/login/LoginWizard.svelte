@@ -8,10 +8,12 @@
   import type { StorageProvider } from '$lib/auth-providers'
   import { providerStorageDetail } from '$lib/auth-providers'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import type { VaultState } from '$lib/vault.svelte'
   import LoginConnectionStep from '$lib/components/login/LoginConnectionStep.svelte'
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
 
   let {
+    vault,
     step,
     providers,
     activeProviderId,
@@ -30,6 +32,7 @@
     onUnlockWithPassword,
     onConsumeLoginPasswordPrompt,
   }: {
+    vault: VaultState
     step: 'connection' | 'authorization'
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -95,7 +98,8 @@
         {/if}
       </span>
       <span class="min-w-0 flex-1">
-        <span class="block text-sm font-medium text-foreground">Connection</span
+        <span class="block text-sm font-medium text-foreground"
+          >{vault.t('login_wizard.connection_step')}</span
         >
         {#if connectionDone && activeProvider}
           <span class="block truncate text-xs text-muted-foreground">
@@ -103,7 +107,7 @@
           </span>
         {:else if connectionOpen}
           <span class="block text-xs text-muted-foreground">
-            Pick where your vault file lives
+            {vault.t('login_wizard.connection_subheader')}
           </span>
         {/if}
       </span>
@@ -124,6 +128,7 @@
         data-testid="login-wizard-connection-step"
       >
         <LoginConnectionStep
+          {vault}
           {providers}
           {activeProviderId}
           {isVerifying}
@@ -169,15 +174,15 @@
             ? 'text-foreground'
             : 'text-muted-foreground'}"
         >
-          Get access
+          {vault.t('login_wizard.get_access')}
         </span>
         {#if authorizationOpen}
           <span class="block text-xs text-muted-foreground">
-            Choose how to unlock
+            {vault.t('login_wizard.get_access_subheader')}
           </span>
         {:else if !authorizationEnabled}
           <span class="block text-xs text-muted-foreground/70">
-            Available after connection
+            {vault.t('login_wizard.available_after_connect')}
           </span>
         {/if}
       </span>
@@ -194,6 +199,7 @@
         data-testid="login-wizard-authorization-step"
       >
         <LoginAuthorizationStep
+          {vault}
           bind:selectedPasswordEntryId
           {isVerifying}
           {isInitializing}

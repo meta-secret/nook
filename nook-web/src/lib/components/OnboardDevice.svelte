@@ -15,12 +15,15 @@
     peekEnrollmentIssuedAt,
   } from '$lib/enrollment-code'
   import {
+    localizeProviderLabel,
     providerStorageDetail,
     type StorageProvider,
   } from '$lib/auth-providers'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     providers,
     activeProviderId,
     passwordEntries,
@@ -31,6 +34,7 @@
     onOpenStorageSettings,
     onOpenPasswordSettings,
   }: {
+    vault: VaultState
     providers: StorageProvider[]
     activeProviderId: string | null
     passwordEntries: VaultPasswordEntrySummary[]
@@ -113,15 +117,15 @@
     localError = ''
     onClearCode()
     if (!selectedProvider) {
-      localError = 'Choose an auth provider.'
+      localError = vault.t('onboard_device.choose_provider_err')
       return
     }
     if (!selectedPassword) {
-      localError = 'Choose a vault password.'
+      localError = vault.t('onboard_device.choose_pw_err')
       return
     }
     if (!passwordInput) {
-      localError = 'Enter the selected vault password.'
+      localError = vault.t('onboard_device.enter_pw_err')
       return
     }
     try {
@@ -129,7 +133,7 @@
       passwordInput = ''
     } catch (e: unknown) {
       localError =
-        e instanceof Error ? e.message : 'Failed to generate onboarding QR.'
+        e instanceof Error ? e.message : vault.t('onboard_device.failed_qr_err')
     }
   }
 
@@ -152,11 +156,11 @@
   data-testid="onboard-device-panel"
 >
   <div class="space-y-1">
-    <h2 class="text-base font-semibold text-foreground">Onboard Device</h2>
+    <h2 class="text-base font-semibold text-foreground">
+      {vault.t('onboard_device.title')}
+    </h2>
     <p class="text-xs text-muted-foreground text-pretty">
-      Generate a QR/link with provider access and a vault password entry for
-      another browser. The QR does not contain the password — share it
-      separately when onboarding.
+      {vault.t('onboard_device.desc')}
     </p>
   </div>
 
@@ -174,7 +178,7 @@
             id="onboard-provider-label"
             class="text-sm font-medium text-muted-foreground"
           >
-            Auth provider
+            {vault.t('onboard_device.auth_provider')}
           </p>
           {#if onOpenStorageSettings}
             <button
@@ -183,13 +187,13 @@
               data-testid="onboard-open-storage-settings"
               onclick={() => onOpenStorageSettings()}
             >
-              Add in Settings
+              {vault.t('onboard_device.add_in_settings')}
             </button>
           {/if}
         </div>
         {#if providers.length === 0}
           <p class="text-xs text-muted-foreground">
-            No providers saved.
+            {vault.t('onboard_device.no_providers')}
             {#if onOpenStorageSettings}
               <button
                 type="button"
@@ -197,7 +201,7 @@
                 data-testid="onboard-empty-providers-settings-link"
                 onclick={() => onOpenStorageSettings()}
               >
-                Add one in Settings
+                {vault.t('onboard_device.add_one_in_settings')}
               </button>
             {/if}
           </p>
@@ -240,13 +244,15 @@
                 {/if}
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2">
-                    <span class="truncate font-medium">{provider.label}</span>
+                    <span class="truncate font-medium"
+                      >{localizeProviderLabel(provider.label, vault.t)}</span
+                    >
                     {#if provider.id === activeProviderId}
                       <span
                         class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
                         data-testid="onboard-provider-active-{provider.id}"
                       >
-                        Active
+                        {vault.t('common.active')}
                       </span>
                     {/if}
                   </div>
@@ -256,7 +262,7 @@
                       : 'text-muted-foreground/80'}"
                     data-testid="onboard-provider-detail-{provider.id}"
                   >
-                    {providerStorageDetail(provider)}
+                    {providerStorageDetail(provider, vault.t)}
                   </div>
                 </div>
               </button>
@@ -271,7 +277,7 @@
             for="onboard-password-entry"
             class="text-sm font-medium text-muted-foreground"
           >
-            Vault password
+            {vault.t('onboard_device.vault_password')}
           </label>
           {#if onOpenPasswordSettings}
             <button
@@ -280,7 +286,7 @@
               data-testid="onboard-open-password-settings"
               onclick={() => onOpenPasswordSettings()}
             >
-              Add in Settings
+              {vault.t('onboard_device.add_in_settings')}
             </button>
           {/if}
         </div>
@@ -309,7 +315,7 @@
         for="onboard-password"
         class="text-sm font-medium text-muted-foreground"
       >
-        Confirm password
+        {vault.t('vault_passwords.confirm_password')}
       </label>
       <input
         id="onboard-password"
@@ -336,10 +342,10 @@
     >
       {#if isBusy}
         <RefreshCw class="size-4 animate-spin" />
-        Generating...
+        {vault.t('onboard_device.generating')}
       {:else}
         <QrCode class="size-4" />
-        Onboard Device
+        {vault.t('onboard_device.title')}
       {/if}
     </Button>
   </form>
@@ -349,7 +355,7 @@
       class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
       data-testid="onboard-missing-password-hint"
     >
-      Create a vault password before onboarding another device.
+      {vault.t('onboard_device.missing_password_hint')}
       {#if onOpenPasswordSettings}
         <button
           type="button"
@@ -357,7 +363,7 @@
           data-testid="onboard-missing-password-settings-link"
           onclick={() => onOpenPasswordSettings()}
         >
-          Open vault passwords in Settings
+          {vault.t('onboard_device.missing_password_settings_link')}
         </button>
       {/if}
     </p>
@@ -367,10 +373,12 @@
     <div class="space-y-3 rounded-lg border border-border bg-background p-3">
       <div class="flex items-start justify-between gap-3">
         <p class="text-xs text-muted-foreground text-pretty">
-          Scan this QR with the new device to open Nook, or copy the link.
+          {vault.t('onboard_device.ready_desc')}
           {#if issuedAt}
             <span class="ml-1 text-muted-foreground/80">
-              Issued {issuedAt.slice(0, 19).replace('T', ' ')} UTC.
+              {vault.t('onboard_device.issued_time', {
+                time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
+              })}
             </span>
           {/if}
         </p>
@@ -381,9 +389,9 @@
           data-testid="copy-onboard-link-btn"
         >
           {#if copied}
-            <Check class="size-3" /> Copied
+            <Check class="size-3" /> {vault.t('vault.copied')}
           {:else}
-            <Copy class="size-3" /> Copy
+            <Copy class="size-3" /> {vault.t('vault.copy')}
           {/if}
         </button>
       </div>

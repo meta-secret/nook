@@ -77,6 +77,21 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <div id="header-language-container">
+          <button
+            type="button"
+            class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-xs font-bold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 cursor-pointer"
+            aria-label="Toggle language"
+            title="Toggle language"
+            onclick={() => {
+              const nextLocale = vault.locale === 'en' ? 'ru' : 'en'
+              void vault.updateLocale(nextLocale)
+            }}
+          >
+            {vault.locale.toUpperCase()}
+          </button>
+        </div>
+
         <button
           type="button"
           class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
@@ -160,6 +175,7 @@
       <div class="space-y-4">
         <HelpPage onClose={() => vault.closeHelp()} />
         <VaultStatusBar
+          {vault}
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
@@ -182,6 +198,7 @@
         <div class="space-y-4 p-4 sm:p-5">
           {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
             <OnboardDevice
+              {vault}
               providers={vault.providers}
               activeProviderId={vault.activeProviderId}
               passwordEntries={vault.passwordEntries}
@@ -197,6 +214,7 @@
             />
           {:else if vault.settingsOpen}
             <VaultSettingsAccordion
+              {vault}
               bind:accordionSection={vault.settingsAccordionSection}
               providers={vault.providers}
               activeProviderId={vault.activeProviderId}
@@ -238,6 +256,7 @@
             />
           {:else}
             <PendingJoinsBanner
+              {vault}
               pendingJoins={vault.pendingJoins}
               isBusy={vault.isSaving || vault.isVerifying}
               onApproveJoin={(id) => vault.approveJoin(id)}
@@ -246,6 +265,7 @@
                 vault.openSettings('storage', 'devices')}
             />
             <SecretVault
+              {vault}
               isSaving={vault.isSaving}
               secrets={vault.secrets}
               onAddModeChange={(open) => {
@@ -274,6 +294,7 @@
           {/if}
         </div>
         <VaultStatusBar
+          {vault}
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
@@ -287,6 +308,7 @@
         />
         {#if !secretsAddOpen}
           <VaultBottomNav
+            {vault}
             settingsOpen={vault.settingsOpen}
             settingsSection={vault.settingsSection}
             onSelectSecrets={() => vault.closeSettings()}
@@ -298,6 +320,7 @@
     {:else if vault.providersLoaded}
       <div class="space-y-4">
         <LoginGate
+          {vault}
           providers={vault.providers}
           activeProviderId={vault.activeProviderId}
           loginFlowStep={vault.loginFlowStep}
@@ -329,6 +352,7 @@
           onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
         />
         <VaultStatusBar
+          {vault}
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
@@ -348,6 +372,7 @@
   </div>
 
   <JoinEnrollmentDialog
+    {vault}
     open={vault.joinEnrollmentPrompt !== 'none'}
     variant={vault.joinEnrollmentPrompt === 'pending'
       ? 'pending'

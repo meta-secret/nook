@@ -22,3 +22,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 ## 5. Pay Down Tech Debt Continuously
 * **Technical Debt is High-Interest**: Stale dependencies, unpinned versions, and deprecated configurations are treated as bugs. We pay down minor technical debt continuously in small increments rather than letting it compound into large, disruptive refactoring jobs.
+
+## 6. Maximize Reuse via Rust
+* **Rust-First Domain Assets**: Any assets or domain rules (including validation error messages and i18n localization dictionaries) must live in Rust (`nook-core`). Because we plan to build CLI tools and mobile clients in the future, implementing these features in Rust ensures that they can be easily shared across all platforms. Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
+

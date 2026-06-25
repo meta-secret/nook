@@ -3,13 +3,17 @@
   import { Button } from '$lib/components/ui/button'
   import type { JoinRequest } from '$lib/nook'
 
+  import type { VaultState } from '$lib/vault.svelte'
+
   let {
+    vault,
     pendingJoins,
     isBusy = false,
     onApproveJoin,
     onRefresh,
     onOpenDevicesSettings,
   }: {
+    vault: VaultState
     pendingJoins: JoinRequest[]
     isBusy?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
@@ -35,11 +39,13 @@
         >
           <UserPlus class="size-4 shrink-0 text-primary" />
           {pendingJoins.length === 1
-            ? '1 device wants to join'
-            : `${pendingJoins.length} devices want to join`}
+            ? vault.t('pending_joins.one_wants_join')
+            : vault.t('pending_joins.count_wants_join', {
+                count: String(pendingJoins.length),
+              })}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
-          Approve here or manage requests in Settings → Devices.
+          {vault.t('pending_joins.instructions')}
         </p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
@@ -52,7 +58,7 @@
             data-testid="open-devices-settings-btn"
             onclick={onOpenDevicesSettings}
           >
-            Devices
+            {vault.t('pending_joins.devices')}
           </Button>
         {/if}
         {#if onRefresh}
@@ -63,7 +69,7 @@
             class="border-border"
             disabled={isBusy}
             data-testid="refresh-joins-banner-btn"
-            aria-label="Refresh join requests"
+            aria-label={vault.t('pending_joins.refresh_aria')}
             onclick={() => void onRefresh()}
           >
             <RefreshCw class="size-3.5 {isBusy ? 'animate-spin' : ''}" />
@@ -94,7 +100,7 @@
             data-testid="approve-join-btn"
             onclick={() => void onApproveJoin(join.device_id)}
           >
-            Approve
+            {vault.t('settings.approve')}
           </Button>
         </li>
       {/each}

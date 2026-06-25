@@ -1,12 +1,19 @@
 <script lang="ts">
   import { Cloud, HardDrive } from '@lucide/svelte'
   import type { StorageProviderType } from '$lib/auth-providers'
+  import type { VaultState } from '$lib/vault.svelte'
 
-  let { onSelect }: { onSelect: (type: StorageProviderType) => void } = $props()
+  let {
+    vault,
+    onSelect,
+  }: {
+    vault: VaultState
+    onSelect: (type: StorageProviderType) => void
+  } = $props()
 </script>
 
 <fieldset class="space-y-2">
-  <legend class="sr-only">Choose a storage provider</legend>
+  <legend class="sr-only">{vault.t('provider_picker.choose_provider')}</legend>
   <ul class="space-y-1.5" data-testid="provider-picker-list">
     <li>
       <button
@@ -17,11 +24,11 @@
       >
         <HardDrive class="size-4 shrink-0 text-foreground" />
         <span class="min-w-0 flex-1">
-          <span class="block text-sm font-medium text-foreground"
-            >This device</span
+          <span class="block text-sm font-semibold text-foreground"
+            >{vault.t('provider_picker.this_device')}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            Encrypted vault in browser storage — no provider login
+            {vault.t('provider_picker.this_device_desc')}
           </span>
         </span>
       </button>
@@ -35,9 +42,11 @@
       >
         <Cloud class="size-4 shrink-0 text-foreground" />
         <span class="min-w-0 flex-1">
-          <span class="block text-sm font-medium text-foreground">GitHub</span>
+          <span class="block text-sm font-semibold text-foreground"
+            >{vault.t('provider_picker.github')}</span
+          >
           <span class="block truncate text-xs text-muted-foreground">
-            Sign in to GitHub — sync encrypted vault to your repo
+            {vault.t('provider_picker.github_desc')}
           </span>
         </span>
       </button>

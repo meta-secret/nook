@@ -12,6 +12,7 @@
     Check,
   } from '@lucide/svelte'
   import type { VaultItem } from '$lib/nook'
+  import type { VaultState } from '$lib/vault.svelte'
   import MarkdownContent from './MarkdownContent.svelte'
 
   let {
@@ -23,6 +24,7 @@
     onEditItem,
     onDeleteSecret,
     onCopyToClipboard,
+    vault,
   }: {
     item: VaultItem
     index: number
@@ -36,6 +38,7 @@
       id: string,
       field: string,
     ) => Promise<void>
+    vault: VaultState
   } = $props()
 </script>
 
@@ -52,13 +55,17 @@
         class="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
       >
         {#if item.type === 'login'}
-          <Globe class="size-3 text-primary/70" /> Login
+          <Globe class="size-3 text-primary/70" />
+          {vault.t('vault.types.login')}
         {:else if item.type === 'api-key'}
-          <Braces class="size-3 text-primary/70" /> API key
+          <Braces class="size-3 text-primary/70" />
+          {vault.t('vault.types.api_key')}
         {:else if item.type === 'seed-phrase'}
-          <Sprout class="size-3 text-primary/70" /> Seed phrase
+          <Sprout class="size-3 text-primary/70" />
+          {vault.t('vault.types.seed_phrase')}
         {:else}
-          <StickyNote class="size-3 text-primary/70" /> Secure note
+          <StickyNote class="size-3 text-primary/70" />
+          {vault.t('vault.types.secure_note')}
         {/if}
       </span>
       <div class="flex items-center gap-0.5">
@@ -96,12 +103,14 @@
     <div class="space-y-1.5">
       {#if item.type === 'login'}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Website</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.website_label')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
             <span class="truncate font-mono text-foreground"
-              >{item.websiteUrl || 'No website'}</span
+              >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
             >
             {#if item.websiteUrl}
               <button
@@ -120,12 +129,14 @@
         </div>
 
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Username</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.username')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
             <span class="truncate font-mono text-foreground"
-              >{item.username || 'No username'}</span
+              >{item.username || vault.t('vault.fields.no_username')}</span
             >
             {#if item.username}
               <button
@@ -144,7 +155,9 @@
         </div>
 
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Password</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.password')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
@@ -170,7 +183,9 @@
 
         {#if item.notes}
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
-            <span class="text-muted-foreground/70 font-medium pt-1">Notes</span>
+            <span class="text-muted-foreground/70 font-medium pt-1"
+              >{vault.t('vault.fields.notes')}</span
+            >
             <div
               class="text-muted-foreground whitespace-pre-wrap font-sans bg-muted/10 rounded-md px-2.5 py-1.5 text-[11px] leading-relaxed border border-border/20"
             >
@@ -180,12 +195,14 @@
         {/if}
       {:else if item.type === 'api-key'}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Website</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.website_label')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
             <span class="truncate font-mono text-foreground"
-              >{item.websiteUrl || 'No website'}</span
+              >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
             >
             {#if item.websiteUrl}
               <button
@@ -204,7 +221,9 @@
         </div>
 
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Key</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.key')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
@@ -230,7 +249,9 @@
 
         {#if item.expiresAt}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-            <span class="text-muted-foreground/70 font-medium">Expires</span>
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t('vault.fields.expires')}</span
+            >
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
@@ -253,12 +274,14 @@
         {/if}
       {:else if item.type === 'seed-phrase'}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Account</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.account')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
             <span class="truncate font-mono text-foreground"
-              >{item.name || 'No account name'}</span
+              >{item.name || vault.t('vault.fields.no_account_name')}</span
             >
             {#if item.name}
               <button
@@ -277,7 +300,9 @@
         </div>
 
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Seed phrase</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.types.seed_phrase')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
@@ -302,12 +327,14 @@
         </div>
       {:else}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium">Title</span>
+          <span class="text-muted-foreground/70 font-medium"
+            >{vault.t('vault.fields.title')}</span
+          >
           <div
             class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
           >
             <span class="truncate text-foreground"
-              >{item.title || 'No title'}</span
+              >{item.title || vault.t('vault.fields.no_title')}</span
             >
             {#if item.title}
               <button
@@ -326,7 +353,9 @@
         </div>
 
         <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium pt-1">Note</span>
+          <span class="text-muted-foreground/70 font-medium pt-1"
+            >{vault.t('vault.fields.note')}</span
+          >
           <div
             class="flex items-start justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2.5 py-1.5 transition-colors border border-border/20"
           >

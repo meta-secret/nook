@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { CheckCircle2, Laptop, Lock, ShieldCheck } from '@lucide/svelte'
+  import {
+    CheckCircle2,
+    Laptop,
+    Lock,
+    ShieldCheck,
+    Globe,
+  } from '@lucide/svelte'
+  import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
@@ -12,6 +19,7 @@
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
+    vault,
     providers,
     activeProviderId,
     isAuthenticated,
@@ -49,9 +57,10 @@
     onRenameDevice,
     onRevokeDevice,
     accordionSection = $bindable(
-      'storage' as 'storage' | 'passwords' | 'devices',
+      'storage' as 'storage' | 'passwords' | 'devices' | 'language',
     ),
   }: {
+    vault: VaultState
     providers: StorageProvider[]
     activeProviderId: string | null
     isAuthenticated: boolean
@@ -91,7 +100,7 @@
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
-    accordionSection?: 'storage' | 'passwords' | 'devices'
+    accordionSection?: 'storage' | 'passwords' | 'devices' | 'language'
   } = $props()
 
   const hasPasswords = $derived(passwordEntries.length > 0)
@@ -100,8 +109,8 @@
 
 <div class="space-y-2" data-testid="storage-settings-panel">
   <SettingsAccordionSection
-    title="Storage providers"
-    subtitle="Where your vault file lives"
+    title={vault.t('settings.storage')}
+    subtitle={vault.t('settings.storage_desc')}
     open={accordionSection === 'storage'}
     testId="storage-providers-section"
     onToggle={() => {
@@ -115,11 +124,12 @@
           data-testid="connected-badge"
         >
           <CheckCircle2 class="size-3" />
-          Connected
+          {vault.t('common.active')}
         </span>
       {/if}
     {/snippet}
     <AuthStorage
+      {vault}
       embedded
       {providers}
       {activeProviderId}
@@ -143,8 +153,8 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title="Devices"
-    subtitle="Enrolled browsers and pending access requests"
+    title={vault.t('settings.devices')}
+    subtitle={vault.t('settings.devices_desc')}
     open={accordionSection === 'devices'}
     testId="vault-devices-section"
     onToggle={() => {
@@ -159,11 +169,15 @@
         data-testid="vault-devices-status"
       >
         <Laptop class="size-3" />
-        {vaultMembers.length}
-        {vaultMembers.length === 1 ? 'device' : 'devices'}
+        {vaultMembers.length === 1
+          ? vault.t('settings.device_count_singular')
+          : vault.t('settings.device_count_plural', {
+              count: String(vaultMembers.length),
+            })}
       </span>
     {/snippet}
     <VaultDevicesCard
+      {vault}
       {deviceId}
       {devicePublicKey}
       {pendingJoins}
@@ -178,8 +192,8 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title="Vault passwords"
-    subtitle="Passwords available for unlock and device onboarding"
+    title={vault.t('settings.passwords')}
+    subtitle={vault.t('settings.passwords_desc')}
     open={accordionSection === 'passwords'}
     testId="vault-unlock-section"
     onToggle={() => {
@@ -195,15 +209,19 @@
       >
         {#if hasPasswords}
           <ShieldCheck class="size-3" />
-          {passwordEntries.length}
-          {passwordEntries.length === 1 ? 'password' : 'passwords'}
+          {passwordEntries.length === 1
+            ? vault.t('settings.password_count_singular')
+            : vault.t('settings.password_count_plural', {
+                count: String(passwordEntries.length),
+              })}
         {:else}
           <Lock class="size-3" />
-          None
+          {vault.t('settings.no_passwords')}
         {/if}
       </span>
     {/snippet}
     <VaultPasswordCard
+      {vault}
       embedded
       {passwordEntries}
       isBusy={isPasswordBusy}
@@ -216,5 +234,42 @@
       {onClearCode}
       allowIssueCode={false}
     />
+  </SettingsAccordionSection>
+
+  <SettingsAccordionSection
+    title={vault.t('settings.language')}
+    subtitle={vault.t('settings.select_language')}
+    open={accordionSection === 'language'}
+    testId="vault-language-section"
+    onToggle={() => {
+      accordionSection = 'language'
+    }}
+  >
+    {#snippet badge()}
+      <span
+        class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
+      >
+        <Globe class="size-3" />
+        {vault.locale === 'en' ? 'English' : 'Русский'}
+      </span>
+    {/snippet}
+    <div class="p-4 space-y-3">
+      <label
+        for="language-select"
+        class="block text-sm font-medium text-muted-foreground"
+      >
+        {vault.t('settings.select_language')}
+      </label>
+      <select
+        id="language-select"
+        class="w-full max-w-xs rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:border-primary focus:ring-1 focus:ring-primary"
+        value={vault.locale}
+        onchange={(e) =>
+          vault.updateLocale(e.currentTarget.value as 'en' | 'ru')}
+      >
+        <option value="en">English</option>
+        <option value="ru">Русский</option>
+      </select>
+    </div>
   </SettingsAccordionSection>
 </div>

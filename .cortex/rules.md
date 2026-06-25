@@ -11,6 +11,7 @@ This document defines the strict development standards, architectural boundaries
   - Must remain 100% pure Rust.
   - Must not depend on `wasm-bindgen`, `js-sys`, `web-sys`, or any browser Web APIs.
   - Must be fully compilable and testable on native desktop/server targets.
+  - **Rust-First for Reuse (including i18n):** Keep as much domain logic, validation rules, and resources (like localization catalogs) in Rust (`nook-core`). This guarantees that future platforms—like a CLI tool or mobile apps—can easily reuse this code, which would not be possible if implemented in TypeScript.
 - **`nook-wasm` Bridge Responsibilities:**
   - Exposes Rust structs to JS via `#[wasm_bindgen]`.
   - Performs network/database input/output operations (e.g., IndexedDB, GitHub API).
