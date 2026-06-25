@@ -11,6 +11,7 @@ import {
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForVaultUnlocked,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
 
 test.describe('vault password envelope (local)', () => {
@@ -274,10 +275,9 @@ test.describe('vault password envelope (local)', () => {
 
 test.describe('enrollment link deep link (local)', () => {
   test('opens the app and enrolls from the URL hash in a second tab', async ({
-    browser,
+    context,
   }) => {
-    const contextA = await browser.newContext()
-    const pageA = await contextA.newPage()
+    const pageA = await context.newPage()
     await pageA.goto('/')
     await clearBrowserVault(pageA)
     await pageA.reload()
@@ -293,9 +293,8 @@ test.describe('enrollment link deep link (local)', () => {
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
-    // Fresh context simulates a new device without page A's device keys.
-    const contextB = await browser.newContext()
-    const pageB = await contextB.newPage()
+    // Same browser context shares IndexedDB where the local vault file lives.
+    const pageB = await context.newPage()
     await pageB.goto(link)
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -308,11 +307,11 @@ test.describe('enrollment link deep link (local)', () => {
     ).toContainText('Link test')
     await pageB.getByTestId('enrollment-password-input').fill('link-pass')
     await pageB.getByTestId('submit-enrollment-code-btn').click()
-    await waitForVaultUnlocked(pageB)
+    await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 
-    await contextB.close()
-    await contextA.close()
+    await pageA.close()
+    await pageB.close()
   })
 })

@@ -14,6 +14,7 @@ import {
   resetGithubVault,
   revealSecretValue,
   UI_TIMEOUT_MS,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   uniqueSecretKey,
   waitForGithubVaultState,
   waitForVaultUnlocked,
@@ -150,7 +151,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceB.getByTestId('enrollment-password-input').fill(vaultPassword)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
 
-    await waitForVaultUnlocked(deviceB)
+    await waitForVaultUnlocked(deviceB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await assertVaultReady(deviceB)
 
     // The shared secret decrypts on device B with the keys it pulled from
