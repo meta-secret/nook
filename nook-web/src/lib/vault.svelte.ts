@@ -37,6 +37,9 @@ import {
 } from '$lib/auth-providers'
 
 export class VaultState {
+  locale = $state<'en' | 'ru'>('en')
+  translations = $state<Record<string, unknown>>({})
+
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard'>('storage')
   settingsAccordionSection = $state<'storage' | 'passwords' | 'devices'>(
@@ -188,6 +191,32 @@ export class VaultState {
     return this.activeProvider?.label ?? providerDefaultLabel(this.storageMode)
   }
 
+  async updateLocale(newLocale: 'en' | 'ru') {
+    this.locale = newLocale
+    localStorage.setItem('nook_locale', newLocale)
+    try {
+      const wasm = await import('./nook-wasm/nook_wasm.js')
+      const jsonStr = wasm.get_translation_catalog(newLocale)
+      this.translations = JSON.parse(jsonStr)
+    } catch (e) {
+      console.error('Failed to load translations from WebAssembly:', e)
+    }
+  }
+
+  t = (key: string, replacements?: Record<string, string>): string => {
+    const val = getKeyValue(this.translations, key)
+    if (val === undefined) {
+      return key
+    }
+    let text = String(val)
+    if (replacements) {
+      for (const [k, v] of Object.entries(replacements)) {
+        text = text.replace(`{${k}}`, v)
+      }
+    }
+    return text
+  }
+
   async init() {
     if (this.initPromise) {
       return this.initPromise
@@ -202,6 +231,16 @@ export class VaultState {
       this.errorMsg = ''
     }
     try {
+      const savedLocale = localStorage.getItem('nook_locale') as
+        | 'en'
+        | 'ru'
+        | null
+      const systemLocale =
+        typeof navigator !== 'undefined' && navigator.language.startsWith('ru')
+          ? 'ru'
+          : 'en'
+      await this.updateLocale(savedLocale || systemLocale)
+
       await this.loadProviders()
       this.applyActiveProviderCredentials()
       this.manager = await getVaultManager()
@@ -1390,4 +1429,14 @@ export class VaultState {
       this.isSaving = false
     }
   }
+}
+
+function getKeyValue(obj: unknown, path: string): unknown {
+  if (!obj || typeof obj !== 'object') return undefined
+  return path.split('.').reduce<unknown>((acc, part) => {
+    if (acc && typeof acc === 'object') {
+      return (acc as Record<string, unknown>)[part]
+    }
+    return undefined
+  }, obj)
 }

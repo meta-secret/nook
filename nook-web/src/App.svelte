@@ -197,6 +197,7 @@
             />
           {:else if vault.settingsOpen}
             <VaultSettingsAccordion
+              {vault}
               bind:accordionSection={vault.settingsAccordionSection}
               providers={vault.providers}
               activeProviderId={vault.activeProviderId}
@@ -246,6 +247,7 @@
                 vault.openSettings('storage', 'devices')}
             />
             <SecretVault
+              {vault}
               isSaving={vault.isSaving}
               secrets={vault.secrets}
               onAddModeChange={(open) => {
@@ -298,6 +300,7 @@
     {:else if vault.providersLoaded}
       <div class="space-y-4">
         <LoginGate
+          {vault}
           providers={vault.providers}
           activeProviderId={vault.activeProviderId}
           loginFlowStep={vault.loginFlowStep}

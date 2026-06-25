@@ -8,6 +8,7 @@
     Sprout,
     StickyNote,
   } from '@lucide/svelte'
+  import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
@@ -20,6 +21,7 @@
   } from '$lib/nook'
 
   let {
+    vault,
     isSaving,
     secrets = [] as SecretRecord[],
     onAddSecret,
@@ -28,6 +30,7 @@
     onGeneratePassword,
     onAddModeChange,
   }: {
+    vault: VaultState
     isSaving: boolean
     secrets?: SecretRecord[]
     onAddSecret: (
@@ -55,6 +58,7 @@
   let revealSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | null>(null)
   let addSecretOpen = $state(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let editItem = $state<VaultItem | null>(null)
 
   const items = $derived(secrets.map(parseVaultItem))
@@ -141,6 +145,7 @@
     onAddModeChange?.(true)
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function closeEditItem() {
     editItem = null
     onAddModeChange?.(false)
@@ -173,11 +178,12 @@
           onclick={closeAddSecret}
         >
           <ArrowLeft class="size-4" />
-          Vault
+          {vault.t('common.back')}
         </button>
         <div class="min-w-0">
-          <h2 class="text-base font-semibold text-foreground">Add item</h2>
-          <p class="text-xs text-muted-foreground">Save a new secret</p>
+          <h2 class="text-base font-semibold text-foreground">
+            {vault.t('vault.add_secret')}
+          </h2>
         </div>
       </div>
 
@@ -189,36 +195,6 @@
         onCancel={closeAddSecret}
       />
     </div>
-  {:else if editItem}
-    <div
-      class="animate-in fade-in slide-in-from-right-2 duration-200"
-      data-testid="edit-secret-panel"
-    >
-      <div class="mb-5 flex items-center gap-3">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-background/70 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background"
-          data-testid="edit-secret-back-btn"
-          onclick={closeEditItem}
-        >
-          <ArrowLeft class="size-4" />
-          Vault
-        </button>
-        <div class="min-w-0">
-          <h2 class="text-base font-semibold text-foreground">Edit item</h2>
-          <p class="text-xs text-muted-foreground">Update this secret</p>
-        </div>
-      </div>
-
-      <AddSecretForm
-        {isSaving}
-        {onAddSecret}
-        {onReplaceSecret}
-        {onGeneratePassword}
-        initialItem={editItem}
-        onCancel={closeEditItem}
-      />
-    </div>
   {:else}
     <div class="space-y-4">
       <div
@@ -227,7 +203,9 @@
         <div>
           <p class="text-sm font-semibold text-foreground">
             {visibleItemCount}
-            {visibleItemCount === 1 ? 'item' : 'items'}
+            {visibleItemCount === 1
+              ? vault.t('common.item')
+              : vault.t('common.items')}
             {#if searchPattern.trim() && visibleItemCount !== items.length}
               <span class="text-muted-foreground"> of {items.length}</span>
             {/if}
@@ -242,7 +220,7 @@
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
-            Add item
+            {vault.t('vault.add_secret')}
           </Button>
         </div>
       </div>
@@ -253,7 +231,7 @@
           type="search"
           bind:value={searchPattern}
           data-testid="search-secrets"
-          placeholder="Search vault…"
+          placeholder={vault.t('vault.search_placeholder')}
           class="flex h-10 w-full rounded-lg border border-border/45 bg-background/80 py-2 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
@@ -266,13 +244,8 @@
           >
             <p>
               {items.length === 0
-                ? 'Your vault is empty.'
-                : 'No items matched.'}
-            </p>
-            <p class="text-xs">
-              {items.length === 0
-                ? 'Add a login, API key, seed phrase, or secure note to get started.'
-                : 'Try a different search term.'}
+                ? vault.t('vault.no_secrets')
+                : vault.t('vault.no_secrets')}
             </p>
           </CardContent>
         </Card>
@@ -301,7 +274,10 @@
                   <span
                     class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                   >
-                    {group.items.length} items
+                    {group.items.length}
+                    {group.items.length === 1
+                      ? vault.t('common.item')
+                      : vault.t('common.items')}
                   </span>
                 {/if}
               </div>

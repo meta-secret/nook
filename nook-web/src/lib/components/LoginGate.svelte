@@ -1,5 +1,6 @@
 <script lang="ts">
   import { RefreshCw, ShieldCheck, ChevronLeft } from '@lucide/svelte'
+  import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     StorageProvider,
@@ -26,6 +27,7 @@
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
+    vault,
     providers,
     activeProviderId,
     setupType = $bindable(null as StorageProviderType | null),
@@ -54,6 +56,7 @@
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
   }: {
+    vault: VaultState
     providers: StorageProvider[]
     activeProviderId: string | null
     loginFlowStep?: 'connection' | 'authorization'
@@ -172,7 +175,7 @@
               onclick={() => onCancelAddProvider?.()}
             >
               <ChevronLeft class="size-3.5" />
-              Back to saved providers
+              {vault.t('onboarding.back_to_saved')}
             </button>
           {/if}
 
@@ -180,41 +183,49 @@
             class="text-lg font-semibold tracking-tight text-foreground"
           >
             {#if showWizard}
-              Unlock your vault
+              {vault.t('login.unlock_vault')}
             {:else if showSetup}
-              Connect to {setupType === 'github' ? 'GitHub' : 'this device'}
+              {vault.t('onboarding.connect_to', {
+                provider:
+                  setupType === 'github'
+                    ? 'GitHub'
+                    : vault.t('onboarding.local_storage'),
+              })}
             {:else if !hasProviders}
-              Set up storage
+              {vault.t('onboarding.setup_storage')}
             {:else if addProviderOpen}
-              Add storage provider
+              {vault.t('onboarding.add_provider')}
             {:else}
-              Set up storage
+              {vault.t('onboarding.setup_storage')}
             {/if}
           </CardTitle>
           {#if isUnlocking}
-            <CardDescription class="text-pretty">Unlocking…</CardDescription>
+            <CardDescription class="text-pretty"
+              >{vault.t('login.unlocking')}</CardDescription
+            >
           {:else if isConnecting}
-            <CardDescription class="text-pretty">Connecting…</CardDescription>
+            <CardDescription class="text-pretty"
+              >{vault.t('common.connecting')}</CardDescription
+            >
           {:else if showWizard}
             <CardDescription class="text-pretty">
-              Connect to storage, then get access.
+              {vault.t('login.connect_prompt')}
             </CardDescription>
           {:else if showSetup && setupType === 'github'}
             <CardDescription class="text-pretty">
-              Sign in with a personal access token — plaintext secrets never
-              leave this browser.
+              {vault.t('onboarding.github_description')}
             </CardDescription>
           {:else if showSetup}
             <CardDescription class="text-pretty">
-              Encrypted vault stays in browser storage on this device.
+              {vault.t('onboarding.local_description')}
             </CardDescription>
           {:else if !hasProviders}
             <CardDescription class="text-pretty">
-              Add a provider first — then you can connect and unlock.
+              {vault.t('onboarding.intro_description')}
             </CardDescription>
           {:else if addProviderOpen}
             <CardDescription class="text-pretty">
-              Another encrypted vault file on a different provider.
+              {vault.t('onboarding.another_provider')}
             </CardDescription>
           {/if}
         </div>
@@ -266,13 +277,13 @@
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />
-                  Loading engine…
+                  {vault.t('onboarding.loading_engine')}
                 {:else if isVerifying}
                   <RefreshCw class="size-4 animate-spin" />
-                  Connecting…
+                  {vault.t('common.connecting')}
                 {:else}
                   <ShieldCheck class="size-4" />
-                  Connect
+                  {vault.t('common.connect')}
                 {/if}
               </Button>
             </div>

@@ -5,6 +5,7 @@
 )]
 
 mod database;
+mod i18n;
 mod multi_device;
 mod password;
 mod password_envelope;
@@ -15,6 +16,7 @@ mod vault_crypto;
 mod vault_format;
 
 pub use database::Database;
+pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredSecretRecord,

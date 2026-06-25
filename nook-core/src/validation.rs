@@ -32,7 +32,7 @@ impl StorageMode {
         match value {
             "local" => Ok(Self::Local),
             "github" => Ok(Self::Github),
-            other => Err(format!("Unknown storage mode: {other}")),
+            other => Err(format!("errors.validation.unknown_storage_mode:{}", other)),
         }
     }
 }
@@ -59,7 +59,7 @@ pub fn validate_storage_mode(mode: &str) -> Result<(), String> {
 pub fn validate_github_pat(pat: &str) -> Result<String, String> {
     let trimmed = pat.trim();
     if trimmed.is_empty() {
-        return Err("Enter a GitHub personal access token to connect.".to_owned());
+        return Err("errors.validation.github_pat_empty".to_owned());
     }
     Ok(trimmed.to_owned())
 }
@@ -72,19 +72,16 @@ pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
         name.trim().to_owned()
     };
     if repo.len() > 100 {
-        return Err("GitHub repository name must be 100 characters or fewer.".to_owned());
+        return Err("errors.validation.github_repo_length".to_owned());
     }
     if repo == "." || repo == ".." {
-        return Err("Invalid GitHub repository name.".to_owned());
+        return Err("errors.validation.github_repo_invalid".to_owned());
     }
     if !repo
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
     {
-        return Err(
-            "Repository name may only contain letters, numbers, dots, hyphens, and underscores."
-                .to_owned(),
-        );
+        return Err("errors.validation.github_repo_chars".to_owned());
     }
     Ok(repo)
 }
@@ -104,17 +101,17 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
 pub fn validate_secret_id(id: &str) -> Result<String, String> {
     let trimmed = id.trim();
     if trimmed.is_empty() {
-        return Err("Secret id is required.".to_owned());
+        return Err("errors.validation.secret_id_required".to_owned());
     }
     if is_device_id(trimmed) || is_auth_id(trimmed) {
-        return Err("Secret id cannot use a reserved device id.".to_owned());
+        return Err("errors.validation.secret_id_reserved".to_owned());
     }
     Ok(trimmed.to_owned())
 }
 
 pub fn validate_secret_data(data: &str) -> Result<(), String> {
     if data.is_empty() {
-        return Err("Secret data is required.".to_owned());
+        return Err("errors.validation.secret_data_required".to_owned());
     }
     Ok(())
 }
