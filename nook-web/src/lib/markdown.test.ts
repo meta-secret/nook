@@ -41,10 +41,10 @@ describe('renderMarkdown', () => {
   test('renders task lists with checkbox inputs', () => {
     const html = renderMarkdown('- [ ] todo list item\n- [x] done list item')
     expect(html).toMatch(
-      /<input(?=[^>]*type="checkbox")(?=[^>]*disabled="")[^>]*>/,
+      /<input(?=[^>]*type="checkbox")(?=[^>]*disabled(?:=""|[ />]))[^>]*>/,
     )
     expect(html).toMatch(
-      /<input(?=[^>]*type="checkbox")(?=[^>]*checked="")(?=[^>]*disabled="")[^>]*>/,
+      /<input(?=[^>]*type="checkbox")(?=[^>]*checked(?:=""|[ />]))(?=[^>]*disabled(?:=""|[ />]))[^>]*>/,
     )
     expect(html).toContain('todo list item')
     expect(html).toContain('done list item')
