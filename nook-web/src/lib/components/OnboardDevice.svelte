@@ -12,7 +12,7 @@
   import { Button } from '$lib/components/ui/button'
   import {
     buildEnrollmentLink,
-    decodeEnrollmentPayload,
+    peekEnrollmentIssuedAt,
   } from '$lib/enrollment-code'
   import {
     providerStorageDetail,
@@ -60,11 +60,7 @@
   )
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
-    try {
-      return decodeEnrollmentPayload(enrollmentCode).issued_at
-    } catch {
-      return ''
-    }
+    return peekEnrollmentIssuedAt(enrollmentCode) ?? ''
   })
 
   $effect(() => {
@@ -155,7 +151,8 @@
     <h2 class="text-base font-semibold text-foreground">Onboard Device</h2>
     <p class="text-xs text-muted-foreground text-pretty">
       Generate a QR/link with provider access and a vault password for another
-      browser.
+      browser. The QR is encrypted with the vault password — share that password
+      separately when onboarding.
     </p>
   </div>
 
