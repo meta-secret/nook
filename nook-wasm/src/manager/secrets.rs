@@ -88,6 +88,43 @@ impl NookVaultManager {
         Ok(self.get_records_as_array()?)
     }
 
+    // Replace a secret (new id + payload, single save)
+    pub async fn replace_secret(
+        &mut self,
+        old_id: String,
+        new_id: String,
+        secret_type: String,
+        data: String,
+    ) -> Result<js_sys::Array, JsError> {
+        let _ = self.status_tx.send("REPLACE_SECRET_START".to_owned());
+        let secret_type =
+            nook_core::SecretType::parse(&secret_type).map_err(NookError::Database)?;
+        let crypto = self
+            .crypto
+            .as_ref()
+            .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
+        let mut db =
+            nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
+        nook_core::replace_secret(
+            &mut db,
+            &mut self.stored_armored,
+            &mut self.secret_types,
+            crypto,
+            &nook_core::ReplaceSecretInput {
+                old_id: &old_id,
+                new_id: &new_id,
+                secret_type,
+                data_yaml: &data,
+            },
+        )
+        .map_err(NookError::Database)?;
+        self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
+
+        self.save_current_db().await?;
+        let _ = self.status_tx.send("READY".to_owned());
+        Ok(self.get_records_as_array()?)
+    }
+
     // Delete a secret
     pub async fn delete_secret(&mut self, id: String) -> Result<js_sys::Array, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
