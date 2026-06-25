@@ -528,17 +528,23 @@ export async function connectLoginProvider(page: Page) {
   if (await authorizationStep.isVisible()) {
     return
   }
+  const connectButton = page.getByTestId('login-connect-provider-btn')
   const savedList = page.getByTestId('saved-providers-list')
   if (await savedList.isVisible()) {
-    const provider = page
-      .getByTestId('saved-provider-local')
-      .or(page.getByTestId('saved-provider-github'))
-      .first()
-    if (await provider.isVisible()) {
+    const connectReady = await connectButton
+      .isEnabled({ timeout: UI_TIMEOUT_MS })
+      .catch(() => false)
+    if (!connectReady) {
+      const provider = page
+        .getByTestId('saved-provider-local')
+        .or(page.getByTestId('saved-provider-github'))
+        .first()
+      await expect(provider).toBeVisible({ timeout: UI_TIMEOUT_MS })
       await provider.click()
+      await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
     }
   }
-  await page.getByTestId('login-connect-provider-btn').click()
+  await connectButton.click()
   await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
