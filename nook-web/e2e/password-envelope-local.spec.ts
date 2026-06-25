@@ -292,7 +292,7 @@ test.describe('enrollment link deep link (local)', () => {
 
     const pageB = await context.newPage()
     await pageB.goto(link)
-    await expect(pageB.getByTestId('login-enrollment-panel')).toBeVisible({
+    await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
     await pageB.getByTestId('enrollment-password-input').fill('link-pass')
