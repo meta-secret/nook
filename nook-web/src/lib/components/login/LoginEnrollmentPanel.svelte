@@ -80,8 +80,8 @@
     >
       <p class="text-xs text-muted-foreground text-pretty">
         Scan a QR code or paste an enrollment link from a device that is already
-        unlocked. The QR is encrypted with the vault password — share that
-        password separately.
+        unlocked. The QR carries provider access and a vault password entry id —
+        enter the password on this device to finish onboarding.
       </p>
 
       {#if !enrollmentCodeFormOpen}
@@ -115,7 +115,7 @@
                 Paste enrollment link or code
               </h3>
               <p class="text-xs text-muted-foreground text-pretty">
-                Enter the same vault password used when the QR was generated.
+                Enter the vault password for the entry referenced in the QR.
               </p>
             </div>
             <button
@@ -147,7 +147,7 @@
               id="enrollment-password-input"
               type="password"
               class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Password that encrypted this QR"
+              placeholder="Vault password for this onboarding QR"
               bind:value={enrollmentPasswordInput}
               autocomplete="current-password"
               data-testid="enrollment-password-input"

@@ -187,9 +187,14 @@
               onIssueCode={(entryId, pw, providerId) =>
                 vault.issueEnrollmentCode(entryId, pw, providerId)}
               onClearCode={() => vault.clearEnrollmentCode()}
+              onOpenStorageSettings={() =>
+                vault.openSettings('storage', 'storage')}
+              onOpenPasswordSettings={() =>
+                vault.openSettings('storage', 'passwords')}
             />
           {:else if vault.settingsOpen}
             <VaultSettingsAccordion
+              bind:accordionSection={vault.settingsAccordionSection}
               providers={vault.providers}
               activeProviderId={vault.activeProviderId}
               isAuthenticated={vault.isAuthenticated}

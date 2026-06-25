@@ -11,10 +11,14 @@
 
   let {
     code,
+    passwordEntryId = null,
+    passwordEntryLabel = null,
     isVerifying,
     onSubmit,
   }: {
     code: string
+    passwordEntryId?: string | null
+    passwordEntryLabel?: string | null
     isVerifying: boolean
     onSubmit: (password: string) => void | Promise<void>
   } = $props()
@@ -56,6 +60,21 @@
         void onSubmit(passwordInput)
       }}
     >
+      {#if passwordEntryLabel || passwordEntryId}
+        <p
+          class="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+          data-testid="enrollment-password-entry-hint"
+        >
+          Vault password
+          {#if passwordEntryLabel}
+            <span class="font-medium text-foreground">{passwordEntryLabel}</span
+            >
+          {:else if passwordEntryId}
+            <span class="font-mono text-foreground">{passwordEntryId}</span>
+          {/if}
+        </p>
+      {/if}
+
       <div class="space-y-1.5">
         <label
           for="enrollment-scan-password"
@@ -69,14 +88,14 @@
           bind:this={passwordField}
           type="password"
           class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Password from the device that showed the QR"
+          placeholder="Password for the vault entry shown in the QR"
           bind:value={passwordInput}
           autocomplete="current-password"
           data-testid="enrollment-password-input"
         />
         <p class="text-xs text-muted-foreground text-pretty">
-          The same password used when the QR was generated. Provider credentials
-          are applied automatically after decrypt.
+          The password is not stored in the QR. Provider credentials are applied
+          automatically after you enter it.
         </p>
       </div>
 
