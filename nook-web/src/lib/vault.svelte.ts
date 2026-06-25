@@ -213,7 +213,8 @@ export class VaultState {
       this.isInitializing = false
     }
 
-    const autoUnlock = this.shouldAutoUnlock()
+    const hasPendingEnrollment = Boolean(this.pendingEnrollmentFromUrl)
+    const autoUnlock = !hasPendingEnrollment && this.shouldAutoUnlock()
     if (autoUnlock) {
       await this.loadDb()
       if (!this.isAuthenticated && this.activeProvider) {

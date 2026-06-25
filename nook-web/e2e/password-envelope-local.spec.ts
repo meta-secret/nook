@@ -274,9 +274,10 @@ test.describe('vault password envelope (local)', () => {
 
 test.describe('enrollment link deep link (local)', () => {
   test('opens the app and enrolls from the URL hash in a second tab', async ({
-    context,
+    browser,
   }) => {
-    const pageA = await context.newPage()
+    const contextA = await browser.newContext()
+    const pageA = await contextA.newPage()
     await pageA.goto('/')
     await clearBrowserVault(pageA)
     await pageA.reload()
@@ -292,8 +293,13 @@ test.describe('enrollment link deep link (local)', () => {
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
-    const pageB = await context.newPage()
+    // Fresh context simulates a new device without page A's device keys.
+    const contextB = await browser.newContext()
+    const pageB = await contextB.newPage()
     await pageB.goto(link)
+    await expect(pageB.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -306,7 +312,7 @@ test.describe('enrollment link deep link (local)', () => {
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 
-    await pageA.close()
-    await pageB.close()
+    await contextB.close()
+    await contextA.close()
   })
 })
