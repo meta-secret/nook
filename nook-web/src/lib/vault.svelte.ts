@@ -196,6 +196,7 @@ export class VaultState {
     localStorage.setItem('nook_locale', newLocale)
     try {
       const wasm = await import('./nook-wasm/nook_wasm.js')
+      await wasm.default()
       const jsonStr = wasm.get_translation_catalog(newLocale)
       this.translations = JSON.parse(jsonStr)
     } catch (e) {

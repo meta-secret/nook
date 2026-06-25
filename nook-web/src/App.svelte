@@ -77,6 +77,19 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <select
+          id="header-language-select"
+          class="h-10 rounded-lg border border-border/40 bg-background/60 px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 focus:outline-hidden cursor-pointer"
+          value={vault.locale}
+          aria-label="Select language"
+          title="Select language"
+          onchange={(e) =>
+            vault.updateLocale(e.currentTarget.value as 'en' | 'ru')}
+        >
+          <option value="en">EN</option>
+          <option value="ru">RU</option>
+        </select>
+
         <button
           type="button"
           class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
