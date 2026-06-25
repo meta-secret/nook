@@ -55,7 +55,7 @@ Both keys are generated together on genesis (`generate_vault_keys()`).
 | `secrets:` | `key` + `value` | User passwords (`value` encrypted with `secrets_key`) |
 | `auth:` | `pk_id` + `secrets_key` + `members_key` | Per-device age envelopes |
 | `joins:` | `key` + `value` | Pending join (`key` = device_id) |
-| `members:` | `pk_id` + `ciphertext` | One row per member; `members_key`-encrypted `{pk_id, pk}` |
+| `members:` | `pk_id` + `ciphertext` | One row per member; `members_key`-encrypted `{pk_id, pk, label?, enrolled_at?}` |
 
 ### Example
 
@@ -83,7 +83,7 @@ members:
 - pk_id: 7f3a9c2e1b8d4f6a...
   ciphertext: |
     -----BEGIN AGE ENCRYPTED FILE-----
-    # plaintext JSON: {"pk_id":"7f3a...","pk":"age1..."}
+    # plaintext JSON: {"pk_id":"7f3a...","pk":"age1...","label":"Work laptop","enrolled_at":"2026-06-21T12:00:00Z"}
     -----END AGE ENCRYPTED FILE-----
 ```
 
@@ -107,6 +107,24 @@ The approver encrypts **both** `secrets_key` and `members_key` to the joiner's p
 
 Each `members:` row is one member, encrypted with the shared `members_key`. Any enrolled device can decrypt all rows after unwrapping `members_key` from its auth row.
 
+### 4.5 Device labels and revocation
+
+Member rows may include an optional user-facing `label`. Labels are encrypted inside
+the `members:` row, not stored in plaintext. Any enrolled device can rename any
+member because all enrolled devices can unwrap `members_key`.
+
+Revoking a member removes both:
+
+- the member's `auth:` envelope, so that device can no longer unwrap
+  `secrets_key` / `members_key`
+- the matching encrypted `members:` roster row
+
+Revoking the last enrolled device is blocked with: **Add another device or a
+vault password before removing this one.** Revoking the current browser is
+allowed only when at least one other enrolled device remains; after the write
+succeeds, the current browser locks and must be re-enrolled or unlocked by
+another valid path.
+
 ---
 
 ## 5. Core API (`multi_device.rs`)
@@ -117,6 +135,9 @@ Each `members:` row is one member, encrypted with the shared `members_key`. Any 
 | `resolve_secrets_key()` / `resolve_members_key()` | Unwrap keys for current device |
 | `approve_join_request(secrets_key, members_key, …)` | Auth row + members row for joiner |
 | `ensure_self_in_roster()` | Self-heal missing members row on connect |
+| `rename_vault_member(records, members_key, auth_id, label)` | Update an encrypted roster label |
+| `revoke_vault_member(records, members_key, auth_id)` | Remove a member's `auth:` and `members:` rows |
+| `deny_join_request(records, device_id)` | Drop a pending `joins:` row |
 
 Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secrets_key()`.
 
@@ -132,18 +153,11 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 
 ---
 
-## 7. Password unlock mode (cross-link)
+## 7. Backup password unlock (cross-link)
 
-The vault picks **one** unlock variant from the `VaultUnlock` enum:
-
-- `Keys` — everything in this document applies (per-device `auth:` rows,
-  `joins:` requests, approve flow).
-- `Password { envelope }` — none of `auth:` / `joins:` exist; any device
-  that knows the password self-enrols by writing a `members:` entry and
-  using the password to unwrap `secrets_key` + `members_key`.
-
-The two are mutually exclusive at every layer (Rust enum, YAML
-serialiser, runtime invariants). Switching modes is a deliberate
-operation that drops the artifacts of the previous mode. See
-[password-envelope.md](password-envelope.md) for the full spec, threat
-model, and phase plan.
+Device keys remain the primary access path. Labelled backup password entries
+coexist with `auth:` rows and wrap the same `secrets_key` + `members_key`, so a
+lost browser can recover without weakening the device roster model. A device
+that unlocks with a backup password self-enrols by writing its own `auth:` and
+`members:` rows. See [password-envelope.md](password-envelope.md) for the full
+spec and threat model.

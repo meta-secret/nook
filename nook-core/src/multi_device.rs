@@ -117,6 +117,10 @@ pub const MEMBER_RECORD_PREFIX: &str = "member:";
 pub struct MemberEntry {
     pub pk_id: String,
     pub pk: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub enrolled_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -125,6 +129,7 @@ pub struct VaultMember {
     pub device_id: String,
     pub public_key: String,
     pub enrolled_at: String,
+    pub label: Option<String>,
 }
 
 #[must_use]
@@ -287,6 +292,7 @@ pub fn member_from_identity(identity: &DeviceIdentity, enrolled_at: &str) -> Vau
         device_id: identity.device_id().to_owned(),
         public_key: identity.public_key(),
         enrolled_at: enrolled_at.to_owned(),
+        label: None,
     }
 }
 
@@ -296,6 +302,7 @@ pub fn member_from_join(join: &JoinRequest) -> Result<VaultMember, String> {
         device_id: join.device_id.clone(),
         public_key: join.public_key.clone(),
         enrolled_at: join.requested_at.clone(),
+        label: None,
     })
 }
 
@@ -303,6 +310,8 @@ fn member_to_entry(member: &VaultMember) -> MemberEntry {
     MemberEntry {
         pk_id: member.auth_id.clone(),
         pk: member.public_key.clone(),
+        label: member.label.clone(),
+        enrolled_at: member.enrolled_at.clone(),
     }
 }
 
@@ -311,7 +320,8 @@ fn entry_to_member(entry: &MemberEntry) -> Result<VaultMember, String> {
         auth_id: entry.pk_id.clone(),
         device_id: device_id_from_public_key(&entry.pk)?,
         public_key: entry.pk.clone(),
-        enrolled_at: String::new(),
+        enrolled_at: entry.enrolled_at.clone(),
+        label: entry.label.clone(),
     })
 }
 
@@ -384,6 +394,77 @@ pub fn replace_member_records(
 ) {
     records.retain(|record| !is_members_stored_record(record));
     records.extend(member_records);
+}
+
+pub fn rename_vault_member(
+    records: &[StoredSecretRecord],
+    members_key: &str,
+    auth_id: &str,
+    label: &str,
+) -> Result<Vec<StoredSecretRecord>, String> {
+    if !is_auth_id(auth_id) {
+        return Err("Invalid member id.".to_owned());
+    }
+    let trimmed = label.trim();
+    if trimmed.len() > 80 {
+        return Err("Device name must be 80 characters or fewer.".to_owned());
+    }
+    let mut roster = resolve_member_roster(records, members_key)?;
+    let member = roster
+        .iter_mut()
+        .find(|member| member.auth_id == auth_id)
+        .ok_or_else(|| "Device not found.".to_owned())?;
+    member.label = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_owned())
+    };
+    build_members_records(&roster, members_key)
+}
+
+pub fn revoke_vault_member(
+    records: &[StoredSecretRecord],
+    members_key: &str,
+    auth_id: &str,
+) -> Result<Vec<StoredSecretRecord>, String> {
+    if !is_auth_id(auth_id) {
+        return Err("Invalid member id.".to_owned());
+    }
+    let roster = resolve_member_roster(records, members_key)?;
+    if roster.len() <= 1 {
+        return Err("Add another device or a vault password before removing this one.".to_owned());
+    }
+    if !roster.iter().any(|member| member.auth_id == auth_id) {
+        return Err("Device not found.".to_owned());
+    }
+
+    let mut updated: Vec<StoredSecretRecord> = records
+        .iter()
+        .filter(|record| record.key != auth_id && record.key != member_stored_key(auth_id))
+        .cloned()
+        .collect();
+    let remaining_roster: Vec<VaultMember> = roster
+        .into_iter()
+        .filter(|member| member.auth_id != auth_id)
+        .collect();
+    replace_member_records(
+        &mut updated,
+        build_members_records(&remaining_roster, members_key)?,
+    );
+    Ok(updated)
+}
+
+#[must_use]
+pub fn deny_join_request(
+    records: &[StoredSecretRecord],
+    join_device_id: &str,
+) -> Vec<StoredSecretRecord> {
+    let join_key = join_record_key(join_device_id);
+    records
+        .iter()
+        .filter(|record| record.key != join_key)
+        .cloned()
+        .collect()
 }
 
 pub fn auth_record(
@@ -860,10 +941,95 @@ mod tests {
         let entry = MemberEntry {
             pk_id: device.auth_id(),
             pk: device.public_key(),
+            label: Some("Work laptop".to_owned()),
+            enrolled_at: "2026-06-21T05:00:00Z".to_owned(),
         };
         let ciphertext = encrypt_member_entry(&entry, &members_key).unwrap();
         let decoded = decrypt_member_entry(&ciphertext, &members_key).unwrap();
         assert_eq!(decoded, entry);
+    }
+
+    #[test]
+    fn member_label_persists_through_roster_records() {
+        let keys = generate_vault_keys().unwrap();
+        let device = DeviceIdentity::generate().unwrap();
+        let mut member = member_from_identity(&device, "2026-06-21T05:00:00Z");
+        member.label = Some("Work laptop".to_owned());
+
+        let records = build_members_records(&[member], &keys.members_key).unwrap();
+        let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].label.as_deref(), Some("Work laptop"));
+        assert_eq!(roster[0].enrolled_at, "2026-06-21T05:00:00Z");
+    }
+
+    #[test]
+    fn rename_vault_member_updates_encrypted_roster() {
+        let keys = generate_vault_keys().unwrap();
+        let (device, mut records) = genesis_vault(&keys);
+        let member_records = rename_vault_member(
+            &records,
+            &keys.members_key,
+            &device.auth_id(),
+            " Travel phone ",
+        )
+        .unwrap();
+        replace_member_records(&mut records, member_records);
+
+        let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
+        assert_eq!(roster[0].label.as_deref(), Some("Travel phone"));
+
+        let member_records =
+            rename_vault_member(&records, &keys.members_key, &device.auth_id(), "").unwrap();
+        replace_member_records(&mut records, member_records);
+        let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
+        assert_eq!(roster[0].label, None);
+    }
+
+    #[test]
+    fn revoke_vault_member_removes_auth_and_roster_row() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, mut records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z").unwrap());
+        let join = list_join_requests(&records).pop().unwrap();
+        let (auth, join_key, member_records) = approve_join_request(
+            &keys.secrets_key,
+            &keys.members_key,
+            &join,
+            &genesis,
+            &records,
+        )
+        .unwrap();
+        records.retain(|record| record.key != join_key);
+        records.push(auth);
+        replace_member_records(&mut records, member_records);
+
+        let updated = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id()).unwrap();
+        assert!(resolve_secrets_key(&updated, &joiner).is_err());
+        assert_eq!(
+            resolve_secrets_key(&updated, &genesis).unwrap(),
+            keys.secrets_key
+        );
+        let roster = resolve_member_roster(&updated, &keys.members_key).unwrap();
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].auth_id, genesis.auth_id());
+    }
+
+    #[test]
+    fn revoke_last_member_is_blocked() {
+        let keys = generate_vault_keys().unwrap();
+        let (device, records) = genesis_vault(&keys);
+        let err = revoke_vault_member(&records, &keys.members_key, &device.auth_id()).unwrap_err();
+        assert!(err.contains("Add another device"));
+    }
+
+    #[test]
+    fn deny_join_request_removes_pending_join() {
+        let joiner = DeviceIdentity::generate().unwrap();
+        let records = vec![create_join_request_record(&joiner, "2026-06-21T04:00:00Z").unwrap()];
+        let updated = deny_join_request(&records, joiner.device_id());
+        assert!(list_join_requests(&updated).is_empty());
     }
 
     #[test]
