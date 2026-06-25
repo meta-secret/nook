@@ -626,6 +626,71 @@ export async function disableLoginAutoUnlock(page: Page) {
   })
 }
 
+/**
+ * Add extra GitHub providers to the saved auth snapshot for onboarding UI tests.
+ */
+export async function seedExtraGithubProviders(
+  page: Page,
+  extras: Array<{
+    id: string
+    label: string
+    githubRepo: string
+    githubPat: string
+  }>,
+) {
+  await page.evaluate((providers) => {
+    return new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('nook_auth', 1)
+      request.onerror = () =>
+        reject(request.error ?? new Error('idb open failed'))
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('auth', 'readwrite')
+        const store = tx.objectStore('auth')
+        const getReq = store.get('providers')
+        getReq.onerror = () =>
+          reject(getReq.error ?? new Error('idb read failed'))
+        getReq.onsuccess = () => {
+          const snapshot = getReq.result as {
+            providers: Array<{
+              id: string
+              type: string
+              label: string
+              githubRepo?: string
+              githubPat?: string
+              createdAt: string
+            }>
+            activeProviderId: string | null
+          } | null
+          if (!snapshot?.providers?.length) {
+            reject(new Error('No saved providers in nook_auth.'))
+            return
+          }
+          for (const provider of providers) {
+            snapshot.providers.push({
+              id: provider.id,
+              type: 'github',
+              label: provider.label,
+              githubRepo: provider.githubRepo,
+              githubPat: provider.githubPat,
+              createdAt: new Date().toISOString(),
+            })
+          }
+          const putReq = store.put(snapshot, 'providers')
+          putReq.onerror = () =>
+            reject(putReq.error ?? new Error('idb write failed'))
+          putReq.onsuccess = () => undefined
+        }
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+      }
+    })
+  }, extras)
+}
+
 export async function addSecret(
   page: Page,
   key: string,

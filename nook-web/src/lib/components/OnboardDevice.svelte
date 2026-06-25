@@ -1,12 +1,23 @@
 <script lang="ts">
-  import { Check, Copy, QrCode, RefreshCw } from '@lucide/svelte'
+  import {
+    Check,
+    ChevronDown,
+    Cloud,
+    Copy,
+    HardDrive,
+    QrCode,
+    RefreshCw,
+  } from '@lucide/svelte'
   import QRCode from 'qrcode'
   import { Button } from '$lib/components/ui/button'
   import {
     buildEnrollmentLink,
     decodeEnrollmentPayload,
   } from '$lib/enrollment-code'
-  import type { StorageProvider } from '$lib/auth-providers'
+  import {
+    providerStorageDetail,
+    type StorageProvider,
+  } from '$lib/auth-providers'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
@@ -155,25 +166,78 @@
       void submitOnboard()
     }}
   >
-    <div class="grid gap-3 sm:grid-cols-2">
+    <div class="space-y-4">
       <div class="space-y-1.5">
-        <label
-          for="onboard-provider"
+        <p
+          id="onboard-provider-label"
           class="text-sm font-medium text-muted-foreground"
         >
           Auth provider
-        </label>
-        <select
-          id="onboard-provider"
-          class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          bind:value={providerId}
-          disabled={providers.length === 0}
-          data-testid="onboard-provider-select"
-        >
-          {#each providers as provider (provider.id)}
-            <option value={provider.id}>{provider.label}</option>
-          {/each}
-        </select>
+        </p>
+        {#if providers.length === 0}
+          <p class="text-xs text-muted-foreground">No providers saved.</p>
+        {:else}
+          <div
+            class="space-y-1.5"
+            role="radiogroup"
+            aria-labelledby="onboard-provider-label"
+            data-testid="onboard-provider-list"
+          >
+            {#each providers as provider (provider.id)}
+              {@const selected = provider.id === providerId}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
+                  ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
+                  : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                data-testid="onboard-provider-{provider.id}"
+                disabled={isBusy}
+                onclick={() => {
+                  providerId = provider.id
+                }}
+              >
+                <span
+                  class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                    ? 'border-primary'
+                    : 'border-muted-foreground/35'}"
+                  aria-hidden="true"
+                >
+                  {#if selected}
+                    <span class="size-2 rounded-full bg-primary"></span>
+                  {/if}
+                </span>
+                {#if provider.type === 'github'}
+                  <Cloud class="size-4 shrink-0 opacity-80" />
+                {:else}
+                  <HardDrive class="size-4 shrink-0 opacity-80" />
+                {/if}
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="truncate font-medium">{provider.label}</span>
+                    {#if provider.id === activeProviderId}
+                      <span
+                        class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
+                        data-testid="onboard-provider-active-{provider.id}"
+                      >
+                        Active
+                      </span>
+                    {/if}
+                  </div>
+                  <div
+                    class="truncate font-mono text-[11px] {selected
+                      ? 'text-muted-foreground'
+                      : 'text-muted-foreground/80'}"
+                    data-testid="onboard-provider-detail-{provider.id}"
+                  >
+                    {providerStorageDetail(provider)}
+                  </div>
+                </div>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       <div class="space-y-1.5">
@@ -183,17 +247,23 @@
         >
           Vault password
         </label>
-        <select
-          id="onboard-password-entry"
-          class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          bind:value={passwordEntryId}
-          disabled={passwordEntries.length === 0}
-          data-testid="onboard-password-select"
-        >
-          {#each passwordEntries as entry (entry.id)}
-            <option value={entry.id}>{entry.label}</option>
-          {/each}
-        </select>
+        <div class="relative">
+          <select
+            id="onboard-password-entry"
+            class="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            bind:value={passwordEntryId}
+            disabled={passwordEntries.length === 0}
+            data-testid="onboard-password-select"
+          >
+            {#each passwordEntries as entry (entry.id)}
+              <option value={entry.id}>{entry.label}</option>
+            {/each}
+          </select>
+          <ChevronDown
+            class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </div>
       </div>
     </div>
 
