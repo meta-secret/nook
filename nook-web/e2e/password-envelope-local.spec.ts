@@ -291,9 +291,7 @@ test.describe('enrollment link deep link (local)', () => {
     await pageA.getByTestId('vault-onboard-tab').click()
     await pageA.getByTestId('onboard-password-input').fill('link-pass')
     await pageA.getByTestId('onboard-device-submit').click()
-    const link = (await pageA
-      .getByTestId('onboard-link')
-      .textContent())!.trim()
+    const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
     const pageB = await context.newPage()

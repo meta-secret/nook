@@ -61,7 +61,9 @@
 
   const statusLabel = $derived(
     label ??
-      (storageMode === 'github' ? githubRepo.trim() || 'GitHub' : 'This device'),
+      (storageMode === 'github'
+        ? githubRepo.trim() || 'GitHub'
+        : 'This device'),
   )
   const isQuiet = $derived(variant === 'quiet')
 </script>

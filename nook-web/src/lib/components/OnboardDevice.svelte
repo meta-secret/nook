@@ -57,7 +57,10 @@
   })
 
   $effect(() => {
-    if (providerId && !providers.some((provider) => provider.id === providerId)) {
+    if (
+      providerId &&
+      !providers.some((provider) => provider.id === providerId)
+    ) {
       providerId = providers[0]?.id ?? ''
     } else if (!providerId && providers[0]) {
       providerId = providers[0].id
@@ -219,7 +222,9 @@
 
     <Button
       type="submit"
-      disabled={isBusy || providers.length === 0 || passwordEntries.length === 0}
+      disabled={isBusy ||
+        providers.length === 0 ||
+        passwordEntries.length === 0}
       data-testid="onboard-device-submit"
     >
       {#if isBusy}
@@ -233,7 +238,9 @@
   </form>
 
   {#if passwordEntries.length === 0}
-    <p class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+    <p
+      class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+    >
       Create a vault password in Settings before onboarding another device.
     </p>
   {/if}
@@ -280,8 +287,8 @@
         readonly
         rows="3"
         class="w-full font-mono text-[10px] leading-relaxed rounded-md border border-border bg-muted/30 p-2 text-muted-foreground break-all"
-        data-testid="onboard-code"
-      >{enrollmentCode}</textarea>
+        data-testid="onboard-code">{enrollmentCode}</textarea
+      >
     </div>
   {/if}
 </section>

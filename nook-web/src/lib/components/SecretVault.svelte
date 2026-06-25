@@ -171,7 +171,9 @@
     </div>
   {:else}
     <div class="space-y-4">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div>
           <p class="text-sm font-semibold text-foreground">
             {visibleItemCount}
