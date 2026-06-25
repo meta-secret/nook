@@ -3,7 +3,10 @@
   import { Button } from '$lib/components/ui/button'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
+  import type { VaultState } from '$lib/vault.svelte'
+
   let {
+    vault,
     passwordEntries = [] as VaultPasswordEntrySummary[],
     selectedPasswordEntryId = $bindable(null as string | null),
     isVerifying,
@@ -14,6 +17,7 @@
     onUnlockWithPassword,
     onConsumeLoginPasswordPrompt,
   }: {
+    vault: VaultState
     passwordEntries?: VaultPasswordEntrySummary[]
     selectedPasswordEntryId?: string | null
     isVerifying: boolean
@@ -85,11 +89,11 @@
 
 <form class="space-y-3" onsubmit={handleSubmit}>
   <fieldset class="space-y-3" data-testid="login-unlock-method-fieldset">
-    <legend class="sr-only">Unlock method</legend>
+    <legend class="sr-only">{vault.t('login.unlock_vault')}</legend>
     <div
       class="grid gap-2 overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
       role="radiogroup"
-      aria-label="Unlock method"
+      aria-label={vault.t('login.unlock_vault')}
     >
       <button
         type="button"
@@ -107,7 +111,7 @@
         }}
       >
         <ShieldCheck class="size-4 shrink-0" />
-        This device's keys
+        {vault.t('login.unlock_keys')}
       </button>
       {#if showPasswordUnlockOption}
         <button
@@ -125,7 +129,7 @@
           }}
         >
           <KeyRound class="size-4 shrink-0" />
-          Backup password
+          {vault.t('login.unlock_backup')}
         </button>
       {/if}
     </div>
@@ -157,7 +161,7 @@
         <input
           type="password"
           class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Password for selected entry"
+          placeholder={vault.t('login.password_selected_placeholder')}
           bind:value={passwordInput}
           autocomplete="current-password"
           data-testid="login-password-input"
@@ -176,10 +180,10 @@
   >
     {#if isUnlocking}
       <RefreshCw class="size-4 animate-spin" />
-      Unlocking…
+      {vault.t('login.unlocking')}
     {:else}
       <ShieldCheck class="size-4" />
-      Unlock vault
+      {vault.t('login.unlock_vault_btn')}
     {/if}
   </Button>
 </form>

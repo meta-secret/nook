@@ -19,9 +19,11 @@
     type VaultItemInput,
     type VaultItemType,
   } from '$lib/nook'
+  import type { VaultState } from '$lib/vault.svelte'
   import MarkdownEditor from './MarkdownEditor.svelte'
 
   let {
+    vault,
     isSaving,
     onAddSecret,
     onReplaceSecret,
@@ -29,6 +31,7 @@
     onCancel,
     initialItem = null,
   }: {
+    vault: VaultState
     isSaving: boolean
     onAddSecret: (
       id: string,
@@ -77,23 +80,23 @@
   const typeTitle = $derived(
     isEditMode
       ? selectedType === 'login'
-        ? 'Edit login'
+        ? vault.t('add_secret.title_edit_login')
         : selectedType === 'api-key'
-          ? 'Edit API key'
+          ? vault.t('add_secret.title_edit_api_key')
           : selectedType === 'seed-phrase'
-            ? 'Edit seed phrase'
+            ? vault.t('add_secret.title_edit_seed_phrase')
             : selectedType === 'secure-note'
-              ? 'Edit secure note'
-              : 'Edit item'
+              ? vault.t('add_secret.title_edit_secure_note')
+              : vault.t('add_secret.title_edit_item')
       : selectedType === 'login'
-        ? 'New login'
+        ? vault.t('add_secret.title_new_login')
         : selectedType === 'api-key'
-          ? 'New API key'
+          ? vault.t('add_secret.title_new_api_key')
           : selectedType === 'seed-phrase'
-            ? 'New seed phrase'
+            ? vault.t('add_secret.title_new_seed_phrase')
             : selectedType === 'secure-note'
-              ? 'New secure note'
-              : 'Add item',
+              ? vault.t('add_secret.title_new_secure_note')
+              : vault.t('add_secret.title_add_item'),
   )
 
   $effect(() => {
@@ -207,10 +210,10 @@
   <div class="space-y-5">
     <div class="space-y-1">
       <h3 class="text-base font-semibold text-foreground">
-        What are you saving?
+        {vault.t('add_secret.what_saving')}
       </h3>
       <p class="text-sm text-muted-foreground text-pretty">
-        Choose a type — the form shows only the fields you need.
+        {vault.t('add_secret.choose_type_desc')}
       </p>
     </div>
     <div class="grid grid-cols-2 gap-3 sm:gap-4" data-testid="item-type-picker">
@@ -225,9 +228,11 @@
         >
           <Globe class="size-6" />
         </div>
-        <span class="block text-sm font-semibold text-foreground">Login</span>
+        <span class="block text-sm font-semibold text-foreground"
+          >{vault.t('vault.types.login')}</span
+        >
         <span class="mt-1 block text-xs text-muted-foreground"
-          >Website account</span
+          >{vault.t('add_secret.website_account_desc')}</span
         >
       </button>
       <button
@@ -241,9 +246,11 @@
         >
           <Braces class="size-6" />
         </div>
-        <span class="block text-sm font-semibold text-foreground">API key</span>
+        <span class="block text-sm font-semibold text-foreground"
+          >{vault.t('vault.types.api_key')}</span
+        >
         <span class="mt-1 block text-xs text-muted-foreground"
-          >Token or auth key</span
+          >{vault.t('add_secret.token_desc')}</span
         >
       </button>
       <button
@@ -258,10 +265,10 @@
           <Sprout class="size-6" />
         </div>
         <span class="block text-sm font-semibold text-foreground"
-          >Seed phrase</span
+          >{vault.t('vault.types.seed_phrase')}</span
         >
         <span class="mt-1 block text-xs text-muted-foreground"
-          >BIP39 recovery</span
+          >{vault.t('add_secret.bip39_desc')}</span
         >
       </button>
       <button
@@ -276,10 +283,10 @@
           <StickyNote class="size-6" />
         </div>
         <span class="block text-sm font-semibold text-foreground"
-          >Secure note</span
+          >{vault.t('vault.types.secure_note')}</span
         >
         <span class="mt-1 block text-xs text-muted-foreground"
-          >Private text (Markdown)</span
+          >{vault.t('add_secret.private_text_desc')}</span
         >
       </button>
     </div>
@@ -298,7 +305,7 @@
           onclick={() => (selectedType = null)}
         >
           <ArrowLeft class="size-4" />
-          Change type
+          {vault.t('add_secret.change_type')}
         </button>
       {/if}
       <h3 class="text-base font-semibold text-foreground">{typeTitle}</h3>
@@ -306,7 +313,8 @@
 
     {#if selectedType === 'login' || selectedType === 'api-key'}
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label">Website URL</label
+        <label class="text-xs font-medium" for="secret-label"
+          >{vault.t('add_secret.website_label')}</label
         >
         <input
           id="secret-label"
@@ -324,7 +332,7 @@
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="login-username"
-            >Username</label
+            >{vault.t('vault.fields.username')}</label
           >
           <input
             id="login-username"
@@ -336,7 +344,9 @@
           />
         </div>
         <div class="space-y-1.5">
-          <label class="text-xs font-medium" for="secret-value">Password</label>
+          <label class="text-xs font-medium" for="secret-value"
+            >{vault.t('vault.fields.password')}</label
+          >
           <div class="relative">
             <input
               id="secret-value"
@@ -350,7 +360,9 @@
             <button
               type="button"
               class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label={showPasswordValue ? 'Hide password' : 'Show password'}
+              aria-label={showPasswordValue
+                ? vault.t('vault.hide_value')
+                : vault.t('vault.show_value')}
               data-testid="toggle-password-visibility"
               onclick={() => (showPasswordValue = !showPasswordValue)}
             >
@@ -365,7 +377,7 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="login-notes"
-          >Notes <span class="text-muted-foreground">(optional)</span></label
+          >{vault.t('add_secret.notes_label')}</label
         >
         <textarea
           id="login-notes"
@@ -387,7 +399,8 @@
           onclick={() => (showPasswordOptions = !showPasswordOptions)}
         >
           <span class="inline-flex items-center gap-2">
-            <KeyRound class="size-4" /> Generate password
+            <KeyRound class="size-4" />
+            {vault.t('add_secret.generate_password')}
           </span>
           <ChevronDown
             class="size-4 transition-transform {showPasswordOptions
@@ -401,7 +414,7 @@
           >
             <div class="flex items-center gap-3">
               <label class="text-xs text-muted-foreground" for="password-length"
-                >Length</label
+                >{vault.t('add_secret.length')}</label
               >
               <input
                 id="password-length"
@@ -424,7 +437,8 @@
                 ><input type="checkbox" bind:checked={genNumbers} /> 0-9</label
               >
               <label
-                ><input type="checkbox" bind:checked={genSymbols} /> symbols</label
+                ><input type="checkbox" bind:checked={genSymbols} />
+                {vault.t('add_secret.symbols')}</label
               >
             </div>
             <Button
@@ -435,14 +449,17 @@
               data-testid="generate-password-btn"
               onclick={generatePassword}
             >
-              <RefreshCw class="size-3.5" /> Generate
+              <RefreshCw class="size-3.5" />
+              {vault.t('add_secret.generate_btn')}
             </Button>
           </div>
         {/if}
       </div>
     {:else if selectedType === 'api-key'}
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-value">Key</label>
+        <label class="text-xs font-medium" for="secret-value"
+          >{vault.t('vault.fields.key')}</label
+        >
         <textarea
           id="secret-value"
           data-testid="secret-value"
@@ -455,8 +472,7 @@
       </div>
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="api-key-expiration"
-          >Expiration <span class="text-muted-foreground">(optional)</span
-          ></label
+          >{vault.t('vault.fields.expires')}</label
         >
         <input
           id="api-key-expiration"
@@ -469,7 +485,7 @@
     {:else if selectedType === 'seed-phrase'}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
-          >Account name</label
+          >{vault.t('vault.fields.account')}</label
         >
         <input
           id="secret-label"
@@ -481,7 +497,8 @@
         />
       </div>
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-value">Seed phrase</label
+        <label class="text-xs font-medium" for="secret-value"
+          >{vault.t('vault.types.seed_phrase')}</label
         >
         <textarea
           id="secret-value"
@@ -491,13 +508,15 @@
           required
           autocomplete="off"
           spellcheck="false"
-          placeholder="Enter 12 or 24 words"
+          placeholder={vault.t('add_secret.placeholder_seed')}
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
       </div>
     {:else}
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-label">Title</label>
+        <label class="text-xs font-medium" for="secret-label"
+          >{vault.t('vault.fields.title')}</label
+        >
         <input
           id="secret-label"
           data-testid="secret-label"
@@ -509,11 +528,12 @@
       </div>
       <div class="space-y-1.5">
         <span class="text-xs font-medium"
-          >Note <span class="text-muted-foreground">(Markdown)</span></span
+          >{vault.t('vault.fields.note')}
+          <span class="text-muted-foreground">(Markdown)</span></span
         >
         <MarkdownEditor
           bind:value={noteBody}
-          placeholder="Write anything — headings, lists, and code blocks are supported."
+          placeholder={vault.t('add_secret.placeholder_note')}
         />
       </div>
     {/if}
@@ -528,7 +548,7 @@
         data-testid="add-secret-cancel-btn"
         onclick={handleCancel}
       >
-        Cancel
+        {vault.t('common.cancel')}
       </Button>
       <Button
         type="submit"
@@ -537,9 +557,12 @@
         data-testid="save-secret-btn"
       >
         {#if isSaving}
-          <RefreshCw class="size-4 animate-spin" /> Saving…
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t('add_secret.working')}
         {:else}
-          {isEditMode ? 'Save changes' : 'Save item'}
+          {isEditMode
+            ? vault.t('add_secret.save_changes')
+            : vault.t('add_secret.save_item')}
         {/if}
       </Button>
     </div>

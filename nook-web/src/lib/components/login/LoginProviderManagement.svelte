@@ -12,9 +12,15 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import { providerStorageDetail } from '$lib/auth-providers'
+  import {
+    localizeProviderLabel,
+    providerStorageDetail,
+  } from '$lib/auth-providers'
+
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     providers,
     variant = 'manage',
     isVerifying,
@@ -26,6 +32,7 @@
     onRemoveProvider,
     onBeginAddProvider,
   }: {
+    vault: VaultState
     providers: StorageProvider[]
     variant?: 'setup' | 'manage'
     isVerifying: boolean
@@ -43,7 +50,10 @@
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
     const ok = confirm(
-      `Remove "${provider.label}" from saved providers? Your vault file on storage is not deleted.`,
+      vault.t('auth_storage.confirm_remove', {
+        label: provider.label,
+        signedOutNote: '',
+      }),
     )
     if (ok) {
       void onRemoveProvider(provider.id)
@@ -61,31 +71,29 @@
         onclick={() => onCancelAddProvider()}
       >
         <ChevronLeft class="size-3.5" />
-        Back to unlock
+        {vault.t('login_wizard.back_to_unlock')}
       </button>
     {/if}
 
     <div class="space-y-1">
       <h2 class="text-sm font-semibold text-foreground">
         {#if addingProvider}
-          Add a storage provider
+          {vault.t('onboarding.add_provider')}
         {:else}
-          Choose where to store your vault
+          {vault.t('login_wizard.choose_store_vault')}
         {/if}
       </h2>
       <p class="text-xs text-muted-foreground text-pretty">
         {#if addingProvider}
-          Pick another place for an encrypted vault file. Each saved provider is
-          a separate vault location in this browser.
+          {vault.t('login_wizard.add_provider_desc')}
         {:else}
-          Before you can connect, add a storage provider — local device or
-          GitHub.
+          {vault.t('login_wizard.before_connect_desc')}
         {/if}
       </p>
     </div>
 
     {#if onBeginSetup}
-      <ProviderPicker onSelect={onBeginSetup} />
+      <ProviderPicker {vault} onSelect={onBeginSetup} />
     {/if}
   </div>
 {:else}
@@ -108,11 +116,12 @@
       <Settings2 class="size-5 shrink-0 text-muted-foreground" />
       <span class="min-w-0 flex-1 text-base">
         <span class="font-semibold text-foreground"
-          >Manage storage providers</span
+          >{vault.t('login_wizard.manage_providers')}</span
         >
         {#if providers.length > 0}
           <span class="text-sm text-muted-foreground">
-            · {providers.length} saved
+            · {providers.length}
+            {vault.t('login_wizard.saved_count')}
           </span>
         {/if}
       </span>
@@ -129,7 +138,7 @@
         data-testid="login-manage-providers-panel"
       >
         <p class="text-xs text-muted-foreground text-pretty">
-          Add or remove saved providers. Vault files on storage are not deleted.
+          {vault.t('login_wizard.manage_providers_desc')}
         </p>
 
         <ul
@@ -147,13 +156,13 @@
               {/if}
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm font-medium text-foreground">
-                  {provider.label}
+                  {localizeProviderLabel(provider.label, vault.t)}
                 </div>
                 <div
                   class="truncate font-mono text-[11px] text-muted-foreground"
                   data-testid="provider-detail-{provider.id}"
                 >
-                  {providerStorageDetail(provider)}
+                  {providerStorageDetail(provider, vault.t)}
                 </div>
               </div>
               {#if onRemoveProvider}
@@ -164,7 +173,7 @@
                   disabled={isVerifying || isInitializing}
                   onclick={() => confirmRemoveProvider(provider)}
                 >
-                  Remove
+                  {vault.t('common.remove')}
                 </button>
               {/if}
             </li>
@@ -180,7 +189,7 @@
             onclick={() => onBeginAddProvider()}
           >
             <Plus class="size-4" />
-            Add provider
+            {vault.t('onboarding.add_provider_btn')}
           </button>
         {/if}
       </div>

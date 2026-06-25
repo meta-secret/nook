@@ -188,6 +188,7 @@
       </div>
 
       <AddSecretForm
+        {vault}
         {isSaving}
         {onAddSecret}
         {onReplaceSecret}
@@ -295,6 +296,7 @@
                     onEditItem={openEditItem}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
+                    {vault}
                   />
                 {/each}
               </CardContent>

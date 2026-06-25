@@ -1,13 +1,16 @@
 <script lang="ts">
   import { KeyRound, QrCode, Settings2 } from '@lucide/svelte'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     settingsOpen = false,
     settingsSection = 'storage' as 'storage' | 'onboard',
     onSelectSecrets,
     onSelectOnboard,
     onSelectSettings,
   }: {
+    vault: VaultState
     settingsOpen?: boolean
     settingsSection?: 'storage' | 'onboard'
     onSelectSecrets?: () => void
@@ -40,7 +43,9 @@
       onclick={() => onSelectSecrets?.()}
     >
       <KeyRound class="size-5 shrink-0" />
-      <span class="text-xs font-medium leading-none">Vault</span>
+      <span class="text-xs font-medium leading-none"
+        >{vault.t('nav.vault')}</span
+      >
     </button>
     <button
       type="button"
@@ -53,7 +58,9 @@
       onclick={() => onSelectOnboard?.()}
     >
       <QrCode class="size-5 shrink-0" />
-      <span class="text-xs font-medium leading-none">Onboard</span>
+      <span class="text-xs font-medium leading-none"
+        >{vault.t('nav.onboard')}</span
+      >
     </button>
     <button
       type="button"
@@ -66,7 +73,9 @@
       onclick={() => onSelectSettings?.()}
     >
       <Settings2 class="size-5 shrink-0" />
-      <span class="text-xs font-medium leading-none">Settings</span>
+      <span class="text-xs font-medium leading-none"
+        >{vault.t('nav.settings')}</span
+      >
     </button>
   </div>
 </nav>

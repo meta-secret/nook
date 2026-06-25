@@ -134,6 +134,7 @@
 >
   {#if showQrOnboarding}
     <EnrollmentQrOnboardCard
+      {vault}
       code={prefillEnrollmentCode}
       passwordEntryId={peekEnrollmentEntryId(prefillEnrollmentCode)}
       passwordEntryLabel={peekEnrollmentEntryLabel(prefillEnrollmentCode)}
@@ -144,6 +145,7 @@
   {:else}
     {#if showWizard}
       <LoginProviderManagement
+        {vault}
         variant="manage"
         {providers}
         {isVerifying}
@@ -155,7 +157,7 @@
     {/if}
 
     {#if !hasProviders && !showSetup && onOpenHelp}
-      <ProductIntro {onOpenHelp} />
+      <ProductIntro {vault} {onOpenHelp} />
     {/if}
 
     <Card
@@ -238,6 +240,7 @@
       >
         {#if showWizard}
           <LoginWizard
+            {vault}
             step={loginFlowStep}
             {providers}
             {activeProviderId}
@@ -263,6 +266,7 @@
             class="space-y-4"
           >
             <ProviderSetupFields
+              {vault}
               {setupType}
               bind:githubPat
               bind:githubRepo
@@ -290,6 +294,7 @@
           </form>
         {:else if showProviderSetup}
           <LoginProviderManagement
+            {vault}
             variant="setup"
             {providers}
             {isVerifying}
@@ -305,6 +310,7 @@
 
     {#if showEnrollmentAccess}
       <LoginEnrollmentPanel
+        {vault}
         bind:open={enrollmentPanelOpen}
         {isVerifying}
         initialCode={prefillEnrollmentCode}

@@ -129,6 +129,7 @@
       {/if}
     {/snippet}
     <AuthStorage
+      {vault}
       embedded
       {providers}
       {activeProviderId}
@@ -168,11 +169,15 @@
         data-testid="vault-devices-status"
       >
         <Laptop class="size-3" />
-        {vaultMembers.length}
-        {vaultMembers.length === 1 ? 'device' : 'devices'}
+        {vaultMembers.length === 1
+          ? vault.t('settings.device_count_singular')
+          : vault.t('settings.device_count_plural', {
+              count: String(vaultMembers.length),
+            })}
       </span>
     {/snippet}
     <VaultDevicesCard
+      {vault}
       {deviceId}
       {devicePublicKey}
       {pendingJoins}
@@ -204,15 +209,19 @@
       >
         {#if hasPasswords}
           <ShieldCheck class="size-3" />
-          {passwordEntries.length}
-          {passwordEntries.length === 1 ? 'password' : 'passwords'}
+          {passwordEntries.length === 1
+            ? vault.t('settings.password_count_singular')
+            : vault.t('settings.password_count_plural', {
+                count: String(passwordEntries.length),
+              })}
         {:else}
           <Lock class="size-3" />
-          None
+          {vault.t('settings.no_passwords')}
         {/if}
       </span>
     {/snippet}
     <VaultPasswordCard
+      {vault}
       embedded
       {passwordEntries}
       isBusy={isPasswordBusy}

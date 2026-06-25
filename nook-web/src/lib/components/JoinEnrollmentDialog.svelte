@@ -15,7 +15,10 @@
     CardTitle,
   } from '$lib/components/ui/card'
 
+  import type { VaultState } from '$lib/vault.svelte'
+
   let {
+    vault,
     open,
     variant,
     deviceId = '',
@@ -27,6 +30,7 @@
     onCreateFreshVault,
     onCancel,
   }: {
+    vault: VaultState
     open: boolean
     variant: 'needs_request' | 'pending'
     deviceId?: string
@@ -58,7 +62,7 @@
     <button
       type="button"
       class="absolute inset-0 bg-background/80 backdrop-blur-sm"
-      aria-label="Close dialog"
+      aria-label={vault.t('common.cancel')}
       onclick={onCancel}
     ></button>
 
@@ -74,26 +78,24 @@
             >
               {#if variant === 'needs_request'}
                 <UserPlus class="size-4 shrink-0" />
-                Join this vault
+                {vault.t('join_enrollment.title_join')}
               {:else}
                 <ShieldCheck class="size-4 shrink-0" />
-                Waiting for approval
+                {vault.t('join_enrollment.title_pending')}
               {/if}
             </CardTitle>
             <CardDescription class="text-pretty">
               {#if variant === 'needs_request'}
-                This browser is not enrolled yet. Join links your device to the
-                vault without a central nook account.
+                {vault.t('join_enrollment.desc_join')}
               {:else}
-                Your join request was sent. Try unlocking again after an
-                enrolled device approves you.
+                {vault.t('join_enrollment.desc_pending')}
               {/if}
             </CardDescription>
           </div>
           <button
             type="button"
             class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="Close"
+            aria-label={vault.t('common.cancel')}
             data-testid="join-enrollment-close"
             onclick={onCancel}
           >
@@ -112,7 +114,7 @@
               class="font-medium text-foreground inline-flex items-center gap-1.5"
             >
               <Smartphone class="size-3.5" />
-              This browser
+              {vault.t('join_enrollment.this_browser')}
             </p>
             <p class="mt-1 font-mono text-muted-foreground">
               {truncate(deviceId)}
@@ -126,21 +128,16 @@
             data-testid="join-enrollment-explainer"
           >
             <li>
-              Join is required so only trusted browsers receive vault keys —
-              reading the encrypted file from GitHub is not enough.
+              {vault.t('join_enrollment.explainer_item1')}
             </li>
             <li>
-              Send a request; an enrolled device approves it under
-              <strong class="font-medium text-foreground">Vault settings</strong
-              >.
+              {vault.t('join_enrollment.explainer_item2')}
             </li>
             <li>
-              Approval wraps the vault keys for this browser’s public key — no
-              plaintext secrets are shared.
+              {vault.t('join_enrollment.explainer_item3')}
             </li>
             <li>
-              More enrolled devices mean more recovery paths if one browser is
-              lost.
+              {vault.t('join_enrollment.explainer_item4')}
             </li>
           </ul>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -152,7 +149,7 @@
               data-testid="join-enrollment-cancel"
               onclick={onCancel}
             >
-              Cancel
+              {vault.t('common.cancel')}
             </Button>
             <Button
               type="button"
@@ -161,9 +158,9 @@
               onclick={() => void onConfirm?.()}
             >
               {#if isBusy}
-                Sending…
+                {vault.t('join_enrollment.sending')}
               {:else}
-                Send join request
+                {vault.t('join_enrollment.send_request')}
               {/if}
             </Button>
           </div>
@@ -177,7 +174,7 @@
                 aria-expanded={showTransferKeys}
                 onclick={() => (showTransferKeys = !showTransferKeys)}
               >
-                <span>Have transfer keys from another device?</span>
+                <span>{vault.t('join_enrollment.have_transfer_keys')}</span>
                 <ChevronDown
                   class="size-3.5 shrink-0 transition-transform {showTransferKeys
                     ? 'rotate-180'
@@ -188,21 +185,21 @@
               {#if showTransferKeys}
                 <div class="space-y-2 border-t border-border px-3 py-3">
                   <p class="text-[11px] leading-relaxed text-muted-foreground">
-                    Paste the two keys copied from an enrolled device. This
-                    skips the approval step — only use if you already received
-                    them out of band.
+                    {vault.t('join_enrollment.transfer_keys_desc')}
                   </p>
                   <label
                     class="text-xs font-medium text-muted-foreground"
                     for="enroll-secrets-key"
                   >
-                    Secrets key
+                    {vault.t('join_enrollment.secrets_key')}
                   </label>
                   <input
                     id="enroll-secrets-key"
                     type="password"
                     bind:value={enrollSecretsKey}
-                    placeholder="64-character hex key"
+                    placeholder={vault.t(
+                      'join_enrollment.secrets_key_placeholder',
+                    )}
                     autocomplete="off"
                     data-testid="enroll-secrets-key-input"
                     class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
@@ -211,13 +208,15 @@
                     class="text-xs font-medium text-muted-foreground"
                     for="enroll-members-key"
                   >
-                    Members key
+                    {vault.t('join_enrollment.members_key')}
                   </label>
                   <input
                     id="enroll-members-key"
                     type="password"
                     bind:value={enrollMembersKey}
-                    placeholder="64-character hex key"
+                    placeholder={vault.t(
+                      'join_enrollment.secrets_key_placeholder',
+                    )}
                     autocomplete="off"
                     data-testid="enroll-members-key-input"
                     class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
@@ -233,7 +232,7 @@
                     data-testid="enroll-with-keys-btn"
                     onclick={() => void onEnrollWithKeys()}
                   >
-                    Enroll with transfer keys
+                    {vault.t('join_enrollment.enroll_with_keys')}
                   </Button>
                 </div>
               {/if}
@@ -245,12 +244,10 @@
               class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
             >
               <p class="text-xs font-medium text-foreground">
-                Setting up from scratch?
+                {vault.t('join_enrollment.setup_from_scratch')}
               </p>
               <p class="text-[11px] leading-relaxed text-muted-foreground">
-                If you cleared this browser and remote storage, create a new
-                vault here. This replaces any existing vault file with a fresh
-                one for this browser.
+                {vault.t('join_enrollment.setup_from_scratch_desc')}
               </p>
               <Button
                 type="button"
@@ -261,18 +258,16 @@
                 onclick={() => void onCreateFreshVault()}
               >
                 {#if isBusy}
-                  Creating…
+                  {vault.t('join_enrollment.creating')}
                 {:else}
-                  Create new vault
+                  {vault.t('join_enrollment.create_new_vault')}
                 {/if}
               </Button>
             </div>
           {/if}
         {:else}
           <p class="text-sm leading-relaxed text-muted-foreground">
-            Open Nook on an enrolled device, approve this browser in
-            <strong class="font-medium text-foreground">Vault settings</strong>,
-            then unlock again here.
+            {vault.t('join_enrollment.approve_on_enrolled')}
           </p>
           <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
@@ -280,7 +275,7 @@
               data-testid="join-enrollment-dismiss"
               onclick={onCancel}
             >
-              Got it
+              {vault.t('join_enrollment.got_it')}
             </Button>
           </div>
           {#if onCreateFreshVault}
@@ -288,11 +283,10 @@
               class="rounded-lg border border-border bg-muted/20 px-3 py-3 space-y-2"
             >
               <p class="text-xs font-medium text-foreground">
-                Starting over instead?
+                {vault.t('join_enrollment.starting_over')}
               </p>
               <p class="text-[11px] leading-relaxed text-muted-foreground">
-                Create a new vault if you reset storage and no longer have an
-                enrolled device to approve this browser.
+                {vault.t('join_enrollment.starting_over_desc')}
               </p>
               <Button
                 type="button"
@@ -303,9 +297,9 @@
                 onclick={() => void onCreateFreshVault()}
               >
                 {#if isBusy}
-                  Creating…
+                  {vault.t('join_enrollment.creating')}
                 {:else}
-                  Create new vault
+                  {vault.t('join_enrollment.create_new_vault')}
                 {/if}
               </Button>
             </div>

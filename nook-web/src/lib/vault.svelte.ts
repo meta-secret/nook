@@ -499,7 +499,7 @@ export class VaultState {
       this.loginUnlockMode = 'unknown'
     }
 
-    this.showSuccess(`Removed ${target.label}.`)
+    this.showSuccess(this.t('toasts.removed_device', { label: target.label }))
   }
 
   async ensureProviderSaved() {
@@ -605,7 +605,7 @@ export class VaultState {
       this.joinEnrollmentPrompt === 'pending'
     ) {
       this.joinEnrollmentPrompt = 'none'
-      this.showSuccess('Your device was approved. Click Connect vault.')
+      this.showSuccess(this.t('toasts.device_approved'))
     } else if (
       result.access_status === 'join_pending' &&
       this.joinEnrollmentPrompt === 'none'
@@ -752,9 +752,7 @@ export class VaultState {
       )
       await this.ensureProviderSaved()
       await this.refreshDeviceState()
-      this.showSuccess(
-        'Join request sent. An enrolled device must approve before you can connect.',
-      )
+      this.showSuccess(this.t('login.join_request_sent'))
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to request vault access.'
@@ -774,9 +772,7 @@ export class VaultState {
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       void this.hydrateMultiDeviceState()
-      this.showSuccess(
-        'Device approved. They can now connect from their browser.',
-      )
+      this.showSuccess(this.t('toasts.device_approved_success'))
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to approve join request.'
@@ -796,7 +792,7 @@ export class VaultState {
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       await this.hydrateMultiDeviceState()
-      this.showSuccess('Join request denied.')
+      this.showSuccess(this.t('toasts.join_denied'))
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to deny join request.'
@@ -815,7 +811,11 @@ export class VaultState {
         this.manager!.rename_vault_member(authId, label),
       )
       await this.hydrateMultiDeviceState()
-      this.showSuccess(label.trim() ? 'Device renamed.' : 'Device name reset.')
+      this.showSuccess(
+        label.trim()
+          ? this.t('toasts.device_renamed')
+          : this.t('toasts.device_name_reset'),
+      )
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to rename device.'
@@ -841,12 +841,12 @@ export class VaultState {
       if (isSelf) {
         this.clearUnlockedSession()
         this.loginFlowStep = 'connection'
-        this.showSuccess('This device was removed from the vault.')
+        this.showSuccess(this.t('toasts.device_removed'))
         return
       }
       this.secrets = mapWasmRecords(rawRecords)
       await this.hydrateMultiDeviceState()
-      this.showSuccess('Device access revoked.')
+      this.showSuccess(this.t('toasts.device_revoked'))
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to revoke device access.'
@@ -888,7 +888,7 @@ export class VaultState {
       await this.ensureProviderSaved()
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
-      this.showSuccess('Created a new vault on this device.')
+      this.showSuccess(this.t('toasts.vault_created'))
     } catch (e: unknown) {
       this.isAuthenticated = false
       this.errorMsg =
@@ -922,7 +922,7 @@ export class VaultState {
       await this.ensureProviderSaved()
       void this.hydrateMultiDeviceState()
       await this.syncFromStorage()
-      this.showSuccess('Enrolled and connected to the vault.')
+      this.showSuccess(this.t('toasts.enrolled_connected'))
       this.joinEnrollmentPrompt = 'none'
       this.closeSettings()
     } catch (e: unknown) {
@@ -1044,11 +1044,9 @@ export class VaultState {
       void this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
-        this.showSuccess('Local vault loaded from IndexedDB.')
+        this.showSuccess(this.t('toasts.local_loaded'))
       } else {
-        this.showSuccess(
-          'Connected to GitHub. Encryption key is stored locally in this browser.',
-        )
+        this.showSuccess(this.t('toasts.github_connected'))
       }
       this.startVaultSync()
     } catch (e: unknown) {
@@ -1078,8 +1076,8 @@ export class VaultState {
       await this.refreshPasswordEntriesList()
       this.showSuccess(
         hadPasswords
-          ? `Added "${label.trim()}".`
-          : 'Backup password added. Device keys still unlock this vault.',
+          ? this.t('toasts.password_added_rotate')
+          : this.t('toasts.password_set'),
       )
     } catch (e: unknown) {
       this.passwordError =
@@ -1105,7 +1103,7 @@ export class VaultState {
         this.manager!.updateVaultPasswordEntry(entryId, password),
       )
       await this.refreshPasswordEntriesList()
-      this.showSuccess('Vault password updated.')
+      this.showSuccess(this.t('toasts.password_updated'))
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to update vault password.'
@@ -1128,7 +1126,7 @@ export class VaultState {
         this.enrollmentCode = ''
         this.activeEnrollmentEntryId = null
       }
-      this.showSuccess('Vault password removed.')
+      this.showSuccess(this.t('toasts.password_removed'))
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to remove vault password.'
@@ -1275,7 +1273,7 @@ export class VaultState {
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.loginPasswordPrompt = false
-      this.showSuccess('Vault unlocked with password.')
+      this.showSuccess(this.t('toasts.vault_unlocked'))
       this.startVaultSync()
     } catch (e: unknown) {
       this.isAuthenticated = false
@@ -1337,7 +1335,7 @@ export class VaultState {
       this.loginEnrollmentCode = ''
       this.prefillEnrollmentCode = ''
       this.enrollmentFromUrlPending = false
-      this.showSuccess('Enrolled this device via enrollment code.')
+      this.showSuccess(this.t('toasts.device_enrolled'))
       this.startVaultSync()
     } catch (e: unknown) {
       this.isAuthenticated = false
@@ -1368,7 +1366,7 @@ export class VaultState {
         this.secrets = mapWasmRecords(rawRecords)
       })
       this.refreshSecretsFromSession()
-      this.showSuccess('Secret saved successfully.')
+      this.showSuccess(this.t('toasts.secret_saved'))
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
@@ -1393,7 +1391,7 @@ export class VaultState {
         this.secrets = mapWasmRecords(rawRecords)
       })
       this.refreshSecretsFromSession()
-      this.showSuccess('Secret deleted successfully.')
+      this.showSuccess(this.t('toasts.secret_deleted'))
     } catch (e: unknown) {
       this.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
@@ -1422,7 +1420,7 @@ export class VaultState {
         this.secrets = mapWasmRecords(rawRecords)
       })
       this.refreshSecretsFromSession()
-      this.showSuccess('Item updated successfully.')
+      this.showSuccess(this.t('toasts.item_updated'))
     } catch (e: unknown) {
       this.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`
       throw e

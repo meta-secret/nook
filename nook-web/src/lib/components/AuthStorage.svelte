@@ -17,9 +17,14 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
-  import { providerStorageDetail } from '$lib/auth-providers'
+  import {
+    DEFAULT_GITHUB_REPO,
+    localizeProviderLabel,
+    providerStorageDetail,
+  } from '$lib/auth-providers'
+  import type { VaultState } from '$lib/vault.svelte'
   let {
+    vault,
     providers,
     activeProviderId,
     isAuthenticated,
@@ -39,6 +44,7 @@
     onRemoveProvider,
     onLockVault,
   }: {
+    vault: VaultState
     providers: StorageProvider[]
     activeProviderId: string | null
     isAuthenticated: boolean
@@ -64,10 +70,13 @@
     if (!onRemoveProvider) return
     const signedOutNote =
       isAuthenticated && provider.id === activeProviderId
-        ? ' You will be signed out of the vault in this browser.'
+        ? vault.t('auth_storage.signed_out_note')
         : ''
     const ok = confirm(
-      `Remove "${provider.label}" from saved providers?${signedOutNote} Your vault file on storage is not deleted.`,
+      vault.t('auth_storage.confirm_remove', {
+        label: provider.label,
+        signedOutNote,
+      }),
     )
     if (ok) {
       void onRemoveProvider(provider.id)
@@ -92,29 +101,32 @@
             showSetup ? onCancelSetup() : onCancelAddProvider?.()}
         >
           <ChevronLeft class="size-3.5" />
-          Back to saved providers
+          {vault.t('onboarding.back_to_saved')}
         </button>
         <h2 class="text-base font-semibold text-foreground">
           {#if showSetup}
-            Connect to {setupType === 'github' ? 'GitHub' : 'this device'}
+            {vault.t('auth_storage.connect_to_type', {
+              type:
+                setupType === 'github'
+                  ? vault.t('auth_storage.github')
+                  : vault.t('auth_storage.this_device'),
+            })}
           {:else}
-            Add storage provider
+            {vault.t('onboarding.add_provider')}
           {/if}
         </h2>
         <p class="text-xs text-muted-foreground text-pretty">
           {#if showSetup}
-            Connect and save this provider in this browser. Only the active
-            provider is used for sync until you switch.
+            {vault.t('auth_storage.setup_desc')}
           {:else}
-            Pick where to store another encrypted vault file. Each provider can
-            point at a different vault.
+            {vault.t('auth_storage.choose_desc')}
           {/if}
         </p>
       </div>
     </div>
   {:else if !embedded}
     <p class="text-xs text-muted-foreground text-pretty">
-      Switch providers without changing device keys or backup passwords.
+      {vault.t('auth_storage.switch_providers_desc')}
     </p>
   {/if}
 
@@ -129,6 +141,7 @@
     >
       {#if showSetup}
         <ProviderSetupFields
+          {vault}
           setupType={setupType!}
           bind:githubPat
           bind:githubRepo
@@ -136,11 +149,13 @@
           {onCancelSetup}
         />
       {:else if addProviderOpen}
-        <ProviderPicker onSelect={onBeginSetup} />
+        <ProviderPicker {vault} onSelect={onBeginSetup} />
       {:else}
         <fieldset class="space-y-2">
           {#if providers.length === 0}
-            <p class="text-xs text-muted-foreground">No providers saved yet.</p>
+            <p class="text-xs text-muted-foreground">
+              {vault.t('auth_storage.no_providers_saved')}
+            </p>
           {:else}
             <ul
               class="divide-y divide-border/60"
@@ -166,12 +181,12 @@
                     {/if}
                     <span class="min-w-0 flex-1">
                       <span class="block truncate font-medium text-sm">
-                        {provider.label}
+                        {localizeProviderLabel(provider.label, vault.t)}
                       </span>
                       <span
                         class="block truncate font-mono text-[11px] text-muted-foreground"
                       >
-                        {providerStorageDetail(provider)}
+                        {providerStorageDetail(provider, vault.t)}
                       </span>
                     </span>
                     {#if provider.id === activeProviderId}
@@ -184,14 +199,14 @@
                           class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
                         >
                           <CheckCircle2 class="size-3" />
-                          Active
+                          {vault.t('common.active')}
                         </span>
                       {/if}
                     {:else}
                       <span
                         class="shrink-0 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        Switch
+                        {vault.t('common.switch')}
                       </span>
                     {/if}
                   </button>
@@ -199,8 +214,8 @@
                     <button
                       type="button"
                       class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-primary disabled:opacity-50"
-                      aria-label="Lock vault"
-                      title="Lock vault"
+                      aria-label={vault.t('common.lock_vault')}
+                      title={vault.t('common.lock_vault')}
                       data-testid="lock-vault-btn"
                       disabled={isVerifying || isInitializing}
                       onclick={() => onLockVault()}
@@ -212,7 +227,9 @@
                     <button
                       type="button"
                       class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                      aria-label="Remove {provider.label}"
+                      aria-label="{vault.t(
+                        'common.remove',
+                      )} {localizeProviderLabel(provider.label, vault.t)}"
                       data-testid="remove-provider-{provider.id}"
                       disabled={isVerifying || isInitializing}
                       onclick={() => confirmRemoveProvider(provider)}
@@ -232,7 +249,7 @@
             onclick={() => onBeginAddProvider?.()}
           >
             <Plus class="size-4" />
-            Add storage provider
+            {vault.t('onboarding.add_provider')}
           </button>
         </fieldset>
       {/if}
@@ -248,13 +265,13 @@
           >
             {#if isInitializing}
               <RefreshCw class="size-4 animate-spin" />
-              Loading engine…
+              {vault.t('onboarding.loading_engine')}
             {:else if isVerifying}
               <RefreshCw class="size-4 animate-spin" />
-              Connecting…
+              {vault.t('common.connecting')}
             {:else}
               <ShieldCheck class="size-4" />
-              Connect
+              {vault.t('common.connect')}
             {/if}
           </Button>
         </div>

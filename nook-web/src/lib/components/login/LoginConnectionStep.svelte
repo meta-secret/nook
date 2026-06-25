@@ -1,10 +1,16 @@
 <script lang="ts">
   import { Cloud, HardDrive, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { StorageProvider } from '$lib/auth-providers'
-  import { providerStorageDetail } from '$lib/auth-providers'
+  import {
+    localizeProviderLabel,
+    providerStorageDetail,
+    type StorageProvider,
+  } from '$lib/auth-providers'
+
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     providers,
     activeProviderId,
     isVerifying,
@@ -13,6 +19,7 @@
     onSelectProvider,
     onConnect,
   }: {
+    vault: VaultState
     providers: StorageProvider[]
     activeProviderId: string | null
     isVerifying: boolean
@@ -27,7 +34,7 @@
   <div
     class="space-y-2"
     role="radiogroup"
-    aria-label="Storage provider"
+    aria-label={vault.t('login_wizard.storage_provider')}
     data-testid="saved-providers-list"
   >
     {#each providers as provider (provider.id)}
@@ -59,13 +66,15 @@
           <HardDrive class="size-4 shrink-0 opacity-80" />
         {/if}
         <div class="min-w-0 flex-1">
-          <div class="truncate font-medium">{provider.label}</div>
+          <div class="truncate font-medium">
+            {localizeProviderLabel(provider.label, vault.t)}
+          </div>
           <div
             class="truncate font-mono text-[11px] {selected
               ? 'text-muted-foreground'
               : 'text-muted-foreground/80'}"
           >
-            {providerStorageDetail(provider)}
+            {providerStorageDetail(provider, vault.t)}
           </div>
         </div>
       </button>
@@ -82,9 +91,9 @@
   >
     {#if isConnecting}
       <RefreshCw class="size-4 animate-spin" />
-      Connecting…
+      {vault.t('common.connecting')}
     {:else}
-      Connect
+      {vault.t('common.connect')}
     {/if}
   </Button>
 </div>

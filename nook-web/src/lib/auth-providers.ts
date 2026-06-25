@@ -160,22 +160,47 @@ export function providerDefaultLabel(
   return 'This device'
 }
 
+export function localizeProviderLabel(
+  label: string,
+  t: (key: string) => string,
+): string {
+  if (label === 'This device') {
+    return t('provider_picker.this_device')
+  }
+  if (label === 'GitHub') {
+    return t('provider_picker.github')
+  }
+  if (label.startsWith('GitHub · ')) {
+    const repo = label.slice('GitHub · '.length)
+    return `${t('provider_picker.github')} · ${repo}`
+  }
+  return label
+}
+
 /** Safe PAT hint for provider lists — never shows the full token. */
-export function maskGithubPat(pat: string | undefined): string {
+export function maskGithubPat(
+  pat: string | undefined,
+  t?: (key: string) => string,
+): string {
   const trimmed = pat?.trim() ?? ''
-  if (!trimmed) return 'No token saved'
+  if (!trimmed) return t ? t('auth_storage.no_token_saved') : 'No token saved'
   const prefixLen = trimmed.startsWith('github_pat_') ? 14 : 10
   if (trimmed.length <= prefixLen) return '••••'
   return `${trimmed.slice(0, prefixLen)}…`
 }
 
 /** Secondary line for provider rows in management / picker UIs. */
-export function providerStorageDetail(provider: StorageProvider): string {
+export function providerStorageDetail(
+  provider: StorageProvider,
+  t?: (key: string) => string,
+): string {
   if (provider.type === 'local') {
-    return 'Vault in browser storage on this device'
+    return t
+      ? t('provider_picker.this_device_desc')
+      : 'Vault in browser storage on this device'
   }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-  return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat)}`
+  return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat, t)}`
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {

@@ -19,8 +19,10 @@
     peekEnrollmentIssuedAt,
   } from '$lib/enrollment-code'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     passwordEntries,
     isBusy,
     passwordError,
@@ -33,6 +35,7 @@
     embedded = false,
     allowIssueCode = true,
   }: {
+    vault: VaultState
     passwordEntries: VaultPasswordEntrySummary[]
     isBusy: boolean
     passwordError: string
@@ -79,11 +82,14 @@
     const ms = Date.parse(issuedAt)
     if (!Number.isFinite(ms)) return ''
     const delta = Date.now() - ms
-    if (delta < 60_000) return 'issued just now'
+    if (delta < 60_000) return vault.t('vault_passwords.issued_just_now')
     const minutes = Math.round(delta / 60_000)
-    if (minutes < 60) return `issued ${minutes}m ago`
+    if (minutes < 60)
+      return vault.t('vault_passwords.issued_mins_ago', {
+        mins: String(minutes),
+      })
     const hours = Math.round(minutes / 60)
-    return `issued ${hours}h ago`
+    return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
   })
 
   $effect(() => {
@@ -129,15 +135,15 @@
   async function submitAddPassword() {
     localError = ''
     if (!labelInput.trim()) {
-      localError = 'Enter a label, like "John\'s MacBook".'
+      localError = vault.t('vault_passwords.enter_label_error')
       return
     }
     if (passwordInput.length < 5) {
-      localError = 'Password must be at least 5 characters.'
+      localError = vault.t('vault_passwords.min_length_error')
       return
     }
     if (passwordInput !== confirmInput) {
-      localError = 'Passwords do not match.'
+      localError = vault.t('vault_passwords.mismatch_error')
       return
     }
     try {
@@ -152,11 +158,11 @@
     localError = ''
     if (!activeEntryId) return
     if (passwordInput.length < 5) {
-      localError = 'Password must be at least 5 characters.'
+      localError = vault.t('vault_passwords.min_length_error')
       return
     }
     if (passwordInput !== confirmInput) {
-      localError = 'Passwords do not match.'
+      localError = vault.t('vault_passwords.mismatch_error')
       return
     }
     try {
@@ -182,7 +188,7 @@
     localError = ''
     if (!activeEntryId) return
     if (!passwordInput) {
-      localError = 'Enter the password for this entry to issue a code.'
+      localError = vault.t('vault_passwords.enter_pw_error')
       return
     }
     try {
@@ -190,7 +196,10 @@
       passwordInput = ''
       confirmInput = ''
     } catch (e: unknown) {
-      localError = e instanceof Error ? e.message : 'Failed to issue code.'
+      localError =
+        e instanceof Error
+          ? e.message
+          : vault.t('vault_passwords.failed_issue_error')
     }
   }
 
@@ -222,11 +231,10 @@
           class="inline-flex items-center gap-2 text-base font-semibold text-foreground"
         >
           <KeyRound class="size-4 text-primary" />
-          Onboard another device
+          {vault.t('vault_passwords.title')}
         </h2>
         <p class="text-xs text-muted-foreground text-pretty max-w-prose">
-          Generate a QR/link that carries provider access and a vault password
-          so another browser can join this vault.
+          {vault.t('vault_passwords.desc')}
         </p>
       </div>
       <span
@@ -238,9 +246,11 @@
         {#if hasPasswords}
           <ShieldCheck class="size-3" />
           {passwordEntries.length}
-          {passwordEntries.length === 1 ? 'password' : 'passwords'}
+          {passwordEntries.length === 1
+            ? vault.t('common.item')
+            : vault.t('common.items')}
         {:else}
-          <Lock class="size-3" /> None
+          <Lock class="size-3" /> {vault.t('common.none')}
         {/if}
       </span>
     </header>
@@ -252,14 +262,12 @@
     >
       <ShieldAlert class="size-4 mt-0.5 shrink-0" />
       <span class="text-pretty">
-        Create a vault password to unlock from another browser or generate an
-        onboarding QR from the Onboard page. Use a long, unique value.
+        {vault.t('vault_passwords.warning_banner')}
       </span>
     </div>
   {:else}
     <p class="mb-4 text-xs text-muted-foreground text-pretty">
-      These passwords can unlock the vault and can be selected on the Onboard
-      page when you generate a QR/link for another device.
+      {vault.t('vault_passwords.info_desc')}
     </p>
   {/if}
 
@@ -279,7 +287,9 @@
                 </p>
                 {#if entry.created_at}
                   <p class="text-xs text-muted-foreground">
-                    Added {entry.created_at.slice(0, 10)}
+                    {vault.t('vault_passwords.added_date', {
+                      date: entry.created_at.slice(0, 10),
+                    })}
                   </p>
                 {/if}
               </div>
@@ -311,7 +321,9 @@
                   onclick={() => openPanel('issue', entry.id)}
                 >
                   <QrCode class="size-4" />
-                  <span class="hidden sm:inline">Generate QR</span>
+                  <span class="hidden sm:inline"
+                    >{vault.t('vault_passwords.generate_qr')}</span
+                  >
                 </Button>
               {/if}
               <Button
@@ -341,7 +353,9 @@
       onclick={() => openPanel('add')}
     >
       <Plus class="size-4" />
-      {hasPasswords ? 'Create another password' : 'Create vault password'}
+      {hasPasswords
+        ? vault.t('vault_passwords.create_another')
+        : vault.t('vault_passwords.create_password')}
     </Button>
   {/if}
 
@@ -359,27 +373,29 @@
             for="vault-pw-label"
             class="text-sm font-medium text-muted-foreground"
           >
-            Label
+            {vault.t('vault_passwords.label')}
           </label>
           <input
             id="vault-pw-label"
             type="text"
             class="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="John's MacBook"
+            placeholder={vault.t('vault_passwords.label_placeholder')}
             bind:value={labelInput}
             data-testid="vault-password-label"
           />
         </div>
       {:else if activeEntry}
         <p class="text-xs text-muted-foreground">
-          Rotating password for <span class="font-medium text-foreground"
-            >{activeEntry.label}</span
+          {vault.t('vault_passwords.rotating_for_prefix')}<span
+            class="font-medium text-foreground">{activeEntry.label}</span
           >.
         </p>
       {/if}
       <div class="space-y-1.5">
         <label for="vault-pw" class="text-sm font-medium text-muted-foreground">
-          {panel === 'add' ? 'Password' : 'New password'}
+          {panel === 'add'
+            ? vault.t('vault.fields.password')
+            : vault.t('vault_passwords.new_password')}
         </label>
         <input
           id="vault-pw"
@@ -395,7 +411,7 @@
           for="vault-pw-confirm"
           class="text-sm font-medium text-muted-foreground"
         >
-          Confirm password
+          {vault.t('vault_passwords.confirm_password')}
         </label>
         <input
           id="vault-pw-confirm"
@@ -409,9 +425,11 @@
       <div class="flex items-center justify-between text-xs">
         <label class="inline-flex items-center gap-2 text-muted-foreground">
           <input type="checkbox" bind:checked={showPassword} />
-          Show
+          {vault.t('vault_passwords.show')}
         </label>
-        <span class="text-muted-foreground">Minimum 5 characters.</span>
+        <span class="text-muted-foreground"
+          >{vault.t('vault_passwords.min_chars')}</span
+        >
       </div>
       {#if localError || passwordError}
         <p class="text-xs text-destructive" data-testid="vault-password-error">
@@ -426,7 +444,7 @@
           onclick={closePanel}
           disabled={isBusy}
         >
-          Cancel
+          {vault.t('common.cancel')}
         </Button>
         <Button
           type="submit"
@@ -435,10 +453,13 @@
           data-testid="submit-vault-password"
         >
           {#if isBusy}
-            <RefreshCw class="size-3.5 animate-spin" /> Working…
+            <RefreshCw class="size-3.5 animate-spin" />
+            {vault.t('vault_passwords.working')}
           {:else}
             <ShieldCheck class="size-3.5" />
-            {panel === 'add' ? 'Add password' : 'Rotate'}
+            {panel === 'add'
+              ? vault.t('vault_passwords.add_password')
+              : vault.t('vault_passwords.rotate')}
           {/if}
         </Button>
       </div>
@@ -448,10 +469,9 @@
   {#if panel === 'remove' && activeEntry}
     <div class="space-y-3">
       <p class="text-xs text-muted-foreground text-pretty">
-        Remove <span class="font-medium text-foreground"
-          >{activeEntry.label}</span
-        >? Other passwords stay active. If this is the last password, the vault
-        returns to device-key unlock for this browser.
+        {vault.t('vault_passwords.remove_body_prefix')}<span
+          class="font-medium text-foreground">{activeEntry.label}</span
+        >{vault.t('vault_passwords.remove_body_suffix')}
       </p>
       <div class="flex items-center justify-end gap-2">
         <Button
@@ -461,7 +481,7 @@
           onclick={closePanel}
           disabled={isBusy}
         >
-          Cancel
+          {vault.t('common.cancel')}
         </Button>
         <Button
           type="button"
@@ -472,9 +492,10 @@
           data-testid="confirm-remove-vault-password"
         >
           {#if isBusy}
-            <RefreshCw class="size-3.5 animate-spin" /> Removing…
+            <RefreshCw class="size-3.5 animate-spin" />
+            {vault.t('vault_passwords.working')}
           {:else}
-            <Trash2 class="size-3.5" /> Remove
+            <Trash2 class="size-3.5" /> {vault.t('common.remove')}
           {/if}
         </Button>
       </div>
@@ -492,16 +513,18 @@
           }}
         >
           <p class="text-xs text-muted-foreground text-pretty">
-            Re-type the password for <span class="font-medium text-foreground"
-              >{activeEntry.label}</span
-            > to generate a QR/link for the new device.
+            {vault.t('vault_passwords.issue_desc_prefix')}<span
+              class="font-medium text-foreground">{activeEntry.label}</span
+            >{vault.t('vault_passwords.issue_desc_suffix')}
           </p>
           <div class="space-y-1.5">
             <label
               for="issue-pw"
               class="text-sm font-medium text-muted-foreground"
             >
-              Password for {activeEntry.label}
+              {vault.t('vault_passwords.password_for', {
+                label: activeEntry.label,
+              })}
             </label>
             <input
               id="issue-pw"
@@ -524,14 +547,15 @@
               size="sm"
               onclick={closePanel}
             >
-              Cancel
+              {vault.t('common.cancel')}
             </Button>
             <Button
               type="submit"
               size="sm"
               data-testid="generate-enrollment-code-btn"
             >
-              <QrCode class="size-3.5" /> Generate QR/link
+              <QrCode class="size-3.5" />
+              {vault.t('vault_passwords.generate_qr')}
             </Button>
           </div>
         </form>
@@ -541,7 +565,7 @@
         >
           <div class="flex items-start justify-between gap-3">
             <p class="text-xs text-muted-foreground text-pretty">
-              Scan this QR with the new device to open Nook, or copy the link.
+              {vault.t('vault_passwords.scan_qr_desc')}
               {#if issuedAgo}
                 <span
                   class="ml-1 text-muted-foreground/80"
@@ -558,9 +582,9 @@
               data-testid="copy-enrollment-code-btn"
             >
               {#if copied}
-                <Check class="size-3" /> Copied
+                <Check class="size-3" /> {vault.t('vault.copied')}
               {:else}
-                <Copy class="size-3" /> Copy
+                <Copy class="size-3" /> {vault.t('vault.copy')}
               {/if}
             </button>
           </div>
@@ -597,7 +621,7 @@
                 closePanel()
               }}
             >
-              Done
+              {vault.t('common.done')}
             </Button>
           </div>
         </div>
