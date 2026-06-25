@@ -69,6 +69,8 @@ export function createE2eGithubRepoName(): string {
 
 /** UI actions we control should complete in a couple of seconds. */
 export const UI_TIMEOUT_MS = 5_000
+/** Password unlock / enrollment runs scrypt in wasm — allow more time on CI. */
+export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
 export type GithubE2eTarget = { pat: string; repoName: string }
 
@@ -285,10 +287,11 @@ async function setupGithubProvider(page: Page, pat: string, repoName: string) {
   await page.getByTestId('github-pat-input').fill(pat)
 }
 
-export async function waitForVaultUnlocked(page: Page) {
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+export async function waitForVaultUnlocked(
+  page: Page,
+  timeout = UI_TIMEOUT_MS,
+) {
+  await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
 }
 
 export async function connectLocalVault(page: Page) {
@@ -540,7 +543,9 @@ export async function connectLoginProvider(page: Page) {
         .or(page.getByTestId('saved-provider-github'))
         .first()
       await expect(provider).toBeVisible({ timeout: UI_TIMEOUT_MS })
-      await provider.click()
+      if ((await provider.getAttribute('aria-checked')) !== 'true') {
+        await provider.click()
+      }
       await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
     }
   }

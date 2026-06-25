@@ -9,6 +9,7 @@ mod multi_device;
 mod password;
 mod password_envelope;
 mod secret_types;
+mod session;
 mod validation;
 mod vault_crypto;
 mod vault_format;
@@ -41,6 +42,7 @@ pub use password_envelope::{
     PasswordUnlockEntry, VaultUnlock, attach_password_envelope, create_password_entry,
     resolve_keys_from_entry, resolve_keys_from_password, verify_password, verify_password_entry,
 };
+pub use session::{ReplaceSecretInput, replace_secret};
 pub use validation::{
     DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets,
     validate_connect, validate_github_pat, validate_github_repo_name, validate_secret_data,

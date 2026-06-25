@@ -6,6 +6,7 @@
     StickyNote,
     Eye,
     EyeOff,
+    Pencil,
     Trash2,
     Copy,
     Check,
@@ -19,6 +20,7 @@
     revealSecrets,
     copiedKey,
     onToggleReveal,
+    onEditItem,
     onDeleteSecret,
     onCopyToClipboard,
   }: {
@@ -27,6 +29,7 @@
     revealSecrets: Record<string, boolean>
     copiedKey: string | null
     onToggleReveal: (id: string) => void
+    onEditItem: (item: VaultItem) => void
     onDeleteSecret: (id: string) => Promise<void>
     onCopyToClipboard: (
       text: string,
@@ -68,6 +71,15 @@
           {#if revealSecrets[item.id]}<EyeOff class="size-3.5" />{:else}<Eye
               class="size-3.5"
             />{/if}
+        </button>
+        <button
+          type="button"
+          onclick={() => onEditItem(item)}
+          aria-label="Edit item"
+          data-testid="edit-secret-btn"
+          class="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <Pencil class="size-3.5" />
         </button>
         <button
           type="button"

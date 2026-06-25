@@ -85,6 +85,42 @@ export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
   }
 }
 
+export function vaultItemToInput(item: VaultItem): VaultItemInput {
+  if (item.type === 'login') {
+    return {
+      type: 'login',
+      websiteUrl: item.websiteUrl,
+      username: item.username,
+      password: item.password,
+      notes: item.notes,
+    }
+  }
+  if (item.type === 'api-key') {
+    return {
+      type: 'api-key',
+      websiteUrl: item.websiteUrl,
+      key: item.key,
+      expiresAt: item.expiresAt,
+    }
+  }
+  if (item.type === 'seed-phrase') {
+    return {
+      type: 'seed-phrase',
+      name: item.name,
+      seed: item.seed,
+    }
+  }
+  return {
+    type: 'secure-note',
+    title: item.title,
+    note: item.note,
+  }
+}
+
+export function vaultItemDataYaml(item: VaultItemInput): string {
+  return createVaultItemRecord(item).data
+}
+
 export function parseVaultItem(record: SecretRecord): VaultItem {
   const value = parseYaml(record.data) as Record<string, unknown>
   if (record.type === 'login') {

@@ -11,6 +11,7 @@ import {
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForVaultUnlocked,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
 
 test.describe('vault password envelope (local)', () => {
@@ -292,8 +293,12 @@ test.describe('enrollment link deep link (local)', () => {
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
+    // Same browser context shares IndexedDB where the local vault file lives.
     const pageB = await context.newPage()
     await pageB.goto(link)
+    await expect(pageB.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await expect(pageB.getByTestId('enrollment-scan-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -302,7 +307,7 @@ test.describe('enrollment link deep link (local)', () => {
     ).toContainText('Link test')
     await pageB.getByTestId('enrollment-password-input').fill('link-pass')
     await pageB.getByTestId('submit-enrollment-code-btn').click()
-    await waitForVaultUnlocked(pageB)
+    await waitForVaultUnlocked(pageB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     const row = pageB.getByTestId('secret-row').filter({ hasText: secretKey })
     await expect(row).toBeVisible()
 

@@ -213,7 +213,8 @@ export class VaultState {
       this.isInitializing = false
     }
 
-    const autoUnlock = this.shouldAutoUnlock()
+    const hasPendingEnrollment = Boolean(this.pendingEnrollmentFromUrl)
+    const autoUnlock = !hasPendingEnrollment && this.shouldAutoUnlock()
     if (autoUnlock) {
       await this.loadDb()
       if (!this.isAuthenticated && this.activeProvider) {
@@ -1282,6 +1283,35 @@ export class VaultState {
       this.showSuccess('Secret deleted successfully.')
     } catch (e: unknown) {
       this.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
+      throw e
+    } finally {
+      this.isSaving = false
+    }
+  }
+
+  async handleReplaceSecret(oldId: string, type: VaultItemType, data: string) {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isSaving = true
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+    try {
+      const newId = generateId()
+      await this.enqueueStorage(async () => {
+        const rawRecords = (await this.manager!.replace_secret(
+          oldId,
+          newId,
+          type,
+          data,
+        )) as NookSecretRecord[]
+        this.secrets = mapWasmRecords(rawRecords)
+      })
+      this.refreshSecretsFromSession()
+      this.showSuccess('Item updated successfully.')
+    } catch (e: unknown) {
+      this.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`
       throw e
     } finally {
       this.isSaving = false
