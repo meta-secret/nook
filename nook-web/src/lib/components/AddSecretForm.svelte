@@ -10,7 +10,6 @@
     Eye,
     EyeOff,
     ChevronDown,
-    ChevronRight,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -214,88 +213,74 @@
         Choose a type — the form shows only the fields you need.
       </p>
     </div>
-    <div class="space-y-2" data-testid="item-type-picker">
+    <div class="grid grid-cols-2 gap-3 sm:gap-4" data-testid="item-type-picker">
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         data-testid="item-type-login"
         onclick={() => (selectedType = 'login')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
         >
-          <Globe class="size-5" />
+          <Globe class="size-6" />
         </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground">Login</span>
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >Website account</span
-          >
-        </span>
-        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+        <span class="block text-sm font-semibold text-foreground">Login</span>
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >Website account</span
+        >
       </button>
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         data-testid="item-type-api-key"
         onclick={() => (selectedType = 'api-key')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
         >
-          <Braces class="size-5" />
+          <Braces class="size-6" />
         </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >API key</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >Token or auth key</span
-          >
-        </span>
-        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+        <span class="block text-sm font-semibold text-foreground">API key</span>
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >Token or auth key</span
+        >
       </button>
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         data-testid="item-type-seed-phrase"
         onclick={() => (selectedType = 'seed-phrase')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
         >
-          <Sprout class="size-5" />
+          <Sprout class="size-6" />
         </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >Seed phrase</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >BIP39 recovery</span
-          >
-        </span>
-        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+        <span class="block text-sm font-semibold text-foreground"
+          >Seed phrase</span
+        >
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >BIP39 recovery</span
+        >
       </button>
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
+        class="flex flex-col items-center justify-center p-5 text-center rounded-xl border border-border/40 bg-muted/15 transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         data-testid="item-type-secure-note"
         onclick={() => (selectedType = 'secure-note')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
+          class="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-background/80 text-primary mb-3 sm:border-border/60 sm:bg-background"
         >
-          <StickyNote class="size-5" />
+          <StickyNote class="size-6" />
         </div>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >Secure note</span
-          >
-          <span class="mt-0.5 block text-xs text-muted-foreground"
-            >Private text (Markdown)</span
-          >
-        </span>
-        <ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+        <span class="block text-sm font-semibold text-foreground"
+          >Secure note</span
+        >
+        <span class="mt-1 block text-xs text-muted-foreground"
+          >Private text (Markdown)</span
+        >
       </button>
     </div>
   </div>
