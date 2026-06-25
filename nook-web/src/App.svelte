@@ -60,10 +60,10 @@
   const authenticatedShellSpacing = $derived(
     secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
   )
-  const authenticatedShellMinHeight = $derived(
+  const authenticatedShellSize = $derived(
     secretsAddOpen
-      ? 'min-h-[calc(100svh-5rem)] sm:min-h-[calc(100svh-7rem)]'
-      : 'min-h-[calc(100svh-11rem)] sm:min-h-[calc(100svh-7rem)]',
+      ? 'min-h-[calc(100svh-5rem)] sm:min-h-0 sm:h-[min(32rem,calc(100svh-7rem))]'
+      : 'min-h-[calc(100svh-11rem)] sm:min-h-0 sm:h-[min(32rem,calc(100svh-7rem))]',
   )
 </script>
 
@@ -198,7 +198,7 @@
       </div>
     {:else if vault.isAuthenticated}
       <div
-        class="flex w-full {authenticatedShellMinHeight} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
+        class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
         data-testid="authenticated-shell"
       >
         <div class="min-h-0 min-w-0 flex-1 overflow-y-auto">
