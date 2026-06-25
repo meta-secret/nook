@@ -239,6 +239,8 @@
               }}
               onAddSecret={(id, type, data) =>
                 vault.handleAddSecret(id, type, data)}
+              onReplaceSecret={(oldId, type, data) =>
+                vault.handleReplaceSecret(oldId, type, data)}
               onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
               onGeneratePassword={(
                 length,

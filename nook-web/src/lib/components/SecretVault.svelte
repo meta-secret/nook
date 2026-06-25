@@ -23,6 +23,7 @@
     isSaving,
     secrets = [] as SecretRecord[],
     onAddSecret,
+    onReplaceSecret,
     onDeleteSecret,
     onGeneratePassword,
     onAddModeChange,
@@ -31,6 +32,11 @@
     secrets?: SecretRecord[]
     onAddSecret: (
       id: string,
+      type: VaultItemType,
+      data: string,
+    ) => Promise<void>
+    onReplaceSecret: (
+      oldId: string,
       type: VaultItemType,
       data: string,
     ) => Promise<void>
@@ -49,6 +55,7 @@
   let revealSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | null>(null)
   let addSecretOpen = $state(false)
+  let editItem = $state<VaultItem | null>(null)
 
   const items = $derived(secrets.map(parseVaultItem))
   const filteredItems = $derived.by(() => {
@@ -118,12 +125,24 @@
   }
 
   function openAddSecret() {
+    editItem = null
     addSecretOpen = true
     onAddModeChange?.(true)
   }
 
   function closeAddSecret() {
     addSecretOpen = false
+    onAddModeChange?.(false)
+  }
+
+  function openEditItem(item: VaultItem) {
+    addSecretOpen = false
+    editItem = item
+    onAddModeChange?.(true)
+  }
+
+  function closeEditItem() {
+    editItem = null
     onAddModeChange?.(false)
   }
 
@@ -165,8 +184,39 @@
       <AddSecretForm
         {isSaving}
         {onAddSecret}
+        {onReplaceSecret}
         {onGeneratePassword}
         onCancel={closeAddSecret}
+      />
+    </div>
+  {:else if editItem}
+    <div
+      class="animate-in fade-in slide-in-from-right-2 duration-200"
+      data-testid="edit-secret-panel"
+    >
+      <div class="mb-5 flex items-center gap-3">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          data-testid="edit-secret-back-btn"
+          onclick={closeEditItem}
+        >
+          <ArrowLeft class="size-4" />
+          Vault
+        </button>
+        <div class="min-w-0">
+          <h2 class="text-base font-semibold text-foreground">Edit item</h2>
+          <p class="text-xs text-muted-foreground">Update this secret</p>
+        </div>
+      </div>
+
+      <AddSecretForm
+        {isSaving}
+        {onAddSecret}
+        {onReplaceSecret}
+        {onGeneratePassword}
+        initialItem={editItem}
+        onCancel={closeEditItem}
       />
     </div>
   {:else}
@@ -264,6 +314,7 @@
                     {revealSecrets}
                     {copiedKey}
                     onToggleReveal={toggleReveal}
+                    onEditItem={openEditItem}
                     {onDeleteSecret}
                     onCopyToClipboard={copyToClipboard}
                   />

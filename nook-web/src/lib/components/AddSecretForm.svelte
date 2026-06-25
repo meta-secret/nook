@@ -13,6 +13,8 @@
   import { Button } from '$lib/components/ui/button'
   import {
     createVaultItemRecord,
+    vaultItemDataYaml,
+    type VaultItem,
     type VaultItemInput,
     type VaultItemType,
   } from '$lib/nook'
@@ -21,12 +23,19 @@
   let {
     isSaving,
     onAddSecret,
+    onReplaceSecret,
     onGeneratePassword,
     onCancel,
+    initialItem = null,
   }: {
     isSaving: boolean
     onAddSecret: (
       id: string,
+      type: VaultItemType,
+      data: string,
+    ) => Promise<void>
+    onReplaceSecret?: (
+      oldId: string,
       type: VaultItemType,
       data: string,
     ) => Promise<void>
@@ -38,7 +47,10 @@
       symbols: boolean,
     ) => string
     onCancel: () => void
+    initialItem?: VaultItem | null
   } = $props()
+
+  const isEditMode = $derived(initialItem !== null)
 
   let selectedType = $state<VaultItemType | null>(null)
   let showPasswordOptions = $state(false)
@@ -61,16 +73,80 @@
   let genSymbols = $state(true)
 
   const typeTitle = $derived(
-    selectedType === 'login'
-      ? 'New login'
-      : selectedType === 'api-key'
-        ? 'New API key'
-        : selectedType === 'seed-phrase'
-          ? 'New seed phrase'
-          : selectedType === 'secure-note'
-            ? 'New secure note'
-            : 'Add item',
+    isEditMode
+      ? selectedType === 'login'
+        ? 'Edit login'
+        : selectedType === 'api-key'
+          ? 'Edit API key'
+          : selectedType === 'seed-phrase'
+            ? 'Edit seed phrase'
+            : selectedType === 'secure-note'
+              ? 'Edit secure note'
+              : 'Edit item'
+      : selectedType === 'login'
+        ? 'New login'
+        : selectedType === 'api-key'
+          ? 'New API key'
+          : selectedType === 'seed-phrase'
+            ? 'New seed phrase'
+            : selectedType === 'secure-note'
+              ? 'New secure note'
+              : 'Add item',
   )
+
+  $effect(() => {
+    const item = initialItem
+    if (!item) return
+    selectedType = item.type
+    if (item.type === 'login') {
+      websiteUrl = item.websiteUrl
+      username = item.username
+      password = item.password
+      notes = item.notes ?? ''
+    } else if (item.type === 'api-key') {
+      websiteUrl = item.websiteUrl
+      apiKey = item.key
+      expiresAt = item.expiresAt ?? ''
+    } else if (item.type === 'seed-phrase') {
+      accountName = item.name
+      seedPhrase = item.seed
+    } else {
+      noteTitle = item.title
+      noteBody = item.note
+    }
+  })
+
+  function buildItem(): VaultItemInput {
+    if (selectedType === 'login') {
+      return {
+        type: 'login',
+        websiteUrl: websiteUrl.trim(),
+        username: username.trim(),
+        password,
+        notes: notes.trim(),
+      }
+    }
+    if (selectedType === 'api-key') {
+      return {
+        type: 'api-key',
+        websiteUrl: websiteUrl.trim(),
+        key: apiKey,
+        expiresAt,
+      }
+    }
+    if (selectedType === 'seed-phrase') {
+      return {
+        type: 'seed-phrase',
+        name: accountName.trim(),
+        seed: seedPhrase.trim(),
+      }
+    }
+    return {
+      type: 'secure-note',
+      title: noteTitle.trim(),
+      note: noteBody,
+    }
+  }
 
   function resetForm() {
     selectedType = null
@@ -96,39 +172,19 @@
     e.preventDefault()
     if (!selectedType) return
 
-    let item: VaultItemInput
-    if (selectedType === 'login') {
-      item = {
-        type: 'login',
-        websiteUrl: websiteUrl.trim(),
-        username: username.trim(),
-        password,
-        notes: notes.trim(),
-      }
-    } else if (selectedType === 'api-key') {
-      item = {
-        type: 'api-key',
-        websiteUrl: websiteUrl.trim(),
-        key: apiKey,
-        expiresAt,
-      }
-    } else if (selectedType === 'seed-phrase') {
-      item = {
-        type: 'seed-phrase',
-        name: accountName.trim(),
-        seed: seedPhrase.trim(),
-      }
-    } else {
-      if (!noteBody.trim()) return
-      item = {
-        type: 'secure-note',
-        title: noteTitle.trim(),
-        note: noteBody,
-      }
-    }
+    const item = buildItem()
+    if (selectedType === 'secure-note' && !noteBody.trim()) return
 
-    const record = createVaultItemRecord(item)
-    await onAddSecret(record.id, record.type, record.data)
+    if (isEditMode && initialItem && onReplaceSecret) {
+      await onReplaceSecret(
+        initialItem.id,
+        selectedType,
+        vaultItemDataYaml(item),
+      )
+    } else {
+      const record = createVaultItemRecord(item)
+      await onAddSecret(record.id, record.type, record.data)
+    }
     resetForm()
     onCancel()
   }
@@ -144,7 +200,7 @@
   }
 </script>
 
-{#if selectedType === null}
+{#if selectedType === null && !isEditMode}
   <div class="space-y-5">
     <div class="space-y-1">
       <h3 class="text-base font-semibold text-foreground">
@@ -240,16 +296,22 @@
     </div>
   </div>
 {:else}
-  <form onsubmit={handleSubmit} class="space-y-5">
+  <form
+    onsubmit={handleSubmit}
+    class="space-y-5"
+    data-testid={isEditMode ? 'edit-secret-form' : undefined}
+  >
     <div class="space-y-3">
-      <button
-        type="button"
-        class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        onclick={() => (selectedType = null)}
-      >
-        <ArrowLeft class="size-4" />
-        Change type
-      </button>
+      {#if !isEditMode}
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          onclick={() => (selectedType = null)}
+        >
+          <ArrowLeft class="size-4" />
+          Change type
+        </button>
+      {/if}
       <h3 class="text-base font-semibold text-foreground">{typeTitle}</h3>
     </div>
 
@@ -469,7 +531,7 @@
         {#if isSaving}
           <RefreshCw class="size-4 animate-spin" /> Saving…
         {:else}
-          Save item
+          {isEditMode ? 'Save changes' : 'Save item'}
         {/if}
       </Button>
     </div>

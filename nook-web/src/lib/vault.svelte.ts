@@ -1287,4 +1287,33 @@ export class VaultState {
       this.isSaving = false
     }
   }
+
+  async handleReplaceSecret(oldId: string, type: VaultItemType, data: string) {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isSaving = true
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    })
+    try {
+      const newId = generateId()
+      await this.enqueueStorage(async () => {
+        const rawRecords = (await this.manager!.replace_secret(
+          oldId,
+          newId,
+          type,
+          data,
+        )) as NookSecretRecord[]
+        this.secrets = mapWasmRecords(rawRecords)
+      })
+      this.refreshSecretsFromSession()
+      this.showSuccess('Item updated successfully.')
+    } catch (e: unknown) {
+      this.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`
+      throw e
+    } finally {
+      this.isSaving = false
+    }
+  }
 }
