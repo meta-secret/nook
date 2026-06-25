@@ -9,6 +9,7 @@ import {
   connectGithubJoinerDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
+  expandSettingsSection,
   githubPat,
   openStorageSettings,
   resetGithubVault,
@@ -175,11 +176,13 @@ describeMultiDevice('multi-device github vault', () => {
     expect(revealed).toBe(joinerSecretValue)
   })
 
-  test('settings keeps storage and password management separate from device onboarding', async () => {
+  test('settings shows storage, passwords, and devices separately from onboarding', async () => {
     await openStorageSettings(deviceA)
     await expect(deviceA.getByTestId('storage-providers-section')).toBeVisible()
     await expect(deviceA.getByTestId('vault-unlock-section')).toBeVisible()
-    await expect(deviceA.getByTestId('devices-access-section')).toHaveCount(0)
+    await expect(deviceA.getByTestId('vault-devices-section')).toBeVisible()
+    await expandSettingsSection(deviceA, 'devices')
+    await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()
     await deviceA.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(deviceA)
   })

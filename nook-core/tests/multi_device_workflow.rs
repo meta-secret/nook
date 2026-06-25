@@ -4,8 +4,8 @@ use nook_core::{
     ApiKeySecret, Database, DeviceIdentity, SecretValue, VaultCrypto, VaultFormat, VaultKeys,
     approve_join_request, create_join_request_record, deserialize_stored, enroll_device_with_keys,
     generate_vault_keys, genesis_auth_record, genesis_members_records, list_join_requests,
-    replace_member_records, resolve_member_roster, resolve_members_key, resolve_secrets_key,
-    serialize_stored, user_stored_records,
+    rename_vault_member, replace_member_records, resolve_member_roster, resolve_members_key,
+    resolve_secrets_key, revoke_vault_member, serialize_stored, user_stored_records,
 };
 
 fn api_key(value: &str) -> SecretValue {
@@ -200,4 +200,59 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() {
         joiner.decrypt_envelope(&env.members_key).unwrap(),
         keys.members_key
     );
+}
+
+#[test]
+fn rename_member_label_survives_yaml_roundtrip() {
+    let keys = generate_vault_keys().unwrap();
+    let (device, mut records) = genesis_vault(&keys);
+    let member_records = rename_vault_member(
+        &records,
+        &keys.members_key,
+        &device.auth_id(),
+        "Kitchen iPad",
+    )
+    .unwrap();
+    replace_member_records(&mut records, member_records);
+
+    let yaml = serialize_stored(&records, VaultFormat::Yaml).unwrap();
+    assert!(!yaml.contains("Kitchen iPad"));
+    let loaded = deserialize_stored(&yaml, VaultFormat::Yaml).unwrap();
+    let roster = resolve_member_roster(&loaded, &keys.members_key).unwrap();
+    assert_eq!(roster.len(), 1);
+    assert_eq!(roster[0].label.as_deref(), Some("Kitchen iPad"));
+}
+
+#[test]
+fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() {
+    let keys = generate_vault_keys().unwrap();
+    let (genesis, mut records) = genesis_vault(&keys);
+    let joiner = DeviceIdentity::generate().unwrap();
+    records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z").unwrap());
+    let join = list_join_requests(&records).pop().unwrap();
+
+    let (auth, join_key, member_records) = approve_join_request(
+        &keys.secrets_key,
+        &keys.members_key,
+        &join,
+        &genesis,
+        &records,
+    )
+    .unwrap();
+    records.retain(|r| r.key != join_key);
+    records.push(auth);
+    replace_member_records(&mut records, member_records);
+
+    let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id()).unwrap();
+    let yaml = serialize_stored(&revoked, VaultFormat::Yaml).unwrap();
+    let loaded = deserialize_stored(&yaml, VaultFormat::Yaml).unwrap();
+
+    assert!(resolve_secrets_key(&loaded, &joiner).is_err());
+    assert_eq!(
+        resolve_secrets_key(&loaded, &genesis).unwrap(),
+        keys.secrets_key
+    );
+    let roster = resolve_member_roster(&loaded, &keys.members_key).unwrap();
+    assert_eq!(roster.len(), 1);
+    assert_eq!(roster[0].auth_id, genesis.auth_id());
 }

@@ -8,11 +8,13 @@
     isBusy = false,
     onApproveJoin,
     onRefresh,
+    onOpenDevicesSettings,
   }: {
     pendingJoins: JoinRequest[]
     isBusy?: boolean
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onRefresh?: () => void | Promise<void>
+    onOpenDevicesSettings?: () => void
   } = $props()
 
   function truncate(value: string, head = 10, tail = 8) {
@@ -37,24 +39,37 @@
             : `${pendingJoins.length} devices want to join`}
         </p>
         <p class="text-xs leading-relaxed text-muted-foreground">
-          Approve a device to encrypt vault keys for it. You can also manage
-          joins in storage settings.
+          Approve here or manage requests in Settings → Devices.
         </p>
       </div>
-      {#if onRefresh}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="shrink-0 border-border"
-          disabled={isBusy}
-          data-testid="refresh-joins-banner-btn"
-          aria-label="Refresh join requests"
-          onclick={() => void onRefresh()}
-        >
-          <RefreshCw class="size-3.5 {isBusy ? 'animate-spin' : ''}" />
-        </Button>
-      {/if}
+      <div class="flex shrink-0 items-center gap-2">
+        {#if onOpenDevicesSettings}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="border-border"
+            data-testid="open-devices-settings-btn"
+            onclick={onOpenDevicesSettings}
+          >
+            Devices
+          </Button>
+        {/if}
+        {#if onRefresh}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="border-border"
+            disabled={isBusy}
+            data-testid="refresh-joins-banner-btn"
+            aria-label="Refresh join requests"
+            onclick={() => void onRefresh()}
+          >
+            <RefreshCw class="size-3.5 {isBusy ? 'animate-spin' : ''}" />
+          </Button>
+        {/if}
+      </div>
     </div>
 
     <ul class="mt-3 space-y-2" data-testid="pending-joins-list">

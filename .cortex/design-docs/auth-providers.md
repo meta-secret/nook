@@ -70,7 +70,8 @@ stateDiagram-v2
 - Provider picker uses compact list rows (not large cards) so many providers scale without wasting vertical space.
 - Primary action on setup: **Connect** (not “Sign in to nook”).
 - **Help** page (`HelpPage`) in header — architecture, multi-device security, join flow, vault file layout. Login gate shows `ProductIntro` callout with link.
-- **Settings**: saved provider list, **Add provider**, switch active provider + **Reconnect vault**, plus vault password management.
+- **Settings**: saved provider list, **Add provider**, switch active provider + **Reconnect vault**, **Devices** management, plus vault password management.
+- **Devices**: enrolled browser list, encrypted friendly names, pending join approval/denial, technical IDs behind disclosure, and revocation. Revoking the final enrolled device is blocked; revoking the current browser is allowed only when another enrolled device remains and locks the local session.
 - **Onboard**: a standalone bottom-nav page with two dropdowns — auth provider and vault password — plus one primary **Onboard Device** action. It generates a QR/link for one-step bootstrap. The QR bundles the selected provider credentials and selected vault password, so the new browser can fetch the vault and self-enroll without a separate approval hop.
 
 ### 3.1 Two-step unlock (storage provider × unlock method)

@@ -86,6 +86,12 @@ impl NookVaultManager {
                 &JsValue::from_str(&member.enrolled_at),
             )
             .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
+            js_sys::Reflect::set(
+                &obj,
+                &JsValue::from_str("label"),
+                &JsValue::from_str(member.label.as_deref().unwrap_or_default()),
+            )
+            .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
             array.push(&obj);
         }
         Ok(array)
@@ -229,6 +235,59 @@ impl NookVaultManager {
             .insert(auth_record.key.clone(), auth_record.value);
         apply_member_records(&mut self.stored_armored, &member_records);
         self.save_current_db().await?;
+        Ok(self.get_records_as_array()?)
+    }
+
+    pub async fn deny_join_request(
+        &mut self,
+        join_device_id: String,
+    ) -> Result<js_sys::Array, JsError> {
+        let records = self.stored_records_snapshot();
+        if !records.iter().any(|record| {
+            nook_core::parse_join_request(&record.value)
+                .is_ok_and(|join| join.device_id == join_device_id)
+        }) {
+            return Err(NookError::Database("Join request not found.".to_owned()).into());
+        }
+        let updated = nook_core::deny_join_request(&records, &join_device_id);
+        self.stored_armored = records_to_armored(&updated);
+        self.secret_types = records_to_secret_types(&updated);
+        self.save_current_db().await?;
+        Ok(self.get_records_as_array()?)
+    }
+
+    pub async fn rename_vault_member(
+        &mut self,
+        auth_id: String,
+        label: String,
+    ) -> Result<(), JsError> {
+        let records = self.stored_records_snapshot();
+        let member_records =
+            nook_core::rename_vault_member(&records, &self.members_key, &auth_id, &label)
+                .map_err(NookError::Database)?;
+        apply_member_records(&mut self.stored_armored, &member_records);
+        self.save_current_db().await?;
+        Ok(())
+    }
+
+    pub async fn revoke_vault_member(&mut self, auth_id: String) -> Result<js_sys::Array, JsError> {
+        let identity = self.device_identity()?;
+        let is_self = auth_id == identity.auth_id();
+        let records = self.stored_records_snapshot();
+        let updated = nook_core::revoke_vault_member(&records, &self.members_key, &auth_id)
+            .map_err(NookError::Database)?;
+        self.stored_armored = records_to_armored(&updated);
+        self.secret_types = records_to_secret_types(&updated);
+        self.save_current_db().await?;
+
+        if is_self {
+            self.secrets_key.clear();
+            self.members_key.clear();
+            self.crypto = None;
+            self.decrypted_jsonl.clear();
+            return Ok(js_sys::Array::new());
+        }
+
         Ok(self.get_records_as_array()?)
     }
 

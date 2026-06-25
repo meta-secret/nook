@@ -169,6 +169,7 @@ export type VaultMember = {
   device_id: string
   public_key: string
   enrolled_at: string
+  label: string
 }
 
 export function mapWasmJoinRequests(raw: unknown): JoinRequest[] {
@@ -187,6 +188,7 @@ export function mapWasmVaultMembers(raw: unknown): VaultMember[] {
     device_id: String(entry.device_id ?? ''),
     public_key: String(entry.public_key ?? ''),
     enrolled_at: String(entry.enrolled_at ?? ''),
+    label: String(entry.label ?? ''),
   }))
 }
 

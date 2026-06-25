@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { CheckCircle2, Lock, ShieldCheck } from '@lucide/svelte'
+  import { CheckCircle2, Laptop, Lock, ShieldCheck } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import AuthStorage from '$lib/components/AuthStorage.svelte'
+  import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
+  import type { JoinRequest, VaultMember } from '$lib/nook'
   import type {
     StorageProvider,
     StorageProviderType,
@@ -24,6 +26,11 @@
     isPasswordBusy,
     passwordError,
     enrollmentCode,
+    deviceId,
+    devicePublicKey,
+    pendingJoins,
+    vaultMembers,
+    hasPasswordEnvelope = false,
     onReconnect,
     onSelectProvider,
     onBeginAddProvider,
@@ -37,7 +44,13 @@
     onRemovePassword,
     onIssueCode,
     onClearCode,
-    accordionSection = $bindable('storage' as 'storage' | 'passwords'),
+    onApproveJoin,
+    onDenyJoin,
+    onRenameDevice,
+    onRevokeDevice,
+    accordionSection = $bindable(
+      'storage' as 'storage' | 'passwords' | 'devices',
+    ),
   }: {
     providers: StorageProvider[]
     activeProviderId: string | null
@@ -53,6 +66,11 @@
     isPasswordBusy: boolean
     passwordError: string
     enrollmentCode: string
+    deviceId: string
+    devicePublicKey: string
+    pendingJoins: JoinRequest[]
+    vaultMembers: VaultMember[]
+    hasPasswordEnvelope?: boolean
     onReconnect: () => void | Promise<void>
     onSelectProvider: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
@@ -69,10 +87,15 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
-    accordionSection?: 'storage' | 'passwords'
+    onApproveJoin: (deviceId: string) => void | Promise<void>
+    onDenyJoin: (deviceId: string) => void | Promise<void>
+    onRenameDevice: (authId: string, label: string) => void | Promise<void>
+    onRevokeDevice: (authId: string) => void | Promise<void>
+    accordionSection?: 'storage' | 'passwords' | 'devices'
   } = $props()
 
   const hasPasswords = $derived(passwordEntries.length > 0)
+  const hasDevices = $derived(vaultMembers.length > 0)
 </script>
 
 <div class="space-y-2" data-testid="storage-settings-panel">
@@ -116,6 +139,41 @@
       {onCancelSetup}
       {onRemoveProvider}
       {onLockVault}
+    />
+  </SettingsAccordionSection>
+
+  <SettingsAccordionSection
+    title="Devices"
+    subtitle="Enrolled browsers and pending access requests"
+    open={accordionSection === 'devices'}
+    testId="vault-devices-section"
+    onToggle={() => {
+      accordionSection = 'devices'
+    }}
+  >
+    {#snippet badge()}
+      <span
+        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasDevices
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+          : 'border-border bg-muted/40 text-muted-foreground'}"
+        data-testid="vault-devices-status"
+      >
+        <Laptop class="size-3" />
+        {vaultMembers.length}
+        {vaultMembers.length === 1 ? 'device' : 'devices'}
+      </span>
+    {/snippet}
+    <VaultDevicesCard
+      {deviceId}
+      {devicePublicKey}
+      {pendingJoins}
+      {vaultMembers}
+      isBusy={isSaving || isVerifying}
+      {hasPasswordEnvelope}
+      {onApproveJoin}
+      {onDenyJoin}
+      {onRenameDevice}
+      {onRevokeDevice}
     />
   </SettingsAccordionSection>
 

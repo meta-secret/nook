@@ -39,7 +39,9 @@ import {
 export class VaultState {
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard'>('storage')
-  settingsAccordionSection = $state<'storage' | 'passwords'>('storage')
+  settingsAccordionSection = $state<'storage' | 'passwords' | 'devices'>(
+    'storage',
+  )
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -650,7 +652,7 @@ export class VaultState {
 
   openSettings(
     section: 'storage' | 'onboard' = 'storage',
-    accordion: 'storage' | 'passwords' = 'storage',
+    accordion: 'storage' | 'passwords' | 'devices' = 'storage',
   ) {
     this.helpOpen = false
     this.settingsSection = section
@@ -738,6 +740,77 @@ export class VaultState {
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to approve join request.'
+    } finally {
+      this.isSaving = false
+    }
+  }
+
+  async denyJoin(joinDeviceId: string) {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isSaving = true
+    try {
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.deny_join_request(joinDeviceId),
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      await this.hydrateMultiDeviceState()
+      this.showSuccess('Join request denied.')
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to deny join request.'
+    } finally {
+      this.isSaving = false
+    }
+  }
+
+  async renameDevice(authId: string, label: string) {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isSaving = true
+    try {
+      await this.enqueueStorage(() =>
+        this.manager!.rename_vault_member(authId, label),
+      )
+      await this.hydrateMultiDeviceState()
+      this.showSuccess(label.trim() ? 'Device renamed.' : 'Device name reset.')
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to rename device.'
+      throw e
+    } finally {
+      this.isSaving = false
+    }
+  }
+
+  async revokeDevice(authId: string) {
+    if (!this.manager) return
+    const isSelf = this.vaultMembers.some(
+      (member) =>
+        member.auth_id === authId && member.device_id === this.deviceId,
+    )
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.isSaving = true
+    try {
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.revoke_vault_member(authId),
+      )) as NookSecretRecord[]
+      if (isSelf) {
+        this.clearUnlockedSession()
+        this.loginFlowStep = 'connection'
+        this.showSuccess('This device was removed from the vault.')
+        return
+      }
+      this.secrets = mapWasmRecords(rawRecords)
+      await this.hydrateMultiDeviceState()
+      this.showSuccess('Device access revoked.')
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to revoke device access.'
+      throw e
     } finally {
       this.isSaving = false
     }

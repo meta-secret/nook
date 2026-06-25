@@ -212,6 +212,11 @@
               isPasswordBusy={vault.isPasswordBusy}
               passwordError={vault.passwordError}
               enrollmentCode={vault.enrollmentCode}
+              deviceId={vault.deviceId}
+              devicePublicKey={vault.devicePublicKey}
+              pendingJoins={vault.pendingJoins}
+              vaultMembers={vault.vaultMembers}
+              hasPasswordEnvelope={vault.hasPasswordEnvelope}
               onReconnect={handleUnlock}
               onSelectProvider={handleProviderReconnect}
               onBeginAddProvider={() => vault.beginAddProvider()}
@@ -226,6 +231,10 @@
               onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
               onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
               onClearCode={() => vault.clearEnrollmentCode()}
+              onApproveJoin={(id) => vault.approveJoin(id)}
+              onDenyJoin={(id) => vault.denyJoin(id)}
+              onRenameDevice={(id, label) => vault.renameDevice(id, label)}
+              onRevokeDevice={(id) => vault.revokeDevice(id)}
             />
           {:else}
             <PendingJoinsBanner
@@ -233,6 +242,8 @@
               isBusy={vault.isSaving || vault.isVerifying}
               onApproveJoin={(id) => vault.approveJoin(id)}
               onRefresh={() => vault.manualSync()}
+              onOpenDevicesSettings={() =>
+                vault.openSettings('storage', 'devices')}
             />
             <SecretVault
               isSaving={vault.isSaving}
