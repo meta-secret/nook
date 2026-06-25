@@ -25,8 +25,8 @@
 
 <section
   class="overflow-hidden rounded-xl border transition-colors {open
-    ? 'border-primary/30 bg-background shadow-sm'
-    : 'border-border/60 bg-muted/15'}"
+    ? 'border-primary/25 bg-background shadow-sm sm:border-primary/30'
+    : 'border-border/35 bg-muted/15 sm:border-border/60'}"
   data-testid={testId}
 >
   <button
@@ -62,7 +62,7 @@
 
   {#if open}
     <div
-      class="border-t border-border/40 px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4"
+      class="border-t border-border/25 px-4 pb-4 pt-3 sm:border-border/40 sm:px-5 sm:pb-5 sm:pt-4"
     >
       {@render children?.()}
     </div>

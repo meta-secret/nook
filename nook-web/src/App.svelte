@@ -57,6 +57,9 @@
   )
   const appVersion = '0.1.0'
   let secretsAddOpen = $state(false)
+  const authenticatedShellSpacing = $derived(
+    secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
+  )
 </script>
 
 <main
@@ -64,7 +67,7 @@
   class:dark={colorMode === 'dark'}
 >
   <header
-    class="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40"
+    class="border-b border-border/50 bg-card/80 backdrop-blur-md sticky top-0 z-40"
   >
     <div
       class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
@@ -76,7 +79,7 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="inline-flex size-10 items-center justify-center rounded-lg border border-border bg-background/70 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
           aria-label={colorMode === 'dark'
             ? 'Switch to light mode'
             : 'Switch to dark mode'}
@@ -97,7 +100,7 @@
           href="https://github.com/meta-secret/nook"
           target="_blank"
           rel="noreferrer"
-          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground {vault.isAuthenticated
+          class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
             ? 'w-10'
             : 'px-3.5'}"
           aria-label="Nook on GitHub — open source"
@@ -124,7 +127,7 @@
             type="button"
             variant="outline"
             size="sm"
-            class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground [&_svg]:size-4"
+            class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
             data-testid="help-header-close"
             onclick={() => vault.closeHelp()}
           >
@@ -136,7 +139,7 @@
             type="button"
             variant="outline"
             size="sm"
-            class="h-10 rounded-lg border-border px-3.5 text-sm text-muted-foreground [&_svg]:size-4"
+            class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
             data-testid="help-open-btn"
             onclick={() => vault.openHelp()}
           >
@@ -150,7 +153,7 @@
 
   <div
     class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? 'py-8'
+      ? authenticatedShellSpacing
       : 'py-5 sm:py-6'}"
   >
     {#if vault.helpOpen}
@@ -174,7 +177,7 @@
       </div>
     {:else if vault.isAuthenticated}
       <div
-        class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+        class="overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
       >
         <div class="space-y-4 p-4 sm:p-5">
           {#if vault.settingsOpen && vault.settingsSection === 'onboard'}

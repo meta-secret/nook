@@ -217,12 +217,12 @@
     <div class="space-y-2" data-testid="item-type-picker">
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
         data-testid="item-type-login"
         onclick={() => (selectedType = 'login')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
         >
           <Globe class="size-5" />
         </div>
@@ -236,12 +236,12 @@
       </button>
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
         data-testid="item-type-api-key"
         onclick={() => (selectedType = 'api-key')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
         >
           <Braces class="size-5" />
         </div>
@@ -257,12 +257,12 @@
       </button>
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
         data-testid="item-type-seed-phrase"
         onclick={() => (selectedType = 'seed-phrase')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
         >
           <Sprout class="size-5" />
         </div>
@@ -278,12 +278,12 @@
       </button>
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-border bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5"
+        class="flex w-full items-center gap-4 rounded-xl border border-border/40 bg-muted/15 p-4 text-left transition-colors hover:border-primary/35 hover:bg-primary/5 sm:border-border"
         data-testid="item-type-secure-note"
         onclick={() => (selectedType = 'secure-note')}
       >
         <div
-          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background text-primary"
+          class="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/35 bg-background/80 text-primary sm:border-border/60 sm:bg-background"
         >
           <StickyNote class="size-5" />
         </div>
@@ -330,7 +330,7 @@
           bind:value={websiteUrl}
           placeholder="https://example.com"
           required
-          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
     {/if}
@@ -347,7 +347,7 @@
             bind:value={username}
             autocomplete="username"
             required
-            class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+            class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
           />
         </div>
         <div class="space-y-1.5">
@@ -360,7 +360,7 @@
               bind:value={password}
               autocomplete="new-password"
               required
-              class="flex h-10 w-full rounded-md border border-border bg-background py-2 pl-3 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+              class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 py-2 pl-3 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
             />
             <button
               type="button"
@@ -387,11 +387,13 @@
           data-testid="login-notes"
           bind:value={notes}
           rows="3"
-          class="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
       </div>
 
-      <div class="rounded-xl border border-border bg-muted/15">
+      <div
+        class="rounded-xl border border-border/40 bg-muted/15 sm:border-border"
+      >
         <button
           type="button"
           class="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -409,7 +411,9 @@
           />
         </button>
         {#if showPasswordOptions}
-          <div class="space-y-3 border-t border-border px-4 py-3">
+          <div
+            class="space-y-3 border-t border-border/35 px-4 py-3 sm:border-border"
+          >
             <div class="flex items-center gap-3">
               <label class="text-xs text-muted-foreground" for="password-length"
                 >Length</label
@@ -461,7 +465,7 @@
           rows="4"
           required
           spellcheck="false"
-          class="flex w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
       </div>
       <div class="space-y-1.5">
@@ -474,7 +478,7 @@
           type="date"
           data-testid="api-key-expiration"
           bind:value={expiresAt}
-          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
     {:else if selectedType === 'seed-phrase'}
@@ -488,7 +492,7 @@
           bind:value={accountName}
           placeholder="Main wallet"
           required
-          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
       <div class="space-y-1.5">
@@ -503,7 +507,7 @@
           autocomplete="off"
           spellcheck="false"
           placeholder="Enter 12 or 24 words"
-          class="flex w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         ></textarea>
       </div>
     {:else}
@@ -515,7 +519,7 @@
           bind:value={noteTitle}
           placeholder="Recovery instructions"
           required
-          class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
       <div class="space-y-1.5">
@@ -530,7 +534,7 @@
     {/if}
 
     <div
-      class="flex flex-col-reverse gap-2 border-t border-border/60 pt-4 sm:flex-row sm:justify-end"
+      class="flex flex-col-reverse gap-2 border-t border-border/35 pt-4 sm:flex-row sm:justify-end sm:border-border/60"
     >
       <Button
         type="button"

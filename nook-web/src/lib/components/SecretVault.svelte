@@ -168,7 +168,7 @@
       <div class="mb-5 flex items-center gap-3">
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-background/70 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background"
           data-testid="add-secret-back-btn"
           onclick={closeAddSecret}
         >
@@ -197,7 +197,7 @@
       <div class="mb-5 flex items-center gap-3">
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-background/70 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background"
           data-testid="edit-secret-back-btn"
           onclick={closeEditItem}
         >
@@ -237,7 +237,7 @@
           <Button
             size="sm"
             variant="outline"
-            class="flex-1 border-border bg-background text-foreground hover:bg-accent sm:flex-none"
+            class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             onclick={openAddSecret}
           >
@@ -254,12 +254,12 @@
           bind:value={searchPattern}
           data-testid="search-secrets"
           placeholder="Search vault…"
-          class="flex h-10 w-full rounded-lg border border-border bg-background py-2 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+          class="flex h-10 w-full rounded-lg border border-border/45 bg-background/80 py-2 pl-10 pr-4 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
 
       {#if filteredItems.length === 0}
-        <Card class="border-border bg-card">
+        <Card class="border-border/45 bg-card sm:border-border/70">
           <CardContent
             class="space-y-2 p-10 text-center text-muted-foreground"
             data-testid="vault-empty-search"
@@ -281,14 +281,14 @@
           {#each groups as group (group.site)}
             {@const Icon = getGroupIcon(group.items)}
             <Card
-              class="gap-0 overflow-hidden border-border bg-card py-0 shadow-xs"
+              class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"
             >
               <div
-                class="flex items-center gap-2.5 border-b border-border/50 bg-muted/10 px-3 py-2.5"
+                class="flex items-center gap-2.5 border-b border-border/30 bg-muted/10 px-3 py-2.5 sm:border-border/50"
               >
                 <div
-                  class="flex size-6 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground"
+                  class="flex size-6 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
                 >
                   <Icon class="size-3.5" />
                 </div>
@@ -306,7 +306,9 @@
                 {/if}
               </div>
 
-              <CardContent class="space-y-3 divide-y divide-border/45 p-3">
+              <CardContent
+                class="space-y-3 divide-y divide-border/30 p-3 sm:divide-border/45"
+              >
                 {#each group.items as item, index (item.id)}
                   <SecretDetailRow
                     {item}

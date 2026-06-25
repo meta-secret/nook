@@ -71,7 +71,7 @@
 <div
   class={isQuiet
     ? 'border-t border-foreground/15 bg-muted/20 px-3 py-2.5 dark:border-foreground/20 dark:bg-muted/10'
-    : 'border-t border-border bg-muted/30 px-4 py-2.5 sm:px-5'}
+    : 'border-t border-border/35 bg-muted/25 px-4 py-2.5 sm:border-border/60 sm:bg-muted/30 sm:px-5'}
   data-testid="vault-status-bar"
 >
   <div class="flex flex-col gap-2">
