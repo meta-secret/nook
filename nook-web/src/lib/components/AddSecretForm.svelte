@@ -7,6 +7,8 @@
     ArrowLeft,
     KeyRound,
     RefreshCw,
+    Eye,
+    EyeOff,
     ChevronDown,
     ChevronRight,
   } from '@lucide/svelte'
@@ -54,6 +56,7 @@
 
   let selectedType = $state<VaultItemType | null>(null)
   let showPasswordOptions = $state(false)
+  let showPasswordValue = $state(false)
 
   let websiteUrl = $state('')
   let username = $state('')
@@ -161,6 +164,7 @@
     noteTitle = ''
     noteBody = ''
     showPasswordOptions = false
+    showPasswordValue = false
   }
 
   function handleCancel() {
@@ -348,15 +352,30 @@
         </div>
         <div class="space-y-1.5">
           <label class="text-xs font-medium" for="secret-value">Password</label>
-          <input
-            id="secret-value"
-            type="password"
-            data-testid="secret-value"
-            bind:value={password}
-            autocomplete="new-password"
-            required
-            class="flex h-10 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
-          />
+          <div class="relative">
+            <input
+              id="secret-value"
+              type={showPasswordValue ? 'text' : 'password'}
+              data-testid="secret-value"
+              bind:value={password}
+              autocomplete="new-password"
+              required
+              class="flex h-10 w-full rounded-md border border-border bg-background py-2 pl-3 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
+            />
+            <button
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={showPasswordValue ? 'Hide password' : 'Show password'}
+              data-testid="toggle-password-visibility"
+              onclick={() => (showPasswordValue = !showPasswordValue)}
+            >
+              {#if showPasswordValue}
+                <EyeOff class="size-4" />
+              {:else}
+                <Eye class="size-4" />
+              {/if}
+            </button>
+          </div>
         </div>
       </div>
       <div class="space-y-1.5">
