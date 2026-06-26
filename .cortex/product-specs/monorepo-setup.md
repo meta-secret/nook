@@ -19,11 +19,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 ## 4. Docker & CI caching
 
-- **No Docker named volumes.** GitHub Actions runners do not retain volumes across jobs. `task` bind-mounts the repository only (`-v $ROOT:/workspace`).
+- **Repo bind mount + per-container `node_modules`.** `docker run` bind-mounts the repo at `/workspace` and overlays an anonymous volume at `nook-web/node_modules` so parallel containers each run `bun install` independently (packages link from `/opt/nook/bun-install-cache` in the image).
 - **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). `task setup` pulls it; build reuses registry layers; CI pushes after green verify. Mac uses `--platform linux/amd64`.
 - **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps; clippy/test/build warm-up runs during `docker build`.
-- **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty. Web deps link from `/opt/nook/bun-install-cache` via `bun install --frozen-lockfile` (never copy `node_modules` — breaks rolldown natives).
+- **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
 - **PR CI parallelism.** `pr.yml` builds the toolchain once, then `task ci:pr` runs format+wasm in one container, then `ci:verify:parallel` and `web:build:parallel` in separate `docker run` invocations (avoids racing on wasm output), then deploys the preview.
-- **Within a CI job**, incremental `target/` and `node_modules` artifacts persist on the runner filesystem through the bind mount until the job ends.
+- **Within a CI job**, incremental `target/` and wasm build output persist on the runner filesystem through the bind mount until the job ends.

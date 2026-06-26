@@ -91,15 +91,7 @@ RUN printf '%s\n' \
     '  fi' \
     'fi' \
     'if [ -f /workspace/nook-web/package.json ]; then' \
-    '  if [ ! -x /workspace/nook-web/node_modules/.bin/vite ]; then' \
-    '    lockfile=/workspace/.nook-bun-install.lock' \
-    '    (' \
-    '      flock -w 600 9' \
-    '      if [ ! -x /workspace/nook-web/node_modules/.bin/vite ]; then' \
-    '        cd /workspace/nook-web && bun install --frozen-lockfile' \
-    '      fi' \
-    '    ) 9>"$lockfile"' \
-    '  fi' \
+    '  (cd /workspace/nook-web && bun install --frozen-lockfile)' \
     'fi' \
     'exec "$@"' \
     > /usr/local/bin/nook-entrypoint.sh \
