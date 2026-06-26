@@ -29,11 +29,14 @@ struct DriveFileMeta {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct DriveAboutUser {
+    #[serde(rename = "emailAddress")]
     email_address: Option<String>,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct DriveAboutResponse {
     user: Option<DriveAboutUser>,
 }
@@ -154,15 +157,13 @@ pub(crate) async fn ensure_drive_vault_file(
 ) -> Result<String, NookError> {
     let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
     let trimmed_id = known_file_id.trim();
-    if !trimmed_id.is_empty() {
-        if fetch_file_metadata(&token, trimmed_id).await.is_ok() {
-            return Ok(trimmed_id.to_owned());
-        }
+    if !trimmed_id.is_empty() && fetch_file_metadata(&token, trimmed_id).await.is_ok() {
+        return Ok(trimmed_id.to_owned());
     }
     if let Some(meta) = list_vault_file_meta(&token).await? {
         return Ok(meta.id);
     }
-    Ok(create_drive_vault_file(&token).await?)
+    create_drive_vault_file(&token).await
 }
 
 async fn create_drive_vault_file(access_token: &str) -> Result<String, NookError> {
@@ -277,5 +278,5 @@ async fn write_drive_vault_once(
         .json()
         .await
         .map_err(|e| NookError::Serialization(format!("Failed to parse Drive update: {e}")))?;
-    Ok(meta.md5_checksum.unwrap_or_else(|| meta.id))
+    Ok(meta.md5_checksum.unwrap_or(meta.id))
 }
