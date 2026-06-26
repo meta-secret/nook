@@ -77,6 +77,9 @@ RUN printf '%s\n' \
     '    cp -a /opt/nook/nook-web-node_modules/. /workspace/nook-web/node_modules/' \
     '  fi' \
     'fi' \
+    'if [ -f /workspace/nook-web/package.json ]; then' \
+    '  (cd /workspace/nook-web && bun install --frozen-lockfile)' \
+    'fi' \
     'exec "$@"' \
     > /usr/local/bin/nook-entrypoint.sh \
     && chmod +x /usr/local/bin/nook-entrypoint.sh
