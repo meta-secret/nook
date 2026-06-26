@@ -72,6 +72,58 @@ export const UI_TIMEOUT_MS = 5_000
 /** Password unlock / enrollment runs scrypt in wasm — allow more time on CI. */
 export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
+export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
+
+export const BIP39_SAMPLE_WORDS = [
+  'abandon',
+  'ability',
+  'able',
+  'about',
+  'above',
+  'absent',
+  'absorb',
+  'abstract',
+  'absurd',
+  'abuse',
+  'access',
+  'accident',
+] as const
+
+export function buildBip39WordlistBody(
+  leadingWords: readonly string[] = BIP39_SAMPLE_WORDS,
+): string {
+  const words = [...leadingWords]
+  let index = words.length
+  while (words.length < 2048) {
+    words.push(`testword${index}`)
+    index += 1
+  }
+  return words.join('\n')
+}
+
+export async function mockBip39Wordlist(
+  page: Page,
+  leadingWords: readonly string[] = BIP39_SAMPLE_WORDS,
+) {
+  const body = buildBip39WordlistBody(leadingWords)
+  await page.route(BIP39_WORDLIST_ROUTE, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/plain',
+      body,
+    })
+  })
+}
+
+export async function fillSeedPhraseGrid(page: Page, words: readonly string[]) {
+  if (words.length === 24) {
+    await page.getByTestId('seed-word-count-24').click()
+  }
+  for (let index = 0; index < words.length; index += 1) {
+    await page.getByTestId(`seed-word-${index + 1}`).fill(words[index]!)
+  }
+}
+
 export type GithubE2eTarget = { pat: string; repoName: string }
 
 function configuredVaultSyncIntervalMs(): number {
@@ -738,6 +790,14 @@ export async function addSecret(
 export async function revealSecretValue(page: Page, key: string) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await row.getByRole('button', { name: 'Show secret' }).click()
+  const grid = row.getByTestId('seed-phrase-grid')
+  if (await grid.isVisible()) {
+    const words = await row.getByTestId(/^seed-word-\d+$/).allTextContents()
+    return words
+      .map((word) => word.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
   const code = row.locator('code')
   await expect(code).toBeVisible()
   return (await code.textContent()) ?? ''

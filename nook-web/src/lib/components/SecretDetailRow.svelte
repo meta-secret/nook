@@ -14,6 +14,7 @@
   import type { VaultItem } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import MarkdownContent from './MarkdownContent.svelte'
+  import SeedPhraseGrid from './SeedPhraseGrid.svelte'
 
   let {
     item,
@@ -299,19 +300,11 @@
           </div>
         </div>
 
-        <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-          <span class="text-muted-foreground/70 font-medium"
-            >{vault.t('vault.types.seed_phrase')}</span
-          >
-          <div
-            class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
-          >
-            <code
-              class="break-all font-mono text-foreground"
-              data-testid="revealed-secret"
+        <div class="space-y-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-muted-foreground/70 font-medium"
+              >{vault.t('vault.types.seed_phrase')}</span
             >
-              {revealSecrets[item.id] ? item.seed : '••••••••••••••••'}
-            </code>
             <button
               type="button"
               onclick={() =>
@@ -324,6 +317,12 @@
                 />{:else}<Copy class="size-3" />{/if}
             </button>
           </div>
+          <SeedPhraseGrid
+            {vault}
+            value={item.seed}
+            readonly
+            revealed={Boolean(revealSecrets[item.id])}
+          />
         </div>
       {:else}
         <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">

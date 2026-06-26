@@ -2,9 +2,12 @@ import { expect, test } from '@playwright/test'
 import {
   addSecret,
   assertVaultReady,
+  BIP39_SAMPLE_WORDS,
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
+  fillSeedPhraseGrid,
+  mockBip39Wordlist,
   uniqueSecretKey,
   waitForVaultUnlocked,
 } from './helpers'
@@ -12,6 +15,7 @@ import {
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
+    await mockBip39Wordlist(page)
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
@@ -75,11 +79,7 @@ test.describe('local vault', () => {
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-seed-phrase').click()
     await page.getByTestId('secret-label').fill('Main wallet')
-    await page
-      .getByTestId('secret-value')
-      .fill(
-        'abandon ability able about above absent absorb abstract absurd abuse access accident',
-      )
+    await fillSeedPhraseGrid(page, BIP39_SAMPLE_WORDS)
     await page.getByTestId('save-secret-btn').click()
 
     await expect(page.getByTestId('vault-group-login')).toContainText(
