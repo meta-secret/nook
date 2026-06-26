@@ -287,6 +287,8 @@
     "seed_word_invalid": "Неизвестное слово",
     "seed_wordlist_loading": "Загрузка словаря BIP39…",
     "seed_wordlist_error": "Не удалось загрузить официальный словарь BIP39.",
+    "seed_phrase_invalid": "Неверная контрольная сумма BIP39 сид-фразы.",
+    "seed_phrase_checking": "Проверка сид-фразы…",
     "placeholder_title": "например, Моя секретная заметка",
     "placeholder_note": "Напишите вашу заметку (поддерживается markdown)…",
     "generate_password": "Сгенерировать пароль",
@@ -390,6 +392,8 @@
       "secret_id_required": "Имя секрета обязательно для заполнения.",
       "secret_id_reserved": "Имя секрета не может использовать зарезервированный ID устройства.",
       "secret_data_required": "Значение секрета обязательно для заполнения.",
+      "bip39_empty": "Сид-фраза обязательна.",
+      "bip39_invalid": "Недействительная BIP39 сид-фраза.",
       "unknown_storage_mode": "Неизвестный режим хранилища: {mode}"
     },
     "vault": {

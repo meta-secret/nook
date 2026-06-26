@@ -4,6 +4,7 @@
     clippy::uninlined_format_args
 )]
 
+mod bip39;
 mod database;
 mod i18n;
 mod multi_device;
@@ -15,6 +16,7 @@ mod validation;
 mod vault_crypto;
 mod vault_format;
 
+pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{

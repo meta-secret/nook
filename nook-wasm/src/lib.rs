@@ -51,6 +51,12 @@ pub fn get_translation_catalog(locale: &str) -> String {
     nook_core::get_translation_catalog(locale).to_owned()
 }
 
+#[wasm_bindgen(js_name = validateBip39Mnemonic)]
+#[must_use]
+pub fn validate_bip39_mnemonic(mnemonic: &str) -> bool {
+    nook_core::validate_bip39_mnemonic(mnemonic).is_ok()
+}
+
 #[wasm_bindgen]
 pub struct NookSecretRecord {
     id: String,

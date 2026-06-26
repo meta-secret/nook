@@ -188,6 +188,8 @@
       "secret_id_required": "Secret id is required.",
       "secret_id_reserved": "Secret id cannot use a reserved device id.",
       "secret_data_required": "Secret data is required.",
+      "bip39_empty": "Seed phrase is required.",
+      "bip39_invalid": "Invalid BIP39 seed phrase.",
       "unknown_storage_mode": "Unknown storage mode: {mode}"
     },
     "vault": {
@@ -309,6 +311,8 @@
     "seed_word_invalid": "Unknown word",
     "seed_wordlist_loading": "Loading BIP39 wordlist…",
     "seed_wordlist_error": "Could not load the official BIP39 wordlist.",
+    "seed_phrase_invalid": "Invalid BIP39 seed phrase checksum.",
+    "seed_phrase_checking": "Checking seed phrase…",
     "placeholder_title": "e.g., My Secret Note",
     "placeholder_note": "Write your secure note (markdown supported)…",
     "generate_password": "Generate Password",

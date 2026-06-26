@@ -74,19 +74,20 @@ export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
 
+/** Valid BIP-39 test mnemonic (12 words). */
 export const BIP39_SAMPLE_WORDS = [
   'abandon',
-  'ability',
-  'able',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
   'about',
-  'above',
-  'absent',
-  'absorb',
-  'abstract',
-  'absurd',
-  'abuse',
-  'access',
-  'accident',
 ] as const
 
 export function buildBip39WordlistBody(

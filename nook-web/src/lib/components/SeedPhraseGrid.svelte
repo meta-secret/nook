@@ -10,6 +10,7 @@
     suggestBip39Words,
     type MnemonicLength,
   } from '$lib/bip39-wordlist'
+  import { validateBip39MnemonicChecksum } from '$lib/bip39-mnemonic'
 
   let {
     vault,
@@ -34,9 +35,17 @@
   let focusedIndex = $state<number | null>(null)
   let suggestionIndex = $state(0)
   let inputRefs = $state<Array<HTMLInputElement | null>>([])
+  let checksumValid = $state<boolean | null>(null)
+  let checksumChecking = $state(false)
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
+  const perWordValid = $derived(
+    Boolean(wordlist && isMnemonicValid(value, wordlist, wordCount)),
+  )
+  const allWordsFilled = $derived(
+    activeCells.every((word) => word.trim().length > 0),
+  )
 
   const suggestions = $derived.by(() => {
     if (readonly || focusedIndex === null || !wordlist) return []
@@ -177,7 +186,34 @@
   })
 
   $effect(() => {
-    valid = Boolean(wordlist && isMnemonicValid(value, wordlist, wordCount))
+    if (readonly || !perWordValid || !allWordsFilled) {
+      checksumValid = null
+      checksumChecking = false
+      valid = false
+      return
+    }
+
+    const mnemonic = value
+    let cancelled = false
+    checksumChecking = true
+
+    void validateBip39MnemonicChecksum(mnemonic)
+      .then((ok) => {
+        if (cancelled) return
+        checksumValid = ok
+        checksumChecking = false
+        valid = ok
+      })
+      .catch(() => {
+        if (cancelled) return
+        checksumValid = false
+        checksumChecking = false
+        valid = false
+      })
+
+    return () => {
+      cancelled = true
+    }
   })
 
   $effect(() => {
@@ -347,4 +383,20 @@
       </label>
     {/each}
   </div>
+
+  {#if !readonly && perWordValid && allWordsFilled && checksumValid === false}
+    <p
+      class="text-xs text-destructive"
+      data-testid="seed-phrase-checksum-error"
+    >
+      {vault.t('add_secret.seed_phrase_invalid')}
+    </p>
+  {:else if !readonly && checksumChecking}
+    <p
+      class="text-xs text-muted-foreground"
+      data-testid="seed-phrase-checksum-checking"
+    >
+      {vault.t('add_secret.seed_phrase_checking')}
+    </p>
+  {/if}
 </div>

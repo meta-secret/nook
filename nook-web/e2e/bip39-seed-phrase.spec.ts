@@ -37,7 +37,20 @@ test.describe('BIP39 seed phrase grid', () => {
 
     await row.getByRole('button', { name: 'Show secret' }).click()
     await expect(row.getByTestId('seed-word-1')).toHaveText('abandon')
-    await expect(row.getByTestId('seed-word-12')).toHaveText('accident')
+    await expect(row.getByTestId('seed-word-12')).toHaveText('about')
+  })
+
+  test('blocks save when checksum is invalid', async ({ page }) => {
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-seed-phrase').click()
+    await page.getByTestId('secret-label').fill('Bad checksum')
+    await fillSeedPhraseGrid(
+      page,
+      Array.from({ length: 12 }, () => 'able'),
+    )
+
+    await expect(page.getByTestId('seed-phrase-checksum-error')).toBeVisible()
+    await expect(page.getByTestId('save-secret-btn')).toBeDisabled()
   })
 
   test('blocks save when a word is not in the official list', async ({
@@ -64,7 +77,7 @@ test.describe('BIP39 seed phrase grid', () => {
     await page.getByTestId('seed-word-1').fill(BIP39_SAMPLE_WORDS.join(' '))
 
     await expect(page.getByTestId('seed-word-1')).toHaveValue('abandon')
-    await expect(page.getByTestId('seed-word-12')).toHaveValue('accident')
+    await expect(page.getByTestId('seed-word-12')).toHaveValue('about')
     await expect(page.getByTestId('save-secret-btn')).toBeEnabled()
   })
 

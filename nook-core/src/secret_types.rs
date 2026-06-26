@@ -93,9 +93,12 @@ impl SecretValue {
             SecretType::ApiKey => serde_yaml::from_str(yaml)
                 .map(Self::ApiKey)
                 .map_err(|error| format!("Invalid API key payload: {error}")),
-            SecretType::SeedPhrase => serde_yaml::from_str(yaml)
-                .map(Self::SeedPhrase)
-                .map_err(|error| format!("Invalid seed phrase payload: {error}")),
+            SecretType::SeedPhrase => {
+                let secret: SeedPhraseSecret = serde_yaml::from_str(yaml)
+                    .map_err(|error| format!("Invalid seed phrase payload: {error}"))?;
+                crate::bip39::validate_bip39_mnemonic(&secret.seed)?;
+                Ok(Self::SeedPhrase(secret))
+            }
             SecretType::SecureNote => serde_yaml::from_str(yaml)
                 .map(Self::SecureNote)
                 .map_err(|error| format!("Invalid secure note payload: {error}")),
