@@ -1,6 +1,11 @@
 name: Nook Docker setup
 description: Pull GHCR cache (if available), Buildx login, and build toolchain image once per workflow run.
 
+inputs:
+  github-token:
+    description: Token with packages:write for GHCR login and cache push.
+    required: true
+
 runs:
   using: composite
   steps:
@@ -15,7 +20,7 @@ runs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ inputs.github-token }}
 
     - name: Set Cache Env
       shell: bash

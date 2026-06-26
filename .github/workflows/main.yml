@@ -28,6 +28,8 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check
         run: task check
