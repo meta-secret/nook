@@ -1,5 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import {
+    readPendingGoogleOAuthError,
+    readPendingGoogleOAuthTokens,
+  } from '$lib/google-oauth-callback'
   import { ArrowLeft, BookOpen, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
@@ -26,11 +30,49 @@
       colorMode = savedMode
     }
     void vault.init()
-    return () => vault.stopVaultSync()
+
+    const pendingTokens = readPendingGoogleOAuthTokens()
+    if (pendingTokens) {
+      void vault.ingestGoogleOAuthTokens(pendingTokens)
+    }
+    const pendingOAuthError = readPendingGoogleOAuthError()
+    if (pendingOAuthError) {
+      vault.errorMsg = pendingOAuthError
+    }
+
+    const onGoogleOAuthMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
+      const payload = event.data as {
+        type?: string
+        code?: string
+        state?: string
+        error?: string
+      }
+      if (payload?.type !== 'nook-google-oauth') return
+      if (payload.error) {
+        vault.errorMsg = payload.error
+        return
+      }
+      if (payload.code && payload.state) {
+        void vault.completeGoogleOAuth(payload.code, payload.state)
+      }
+    }
+    window.addEventListener('message', onGoogleOAuthMessage)
+
+    return () => {
+      vault.stopVaultSync()
+      window.removeEventListener('message', onGoogleOAuthMessage)
+    }
   })
 
   async function handleUnlock() {
     await vault.loadDb()
+  }
+
+  async function handleGoogleSignIn() {
+    await vault.signInWithGoogle(
+      window.location.pathname + window.location.search,
+    )
   }
 
   async function handleLoginProviderSelect(id: string) {
@@ -348,6 +390,7 @@
             vault.unlockWithPassword(entryId, password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}
           onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
+          onGoogleSignIn={handleGoogleSignIn}
         />
         <VaultStatusBar
           {vault}

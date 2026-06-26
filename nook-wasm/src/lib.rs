@@ -26,6 +26,9 @@ pub enum NookError {
     #[error("GitHub error: {0}")]
     GitHub(String),
 
+    #[error("Drive error: {0}")]
+    Drive(String),
+
     #[error("Decryption failed: {0}")]
     Decryption(String),
 

@@ -182,6 +182,7 @@
   "errors": {
     "validation": {
       "github_pat_empty": "Enter a GitHub personal access token to connect.",
+      "oauth_access_token_empty": "Sign in with Google to connect Google Drive.",
       "github_repo_length": "GitHub repository name must be 100 characters or fewer.",
       "github_repo_invalid": "Invalid GitHub repository name.",
       "github_repo_chars": "Repository name may only contain letters, numbers, dots, hyphens, and underscores.",
@@ -192,6 +193,7 @@
       "bip39_invalid": "Invalid BIP39 seed phrase.",
       "unknown_storage_mode": "Unknown storage mode: {mode}"
     },
+    "google_sign_in_required": "Sign in with Google before unlocking.",
     "vault": {
       "decryption_failed": "Decryption failed. Please check your password.",
       "connection_failed": "Failed to connect to storage provider.",
@@ -278,7 +280,9 @@
     "setup_desc": "Connect and save this provider in this browser. Only the active provider is used for sync until you switch.",
     "choose_desc": "Pick where to store another encrypted vault file. Each provider can point at a different vault.",
     "switch_providers_desc": "Switch providers without changing device keys or backup passwords.",
-    "no_token_saved": "No token saved"
+    "no_token_saved": "No token saved",
+    "google_signed_in": "Signed in with Google",
+    "google_not_signed_in": "Not signed in with Google"
   },
   "pending_joins": {
     "one_wants_join": "1 device wants to join",
@@ -365,6 +369,7 @@
     "enrolled_connected": "Enrolled and connected to the vault.",
     "local_loaded": "Local vault loaded from IndexedDB.",
     "github_connected": "Connected to GitHub. Encryption key is stored locally in this browser.",
+    "google_drive_connected": "Connected to Google Drive. Encryption key is stored locally in this browser.",
     "password_updated": "Vault password updated.",
     "password_removed": "Vault password removed.",
     "vault_unlocked": "Vault unlocked with password.",
@@ -450,7 +455,9 @@
     "this_device": "This device",
     "this_device_desc": "Encrypted vault in browser storage — no provider login",
     "github": "GitHub",
-    "github_desc": "Sign in to GitHub — sync encrypted vault to your repo"
+    "github_desc": "Sign in to GitHub — sync encrypted vault to your repo",
+    "google_drive": "Google Drive",
+    "google_drive_desc": "Sign in with Google — sync encrypted vault to your Drive app data"
   },
   "provider_setup": {
     "change_provider": "Change provider",
@@ -460,7 +467,13 @@
     "vault_file_desc": "Vault file: nook-vault.yaml in this repo under your account.",
     "pat_label": "Personal access token",
     "stored_locally_desc": "Stored in this browser only. Syncs to username/{repo}/nook-vault.yaml.",
-    "local_storage_desc": "Your vault is stored in IndexedDB on this device. No token needed."
+    "local_storage_desc": "Your vault is stored in IndexedDB on this device. No token needed.",
+    "google_drive_desc": "Nook stores your encrypted vault in a hidden Google Drive app folder. Click Sign in with Google — no API keys to copy.",
+    "sign_in_with_google": "Sign in with Google",
+    "google_signing_in": "Opening Google sign-in…",
+    "google_signed_in_as": "Signed in as {account}",
+    "google_tokens_local_desc": "OAuth tokens stay in this browser only, like a saved GitHub token.",
+    "google_oauth_unconfigured": "Google Drive is not configured for this build."
   },
   "devices_card": {
     "single_device_warning": "Add another device before removing this one. A backup password helps with recovery, but at least one device key must remain enrolled.",

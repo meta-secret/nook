@@ -1,9 +1,19 @@
 import { mount } from 'svelte'
 import './app.css'
 import App from './App.svelte'
+import { handleGoogleOAuthCallbackIfPresent } from '$lib/google-oauth-callback'
 
-const app = mount(App, {
-  target: document.getElementById('app')!,
-})
+async function bootstrap() {
+  const handled = await handleGoogleOAuthCallbackIfPresent()
+  if (handled) {
+    return
+  }
 
-export default app
+  mount(App, {
+    target: document.getElementById('app')!,
+  })
+}
+
+void bootstrap()
+
+export default null

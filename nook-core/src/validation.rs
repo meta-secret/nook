@@ -12,6 +12,8 @@ pub enum StorageMode {
     Local,
     /// GitHub repository (authenticated with a PAT).
     Github,
+    /// Google Drive app-data folder (authenticated with OAuth access token).
+    GoogleDrive,
 }
 
 impl StorageMode {
@@ -22,6 +24,7 @@ impl StorageMode {
         match self {
             Self::Local => "local",
             Self::Github => "github",
+            Self::GoogleDrive => "google-drive",
         }
     }
 
@@ -32,6 +35,7 @@ impl StorageMode {
         match value {
             "local" => Ok(Self::Local),
             "github" => Ok(Self::Github),
+            "google-drive" => Ok(Self::GoogleDrive),
             other => Err(format!("errors.validation.unknown_storage_mode:{}", other)),
         }
     }
@@ -86,6 +90,14 @@ pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
     Ok(repo)
 }
 
+pub fn validate_oauth_access_token(token: &str) -> Result<String, String> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return Err("errors.validation.oauth_access_token_empty".to_owned());
+    }
+    Ok(trimmed.to_owned())
+}
+
 /// Validates connect inputs. Returns trimmed GitHub PAT when mode is `Github`.
 ///
 /// Accepts a string-typed `storage_mode` purely as a boundary convenience
@@ -94,6 +106,10 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
     let mode = StorageMode::parse(storage_mode)?;
     match mode {
         StorageMode::Github => Ok(Some(validate_github_pat(github_pat)?)),
+        StorageMode::GoogleDrive => {
+            validate_oauth_access_token(github_pat)?;
+            Ok(None)
+        }
         StorageMode::Local => Ok(None),
     }
 }
@@ -221,8 +237,13 @@ mod tests {
     fn storage_mode_roundtrips_through_string_tag() {
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
+        assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
         assert_eq!(StorageMode::parse("local").unwrap(), StorageMode::Local);
         assert_eq!(StorageMode::parse("github").unwrap(), StorageMode::Github);
+        assert_eq!(
+            StorageMode::parse("google-drive").unwrap(),
+            StorageMode::GoogleDrive
+        );
         assert!(StorageMode::parse("s3").is_err());
         assert_eq!(format!("{}", StorageMode::Local), "local");
     }
@@ -236,6 +257,21 @@ mod tests {
     #[test]
     fn validate_connect_rejects_unknown_mode() {
         assert!(validate_connect("icloud", "token").is_err());
+    }
+
+    #[test]
+    fn validate_connect_google_drive_requires_access_token() {
+        assert!(validate_connect("google-drive", "  ").is_err());
+        assert_eq!(
+            validate_connect("google-drive", " ya29.test ").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn validate_oauth_access_token_rejects_empty() {
+        assert!(validate_oauth_access_token(" ").is_err());
+        assert_eq!(validate_oauth_access_token(" token ").unwrap(), "token");
     }
 
     #[test]

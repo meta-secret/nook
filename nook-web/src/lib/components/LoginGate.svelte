@@ -53,6 +53,7 @@
     onRemoveProvider,
     loginPasswordPrompt = false,
     onConsumeLoginPasswordPrompt,
+    onGoogleSignIn,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
   }: {
@@ -88,6 +89,7 @@
     passwordEntries?: VaultPasswordEntrySummary[]
     selectedPasswordEntryId?: string | null
     onConsumeLoginPasswordPrompt?: () => void
+    onGoogleSignIn?: () => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
   } = $props()
@@ -120,6 +122,10 @@
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
       (showProviderSetup || showWizard || showSetup),
+  )
+
+  const setupCanConnect = $derived(
+    setupType !== 'oauth-file' || Boolean(vault.oauthFile?.accessToken?.trim()),
   )
 
   function handleFirstConnectSubmit(e: Event) {
@@ -272,12 +278,14 @@
               bind:githubRepo
               idPrefix="login"
               {onCancelSetup}
+              {onGoogleSignIn}
             />
             <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="submit"
                 class="sm:min-w-[180px]"
                 data-testid="connect-provider-btn"
+                disabled={!setupCanConnect}
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />

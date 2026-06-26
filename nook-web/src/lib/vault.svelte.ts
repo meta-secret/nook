@@ -32,9 +32,20 @@ import {
   loadAuthProviders,
   providerDefaultLabel,
   saveAuthProviders,
+  wasmStorageModeForProvider,
+  type OAuthFileConfig,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
+import {
+  ensureValidOAuthFileConfig,
+  exchangeGoogleAuthCode,
+  fetchGoogleAccountEmail,
+  isGoogleOAuthConfigured,
+  oauthTokensToConfig,
+  startGoogleOAuthSignIn,
+  type GoogleOAuthTokens,
+} from '$lib/google-oauth'
 import {
   getBrowserAppLocale,
   parseAppLocale,
@@ -59,9 +70,11 @@ export class VaultState {
   loginSetupType = $state<StorageProviderType | null>(null)
   addProviderOpen = $state(false)
 
-  storageMode = $state<'local' | 'github'>('local')
+  storageMode = $state<StorageProviderType>('local')
   githubPat = $state('')
   githubRepo = $state(DEFAULT_GITHUB_REPO)
+  oauthFile = $state<OAuthFileConfig | null>(null)
+  googleOAuthBusy = $state(false)
 
   manager = $state<NookVaultManager | null>(null)
   isAuthenticated = $state(false)
@@ -130,8 +143,120 @@ export class VaultState {
     return next
   }
 
-  private wasmGithubArgs(): [string, string, string] {
-    return [this.storageMode, this.githubPat, this.githubRepo]
+  private wasmStorageArgs(): [string, string, string] {
+    const mode = wasmStorageModeForProvider(
+      this.storageMode,
+      this.oauthFile?.preset,
+    )
+    if (this.storageMode === 'oauth-file') {
+      return [
+        mode,
+        this.oauthFile?.accessToken?.trim() ?? '',
+        this.oauthFile?.fileId?.trim() ?? '',
+      ]
+    }
+    return [mode, this.githubPat, this.githubRepo]
+  }
+
+  private hasRemoteCredentials(): boolean {
+    if (this.storageMode === 'github') {
+      return Boolean(this.githubPat.trim())
+    }
+    if (this.storageMode === 'oauth-file') {
+      return Boolean(this.oauthFile?.accessToken?.trim())
+    }
+    return true
+  }
+
+  get googleOAuthAvailable(): boolean {
+    return isGoogleOAuthConfigured()
+  }
+
+  private syncOAuthRemoteRefFromManager() {
+    if (this.storageMode !== 'oauth-file' || !this.manager || !this.oauthFile) {
+      return
+    }
+    const remoteRef = this.manager.storage_remote_ref ?? ''
+    if (!remoteRef.trim() || remoteRef === this.oauthFile.fileId) {
+      return
+    }
+    this.oauthFile = { ...this.oauthFile, fileId: remoteRef }
+  }
+
+  async ensureOAuthTokensFresh(): Promise<void> {
+    if (this.storageMode !== 'oauth-file' || !this.oauthFile) {
+      return
+    }
+    const refreshed = await ensureValidOAuthFileConfig(this.oauthFile)
+    if (
+      refreshed.accessToken === this.oauthFile.accessToken &&
+      refreshed.expiresAt === this.oauthFile.expiresAt
+    ) {
+      return
+    }
+    this.oauthFile = refreshed
+    if (this.activeProvider?.type === 'oauth-file') {
+      this.providers = this.providers.map((provider) =>
+        provider.id === this.activeProviderId
+          ? { ...provider, oauthFile: refreshed }
+          : provider,
+      )
+      await this.persistProviders()
+    }
+  }
+
+  async completeGoogleOAuth(code: string, state: string): Promise<void> {
+    this.googleOAuthBusy = true
+    this.errorMsg = ''
+    try {
+      const tokens = await exchangeGoogleAuthCode(code, state)
+      await this.applyGoogleOAuthTokens(tokens)
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Google sign-in failed.'
+      throw error
+    } finally {
+      this.googleOAuthBusy = false
+    }
+  }
+
+  async signInWithGoogle(returnTo = '/'): Promise<void> {
+    if (!isGoogleOAuthConfigured()) {
+      this.errorMsg = this.t('provider_setup.google_oauth_unconfigured')
+      return
+    }
+    this.googleOAuthBusy = true
+    this.errorMsg = ''
+    try {
+      await startGoogleOAuthSignIn(returnTo)
+    } catch (error) {
+      this.googleOAuthBusy = false
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Google sign-in failed.'
+    }
+  }
+
+  async ingestGoogleOAuthTokens(tokens: GoogleOAuthTokens): Promise<void> {
+    await this.applyGoogleOAuthTokens(tokens)
+  }
+
+  private async applyGoogleOAuthTokens(
+    tokens: GoogleOAuthTokens,
+  ): Promise<void> {
+    const email = await fetchGoogleAccountEmail(tokens.accessToken)
+    this.loginSetupType = 'oauth-file'
+    this.storageMode = 'oauth-file'
+    this.oauthFile = oauthTokensToConfig(tokens, {
+      preset: 'google-drive',
+      accessToken: this.oauthFile?.accessToken ?? tokens.accessToken,
+      refreshToken: this.oauthFile?.refreshToken,
+      expiresAt: this.oauthFile?.expiresAt,
+      fileId: this.oauthFile?.fileId,
+      accountEmail: email,
+    })
+    this.githubPat = ''
+    this.githubRepo = DEFAULT_GITHUB_REPO
+    this.googleOAuthBusy = false
   }
 
   dismissSuccess() {
@@ -162,7 +287,7 @@ export class VaultState {
     try {
       await this.enqueueStorage(() =>
         this.manager!.request_vault_access(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
           isoTimestamp(),
         ),
       )
@@ -207,7 +332,10 @@ export class VaultState {
   }
 
   private resolveErrorMessage(message: string): string {
-    const stripped = message.replace(/^GitHub error:\s*/i, '').trim()
+    const stripped = message
+      .replace(/^GitHub error:\s*/i, '')
+      .replace(/^Drive error:\s*/i, '')
+      .trim()
     if (stripped.startsWith('errors.')) {
       return this.t(stripped)
     }
@@ -319,12 +447,16 @@ export class VaultState {
         if (this.loginSetupType !== 'github') {
           this.githubPat = ''
         }
+        if (this.loginSetupType !== 'oauth-file') {
+          this.oauthFile = null
+        }
       }
       return
     }
     this.storageMode = provider.type
     this.githubPat = provider.githubPat ?? ''
     this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+    this.oauthFile = provider.oauthFile ?? null
   }
 
   async persistProviders() {
@@ -339,6 +471,7 @@ export class VaultState {
     this.storageMode = type
     this.githubPat = ''
     this.githubRepo = DEFAULT_GITHUB_REPO
+    this.oauthFile = type === 'oauth-file' ? this.oauthFile : null
     this.errorMsg = ''
     this.dismissSuccess()
   }
@@ -396,13 +529,14 @@ export class VaultState {
         this.unlockMode = 'keys'
         return true
       }
-      if (this.storageMode === 'github' && !this.githubPat.trim()) {
+      if (!this.hasRemoteCredentials()) {
         this.passwordEntries = []
         this.loginUnlockMode = 'unknown'
         return false
       }
+      await this.ensureOAuthTokensFresh()
       const raw = await this.enqueueStorage(() =>
-        this.manager!.fetchVaultPasswordEntries(...this.wasmGithubArgs()),
+        this.manager!.fetchVaultPasswordEntries(...this.wasmStorageArgs()),
       )
       this.passwordEntries = mapWasmPasswordEntries(raw)
       this.loginUnlockMode = 'keys'
@@ -439,6 +573,7 @@ export class VaultState {
     this.errorMsg = ''
     this.isVerifying = true
     try {
+      await this.ensureOAuthTokensFresh()
       const ok = await this.refreshPasswordEntriesList()
       if (!ok) {
         this.errorMsg =
@@ -514,6 +649,8 @@ export class VaultState {
     const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
     const type = this.loginSetupType ?? this.storageMode
     const isNewSetup = this.loginSetupType !== null
+    const oauthSnapshot =
+      type === 'oauth-file' ? (this.oauthFile ?? undefined) : undefined
 
     if (isNewSetup) {
       const provider: StorageProvider = {
@@ -522,6 +659,7 @@ export class VaultState {
         label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
+        oauthFile: oauthSnapshot,
         createdAt: isoTimestamp(),
       }
       this.providers = [...this.providers, provider]
@@ -535,6 +673,10 @@ export class VaultState {
             ? pat || this.activeProvider.githubPat
             : undefined,
         githubRepo: this.storageMode === 'github' ? repo : undefined,
+        oauthFile:
+          this.storageMode === 'oauth-file'
+            ? (oauthSnapshot ?? this.activeProvider.oauthFile)
+            : undefined,
       }
       this.providers = this.providers.map((p) =>
         p.id === updated.id ? updated : p,
@@ -546,10 +688,25 @@ export class VaultState {
         label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
+        oauthFile: oauthSnapshot,
         createdAt: isoTimestamp(),
       }
       this.providers = [provider]
       this.activeProviderId = provider.id
+    }
+
+    if (this.storageMode === 'oauth-file' && this.oauthFile?.fileId) {
+      const active = this.providers.find((p) => p.id === this.activeProviderId)
+      if (
+        active?.oauthFile &&
+        active.oauthFile.fileId !== this.oauthFile.fileId
+      ) {
+        const merged = { ...active.oauthFile, fileId: this.oauthFile.fileId }
+        this.oauthFile = merged
+        this.providers = this.providers.map((p) =>
+          p.id === this.activeProviderId ? { ...p, oauthFile: merged } : p,
+        )
+      }
     }
 
     this.loginSetupType = null
@@ -660,12 +817,13 @@ export class VaultState {
     if (!options?.force && this.isVerifying) return
     if (!options?.force && this.isSaving) return
     if (!options?.force && this.isSyncing) return
-    if (this.storageMode === 'github' && !this.githubPat.trim()) return
+    if (!this.hasRemoteCredentials()) return
+    await this.ensureOAuthTokensFresh()
 
     this.isSyncing = true
     try {
       const raw = await this.enqueueStorage(() =>
-        this.manager!.sync_vault_from_storage(...this.wasmGithubArgs()),
+        this.manager!.sync_vault_from_storage(...this.wasmStorageArgs()),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
       this.lastSyncedAt = new SvelteDate()
@@ -680,7 +838,7 @@ export class VaultState {
     if (!this.manager) return
     try {
       await this.initDeviceIdentity()
-      if (this.storageMode === 'github' && !this.githubPat.trim()) {
+      if (!this.hasRemoteCredentials()) {
         this.pendingJoins = []
         this.vaultMembers = []
         return
@@ -753,7 +911,7 @@ export class VaultState {
     try {
       await this.enqueueStorage(() =>
         this.manager!.request_vault_access(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
           isoTimestamp(),
         ),
       )
@@ -872,7 +1030,7 @@ export class VaultState {
       await this.initDeviceIdentity()
       const rawRecords = await this.enqueueStorage(async () => {
         const connectPromise = this.manager!.connect_fresh(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
         )
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
@@ -917,7 +1075,7 @@ export class VaultState {
     try {
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.enroll_and_connect(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
           secretsKey,
           membersKey,
         ),
@@ -981,10 +1139,11 @@ export class VaultState {
     this.isVerifying = true
     try {
       await this.initDeviceIdentity()
+      await this.ensureOAuthTokensFresh()
 
       const accessStatus = await this.enqueueStorage(async () => {
         const assessPromise = this.manager!.assess_vault_connect(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
         )
         const assessTimeout = new Promise<never>((_, reject) => {
           setTimeout(
@@ -1028,7 +1187,7 @@ export class VaultState {
       }
 
       const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise = this.manager!.connect(...this.wasmGithubArgs())
+        const connectPromise = this.manager!.connect(...this.wasmStorageArgs())
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () =>
@@ -1047,11 +1206,14 @@ export class VaultState {
       })
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
+      this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
       void this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
         this.showSuccess(this.t('toasts.local_loaded'))
+      } else if (this.storageMode === 'oauth-file') {
+        this.showSuccess(this.t('toasts.google_drive_connected'))
       } else {
         this.showSuccess(this.t('toasts.github_connected'))
       }
@@ -1254,10 +1416,14 @@ export class VaultState {
       return
     }
     if (this.isVerifying) return
-    if (this.storageMode === 'github' && !this.githubPat.trim()) {
-      this.errorMsg = 'Configure GitHub credentials before unlocking.'
+    if (!this.hasRemoteCredentials()) {
+      this.errorMsg =
+        this.storageMode === 'oauth-file'
+          ? this.t('errors.google_sign_in_required')
+          : 'Configure GitHub credentials before unlocking.'
       return
     }
+    await this.ensureOAuthTokensFresh()
     if (!entryId.trim()) {
       this.errorMsg = 'Choose a vault password to unlock.'
       return
@@ -1269,7 +1435,7 @@ export class VaultState {
       await this.initDeviceIdentity()
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.connectWithPassword(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
           entryId,
           password,
         ),
@@ -1329,7 +1495,7 @@ export class VaultState {
 
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.connectWithPassword(
-          ...this.wasmGithubArgs(),
+          ...this.wasmStorageArgs(),
           entryId,
           unlockPassword,
         ),
