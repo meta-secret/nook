@@ -155,7 +155,7 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 | Toolchain image | Single **`ghcr.io/<owner>/<repo>/toolchain:latest`** image (always **linux/amd64**). `task setup` pulls it; `docker buildx bake` reuses registry layers and only rebuilds invalidated layers. CI pushes after a green check/e2e. Mac dev runs via `docker run --platform linux/amd64`. |
 | Rust crate dependencies | **cargo-chef** + clippy/test warm-up during image build. Baked artifacts live at `/opt/nook/target`. |
 | `target/` at runtime | Bind-mounting the repo hides image layers under `/workspace/target`. The **entrypoint** copies `/opt/nook/target` into the workspace when `target/debug/deps` is empty (fresh CI checkout). Within one CI job, later `docker run` invocations reuse the same host `target/` via the bind mount. |
-| `nook-web/node_modules` | `bun install --frozen-lockfile` during image build; baked at `/opt/nook/nook-web-node_modules`. Entrypoint copies then relinks natives with `bun install --frozen-lockfile`. |
+| `nook-web/node_modules` | `BUN_INSTALL_CACHE_DIR` baked at `/opt/nook/bun-install-cache` during image build. Entrypoint runs `bun install --frozen-lockfile` (fast link from cache; correct rolldown native bindings). |
 | Playwright Chromium | `playwright install --with-deps chromium` during image build at `PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`. |
 | CI Docker builds | **One `task setup` per workflow run**. Pull `toolchain:latest`, build only changed layers, push after green verify. |
 

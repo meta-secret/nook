@@ -22,7 +22,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **No Docker named volumes.** GitHub Actions runners do not retain volumes across jobs. `task` bind-mounts the repository only (`-v $ROOT:/workspace`).
 - **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). `task setup` pulls it; build reuses registry layers; CI pushes after green verify. Mac uses `--platform linux/amd64`.
 - **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps; clippy/test/build warm-up runs during `docker build`.
-- **Entrypoint seeding.** The bind mount hides image-baked `target/` and `nook-web/node_modules`. The entrypoint copies from `/opt/nook/*` when empty, then `bun install --frozen-lockfile` relinks web natives.
+- **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty. Web deps link from `/opt/nook/bun-install-cache` via `bun install --frozen-lockfile` (never copy `node_modules` — breaks rolldown natives).
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
 - **One Docker build per workflow.** `pr.yml` and `main.yml` each use a single job so `task setup` runs once; `task docker:pull` loads `toolchain:latest` before `docker:build`.
