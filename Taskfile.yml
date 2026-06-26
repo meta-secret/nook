@@ -243,9 +243,18 @@ tasks:
       - cargo clippy --workspace --all-targets -- -D warnings
 
   _wasm:build:
-    desc: Build nook-wasm for the web app.
+    desc: Build nook-wasm for the web app (workspace cargo build reuses chef-cached deps).
+    vars:
+      WASM_OUT: nook-web/src/lib/nook-wasm
+      WASM_ARTIFACT: target/wasm32-unknown-unknown/release/nook_wasm.wasm
     cmds:
-      - wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm
+      - cargo build --release --target wasm32-unknown-unknown -p nook-wasm
+      - mkdir -p {{.WASM_OUT}}
+      - wasm-bindgen {{.WASM_ARTIFACT}} --out-dir {{.WASM_OUT}} --target web --out-name nook_wasm
+      - wasm-opt -Oz {{.WASM_OUT}}/nook_wasm_bg.wasm -o {{.WASM_OUT}}/nook_wasm_bg.wasm
+      - cp nook-wasm/wasm-package.json {{.WASM_OUT}}/package.json
+      - cp nook-wasm/LICENSE {{.WASM_OUT}}/LICENSE
+      - printf '%s\n' '*' > {{.WASM_OUT}}/.gitignore
 
   _web:install:
     desc: Install web dependencies.
