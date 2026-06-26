@@ -228,19 +228,20 @@ tasks:
       - cd nook-web && bun run format:check
 
   _rust:build:
-    desc: Build the Rust workspace.
+    desc: Build the native Rust crate (wasm is built via _wasm:build).
     cmds:
-      - cargo build --workspace
+      - cargo build -p nook-core
 
   _rust:test:
-    desc: Test the Rust workspace.
+    desc: Test nook-core (wasm is covered by web e2e).
     cmds:
-      - cargo test --workspace
+      - cargo test -p nook-core
 
   _rust:lint:
-    desc: Lint the Rust workspace.
+    desc: Lint nook-core on host and nook-wasm for wasm32.
     cmds:
-      - cargo clippy --workspace --all-targets -- -D warnings
+      - cargo clippy -p nook-core --all-targets -- -D warnings
+      - cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 
   _wasm:build:
     desc: Build nook-wasm for the web app (workspace cargo build reuses chef-cached deps).

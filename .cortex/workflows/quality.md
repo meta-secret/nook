@@ -9,8 +9,8 @@ Use this workflow for quality, CI, and deployment changes.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
 6. Preserve these gates unless the task explicitly changes them:
    - `cargo fmt --all -- --check`
-   - `cargo clippy --workspace --all-targets -- -D warnings`
-   - `cargo test --workspace`
+   - `cargo clippy -p nook-core --all-targets` and `cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm` (`-D warnings`)
+   - `cargo test -p nook-core`
    - `svelte-check`
    - `eslint`
    - `prettier --check`
