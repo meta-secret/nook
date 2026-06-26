@@ -10,13 +10,13 @@ nook-web/test-results/
 nook-web/package-lock.json
 nook-web/src/lib/nook-wasm/
 
-# Environment files (secrets)
+# Local env files with secrets (never commit)
 .env
-.env.*
-.env.test.local
-nook-web/.env.test.local
-!.env*.example
-!nook-web/.env.test.example
+.env.local
+.env.*.local
+nook-web/.env
+nook-web/.env.local
+nook-web/.env.*.local
 *.pdf
 Cargo.lock
 bun.lock

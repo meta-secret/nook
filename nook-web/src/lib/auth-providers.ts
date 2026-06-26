@@ -1,8 +1,32 @@
 import { generateId } from '$lib/nook'
 
-export type StorageProviderType = 'local' | 'github'
+export type StorageProviderType = 'local' | 'github' | 'oauth-file'
+
+export type OAuthFilePreset = 'google-drive'
+
+export interface OAuthFileConfig {
+  preset: OAuthFilePreset
+  accessToken: string
+  refreshToken?: string
+  expiresAt?: string
+  fileId?: string
+  /** Vault file name in Drive app data (default `nook-vault.yaml`). */
+  fileName?: string
+  accountEmail?: string
+}
 
 export const DEFAULT_GITHUB_REPO = 'nook'
+export const DEFAULT_DRIVE_VAULT_FILE = 'nook-vault.yaml'
+const DRIVE_STORAGE_REF_SEP = '\t'
+
+export function formatDriveStorageRef(
+  fileId: string | undefined,
+  fileName: string,
+): string {
+  const id = fileId?.trim() ?? ''
+  const name = fileName.trim() || DEFAULT_DRIVE_VAULT_FILE
+  return id ? `${id}${DRIVE_STORAGE_REF_SEP}${name}` : name
+}
 
 export interface StorageProvider {
   id: string
@@ -11,6 +35,7 @@ export interface StorageProvider {
   githubPat?: string
   /** GitHub repository name (not owner/name). Defaults to `nook`. */
   githubRepo?: string
+  oauthFile?: OAuthFileConfig
   createdAt: string
 }
 
@@ -83,14 +108,33 @@ function migrateProviderFields(
 ): AuthProvidersSnapshot {
   let changed = false
   const providers = snapshot.providers.map((provider) => {
-    if (provider.type !== 'github') {
-      return provider
+    if (provider.type === 'github') {
+      if (provider.githubRepo?.trim()) {
+        return provider
+      }
+      changed = true
+      return { ...provider, githubRepo: DEFAULT_GITHUB_REPO }
     }
-    if (provider.githubRepo?.trim()) {
-      return provider
+    if (provider.type === 'oauth-file') {
+      if (provider.oauthFile?.fileName?.trim()) {
+        return provider
+      }
+      changed = true
+      const existing = provider.oauthFile
+      return {
+        ...provider,
+        oauthFile: {
+          preset: 'google-drive' as const,
+          accessToken: existing?.accessToken ?? '',
+          refreshToken: existing?.refreshToken,
+          expiresAt: existing?.expiresAt,
+          fileId: existing?.fileId,
+          accountEmail: existing?.accountEmail,
+          fileName: DEFAULT_DRIVE_VAULT_FILE,
+        },
+      }
     }
-    changed = true
-    return { ...provider, githubRepo: DEFAULT_GITHUB_REPO }
+    return provider
   })
   if (!changed) {
     return snapshot
@@ -149,13 +193,29 @@ export async function saveAuthProviders(
   }
 }
 
+export function wasmStorageModeForProvider(
+  type: StorageProviderType,
+  oauthPreset?: OAuthFilePreset,
+): string {
+  if (type === 'oauth-file' && oauthPreset === 'google-drive') {
+    return 'google-drive'
+  }
+  return type
+}
+
 export function providerDefaultLabel(
   type: StorageProviderType,
-  githubRepo?: string,
+  detail?: string,
 ): string {
   if (type === 'github') {
-    const repo = githubRepo?.trim() || DEFAULT_GITHUB_REPO
+    const repo = detail?.trim() || DEFAULT_GITHUB_REPO
     return repo === DEFAULT_GITHUB_REPO ? 'GitHub' : `GitHub · ${repo}`
+  }
+  if (type === 'oauth-file') {
+    const file = detail?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    return file === DEFAULT_DRIVE_VAULT_FILE
+      ? 'Google Drive'
+      : `Google Drive · ${file}`
   }
   return 'This device'
 }
@@ -169,6 +229,13 @@ export function localizeProviderLabel(
   }
   if (label === 'GitHub') {
     return t('provider_picker.github')
+  }
+  if (label.startsWith('Google Drive · ')) {
+    const file = label.slice('Google Drive · '.length)
+    return `${t('provider_picker.google_drive')} · ${file}`
+  }
+  if (label === 'Google Drive') {
+    return t('provider_picker.google_drive')
   }
   if (label.startsWith('GitHub · ')) {
     const repo = label.slice('GitHub · '.length)
@@ -189,6 +256,18 @@ export function maskGithubPat(
   return `${trimmed.slice(0, prefixLen)}…`
 }
 
+export function maskOAuthAccount(
+  oauth: OAuthFileConfig | undefined,
+  t?: (key: string) => string,
+): string {
+  const email = oauth?.accountEmail?.trim()
+  if (email) return email
+  if (oauth?.accessToken?.trim()) {
+    return t ? t('auth_storage.google_signed_in') : 'Signed in with Google'
+  }
+  return t ? t('auth_storage.google_not_signed_in') : 'Not signed in'
+}
+
 /** Secondary line for provider rows in management / picker UIs. */
 export function providerStorageDetail(
   provider: StorageProvider,
@@ -198,6 +277,12 @@ export function providerStorageDetail(
     return t
       ? t('provider_picker.this_device_desc')
       : 'Vault in browser storage on this device'
+  }
+  if (provider.type === 'oauth-file') {
+    const file =
+      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    const account = maskOAuthAccount(provider.oauthFile, t)
+    return `${file} · ${account}`
   }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
   return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat, t)}`

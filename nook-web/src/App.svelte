@@ -26,12 +26,11 @@
       colorMode = savedMode
     }
     void vault.init()
-    return () => vault.stopVaultSync()
-  })
 
-  async function handleUnlock() {
-    await vault.loadDb()
-  }
+    return () => {
+      vault.stopVaultSync()
+    }
+  })
 
   async function handleLoginProviderSelect(id: string) {
     await vault.selectLoginProvider(id)
@@ -44,6 +43,18 @@
   async function handleProviderReconnect(id: string) {
     await vault.selectProvider(id)
     await vault.loadDb()
+  }
+
+  async function handleUnlock() {
+    if (vault.loginSetupType) {
+      await vault.connectStagedProvider()
+      return
+    }
+    await vault.loadDb()
+  }
+
+  async function handleSettingsReconnect() {
+    await handleUnlock()
   }
 
   function toggleColorMode() {
@@ -230,7 +241,7 @@
                 pendingJoins={vault.pendingJoins}
                 vaultMembers={vault.vaultMembers}
                 hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                onReconnect={handleUnlock}
+                onReconnect={handleSettingsReconnect}
                 onSelectProvider={handleProviderReconnect}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}

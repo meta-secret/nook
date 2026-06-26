@@ -391,6 +391,9 @@
       "github_repo_length": "Имя репозитория GitHub должно содержать не более 100 символов.",
       "github_repo_invalid": "Недопустимое имя репозитория GitHub.",
       "github_repo_chars": "Имя репозитория может содержать только буквы, цифры, точки, дефисы и знаки подчеркивания.",
+      "drive_file_name_length": "Имя файла сейфа в Drive должно содержать не более 100 символов.",
+      "drive_file_name_invalid": "Недопустимое имя файла сейфа в Drive.",
+      "drive_file_name_chars": "Имя файла сейфа может содержать только буквы, цифры, точки, дефисы и знаки подчеркивания.",
       "secret_id_required": "Имя секрета обязательно для заполнения.",
       "secret_id_reserved": "Имя секрета не может использовать зарезервированный ID устройства.",
       "secret_data_required": "Значение секрета обязательно для заполнения.",
@@ -445,7 +448,9 @@
     "this_device": "Это устройство",
     "this_device_desc": "Зашифрованный сейф в локальном хранилище браузера — без входа через сторонний сервис",
     "github": "GitHub",
-    "github_desc": "Вход в GitHub — синхронизация зашифрованного сейфа с вашим репозиторием"
+    "github_desc": "Вход в GitHub — синхронизация зашифрованного сейфа с вашим репозиторием",
+    "google_drive": "Google Drive",
+    "google_drive_desc": "Вход через Google — синхронизация зашифрованного сейфа в скрытую папку приложения Drive"
   },
   "provider_setup": {
     "change_provider": "Сменить провайдера",
@@ -453,9 +458,17 @@
     "create_token_github": "Создать токен на GitHub",
     "repo_name": "Имя репозитория",
     "vault_file_desc": "Файл сейфа: nook-vault.yaml в этом репозитории вашего аккаунта.",
+    "drive_file_name": "Имя файла сейфа",
+    "drive_vault_file_desc": "Каждое имя — отдельный зашифрованный сейф в скрытой папке приложения Google Drive.",
     "pat_label": "Персональный токен доступа",
     "stored_locally_desc": "Хранится только в этом браузере. Синхронизируется в username/{repo}/nook-vault.yaml.",
-    "local_storage_desc": "Ваш сейф хранится в IndexedDB на этом устройстве. Токен не требуется."
+    "local_storage_desc": "Ваш сейф хранится в IndexedDB на этом устройстве. Токен не требуется.",
+    "google_drive_desc": "Nook хранит зашифрованный сейф в скрытой папке приложения Google Drive. Нажмите «Войти через Google» — API-ключи не нужны.",
+    "sign_in_with_google": "Войти через Google",
+    "google_signing_in": "Открываем вход Google…",
+    "google_signed_in_as": "Вошли как {account}",
+    "google_tokens_local_desc": "OAuth-токены остаются только в этом браузере, как сохранённый токен GitHub.",
+    "google_oauth_unconfigured": "Вход через Google не настроен. Укажите GOOGLE_OAUTH_CLIENT_ID в google-oauth-config.ts."
   },
   "devices_card": {
     "single_device_warning": "Добавьте другое устройство перед удалением текущего. Резервный пароль помогает восстановить доступ, но как минимум один ключ устройства должен оставаться зарегистрированным.",

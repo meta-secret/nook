@@ -7,6 +7,7 @@
     TriangleAlert,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import type { StorageProviderType } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -27,7 +28,7 @@
     onDismissError,
   }: {
     vault?: VaultState
-    storageMode: 'local' | 'github'
+    storageMode: StorageProviderType
     githubRepo?: string
     lastSyncedAt?: Date | null
     isSyncing?: boolean
@@ -76,9 +77,13 @@
     label ??
       (storageMode === 'github'
         ? githubRepo.trim() || 'GitHub'
-        : vault
-          ? vault.t('provider_picker.this_device')
-          : 'This device'),
+        : storageMode === 'oauth-file'
+          ? vault
+            ? vault.t('provider_picker.google_drive')
+            : 'Google Drive'
+          : vault
+            ? vault.t('provider_picker.this_device')
+            : 'This device'),
   )
   const isQuiet = $derived(variant === 'quiet')
 </script>
@@ -102,6 +107,17 @@
               class="size-3.5 shrink-0 text-primary/80"
               aria-hidden="true"
             />
+          {:else if storageMode === 'oauth-file'}
+            <svg
+              class="size-3.5 shrink-0 text-primary/80"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+              />
+            </svg>
           {:else}
             <HardDrive
               class="size-3.5 shrink-0 text-primary/80"

@@ -27,6 +27,10 @@ mod sync;
 use crate::NookError;
 use crate::conversion::{apply_member_records, records_to_array};
 use crate::storage::{
+    drive::{
+        ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
+        write_drive_vault_with_retry,
+    },
     github::{ensure_github_repo_exists, fetch_github_username, write_github_text_file_with_retry},
     indexed_db::{load_from_indexed_db, load_or_create_device_identity, save_to_indexed_db},
 };
@@ -118,6 +122,12 @@ impl NookVaultManager {
             .map(|identity| identity.public_key())
             .unwrap_or_default()
     }
+
+    /// GitHub repo (`owner/name`) or Google Drive file id, depending on mode.
+    #[wasm_bindgen(getter)]
+    pub fn storage_remote_ref(&self) -> String {
+        self.github_repo.clone()
+    }
 }
 
 // ---- Cross-cutting private helpers ----------------------------------------
@@ -167,6 +177,20 @@ impl NookVaultManager {
                 self.file_sha = Some(new_sha);
                 self.github_root_empty = false;
                 let _ = self.status_tx.send("GITHUB_SAVE_SUCCESS".to_owned());
+            }
+            nook_core::StorageMode::GoogleDrive => {
+                let _ = self.status_tx.send("DRIVE_SAVE_START".to_owned());
+                let (file_id, new_revision) = write_drive_vault_with_retry(
+                    &self.github_pat,
+                    &self.github_repo,
+                    &self.github_path,
+                    &stored,
+                    self.file_sha.clone(),
+                )
+                .await?;
+                self.github_repo = file_id;
+                self.file_sha = Some(new_revision);
+                let _ = self.status_tx.send("DRIVE_SAVE_SUCCESS".to_owned());
             }
         }
         self.last_synced_content = stored;
@@ -268,6 +292,20 @@ impl NookVaultManager {
                 let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
                 ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
             }
+            nook_core::StorageMode::GoogleDrive => {
+                self.github_pat =
+                    nook_core::validate_oauth_access_token(github_pat).map_err(NookError::Drive)?;
+                let (known_file_id, raw_file_name) =
+                    nook_core::parse_drive_storage_ref(github_repo_name);
+                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
+                    .map_err(NookError::Database)?;
+                self.github_path = file_name.clone();
+                let _ = self.status_tx.send("DRIVE_VERIFY".to_owned());
+                verify_drive_access(&self.github_pat).await?;
+                let file_id =
+                    ensure_drive_vault_file(&self.github_pat, &known_file_id, &file_name).await?;
+                self.github_repo = file_id;
+            }
         }
         Ok(())
     }
@@ -306,6 +344,20 @@ impl NookVaultManager {
                 let _ = self.status_tx.send("GITHUB_FETCH_SUCCESS".to_owned());
                 if let Some(file) = res {
                     self.file_sha = Some(file.sha);
+                    file.content
+                } else {
+                    *vault_file_missing = true;
+                    String::new()
+                }
+            }
+            nook_core::StorageMode::GoogleDrive => {
+                let _ = self.status_tx.send("DRIVE_FETCH_START".to_owned());
+                let res = fetch_drive_vault(&self.github_pat, &self.github_repo, &self.github_path)
+                    .await?;
+                let _ = self.status_tx.send("DRIVE_FETCH_SUCCESS".to_owned());
+                if let Some(file) = res {
+                    self.github_repo = file.file_id;
+                    self.file_sha = Some(file.revision);
                     file.content
                 } else {
                     *vault_file_missing = true;

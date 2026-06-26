@@ -26,6 +26,9 @@ pub enum NookError {
     #[error("GitHub error: {0}")]
     GitHub(String),
 
+    #[error("Drive error: {0}")]
+    Drive(String),
+
     #[error("Decryption failed: {0}")]
     Decryption(String),
 
@@ -43,6 +46,12 @@ pub enum NookError {
 
     #[error("Serialization error: {0}")]
     Serialization(String),
+}
+
+#[wasm_bindgen(js_name = translate)]
+#[must_use]
+pub fn translate_key(locale: &str, key: &str) -> String {
+    nook_core::translate(locale, key)
 }
 
 #[wasm_bindgen]

@@ -20,8 +20,8 @@ If you merge a PR for the user, **confirm squash** before completing the merge. 
 ## Standard flow
 
 1. Branch from `main` (never commit directly on `main`).
-2. Implement; run `task format` and `task check`.
-3. Push the branch; open a PR with summary and test plan.
+2. Implement; run `task format` and `task check` locally before opening a PR.
+3. Push the branch; open a PR with summary and test plan. CI on PRs runs `task check` (format, lint, unit tests, build) plus a Cloudflare preview — Playwright e2e runs on `main` after squash merge and gates GitHub Pages deploy.
 4. After review, **squash merge** into `main`.
 5. Delete the branch (optional but recommended).
 

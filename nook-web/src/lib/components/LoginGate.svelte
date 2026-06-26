@@ -122,6 +122,10 @@
       (showProviderSetup || showWizard || showSetup),
   )
 
+  const setupCanConnect = $derived(
+    setupType !== 'oauth-file' || Boolean(vault.oauthFile?.accessToken?.trim()),
+  )
+
   function handleFirstConnectSubmit(e: Event) {
     e.preventDefault()
     void onUnlock()
@@ -278,6 +282,7 @@
                 type="submit"
                 class="sm:min-w-[180px]"
                 data-testid="connect-provider-btn"
+                disabled={!setupCanConnect}
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />

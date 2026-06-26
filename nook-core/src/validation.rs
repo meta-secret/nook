@@ -12,6 +12,8 @@ pub enum StorageMode {
     Local,
     /// GitHub repository (authenticated with a PAT).
     Github,
+    /// Google Drive app-data folder (authenticated with OAuth access token).
+    GoogleDrive,
 }
 
 impl StorageMode {
@@ -22,6 +24,7 @@ impl StorageMode {
         match self {
             Self::Local => "local",
             Self::Github => "github",
+            Self::GoogleDrive => "google-drive",
         }
     }
 
@@ -32,6 +35,7 @@ impl StorageMode {
         match value {
             "local" => Ok(Self::Local),
             "github" => Ok(Self::Github),
+            "google-drive" => Ok(Self::GoogleDrive),
             other => Err(format!("errors.validation.unknown_storage_mode:{}", other)),
         }
     }
@@ -49,6 +53,11 @@ impl std::fmt::Display for StorageMode {
 pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
 pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
+pub const DEFAULT_DRIVE_VAULT_FILE_NAME: &str = "nook-vault.yaml";
+
+/// Separator between optional known Drive file id and vault file name in the
+/// wasm connect `github_repo` argument for `google-drive` mode.
+pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
 /// Boundary helper: confirms a raw string is a known storage mode. Prefer
 /// `StorageMode::parse` when you also want the parsed value.
@@ -86,6 +95,59 @@ pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
     Ok(repo)
 }
 
+/// Validates a Google Drive app-data vault file name. Empty uses
+/// [`DEFAULT_DRIVE_VAULT_FILE_NAME`].
+pub fn validate_drive_vault_file_name(name: &str) -> Result<String, String> {
+    let file_name = if name.trim().is_empty() {
+        DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
+    } else {
+        name.trim().to_owned()
+    };
+    if file_name.len() > 100 {
+        return Err("errors.validation.drive_file_name_length".to_owned());
+    }
+    if file_name == "." || file_name == ".." {
+        return Err("errors.validation.drive_file_name_invalid".to_owned());
+    }
+    if !file_name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    {
+        return Err("errors.validation.drive_file_name_chars".to_owned());
+    }
+    Ok(file_name)
+}
+
+/// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
+/// or `fileName` alone when no cached file id exists yet.
+#[must_use]
+pub fn parse_drive_storage_ref(value: &str) -> (String, String) {
+    if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
+        (file_id.trim().to_owned(), file_name.trim().to_owned())
+    } else {
+        (String::new(), value.trim().to_owned())
+    }
+}
+
+#[must_use]
+pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
+    let id = file_id.trim();
+    let name = file_name.trim();
+    if id.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{id}{DRIVE_STORAGE_REF_SEP}{name}")
+    }
+}
+
+pub fn validate_oauth_access_token(token: &str) -> Result<String, String> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return Err("errors.validation.oauth_access_token_empty".to_owned());
+    }
+    Ok(trimmed.to_owned())
+}
+
 /// Validates connect inputs. Returns trimmed GitHub PAT when mode is `Github`.
 ///
 /// Accepts a string-typed `storage_mode` purely as a boundary convenience
@@ -94,6 +156,10 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
     let mode = StorageMode::parse(storage_mode)?;
     match mode {
         StorageMode::Github => Ok(Some(validate_github_pat(github_pat)?)),
+        StorageMode::GoogleDrive => {
+            validate_oauth_access_token(github_pat)?;
+            Ok(None)
+        }
         StorageMode::Local => Ok(None),
     }
 }
@@ -221,8 +287,13 @@ mod tests {
     fn storage_mode_roundtrips_through_string_tag() {
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
+        assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
         assert_eq!(StorageMode::parse("local").unwrap(), StorageMode::Local);
         assert_eq!(StorageMode::parse("github").unwrap(), StorageMode::Github);
+        assert_eq!(
+            StorageMode::parse("google-drive").unwrap(),
+            StorageMode::GoogleDrive
+        );
         assert!(StorageMode::parse("s3").is_err());
         assert_eq!(format!("{}", StorageMode::Local), "local");
     }
@@ -236,6 +307,59 @@ mod tests {
     #[test]
     fn validate_connect_rejects_unknown_mode() {
         assert!(validate_connect("icloud", "token").is_err());
+    }
+
+    #[test]
+    fn validate_connect_google_drive_requires_access_token() {
+        assert!(validate_connect("google-drive", "  ").is_err());
+        assert_eq!(
+            validate_connect("google-drive", " ya29.test ").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn validate_drive_vault_file_name_defaults_and_rejects_invalid() {
+        assert_eq!(
+            validate_drive_vault_file_name("  ").unwrap(),
+            DEFAULT_DRIVE_VAULT_FILE_NAME
+        );
+        assert_eq!(
+            validate_drive_vault_file_name("work-vault.yaml").unwrap(),
+            "work-vault.yaml"
+        );
+        assert!(validate_drive_vault_file_name(".").is_err());
+        assert!(validate_drive_vault_file_name("bad name").is_err());
+    }
+
+    #[test]
+    fn parse_drive_storage_ref_splits_file_id_and_name() {
+        assert_eq!(
+            parse_drive_storage_ref("abc123\twork-vault.yaml"),
+            ("abc123".to_owned(), "work-vault.yaml".to_owned())
+        );
+        assert_eq!(
+            parse_drive_storage_ref("nook-vault.yaml"),
+            (String::new(), "nook-vault.yaml".to_owned())
+        );
+    }
+
+    #[test]
+    fn format_drive_storage_ref_omits_empty_file_id() {
+        assert_eq!(
+            format_drive_storage_ref("", "nook-vault.yaml"),
+            "nook-vault.yaml"
+        );
+        assert_eq!(
+            format_drive_storage_ref("abc", "work.yaml"),
+            "abc\twork.yaml"
+        );
+    }
+
+    #[test]
+    fn validate_oauth_access_token_rejects_empty() {
+        assert!(validate_oauth_access_token(" ").is_err());
+        assert_eq!(validate_oauth_access_token(" token ").unwrap(), "token");
     }
 
     #[test]
