@@ -18,6 +18,17 @@ tasks:
       - task: docker:pull
       - task: docker:build
 
+  setup:pull:
+    desc: Pull the remote toolchain image only (CI jobs after the toolchain build job).
+    cmds:
+      - task: docker:pull
+
+  ci:verify:
+    desc: Format, lint, and test in Docker (no web production build; preview job builds in parallel).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _verify }
+
   docker:pull:
     internal: true
     env:
@@ -231,6 +242,13 @@ tasks:
       - task: _lint
       - task: _test
       - task: _build
+
+  _verify:
+    desc: Format, lint, and test without production web build (CI parallel preview).
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
 
   _format:
     desc: Format all projects.
