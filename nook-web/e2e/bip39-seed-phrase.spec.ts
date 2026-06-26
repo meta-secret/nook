@@ -3,6 +3,7 @@ import {
   BIP39_SAMPLE_WORDS,
   clearBrowserVault,
   connectLocalVault,
+  expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,
   UI_TIMEOUT_MS,
@@ -31,6 +32,7 @@ test.describe('BIP39 seed phrase grid', () => {
       .getByTestId('secret-row')
       .filter({ hasText: 'Recovery wallet' })
     await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expandSecretRow(page, 'Recovery wallet')
     await expect(row.getByTestId('seed-phrase-grid')).toBeVisible()
 
     await row.getByRole('button', { name: 'Show secret' }).click()

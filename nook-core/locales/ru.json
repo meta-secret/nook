@@ -98,6 +98,8 @@
     "of": "из",
     "secret_count": "секретов: {count}",
     "secret_count_filtered": "секретов: {count} из {total}",
+    "expand_secret": "Развернуть секрет",
+    "collapse_secret": "Свернуть секрет",
     "types": {
       "login": "Логин",
       "api_key": "API Ключ",
@@ -121,6 +123,7 @@
       "no_username": "Нет имени пользователя",
       "no_account_name": "Нет имени аккаунта",
       "no_title": "Нет названия",
+      "words_count": "{count} слов",
       "unnamed_seed_phrase": "Безымянная сид-фраза",
       "unnamed_note": "Безымянная заметка",
       "no_website_group": "Нет сайта"

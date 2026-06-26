@@ -98,6 +98,8 @@
     "of": "of",
     "secret_count": "Secrets: {count}",
     "secret_count_filtered": "Secrets: {count} of {total}",
+    "expand_secret": "Expand secret",
+    "collapse_secret": "Collapse secret",
     "types": {
       "login": "Login",
       "api_key": "API Key",
@@ -121,6 +123,7 @@
       "no_username": "No username",
       "no_account_name": "No account name",
       "no_title": "No title",
+      "words_count": "{count} words",
       "unnamed_seed_phrase": "Unnamed Seed Phrase",
       "unnamed_note": "Unnamed Note",
       "no_website_group": "No Website"

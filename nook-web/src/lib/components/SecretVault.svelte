@@ -56,6 +56,7 @@
 
   let searchPattern = $state('')
   let revealSecrets = $state<Record<string, boolean>>({})
+  let expandedSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | null>(null)
   let addSecretOpen = $state(false)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -160,7 +161,15 @@
   }
 
   function toggleReveal(id: string) {
-    revealSecrets = { ...revealSecrets, [id]: !revealSecrets[id] }
+    const next = !revealSecrets[id]
+    revealSecrets = { ...revealSecrets, [id]: next }
+    if (next) {
+      expandedSecrets = { ...expandedSecrets, [id]: true }
+    }
+  }
+
+  function toggleExpand(id: string) {
+    expandedSecrets = { ...expandedSecrets, [id]: !expandedSecrets[id] }
   }
 </script>
 
@@ -290,8 +299,10 @@
                   <SecretDetailRow
                     {item}
                     {index}
+                    expanded={Boolean(expandedSecrets[item.id])}
                     {revealSecrets}
                     {copiedKey}
+                    onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
                     {onDeleteSecret}

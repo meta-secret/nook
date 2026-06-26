@@ -787,8 +787,17 @@ export async function addSecret(
   }
 }
 
+export async function expandSecretRow(page: Page, key: string) {
+  const row = page.getByTestId('secret-row').filter({ hasText: key })
+  const toggle = row.getByTestId('secret-row-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+}
+
 export async function revealSecretValue(page: Page, key: string) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
+  await expandSecretRow(page, key)
   await row.getByRole('button', { name: 'Show secret' }).click()
   const grid = row.getByTestId('seed-phrase-grid')
   if (await grid.isVisible()) {
