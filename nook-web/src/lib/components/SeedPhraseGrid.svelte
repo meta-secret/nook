@@ -46,6 +46,10 @@
   const allWordsFilled = $derived(
     activeCells.every((word) => word.trim().length > 0),
   )
+  const hasPhraseContent = $derived(
+    activeCells.some((word) => word.trim().length > 0) ||
+      value.trim().length > 0,
+  )
 
   const suggestions = $derived.by(() => {
     if (readonly || focusedIndex === null || !wordlist) return []
@@ -103,6 +107,19 @@
     if (readonly) return
     wordCount = count
     syncValueFromCells()
+  }
+
+  function clearPhrase() {
+    if (readonly) return
+    cells = Array.from({ length: 24 }, () => '')
+    wordCount = 12
+    value = ''
+    valid = false
+    checksumValid = null
+    checksumChecking = false
+    focusedIndex = null
+    suggestionIndex = 0
+    focusCell(0)
   }
 
   function setCellValue(index: number, nextValue: string) {
@@ -252,7 +269,7 @@
       {vault.t('add_secret.seed_wordlist_error')}
     </p>
   {:else if !readonly}
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
         class="rounded-md border px-2.5 py-1 text-xs font-medium transition-colors {wordCount ===
@@ -274,6 +291,15 @@
         onclick={() => setWordCount(24)}
       >
         {vault.t('add_secret.seed_word_count_24')}
+      </button>
+      <button
+        type="button"
+        class="ml-auto rounded-md border border-border/50 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        data-testid="seed-phrase-clear-btn"
+        disabled={!hasPhraseContent}
+        onclick={clearPhrase}
+      >
+        {vault.t('add_secret.seed_phrase_clear')}
       </button>
     </div>
   {/if}

@@ -81,6 +81,21 @@ test.describe('BIP39 seed phrase grid', () => {
     await expect(page.getByTestId('save-secret-btn')).toBeEnabled()
   })
 
+  test('clears the entire phrase to start over', async ({ page }) => {
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-seed-phrase').click()
+    await fillSeedPhraseGrid(page, BIP39_SAMPLE_WORDS.slice(0, 3))
+
+    const clearButton = page.getByTestId('seed-phrase-clear-btn')
+    await expect(clearButton).toBeEnabled()
+    await clearButton.click()
+
+    await expect(page.getByTestId('seed-word-1')).toHaveValue('')
+    await expect(page.getByTestId('seed-word-12')).toHaveValue('')
+    await expect(clearButton).toBeDisabled()
+    await expect(page.getByTestId('save-secret-btn')).toBeDisabled()
+  })
+
   test('shows autocomplete suggestions while typing', async ({ page }) => {
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-seed-phrase').click()

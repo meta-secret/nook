@@ -313,6 +313,7 @@
     "seed_wordlist_error": "Could not load the official BIP39 wordlist.",
     "seed_phrase_invalid": "Invalid BIP39 seed phrase checksum.",
     "seed_phrase_checking": "Checking seed phrase…",
+    "seed_phrase_clear": "Clear phrase",
     "placeholder_title": "e.g., My Secret Note",
     "placeholder_note": "Write your secure note (markdown supported)…",
     "generate_password": "Generate Password",
