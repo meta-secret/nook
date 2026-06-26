@@ -28,7 +28,7 @@ group "setup" {
   targets = ["builder-debug-cache", "builder-wasm-cache", "toolchain"]
 }
 
-// Pre-compiled debug/test deps (cargo chef cook --tests). Pushed as builder-debug:cache in CI.
+// Pre-compiled debug/all-target deps (cargo chef cook --all-targets). Pushed as builder-debug:cache in CI.
 target "builder-debug-cache" {
   context    = "."
   dockerfile = "Dockerfile"

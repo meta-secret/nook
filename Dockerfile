@@ -42,7 +42,14 @@ FROM builder-base AS builder-debug
 
 COPY recipe.json .
 COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
-RUN cargo chef cook --tests --recipe-path recipe.json
+RUN cargo chef cook --all-targets --recipe-path recipe.json
+
+COPY Cargo.toml Cargo.toml
+COPY nook-core/Cargo.toml nook-core/Cargo.toml
+COPY nook-wasm/Cargo.toml nook-wasm/Cargo.toml
+COPY nook-core/src nook-core/src
+COPY nook-wasm/src nook-wasm/src
+RUN cargo clippy -p nook-core --all-targets -- -D warnings
 
 # --- Builder wasm: pre-compiled wasm32 release deps for nook-wasm ---
 FROM builder-debug AS builder-wasm
@@ -52,6 +59,7 @@ RUN rustup target add wasm32-unknown-unknown
 COPY recipe.json .
 COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json -p nook-wasm
+RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 
 # --- Toolchain: final dev/CI image with Bun, Task, wasm-pack, and cached deps ---
 FROM builder-wasm AS toolchain
