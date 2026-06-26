@@ -7,6 +7,9 @@
 #
 # deploy-preview runs in parallel with build/e2e (no needs:) and uses
 # continue-on-error so a preview is still attempted when tests fail.
+#
+# Concurrency + cancel-workflow-action: a new push to the same PR (or merge)
+# cancels superseded in-progress runs so CI does not stack redundant work.
 
 name: CI
 
@@ -14,6 +17,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, closed]
 
 permissions:
   contents: read
@@ -21,16 +25,71 @@ permissions:
   pages: write
   id-token: write
   pull-requests: write
+  actions: write
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build and test
+  cancel-on-close:
+    name: Cancel PR runs on close
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
+      - name: Cancel in-progress and queued runs for this branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const statuses = ['in_progress', 'queued', 'waiting', 'pending'];
+            const runIds = new Set();
+
+            for (const status of statuses) {
+              let page = 1;
+              while (true) {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'ci.yml',
+                  branch,
+                  status,
+                  per_page: 100,
+                  page,
+                });
+
+                for (const run of data.workflow_runs) {
+                  if (run.id !== context.runId) {
+                    runIds.add(run.id);
+                  }
+                }
+
+                if (data.workflow_runs.length < 100) break;
+                page += 1;
+              }
+            }
+
+            await Promise.all(
+              [...runIds].map((run_id) =>
+                github.rest.actions.cancelWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id,
+                }),
+              ),
+            );
+
+  build:
+    name: Build and test
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel superseded workflow runs
+        if: github.event_name == 'pull_request'
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -76,8 +135,15 @@ jobs:
 
   e2e:
     name: E2E tests
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
+      - name: Cancel superseded workflow runs
+        if: github.event_name == 'pull_request'
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -131,14 +197,20 @@ jobs:
 
   deploy-preview:
     name: Deploy preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
       contents: read
       packages: write
       pull-requests: write
+      actions: write
     steps:
+      - name: Cancel superseded workflow runs
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v4
 
