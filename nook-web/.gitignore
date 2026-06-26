@@ -22,8 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-bun.lock
-bun.lockb
 
 # Playwright e2e transient GitHub repo registry
 e2e/.e2e-github-repos.json
