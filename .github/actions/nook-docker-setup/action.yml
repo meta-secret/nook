@@ -4,9 +4,6 @@ description: Checkout, Buildx, GHCR login, and task setup (toolchain image + web
 runs:
   using: composite
   steps:
-    - name: Checkout
-      uses: actions/checkout@v7
-
     - name: Setup Task
       uses: go-task/setup-task@v2
 

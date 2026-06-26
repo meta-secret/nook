@@ -78,6 +78,9 @@ jobs:
         with:
           access_token: ${{ github.token }}
 
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
 
@@ -94,6 +97,9 @@ jobs:
         uses: styfle/cancel-workflow-action@0.13.1
         with:
           access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
