@@ -52,6 +52,12 @@ mod tests {
     }
 
     #[test]
+    fn test_secret_count_labels() {
+        assert_eq!(translate("en", "vault.secret_count"), "Secrets: {count}");
+        assert_eq!(translate("ru", "vault.secret_count"), "секретов: {count}");
+    }
+
+    #[test]
     fn test_catalog_retrieval() {
         let en_catalog = get_translation_catalog("en");
         let ru_catalog = get_translation_catalog("ru");

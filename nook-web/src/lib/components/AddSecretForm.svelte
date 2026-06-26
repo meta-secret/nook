@@ -21,6 +21,7 @@
   } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import MarkdownEditor from './MarkdownEditor.svelte'
+  import SeedPhraseGrid from './SeedPhraseGrid.svelte'
 
   let {
     vault,
@@ -68,6 +69,7 @@
   let expiresAt = $state('')
   let accountName = $state('')
   let seedPhrase = $state('')
+  let seedPhraseValid = $state(false)
   let noteTitle = $state('')
   let noteBody = $state('')
 
@@ -180,6 +182,7 @@
 
     const item = buildItem()
     if (selectedType === 'secure-note' && !noteBody.trim()) return
+    if (selectedType === 'seed-phrase' && !seedPhraseValid) return
 
     if (isEditMode && initialItem && onReplaceSecret) {
       await onReplaceSecret(
@@ -497,20 +500,14 @@
         />
       </div>
       <div class="space-y-1.5">
-        <label class="text-xs font-medium" for="secret-value"
-          >{vault.t('vault.types.seed_phrase')}</label
+        <span class="text-xs font-medium"
+          >{vault.t('vault.types.seed_phrase')}</span
         >
-        <textarea
-          id="secret-value"
-          data-testid="secret-value"
+        <SeedPhraseGrid
+          {vault}
           bind:value={seedPhrase}
-          rows="5"
-          required
-          autocomplete="off"
-          spellcheck="false"
-          placeholder={vault.t('add_secret.placeholder_seed')}
-          class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
-        ></textarea>
+          bind:valid={seedPhraseValid}
+        />
       </div>
     {:else}
       <div class="space-y-1.5">
@@ -552,7 +549,8 @@
       </Button>
       <Button
         type="submit"
-        disabled={isSaving}
+        disabled={isSaving ||
+          (selectedType === 'seed-phrase' && !seedPhraseValid)}
         class="sm:min-w-[7rem]"
         data-testid="save-secret-btn"
       >

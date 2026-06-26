@@ -26,7 +26,7 @@
     "welcome": "Welcome to Nook",
     "tagline": "A decentralized, agent-first password manager.",
     "intro_title": "Set up your vault",
-    "intro_description": "Nook keeps your credentials encrypted with zero-knowledge keys. To start, select where you want to store your vault.",
+    "intro_description": "Your credentials are encrypted locally; only your approved devices can unlock them. To start, choose where to store your vault.",
     "local_storage": "This Device (Local)",
     "local_description": "Encrypted vault stays in browser storage on this device.",
     "github_storage": "GitHub Repository",
@@ -96,6 +96,10 @@
     "copied": "Copied!",
     "copy": "Copy",
     "of": "of",
+    "secret_count": "Secrets: {count}",
+    "secret_count_filtered": "Secrets: {count} of {total}",
+    "expand_secret": "Expand secret",
+    "collapse_secret": "Collapse secret",
     "types": {
       "login": "Login",
       "api_key": "API Key",
@@ -119,6 +123,7 @@
       "no_username": "No username",
       "no_account_name": "No account name",
       "no_title": "No title",
+      "words_count": "{count} words",
       "unnamed_seed_phrase": "Unnamed Seed Phrase",
       "unnamed_note": "Unnamed Note",
       "no_website_group": "No Website"
@@ -171,7 +176,7 @@
   },
   "help": {
     "title": "Nook Architecture & Help",
-    "subtitle": "How decentralized, zero-knowledge storage works in Nook.",
+    "subtitle": "How Nook keeps your vault encrypted and under your control.",
     "close": "Close Help"
   },
   "errors": {
@@ -183,6 +188,8 @@
       "secret_id_required": "Secret id is required.",
       "secret_id_reserved": "Secret id cannot use a reserved device id.",
       "secret_data_required": "Secret data is required.",
+      "bip39_empty": "Seed phrase is required.",
+      "bip39_invalid": "Invalid BIP39 seed phrase.",
       "unknown_storage_mode": "Unknown storage mode: {mode}"
     },
     "vault": {
@@ -299,6 +306,15 @@
     "placeholder_expires": "e.g., 2026-12-31",
     "placeholder_account": "e.g., My Ethereum Account",
     "placeholder_seed": "Enter seed phrase…",
+    "seed_word_count_12": "12 words",
+    "seed_word_count_24": "24 words",
+    "seed_word_invalid": "Unknown word",
+    "seed_wordlist_loading": "Loading BIP39 wordlist…",
+    "seed_wordlist_error": "Could not load the official BIP39 wordlist.",
+    "seed_phrase_invalid": "Invalid BIP39 seed phrase checksum.",
+    "seed_phrase_checking": "Checking seed phrase…",
+    "seed_phrase_clear": "Clear phrase",
+    "seed_phrase_valid": "Valid seed phrase",
     "placeholder_title": "e.g., My Secret Note",
     "placeholder_note": "Write your secure note (markdown supported)…",
     "generate_password": "Generate Password",

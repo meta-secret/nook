@@ -56,6 +56,7 @@
 
   let searchPattern = $state('')
   let revealSecrets = $state<Record<string, boolean>>({})
+  let expandedSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | null>(null)
   let addSecretOpen = $state(false)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -160,7 +161,15 @@
   }
 
   function toggleReveal(id: string) {
-    revealSecrets = { ...revealSecrets, [id]: !revealSecrets[id] }
+    const next = !revealSecrets[id]
+    revealSecrets = { ...revealSecrets, [id]: next }
+    if (next) {
+      expandedSecrets = { ...expandedSecrets, [id]: true }
+    }
+  }
+
+  function toggleExpand(id: string) {
+    expandedSecrets = { ...expandedSecrets, [id]: !expandedSecrets[id] }
   }
 </script>
 
@@ -203,13 +212,14 @@
       >
         <div>
           <p class="text-sm font-semibold text-foreground">
-            {visibleItemCount}
-            {visibleItemCount === 1
-              ? vault.t('common.item')
-              : vault.t('common.items')}
-            {#if searchPattern.trim() && visibleItemCount !== items.length}
-              <span class="text-muted-foreground"> of {items.length}</span>
-            {/if}
+            {searchPattern.trim() && visibleItemCount !== items.length
+              ? vault.t('vault.secret_count_filtered', {
+                  count: String(visibleItemCount),
+                  total: String(items.length),
+                })
+              : vault.t('vault.secret_count', {
+                  count: String(visibleItemCount),
+                })}
           </p>
         </div>
         <div class="flex w-full shrink-0 items-center gap-2 sm:w-auto">
@@ -275,10 +285,9 @@
                   <span
                     class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
                   >
-                    {group.items.length}
-                    {group.items.length === 1
-                      ? vault.t('common.item')
-                      : vault.t('common.items')}
+                    {vault.t('vault.secret_count', {
+                      count: String(group.items.length),
+                    })}
                   </span>
                 {/if}
               </div>
@@ -290,8 +299,10 @@
                   <SecretDetailRow
                     {item}
                     {index}
+                    expanded={Boolean(expandedSecrets[item.id])}
                     {revealSecrets}
                     {copiedKey}
+                    onToggleExpand={toggleExpand}
                     onToggleReveal={toggleReveal}
                     onEditItem={openEditItem}
                     {onDeleteSecret}

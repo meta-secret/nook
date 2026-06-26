@@ -9,6 +9,7 @@ import {
   assertVaultReady,
   reconnectGithubVault,
   resetGithubVault,
+  revealSecretInRow,
   finishE2eGithubSuite,
   uniqueSecretKey,
 } from './helpers'
@@ -72,7 +73,7 @@ describeGithub('github vault', () => {
 
     const row = vaultPage.getByTestId('secret-row').filter({ hasText: key })
     await row.waitFor()
-    await row.getByRole('button', { name: 'Show secret' }).click()
+    await revealSecretInRow(row)
     await row.getByText(value).waitFor()
 
     await deleteSecret(vaultPage, key, { pat: githubPat, repoName: e2eRepo })

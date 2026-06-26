@@ -35,9 +35,15 @@ import {
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
+import {
+  getBrowserAppLocale,
+  parseAppLocale,
+  type AppLocale,
+} from '$lib/locale'
+import { TRANSLATION_CATALOGS } from '$lib/locale-catalogs'
 
 export class VaultState {
-  locale = $state<'en' | 'ru'>('en')
+  locale = $state<AppLocale>('en')
   translations = $state<Record<string, unknown>>({})
 
   settingsOpen = $state(false)
@@ -191,17 +197,24 @@ export class VaultState {
     return this.activeProvider?.label ?? providerDefaultLabel(this.storageMode)
   }
 
-  async updateLocale(newLocale: 'en' | 'ru') {
+  async updateLocale(newLocale: AppLocale) {
     this.locale = newLocale
     localStorage.setItem('nook_locale', newLocale)
-    try {
-      const wasm = await import('./nook-wasm/nook_wasm.js')
-      await wasm.default()
-      const jsonStr = wasm.get_translation_catalog(newLocale)
-      this.translations = JSON.parse(jsonStr)
-    } catch (e) {
-      console.error('Failed to load translations from WebAssembly:', e)
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = newLocale
     }
+    this.translations = TRANSLATION_CATALOGS[newLocale]
+  }
+
+  private resolveErrorMessage(message: string): string {
+    const stripped = message.replace(/^GitHub error:\s*/i, '').trim()
+    if (stripped.startsWith('errors.')) {
+      return this.t(stripped)
+    }
+    if (message.startsWith('errors.')) {
+      return this.t(message)
+    }
+    return message
   }
 
   t = (key: string, replacements?: Record<string, string>): string => {
@@ -232,15 +245,9 @@ export class VaultState {
       this.errorMsg = ''
     }
     try {
-      const savedLocale = localStorage.getItem('nook_locale') as
-        | 'en'
-        | 'ru'
-        | null
-      const systemLocale =
-        typeof navigator !== 'undefined' && navigator.language.startsWith('ru')
-          ? 'ru'
-          : 'en'
-      await this.updateLocale(savedLocale || systemLocale)
+      const savedLocale = parseAppLocale(localStorage.getItem('nook_locale'))
+      const browserLocale = getBrowserAppLocale()
+      await this.updateLocale(savedLocale ?? browserLocale)
 
       await this.loadProviders()
       this.applyActiveProviderCredentials()
@@ -1051,7 +1058,8 @@ export class VaultState {
       this.startVaultSync()
     } catch (e: unknown) {
       this.isAuthenticated = false
-      this.errorMsg = e instanceof Error ? e.message : String(e)
+      const message = e instanceof Error ? e.message : String(e)
+      this.errorMsg = this.resolveErrorMessage(message)
     } finally {
       this.isVerifying = false
     }

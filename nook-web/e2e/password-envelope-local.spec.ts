@@ -7,6 +7,7 @@ import {
   connectLocalVault,
   expandSettingsSection,
   openStorageSettings,
+  revealSecretInRow,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
@@ -44,7 +45,7 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Primary password', 'correct-horse-1')
     await expect(status).toContainText('1 password', { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('app-success')).toContainText(
-      'Device keys still unlock',
+      'Vault password set',
       { timeout: UI_TIMEOUT_MS },
     )
 
@@ -268,7 +269,7 @@ test.describe('vault password envelope (local)', () => {
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
     await expect(row).toBeVisible()
-    await row.getByRole('button', { name: 'Show secret' }).click()
+    await revealSecretInRow(row)
     await expect(row.getByText(value)).toBeVisible()
   })
 })

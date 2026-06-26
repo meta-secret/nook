@@ -102,6 +102,8 @@ describePasswordEnvelope('vault password envelope (github)', () => {
   })
 
   test('device A issues an enrollment code carrying github credentials', async () => {
+    await deviceA.getByTestId('vault-secrets-tab').click()
+    await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
     await deviceA.getByTestId('vault-onboard-tab').click()
     await deviceA.getByTestId('onboard-password-input').fill(vaultPassword)
     await deviceA.getByTestId('onboard-device-submit').click()
@@ -233,7 +235,9 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const yaml = await waitForGithubVaultState(
       { pat: githubPat, repoName: e2eRepo },
       (snapshot) =>
-        snapshot.unlockMode === 'keys' && snapshot.authPkIds.length >= 1,
+        snapshot.unlockMode === 'keys' &&
+        !snapshot.hasPasswordEnvelope &&
+        snapshot.authPkIds.length >= 1,
     )
     expect(yaml.unlockMode).toBe('keys')
     expect(yaml.hasPasswordEnvelope).toBe(false)

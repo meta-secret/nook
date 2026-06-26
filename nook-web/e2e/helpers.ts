@@ -72,6 +72,59 @@ export const UI_TIMEOUT_MS = 5_000
 /** Password unlock / enrollment runs scrypt in wasm — allow more time on CI. */
 export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
+export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
+
+/** Valid BIP-39 test mnemonic (12 words). */
+export const BIP39_SAMPLE_WORDS = [
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'abandon',
+  'about',
+] as const
+
+export function buildBip39WordlistBody(
+  leadingWords: readonly string[] = BIP39_SAMPLE_WORDS,
+): string {
+  const words = [...leadingWords]
+  let index = words.length
+  while (words.length < 2048) {
+    words.push(`testword${index}`)
+    index += 1
+  }
+  return words.join('\n')
+}
+
+export async function mockBip39Wordlist(
+  page: Page,
+  leadingWords: readonly string[] = BIP39_SAMPLE_WORDS,
+) {
+  const body = buildBip39WordlistBody(leadingWords)
+  await page.route(BIP39_WORDLIST_ROUTE, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/plain',
+      body,
+    })
+  })
+}
+
+export async function fillSeedPhraseGrid(page: Page, words: readonly string[]) {
+  if (words.length === 24) {
+    await page.getByTestId('seed-word-count-24').click()
+  }
+  for (let index = 0; index < words.length; index += 1) {
+    await page.getByTestId(`seed-word-${index + 1}`).fill(words[index]!)
+  }
+}
+
 export type GithubE2eTarget = { pat: string; repoName: string }
 
 function configuredVaultSyncIntervalMs(): number {
@@ -537,29 +590,43 @@ export async function assertVaultReady(page: Page) {
 /** Pick device keys or backup password on the login gate unlock form. */
 export async function connectLoginProvider(page: Page) {
   const authorizationStep = page.getByTestId('login-wizard-authorization-step')
+  const connectButton = page.getByTestId('login-connect-provider-btn')
+
+  await expect(authorizationStep.or(connectButton)).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   if (await authorizationStep.isVisible()) {
     return
   }
-  const connectButton = page.getByTestId('login-connect-provider-btn')
-  const savedList = page.getByTestId('saved-providers-list')
-  if (await savedList.isVisible()) {
-    const connectReady = await connectButton
-      .isEnabled({ timeout: UI_TIMEOUT_MS })
-      .catch(() => false)
-    if (!connectReady) {
-      const provider = page
-        .getByTestId('saved-provider-local')
-        .or(page.getByTestId('saved-provider-github'))
-        .first()
-      await expect(provider).toBeVisible({ timeout: UI_TIMEOUT_MS })
-      if ((await provider.getAttribute('aria-checked')) !== 'true') {
-        await provider.click()
-      }
-      await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+
+  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
+  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
+
+  if (await savedLocalProvider.isVisible()) {
+    if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedLocalProvider.click()
     }
+  } else if (await savedGithubProvider.isVisible()) {
+    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedGithubProvider.click()
+    }
+  } else {
+    await page.getByTestId('provider-option-local').click()
   }
+
+  await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
   await connectButton.click()
   await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+export async function revealSecretInRow(
+  row: import('@playwright/test').Locator,
+) {
+  const toggle = row.getByTestId('secret-row-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await row.getByRole('button', { name: 'Show secret' }).click()
 }
 
 export async function selectLoginUnlockMethod(
@@ -735,9 +802,25 @@ export async function addSecret(
   }
 }
 
+export async function expandSecretRow(page: Page, key: string) {
+  const row = page.getByTestId('secret-row').filter({ hasText: key })
+  const toggle = row.getByTestId('secret-row-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+}
+
 export async function revealSecretValue(page: Page, key: string) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await row.getByRole('button', { name: 'Show secret' }).click()
+  await revealSecretInRow(row)
+  const grid = row.getByTestId('seed-phrase-grid')
+  if (await grid.isVisible()) {
+    const words = await row.getByTestId(/^seed-word-\d+$/).allTextContents()
+    return words
+      .map((word) => word.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
   const code = row.locator('code')
   await expect(code).toBeVisible()
   return (await code.textContent()) ?? ''
