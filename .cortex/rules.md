@@ -64,7 +64,7 @@ This document defines the strict development standards, architectural boundaries
   - Do not use semver ranges (`^`, `~`, `>=`, `*`) in dependencies.
 - **Bun for Node/JS Tooling:**
   - Svelte project dependencies must be managed using Bun.
-  - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs.
+  - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
 - **Harness Verification:**
   - All linting, formatting, testing, and production building must run inside the Docker builder image using Taskfile targets.
   - Before committing, developers must run:
