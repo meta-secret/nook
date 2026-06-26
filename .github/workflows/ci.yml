@@ -1,15 +1,16 @@
-# CI: PR Cloudflare previews; main — full check, Playwright e2e, GitHub Pages deploy.
+# CI: PR check + Cloudflare preview; main — full check, Playwright e2e, GitHub Pages deploy.
 #
-# Quality gates (task check + e2e) run on push to main after squash merge, not
-# on pull requests. GitHub Pages deploy is blocked unless both build and e2e pass.
+# Pull requests run task check (format, lint, unit tests, build). Playwright e2e
+# runs on push to main after squash merge. GitHub Pages deploy is blocked unless
+# both the main web build and e2e pass.
 #
 # Playwright does not hit the preview — it starts `vite dev` on localhost.
 # PR previews deploy to Cloudflare Pages (one subdomain per PR, e.g.
 # https://pr-123.nook.pages.dev) because GitHub Pages previews resolve to the
 # production custom domain (nokey.sh) and cannot serve /nook/pr123 paths.
 #
-# deploy-preview runs in parallel on PRs and uses continue-on-error so a preview
-# is still attempted when the build step fails.
+# deploy-preview uses continue-on-error so a preview is still attempted when
+# its build step fails.
 #
 # Concurrency + cancel-workflow-action: a new push to the same PR (or merge)
 # cancels superseded in-progress runs so CI does not stack redundant work.
@@ -82,11 +83,19 @@ jobs:
               ),
             );
 
-  build:
-    name: Build and test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  check:
+    name: Check
+    if: |
+      (github.event_name == 'pull_request' && github.event.action != 'closed') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
+      - name: Cancel superseded workflow runs
+        if: github.event_name == 'pull_request'
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -115,6 +124,38 @@ jobs:
 
       - name: Check
         run: task check
+
+  build:
+    name: Build web
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Cache Env
+        run: |
+          echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Build toolchain image and install dependencies
+        run: task setup
+        env:
+          CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
+          CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
 
       - name: Set Vite base path
         run: |
