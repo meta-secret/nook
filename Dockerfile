@@ -53,7 +53,7 @@ COPY recipe.json .
 COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json -p nook-wasm
 
-# --- Toolchain: final dev/CI image with Bun, Task, wasm-bindgen, and cached deps ---
+# --- Toolchain: final dev/CI image with Bun, Task, wasm-pack, and cached deps ---
 FROM builder-wasm AS toolchain
 
 COPY --from=chef-planner /workspace/Cargo.lock /opt/nook/Cargo.lock
@@ -79,6 +79,7 @@ ENTRYPOINT ["/usr/local/bin/nook-entrypoint.sh"]
 
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1
+ARG WASM_PACK_VERSION=0.15.0
 ARG WASM_BINDGEN_VERSION=0.2.125
 ARG BINARYEN_VERSION=122
 
@@ -95,6 +96,15 @@ RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 RUN arch="$(dpkg --print-architecture)" \
     && curl -fsSL "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_${arch}.tar.gz" \
         | tar -xz -C /usr/local/bin task
+
+RUN arch="$(dpkg --print-architecture)" \
+    && case "${arch}" in \
+        amd64) target="x86_64-unknown-linux-musl" ;; \
+        arm64) target="aarch64-unknown-linux-musl" ;; \
+        *) echo "Unsupported: ${arch}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-${target}.tar.gz" \
+        | tar -xz --strip-components=1 -C /usr/local/bin "wasm-pack-v${WASM_PACK_VERSION}-${target}/wasm-pack"
 
 RUN arch="$(dpkg --print-architecture)" \
     && case "${arch}" in \

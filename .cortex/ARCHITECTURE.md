@@ -161,5 +161,5 @@ Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (
 
 ### Build & verify
 
-- **Wasm:** `task wasm:build` — workspace `cargo build` for `wasm32-unknown-unknown`, then `wasm-bindgen` + `wasm-opt` (not `wasm-pack`; it bypasses chef cache).
+- **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (prebuilt `wasm-pack` + `wasm-bindgen` in the image; chef-cached `target/` seeded by the entrypoint).
 - **Verify:** `task check` (fmt, clippy, `cargo test -p nook-core`, svelte-check, eslint, vitest, vite build).

@@ -6,9 +6,10 @@
 - Examples: `connect`, `add_secret`, `filter_secrets`, `generate_password`.
 
 ## 2. Compiling for the web
-- Build from the workspace root so chef-cached `target/` is reused (do not use `wasm-pack build` inside the crate — it recompiles deps):
-  `task wasm:build`
-- `wasm-bindgen` and `wasm-opt` (Binaryen 122+) run in the Docker toolchain image.
+- Invoke wasm-pack from the **workspace root** so chef-cached `target/` is reused:
+  `wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm`
+- The Docker image installs `wasm-pack` and `wasm-bindgen` from prebuilt release archives (`curl`), not `cargo install`.
+- `wasm-opt` (Binaryen 122+) runs automatically via wasm-pack.
 
 ## 3. Session state (`NookVaultManager`)
 - `decrypted_jsonl` — in-memory plaintext session (JSONL)
