@@ -51,7 +51,12 @@ import {
   parseAppLocale,
   type AppLocale,
 } from '$lib/locale'
-import { TRANSLATION_CATALOGS, loadTranslationCatalogFromWasm, lookupTranslation } from '$lib/locale-catalogs'
+import {
+  TRANSLATION_CATALOGS,
+  loadTranslationCatalogFromWasm,
+  lookupTranslation,
+  resolveTranslationCatalog,
+} from '$lib/locale-catalogs'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -328,15 +333,17 @@ export class VaultState {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = newLocale
     }
-    if (options?.preferWasm) {
+
+    const preferWasm = options?.preferWasm ?? Boolean(this.manager)
+    let wasmCatalog: Record<string, unknown> | undefined
+    if (preferWasm) {
       try {
-        this.translations = await loadTranslationCatalogFromWasm(newLocale)
-        return
+        wasmCatalog = await loadTranslationCatalogFromWasm(newLocale)
       } catch {
-        // Fall back to the bundled JSON catalogs.
+        // Fall back to the bundled JSON catalogs only.
       }
     }
-    this.translations = TRANSLATION_CATALOGS[newLocale]
+    this.translations = resolveTranslationCatalog(newLocale, wasmCatalog)
   }
 
   private resolveErrorMessage(message: string): string {

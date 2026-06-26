@@ -48,6 +48,12 @@ pub enum NookError {
     Serialization(String),
 }
 
+#[wasm_bindgen(js_name = translate)]
+#[must_use]
+pub fn translate_key(locale: &str, key: &str) -> String {
+    nook_core::translate(locale, key)
+}
+
 #[wasm_bindgen]
 #[must_use]
 pub fn get_translation_catalog(locale: &str) -> String {

@@ -34,3 +34,41 @@ export function lookupTranslation(
     return undefined
   }, catalog)
 }
+
+/** Overlay wins on conflicts — keeps Vite-bundled keys when WASM is stale. */
+export function mergeTranslationCatalogs(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...base }
+  for (const [key, value] of Object.entries(overlay)) {
+    const existing = merged[key]
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      existing !== null &&
+      typeof existing === 'object' &&
+      !Array.isArray(existing)
+    ) {
+      merged[key] = mergeTranslationCatalogs(
+        existing as Record<string, unknown>,
+        value as Record<string, unknown>,
+      )
+    } else {
+      merged[key] = value
+    }
+  }
+  return merged
+}
+
+export function resolveTranslationCatalog(
+  locale: AppLocale,
+  wasmCatalog?: Record<string, unknown>,
+): Record<string, unknown> {
+  const bundled = TRANSLATION_CATALOGS[locale]
+  if (!wasmCatalog) {
+    return bundled
+  }
+  return mergeTranslationCatalogs(wasmCatalog, bundled)
+}
