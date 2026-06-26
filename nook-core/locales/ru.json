@@ -290,6 +290,7 @@
     "seed_phrase_invalid": "Неверная контрольная сумма BIP39 сид-фразы.",
     "seed_phrase_checking": "Проверка сид-фразы…",
     "seed_phrase_clear": "Очистить фразу",
+    "seed_phrase_valid": "Сид-фраза верна",
     "placeholder_title": "например, Моя секретная заметка",
     "placeholder_note": "Напишите вашу заметку (поддерживается markdown)…",
     "generate_password": "Сгенерировать пароль",

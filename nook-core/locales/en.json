@@ -314,6 +314,7 @@
     "seed_phrase_invalid": "Invalid BIP39 seed phrase checksum.",
     "seed_phrase_checking": "Checking seed phrase…",
     "seed_phrase_clear": "Clear phrase",
+    "seed_phrase_valid": "Valid seed phrase",
     "placeholder_title": "e.g., My Secret Note",
     "placeholder_note": "Write your secure note (markdown supported)…",
     "generate_password": "Generate Password",

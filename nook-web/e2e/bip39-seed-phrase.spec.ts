@@ -25,6 +25,7 @@ test.describe('BIP39 seed phrase grid', () => {
     await fillSeedPhraseGrid(page, BIP39_SAMPLE_WORDS)
 
     const saveButton = page.getByTestId('save-secret-btn')
+    await expect(page.getByTestId('seed-phrase-valid')).toBeVisible()
     await expect(saveButton).toBeEnabled()
     await saveButton.click()
 

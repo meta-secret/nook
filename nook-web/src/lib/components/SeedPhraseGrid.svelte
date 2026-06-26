@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
     inferMnemonicLength,
@@ -410,7 +411,15 @@
     {/each}
   </div>
 
-  {#if !readonly && perWordValid && allWordsFilled && checksumValid === false}
+  {#if !readonly && perWordValid && allWordsFilled && checksumValid === true}
+    <p
+      class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-500"
+      data-testid="seed-phrase-valid"
+    >
+      <Check class="size-3.5 shrink-0" aria-hidden="true" />
+      {vault.t('add_secret.seed_phrase_valid')}
+    </p>
+  {:else if !readonly && perWordValid && allWordsFilled && checksumValid === false}
     <p
       class="text-xs text-destructive"
       data-testid="seed-phrase-checksum-error"
