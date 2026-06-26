@@ -352,9 +352,8 @@ impl NookVaultManager {
             }
             nook_core::StorageMode::GoogleDrive => {
                 let _ = self.status_tx.send("DRIVE_FETCH_START".to_owned());
-                let res =
-                    fetch_drive_vault(&self.github_pat, &self.github_repo, &self.github_path)
-                        .await?;
+                let res = fetch_drive_vault(&self.github_pat, &self.github_repo, &self.github_path)
+                    .await?;
                 let _ = self.status_tx.send("DRIVE_FETCH_SUCCESS".to_owned());
                 if let Some(file) = res {
                     self.github_repo = file.file_id;

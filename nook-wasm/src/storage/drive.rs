@@ -166,7 +166,8 @@ pub(crate) async fn ensure_drive_vault_file(
     file_name: &str,
 ) -> Result<String, NookError> {
     let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
-    let validated_name = nook_core::validate_drive_vault_file_name(file_name).map_err(NookError::Drive)?;
+    let validated_name =
+        nook_core::validate_drive_vault_file_name(file_name).map_err(NookError::Drive)?;
     let trimmed_id = known_file_id.trim();
     if !trimmed_id.is_empty() && fetch_file_metadata(&token, trimmed_id).await.is_ok() {
         return Ok(trimmed_id.to_owned());
@@ -177,10 +178,7 @@ pub(crate) async fn ensure_drive_vault_file(
     create_drive_vault_file(&token, &validated_name).await
 }
 
-async fn create_drive_vault_file(
-    access_token: &str,
-    file_name: &str,
-) -> Result<String, NookError> {
+async fn create_drive_vault_file(access_token: &str, file_name: &str) -> Result<String, NookError> {
     let client = reqwest::Client::new();
     let metadata = serde_json::json!({
         "name": file_name,

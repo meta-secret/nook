@@ -109,7 +109,9 @@ describe('providerStorageDetail', () => {
       'personal.yaml · me@example.com',
     )
     expect(providerStorageDetail(work)).toBe('work.yaml · me@example.com')
-    expect(providerStorageDetail(personal)).not.toBe(providerStorageDetail(work))
+    expect(providerStorageDetail(personal)).not.toBe(
+      providerStorageDetail(work),
+    )
   })
 })
 

@@ -108,9 +108,7 @@ export async function initGoogleAuth(): Promise<void> {
   return initPromise
 }
 
-function tokensFromResponse(
-  response: GoogleTokenResponse,
-): GoogleOAuthTokens {
+function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
   if (response.error) {
     throw new Error(
       response.error_description ?? response.error ?? 'Google sign-in failed.',

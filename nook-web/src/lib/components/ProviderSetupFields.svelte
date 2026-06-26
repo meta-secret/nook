@@ -2,7 +2,10 @@
   import { Cloud, ExternalLink, HardDrive } from '@lucide/svelte'
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import type { StorageProviderType } from '$lib/auth-providers'
-  import { DEFAULT_GITHUB_REPO, DEFAULT_DRIVE_VAULT_FILE } from '$lib/auth-providers'
+  import {
+    DEFAULT_GITHUB_REPO,
+    DEFAULT_DRIVE_VAULT_FILE,
+  } from '$lib/auth-providers'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
 

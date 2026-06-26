@@ -703,7 +703,11 @@ export class VaultState {
         type,
         label: providerDefaultLabel(
           type,
-          type === 'github' ? repo : type === 'oauth-file' ? driveFile : undefined,
+          type === 'github'
+            ? repo
+            : type === 'oauth-file'
+              ? driveFile
+              : undefined,
         ),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
@@ -735,7 +739,11 @@ export class VaultState {
         type,
         label: providerDefaultLabel(
           type,
-          type === 'github' ? repo : type === 'oauth-file' ? driveFile : undefined,
+          type === 'github'
+            ? repo
+            : type === 'oauth-file'
+              ? driveFile
+              : undefined,
         ),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
