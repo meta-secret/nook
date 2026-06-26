@@ -262,10 +262,11 @@ crate dependencies into cacheable image layers (`builder-debug:cache` and
 `target/` directory across local `task` runs.
 
 After changing Rust dependencies in any `Cargo.toml`, regenerate and commit the chef
-recipe:
+recipe and lockfile:
 
 ```sh
 task docker:generate-recipe
+git add recipe.json Cargo.lock
 ```
 
 ## License

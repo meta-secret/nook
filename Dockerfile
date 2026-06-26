@@ -20,6 +20,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM scratch AS recipe-output
 COPY --from=chef-planner /workspace/recipe.json /recipe.json
+COPY --from=chef-planner /workspace/Cargo.lock /Cargo.lock
 
 # --- Builder base: Rust tooling without pre-compiled deps ---
 FROM rust:${RUST_VERSION}-bookworm AS builder-base
@@ -40,6 +41,7 @@ ENV CARGO_NET_RETRY=10
 FROM builder-base AS builder-debug
 
 COPY recipe.json .
+COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
 RUN cargo chef cook --tests --recipe-path recipe.json
 
 # --- Builder wasm: pre-compiled wasm32 release deps for nook-wasm ---
@@ -48,10 +50,25 @@ FROM builder-debug AS builder-wasm
 RUN rustup target add wasm32-unknown-unknown
 
 COPY recipe.json .
+COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json -p nook-wasm
 
 # --- Toolchain: final dev/CI image with Bun, Task, wasm-pack, and cached deps ---
 FROM builder-wasm AS toolchain
+
+COPY --from=chef-planner /workspace/Cargo.lock /opt/nook/Cargo.lock
+
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'if [ ! -f /workspace/Cargo.lock ] && [ -f /opt/nook/Cargo.lock ]; then' \
+    '  cp /opt/nook/Cargo.lock /workspace/Cargo.lock' \
+    'fi' \
+    'exec "$@"' \
+    > /usr/local/bin/nook-entrypoint.sh \
+    && chmod +x /usr/local/bin/nook-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/nook-entrypoint.sh"]
 
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1

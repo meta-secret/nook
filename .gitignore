@@ -18,7 +18,6 @@ nook-web/.env
 nook-web/.env.local
 nook-web/.env.*.local
 *.pdf
-Cargo.lock
 bun.lock
 bun.lockb
 
