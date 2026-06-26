@@ -96,6 +96,8 @@
     "copied": "Скопировано!",
     "copy": "Копировать",
     "of": "из",
+    "secret_count": "секретов: {count}",
+    "secret_count_filtered": "секретов: {count} из {total}",
     "types": {
       "login": "Логин",
       "api_key": "API Ключ",

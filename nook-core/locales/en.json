@@ -96,6 +96,8 @@
     "copied": "Copied!",
     "copy": "Copy",
     "of": "of",
+    "secret_count": "Secrets: {count}",
+    "secret_count_filtered": "Secrets: {count} of {total}",
     "types": {
       "login": "Login",
       "api_key": "API Key",
