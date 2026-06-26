@@ -16,6 +16,7 @@
   let {
     vault,
     value = $bindable(''),
+    // eslint-disable-next-line no-useless-assignment -- $bindable() default for parent bind:valid
     valid = $bindable(false),
     readonly = false,
     revealed = true,
@@ -115,7 +116,6 @@
     cells = Array.from({ length: 24 }, () => '')
     wordCount = 12
     value = ''
-    valid = false
     checksumValid = null
     checksumChecking = false
     focusedIndex = null
