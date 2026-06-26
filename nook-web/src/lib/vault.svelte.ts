@@ -40,6 +40,7 @@ import {
   parseAppLocale,
   type AppLocale,
 } from '$lib/locale'
+import { TRANSLATION_CATALOGS } from '$lib/locale-catalogs'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -202,14 +203,7 @@ export class VaultState {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = newLocale
     }
-    try {
-      const wasm = await import('./nook-wasm/nook_wasm.js')
-      await wasm.default()
-      const jsonStr = wasm.get_translation_catalog(newLocale)
-      this.translations = JSON.parse(jsonStr)
-    } catch (e) {
-      console.error('Failed to load translations from WebAssembly:', e)
-    }
+    this.translations = TRANSLATION_CATALOGS[newLocale]
   }
 
   t = (key: string, replacements?: Record<string, string>): string => {
