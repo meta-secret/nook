@@ -67,4 +67,14 @@ test.describe('BIP39 seed phrase grid', () => {
     await expect(page.getByTestId('seed-word-12')).toHaveValue('accident')
     await expect(page.getByTestId('save-secret-btn')).toBeEnabled()
   })
+
+  test('shows autocomplete suggestions while typing', async ({ page }) => {
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-seed-phrase').click()
+    await page.getByTestId('seed-word-1').fill('aba')
+
+    await expect(page.getByTestId('seed-word-suggestions')).toBeVisible()
+    await page.getByTestId('seed-word-suggestion-abandon').click()
+    await expect(page.getByTestId('seed-word-1')).toHaveValue('abandon')
+  })
 })

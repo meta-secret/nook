@@ -7,6 +7,7 @@
     joinMnemonicWords,
     loadBip39Wordlist,
     parseMnemonicWords,
+    suggestBip39Words,
     type MnemonicLength,
   } from '$lib/bip39-wordlist'
 
@@ -30,9 +31,20 @@
   let loading = $state(true)
   let loadError = $state<string | null>(null)
   let syncingFromCells = $state(false)
+  let focusedIndex = $state<number | null>(null)
+  let suggestionIndex = $state(0)
+  let inputRefs = $state<Array<HTMLInputElement | null>>([])
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
+
+  const suggestions = $derived.by(() => {
+    if (readonly || focusedIndex === null || !wordlist) return []
+    const prefix = cells[focusedIndex]?.trim().toLowerCase() ?? ''
+    if (!prefix || prefix.includes(' ')) return []
+    if (wordlist.has(prefix)) return []
+    return suggestBip39Words(prefix, wordlist)
+  })
 
   function applyValueToCells(seed: string) {
     const inferred = inferMnemonicLength(seed)
@@ -54,17 +66,28 @@
     })
   }
 
-  function applyPastedMnemonic(text: string) {
+  function applyPastedMnemonic(text: string, startIndex = 0) {
     const words = parseMnemonicWords(text)
-    if (words.length === 24) wordCount = 24
-    else wordCount = 12
+    if (words.length === 0) return
 
-    const next = Array.from({ length: 24 }, () => '')
-    for (let index = 0; index < words.length && index < wordCount; index += 1) {
-      next[index] = words[index] ?? ''
+    if (words.length === 24) {
+      wordCount = 24
+    } else if (words.length > 12) {
+      wordCount = 24
+    } else {
+      wordCount = 12
+    }
+
+    const next = [...cells]
+    for (let offset = 0; offset < words.length; offset += 1) {
+      const targetIndex = startIndex + offset
+      if (targetIndex >= wordCount) break
+      next[targetIndex] = words[offset] ?? ''
     }
     cells = next
     syncValueFromCells()
+    focusedIndex = null
+    focusCell(Math.min(startIndex + words.length, wordCount - 1))
   }
 
   function setWordCount(count: MnemonicLength) {
@@ -73,16 +96,73 @@
     syncValueFromCells()
   }
 
-  function onCellInput(index: number, nextValue: string) {
-    if (/\s/.test(nextValue)) {
-      applyPastedMnemonic(nextValue)
-      return
-    }
-
+  function setCellValue(index: number, nextValue: string) {
     const next = [...cells]
     next[index] = nextValue.toLowerCase()
     cells = next
     syncValueFromCells()
+  }
+
+  function onCellInput(index: number, nextValue: string) {
+    if (/\s/.test(nextValue)) {
+      applyPastedMnemonic(nextValue, index)
+      return
+    }
+
+    setCellValue(index, nextValue)
+    suggestionIndex = 0
+  }
+
+  function onCellPaste(index: number, event: ClipboardEvent) {
+    if (readonly) return
+    const text = event.clipboardData?.getData('text')
+    if (!text?.trim()) return
+    event.preventDefault()
+    applyPastedMnemonic(text, index)
+  }
+
+  function selectSuggestion(word: string, index: number) {
+    setCellValue(index, word)
+    focusedIndex = null
+    suggestionIndex = 0
+    focusCell(index + 1)
+  }
+
+  function focusCell(index: number) {
+    if (index < 0 || index >= wordCount) return
+    queueMicrotask(() => {
+      inputRefs[index]?.focus()
+    })
+  }
+
+  function onCellKeyDown(index: number, event: KeyboardEvent) {
+    if (suggestions.length > 0 && focusedIndex === index) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        suggestionIndex = Math.min(suggestionIndex + 1, suggestions.length - 1)
+        return
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        suggestionIndex = Math.max(suggestionIndex - 1, 0)
+        return
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        selectSuggestion(suggestions[suggestionIndex] ?? suggestions[0]!, index)
+        return
+      }
+      if (event.key === 'Tab' && !event.shiftKey) {
+        event.preventDefault()
+        selectSuggestion(suggestions[suggestionIndex] ?? suggestions[0]!, index)
+        return
+      }
+    }
+
+    if (event.key === 'Escape') {
+      focusedIndex = null
+      suggestionIndex = 0
+    }
   }
 
   function cellInvalid(index: number): boolean {
@@ -162,16 +242,7 @@
     </div>
   {/if}
 
-  <div
-    class="grid gap-2 {gridCols}"
-    onpaste={(event) => {
-      if (readonly) return
-      const text = event.clipboardData?.getData('text')
-      if (!text?.trim()) return
-      event.preventDefault()
-      applyPastedMnemonic(text)
-    }}
-  >
+  <div class="grid gap-2 {gridCols}">
     {#each activeCells as word, index (index)}
       <label class="relative block" data-testid="seed-word-cell-{index + 1}">
         <span
@@ -195,11 +266,18 @@
           </div>
         {:else}
           <input
+            bind:this={inputRefs[index]}
             type="text"
             value={word}
             autocomplete="off"
             spellcheck="false"
             inputmode="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={focusedIndex === index && suggestions.length > 0}
+            aria-controls={focusedIndex === index && suggestions.length > 0
+              ? `seed-word-suggestions-${index + 1}`
+              : undefined}
             data-testid="seed-word-{index + 1}"
             aria-invalid={cellInvalid(index)}
             aria-describedby={cellInvalid(index)
@@ -211,7 +289,52 @@
               ? 'border-destructive focus:ring-destructive/40'
               : 'border-border/45'}"
             oninput={(event) => onCellInput(index, event.currentTarget.value)}
+            onpaste={(event) => onCellPaste(index, event)}
+            onfocus={() => {
+              focusedIndex = index
+              suggestionIndex = 0
+            }}
+            onblur={() => {
+              queueMicrotask(() => {
+                if (
+                  document.activeElement?.closest(
+                    '[data-testid^="seed-word-suggestion-"]',
+                  )
+                ) {
+                  return
+                }
+                if (focusedIndex === index) focusedIndex = null
+              })
+            }}
+            onkeydown={(event) => onCellKeyDown(index, event)}
           />
+          {#if focusedIndex === index && suggestions.length > 0}
+            <ul
+              id="seed-word-suggestions-{index + 1}"
+              role="listbox"
+              data-testid="seed-word-suggestions"
+              class="absolute left-0 right-0 top-full z-20 mt-1 max-h-40 overflow-y-auto rounded-md border border-border/45 bg-popover py-1 shadow-md"
+            >
+              {#each suggestions as suggestion, suggestionIdx (suggestion)}
+                <li role="presentation">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={suggestionIdx === suggestionIndex}
+                    data-testid="seed-word-suggestion-{suggestion}"
+                    class="block w-full px-2.5 py-1.5 text-left font-mono text-xs transition-colors {suggestionIdx ===
+                    suggestionIndex
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-foreground hover:bg-accent/60'}"
+                    onmousedown={(event) => event.preventDefault()}
+                    onclick={() => selectSuggestion(suggestion, index)}
+                  >
+                    {suggestion}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
           {#if cellInvalid(index)}
             <span
               id="seed-word-error-{index + 1}"

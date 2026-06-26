@@ -110,6 +110,24 @@ export function isKnownBip39Word(word: string, wordlist: Set<string>): boolean {
   return wordlist.has(normalized)
 }
 
+export function suggestBip39Words(
+  prefix: string,
+  wordlist: Set<string>,
+  limit = 8,
+): string[] {
+  const needle = prefix.trim().toLowerCase()
+  if (!needle) return []
+
+  const matches: string[] = []
+  for (const word of wordlist) {
+    if (word.startsWith(needle)) {
+      matches.push(word)
+    }
+  }
+
+  return matches.sort().slice(0, limit)
+}
+
 export function isMnemonicValid(
   text: string,
   wordlist: Set<string>,
