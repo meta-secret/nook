@@ -51,7 +51,7 @@ import {
   parseAppLocale,
   type AppLocale,
 } from '$lib/locale'
-import { TRANSLATION_CATALOGS } from '$lib/locale-catalogs'
+import { TRANSLATION_CATALOGS, loadTranslationCatalogFromWasm, lookupTranslation } from '$lib/locale-catalogs'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -322,11 +322,19 @@ export class VaultState {
     return this.activeProvider?.label ?? providerDefaultLabel(this.storageMode)
   }
 
-  async updateLocale(newLocale: AppLocale) {
+  async updateLocale(newLocale: AppLocale, options?: { preferWasm?: boolean }) {
     this.locale = newLocale
     localStorage.setItem('nook_locale', newLocale)
     if (typeof document !== 'undefined') {
       document.documentElement.lang = newLocale
+    }
+    if (options?.preferWasm) {
+      try {
+        this.translations = await loadTranslationCatalogFromWasm(newLocale)
+        return
+      } catch {
+        // Fall back to the bundled JSON catalogs.
+      }
     }
     this.translations = TRANSLATION_CATALOGS[newLocale]
   }
@@ -346,7 +354,10 @@ export class VaultState {
   }
 
   t = (key: string, replacements?: Record<string, string>): string => {
-    const val = getKeyValue(this.translations, key)
+    const val =
+      lookupTranslation(this.translations, key) ??
+      lookupTranslation(TRANSLATION_CATALOGS[this.locale], key) ??
+      lookupTranslation(TRANSLATION_CATALOGS.en, key)
     if (val === undefined) {
       return key
     }
@@ -375,11 +386,13 @@ export class VaultState {
     try {
       const savedLocale = parseAppLocale(localStorage.getItem('nook_locale'))
       const browserLocale = getBrowserAppLocale()
-      await this.updateLocale(savedLocale ?? browserLocale)
+      const locale = savedLocale ?? browserLocale
+      await this.updateLocale(locale)
 
       await this.loadProviders()
       this.applyActiveProviderCredentials()
       this.manager = await getVaultManager()
+      await this.updateLocale(locale, { preferWasm: true })
       await this.initDeviceIdentity()
     } catch (error) {
       this.errorMsg =
@@ -1602,14 +1615,4 @@ export class VaultState {
       this.isSaving = false
     }
   }
-}
-
-function getKeyValue(obj: unknown, path: string): unknown {
-  if (!obj || typeof obj !== 'object') return undefined
-  return path.split('.').reduce<unknown>((acc, part) => {
-    if (acc && typeof acc === 'object') {
-      return (acc as Record<string, unknown>)[part]
-    }
-    return undefined
-  }, obj)
 }
