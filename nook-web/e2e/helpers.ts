@@ -590,11 +590,15 @@ export async function assertVaultReady(page: Page) {
 /** Pick device keys or backup password on the login gate unlock form. */
 export async function connectLoginProvider(page: Page) {
   const authorizationStep = page.getByTestId('login-wizard-authorization-step')
+  const connectButton = page.getByTestId('login-connect-provider-btn')
+
+  await expect(authorizationStep.or(connectButton)).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
   if (await authorizationStep.isVisible()) {
     return
   }
 
-  const connectButton = page.getByTestId('login-connect-provider-btn')
   const savedLocalProvider = page.getByTestId('saved-provider-local').first()
   const savedGithubProvider = page.getByTestId('saved-provider-github').first()
 

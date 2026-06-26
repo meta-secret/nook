@@ -207,6 +207,10 @@ export class VaultState {
   }
 
   private resolveErrorMessage(message: string): string {
+    const stripped = message.replace(/^GitHub error:\s*/i, '').trim()
+    if (stripped.startsWith('errors.')) {
+      return this.t(stripped)
+    }
     if (message.startsWith('errors.')) {
       return this.t(message)
     }

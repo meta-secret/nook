@@ -10,6 +10,7 @@ import {
   fillSeedPhraseGrid,
   mockBip39Wordlist,
   revealSecretInRow,
+  UI_TIMEOUT_MS,
   uniqueSecretKey,
   waitForVaultUnlocked,
 } from './helpers'
