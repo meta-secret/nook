@@ -1,32 +1,13 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  generatePkceVerifier,
-  googleOAuthRedirectUri,
+  isGoogleOAuthConfigured,
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
 } from './google-oauth'
 
 describe('google-oauth', () => {
-  beforeEach(() => {
-    vi.stubEnv(
-      'VITE_GOOGLE_CLIENT_ID',
-      'test-client-id.apps.googleusercontent.com',
-    )
-  })
-
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    sessionStorage.clear()
-  })
-
-  it('builds a callback redirect uri under the app base', () => {
-    expect(googleOAuthRedirectUri()).toMatch(/oauth\/google\/callback$/)
-  })
-
-  it('generates pkce verifiers with url-safe characters', () => {
-    const verifier = generatePkceVerifier()
-    expect(verifier.length).toBeGreaterThan(40)
-    expect(verifier).toMatch(/^[A-Za-z0-9_-]+$/)
+  it('is configured with the committed client id', () => {
+    expect(isGoogleOAuthConfigured()).toBe(true)
   })
 
   it('detects expired oauth access tokens with skew', () => {

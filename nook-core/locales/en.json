@@ -473,7 +473,7 @@
     "google_signing_in": "Opening Google sign-in…",
     "google_signed_in_as": "Signed in as {account}",
     "google_tokens_local_desc": "OAuth tokens stay in this browser only, like a saved GitHub token.",
-    "google_oauth_unconfigured": "Google sign-in is not enabled in this build yet. Set VITE_GOOGLE_CLIENT_ID (OAuth Web client id from Google Cloud Console) when building or running dev."
+    "google_oauth_unconfigured": "Google sign-in is not configured. Set GOOGLE_OAUTH_CLIENT_ID in google-oauth-config.ts."
   },
   "devices_card": {
     "single_device_warning": "Add another device before removing this one. A backup password helps with recovery, but at least one device key must remain enrolled.",

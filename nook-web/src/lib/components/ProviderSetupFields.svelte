@@ -13,7 +13,6 @@
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     idPrefix = 'provider',
     onCancelSetup,
-    onGoogleSignIn,
   }: {
     vault: VaultState
     setupType: StorageProviderType
@@ -21,7 +20,6 @@
     githubRepo: string
     idPrefix?: string
     onCancelSetup: () => void
-    onGoogleSignIn?: () => void | Promise<void>
   } = $props()
 
   const githubPatUrl =
@@ -155,28 +153,24 @@
       <p class="text-sm text-foreground text-pretty">
         {vault.t('provider_setup.google_drive_desc')}
       </p>
-      {#if !vault.googleOAuthAvailable}
-        <p
-          class="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
-          data-testid="google-oauth-unconfigured"
-        >
-          {vault.t('provider_setup.google_oauth_unconfigured')}
+      <button
+        type="button"
+        class={cn(
+          buttonVariants({ variant: 'default', size: 'sm' }),
+          'w-full sm:w-auto',
+        )}
+        data-testid="google-sign-in-btn"
+        disabled={vault.googleOAuthBusy}
+        onclick={() => void vault.signInWithGoogle()}
+      >
+        {vault.googleOAuthBusy
+          ? vault.t('provider_setup.google_signing_in')
+          : vault.t('provider_setup.sign_in_with_google')}
+      </button>
+      {#if vault.errorMsg}
+        <p class="text-xs text-destructive" data-testid="google-oauth-error">
+          {vault.errorMsg}
         </p>
-      {:else}
-        <button
-          type="button"
-          class={cn(
-            buttonVariants({ variant: 'default', size: 'sm' }),
-            'w-full sm:w-auto',
-          )}
-          data-testid="google-sign-in-btn"
-          disabled={vault.googleOAuthBusy}
-          onclick={() => void onGoogleSignIn?.()}
-        >
-          {vault.googleOAuthBusy
-            ? vault.t('provider_setup.google_signing_in')
-            : vault.t('provider_setup.sign_in_with_google')}
-        </button>
       {/if}
       {#if googleSignedIn}
         <p

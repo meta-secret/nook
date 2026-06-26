@@ -1,9 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    readPendingGoogleOAuthError,
-    readPendingGoogleOAuthTokens,
-  } from '$lib/google-oauth-callback'
   import { ArrowLeft, BookOpen, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
@@ -31,49 +27,10 @@
     }
     void vault.init()
 
-    const pendingTokens = readPendingGoogleOAuthTokens()
-    if (pendingTokens) {
-      void vault.ingestGoogleOAuthTokens(pendingTokens)
-    }
-    const pendingOAuthError = readPendingGoogleOAuthError()
-    if (pendingOAuthError) {
-      vault.errorMsg = pendingOAuthError
-    }
-
-    const onGoogleOAuthMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return
-      const payload = event.data as {
-        type?: string
-        code?: string
-        state?: string
-        error?: string
-      }
-      if (payload?.type !== 'nook-google-oauth') return
-      if (payload.error) {
-        vault.errorMsg = payload.error
-        return
-      }
-      if (payload.code && payload.state) {
-        void vault.completeGoogleOAuth(payload.code, payload.state)
-      }
-    }
-    window.addEventListener('message', onGoogleOAuthMessage)
-
     return () => {
       vault.stopVaultSync()
-      window.removeEventListener('message', onGoogleOAuthMessage)
     }
   })
-
-  async function handleUnlock() {
-    await vault.loadDb()
-  }
-
-  async function handleGoogleSignIn() {
-    await vault.signInWithGoogle(
-      window.location.pathname + window.location.search,
-    )
-  }
 
   async function handleLoginProviderSelect(id: string) {
     await vault.selectLoginProvider(id)
@@ -86,6 +43,18 @@
   async function handleProviderReconnect(id: string) {
     await vault.selectProvider(id)
     await vault.loadDb()
+  }
+
+  async function handleUnlock() {
+    if (vault.loginSetupType) {
+      await vault.connectStagedProvider()
+      return
+    }
+    await vault.loadDb()
+  }
+
+  async function handleSettingsReconnect() {
+    await handleUnlock()
   }
 
   function toggleColorMode() {
@@ -272,7 +241,7 @@
                 pendingJoins={vault.pendingJoins}
                 vaultMembers={vault.vaultMembers}
                 hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                onReconnect={handleUnlock}
+                onReconnect={handleSettingsReconnect}
                 onSelectProvider={handleProviderReconnect}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -390,7 +359,6 @@
             vault.unlockWithPassword(entryId, password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}
           onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
-          onGoogleSignIn={handleGoogleSignIn}
         />
         <VaultStatusBar
           {vault}

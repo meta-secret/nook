@@ -153,45 +153,6 @@
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
-    title={vault.t('settings.devices')}
-    subtitle={vault.t('settings.devices_desc')}
-    open={accordionSection === 'devices'}
-    testId="vault-devices-section"
-    onToggle={() => {
-      accordionSection = 'devices'
-    }}
-  >
-    {#snippet badge()}
-      <span
-        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasDevices
-          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          : 'border-border bg-muted/40 text-muted-foreground'}"
-        data-testid="vault-devices-status"
-      >
-        <Laptop class="size-3" />
-        {vaultMembers.length === 1
-          ? vault.t('settings.device_count_singular')
-          : vault.t('settings.device_count_plural', {
-              count: String(vaultMembers.length),
-            })}
-      </span>
-    {/snippet}
-    <VaultDevicesCard
-      {vault}
-      {deviceId}
-      {devicePublicKey}
-      {pendingJoins}
-      {vaultMembers}
-      isBusy={isSaving || isVerifying}
-      {hasPasswordEnvelope}
-      {onApproveJoin}
-      {onDenyJoin}
-      {onRenameDevice}
-      {onRevokeDevice}
-    />
-  </SettingsAccordionSection>
-
-  <SettingsAccordionSection
     title={vault.t('settings.passwords')}
     subtitle={vault.t('settings.passwords_desc')}
     open={accordionSection === 'passwords'}
@@ -233,6 +194,45 @@
       {onIssueCode}
       {onClearCode}
       allowIssueCode={false}
+    />
+  </SettingsAccordionSection>
+
+  <SettingsAccordionSection
+    title={vault.t('settings.devices')}
+    subtitle={vault.t('settings.devices_desc')}
+    open={accordionSection === 'devices'}
+    testId="vault-devices-section"
+    onToggle={() => {
+      accordionSection = 'devices'
+    }}
+  >
+    {#snippet badge()}
+      <span
+        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasDevices
+          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+          : 'border-border bg-muted/40 text-muted-foreground'}"
+        data-testid="vault-devices-status"
+      >
+        <Laptop class="size-3" />
+        {vaultMembers.length === 1
+          ? vault.t('settings.device_count_singular')
+          : vault.t('settings.device_count_plural', {
+              count: String(vaultMembers.length),
+            })}
+      </span>
+    {/snippet}
+    <VaultDevicesCard
+      {vault}
+      {deviceId}
+      {devicePublicKey}
+      {pendingJoins}
+      {vaultMembers}
+      isBusy={isSaving || isVerifying}
+      {hasPasswordEnvelope}
+      {onApproveJoin}
+      {onDenyJoin}
+      {onRenameDevice}
+      {onRevokeDevice}
     />
   </SettingsAccordionSection>
 

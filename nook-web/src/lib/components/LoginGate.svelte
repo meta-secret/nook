@@ -53,7 +53,6 @@
     onRemoveProvider,
     loginPasswordPrompt = false,
     onConsumeLoginPasswordPrompt,
-    onGoogleSignIn,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
   }: {
@@ -89,7 +88,6 @@
     passwordEntries?: VaultPasswordEntrySummary[]
     selectedPasswordEntryId?: string | null
     onConsumeLoginPasswordPrompt?: () => void
-    onGoogleSignIn?: () => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
   } = $props()
@@ -278,7 +276,6 @@
               bind:githubRepo
               idPrefix="login"
               {onCancelSetup}
-              {onGoogleSignIn}
             />
             <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button

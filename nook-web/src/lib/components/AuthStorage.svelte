@@ -85,6 +85,9 @@
 
   const showSetup = $derived(setupType !== null)
   const addingProvider = $derived(addProviderOpen || showSetup)
+  const setupCanConnect = $derived(
+    setupType !== 'oauth-file' || Boolean(vault.oauthFile?.accessToken?.trim()),
+  )
 </script>
 
 <div class="w-full animate-in fade-in duration-300 space-y-4">
@@ -109,7 +112,9 @@
               type:
                 setupType === 'github'
                   ? vault.t('auth_storage.github')
-                  : vault.t('auth_storage.this_device'),
+                  : setupType === 'oauth-file'
+                    ? vault.t('provider_picker.google_drive')
+                    : vault.t('auth_storage.this_device'),
             })}
           {:else}
             {vault.t('onboarding.add_provider')}
@@ -262,6 +267,7 @@
             type="submit"
             class="sm:min-w-[180px]"
             data-testid="connect-provider-btn"
+            disabled={!setupCanConnect}
           >
             {#if isInitializing}
               <RefreshCw class="size-4 animate-spin" />

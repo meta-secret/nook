@@ -463,7 +463,7 @@
     "google_signing_in": "Открываем вход Google…",
     "google_signed_in_as": "Вошли как {account}",
     "google_tokens_local_desc": "OAuth-токены остаются только в этом браузере, как сохранённый токен GitHub.",
-    "google_oauth_unconfigured": "Вход через Google пока не включён в этой сборке. Укажите VITE_GOOGLE_CLIENT_ID (OAuth Web client id из Google Cloud Console) при сборке или в dev."
+    "google_oauth_unconfigured": "Вход через Google не настроен. Укажите GOOGLE_OAUTH_CLIENT_ID в google-oauth-config.ts."
   },
   "devices_card": {
     "single_device_warning": "Добавьте другое устройство перед удалением текущего. Резервный пароль помогает восстановить доступ, но как минимум один ключ устройства должен оставаться зарегистрированным.",

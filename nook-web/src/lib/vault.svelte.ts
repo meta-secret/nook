@@ -39,11 +39,11 @@ import {
 } from '$lib/auth-providers'
 import {
   ensureValidOAuthFileConfig,
-  exchangeGoogleAuthCode,
   fetchGoogleAccountEmail,
+  initGoogleAuth,
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
-  startGoogleOAuthSignIn,
+  requestGoogleAccessToken,
   type GoogleOAuthTokens,
 } from '$lib/google-oauth'
 import {
@@ -173,10 +173,6 @@ export class VaultState {
     return true
   }
 
-  get googleOAuthAvailable(): boolean {
-    return isGoogleOAuthConfigured()
-  }
-
   private syncOAuthRemoteRefFromManager() {
     if (this.storageMode !== 'oauth-file' || !this.manager || !this.oauthFile) {
       return
@@ -210,22 +206,7 @@ export class VaultState {
     }
   }
 
-  async completeGoogleOAuth(code: string, state: string): Promise<void> {
-    this.googleOAuthBusy = true
-    this.errorMsg = ''
-    try {
-      const tokens = await exchangeGoogleAuthCode(code, state)
-      await this.applyGoogleOAuthTokens(tokens)
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error ? error.message : 'Google sign-in failed.'
-      throw error
-    } finally {
-      this.googleOAuthBusy = false
-    }
-  }
-
-  async signInWithGoogle(returnTo = '/'): Promise<void> {
+  async signInWithGoogle(): Promise<void> {
     if (!isGoogleOAuthConfigured()) {
       this.errorMsg = this.t('provider_setup.google_oauth_unconfigured')
       return
@@ -233,16 +214,15 @@ export class VaultState {
     this.googleOAuthBusy = true
     this.errorMsg = ''
     try {
-      await startGoogleOAuthSignIn(returnTo)
+      await initGoogleAuth()
+      const tokens = await requestGoogleAccessToken({ prompt: 'consent' })
+      await this.applyGoogleOAuthTokens(tokens)
     } catch (error) {
-      this.googleOAuthBusy = false
       this.errorMsg =
         error instanceof Error ? error.message : 'Google sign-in failed.'
+    } finally {
+      this.googleOAuthBusy = false
     }
-  }
-
-  async ingestGoogleOAuthTokens(tokens: GoogleOAuthTokens): Promise<void> {
-    await this.applyGoogleOAuthTokens(tokens)
   }
 
   private async applyGoogleOAuthTokens(
@@ -250,18 +230,18 @@ export class VaultState {
   ): Promise<void> {
     const email = await fetchGoogleAccountEmail(tokens.accessToken)
     this.loginSetupType = 'oauth-file'
-    this.storageMode = 'oauth-file'
+    if (!this.addProviderOpen) {
+      this.storageMode = 'oauth-file'
+    }
     this.oauthFile = oauthTokensToConfig(tokens, {
       preset: 'google-drive',
-      accessToken: this.oauthFile?.accessToken ?? tokens.accessToken,
-      refreshToken: this.oauthFile?.refreshToken,
-      expiresAt: this.oauthFile?.expiresAt,
+      accessToken: tokens.accessToken,
+      expiresAt: tokens.expiresAt,
       fileId: this.oauthFile?.fileId,
       accountEmail: email,
     })
     this.githubPat = ''
     this.githubRepo = DEFAULT_GITHUB_REPO
-    this.googleOAuthBusy = false
   }
 
   dismissSuccess() {
@@ -460,6 +440,10 @@ export class VaultState {
   }
 
   applyActiveProviderCredentials() {
+    const stagingGoogle =
+      this.loginSetupType === 'oauth-file' &&
+      Boolean(this.oauthFile?.accessToken?.trim())
+
     const provider = this.activeProvider
     if (!provider) {
       if (this.loginSetupType) {
@@ -473,6 +457,14 @@ export class VaultState {
       }
       return
     }
+
+    if (stagingGoogle && this.addProviderOpen) {
+      this.storageMode = provider.type
+      this.githubPat = provider.githubPat ?? ''
+      this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+      return
+    }
+
     this.storageMode = provider.type
     this.githubPat = provider.githubPat ?? ''
     this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
@@ -1135,6 +1127,13 @@ export class VaultState {
       numbers,
       symbols,
     )
+  }
+
+  async connectStagedProvider(): Promise<void> {
+    if (this.loginSetupType) {
+      this.storageMode = this.loginSetupType
+    }
+    await this.loadDb()
   }
 
   async loadDb() {
