@@ -254,6 +254,20 @@ logic belongs in `nook-core`, browser I/O in `nook-wasm`, and presentation behav
 in `nook-web`. CI enforces formatting, Clippy warnings, Rust tests, Svelte and
 TypeScript diagnostics, ESLint, Prettier, Vitest, and production builds.
 
+### Rust dependency cache
+
+Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to pre-compile
+crate dependencies into cacheable image layers (`builder-debug:cache` and
+`builder-wasm:cache` on GHCR). The `nook-cargo-target` Docker volume preserves the warmed
+`target/` directory across local `task` runs.
+
+After changing Rust dependencies in any `Cargo.toml`, regenerate and commit the chef
+recipe:
+
+```sh
+task docker:generate-recipe
+```
+
 ## License
 
 Nook is available under the [MIT License](LICENSE).

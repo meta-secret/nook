@@ -137,11 +137,20 @@ tasks:
       - task: docker:web:dev
 
   docker:build:
-    desc: Build the local Docker toolchain image with Buildx Bake.
+    desc: Build the Docker toolchain image with pre-cached Rust deps (Buildx Bake).
     env:
       DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+      CACHE_REGISTRY: '{{.CACHE_REGISTRY}}'
+      PUSH_CACHE: '{{.PUSH_CACHE}}'
+      CACHE_FROM: '{{.CACHE_FROM}}'
+      CACHE_TO: '{{.CACHE_TO}}'
     cmds:
-      - '{{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+      - '{{.DOCKER}} buildx bake -f docker-bake.hcl setup'
+
+  docker:generate-recipe:
+    desc: Regenerate recipe.json after Cargo.toml dependency changes (commit the result).
+    cmds:
+      - '{{.DOCKER}} buildx bake -f docker-bake.hcl generate-recipe'
 
   docker:task:
     internal: true
@@ -160,6 +169,7 @@ tasks:
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
         -v "{{.ROOT_DIR}}:/workspace"
         -v nook-web-node-modules:/workspace/nook-web/node_modules
+        -v nook-cargo-target:/workspace/target
         -w /workspace
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
@@ -173,6 +183,7 @@ tasks:
         -p 5173:5173
         -v "{{.ROOT_DIR}}:/workspace"
         -v nook-web-node-modules:/workspace/nook-web/node_modules
+        -v nook-cargo-target:/workspace/target
         -w /workspace
         {{.DOCKER_IMAGE}}
         sh -c "cd nook-web && bun install && task _web:dev"

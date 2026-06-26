@@ -114,13 +114,15 @@ jobs:
 
       - name: Set Cache Env
         run: |
-          echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "CACHE_REGISTRY=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Build toolchain image and install dependencies
         run: task setup
         env:
-          CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
-          CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
+          CACHE_REGISTRY: ${{ env.CACHE_REGISTRY }}
+          PUSH_CACHE: "1"
+          CACHE_FROM: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest
+          CACHE_TO: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest,mode=max
 
       - name: Check
         run: task check
@@ -149,13 +151,15 @@ jobs:
 
       - name: Set Cache Env
         run: |
-          echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "CACHE_REGISTRY=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Build toolchain image and install dependencies
         run: task setup
         env:
-          CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
-          CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
+          CACHE_REGISTRY: ${{ env.CACHE_REGISTRY }}
+          PUSH_CACHE: "1"
+          CACHE_FROM: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest
+          CACHE_TO: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest,mode=max
 
       - name: Set Vite base path
         run: |
@@ -193,13 +197,15 @@ jobs:
 
       - name: Set Cache Env
         run: |
-          echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "CACHE_REGISTRY=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Build toolchain and install dependencies
         run: task setup
         env:
-          CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
-          CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
+          CACHE_REGISTRY: ${{ env.CACHE_REGISTRY }}
+          PUSH_CACHE: "1"
+          CACHE_FROM: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest
+          CACHE_TO: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest,mode=max
 
       - name: Run Playwright e2e
         run: task web:test:e2e
@@ -260,15 +266,17 @@ jobs:
 
       - name: Set Cache Env
         run: |
-          echo "CACHE_IMAGE=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "CACHE_REGISTRY=$(echo "ghcr.io/${{ github.repository }}-cache" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Build toolchain and web app for preview
         run: |
           task setup
           task web:build VITE_BASE=/
         env:
-          CACHE_FROM: type=registry,ref=${{ env.CACHE_IMAGE }}:latest
-          CACHE_TO: type=registry,ref=${{ env.CACHE_IMAGE }}:latest,mode=max
+          CACHE_REGISTRY: ${{ env.CACHE_REGISTRY }}
+          PUSH_CACHE: "1"
+          CACHE_FROM: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest
+          CACHE_TO: type=registry,ref=${{ env.CACHE_REGISTRY }}:latest,mode=max
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
