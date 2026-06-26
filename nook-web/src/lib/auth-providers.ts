@@ -10,10 +10,23 @@ export interface OAuthFileConfig {
   refreshToken?: string
   expiresAt?: string
   fileId?: string
+  /** Vault file name in Drive app data (default `nook-vault.yaml`). */
+  fileName?: string
   accountEmail?: string
 }
 
 export const DEFAULT_GITHUB_REPO = 'nook'
+export const DEFAULT_DRIVE_VAULT_FILE = 'nook-vault.yaml'
+const DRIVE_STORAGE_REF_SEP = '\t'
+
+export function formatDriveStorageRef(
+  fileId: string | undefined,
+  fileName: string,
+): string {
+  const id = fileId?.trim() ?? ''
+  const name = fileName.trim() || DEFAULT_DRIVE_VAULT_FILE
+  return id ? `${id}${DRIVE_STORAGE_REF_SEP}${name}` : name
+}
 
 export interface StorageProvider {
   id: string
@@ -102,6 +115,25 @@ function migrateProviderFields(
       changed = true
       return { ...provider, githubRepo: DEFAULT_GITHUB_REPO }
     }
+    if (provider.type === 'oauth-file') {
+      if (provider.oauthFile?.fileName?.trim()) {
+        return provider
+      }
+      changed = true
+      const existing = provider.oauthFile
+      return {
+        ...provider,
+        oauthFile: {
+          preset: 'google-drive' as const,
+          accessToken: existing?.accessToken ?? '',
+          refreshToken: existing?.refreshToken,
+          expiresAt: existing?.expiresAt,
+          fileId: existing?.fileId,
+          accountEmail: existing?.accountEmail,
+          fileName: DEFAULT_DRIVE_VAULT_FILE,
+        },
+      }
+    }
     return provider
   })
   if (!changed) {
@@ -180,7 +212,10 @@ export function providerDefaultLabel(
     return repo === DEFAULT_GITHUB_REPO ? 'GitHub' : `GitHub · ${repo}`
   }
   if (type === 'oauth-file') {
-    return 'Google Drive'
+    const file = detail?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    return file === DEFAULT_DRIVE_VAULT_FILE
+      ? 'Google Drive'
+      : `Google Drive · ${file}`
   }
   return 'This device'
 }
@@ -194,6 +229,10 @@ export function localizeProviderLabel(
   }
   if (label === 'GitHub') {
     return t('provider_picker.github')
+  }
+  if (label.startsWith('Google Drive · ')) {
+    const file = label.slice('Google Drive · '.length)
+    return `${t('provider_picker.google_drive')} · ${file}`
   }
   if (label === 'Google Drive') {
     return t('provider_picker.google_drive')
@@ -240,7 +279,10 @@ export function providerStorageDetail(
       : 'Vault in browser storage on this device'
   }
   if (provider.type === 'oauth-file') {
-    return maskOAuthAccount(provider.oauthFile, t)
+    const file =
+      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    const account = maskOAuthAccount(provider.oauthFile, t)
+    return `${file} · ${account}`
   }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
   return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat, t)}`

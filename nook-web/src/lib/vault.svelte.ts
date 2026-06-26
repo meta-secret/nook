@@ -28,7 +28,9 @@ import {
   type VaultPasswordEntrySummary,
 } from '$lib/vault-password'
 import {
+  DEFAULT_DRIVE_VAULT_FILE,
   DEFAULT_GITHUB_REPO,
+  formatDriveStorageRef,
   loadAuthProviders,
   providerDefaultLabel,
   saveAuthProviders,
@@ -154,10 +156,14 @@ export class VaultState {
       this.oauthFile?.preset,
     )
     if (this.storageMode === 'oauth-file') {
+      const fileName =
+        this.oauthFile?.fileName?.trim() ||
+        this.githubRepo.trim() ||
+        DEFAULT_DRIVE_VAULT_FILE
       return [
         mode,
         this.oauthFile?.accessToken?.trim() ?? '',
-        this.oauthFile?.fileId?.trim() ?? '',
+        formatDriveStorageRef(this.oauthFile?.fileId, fileName),
       ]
     }
     return [mode, this.githubPat, this.githubRepo]
@@ -238,10 +244,15 @@ export class VaultState {
       accessToken: tokens.accessToken,
       expiresAt: tokens.expiresAt,
       fileId: this.oauthFile?.fileId,
+      fileName:
+        this.oauthFile?.fileName?.trim() ||
+        this.githubRepo.trim() ||
+        DEFAULT_DRIVE_VAULT_FILE,
       accountEmail: email,
     })
     this.githubPat = ''
-    this.githubRepo = DEFAULT_GITHUB_REPO
+    this.githubRepo =
+      this.oauthFile.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
   }
 
   dismissSuccess() {
@@ -467,8 +478,14 @@ export class VaultState {
 
     this.storageMode = provider.type
     this.githubPat = provider.githubPat ?? ''
-    this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-    this.oauthFile = provider.oauthFile ?? null
+    if (provider.type === 'oauth-file') {
+      this.oauthFile = provider.oauthFile ?? null
+      this.githubRepo =
+        provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    } else {
+      this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+      this.oauthFile = null
+    }
   }
 
   async persistProviders() {
@@ -482,7 +499,8 @@ export class VaultState {
     this.loginSetupType = type
     this.storageMode = type
     this.githubPat = ''
-    this.githubRepo = DEFAULT_GITHUB_REPO
+    this.githubRepo =
+      type === 'oauth-file' ? DEFAULT_DRIVE_VAULT_FILE : DEFAULT_GITHUB_REPO
     this.oauthFile = type === 'oauth-file' ? this.oauthFile : null
     this.errorMsg = ''
     this.dismissSuccess()
@@ -503,9 +521,13 @@ export class VaultState {
 
   cancelProviderSetup() {
     if (this.addProviderOpen && this.loginSetupType !== null) {
+      const setupType = this.loginSetupType
       this.loginSetupType = null
       this.githubPat = ''
-      this.githubRepo = DEFAULT_GITHUB_REPO
+      this.githubRepo =
+        setupType === 'oauth-file'
+          ? DEFAULT_DRIVE_VAULT_FILE
+          : DEFAULT_GITHUB_REPO
       this.errorMsg = ''
       return
     }
@@ -659,16 +681,30 @@ export class VaultState {
   async ensureProviderSaved() {
     const pat = this.githubPat.trim()
     const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
+    const driveFile = this.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
     const type = this.loginSetupType ?? this.storageMode
     const isNewSetup = this.loginSetupType !== null
-    const oauthSnapshot =
-      type === 'oauth-file' ? (this.oauthFile ?? undefined) : undefined
+    const oauthSnapshot: OAuthFileConfig | undefined =
+      type === 'oauth-file'
+        ? {
+            preset: 'google-drive',
+            accessToken: this.oauthFile?.accessToken ?? '',
+            refreshToken: this.oauthFile?.refreshToken,
+            expiresAt: this.oauthFile?.expiresAt,
+            fileId: this.oauthFile?.fileId,
+            accountEmail: this.oauthFile?.accountEmail,
+            fileName: driveFile,
+          }
+        : undefined
 
     if (isNewSetup) {
       const provider: StorageProvider = {
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
+        label: providerDefaultLabel(
+          type,
+          type === 'github' ? repo : type === 'oauth-file' ? driveFile : undefined,
+        ),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
         oauthFile: oauthSnapshot,
@@ -697,7 +733,10 @@ export class VaultState {
       const provider: StorageProvider = {
         id: generateId(),
         type,
-        label: providerDefaultLabel(type, type === 'github' ? repo : undefined),
+        label: providerDefaultLabel(
+          type,
+          type === 'github' ? repo : type === 'oauth-file' ? driveFile : undefined,
+        ),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
         oauthFile: oauthSnapshot,
@@ -713,7 +752,20 @@ export class VaultState {
         active?.oauthFile &&
         active.oauthFile.fileId !== this.oauthFile.fileId
       ) {
-        const merged = { ...active.oauthFile, fileId: this.oauthFile.fileId }
+        const merged: OAuthFileConfig = {
+          preset: 'google-drive',
+          accessToken:
+            this.oauthFile.accessToken || active.oauthFile.accessToken,
+          refreshToken: active.oauthFile.refreshToken,
+          expiresAt: active.oauthFile.expiresAt ?? this.oauthFile.expiresAt,
+          fileId: this.oauthFile.fileId,
+          fileName:
+            active.oauthFile.fileName?.trim() ||
+            this.oauthFile.fileName?.trim() ||
+            driveFile,
+          accountEmail:
+            active.oauthFile.accountEmail ?? this.oauthFile.accountEmail,
+        }
         this.oauthFile = merged
         this.providers = this.providers.map((p) =>
           p.id === this.activeProviderId ? { ...p, oauthFile: merged } : p,

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import {
+  DEFAULT_DRIVE_VAULT_FILE,
+  formatDriveStorageRef,
   maskGithubPat,
   providerDefaultLabel,
   providerStorageDetail,
@@ -76,6 +78,54 @@ describe('providerStorageDetail', () => {
       'Vault in browser storage on this device',
     )
   })
+
+  test('distinguishes two Google Drive vault files', () => {
+    const personal: StorageProvider = {
+      id: 'gd-1',
+      type: 'oauth-file',
+      label: 'Google Drive · personal.yaml',
+      oauthFile: {
+        preset: 'google-drive',
+        accessToken: 'ya29.test',
+        fileName: 'personal.yaml',
+        accountEmail: 'me@example.com',
+      },
+      createdAt: '2026-06-24T00:00:00.000Z',
+    }
+    const work: StorageProvider = {
+      id: 'gd-2',
+      type: 'oauth-file',
+      label: 'Google Drive · work.yaml',
+      oauthFile: {
+        preset: 'google-drive',
+        accessToken: 'ya29.test',
+        fileName: 'work.yaml',
+        accountEmail: 'me@example.com',
+      },
+      createdAt: '2026-06-24T00:00:00.000Z',
+    }
+
+    expect(providerStorageDetail(personal)).toBe(
+      'personal.yaml · me@example.com',
+    )
+    expect(providerStorageDetail(work)).toBe('work.yaml · me@example.com')
+    expect(providerStorageDetail(personal)).not.toBe(providerStorageDetail(work))
+  })
+})
+
+describe('formatDriveStorageRef', () => {
+  test('includes cached file id when present', () => {
+    expect(formatDriveStorageRef('abc123', 'work.yaml')).toBe(
+      'abc123\twork.yaml',
+    )
+  })
+
+  test('omits empty file id for new vaults', () => {
+    expect(formatDriveStorageRef(undefined, 'work.yaml')).toBe('work.yaml')
+    expect(formatDriveStorageRef('', DEFAULT_DRIVE_VAULT_FILE)).toBe(
+      DEFAULT_DRIVE_VAULT_FILE,
+    )
+  })
 })
 
 describe('providerDefaultLabel', () => {
@@ -83,5 +133,12 @@ describe('providerDefaultLabel', () => {
     expect(providerDefaultLabel('github', 'team-vault')).toBe(
       'GitHub · team-vault',
     )
+  })
+
+  test('includes file name for non-default Google Drive vaults', () => {
+    expect(providerDefaultLabel('oauth-file', 'work.yaml')).toBe(
+      'Google Drive · work.yaml',
+    )
+    expect(providerDefaultLabel('oauth-file')).toBe('Google Drive')
   })
 })

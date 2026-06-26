@@ -53,6 +53,11 @@ impl std::fmt::Display for StorageMode {
 pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
 pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
+pub const DEFAULT_DRIVE_VAULT_FILE_NAME: &str = "nook-vault.yaml";
+
+/// Separator between optional known Drive file id and vault file name in the
+/// wasm connect `github_repo` argument for `google-drive` mode.
+pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
 /// Boundary helper: confirms a raw string is a known storage mode. Prefer
 /// `StorageMode::parse` when you also want the parsed value.
@@ -88,6 +93,50 @@ pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
         return Err("errors.validation.github_repo_chars".to_owned());
     }
     Ok(repo)
+}
+
+/// Validates a Google Drive app-data vault file name. Empty uses
+/// [`DEFAULT_DRIVE_VAULT_FILE_NAME`].
+pub fn validate_drive_vault_file_name(name: &str) -> Result<String, String> {
+    let file_name = if name.trim().is_empty() {
+        DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
+    } else {
+        name.trim().to_owned()
+    };
+    if file_name.len() > 100 {
+        return Err("errors.validation.drive_file_name_length".to_owned());
+    }
+    if file_name == "." || file_name == ".." {
+        return Err("errors.validation.drive_file_name_invalid".to_owned());
+    }
+    if !file_name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    {
+        return Err("errors.validation.drive_file_name_chars".to_owned());
+    }
+    Ok(file_name)
+}
+
+/// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
+/// or `fileName` alone when no cached file id exists yet.
+#[must_use]
+pub fn parse_drive_storage_ref(value: &str) -> (String, String) {
+    if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
+        (file_id.trim().to_owned(), file_name.trim().to_owned())
+    } else {
+        (String::new(), value.trim().to_owned())
+    }
+}
+
+pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
+    let id = file_id.trim();
+    let name = file_name.trim();
+    if id.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{id}{DRIVE_STORAGE_REF_SEP}{name}")
+    }
 }
 
 pub fn validate_oauth_access_token(token: &str) -> Result<String, String> {
@@ -265,6 +314,44 @@ mod tests {
         assert_eq!(
             validate_connect("google-drive", " ya29.test ").unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn validate_drive_vault_file_name_defaults_and_rejects_invalid() {
+        assert_eq!(
+            validate_drive_vault_file_name("  ").unwrap(),
+            DEFAULT_DRIVE_VAULT_FILE_NAME
+        );
+        assert_eq!(
+            validate_drive_vault_file_name("work-vault.yaml").unwrap(),
+            "work-vault.yaml"
+        );
+        assert!(validate_drive_vault_file_name(".").is_err());
+        assert!(validate_drive_vault_file_name("bad name").is_err());
+    }
+
+    #[test]
+    fn parse_drive_storage_ref_splits_file_id_and_name() {
+        assert_eq!(
+            parse_drive_storage_ref("abc123\twork-vault.yaml"),
+            ("abc123".to_owned(), "work-vault.yaml".to_owned())
+        );
+        assert_eq!(
+            parse_drive_storage_ref("nook-vault.yaml"),
+            (String::new(), "nook-vault.yaml".to_owned())
+        );
+    }
+
+    #[test]
+    fn format_drive_storage_ref_omits_empty_file_id() {
+        assert_eq!(
+            format_drive_storage_ref("", "nook-vault.yaml"),
+            "nook-vault.yaml"
+        );
+        assert_eq!(
+            format_drive_storage_ref("abc", "work.yaml"),
+            "abc\twork.yaml"
         );
     }
 

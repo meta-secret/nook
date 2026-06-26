@@ -183,6 +183,7 @@ impl NookVaultManager {
                 let (file_id, new_revision) = write_drive_vault_with_retry(
                     &self.github_pat,
                     &self.github_repo,
+                    &self.github_path,
                     &stored,
                     self.file_sha.clone(),
                 )
@@ -294,11 +295,15 @@ impl NookVaultManager {
             nook_core::StorageMode::GoogleDrive => {
                 self.github_pat =
                     nook_core::validate_oauth_access_token(github_pat).map_err(NookError::Drive)?;
-                self.github_repo = github_repo_name.trim().to_owned();
-                self.github_path = crate::storage::drive::DRIVE_VAULT_FILE_NAME.to_owned();
+                let (known_file_id, raw_file_name) =
+                    nook_core::parse_drive_storage_ref(github_repo_name);
+                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
+                    .map_err(NookError::Database)?;
+                self.github_path = file_name.clone();
                 let _ = self.status_tx.send("DRIVE_VERIFY".to_owned());
                 verify_drive_access(&self.github_pat).await?;
-                let file_id = ensure_drive_vault_file(&self.github_pat, &self.github_repo).await?;
+                let file_id =
+                    ensure_drive_vault_file(&self.github_pat, &known_file_id, &file_name).await?;
                 self.github_repo = file_id;
             }
         }
@@ -347,7 +352,9 @@ impl NookVaultManager {
             }
             nook_core::StorageMode::GoogleDrive => {
                 let _ = self.status_tx.send("DRIVE_FETCH_START".to_owned());
-                let res = fetch_drive_vault(&self.github_pat, &self.github_repo).await?;
+                let res =
+                    fetch_drive_vault(&self.github_pat, &self.github_repo, &self.github_path)
+                        .await?;
                 let _ = self.status_tx.send("DRIVE_FETCH_SUCCESS".to_owned());
                 if let Some(file) = res {
                     self.github_repo = file.file_id;

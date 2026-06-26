@@ -1,13 +1,14 @@
 //! Google Drive app-data folder adapter.
 //!
-//! Stores `nook-vault.yaml` in the user's hidden `appDataFolder` using the
-//! Drive v3 REST API. Optimistic concurrency mirrors GitHub's blob `sha`:
-//! we capture `md5Checksum` from metadata and send `If-Match` on update.
+//! Each vault file lives in the user's hidden `appDataFolder` under a
+//! user-chosen name (default `nook-vault.yaml`). Optimistic concurrency
+//! mirrors GitHub's blob `sha`: we capture `md5Checksum` from metadata and
+//! send `If-Match` on update.
 
 use crate::NookError;
 use serde::Deserialize;
 
-pub(crate) const DRIVE_VAULT_FILE_NAME: &str = "nook-vault.yaml";
+pub(crate) use nook_core::DEFAULT_DRIVE_VAULT_FILE_NAME as DRIVE_VAULT_FILE_NAME;
 
 pub(crate) struct DriveVaultFile {
     pub(crate) content: String,
@@ -59,6 +60,10 @@ fn drive_error(status: reqwest::StatusCode, body: &str) -> NookError {
     ))
 }
 
+fn escape_drive_query_literal(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
+}
+
 pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
     let client = reqwest::Client::new();
@@ -86,9 +91,13 @@ pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookEr
     Ok(())
 }
 
-async fn list_vault_file_meta(access_token: &str) -> Result<Option<DriveFileMeta>, NookError> {
+async fn list_vault_file_meta(
+    access_token: &str,
+    file_name: &str,
+) -> Result<Option<DriveFileMeta>, NookError> {
     let client = reqwest::Client::new();
-    let query = format!("name='{DRIVE_VAULT_FILE_NAME}' and trashed=false");
+    let escaped = escape_drive_query_literal(file_name);
+    let query = format!("name='{escaped}' and trashed=false");
     let mut request = client
         .get("https://www.googleapis.com/drive/v3/files")
         .query(&[
@@ -154,22 +163,27 @@ async fn read_file_content(access_token: &str, file_id: &str) -> Result<String, 
 pub(crate) async fn ensure_drive_vault_file(
     access_token: &str,
     known_file_id: &str,
+    file_name: &str,
 ) -> Result<String, NookError> {
     let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
+    let validated_name = nook_core::validate_drive_vault_file_name(file_name).map_err(NookError::Drive)?;
     let trimmed_id = known_file_id.trim();
     if !trimmed_id.is_empty() && fetch_file_metadata(&token, trimmed_id).await.is_ok() {
         return Ok(trimmed_id.to_owned());
     }
-    if let Some(meta) = list_vault_file_meta(&token).await? {
+    if let Some(meta) = list_vault_file_meta(&token, &validated_name).await? {
         return Ok(meta.id);
     }
-    create_drive_vault_file(&token).await
+    create_drive_vault_file(&token, &validated_name).await
 }
 
-async fn create_drive_vault_file(access_token: &str) -> Result<String, NookError> {
+async fn create_drive_vault_file(
+    access_token: &str,
+    file_name: &str,
+) -> Result<String, NookError> {
     let client = reqwest::Client::new();
     let metadata = serde_json::json!({
-        "name": DRIVE_VAULT_FILE_NAME,
+        "name": file_name,
         "parents": ["appDataFolder"],
     });
     let body = format!(
@@ -201,9 +215,10 @@ async fn create_drive_vault_file(access_token: &str) -> Result<String, NookError
 pub(crate) async fn fetch_drive_vault(
     access_token: &str,
     file_id: &str,
+    file_name: &str,
 ) -> Result<Option<DriveVaultFile>, NookError> {
     let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
-    let resolved_id = ensure_drive_vault_file(&token, file_id).await?;
+    let resolved_id = ensure_drive_vault_file(&token, file_id, file_name).await?;
     let meta = fetch_file_metadata(&token, &resolved_id).await?;
     let content = read_file_content(&token, &resolved_id).await?;
     if content.is_empty() {
@@ -223,11 +238,12 @@ pub(crate) async fn fetch_drive_vault(
 pub(crate) async fn write_drive_vault_with_retry(
     access_token: &str,
     file_id: &str,
+    file_name: &str,
     content: &str,
     revision: Option<String>,
 ) -> Result<(String, String), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
-    let resolved_id = ensure_drive_vault_file(&token, file_id).await?;
+    let resolved_id = ensure_drive_vault_file(&token, file_id, file_name).await?;
     let mut current_revision = revision;
 
     for attempt in 0..3 {

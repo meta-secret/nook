@@ -157,6 +157,7 @@ export function oauthTokensToConfig(
     accessToken: tokens.accessToken,
     expiresAt: tokens.expiresAt,
     fileId: existing?.fileId,
+    fileName: existing?.fileName,
     accountEmail: existing?.accountEmail,
     refreshToken: existing?.refreshToken,
   }

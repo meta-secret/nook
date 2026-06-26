@@ -49,9 +49,11 @@ pub use password_envelope::{
 };
 pub use session::{ReplaceSecretInput, replace_secret};
 pub use validation::{
-    DEFAULT_GITHUB_REPO_NAME, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets,
-    validate_connect, validate_github_pat, validate_github_repo_name, validate_oauth_access_token,
-    validate_secret_data, validate_secret_id, validate_storage_mode,
+    DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
+    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
+    parse_drive_storage_ref, validate_connect, validate_drive_vault_file_name,
+    validate_github_pat, validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
+    validate_secret_id, validate_storage_mode,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{

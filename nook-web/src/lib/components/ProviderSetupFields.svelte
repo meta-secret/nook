@@ -2,7 +2,7 @@
   import { Cloud, ExternalLink, HardDrive } from '@lucide/svelte'
   import { buttonVariants } from '$lib/components/ui/button/button.svelte'
   import type { StorageProviderType } from '$lib/auth-providers'
-  import { DEFAULT_GITHUB_REPO } from '$lib/auth-providers'
+  import { DEFAULT_GITHUB_REPO, DEFAULT_DRIVE_VAULT_FILE } from '$lib/auth-providers'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -153,6 +153,27 @@
       <p class="text-sm text-foreground text-pretty">
         {vault.t('provider_setup.google_drive_desc')}
       </p>
+      <div class="space-y-1.5">
+        <label
+          class="text-xs font-medium text-foreground"
+          for="{idPrefix}-drive-file"
+        >
+          {vault.t('provider_setup.drive_file_name')}
+        </label>
+        <input
+          id="{idPrefix}-drive-file"
+          type="text"
+          bind:value={githubRepo}
+          placeholder={DEFAULT_DRIVE_VAULT_FILE}
+          autocomplete="off"
+          spellcheck="false"
+          data-testid="drive-file-input"
+          class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
+        />
+        <p class="text-[11px] text-muted-foreground text-pretty">
+          {vault.t('provider_setup.drive_vault_file_desc')}
+        </p>
+      </div>
       <button
         type="button"
         class={cn(
