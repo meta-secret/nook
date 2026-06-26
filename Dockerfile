@@ -29,6 +29,10 @@ COPY --from=chef-planner /workspace/Cargo.lock /Cargo.lock
 # --- Builder base: Rust tooling without pre-compiled deps ---
 FROM rust:${RUST_VERSION}-bookworm AS builder-base
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends mold \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN rustup component add rustfmt clippy
 
 COPY --from=chef-planner /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef

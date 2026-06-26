@@ -164,5 +164,6 @@ Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (
 
 ### Build & verify
 
+- **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
 - **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (prebuilt `wasm-pack` + `wasm-bindgen` in the image; chef-cached `target/` seeded by the entrypoint).
 - **Verify:** `task check` (fmt, clippy, `cargo test -p nook-core`, svelte-check, eslint, vitest, vite build).
