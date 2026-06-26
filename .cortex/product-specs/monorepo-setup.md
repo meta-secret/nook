@@ -21,5 +21,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 - **No Docker named volumes.** GitHub Actions runners do not retain volumes across jobs. `task` bind-mounts the repository only (`-v $ROOT:/workspace`).
 - **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps during `docker build`; CI pushes/pulls `builder-debug:cache` and `builder-wasm:cache` from GHCR.
-- **Entrypoint seeding.** Because the bind mount replaces `/workspace/target`, the toolchain entrypoint copies baked deps from `/opt/nook/target` when the workspace `target/` is empty.
-- **Within a CI job**, incremental `target/` artifacts persist on the runner filesystem through the bind mount until the job ends.
+- **Entrypoint seeding.** The bind mount hides image-baked `target/` and `nook-web/node_modules`. The entrypoint copies from `/opt/nook/target` and `/opt/nook/nook-web-node_modules` when the workspace copies are empty.
+- **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
+- **Within a CI job**, incremental `target/` and `node_modules` artifacts persist on the runner filesystem through the bind mount until the job ends.

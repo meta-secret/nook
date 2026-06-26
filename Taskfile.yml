@@ -12,10 +12,9 @@ tasks:
       - task: build
 
   setup:
-    desc: Build the Docker toolchain image and install project dependencies inside it.
+    desc: Build the Docker toolchain image (Rust deps + nook-web node_modules baked in).
     cmds:
       - task: docker:build
-      - task: web:install
 
   build:
     desc: Build Rust crates, wasm package, and web app in Docker.
@@ -245,9 +244,9 @@ tasks:
       - wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm
 
   _web:install:
-    desc: Install web dependencies.
+    desc: Sync web dependencies after package.json or bun.lock changes.
     cmds:
-      - cd nook-web && bun install
+      - cd nook-web && bun install --frozen-lockfile
 
   _web:build:
     desc: Build the Svelte app.

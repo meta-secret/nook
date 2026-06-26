@@ -154,7 +154,7 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 |------|------------------|
 | Rust crate dependencies | **cargo-chef** cooks deps into the toolchain image (`builder-debug:cache`, `builder-wasm:cache` on GHCR). Baked artifacts live at `/opt/nook/target` in the image. |
 | `target/` at runtime | Bind-mounting the repo hides image layers under `/workspace/target`. The **entrypoint** copies `/opt/nook/target` into the workspace when `target/debug/deps` is empty (fresh CI checkout). Within one CI job, later `docker run` invocations reuse the same host `target/` via the bind mount. |
-| `nook-web/node_modules` | Not volume-backed. `task setup` / `bun install` populates `nook-web/node_modules` on the mounted workspace (persists for the rest of that job on the runner disk). |
+| `nook-web/node_modules` | `bun install --frozen-lockfile` during image build; baked at `/opt/nook/nook-web-node_modules`. Entrypoint copies into the workspace when `node_modules` is empty. Rebuild the image after `package.json` / `bun.lock` changes (`task docker:build`). |
 | Application incremental builds | After seeding, only workspace crates (`nook-core`, `nook-wasm`) recompile when sources change. |
 
 Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (commit `recipe.json` and `Cargo.lock`).

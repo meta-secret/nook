@@ -71,6 +71,12 @@ RUN printf '%s\n' \
     '    cp -a /opt/nook/target/. /workspace/target/' \
     '  fi' \
     'fi' \
+    'if [ ! -d /workspace/nook-web/node_modules ] || [ -z "$(ls -A /workspace/nook-web/node_modules 2>/dev/null)" ]; then' \
+    '  if [ -d /opt/nook/nook-web-node_modules ]; then' \
+    '    mkdir -p /workspace/nook-web' \
+    '    cp -a /opt/nook/nook-web-node_modules/. /workspace/nook-web/node_modules/' \
+    '  fi' \
+    'fi' \
     'exec "$@"' \
     > /usr/local/bin/nook-entrypoint.sh \
     && chmod +x /usr/local/bin/nook-entrypoint.sh
@@ -107,3 +113,7 @@ RUN case "${TARGETARCH}" in \
         | tar -xz -C /usr/local/bin --strip-components=1 "wasm-bindgen-${WASM_BINDGEN_VERSION}-${musl_arch}/wasm-bindgen" \
     && curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${linux_arch}.tar.gz" \
         | tar -xz --strip-components=2 -C /usr/local/bin "binaryen-version_${BINARYEN_VERSION}/bin"
+
+COPY nook-web/package.json nook-web/bun.lock ./nook-web/
+RUN cd nook-web && bun install --frozen-lockfile \
+    && cp -a node_modules /opt/nook/nook-web-node_modules
