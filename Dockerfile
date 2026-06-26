@@ -117,3 +117,8 @@ RUN case "${TARGETARCH}" in \
 COPY nook-web/package.json nook-web/bun.lock ./nook-web/
 RUN cd nook-web && bun install --frozen-lockfile \
     && cp -a node_modules /opt/nook/nook-web-node_modules
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
+RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
+    && cd nook-web \
+    && bunx playwright install --with-deps chromium

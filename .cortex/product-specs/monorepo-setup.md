@@ -23,4 +23,6 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps during `docker build`; CI pushes/pulls `builder-debug:cache` and `builder-wasm:cache` from GHCR.
 - **Entrypoint seeding.** The bind mount hides image-baked `target/` and `nook-web/node_modules`. The entrypoint copies from `/opt/nook/target` and `/opt/nook/nook-web-node_modules` when the workspace copies are empty.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
+- **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
+- **One Docker build per workflow.** `pr.yml` and `main.yml` each use a single job so `task setup` runs once; `task docker:pull` loads the last GHCR image before `docker:build`.
 - **Within a CI job**, incremental `target/` and `node_modules` artifacts persist on the runner filesystem through the bind mount until the job ends.

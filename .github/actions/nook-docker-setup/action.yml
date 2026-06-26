@@ -1,5 +1,5 @@
 name: Nook Docker setup
-description: Checkout, Buildx, GHCR login, and task setup (toolchain image + web deps).
+description: Pull GHCR cache (if available), Buildx login, and build toolchain image once per workflow run.
 
 runs:
   using: composite

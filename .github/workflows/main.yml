@@ -1,7 +1,6 @@
-# Main branch: task check, production web build, Playwright e2e, GitHub Pages deploy.
+# Main branch: check, web build, and e2e in one job (one Docker build); then deploy.
 #
-# Runs after squash merge. Deploy is blocked unless both the web build and e2e pass.
-# Playwright starts vite dev on localhost — it does not hit Cloudflare PR previews.
+# Playwright browsers are pre-installed in the toolchain image.
 
 name: Main
 
@@ -20,8 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Check
+  ci:
+    name: Check, build, and e2e
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,17 +32,6 @@ jobs:
       - name: Check
         run: task check
 
-  build:
-    name: Build web
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-
       - name: Set Vite base path
         run: echo "VITE_BASE=/" >> $GITHUB_ENV
 
@@ -54,16 +42,6 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: nook-web/dist
-
-  e2e:
-    name: E2E tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
 
       - name: Run Playwright e2e
         run: task web:test:e2e
@@ -77,7 +55,7 @@ jobs:
 
   deploy:
     name: Deploy GitHub Pages
-    needs: [build, e2e]
+    needs: ci
     runs-on: ubuntu-latest
     environment:
       name: github-pages

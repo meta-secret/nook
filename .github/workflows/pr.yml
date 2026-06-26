@@ -1,8 +1,6 @@
-# Pull requests: task check + Cloudflare preview.
+# Pull requests: task check + Cloudflare preview (single job, one Docker build).
 #
 # Playwright e2e and GitHub Pages deploy run on main only (see main.yml).
-# deploy-preview uses continue-on-error so a preview is still attempted when
-# its build step fails.
 
 name: PR
 
@@ -68,8 +66,8 @@ jobs:
               ),
             );
 
-  check:
-    name: Check
+  verify:
+    name: Check and preview
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
@@ -87,23 +85,6 @@ jobs:
       - name: Check
         run: task check
 
-  deploy-preview:
-    name: Deploy preview
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Cancel superseded workflow runs
-        uses: styfle/cancel-workflow-action@0.13.1
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-
       - name: Build web app for preview
         run: task web:build VITE_BASE=/
 
@@ -112,6 +93,7 @@ jobs:
 
       - name: Deploy to Cloudflare Pages
         id: deploy
+        continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}

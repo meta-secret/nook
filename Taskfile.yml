@@ -12,9 +12,22 @@ tasks:
       - task: build
 
   setup:
-    desc: Build the Docker toolchain image (Rust deps + nook-web node_modules baked in).
+    desc: Pull cached toolchain image (when available) and build if needed.
     cmds:
+      - task: docker:pull
       - task: docker:build
+
+  docker:pull:
+    internal: true
+    env:
+      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+      CACHE_REGISTRY: '{{.CACHE_REGISTRY}}'
+    cmds:
+      - >-
+        sh -c 'test -n "${CACHE_REGISTRY:-}" || exit 0;
+        {{.DOCKER}} pull "${CACHE_REGISTRY}:latest"
+        && {{.DOCKER}} tag "${CACHE_REGISTRY}:latest" "{{.DOCKER_IMAGE}}"
+        || true'
 
   build:
     desc: Build Rust crates, wasm package, and web app in Docker.
@@ -276,8 +289,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e
       - defer: cd nook-web && bun run test:e2e:cleanup
 
@@ -286,8 +297,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e:local
 
   _web:test:e2e:github:
@@ -295,8 +304,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e:github
       - defer: cd nook-web && bun run test:e2e:cleanup
 
@@ -305,8 +312,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e:multi-device
       - defer: cd nook-web && bun run test:e2e:cleanup
 
