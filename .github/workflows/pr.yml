@@ -1,0 +1,139 @@
+# Pull requests: task check + Cloudflare preview.
+#
+# Playwright e2e and GitHub Pages deploy run on main only (see main.yml).
+# deploy-preview uses continue-on-error so a preview is still attempted when
+# its build step fails.
+
+name: PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cancel-on-close:
+    name: Cancel PR runs on close
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel in-progress and queued runs for this branch
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const statuses = ['in_progress', 'queued', 'waiting', 'pending'];
+            const runIds = new Set();
+
+            for (const status of statuses) {
+              let page = 1;
+              while (true) {
+                const { data } = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'pr.yml',
+                  branch,
+                  status,
+                  per_page: 100,
+                  page,
+                });
+
+                for (const run of data.workflow_runs) {
+                  if (run.id !== context.runId) {
+                    runIds.add(run.id);
+                  }
+                }
+
+                if (data.workflow_runs.length < 100) break;
+                page += 1;
+              }
+            }
+
+            await Promise.all(
+              [...runIds].map((run_id) =>
+                github.rest.actions.cancelWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id,
+                }),
+              ),
+            );
+
+  check:
+    name: Check
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel superseded workflow runs
+        uses: styfle/cancel-workflow-action@0.13.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Check
+        run: task check
+
+  deploy-preview:
+    name: Deploy preview
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Cancel superseded workflow runs
+        uses: styfle/cancel-workflow-action@0.13.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Build web app for preview
+        run: task web:build VITE_BASE=/
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2.2.0
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          bunx wrangler@4 pages project create nook --production-branch=main 2>/dev/null || true
+          deploy_output="$(
+            bunx wrangler@4 pages deploy nook-web/dist \
+              --project-name=nook \
+              --branch="pr-${{ github.event.pull_request.number }}" 2>&1
+          )"
+          echo "$deploy_output"
+          deployment_url="$(
+            echo "$deploy_output" \
+              | grep -oE 'Deployment alias URL: https://[^ ]+' \
+              | sed 's/Deployment alias URL: //' \
+              | tail -1
+          )"
+          if [ -z "$deployment_url" ]; then
+            echo "Could not parse Cloudflare deployment alias URL" >&2
+            exit 1
+          fi
+          echo "deployment-url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL on PR
+        if: steps.deploy.outputs.deployment-url != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.deployment-url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bun run .github/scripts/comment-preview-url.ts

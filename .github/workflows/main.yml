@@ -1,0 +1,79 @@
+# Main branch: task check, production web build, Playwright e2e, GitHub Pages deploy.
+#
+# Runs after squash merge. Deploy is blocked unless both the web build and e2e pass.
+# Playwright starts vite dev on localhost — it does not hit Cloudflare PR previews.
+
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: main
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Check
+        run: task check
+
+  build:
+    name: Build web
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Set Vite base path
+        run: echo "VITE_BASE=/" >> $GITHUB_ENV
+
+      - name: Build web for GitHub Pages
+        run: task web:build VITE_BASE="${{ env.VITE_BASE }}"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: nook-web/dist
+
+  e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+
+      - name: Run Playwright e2e
+        run: task web:test:e2e
+        env:
+          CI: true
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-${{ github.run_id }}
+          NOOK_GITHUB_POLL_MS: '3000'
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: [build, e2e]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
