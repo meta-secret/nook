@@ -83,8 +83,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and build preview
-        run: task ci:pr VITE_BASE=/
+      - name: Verify, build preview, and push toolchain
+        run: task ci:pr:publish VITE_BASE=/
+        env:
+          PUSH_TOOLCHAIN: "1"
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.2.0

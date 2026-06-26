@@ -25,5 +25,5 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
-- **PR CI parallelism.** `pr.yml` builds the toolchain once, then `task ci:pr` runs format+wasm in one container, then `ci:verify:parallel` and `web:build:parallel` in separate `docker run` invocations (avoids racing on wasm output), then deploys the preview.
+- **PR CI parallelism.** `pr.yml` builds the toolchain once, then `task ci:pr:publish` runs `ci:pr` and `docker:push:ci` in parallel. `ci:pr` prepares format+wasm (wasm skipped when image-seeded), then verify and web build in separate containers.
 - **Within a CI job**, incremental `target/` and wasm build output persist on the runner filesystem through the bind mount until the job ends.

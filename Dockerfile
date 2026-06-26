@@ -78,27 +78,6 @@ FROM builder-wasm AS toolchain
 COPY --from=chef-planner /workspace/Cargo.lock /opt/nook/Cargo.lock
 COPY --from=builder-wasm /workspace/target /opt/nook/target
 
-RUN printf '%s\n' \
-    '#!/bin/sh' \
-    'set -e' \
-    'if [ ! -f /workspace/Cargo.lock ] && [ -f /opt/nook/Cargo.lock ]; then' \
-    '  cp /opt/nook/Cargo.lock /workspace/Cargo.lock' \
-    'fi' \
-    'if [ ! -d /workspace/target/debug/deps ] || [ -z "$(ls -A /workspace/target/debug/deps 2>/dev/null)" ]; then' \
-    '  if [ -d /opt/nook/target ]; then' \
-    '    mkdir -p /workspace/target' \
-    '    cp -a /opt/nook/target/. /workspace/target/' \
-    '  fi' \
-    'fi' \
-    'if [ -f /workspace/nook-web/package.json ]; then' \
-    '  (cd /workspace/nook-web && bun install --frozen-lockfile)' \
-    'fi' \
-    'exec "$@"' \
-    > /usr/local/bin/nook-entrypoint.sh \
-    && chmod +x /usr/local/bin/nook-entrypoint.sh
-
-ENTRYPOINT ["/usr/local/bin/nook-entrypoint.sh"]
-
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1
 ARG WASM_PACK_VERSION=0.15.0
@@ -108,6 +87,8 @@ ARG BINARYEN_VERSION=122
 ENV BUN_INSTALL=/usr/local/bun
 ENV BUN_INSTALL_CACHE_DIR=/opt/nook/bun-install-cache
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
+ENV CARGO_TARGET_DIR=/opt/nook/target
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -130,7 +111,22 @@ COPY nook-web/package.json nook-web/bun.lock ./nook-web/
 RUN mkdir -p "$BUN_INSTALL_CACHE_DIR" \
     && cd nook-web && bun install --frozen-lockfile
 
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
 RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
     && cd nook-web \
     && bunx playwright install --with-deps chromium
+
+# Baked wasm pkg for entrypoint seeding (cached until wasm/core sources change).
+WORKDIR /workspace
+COPY recipe.json Cargo.toml ./
+COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
+COPY nook-core/Cargo.toml nook-core/Cargo.toml
+COPY nook-wasm/Cargo.toml nook-wasm/Cargo.toml
+COPY nook-core/src nook-core/src
+COPY nook-core/locales nook-core/locales
+COPY nook-wasm/src nook-wasm/src
+RUN wasm-pack build nook-wasm --target web --out-dir /opt/nook/nook-wasm-pkg --out-name nook_wasm
+
+# Entrypoint last so script edits do not invalidate Playwright, bun, or wasm layers.
+COPY docker-entrypoint.sh /usr/local/bin/nook-entrypoint.sh
+RUN chmod +x /usr/local/bin/nook-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/nook-entrypoint.sh"]

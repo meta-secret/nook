@@ -24,6 +24,19 @@ tasks:
       - task: ci:pr:prepare
       - task: ci:pr:parallel
 
+  ci:pr:publish:
+    desc: PR CI verify and GHCR push in parallel (after docker setup build).
+    deps:
+      - ci:pr
+      - docker:push:ci
+
+  docker:push:ci:
+    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (used in parallel with ci:pr).
+    env:
+      PUSH_TOOLCHAIN: "1"
+    cmds:
+      - task: docker:push
+
   ci:pr:prepare:
     desc: Format check and wasm build in one container (shared artifacts for parallel tracks).
     cmds:
@@ -331,9 +344,22 @@ tasks:
       - cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 
   _wasm:build:
-    desc: Build nook-wasm for the web app (invoke wasm-pack from workspace root).
+    desc: Build nook-wasm for the web app when sources changed (skips if image-seeded pkg is current).
     cmds:
-      - wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm
+      - task: _wasm:build:run
+
+  _wasm:build:run:
+    internal: true
+    cmds:
+      - >-
+        sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
+        need=0;
+        if [ ! -f "$out" ]; then need=1;
+        elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
+        fi;
+        if [ "$need" -eq 1 ]; then
+          wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm;
+        fi'
 
   _web:install:
     desc: Sync web dependencies after package.json or bun.lock changes.

@@ -1,9 +1,9 @@
 name: Nook Docker setup
-description: Pull GHCR toolchain image, Buildx login, build linux/amd64 image, and push.
+description: Pull GHCR toolchain image, Buildx login, and build linux/amd64 image.
 
 inputs:
   github-token:
-    description: Token with packages:write for GHCR login and image push.
+    description: Token with packages:read/write for GHCR login and build cache.
     required: true
 
 runs:
@@ -31,11 +31,4 @@ runs:
       shell: bash
       run: task setup
       env:
-        TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
-
-    - name: Push toolchain image
-      shell: bash
-      run: task docker:push
-      env:
-        PUSH_TOOLCHAIN: "1"
         TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
