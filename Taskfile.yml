@@ -3,6 +3,7 @@ version: '3'
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
+  DOCKER_PLATFORM: linux/amd64
   VITE_BASE: '{{default "/" .VITE_BASE}}'
 
 tasks:
@@ -12,10 +13,71 @@ tasks:
       - task: build
 
   setup:
-    desc: Build the Docker toolchain image and install project dependencies inside it.
+    desc: Pull remote toolchain image (when TOOLCHAIN_REGISTRY is set) and build if needed.
     cmds:
+      - task: docker:pull
       - task: docker:build
-      - task: web:install
+
+  ci:pr:
+    desc: PR CI — prepare once, then verify and web build in parallel (separate containers).
+    cmds:
+      - task: ci:pr:prepare
+      - task: ci:pr:parallel
+
+  ci:pr:publish:
+    desc: PR CI verify and GHCR push in parallel (after docker setup build).
+    deps:
+      - ci:pr
+      - docker:push:ci
+
+  docker:push:ci:
+    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (used in parallel with ci:pr).
+    env:
+      PUSH_TOOLCHAIN: "1"
+    cmds:
+      - task: docker:push
+
+  ci:pr:prepare:
+    desc: Format check and wasm build in one container (shared artifacts for parallel tracks).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _ci:pr:prepare }
+
+  ci:pr:parallel:
+    desc: Lint, test, and production web build in parallel after ci:pr:prepare.
+    deps:
+      - ci:verify:parallel
+      - web:build:parallel
+
+  ci:verify:parallel:
+    desc: Lint and test in Docker without rebuilding wasm.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _verify:parallel }
+
+  web:build:parallel:
+    desc: Production web build in Docker without rebuilding wasm.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:build:parallel }
+
+  ci:verify:
+    desc: Format, lint, and test in Docker (no web production build).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _verify }
+
+  docker:pull:
+    internal: true
+    env:
+      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+    cmds:
+      - >-
+        sh -c 'test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        {{.DOCKER}} pull --platform {{.DOCKER_PLATFORM}} "${TOOLCHAIN_REGISTRY}:latest"
+        && {{.DOCKER}} tag "${TOOLCHAIN_REGISTRY}:latest" "{{.DOCKER_IMAGE}}"
+        || true'
 
   build:
     desc: Build Rust crates, wasm package, and web app in Docker.
@@ -137,11 +199,26 @@ tasks:
       - task: docker:web:dev
 
   docker:build:
-    desc: Build the local Docker toolchain image with Buildx Bake.
+    desc: Build the linux/amd64 toolchain image (reuses pulled registry layers when available).
     env:
       DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
     cmds:
       - '{{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+
+  docker:push:
+    desc: Push nook-build:local to TOOLCHAIN_REGISTRY (CI after green check, or local with PUSH_TOOLCHAIN=1).
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+    cmds:
+      - >-
+        sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        {{.DOCKER}} push "${TOOLCHAIN_REGISTRY}:latest"'
+
+  docker:generate-recipe:
+    desc: Regenerate recipe.json after Cargo.toml dependency changes (commit the result).
+    cmds:
+      - '{{.DOCKER}} buildx bake -f docker-bake.hcl generate-recipe'
 
   docker:task:
     internal: true
@@ -150,6 +227,7 @@ tasks:
     cmds:
       - >-
         {{.DOCKER}} run --rm
+        --platform {{.DOCKER_PLATFORM}}
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
         -e NOOK_GITHUB_PAT
@@ -159,7 +237,7 @@ tasks:
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
         -v "{{.ROOT_DIR}}:/workspace"
-        -v nook-web-node-modules:/workspace/nook-web/node_modules
+        -v /workspace/nook-web/node_modules
         -w /workspace
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
@@ -169,10 +247,11 @@ tasks:
     cmds:
       - >-
         {{.DOCKER}} run --rm
+        --platform {{.DOCKER_PLATFORM}}
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
         -v "{{.ROOT_DIR}}:/workspace"
-        -v nook-web-node-modules:/workspace/nook-web/node_modules
+        -v /workspace/nook-web/node_modules
         -w /workspace
         {{.DOCKER_IMAGE}}
         sh -c "cd nook-web && bun install && task _web:dev"
@@ -204,6 +283,38 @@ tasks:
       - task: _test
       - task: _build
 
+  _verify:
+    desc: Format, lint, and test without production web build.
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
+
+  _ci:pr:prepare:
+    desc: Shared PR prep — format and wasm before parallel verify/build containers.
+    cmds:
+      - task: _format:check
+      - task: _wasm:build
+
+  _verify:parallel:
+    desc: Lint and test when wasm is already built (ci:pr parallel track).
+    cmds:
+      - task: _lint:parallel
+      - task: _test:parallel
+
+  _lint:parallel:
+    desc: Rust and web linters without rebuilding wasm.
+    cmds:
+      - task: _rust:lint
+      - task: _web:lint:parallel
+
+  _test:parallel:
+    desc: Rust and web tests without rebuilding wasm.
+    cmds:
+      - task: _rust:test
+      - task: _web:check:parallel
+      - task: _web:test:parallel
+
   _format:
     desc: Format all projects.
     cmds:
@@ -217,29 +328,43 @@ tasks:
       - cd nook-web && bun run format:check
 
   _rust:build:
-    desc: Build the Rust workspace.
+    desc: Build the native Rust crate (wasm is built via _wasm:build).
     cmds:
-      - cargo build --workspace
+      - cargo build -p nook-core
 
   _rust:test:
-    desc: Test the Rust workspace.
+    desc: Test nook-core (wasm is covered by web e2e).
     cmds:
-      - cargo test --workspace
+      - cargo test -p nook-core
 
   _rust:lint:
-    desc: Lint the Rust workspace.
+    desc: Lint nook-core on host and nook-wasm for wasm32.
     cmds:
-      - cargo clippy --workspace --all-targets -- -D warnings
+      - cargo clippy -p nook-core --all-targets -- -D warnings
+      - cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 
   _wasm:build:
-    desc: Build nook-wasm for the web app.
+    desc: Build nook-wasm for the web app when sources changed (skips if image-seeded pkg is current).
     cmds:
-      - wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm
+      - task: _wasm:build:run
+
+  _wasm:build:run:
+    internal: true
+    cmds:
+      - >-
+        sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
+        need=0;
+        if [ ! -f "$out" ]; then need=1;
+        elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
+        fi;
+        if [ "$need" -eq 1 ]; then
+          wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm;
+        fi'
 
   _web:install:
-    desc: Install web dependencies.
+    desc: Sync web dependencies after package.json or bun.lock changes.
     cmds:
-      - cd nook-web && bun install
+      - cd nook-web && bun install --frozen-lockfile
 
   _web:build:
     desc: Build the Svelte app.
@@ -249,6 +374,28 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
     cmds:
       - cd nook-web && bun run build
+
+  _web:build:parallel:
+    desc: Build the Svelte app when wasm is already built (ci:pr parallel track).
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - cd nook-web && bun run build
+
+  _web:check:parallel:
+    desc: Run Svelte and TypeScript checks when wasm is already built.
+    cmds:
+      - cd nook-web && bun run check
+
+  _web:test:parallel:
+    desc: Run web unit tests when wasm is already built.
+    cmds:
+      - cd nook-web && bun run test
+
+  _web:lint:parallel:
+    desc: Lint the web app when wasm is already built.
+    cmds:
+      - cd nook-web && bun run lint
 
   _web:check:
     desc: Run Svelte and TypeScript checks.
@@ -269,8 +416,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e
       - defer: cd nook-web && bun run test:e2e:cleanup
 
@@ -279,8 +424,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e:local
 
   _web:test:e2e:github:
@@ -288,8 +431,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e:github
       - defer: cd nook-web && bun run test:e2e:cleanup
 
@@ -298,8 +439,6 @@ tasks:
     deps:
       - _wasm:build
     cmds:
-      - cd nook-web && bun install
-      - cd nook-web && bunx playwright install --with-deps chromium
       - cd nook-web && bun run test:e2e:multi-device
       - defer: cd nook-web && bun run test:e2e:cleanup
 

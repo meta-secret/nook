@@ -91,7 +91,6 @@
     return date.toLocaleDateString()
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function displayName(member: VaultMember): string {
     const label = member.label.trim()
     if (label) return label

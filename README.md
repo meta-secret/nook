@@ -254,6 +254,43 @@ logic belongs in `nook-core`, browser I/O in `nook-wasm`, and presentation behav
 in `nook-web`. CI enforces formatting, Clippy warnings, Rust tests, Svelte and
 TypeScript diagnostics, ESLint, Prettier, Vitest, and production builds.
 
+### Rust dependency cache
+
+Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to pre-compile
+crate dependencies and warm clippy/tests into the **linux/amd64** toolchain image. CI and dev
+machines share one remote image:
+
+```text
+ghcr.io/<owner>/<repo>/toolchain:latest
+```
+
+`task setup` pulls it (when `TOOLCHAIN_REGISTRY` is set), rebuilds only invalidated layers,
+and CI pushes after a green check. All `docker run` invocations use `--platform linux/amd64`
+(Mac included). The image bakes `target/` at `/opt/nook/target`; the entrypoint seeds the
+bind-mounted workspace when empty. **Do not use Docker named volumes** — GitHub Actions does
+not persist them between jobs. See [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
+
+Optional local pull (after `docker login ghcr.io`):
+
+```sh
+export TOOLCHAIN_REGISTRY=ghcr.io/meta-secret/nook/toolchain
+task setup
+```
+
+Push your image after local verify (`PUSH_TOOLCHAIN=1`):
+
+```sh
+PUSH_TOOLCHAIN=1 task docker:push
+```
+
+After changing Rust dependencies in any `Cargo.toml`, regenerate and commit the chef
+recipe and lockfile:
+
+```sh
+task docker:generate-recipe
+git add recipe.json Cargo.lock
+```
+
 ## License
 
 Nook is available under the [MIT License](LICENSE).

@@ -1,0 +1,74 @@
+# Main branch: check, web build, and e2e in one job (one Docker build); then deploy.
+#
+# Playwright browsers are pre-installed in the toolchain image.
+
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: main
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Check, build, and e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check
+        run: task check
+
+      - name: Set Vite base path
+        run: echo "VITE_BASE=/" >> $GITHUB_ENV
+
+      - name: Build web for GitHub Pages
+        run: task web:build VITE_BASE="${{ env.VITE_BASE }}"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: nook-web/dist
+
+      - name: Run Playwright e2e
+        run: task web:test:e2e
+        env:
+          CI: true
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-${{ github.run_id }}
+          NOOK_GITHUB_POLL_MS: '3000'
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
+
+      - name: Push toolchain image
+        run: task docker:push
+        env:
+          PUSH_TOOLCHAIN: "1"
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: ci
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

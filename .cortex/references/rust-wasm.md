@@ -5,10 +5,11 @@
 - Export functions with `#[wasm_bindgen]`. Domain logic stays in `nook-core`; WASM wraps I/O and session state.
 - Examples: `connect`, `add_secret`, `filter_secrets`, `generate_password`.
 
-## 2. Compiling with Wasm-pack
-- Compile using:
+## 2. Compiling for the web
+- Invoke wasm-pack from the **workspace root** so chef-cached `target/` is reused:
   `wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm`
-- `wasm-opt` (Binaryen) must be version 122+ to correctly compile modern Rust WebAssembly modules with `externref`/`table.grow` support.
+- The Docker image installs `wasm-pack` and `wasm-bindgen` from prebuilt release archives (`curl`), not `cargo install`.
+- `wasm-opt` (Binaryen 122+) runs automatically via wasm-pack.
 
 ## 3. Session state (`NookVaultManager`)
 - `decrypted_jsonl` — in-memory plaintext session (JSONL)
