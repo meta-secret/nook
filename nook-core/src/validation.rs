@@ -129,6 +129,7 @@ pub fn parse_drive_storage_ref(value: &str) -> (String, String) {
     }
 }
 
+#[must_use]
 pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
     let id = file_id.trim();
     let name = file_name.trim();

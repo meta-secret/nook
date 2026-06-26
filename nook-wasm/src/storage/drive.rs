@@ -8,8 +8,6 @@
 use crate::NookError;
 use serde::Deserialize;
 
-pub(crate) use nook_core::DEFAULT_DRIVE_VAULT_FILE_NAME as DRIVE_VAULT_FILE_NAME;
-
 pub(crate) struct DriveVaultFile {
     pub(crate) content: String,
     pub(crate) file_id: String,
