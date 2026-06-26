@@ -6,8 +6,10 @@ import {
   clearBrowserVault,
   connectLocalVault,
   deleteSecret,
+  expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,
+  revealSecretInRow,
   uniqueSecretKey,
   waitForVaultUnlocked,
 } from './helpers'
@@ -31,9 +33,10 @@ test.describe('local vault', () => {
     await addSecret(page, key, value)
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
+    await expandSecretRow(page, key)
     await expect(row.getByText('••••••••••••••••')).toBeVisible()
 
-    await row.getByRole('button', { name: 'Show secret' }).click()
+    await revealSecretInRow(row)
     await expect(row.getByText(value)).toBeVisible()
 
     await page.getByTestId('search-secrets').fill(key)
@@ -80,14 +83,19 @@ test.describe('local vault', () => {
     await page.getByTestId('item-type-seed-phrase').click()
     await page.getByTestId('secret-label').fill('Main wallet')
     await fillSeedPhraseGrid(page, BIP39_SAMPLE_WORDS)
+    await expect(page.getByTestId('seed-phrase-valid')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await page.getByTestId('save-secret-btn').click()
 
+    await expect(page.getByTestId('vault-group-login')).toContainText('alice')
+    await expandSecretRow(page, 'alice')
     await expect(page.getByTestId('vault-group-login')).toContainText(
       'login.example.com',
     )
-    await expect(page.getByTestId('vault-group-login')).toContainText('alice')
+    await expandSecretRow(page, 'api.example.com')
     await expect(page.getByTestId('vault-group-api-key')).toContainText(
-      'Expires 2030-01-01',
+      '2030-01-01',
     )
     await expect(page.getByTestId('vault-group-seed-phrase')).toContainText(
       'Main wallet',
@@ -121,7 +129,7 @@ test.describe('local vault', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toBeVisible()
     await expect(row).toBeVisible()
 
-    await row.getByRole('button', { name: 'Show secret' }).click()
+    await revealSecretInRow(row)
     await expect(row.getByRole('heading', { name: 'Recovery' })).toBeVisible()
     await expect(row.getByText('backup')).toBeVisible()
     await expect(row.getByText('1234')).toBeVisible()
@@ -141,7 +149,7 @@ test.describe('local vault', () => {
 
     const row = page.getByTestId('secret-row').filter({ hasText: key })
     await expect(row).toBeVisible()
-    await row.getByRole('button', { name: 'Show secret' }).click()
+    await revealSecretInRow(row)
     await expect(row.getByText(value)).toBeVisible()
 
     await deleteSecret(page, key)

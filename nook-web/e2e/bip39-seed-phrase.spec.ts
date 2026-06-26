@@ -6,6 +6,7 @@ import {
   expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,
+  revealSecretInRow,
   UI_TIMEOUT_MS,
 } from './helpers'
 
@@ -36,7 +37,7 @@ test.describe('BIP39 seed phrase grid', () => {
     await expandSecretRow(page, 'Recovery wallet')
     await expect(row.getByTestId('seed-phrase-grid')).toBeVisible()
 
-    await row.getByRole('button', { name: 'Show secret' }).click()
+    await revealSecretInRow(row)
     await expect(row.getByTestId('seed-word-1')).toHaveText('abandon')
     await expect(row.getByTestId('seed-word-12')).toHaveText('about')
   })
@@ -47,10 +48,12 @@ test.describe('BIP39 seed phrase grid', () => {
     await page.getByTestId('secret-label').fill('Bad checksum')
     await fillSeedPhraseGrid(
       page,
-      Array.from({ length: 12 }, () => 'able'),
+      Array.from({ length: 12 }, () => 'abandon'),
     )
 
-    await expect(page.getByTestId('seed-phrase-checksum-error')).toBeVisible()
+    await expect(page.getByTestId('seed-phrase-checksum-error')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await expect(page.getByTestId('save-secret-btn')).toBeDisabled()
   })
 

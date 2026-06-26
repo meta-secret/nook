@@ -593,26 +593,36 @@ export async function connectLoginProvider(page: Page) {
   if (await authorizationStep.isVisible()) {
     return
   }
+
   const connectButton = page.getByTestId('login-connect-provider-btn')
-  const savedList = page.getByTestId('saved-providers-list')
-  if (await savedList.isVisible()) {
-    const connectReady = await connectButton
-      .isEnabled({ timeout: UI_TIMEOUT_MS })
-      .catch(() => false)
-    if (!connectReady) {
-      const provider = page
-        .getByTestId('saved-provider-local')
-        .or(page.getByTestId('saved-provider-github'))
-        .first()
-      await expect(provider).toBeVisible({ timeout: UI_TIMEOUT_MS })
-      if ((await provider.getAttribute('aria-checked')) !== 'true') {
-        await provider.click()
-      }
-      await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
+  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
+
+  if (await savedLocalProvider.isVisible()) {
+    if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedLocalProvider.click()
     }
+  } else if (await savedGithubProvider.isVisible()) {
+    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedGithubProvider.click()
+    }
+  } else {
+    await page.getByTestId('provider-option-local').click()
   }
+
+  await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
   await connectButton.click()
   await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+export async function revealSecretInRow(
+  row: import('@playwright/test').Locator,
+) {
+  const toggle = row.getByTestId('secret-row-toggle')
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+    await toggle.click()
+  }
+  await row.getByRole('button', { name: 'Show secret' }).click()
 }
 
 export async function selectLoginUnlockMethod(
@@ -798,8 +808,7 @@ export async function expandSecretRow(page: Page, key: string) {
 
 export async function revealSecretValue(page: Page, key: string) {
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await expandSecretRow(page, key)
-  await row.getByRole('button', { name: 'Show secret' }).click()
+  await revealSecretInRow(row)
   const grid = row.getByTestId('seed-phrase-grid')
   if (await grid.isVisible()) {
     const words = await row.getByTestId(/^seed-word-\d+$/).allTextContents()

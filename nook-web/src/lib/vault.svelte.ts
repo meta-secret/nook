@@ -206,6 +206,13 @@ export class VaultState {
     this.translations = TRANSLATION_CATALOGS[newLocale]
   }
 
+  private resolveErrorMessage(message: string): string {
+    if (message.startsWith('errors.')) {
+      return this.t(message)
+    }
+    return message
+  }
+
   t = (key: string, replacements?: Record<string, string>): string => {
     const val = getKeyValue(this.translations, key)
     if (val === undefined) {
@@ -1047,7 +1054,8 @@ export class VaultState {
       this.startVaultSync()
     } catch (e: unknown) {
       this.isAuthenticated = false
-      this.errorMsg = e instanceof Error ? e.message : String(e)
+      const message = e instanceof Error ? e.message : String(e)
+      this.errorMsg = this.resolveErrorMessage(message)
     } finally {
       this.isVerifying = false
     }
