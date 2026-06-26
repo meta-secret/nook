@@ -82,44 +82,28 @@ ARG TASK_VERSION=3.42.1
 ARG WASM_PACK_VERSION=0.15.0
 ARG WASM_BINDGEN_VERSION=0.2.125
 ARG BINARYEN_VERSION=122
+ARG TARGETARCH
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates curl unzip \
+        ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 
-RUN arch="$(dpkg --print-architecture)" \
-    && curl -fsSL "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_${arch}.tar.gz" \
-        | tar -xz -C /usr/local/bin task
-
-RUN arch="$(dpkg --print-architecture)" \
-    && case "${arch}" in \
-        amd64) target="x86_64-unknown-linux-musl" ;; \
-        arm64) target="aarch64-unknown-linux-musl" ;; \
-        *) echo "Unsupported: ${arch}" >&2; exit 1 ;; \
+RUN case "${TARGETARCH}" in \
+      amd64) musl_arch="x86_64-unknown-linux-musl"; linux_arch="x86_64-linux" ;; \
+      arm64) musl_arch="aarch64-unknown-linux-musl"; linux_arch="aarch64-linux" ;; \
+      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
-    && curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-${target}.tar.gz" \
-        | tar -xz --strip-components=1 -C /usr/local/bin "wasm-pack-v${WASM_PACK_VERSION}-${target}/wasm-pack"
-
-RUN arch="$(dpkg --print-architecture)" \
-    && case "${arch}" in \
-        amd64) target="x86_64-unknown-linux-musl" ;; \
-        arm64) target="aarch64-unknown-linux-musl" ;; \
-        *) echo "Unsupported: ${arch}" >&2; exit 1 ;; \
-    esac \
-    && curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-${target}.tar.gz" \
-        | tar -xz -C /usr/local/bin --strip-components=1 "wasm-bindgen-${WASM_BINDGEN_VERSION}-${target}/wasm-bindgen"
-
-RUN arch="$(dpkg --print-architecture)" \
-    && case "${arch}" in \
-        amd64) target="x86_64-linux" ;; \
-        arm64) target="aarch64-linux" ;; \
-        *) echo "Unsupported: ${arch}" >&2; exit 1 ;; \
-    esac \
-    && curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${target}.tar.gz" \
+    && curl -fsSL "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_${TARGETARCH}.tar.gz" \
+        | tar -xz -C /usr/local/bin task \
+    && curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-${musl_arch}.tar.gz" \
+        | tar -xz --strip-components=1 -C /usr/local/bin "wasm-pack-v${WASM_PACK_VERSION}-${musl_arch}/wasm-pack" \
+    && curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-${musl_arch}.tar.gz" \
+        | tar -xz -C /usr/local/bin --strip-components=1 "wasm-bindgen-${WASM_BINDGEN_VERSION}-${musl_arch}/wasm-bindgen" \
+    && curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${linux_arch}.tar.gz" \
         | tar -xz --strip-components=2 -C /usr/local/bin "binaryen-version_${BINARYEN_VERSION}/bin"
