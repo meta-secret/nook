@@ -4,7 +4,7 @@ Use this workflow for quality, CI, and deployment changes.
 
 1. Keep the Taskfile as the source of truth for build, lint, test, and check commands.
 2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for repo behavior.
-3. Build Docker images with Docker Buildx Bake through `docker-bake.hcl`.
+3. Build Docker images with Docker Buildx Bake through `docker-bake.hcl`. Do **not** use Docker named volumes in `docker run` — GH Actions does not persist them; Rust dep cache is image-baked (cargo-chef + entrypoint seeding). See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
 6. Preserve these gates unless the task explicitly changes them:

@@ -13,5 +13,12 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 ## 3. Toolchain & Runtime Specs
 - **Rust Version**: `1.96` (using bookworm Debian base).
 - **Bun Version**: `1.3.14`.
-- **Wasm Pack**: `0.15.0`.
+- **wasm-bindgen CLI**: `0.2.125` (pinned; matches `nook-wasm` crate dependency).
 - **Binaryen (wasm-opt)**: `122` (precompiled linux binaries to support reference types and externrefs).
+
+## 4. Docker & CI caching
+
+- **No Docker named volumes.** GitHub Actions runners do not retain volumes across jobs. `task` bind-mounts the repository only (`-v $ROOT:/workspace`).
+- **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps during `docker build`; CI pushes/pulls `builder-debug:cache` and `builder-wasm:cache` from GHCR.
+- **Entrypoint seeding.** Because the bind mount replaces `/workspace/target`, the toolchain entrypoint copies baked deps from `/opt/nook/target` when the workspace `target/` is empty.
+- **Within a CI job**, incremental `target/` artifacts persist on the runner filesystem through the bind mount until the job ends.

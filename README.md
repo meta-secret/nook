@@ -258,8 +258,10 @@ TypeScript diagnostics, ESLint, Prettier, Vitest, and production builds.
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to pre-compile
 crate dependencies into cacheable image layers (`builder-debug:cache` and
-`builder-wasm:cache` on GHCR). The `nook-cargo-target` Docker volume preserves the warmed
-`target/` directory across local `task` runs.
+`builder-wasm:cache` on GHCR). The toolchain image bakes `target/` at `/opt/nook/target`;
+the container entrypoint copies it into the bind-mounted workspace when `target/` is empty
+(fresh CI checkout). **Do not use Docker named volumes** — GitHub Actions does not persist
+them between jobs. See [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies in any `Cargo.toml`, regenerate and commit the chef
 recipe and lockfile:

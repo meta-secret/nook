@@ -57,12 +57,19 @@ RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path reci
 FROM builder-wasm AS toolchain
 
 COPY --from=chef-planner /workspace/Cargo.lock /opt/nook/Cargo.lock
+COPY --from=builder-wasm /workspace/target /opt/nook/target
 
 RUN printf '%s\n' \
     '#!/bin/sh' \
     'set -e' \
     'if [ ! -f /workspace/Cargo.lock ] && [ -f /opt/nook/Cargo.lock ]; then' \
     '  cp /opt/nook/Cargo.lock /workspace/Cargo.lock' \
+    'fi' \
+    'if [ ! -d /workspace/target/debug/deps ] || [ -z "$(ls -A /workspace/target/debug/deps 2>/dev/null)" ]; then' \
+    '  if [ -d /opt/nook/target ]; then' \
+    '    mkdir -p /workspace/target' \
+    '    cp -a /opt/nook/target/. /workspace/target/' \
+    '  fi' \
     'fi' \
     'exec "$@"' \
     > /usr/local/bin/nook-entrypoint.sh \

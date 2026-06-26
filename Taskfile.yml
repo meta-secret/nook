@@ -168,8 +168,6 @@ tasks:
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
         -v "{{.ROOT_DIR}}:/workspace"
-        -v nook-web-node-modules:/workspace/nook-web/node_modules
-        -v nook-cargo-target:/workspace/target
         -w /workspace
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
@@ -182,8 +180,6 @@ tasks:
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
         -v "{{.ROOT_DIR}}:/workspace"
-        -v nook-web-node-modules:/workspace/nook-web/node_modules
-        -v nook-cargo-target:/workspace/target
         -w /workspace
         {{.DOCKER_IMAGE}}
         sh -c "cd nook-web && bun install && task _web:dev"

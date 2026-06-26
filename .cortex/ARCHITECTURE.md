@@ -144,8 +144,22 @@ Domain logic changes **must** add or update Rust tests before merge.
 
 ## 7. The Engineering Harness
 
-All development tasks should run containerized via `Taskfile`:
+All development tasks run containerized via `Taskfile` (`docker run` with the repo bind-mounted at `/workspace`).
 
-- **Build Target:** `wasm32-unknown-unknown` via `wasm-pack` → `nook-web/src/lib/nook-wasm/`
-- **Optimization:** `wasm-opt` v122+ in production pipeline
-- **Verify:** `task check` (fmt, clippy, `cargo test`, svelte-check, eslint, vitest, vite build)
+### Docker cache model (no named volumes)
+
+GitHub Actions **does not persist Docker named volumes** between jobs or workflow runs. Nook therefore **must not** rely on volumes for `target/` or `node_modules` caching.
+
+| What | How it is cached |
+|------|------------------|
+| Rust crate dependencies | **cargo-chef** cooks deps into the toolchain image (`builder-debug:cache`, `builder-wasm:cache` on GHCR). Baked artifacts live at `/opt/nook/target` in the image. |
+| `target/` at runtime | Bind-mounting the repo hides image layers under `/workspace/target`. The **entrypoint** copies `/opt/nook/target` into the workspace when `target/debug/deps` is empty (fresh CI checkout). Within one CI job, later `docker run` invocations reuse the same host `target/` via the bind mount. |
+| `nook-web/node_modules` | Not volume-backed. `task setup` / `bun install` populates `nook-web/node_modules` on the mounted workspace (persists for the rest of that job on the runner disk). |
+| Application incremental builds | After seeding, only workspace crates (`nook-core`, `nook-wasm`) recompile when sources change. |
+
+Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (commit `recipe.json` and `Cargo.lock`).
+
+### Build & verify
+
+- **Wasm:** `task wasm:build` — workspace `cargo build` for `wasm32-unknown-unknown`, then `wasm-bindgen` + `wasm-opt` (not `wasm-pack`; it bypasses chef cache).
+- **Verify:** `task check` (fmt, clippy, `cargo test -p nook-core`, svelte-check, eslint, vitest, vite build).
