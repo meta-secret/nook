@@ -13,7 +13,7 @@ if [ ! -d /workspace/target/debug/deps ] || [ -z "$(ls -A /workspace/target/debu
 fi
 
 wasm_pkg=/workspace/nook-web/src/lib/nook-wasm
-if [ ! -f "$wasm_pkg/nook_wasm_bg.wasm ] && [ -d /opt/nook/nook-wasm-pkg ]; then
+if [ ! -f "$wasm_pkg/nook_wasm_bg.wasm" ] && [ -d /opt/nook/nook-wasm-pkg ]; then
   mkdir -p "$wasm_pkg"
   cp -a /opt/nook/nook-wasm-pkg/. "$wasm_pkg/"
 fi
