@@ -13,6 +13,10 @@ COPY Cargo.toml Cargo.toml
 COPY nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 COPY nook-core/src nook-core/src
+COPY nook-core/locales nook-core/locales
+COPY nook-core/tests nook-core/tests
+COPY nook-core/fixtures nook-core/fixtures
+COPY nook-core/examples nook-core/examples
 COPY nook-wasm/src nook-wasm/src
 COPY Cargo.lock* ./
 RUN if [ ! -f Cargo.lock ]; then cargo generate-lockfile; fi
@@ -48,6 +52,10 @@ COPY Cargo.toml Cargo.toml
 COPY nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 COPY nook-core/src nook-core/src
+COPY nook-core/locales nook-core/locales
+COPY nook-core/tests nook-core/tests
+COPY nook-core/fixtures nook-core/fixtures
+COPY nook-core/examples nook-core/examples
 COPY nook-wasm/src nook-wasm/src
 RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && cargo test -p nook-core --no-run \
