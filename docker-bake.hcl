@@ -21,8 +21,13 @@ target "toolchain" {
     "${TOOLCHAIN_REGISTRY}:latest",
   ] : [DOCKER_IMAGE]
   output = ["type=docker"]
+  // :latest is the runnable image; :buildcache holds intermediate layers (cargo chef cook, etc.).
   cache-from = TOOLCHAIN_REGISTRY != "" ? [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
     "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
+  ] : []
+  cache-to = TOOLCHAIN_REGISTRY != "" ? [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
   ] : []
 }
 
