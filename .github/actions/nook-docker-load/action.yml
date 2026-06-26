@@ -1,0 +1,19 @@
+name: Nook Docker load
+description: Load the toolchain image saved by the toolchain job (no GHCR pull).
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Task
+      uses: go-task/setup-task@v2
+
+    - name: Restore toolchain image
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/nook-toolchain.tar
+        key: nook-toolchain-${{ github.run_id }}
+        fail-on-cache-miss: true
+
+    - name: Load into Docker
+      shell: bash
+      run: docker load -i "${RUNNER_TEMP}/nook-toolchain.tar"

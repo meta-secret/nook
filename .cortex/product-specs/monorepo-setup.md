@@ -25,5 +25,5 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty. Web deps link from `/opt/nook/bun-install-cache` via `bun install --frozen-lockfile` (never copy `node_modules` — breaks rolldown natives).
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
-- **PR CI parallelism.** `pr.yml` builds the toolchain once, pushes `:latest`, then runs `task ci:verify` and `task web:build` + deploy on separate runners in parallel.
+- **PR CI parallelism.** `pr.yml` builds the toolchain once, caches the image for the workflow run, then runs `task ci:verify` and `task web:build` + deploy in parallel (no per-job GHCR pull).
 - **Within a CI job**, incremental `target/` and `node_modules` artifacts persist on the runner filesystem through the bind mount until the job ends.

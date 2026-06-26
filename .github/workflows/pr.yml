@@ -1,4 +1,5 @@
-# Pull requests: toolchain build, then check + Cloudflare preview in parallel.
+# Pull requests: build toolchain once, then check + preview in parallel.
+# Sibling jobs load the image from Actions cache (no GHCR pull per job).
 #
 # Playwright e2e and GitHub Pages deploy run on main only (see main.yml).
 
@@ -93,10 +94,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Docker pull
-        uses: ./.github/actions/nook-docker-pull
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Docker load
+        uses: ./.github/actions/nook-docker-load
 
       - name: Verify
         run: task ci:verify
@@ -110,10 +109,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Docker pull
-        uses: ./.github/actions/nook-docker-pull
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Docker load
+        uses: ./.github/actions/nook-docker-load
 
       - name: Build web app for preview
         run: task web:build VITE_BASE=/

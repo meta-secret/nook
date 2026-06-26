@@ -1,5 +1,5 @@
 name: Nook Docker setup
-description: Pull GHCR toolchain image, Buildx login, and build linux/amd64 image once per workflow run.
+description: Pull GHCR toolchain image, Buildx login, build linux/amd64 image, push, and cache for sibling jobs.
 
 inputs:
   github-token:
@@ -39,3 +39,13 @@ runs:
       env:
         PUSH_TOOLCHAIN: "1"
         TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
+    - name: Save image for parallel jobs
+      shell: bash
+      run: docker save nook-build:local -o "${RUNNER_TEMP}/nook-toolchain.tar"
+
+    - name: Cache toolchain image
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/nook-toolchain.tar
+        key: nook-toolchain-${{ github.run_id }}
