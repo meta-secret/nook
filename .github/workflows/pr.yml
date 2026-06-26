@@ -1,5 +1,4 @@
-# Pull requests: build toolchain once, then check + preview in parallel.
-# Sibling jobs load the image from Actions cache (no GHCR pull per job).
+# Pull requests: one job — build toolchain once, verify ‖ web build in parallel containers, deploy preview.
 #
 # Playwright e2e and GitHub Pages deploy run on main only (see main.yml).
 
@@ -13,7 +12,6 @@ permissions:
   contents: read
   packages: write
   pull-requests: write
-  actions: write
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -67,8 +65,8 @@ jobs:
               ),
             );
 
-  toolchain:
-    name: Build toolchain
+  verify:
+    name: Verify and preview
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
@@ -85,35 +83,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  check:
-    name: Check
-    needs: toolchain
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker load
-        uses: ./.github/actions/nook-docker-load
-
-      - name: Verify
-        run: task ci:verify
-
-  preview:
-    name: Preview deploy
-    needs: toolchain
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker load
-        uses: ./.github/actions/nook-docker-load
-
-      - name: Build web app for preview
-        run: task web:build VITE_BASE=/
+      - name: Verify and build preview
+        run: task ci:pr VITE_BASE=/
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.2.0
