@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # Multi-stage Dockerfile: cargo-chef dependency cache + Nook toolchain.
-# See docker-bake.hcl for builder-*-cache targets and recipe regeneration.
+# See docker-bake.hcl — always linux/amd64; pull ghcr.io/.../toolchain:latest before build.
 
 ARG RUST_VERSION=1.96
 
@@ -37,7 +37,7 @@ ENV CARGO_INCREMENTAL=0
 ENV CARGO_HTTP_MULTIPLEXING=false
 ENV CARGO_NET_RETRY=10
 
-# --- Builder debug: pre-compiled debug/test deps (pushed as builder-debug:cache in CI) ---
+# --- Builder debug: pre-compiled debug/all-target deps + workspace warm-up ---
 FROM builder-base AS builder-debug
 
 COPY recipe.json .
@@ -102,7 +102,6 @@ ARG TASK_VERSION=3.42.1
 ARG WASM_PACK_VERSION=0.15.0
 ARG WASM_BINDGEN_VERSION=0.2.125
 ARG BINARYEN_VERSION=122
-ARG TARGETARCH
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
@@ -114,18 +113,14 @@ RUN apt-get update \
 
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 
-RUN case "${TARGETARCH}" in \
-      amd64) musl_arch="x86_64-unknown-linux-musl"; linux_arch="x86_64-linux" ;; \
-      arm64) musl_arch="aarch64-unknown-linux-musl"; linux_arch="aarch64-linux" ;; \
-      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-    && curl -fsSL "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_${TARGETARCH}.tar.gz" \
+# Toolchain is always linux/amd64 (Mac dev runs the image via --platform linux/amd64).
+RUN curl -fsSL "https://github.com/go-task/task/releases/download/v${TASK_VERSION}/task_linux_amd64.tar.gz" \
         | tar -xz -C /usr/local/bin task \
-    && curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-${musl_arch}.tar.gz" \
-        | tar -xz --strip-components=1 -C /usr/local/bin "wasm-pack-v${WASM_PACK_VERSION}-${musl_arch}/wasm-pack" \
-    && curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-${musl_arch}.tar.gz" \
-        | tar -xz -C /usr/local/bin --strip-components=1 "wasm-bindgen-${WASM_BINDGEN_VERSION}-${musl_arch}/wasm-bindgen" \
-    && curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${linux_arch}.tar.gz" \
+    && curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+        | tar -xz --strip-components=1 -C /usr/local/bin "wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl/wasm-pack" \
+    && curl -fsSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+        | tar -xz -C /usr/local/bin --strip-components=1 "wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl/wasm-bindgen" \
+    && curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
         | tar -xz --strip-components=2 -C /usr/local/bin "binaryen-version_${BINARYEN_VERSION}/bin"
 
 COPY nook-web/package.json nook-web/bun.lock ./nook-web/

@@ -152,12 +152,12 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 
 | What | How it is cached |
 |------|------------------|
-| Rust crate dependencies | **cargo-chef** cooks deps into the toolchain image (`builder-debug:cache`, `builder-wasm:cache` on GHCR). Baked artifacts live at `/opt/nook/target` in the image. |
+| Toolchain image | Single **`ghcr.io/<owner>/<repo>/toolchain:latest`** image (always **linux/amd64**). `task setup` pulls it; `docker buildx bake` reuses registry layers and only rebuilds invalidated layers. CI pushes after a green check/e2e. Mac dev runs via `docker run --platform linux/amd64`. |
+| Rust crate dependencies | **cargo-chef** + clippy/test warm-up during image build. Baked artifacts live at `/opt/nook/target`. |
 | `target/` at runtime | Bind-mounting the repo hides image layers under `/workspace/target`. The **entrypoint** copies `/opt/nook/target` into the workspace when `target/debug/deps` is empty (fresh CI checkout). Within one CI job, later `docker run` invocations reuse the same host `target/` via the bind mount. |
-| `nook-web/node_modules` | `bun install --frozen-lockfile` during image build; baked at `/opt/nook/nook-web-node_modules`. Entrypoint copies into the workspace when `node_modules` is empty. Rebuild the image after `package.json` / `bun.lock` changes (`task docker:build`). |
-| Playwright Chromium | `playwright install --with-deps chromium` during image build at `PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`. E2e tasks skip browser download in CI. |
-| CI Docker builds | **One `task setup` per workflow run** (`pr.yml` and `main.yml` use a single job). Pull `CACHE_REGISTRY:latest` before build when available. |
-| Application incremental builds | After seeding, only workspace crates (`nook-core`, `nook-wasm`) recompile when sources change. |
+| `nook-web/node_modules` | `bun install --frozen-lockfile` during image build; baked at `/opt/nook/nook-web-node_modules`. Entrypoint copies then relinks natives with `bun install --frozen-lockfile`. |
+| Playwright Chromium | `playwright install --with-deps chromium` during image build at `PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`. |
+| CI Docker builds | **One `task setup` per workflow run**. Pull `toolchain:latest`, build only changed layers, push after green verify. |
 
 Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (commit `recipe.json` and `Cargo.lock`).
 

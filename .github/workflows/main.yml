@@ -55,6 +55,12 @@ jobs:
           NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
 
+      - name: Push toolchain image
+        run: task docker:push
+        env:
+          PUSH_TOOLCHAIN: "1"
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
   deploy:
     name: Deploy GitHub Pages
     needs: ci

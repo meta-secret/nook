@@ -87,6 +87,12 @@ jobs:
       - name: Check
         run: task check
 
+      - name: Push toolchain image
+        run: task docker:push
+        env:
+          PUSH_TOOLCHAIN: "1"
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
       - name: Build web app for preview
         run: task web:build VITE_BASE=/
 

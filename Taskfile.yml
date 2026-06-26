@@ -3,6 +3,7 @@ version: '3'
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
+  DOCKER_PLATFORM: linux/amd64
   VITE_BASE: '{{default "/" .VITE_BASE}}'
 
 tasks:
@@ -12,7 +13,7 @@ tasks:
       - task: build
 
   setup:
-    desc: Pull cached toolchain image (when available) and build if needed.
+    desc: Pull remote toolchain image (when TOOLCHAIN_REGISTRY is set) and build if needed.
     cmds:
       - task: docker:pull
       - task: docker:build
@@ -21,12 +22,12 @@ tasks:
     internal: true
     env:
       DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
-      CACHE_REGISTRY: '{{.CACHE_REGISTRY}}'
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
     cmds:
       - >-
-        sh -c 'test -n "${CACHE_REGISTRY:-}" || exit 0;
-        {{.DOCKER}} pull "${CACHE_REGISTRY}:latest"
-        && {{.DOCKER}} tag "${CACHE_REGISTRY}:latest" "{{.DOCKER_IMAGE}}"
+        sh -c 'test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        {{.DOCKER}} pull --platform {{.DOCKER_PLATFORM}} "${TOOLCHAIN_REGISTRY}:latest"
+        && {{.DOCKER}} tag "${TOOLCHAIN_REGISTRY}:latest" "{{.DOCKER_IMAGE}}"
         || true'
 
   build:
@@ -149,15 +150,21 @@ tasks:
       - task: docker:web:dev
 
   docker:build:
-    desc: Build the Docker toolchain image with pre-cached Rust deps (Buildx Bake).
+    desc: Build the linux/amd64 toolchain image (reuses pulled registry layers when available).
     env:
       DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
-      CACHE_REGISTRY: '{{.CACHE_REGISTRY}}'
-      PUSH_CACHE: '{{.PUSH_CACHE}}'
-      CACHE_FROM: '{{.CACHE_FROM}}'
-      CACHE_TO: '{{.CACHE_TO}}'
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
     cmds:
-      - '{{.DOCKER}} buildx bake -f docker-bake.hcl setup'
+      - '{{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+
+  docker:push:
+    desc: Push nook-build:local to TOOLCHAIN_REGISTRY (CI after green check, or local with PUSH_TOOLCHAIN=1).
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+    cmds:
+      - >-
+        sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        {{.DOCKER}} push "${TOOLCHAIN_REGISTRY}:latest"'
 
   docker:generate-recipe:
     desc: Regenerate recipe.json after Cargo.toml dependency changes (commit the result).
@@ -171,6 +178,7 @@ tasks:
     cmds:
       - >-
         {{.DOCKER}} run --rm
+        --platform {{.DOCKER_PLATFORM}}
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
         -e NOOK_GITHUB_PAT
@@ -189,6 +197,7 @@ tasks:
     cmds:
       - >-
         {{.DOCKER}} run --rm
+        --platform {{.DOCKER_PLATFORM}}
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
         -v "{{.ROOT_DIR}}:/workspace"
