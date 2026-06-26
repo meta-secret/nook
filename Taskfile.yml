@@ -19,10 +19,34 @@ tasks:
       - task: docker:build
 
   ci:pr:
-    desc: PR CI — verify and web build in parallel (one Docker container each).
+    desc: PR CI — prepare once, then verify and web build in parallel (separate containers).
+    cmds:
+      - task: ci:pr:prepare
+      - task: ci:pr:parallel
+
+  ci:pr:prepare:
+    desc: Format check and wasm build in one container (shared artifacts for parallel tracks).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _ci:pr:prepare }
+
+  ci:pr:parallel:
+    desc: Lint, test, and production web build in parallel after ci:pr:prepare.
     deps:
-      - ci:verify
-      - web:build
+      - ci:verify:parallel
+      - web:build:parallel
+
+  ci:verify:parallel:
+    desc: Lint and test in Docker without rebuilding wasm.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _verify:parallel }
+
+  web:build:parallel:
+    desc: Production web build in Docker without rebuilding wasm.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:build:parallel }
 
   ci:verify:
     desc: Format, lint, and test in Docker (no web production build).
@@ -251,6 +275,31 @@ tasks:
       - task: _lint
       - task: _test
 
+  _ci:pr:prepare:
+    desc: Shared PR prep — format and wasm before parallel verify/build containers.
+    cmds:
+      - task: _format:check
+      - task: _wasm:build
+
+  _verify:parallel:
+    desc: Lint and test when wasm is already built (ci:pr parallel track).
+    cmds:
+      - task: _lint:parallel
+      - task: _test:parallel
+
+  _lint:parallel:
+    desc: Rust and web linters without rebuilding wasm.
+    cmds:
+      - task: _rust:lint
+      - task: _web:lint:parallel
+
+  _test:parallel:
+    desc: Rust and web tests without rebuilding wasm.
+    cmds:
+      - task: _rust:test
+      - task: _web:check:parallel
+      - task: _web:test:parallel
+
   _format:
     desc: Format all projects.
     cmds:
@@ -297,6 +346,28 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
     cmds:
       - cd nook-web && bun run build
+
+  _web:build:parallel:
+    desc: Build the Svelte app when wasm is already built (ci:pr parallel track).
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - cd nook-web && bun run build
+
+  _web:check:parallel:
+    desc: Run Svelte and TypeScript checks when wasm is already built.
+    cmds:
+      - cd nook-web && bun run check
+
+  _web:test:parallel:
+    desc: Run web unit tests when wasm is already built.
+    cmds:
+      - cd nook-web && bun run test
+
+  _web:lint:parallel:
+    desc: Lint the web app when wasm is already built.
+    cmds:
+      - cd nook-web && bun run lint
 
   _web:check:
     desc: Run Svelte and TypeScript checks.

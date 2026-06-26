@@ -19,7 +19,7 @@ Use this workflow for quality, CI, and deployment changes.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
-10. **CI policy:** `.github/workflows/pr.yml` — one job: build toolchain once, `task ci:pr` (`ci:verify` and `web:build` in parallel, each in its own container), then Cloudflare preview deploy. `.github/workflows/main.yml` — one job (`ci`): `task check`, web build, e2e; then GitHub Pages deploy.
+10. **CI policy:** `.github/workflows/pr.yml` — one job: build toolchain once, `task ci:pr` (prepare format+wasm, then `ci:verify:parallel` and `web:build:parallel` each in its own container), then Cloudflare preview deploy. `.github/workflows/main.yml` — one job (`ci`): `task check`, web build, e2e; then GitHub Pages deploy.
 11. Verify locally with `task check`.
 12. **Docker:** Never kill the Docker daemon (`killall docker`, `pkill docker`, etc.). Stop only specific containers (`docker stop <id>`). See [rules.md §5 — Docker daemon](rules.md#docker-daemon--never-kill-it).
 13. **Local web dev:** `task web:install` then `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.
