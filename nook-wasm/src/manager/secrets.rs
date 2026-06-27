@@ -36,7 +36,7 @@ impl NookVaultManager {
         .map_err(Into::into)
     }
 
-    /// Prefixed secret item id (`pass_{token}`).
+    /// Prefixed secret item id (`secret_{token}`).
     pub fn generate_secret_id(&self) -> Result<String, JsError> {
         nook_core::generate_secret_id()
             .map_err(NookError::Database)

@@ -91,7 +91,7 @@ store_id: store_SMypl8K0w9Y
 unlock:
   type: keys
 secrets:
-  - id: pass_k9Qx2mNp4Rt
+  - id: secret_k9Qx2mNp4Rt
     type: api-key
     data: |
       -----BEGIN AGE ENCRYPTED FILE-----
@@ -100,7 +100,7 @@ secrets:
 ```
 
 - **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../design-docs/secret-store-identity.md).
-- **`id`:** Secret item id — generated items use `pass_{token}`; legacy human labels still load.
+- **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Legacy JSONL on-disk format** is still supported on load (`from_stored_auto` / format detection). New saves always use YAML.
 

@@ -1,9 +1,9 @@
-//! Prefixed vault identifiers (`store_`, `pass_`, `key_`) for typed on-disk ids.
+//! Prefixed vault identifiers (`store_`, `secret_`, `key_`) for typed on-disk ids.
 
 use crate::{generate_id, is_device_id};
 
 pub const STORE_ID_PREFIX: &str = "store_";
-pub const SECRET_ID_PREFIX: &str = "pass_";
+pub const SECRET_ID_PREFIX: &str = "secret_";
 pub const AUTH_KEY_ID_PREFIX: &str = "key_";
 
 const AUTH_DIGEST_LEN: usize = 64;
@@ -98,13 +98,19 @@ pub fn validate_secret_id(id: &str) -> Result<String, String> {
         }
         return Ok(format!("{SECRET_ID_PREFIX}{token}"));
     }
+    // Brief rollout alias — normalize to `secret_` on read.
+    if let Some(token) = trimmed.strip_prefix("pass_") {
+        if is_compact_token(token) {
+            return format_secret_id(token);
+        }
+    }
     if is_device_id(trimmed) || is_auth_key_id(trimmed) || trimmed.starts_with(STORE_ID_PREFIX) {
         return Err("errors.validation.secret_id_reserved".to_owned());
     }
     Ok(trimmed.to_owned())
 }
 
-/// On write: legacy labels stay as-is; bare compact tokens gain `pass_`.
+/// On write: legacy labels stay as-is; bare compact tokens gain `secret_`.
 pub fn normalize_secret_id_for_write(id: &str) -> Result<String, String> {
     let trimmed = id.trim();
     if trimmed.starts_with(SECRET_ID_PREFIX) {

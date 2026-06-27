@@ -12,9 +12,9 @@ export function generateId(): string {
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-/** Prefixed secret-store item id (`pass_{token}`). */
+/** Prefixed secret-store item id (`secret_{token}`). */
 export function generateSecretId(): string {
-  return `pass_${generateId()}`
+  return `secret_${generateId()}`
 }
 
 export type SecretRecord = {

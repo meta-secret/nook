@@ -266,8 +266,8 @@ mod tests {
         assert_eq!(validate_store_id("SMypl8K0w9Y").unwrap(), "store_SMypl8K0w9Y");
         assert!(validate_store_id("short").is_err());
         assert_eq!(
-            validate_secret_id("pass_SMypl8K0w9Y").unwrap(),
-            "pass_SMypl8K0w9Y"
+            validate_secret_id("secret_SMypl8K0w9Y").unwrap(),
+            "secret_SMypl8K0w9Y"
         );
     }
 

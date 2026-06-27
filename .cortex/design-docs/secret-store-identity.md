@@ -26,7 +26,7 @@ Nook uses **typed string prefixes** so ids are self-describing in YAML and logs:
 | Prefix | YAML field | Meaning | Example |
 |--------|------------|---------|---------|
 | `store_` | `store_id` | Logical secret store (whole vault database) | `store_SMypl8K0w9Y` |
-| `pass_` | `secrets[].id` | User secret item (generated ids) | `pass_k9Qx2mNp4Rt` |
+| `secret_` | `secrets[].id` | User secret item (generated ids) | `secret_k9Qx2mNp4Rt` |
 | `key_` | `auth[].pk_id`, `members[].pk_id` | Device auth key (SHA-256 of X25519 public key) | `key_1f9ed892…2609439` |
 
 Random suffix tokens use `generate_id()` — 11 chars, base64url. Auth keys append the full 64-hex digest after `key_`.
@@ -36,7 +36,7 @@ store_id: store_SMypl8K0w9Y
 unlock:
   type: keys
 secrets:
-  - id: pass_k9Qx2mNp4Rt
+  - id: secret_k9Qx2mNp4Rt
     type: api-key
     data: |
       -----BEGIN AGE ENCRYPTED FILE-----
@@ -59,7 +59,7 @@ auth:
 **Rules**
 
 1. **Genesis:** `store_{token}` assigned on first persist (`generate_store_id()`).
-2. **New secrets:** UI/WASM use `pass_{token}` via `generate_secret_id()`; e2e may still use human labels.
+2. **New secrets:** UI/WASM use `secret_{token}` via `generate_secret_id()`; e2e may still use human labels.
 3. **Auth rows:** `pk_id` is always `key_{sha256_hex}` on write.
 4. **Replication (future):** same `store_id` on every provider replica; mismatch → hard error.
 5. **Provider binding:** `StorageProvider.storeId` mirrors vault `store_id` after connect.
@@ -96,7 +96,7 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 
 | Piece | Status |
 |-------|--------|
-| Prefixed `store_id` / `pass_` / `key_` in vault YAML | Implemented |
+| Prefixed `store_id` / `secret_` / `key_` in vault YAML | Implemented |
 | `StorageProvider.storeId` | Implemented |
 | Legacy unprefixed read + normalize on write | Implemented |
 | Replication / mismatch guards | Planned |
