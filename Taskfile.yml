@@ -357,13 +357,24 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
-        bunx wrangler@4 pages project create nook --production-branch=main 2>/dev/null || true;
+        if [ ! -d nook-web/dist ]; then
+          echo "error: nook-web/dist not found — run the web build before deploy" >&2;
+          exit 1;
+        fi;
+        bunx wrangler@4 pages project create nook --production-branch=main >/dev/null 2>&1 || true;
+        set +e;
         deploy_output="$(
           bunx wrangler@4 pages deploy nook-web/dist \
             --project-name=nook \
-            --branch="${CF_PAGES_BRANCH}" 2>&1
+            --branch="${CF_PAGES_BRANCH}" \
+            --commit-dirty=true 2>&1
         )";
+        deploy_status=$?;
+        set -e;
         echo "$deploy_output";
+        if [ "$deploy_status" -ne 0 ]; then
+          exit "$deploy_status";
+        fi;
         deployment_url="$(
           echo "$deploy_output" \
             | grep -oE "Deployment alias URL: https://[^ ]+" \
@@ -371,7 +382,14 @@ tasks:
             | tail -1
         )";
         if [ -z "$deployment_url" ]; then
-          echo "Could not parse Cloudflare deployment alias URL" >&2;
+          deployment_url="$(
+            echo "$deploy_output" \
+              | grep -oE "https://[a-zA-Z0-9.-]+\.pages\.dev[^ ]*" \
+              | tail -1
+          )";
+        fi;
+        if [ -z "$deployment_url" ]; then
+          echo "Could not parse Cloudflare deployment URL from wrangler output" >&2;
           exit 1;
         fi;
         echo "$deployment_url" > .cloudflare-preview-url'
