@@ -39,6 +39,10 @@ COPY --from=chef-planner /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/ca
 
 WORKDIR /workspace
 
+# Outside /workspace so the repo bind mount never hides compiled artifacts.
+# Set before any cargo/chef invocation so fingerprints stay on this path.
+ENV CARGO_TARGET_DIR=/opt/nook/target
+
 # Registry cache-to exports image layers only — not BuildKit cache mounts.
 ENV CARGO_INCREMENTAL=0
 # crates.io HTTP/2 flakes in CI; disable multiplexing and retry downloads.
@@ -83,10 +87,6 @@ RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D wa
 FROM builder-wasm AS toolchain
 
 COPY --from=chef-planner /workspace/Cargo.lock /opt/nook/Cargo.lock
-# Bake at /workspace/target (where builder compiled). /opt/nook/target is a seed copy for
-# docker run: the repo bind mount hides /workspace/target, so entrypoint restores from opt.
-COPY --from=builder-wasm /workspace/target /opt/nook/target
-COPY --from=builder-wasm /workspace/target /workspace/target
 
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1

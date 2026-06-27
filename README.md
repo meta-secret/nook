@@ -266,8 +266,7 @@ ghcr.io/<owner>/<repo>/toolchain:latest
 
 `task setup` pulls it (when `TOOLCHAIN_REGISTRY` is set), rebuilds only invalidated layers,
 and CI pushes after a green check. All `docker run` invocations use `--platform linux/amd64`
-(Mac included). The image bakes `target/` at `/opt/nook/target`; the entrypoint seeds the
-bind-mounted workspace when empty. **Do not use Docker named volumes** — GitHub Actions does
+(Mac included). Rust artifacts live at `/opt/nook/target` in the image (`CARGO_TARGET_DIR`), outside the repo bind mount — no runtime copy. **Do not use Docker named volumes** — GitHub Actions does
 not persist them between jobs. See [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 Optional local pull (after `docker login ghcr.io`):

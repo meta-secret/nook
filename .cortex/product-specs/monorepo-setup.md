@@ -22,8 +22,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Repo bind mount + per-container `node_modules`.** `docker run` bind-mounts the repo at `/workspace` and overlays an anonymous volume at `nook-web/node_modules` so parallel containers each run `bun install` independently (packages link from `/opt/nook/bun-install-cache` in the image).
 - **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). `task setup` pulls it; build reuses registry layers; CI pushes after green verify. Mac uses `--platform linux/amd64`.
 - **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps; clippy/test/build warm-up runs during `docker build`.
-- **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty.
+- **Entrypoint seeding.** Only wasm pkg and `Cargo.lock` when missing; Rust `target/` stays at `/opt/nook/target` in the image.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
 - **PR CI parallelism.** `pr.yml` builds the toolchain once, then `task ci:pr:publish` runs `ci:pr` and `docker:push:ci` in parallel. `ci:pr` prepares format+wasm (wasm skipped when image-seeded), then verify and web build in separate containers.
-- **Within a CI job**, incremental `target/` and wasm build output persist on the runner filesystem through the bind mount until the job ends.
+- **Within a CI job**, wasm build output under `nook-web/src/lib/nook-wasm` persists on the runner via the bind mount; Rust artifacts stay in each container's `/opt/nook/target` from the image.
