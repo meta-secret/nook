@@ -33,6 +33,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Standalone CLIs first (version bumps only). cargo-chef last — only needed for Rust cache stages.
+# Playwright test runner spawns Node workers; Bun alone hangs silently with no CLI output.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/bin "v${TASK_VERSION}"
 

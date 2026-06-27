@@ -638,12 +638,18 @@ tasks:
   _web:test:e2e:local:parallel:
     desc: Local Playwright project when wasm is already built (ci:main parallel track).
     cmds:
+      - >-
+        sh -c 'command -v node >/dev/null ||
+        { echo "error: Playwright requires Node.js in the toolchain image (rebuild: NOOK_ENV=ci task setup)" >&2; exit 1; }'
       - echo "==> Playwright local project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
       - cd nook-web && bun run test:e2e:local
 
   _web:test:e2e:github:parallel:
     desc: GitHub Playwright project when wasm is already built (ci:main parallel track).
     cmds:
+      - >-
+        sh -c 'command -v node >/dev/null ||
+        { echo "error: Playwright requires Node.js in the toolchain image (rebuild: NOOK_ENV=ci task setup)" >&2; exit 1; }'
       - echo "==> Playwright GitHub project (CI=${CI:-}, repo=${NOOK_GITHUB_E2E_REPO:-unset})"
       - cd nook-web && bun run test:e2e:github
       - defer: cd nook-web && bun run test:e2e:cleanup
