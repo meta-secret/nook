@@ -1,6 +1,8 @@
 # Pull requests: one job — build toolchain once, verify ‖ web build in parallel containers, deploy preview.
 #
 # Playwright e2e and GitHub Pages deploy run on main only (see main.yml).
+#
+# Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
 
@@ -12,88 +14,17 @@ permissions:
   contents: read
   packages: write
   pull-requests: write
-  actions: write
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  cancel-on-close:
-    name: Cancel PR runs on close
-    if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cancel in-progress and queued runs for this branch
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const prNumber = context.payload.pull_request.number;
-            const branch = context.payload.pull_request.head.ref;
-            const statuses = ['in_progress', 'queued', 'waiting', 'pending'];
-            const runIds = new Set();
-
-            const considerRun = (run) => {
-              if (run.id === context.runId) return;
-              const matchesPr = run.pull_requests?.some(
-                (pr) => pr.number === prNumber,
-              );
-              if (matchesPr || run.head_branch === branch) {
-                runIds.add(run.id);
-              }
-            };
-
-            for (const status of statuses) {
-              let page = 1;
-              while (true) {
-                const { data } = await github.rest.actions.listWorkflowRuns({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  workflow_id: 'pr.yml',
-                  branch,
-                  status,
-                  per_page: 100,
-                  page,
-                });
-
-                for (const run of data.workflow_runs) {
-                  considerRun(run);
-                }
-
-                if (data.workflow_runs.length < 100) break;
-                page += 1;
-              }
-            }
-
-            core.info(
-              `Cancelling ${runIds.size} PR workflow run(s) for #${prNumber}`,
-            );
-
-            for (const run_id of runIds) {
-              try {
-                await github.rest.actions.cancelWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id,
-                });
-                core.info(`Cancelled workflow run ${run_id}`);
-              } catch (error) {
-                core.warning(
-                  `Failed to cancel workflow run ${run_id}: ${error.message}`,
-                );
-              }
-            }
-
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Cancel superseded workflow runs
-        uses: styfle/cancel-workflow-action@0.13.1
-        with:
-          access_token: ${{ github.token }}
-
       - name: Checkout
         uses: actions/checkout@v7
 
