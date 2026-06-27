@@ -35,6 +35,9 @@ target "toolchain" {
 // Do not use `docker push` after `--load`; the daemon re-uploads layers buildkit already has in GHCR.
 target "toolchain-push" {
   inherits = ["toolchain"]
+  tags = TOOLCHAIN_REGISTRY != "" ? [
+    "${TOOLCHAIN_REGISTRY}:latest",
+  ] : []
   output   = ["type=registry"]
   cache-to = []
 }
