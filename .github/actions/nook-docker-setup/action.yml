@@ -1,5 +1,5 @@
 name: Nook Docker setup
-description: Pull GHCR toolchain image, Buildx login, and build linux/amd64 image.
+description: Task, Buildx, and GHCR login (toolchain build runs inside task check / ci:pr / web:dev via setup).
 
 inputs:
   github-token:
@@ -26,9 +26,4 @@ runs:
       shell: bash
       run: |
         echo "TOOLCHAIN_REGISTRY=$(echo "ghcr.io/${{ github.repository }}/toolchain" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
-    - name: Build toolchain image
-      shell: bash
-      run: task setup
-      env:
-        TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+        echo "NOOK_ENV=ci" >> $GITHUB_ENV

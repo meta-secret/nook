@@ -222,11 +222,12 @@ The Taskfile is the command surface for the repository; Rust, Bun, wasm-pack, an
 other build tools run inside the project container.
 
 ```sh
-task setup
 task web:dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173).
+
+`setup` runs automatically before docker tasks. **Dev** (`NOOK_ENV=dev`, default): skips when `nook-build:local` already exists. **CI** sets `NOOK_ENV=ci`: always builds with GHCR `:buildcache`.
 
 To use GitHub storage, connect a personal access token in the UI. Nook creates the
 selected repository as private when it does not already exist and stores the
@@ -258,22 +259,21 @@ TypeScript diagnostics, ESLint, Prettier, Vitest, and production builds.
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to pre-compile
 crate dependencies and warm clippy/tests into the **linux/amd64** toolchain image. CI and dev
-machines share one remote image:
+machines share remote cache and image tags:
 
 ```text
-ghcr.io/<owner>/<repo>/toolchain:latest
+ghcr.io/<owner>/<repo>/toolchain:latest       # runnable toolbox (docker run)
+ghcr.io/<owner>/<repo>/toolchain:buildcache   # buildx layer cache (cargo chef cook, etc.)
 ```
 
-`task setup` pulls it (when `TOOLCHAIN_REGISTRY` is set), rebuilds only invalidated layers,
-and CI pushes after a green check. All `docker run` invocations use `--platform linux/amd64`
+`task check`, `task web:dev`, and CI use the same tasks. **`NOOK_ENV=dev`** (default) skips `setup` when the local toolchain image exists; **`NOOK_ENV=ci`** (set in CI) always runs `docker buildx bake` with GHCR `:buildcache`. Force a local rebuild: `NOOK_ENV=ci task web:dev`. All `docker run` invocations use `--platform linux/amd64`
 (Mac included). Rust artifacts live at `/opt/nook/target` in the image (`CARGO_TARGET_DIR`), outside the repo bind mount — no runtime copy. **Do not use Docker named volumes** — GitHub Actions does
 not persist them between jobs. See [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
-Optional local pull (after `docker login ghcr.io`):
+Build with GHCR cache (optional — defaults to `ghcr.io/meta-secret/nook/toolchain`; run `docker login ghcr.io` once):
 
 ```sh
-export TOOLCHAIN_REGISTRY=ghcr.io/meta-secret/nook/toolchain
-task setup
+task check   # or task web:dev
 ```
 
 Push your image after local verify (`PUSH_TOOLCHAIN=1`):

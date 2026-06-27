@@ -4,6 +4,9 @@ vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
   DOCKER_PLATFORM: linux/amd64
+  TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
+  # dev (default): skip setup when nook-build:local exists. ci: always build (set in CI via GITHUB_ENV).
+  NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
 
 tasks:
@@ -13,13 +16,24 @@ tasks:
       - task: build
 
   setup:
-    desc: Pull remote toolchain image (when TOOLCHAIN_REGISTRY is set) and build if needed.
+    desc: Build linux/amd64 toolchain (dev skips when image exists; ci always builds with GHCR cache).
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      NOOK_ENV: '{{.NOOK_ENV}}'
     cmds:
-      - task: docker:pull
-      - task: docker:build
+      - >-
+        sh -c 'IMAGE="{{.DOCKER_IMAGE}}"; REG="{{.TOOLCHAIN_REGISTRY}}"; ENV="{{.NOOK_ENV}}";
+        if [ "$ENV" = "dev" ] && {{.DOCKER}} image inspect "$IMAGE" >/dev/null 2>&1; then
+          echo "==> Toolchain image present; skipping setup (NOOK_ENV=dev).";
+          exit 0;
+        fi;
+        echo "==> Building toolchain (NOOK_ENV=$ENV) ...";
+        TOOLCHAIN_REGISTRY="$REG" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
 
   ci:pr:
     desc: PR CI — prepare once, then verify and web build in parallel (separate containers).
+    deps:
+      - setup
     cmds:
       - task: ci:pr:prepare
       - task: ci:pr:parallel
@@ -63,148 +77,175 @@ tasks:
 
   ci:verify:
     desc: Format, lint, and test in Docker (no web production build).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _verify }
 
-  docker:pull:
-    internal: true
-    env:
-      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
-    cmds:
-      - >-
-        sh -c 'test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        {{.DOCKER}} pull --platform {{.DOCKER_PLATFORM}} "${TOOLCHAIN_REGISTRY}:latest"
-        && {{.DOCKER}} tag "${TOOLCHAIN_REGISTRY}:latest" "{{.DOCKER_IMAGE}}"
-        || true'
-
   build:
     desc: Build Rust crates, wasm package, and web app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _build }
 
   test:
     desc: Run all test suites in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _test }
 
   lint:
     desc: Run all linters in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _lint }
 
   check:
     desc: Run formatting, linting, tests, and builds in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _check }
 
   format:
     desc: Format all projects in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _format }
 
   format:check:
     desc: Check formatting for all projects in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _format:check }
 
   rust:build:
     desc: Build the Rust workspace in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _rust:build }
 
   rust:test:
     desc: Test the Rust workspace in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _rust:test }
 
   rust:lint:
     desc: Lint the Rust workspace in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _rust:lint }
 
   wasm:build:
     desc: Build nook-wasm for the web app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _wasm:build }
 
   web:install:
     desc: Install web dependencies in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:install }
 
   web:build:
     desc: Build the Svelte app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:build }
 
   web:check:
     desc: Run Svelte and TypeScript checks in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:check }
 
   web:test:
     desc: Run web unit tests in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test }
 
   web:test:e2e:
     desc: Run Playwright e2e tests in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:local:
     desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e:local }
 
   web:test:e2e:github:
     desc: Run GitHub vault Playwright e2e in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e:github }
 
   web:test:e2e:multi-device:
     desc: Run multi-device Playwright e2e in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e:multi-device }
 
   web:lint:
     desc: Lint the web app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:lint }
 
   web:dev:
     desc: Start the Svelte dev server in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:web:dev
 
   docker:build:
-    desc: Build the linux/amd64 toolchain image (reuses pulled registry layers when available).
-    env:
-      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+    desc: Alias for setup (build linux/amd64 toolchain image).
     cmds:
-      - '{{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+      - task: setup
 
   docker:push:
     desc: Push nook-build:local to TOOLCHAIN_REGISTRY (CI after green check, or local with PUSH_TOOLCHAIN=1).

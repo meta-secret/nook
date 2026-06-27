@@ -20,7 +20,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 ## 4. Docker & CI caching
 
 - **Repo bind mount + per-container `node_modules`.** `docker run` bind-mounts the repo at `/workspace` and overlays an anonymous volume at `nook-web/node_modules` so parallel containers each run `bun install` independently (packages link from `/opt/nook/bun-install-cache` in the image).
-- **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). `task setup` pulls it; build reuses registry layers; CI pushes after green verify. Mac uses `--platform linux/amd64`.
+- **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). **`NOOK_ENV=dev`** (default): skip setup when local image exists. **`NOOK_ENV=ci`**: always build with GHCR cache. Mac uses `--platform linux/amd64`.
 - **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps; clippy/test/build warm-up runs during `docker build`.
 - **Entrypoint seeding.** Only wasm pkg and `Cargo.lock` when missing; Rust `target/` stays at `/opt/nook/target` in the image.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
