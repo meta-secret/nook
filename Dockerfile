@@ -77,6 +77,7 @@ RUN cargo chef cook --all-targets --recipe-path recipe.json \
 COPY Cargo.toml Cargo.lock ./
 COPY nook-core nook-core
 COPY nook-wasm nook-wasm
+COPY .config .config
 RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && cargo nextest run --no-run -p nook-core --profile ci \
     && cargo build -p nook-core
