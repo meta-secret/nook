@@ -25,13 +25,13 @@ tasks:
       - task: ci:pr:parallel
 
   ci:pr:publish:
-    desc: PR CI verify and GHCR push in parallel (after docker setup build).
-    deps:
-      - ci:pr
-      - docker:push:ci
+    desc: PR CI verify, then push toolchain to GHCR on success (after docker setup build).
+    cmds:
+      - task: ci:pr
+      - task: docker:push:ci
 
   docker:push:ci:
-    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (used in parallel with ci:pr).
+    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (after green ci:pr).
     env:
       PUSH_TOOLCHAIN: "1"
     cmds:
