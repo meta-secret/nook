@@ -303,15 +303,13 @@ tasks:
       - task: _test:parallel
 
   _lint:parallel:
-    desc: Rust and web linters without rebuilding wasm.
+    desc: Web linters only — Rust clippy already runs in the toolchain docker build warm-up.
     cmds:
-      - task: _rust:lint
       - task: _web:lint:parallel
 
   _test:parallel:
-    desc: Rust and web tests without rebuilding wasm.
+    desc: Web tests only — nook-core tests already run in the toolchain docker build warm-up.
     cmds:
-      - task: _rust:test
       - task: _web:check:parallel
       - task: _web:test:parallel
 

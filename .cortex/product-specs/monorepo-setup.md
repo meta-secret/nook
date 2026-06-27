@@ -25,5 +25,5 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Entrypoint seeding.** Only wasm pkg and `Cargo.lock` when missing; Rust `target/` stays at `/opt/nook/target` in the image.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
-- **PR CI parallelism.** `pr.yml` builds the toolchain once, then `task ci:pr:publish` runs `ci:pr` and `docker:push:ci` in parallel. `ci:pr` prepares format+wasm (wasm skipped when image-seeded), then verify and web build in separate containers.
+- **PR CI parallelism.** `pr.yml` builds the toolchain once (`cargo chef cook`, clippy, `cargo test --no-run`, wasm warm-up in the Dockerfile), then `ci:pr` runs format + wasm in one container and web lint/test/build in parallel — **no second Rust compile in `docker run`**. `task check` on main still runs full Rust lint/test in-container.
 - **Within a CI job**, wasm build output under `nook-web/src/lib/nook-wasm` persists on the runner via the bind mount; Rust artifacts stay in each container's `/opt/nook/target` from the image.

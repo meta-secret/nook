@@ -98,6 +98,7 @@ ENV BUN_INSTALL=/usr/local/bun
 ENV BUN_INSTALL_CACHE_DIR=/opt/nook/bun-install-cache
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
+ENV CARGO_TARGET_DIR=/opt/nook/target
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
