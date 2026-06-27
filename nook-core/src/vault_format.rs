@@ -47,6 +47,7 @@ pub fn detect_stored_format(stored: &str) -> Result<VaultFormat, String> {
         || first_line.starts_with('[')
         || first_line.starts_with("%YAML")
         || first_line.starts_with("secrets:")
+        || first_line.starts_with("store_id:")
         || first_line.starts_with("auth:")
         || first_line.starts_with("joins:")
         || first_line.starts_with("members:")
@@ -122,6 +123,9 @@ struct MembersYamlRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct StoredVaultYaml {
+    /// Logical secret-store identity — same id on every provider replica of this vault.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    store_id: Option<String>,
     /// Active unlock mechanism — exactly one variant per vault. New writes
     /// always emit this field; legacy reads infer it from the absence /
     /// presence of `password_envelope`.
@@ -202,7 +206,14 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
 }
 
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> Result<String, String> {
-    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[])
+    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None)
+}
+
+fn resolve_store_id_for_write(store_id: Option<&str>) -> Result<String, String> {
+    match store_id.map(str::trim).filter(|id| !id.is_empty()) {
+        Some(id) => crate::validate_store_id(id),
+        None => crate::generate_id(),
+    }
 }
 
 /// Serialize records together with unlock metadata. Backup passwords live in
@@ -212,8 +223,10 @@ pub fn serialize_stored_yaml_with_unlock(
     records: &[StoredSecretRecord],
     unlock: &VaultUnlock,
     password_entries: &[PasswordUnlockEntry],
+    store_id: Option<&str>,
 ) -> Result<String, String> {
     let mut vault = partition_yaml_records(records);
+    vault.store_id = Some(resolve_store_id_for_write(store_id)?);
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
@@ -256,6 +269,23 @@ pub fn read_vault_password_entries(stored: &str) -> Result<Vec<PasswordUnlockEnt
     let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
         .map_err(|e| format!("Failed to parse stored YAML for password entries: {}", e))?;
     Ok(extract_password_entries(&vault))
+}
+
+/// Read the logical secret-store id from on-disk YAML (absent on legacy vaults).
+pub fn read_vault_store_id(stored: &str) -> Result<Option<String>, String> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Ok(None);
+    }
+    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
+        .map_err(|e| format!("Failed to parse stored YAML for store id: {}", e))?;
+    match vault.store_id {
+        Some(id) => Ok(Some(crate::validate_store_id(&id)?)),
+        None => Ok(None),
+    }
 }
 
 pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, String> {
@@ -618,6 +648,7 @@ not-json
             &[],
             &VaultUnlock::Keys,
             std::slice::from_ref(&entry),
+            Some("SMypl8K0w9Y"),
         )
         .unwrap();
         assert!(yaml.contains("unlock:"));
@@ -669,11 +700,37 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             &records,
             &parsed_unlock,
             &crate::read_vault_password_entries(legacy).unwrap(),
+            None,
         )
         .unwrap();
         assert!(rewritten.contains("type: keys"));
         assert!(rewritten.contains("password_entries:"));
         assert!(!rewritten.starts_with("password_envelope:"));
+    }
+
+    #[test]
+    fn store_id_roundtrip_and_legacy_backfill() {
+        let records = sample_records();
+        let yaml = serialize_stored_yaml_with_unlock(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            Some("SMypl8K0w9Y"),
+        )
+        .unwrap();
+        assert!(yaml.contains("store_id: SMypl8K0w9Y"));
+        assert_eq!(
+            read_vault_store_id(&yaml).unwrap(),
+            Some("SMypl8K0w9Y".to_owned())
+        );
+
+        let legacy = "unlock:\n  type: keys\nsecrets: []\n";
+        assert!(read_vault_store_id(legacy).unwrap().is_none());
+        let backfilled =
+            serialize_stored_yaml_with_unlock(&records, &VaultUnlock::Keys, &[], None).unwrap();
+        let assigned = read_vault_store_id(&backfilled).unwrap();
+        assert!(assigned.is_some());
+        assert_eq!(assigned.unwrap().len(), 11);
     }
 
     #[test]

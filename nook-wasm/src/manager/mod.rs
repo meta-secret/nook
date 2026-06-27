@@ -60,6 +60,8 @@ pub struct NookVaultManager {
     pub(in crate::manager) unlock: nook_core::VaultUnlock,
     /// Backup password entries — parallel to device-key auth rows.
     pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
+    /// Logical secret-store id — persisted in vault YAML and mirrored on saved providers.
+    pub(in crate::manager) store_id: String,
     pub(in crate::manager) status_tx: flume::Sender<String>,
     pub(in crate::manager) status_rx: flume::Receiver<String>,
 }
@@ -84,6 +86,7 @@ impl NookVaultManager {
             secret_types: HashMap::new(),
             unlock: nook_core::VaultUnlock::Keys,
             password_entries: Vec::new(),
+            store_id: String::new(),
             decrypted_jsonl: String::new(),
             file_sha: None,
             last_synced_content: String::new(),
@@ -96,6 +99,11 @@ impl NookVaultManager {
     #[wasm_bindgen(getter)]
     pub fn storage_mode(&self) -> String {
         self.storage_mode.to_string()
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultStoreId)]
+    pub fn vault_store_id(&self) -> String {
+        self.store_id.clone()
     }
 
     #[wasm_bindgen(getter)]
@@ -172,8 +180,18 @@ impl NookVaultManager {
             &records,
             &self.unlock,
             &self.password_entries,
+            if self.store_id.is_empty() {
+                None
+            } else {
+                Some(self.store_id.as_str())
+            },
         )
         .map_err(NookError::Encryption)?;
+        if self.store_id.is_empty() {
+            if let Ok(Some(id)) = nook_core::read_vault_store_id(&stored) {
+                self.store_id = id;
+            }
+        }
 
         match self.storage_mode {
             nook_core::StorageMode::Local => {
@@ -237,6 +255,9 @@ impl NookVaultManager {
         }
         if let Ok(entries) = nook_core::read_vault_password_entries(content) {
             self.password_entries = entries;
+        }
+        if let Ok(Some(store_id)) = nook_core::read_vault_store_id(content) {
+            self.store_id = store_id;
         }
     }
 

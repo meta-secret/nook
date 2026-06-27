@@ -164,6 +164,26 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
     }
 }
 
+/// Compact random id (`generate_id` — 11 chars, base64url).
+#[must_use]
+pub fn is_compact_id(key: &str) -> bool {
+    key.len() == 11
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
+
+pub fn validate_store_id(id: &str) -> Result<String, String> {
+    let trimmed = id.trim();
+    if !is_compact_id(trimmed) {
+        return Err("errors.validation.store_id_invalid".to_owned());
+    }
+    if is_device_id(trimmed) || is_auth_id(trimmed) {
+        return Err("errors.validation.store_id_reserved".to_owned());
+    }
+    Ok(trimmed.to_owned())
+}
+
 pub fn validate_secret_id(id: &str) -> Result<String, String> {
     let trimmed = id.trim();
     if trimmed.is_empty() {
@@ -264,6 +284,9 @@ mod tests {
         assert!(validate_secret_data("x").is_ok());
         assert!(validate_secret_id("abc123def4567890").is_err());
         assert!(validate_secret_id(&"a".repeat(64)).is_err());
+        assert_eq!(validate_store_id("SMypl8K0w9Y").unwrap(), "SMypl8K0w9Y");
+        assert!(validate_store_id("short").is_err());
+        assert!(validate_store_id(&"a".repeat(64)).is_err());
     }
 
     #[test]

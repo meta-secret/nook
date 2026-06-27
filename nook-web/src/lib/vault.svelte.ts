@@ -689,6 +689,7 @@ export class VaultState {
     const driveFile = this.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
     const type = this.loginSetupType ?? this.storageMode
     const isNewSetup = this.loginSetupType !== null
+    const vaultStoreId = this.manager?.vaultStoreId?.()?.trim() || undefined
     const oauthSnapshot: OAuthFileConfig | undefined =
       type === 'oauth-file'
         ? {
@@ -717,6 +718,7 @@ export class VaultState {
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
         oauthFile: oauthSnapshot,
+        storeId: vaultStoreId,
         createdAt: isoTimestamp(),
       }
       this.providers = [...this.providers, provider]
@@ -734,6 +736,7 @@ export class VaultState {
           this.storageMode === 'oauth-file'
             ? (oauthSnapshot ?? this.activeProvider.oauthFile)
             : undefined,
+        storeId: vaultStoreId ?? this.activeProvider.storeId,
       }
       this.providers = this.providers.map((p) =>
         p.id === updated.id ? updated : p,
@@ -753,6 +756,7 @@ export class VaultState {
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
         oauthFile: oauthSnapshot,
+        storeId: vaultStoreId,
         createdAt: isoTimestamp(),
       }
       this.providers = [provider]

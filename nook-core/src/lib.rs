@@ -53,11 +53,11 @@ pub use validation::{
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
     parse_drive_storage_ref, validate_connect, validate_drive_vault_file_name, validate_github_pat,
     validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
-    validate_secret_id, validate_storage_mode,
+    validate_secret_id, validate_storage_mode, validate_store_id,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
-    read_vault_password_entries, read_vault_unlock, serialize_stored,
+    read_vault_password_entries, read_vault_store_id, read_vault_unlock, serialize_stored,
     serialize_stored_yaml_with_unlock,
 };

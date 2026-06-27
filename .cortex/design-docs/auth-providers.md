@@ -28,6 +28,8 @@ interface StorageProvider {
   type: 'local' | 'github'
   label: string
   githubPat?: string   // GitHub only — stored after first sign-in
+  githubRepo?: string  // GitHub only — repo name (default `nook`)
+  storeId?: string     // Logical secret store — see secret-store-identity.md
   createdAt: string    // ISO timestamp
 }
 ```
@@ -141,9 +143,10 @@ WASM still receives `(storageMode, githubPat)` per call — no change to the Rus
 Planned capabilities (not yet implemented):
 
 1. **Multiple active backends:** User authenticates to several providers (e.g. GitHub + local + future S3/IPFS).
-2. **Single logical vault:** One `nook-vault.yaml` content model; writes propagate to all enrolled providers.
+2. **Single logical vault:** One encrypted database identified by **`store_id`** (11-char id in vault YAML and on each `StorageProvider`) — see [secret-store-identity.md](secret-store-identity.md). Writes propagate to all providers enrolled for that `store_id`.
 3. **Consistency:** Content-hash or version vector on the vault file; background sync resolves conflicts (last-write-wins initially, then CRDT or explicit merge UI).
 4. **Provider-scoped credentials:** Each `StorageProvider` carries its own auth material; unlock may require all providers reachable or a quorum.
+5. **Mismatch protection:** Reject connect when on-disk `store_id` ≠ provider's expected `storeId`.
 
 Design constraints for current implementation:
 
