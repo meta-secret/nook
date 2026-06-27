@@ -32,6 +32,7 @@ const GITHUB_SPECS = [
   'password-envelope-github.spec.ts',
   'fresh-vault-passwords.spec.ts',
   'provider-switch-passwords.spec.ts',
+  'remote-vault-recovery-github.spec.ts',
 ] as const
 
 const specPaths = (files: readonly string[]) =>

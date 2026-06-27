@@ -36,7 +36,14 @@ impl NookVaultManager {
         .map_err(Into::into)
     }
 
-    /// Compact, URL-safe random ID (64-bit, base64url, no padding — 11 chars).
+    /// Prefixed secret item id (`secret_{token}`).
+    pub fn generate_secret_id(&self) -> Result<String, JsError> {
+        nook_core::generate_secret_id()
+            .map_err(NookError::Database)
+            .map_err(Into::into)
+    }
+
+    /// Compact random token (11 chars, base64url) without a type prefix.
     pub fn generate_id(&self) -> Result<String, JsError> {
         nook_core::generate_id()
             .map_err(NookError::Database)

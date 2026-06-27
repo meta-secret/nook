@@ -47,10 +47,10 @@ pub fn is_device_id(key: &str) -> bool {
     key.len() == 16 && key.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Full SHA256(public key) used as `pk_id` (64 hex chars).
+/// `key_{sha256_hex}` or legacy bare 64-hex digest.
 #[must_use]
 pub fn is_auth_id(key: &str) -> bool {
-    key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_hexdigit())
+    crate::is_auth_key_id(key)
 }
 
 #[must_use]
@@ -230,7 +230,7 @@ pub fn device_id_from_public_key(public_key: &str) -> Result<String, String> {
 #[must_use]
 pub fn device_auth_id_from_public(recipient: &Recipient) -> String {
     let hash = Sha256::digest(recipient.to_string().as_bytes());
-    hex::encode(hash)
+    crate::format_auth_key_id(&hex::encode(hash)).expect("sha256 hex is valid auth digest")
 }
 
 pub fn encrypt_for_recipient(plaintext: &[u8], recipient_public: &str) -> Result<String, String> {
@@ -900,7 +900,8 @@ mod tests {
     #[test]
     fn auth_id_is_full_sha256_of_public_key() {
         let device = DeviceIdentity::generate().unwrap();
-        assert_eq!(device.auth_id().len(), 64);
+        assert_eq!(device.auth_id().len(), 68);
+        assert!(device.auth_id().starts_with(crate::AUTH_KEY_ID_PREFIX));
         assert!(is_auth_id(&device.auth_id()));
         assert_ne!(device.auth_id(), device.device_id());
     }

@@ -87,21 +87,19 @@ The WASM session holds a UTF-8 JSONL string (`decrypted_jsonl`). Each line is on
 Path: `nook-vault.yaml` (GitHub and IndexedDB `encrypted_db`).
 
 ```yaml
+store_id: store_SMypl8K0w9Y
 secrets:
-  - key: github.com
-    value: |
-      -----BEGIN AGE ENCRYPTED FILE-----
-      ...
-      -----END AGE ENCRYPTED FILE-----
-  - key: work-vpn
-    value: |
+  - id: secret_k9Qx2mNp4Rt
+    type: api-key
+    data: |
       -----BEGIN AGE ENCRYPTED FILE-----
       ...
       -----END AGE ENCRYPTED FILE-----
 ```
 
-- **`key`:** Plaintext label (visible on disk).
-- **`value`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
+- **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../design-docs/secret-store-identity.md).
+- **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
+- **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Legacy JSONL on-disk format** is still supported on load (`from_stored_auto` / format detection). New saves always use YAML.
 
 Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example generate_vault_fixtures -p nook-core`).

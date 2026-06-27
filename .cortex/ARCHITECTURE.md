@@ -98,8 +98,9 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 |-------|--------|----------|
 | Session (plaintext user secrets) | JSONL lines | WASM `decrypted_jsonl` only |
 | On-disk user secrets | YAML `secrets:` list | Values encrypted with `secrets_key` |
-| Active unlock mode | YAML `unlock:` tagged union | Either `{type: keys}` (per-device envelopes) or `{type: password, envelope: …}` (scrypt-wrapped vault keys). Mutually exclusive. See [password-envelope.md](product-specs/password-envelope.md). |
-| On-disk key envelopes (keys mode only) | YAML `auth:` list | `pk_id` → age-armored `secrets_key` + `members_key` |
+| Logical secret store | YAML `store_id` | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md)) |
+| Active unlock mode | YAML `unlock:` tagged union (omitted when keys — the default) | `{type: password, …}` for password-only vaults; device-key vaults use `auth:` (+ optional `password_entries`). See [password-envelope.md](product-specs/password-envelope.md). |
+| On-disk key envelopes (keys mode only) | YAML `auth:` list | `key_{sha256}` → age-armored `secrets_key` + `members_key` |
 | Member catalog | YAML `members:` list | `pk_id` + `members_key`-encrypted `{pk_id, pk}` |
 | Pending joins (keys mode only) | YAML `joins:` list | `device_id` → JSON (includes `public_key` while pending) |
 | Device identity (X25519 private) | age secret string | IndexedDB `device_identity_secret` only |

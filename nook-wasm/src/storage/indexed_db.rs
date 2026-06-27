@@ -171,6 +171,88 @@ pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> 
     }
 }
 
+fn vault_cache_key(cache_ref: &str) -> String {
+    format!("vault_cache:{cache_ref}")
+}
+
+/// Browser-local mirror of the last known vault YAML for a remote storage ref.
+pub(crate) async fn save_vault_local_cache(
+    cache_ref: &str,
+    content: &str,
+) -> Result<(), NookError> {
+    let rexie = rexie::Rexie::builder("nook_db")
+        .version(1)
+        .add_object_store(rexie::ObjectStore::new("vault"))
+        .build()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {:?}", e)))?;
+
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {:?}", e)))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|e| NookError::IndexedDb(format!("Store error: {:?}", e)))?;
+
+    let key = serde_wasm_bindgen::to_value(&vault_cache_key(cache_ref))
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {:?}", e)))?;
+    let value = serde_wasm_bindgen::to_value(content)
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {:?}", e)))?;
+    store
+        .put(&value, Some(&key))
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Put error: {:?}", e)))?;
+
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {:?}", e)))?;
+    Ok(())
+}
+
+pub(crate) async fn load_vault_local_cache(
+    cache_ref: &str,
+) -> Result<Option<String>, NookError> {
+    let rexie = rexie::Rexie::builder("nook_db")
+        .version(1)
+        .add_object_store(rexie::ObjectStore::new("vault"))
+        .build()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {:?}", e)))?;
+
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {:?}", e)))?;
+    let store = transaction
+        .store("vault")
+        .map_err(|e| NookError::IndexedDb(format!("Store error: {:?}", e)))?;
+
+    let key = serde_wasm_bindgen::to_value(&vault_cache_key(cache_ref))
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {:?}", e)))?;
+    let value = store
+        .get(key)
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Get error: {:?}", e)))?;
+
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {:?}", e)))?;
+
+    match value {
+        None => Ok(None),
+        Some(val) => {
+            if val.is_undefined() || val.is_null() {
+                Ok(None)
+            } else {
+                let content: String = serde_wasm_bindgen::from_value(val)
+                    .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {:?}", e)))?;
+                Ok(Some(content))
+            }
+        }
+    }
+}
+
 pub(crate) async fn save_to_indexed_db(hex: &str) -> Result<(), NookError> {
     let rexie = rexie::Rexie::builder("nook_db")
         .version(1)

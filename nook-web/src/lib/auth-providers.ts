@@ -36,6 +36,8 @@ export interface StorageProvider {
   /** GitHub repository name (not owner/name). Defaults to `nook`. */
   githubRepo?: string
   oauthFile?: OAuthFileConfig
+  /** Logical secret-store id — same across provider replicas of one vault. */
+  storeId?: string
   createdAt: string
 }
 

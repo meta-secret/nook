@@ -7,7 +7,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::conversion::{records_to_armored, records_to_secret_types, wasm_iso_timestamp};
-use crate::storage::indexed_db::save_device_identity_to_indexed_db;
+use crate::storage::indexed_db::{load_vault_local_cache, save_device_identity_to_indexed_db};
 use serde::Serialize;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -43,9 +43,17 @@ impl NookVaultManager {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let mut vault_missing = false;
-        let content = self.fetch_vault_content(&mut vault_missing).await?;
+        let mut content = self.fetch_vault_content(&mut vault_missing).await?;
         if vault_missing || content.trim().is_empty() {
-            return Ok(js_sys::Array::new());
+            if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await? {
+                if !cached.trim().is_empty() {
+                    content = cached;
+                } else {
+                    return Ok(js_sys::Array::new());
+                }
+            } else {
+                return Ok(js_sys::Array::new());
+            }
         }
         let entries =
             nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;

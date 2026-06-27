@@ -20,6 +20,7 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
+  import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import {
     peekEnrollmentEntryId,
     peekEnrollmentEntryLabel,
@@ -262,6 +263,10 @@
             {onUnlock}
             {onUnlockWithPassword}
             {onConsumeLoginPasswordPrompt}
+            remoteVaultRecoveryPrompt={vault.remoteVaultRecoveryPrompt}
+            onRecoverRemoteVault={() => vault.confirmRecoverRemoteVault()}
+            onCreateFreshRemoteVault={() => vault.confirmCreateFreshRemoteVault()}
+            onDismissRemoteRecovery={() => vault.clearRemoteVaultRecovery()}
           />
         {:else if showSetup && setupType}
           <form
@@ -277,12 +282,22 @@
               idPrefix="login"
               {onCancelSetup}
             />
+            {#if vault.remoteVaultRecoveryPrompt !== 'none'}
+              <RemoteVaultRecoveryPanel
+                {vault}
+                mode={vault.remoteVaultRecoveryPrompt}
+                isBusy={isVerifying}
+                onRecover={() => vault.confirmRecoverRemoteVault()}
+                onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
+                onDismiss={() => vault.clearRemoteVaultRecovery()}
+              />
+            {/if}
             <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="submit"
                 class="sm:min-w-[180px]"
                 data-testid="connect-provider-btn"
-                disabled={!setupCanConnect}
+                disabled={!setupCanConnect || vault.remoteVaultRecoveryPrompt !== 'none'}
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />

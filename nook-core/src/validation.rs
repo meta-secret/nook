@@ -1,6 +1,4 @@
-use crate::SecretRecord;
-use crate::is_auth_id;
-use crate::is_device_id;
+use crate::{is_auth_key_id, is_device_id};
 
 /// Backend that persists the encrypted vault file.
 ///
@@ -164,29 +162,17 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
     }
 }
 
-pub fn validate_secret_id(id: &str) -> Result<String, String> {
-    let trimmed = id.trim();
-    if trimmed.is_empty() {
-        return Err("errors.validation.secret_id_required".to_owned());
-    }
-    if is_device_id(trimmed) || is_auth_id(trimmed) {
-        return Err("errors.validation.secret_id_reserved".to_owned());
-    }
-    Ok(trimmed.to_owned())
-}
-
-pub fn validate_secret_data(data: &str) -> Result<(), String> {
-    if data.is_empty() {
-        return Err("errors.validation.secret_data_required".to_owned());
-    }
-    Ok(())
+/// Compact random id (`generate_id` — 11 chars, base64url).
+#[must_use]
+pub fn is_compact_id(key: &str) -> bool {
+    crate::is_compact_token(key)
 }
 
 #[must_use]
-pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
-    let user_records: Vec<SecretRecord> = records
+pub fn filter_secrets(records: &[crate::SecretRecord], query: &str) -> Vec<crate::SecretRecord> {
+    let user_records: Vec<crate::SecretRecord> = records
         .iter()
-        .filter(|record| !is_device_id(&record.id) && !is_auth_id(&record.id))
+        .filter(|record| !is_device_id(&record.id) && !is_auth_key_id(&record.id))
         .cloned()
         .collect();
     let needle = query.trim().to_lowercase();
@@ -200,10 +186,19 @@ pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord
         .collect()
 }
 
+pub fn validate_secret_data(data: &str) -> Result<(), String> {
+    if data.is_empty() {
+        return Err("errors.validation.secret_data_required".to_owned());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ApiKeySecret, SecretType, SecretValue};
+    use crate::{
+        ApiKeySecret, SecretRecord, SecretType, SecretValue, validate_secret_id, validate_store_id,
+    };
 
     fn value(key: &str) -> SecretValue {
         SecretValue::ApiKey(ApiKeySecret {
@@ -264,6 +259,16 @@ mod tests {
         assert!(validate_secret_data("x").is_ok());
         assert!(validate_secret_id("abc123def4567890").is_err());
         assert!(validate_secret_id(&"a".repeat(64)).is_err());
+        assert_eq!(
+            validate_store_id("store_SMypl8K0w9Y").unwrap(),
+            "store_SMypl8K0w9Y"
+        );
+        assert_eq!(validate_store_id("SMypl8K0w9Y").unwrap(), "store_SMypl8K0w9Y");
+        assert!(validate_store_id("short").is_err());
+        assert_eq!(
+            validate_secret_id("secret_SMypl8K0w9Y").unwrap(),
+            "secret_SMypl8K0w9Y"
+        );
     }
 
     #[test]
