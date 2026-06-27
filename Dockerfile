@@ -83,7 +83,10 @@ RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D wa
 FROM builder-wasm AS toolchain
 
 COPY --from=chef-planner /workspace/Cargo.lock /opt/nook/Cargo.lock
+# Bake at /workspace/target (where builder compiled). /opt/nook/target is a seed copy for
+# docker run: the repo bind mount hides /workspace/target, so entrypoint restores from opt.
 COPY --from=builder-wasm /workspace/target /opt/nook/target
+COPY --from=builder-wasm /workspace/target /workspace/target
 
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1
@@ -95,7 +98,6 @@ ENV BUN_INSTALL=/usr/local/bun
 ENV BUN_INSTALL_CACHE_DIR=/opt/nook/bun-install-cache
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
-ENV CARGO_TARGET_DIR=/opt/nook/target
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
