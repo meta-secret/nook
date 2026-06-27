@@ -355,7 +355,7 @@ tasks:
     desc: Deploy nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.
     cmds:
       - >-
-        sh -c 'set -euo pipefail;
+        bash -c 'set -euo pipefail;
         test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
         bunx wrangler@4 pages project create nook --production-branch=main 2>/dev/null || true;
         deploy_output="$(
@@ -380,7 +380,7 @@ tasks:
     desc: Comment or update Cloudflare preview URL on the PR.
     cmds:
       - >-
-        sh -c 'set -euo pipefail;
+        bash -c 'set -euo pipefail;
         export PREVIEW_URL="${PREVIEW_URL:-$(cat .cloudflare-preview-url)}";
         bun run .github/scripts/comment-preview-url.ts'
 
