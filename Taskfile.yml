@@ -368,7 +368,6 @@ tasks:
         {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
-        --init
         -e VITE_BASE="{{.VITE_BASE}}"
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
         -e NOOK_GITHUB_PAT
@@ -639,11 +638,13 @@ tasks:
   _web:test:e2e:local:parallel:
     desc: Local Playwright project when wasm is already built (ci:main parallel track).
     cmds:
+      - echo "==> Playwright local project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
       - cd nook-web && bun run test:e2e:local
 
   _web:test:e2e:github:parallel:
     desc: GitHub Playwright project when wasm is already built (ci:main parallel track).
     cmds:
+      - echo "==> Playwright GitHub project (CI=${CI:-}, repo=${NOOK_GITHUB_E2E_REPO:-unset})"
       - cd nook-web && bun run test:e2e:github
       - defer: cd nook-web && bun run test:e2e:cleanup
 

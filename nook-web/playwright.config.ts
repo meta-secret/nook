@@ -1,4 +1,5 @@
 import dotenv from 'dotenv'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
@@ -11,6 +12,7 @@ process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '1000'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
+const distDir = path.join(rootDir, 'dist')
 
 /** IndexedDB-only specs — safe to fan out (each test gets an isolated browser context). */
 const LOCAL_SPECS = [
@@ -35,6 +37,18 @@ const GITHUB_SPECS = [
 const specPaths = (files: readonly string[]) =>
   files.map((file) => path.join('**', file))
 
+/** CI runs e2e after `ci:main:parallel` — serve production dist (no Vite dev optimizer). */
+const usePreviewServer = isCi && fs.existsSync(distDir)
+const webServerCommand = usePreviewServer
+  ? 'bun run preview -- --host 127.0.0.1 --port 5173'
+  : 'bun run dev -- --host 127.0.0.1 --port 5173'
+
+if (isCi) {
+  console.log(
+    `[e2e] webServer: ${usePreviewServer ? 'preview (dist/)' : 'dev (dist missing)'}`,
+  )
+}
+
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
@@ -52,14 +66,17 @@ export default defineConfig({
     actionTimeout: 5_000,
   },
   webServer: {
-    command: 'bun run dev -- --host 127.0.0.1 --port 5173',
+    command: webServerCommand,
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !isCi,
     timeout: isCi ? 120_000 : 30_000,
-    env: {
-      VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
-      NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
-    },
+    // Do not set stdout/stderr to 'pipe' — an undrained pipe can block Vite with no visible output.
+    env: usePreviewServer
+      ? undefined
+      : {
+          VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
+          NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
+        },
   },
   projects: [
     {

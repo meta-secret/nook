@@ -34,8 +34,18 @@ jobs:
       - name: Prepare (format + wasm)
         run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
 
-      - name: Verify, build, and e2e
-        run: task ci:main:finish VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+      - name: Verify and build
+        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+
+      - name: E2e local
+        run: task web:test:e2e:local:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+
+      - name: E2e GitHub
+        run: task web:test:e2e:github:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
