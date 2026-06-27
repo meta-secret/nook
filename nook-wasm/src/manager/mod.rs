@@ -128,6 +128,23 @@ impl NookVaultManager {
     pub fn storage_remote_ref(&self) -> String {
         self.github_repo.clone()
     }
+
+    /// Drop in-memory vault session state when switching storage providers.
+    /// Device identity and configured storage credentials are preserved.
+    #[wasm_bindgen(js_name = "resetVaultSession")]
+    pub fn reset_vault_session(&mut self) {
+        self.secrets_key.clear();
+        self.members_key.clear();
+        self.crypto = None;
+        self.stored_armored.clear();
+        self.secret_types.clear();
+        self.decrypted_jsonl.clear();
+        self.password_entries.clear();
+        self.file_sha = None;
+        self.last_synced_content.clear();
+        self.github_root_empty = false;
+        self.unlock = nook_core::VaultUnlock::Keys;
+    }
 }
 
 // ---- Cross-cutting private helpers ----------------------------------------

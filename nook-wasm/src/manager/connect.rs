@@ -32,6 +32,9 @@ impl NookVaultManager {
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
         if content.trim().is_empty() {
+            self.password_entries.clear();
+            self.unlock = nook_core::VaultUnlock::Keys;
+            self.last_synced_content.clear();
             return Ok("new_vault".to_owned());
         }
 
@@ -130,6 +133,8 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
+        self.password_entries.clear();
+        self.unlock = nook_core::VaultUnlock::Keys;
         self.stored_armored.clear();
         let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
         self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;

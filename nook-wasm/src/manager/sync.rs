@@ -68,6 +68,7 @@ impl NookVaultManager {
         self.decrypted_jsonl = jsonl;
         self.stored_armored = armored;
         self.secret_types = secret_types;
+        self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
         sync_result_session(self, true)
     }
