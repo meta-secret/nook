@@ -12,6 +12,7 @@ permissions:
   contents: read
   packages: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -27,9 +28,20 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
+            const prNumber = context.payload.pull_request.number;
             const branch = context.payload.pull_request.head.ref;
             const statuses = ['in_progress', 'queued', 'waiting', 'pending'];
             const runIds = new Set();
+
+            const considerRun = (run) => {
+              if (run.id === context.runId) return;
+              const matchesPr = run.pull_requests?.some(
+                (pr) => pr.number === prNumber,
+              );
+              if (matchesPr || run.head_branch === branch) {
+                runIds.add(run.id);
+              }
+            };
 
             for (const status of statuses) {
               let page = 1;
@@ -45,9 +57,7 @@ jobs:
                 });
 
                 for (const run of data.workflow_runs) {
-                  if (run.id !== context.runId) {
-                    runIds.add(run.id);
-                  }
+                  considerRun(run);
                 }
 
                 if (data.workflow_runs.length < 100) break;
@@ -55,15 +65,24 @@ jobs:
               }
             }
 
-            await Promise.all(
-              [...runIds].map((run_id) =>
-                github.rest.actions.cancelWorkflowRun({
+            core.info(
+              `Cancelling ${runIds.size} PR workflow run(s) for #${prNumber}`,
+            );
+
+            for (const run_id of runIds) {
+              try {
+                await github.rest.actions.cancelWorkflowRun({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   run_id,
-                }),
-              ),
-            );
+                });
+                core.info(`Cancelled workflow run ${run_id}`);
+              } catch (error) {
+                core.warning(
+                  `Failed to cancel workflow run ${run_id}: ${error.message}`,
+                );
+              }
+            }
 
   verify:
     name: Verify and preview
