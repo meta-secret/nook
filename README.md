@@ -276,7 +276,7 @@ Build with GHCR cache (optional — defaults to `ghcr.io/meta-secret/nook/toolch
 task check   # or task web:dev
 ```
 
-Push your image after local verify (`PUSH_TOOLCHAIN=1`):
+Push your image after local verify (`PUSH_TOOLCHAIN=1`; uses buildx registry push, not `docker push`):
 
 ```sh
 PUSH_TOOLCHAIN=1 task docker:push

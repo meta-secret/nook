@@ -30,3 +30,11 @@ target "toolchain" {
     "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
   ] : []
 }
+
+// Push :latest via buildx (reuses buildcache blobs — seconds when layers unchanged).
+// Do not use `docker push` after `--load`; the daemon re-uploads layers buildkit already has in GHCR.
+target "toolchain-push" {
+  inherits = ["toolchain"]
+  output   = ["type=registry"]
+  cache-to = []
+}

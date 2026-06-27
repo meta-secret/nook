@@ -22,3 +22,6 @@ nook-web/.env.*.local
 
 # Generated during docker build (chef prepare); not committed.
 recipe.json
+
+# CI Cloudflare preview deploy (written by task ci:pr:deploy-preview).
+.cloudflare-preview-url

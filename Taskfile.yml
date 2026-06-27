@@ -39,10 +39,22 @@ tasks:
       - task: ci:pr:parallel
 
   ci:pr:publish:
-    desc: PR CI verify, then push toolchain to GHCR on success (after docker setup build).
+    desc: PR CI verify, then push toolchain to GHCR on success (buildx registry push).
     cmds:
       - task: ci:pr
       - task: docker:push:ci
+
+  ci:pr:deploy-preview:
+    desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs in Docker; image must exist).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _deploy-preview }
+
+  ci:pr:comment-preview:
+    desc: Comment or update Cloudflare preview URL on the PR (CI; runs in Docker).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _comment-preview }
 
   docker:push:ci:
     desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (after green ci:pr).
@@ -248,13 +260,13 @@ tasks:
       - task: setup
 
   docker:push:
-    desc: Push nook-build:local to TOOLCHAIN_REGISTRY (CI after green check, or local with PUSH_TOOLCHAIN=1).
+    desc: Push :latest via buildx registry output (dedupes with buildcache; after green CI).
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
     cmds:
       - >-
         sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        {{.DOCKER}} push "${TOOLCHAIN_REGISTRY}:latest"'
+        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain-push'
 
   docker:task:
     internal: true
@@ -272,6 +284,13 @@ tasks:
         -e NOOK_GITHUB_POLL_MS
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -e CLOUDFLARE_API_TOKEN
+        -e CLOUDFLARE_ACCOUNT_ID
+        -e CF_PAGES_BRANCH
+        -e GITHUB_TOKEN
+        -e GITHUB_REPOSITORY
+        -e PR_NUMBER
+        -e PREVIEW_URL
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace
@@ -331,6 +350,39 @@ tasks:
     cmds:
       - task: _format:check
       - task: _wasm:build
+
+  _deploy-preview:
+    desc: Deploy nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.
+    cmds:
+      - >-
+        sh -c 'set -euo pipefail;
+        test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
+        bunx wrangler@4 pages project create nook --production-branch=main 2>/dev/null || true;
+        deploy_output="$(
+          bunx wrangler@4 pages deploy nook-web/dist \
+            --project-name=nook \
+            --branch="${CF_PAGES_BRANCH}" 2>&1
+        )";
+        echo "$deploy_output";
+        deployment_url="$(
+          echo "$deploy_output" \
+            | grep -oE "Deployment alias URL: https://[^ ]+" \
+            | sed "s/Deployment alias URL: //" \
+            | tail -1
+        )";
+        if [ -z "$deployment_url" ]; then
+          echo "Could not parse Cloudflare deployment alias URL" >&2;
+          exit 1;
+        fi;
+        echo "$deployment_url" > .cloudflare-preview-url'
+
+  _comment-preview:
+    desc: Comment or update Cloudflare preview URL on the PR.
+    cmds:
+      - >-
+        sh -c 'set -euo pipefail;
+        export PREVIEW_URL="${PREVIEW_URL:-$(cat .cloudflare-preview-url)}";
+        bun run .github/scripts/comment-preview-url.ts'
 
   _verify:parallel:
     desc: Lint and test when wasm is already built (ci:pr parallel track).
