@@ -109,7 +109,9 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceA.getByTestId('onboard-device-submit').click()
 
     const codeArea = deviceA.getByTestId('onboard-code')
-    await expect(codeArea).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(codeArea).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     const code = (await codeArea.inputValue()).trim()
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 

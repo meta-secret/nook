@@ -7,8 +7,12 @@ ARG RUST_VERSION=1.96
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1
 ARG WASM_PACK_VERSION=0.15.0
+ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-bookworm AS cargo-chef
+
+# Playwright worker processes fork a real Node runtime (Bun cannot substitute). Bun handles all installs and app scripts.
+FROM ${NODE_IMAGE} AS playwright-node
 
 # --- Super-base: every apt package + CLI that only changes on version bumps (no repo sources) ---
 FROM rust:${RUST_VERSION}-bookworm AS nook-base
@@ -33,11 +37,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Standalone CLIs first (version bumps only). cargo-chef last — only needed for Rust cache stages.
-# Playwright test runner spawns Node workers; Bun alone hangs silently with no CLI output.
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
+COPY --from=playwright-node /usr/local/bin/node /usr/local/bin/node
 RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/bin "v${TASK_VERSION}"
 
 RUN rustup component add rustfmt clippy \

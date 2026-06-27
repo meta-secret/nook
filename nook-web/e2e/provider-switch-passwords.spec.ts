@@ -56,6 +56,7 @@ describeGithub('provider switch password entries', () => {
     ])
     await disableLoginAutoUnlock(page)
 
+    await expandSettingsSection(page, 'storage')
     await page.getByTestId('lock-vault-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
