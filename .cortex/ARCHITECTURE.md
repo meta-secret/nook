@@ -160,10 +160,10 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 | Playwright Chromium | `playwright install --with-deps chromium` in `toolchain-web` (Playwright owns the apt list; reruns only when web deps change). |
 | CI Docker builds | **One `task setup` per workflow run**. Pull `toolchain:latest`, build only changed layers, push after green verify. |
 
-Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (optional local export). Commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
+Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 
 ### Build & verify
 
 - **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
-- **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (prebuilt `wasm-pack` + `wasm-bindgen` in the image; chef-cached `/opt/nook/target`).
+- **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (wasm-pack in the image; chef-cached `/opt/nook/target`).
 - **Verify:** `task check` (fmt, clippy, `cargo test -p nook-core`, svelte-check, eslint, vitest, vite build).

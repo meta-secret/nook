@@ -289,12 +289,6 @@ cargo generate-lockfile   # or let the next docker build refresh it
 git add Cargo.lock
 ```
 
-To inspect the chef skeleton locally (optional):
-
-```sh
-task docker:generate-recipe   # writes recipe.json (gitignored)
-```
-
 ## License
 
 Nook is available under the [MIT License](LICENSE).

@@ -215,11 +215,6 @@ tasks:
         sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
         {{.DOCKER}} push "${TOOLCHAIN_REGISTRY}:latest"'
 
-  docker:generate-recipe:
-    desc: Export recipe.json locally after Cargo.toml changes (optional; CI generates it during docker build).
-    cmds:
-      - '{{.DOCKER}} buildx bake -f docker-bake.hcl generate-recipe'
-
   docker:task:
     internal: true
     env:

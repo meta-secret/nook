@@ -14,9 +14,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Rust Version**: `1.96` (using bookworm Debian base).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
-- **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`).
-- **wasm-bindgen CLI**: `0.2.125` (prebuilt; pinned to match `nook-wasm` so wasm-pack skips downloading it at build time).
-- **Binaryen (wasm-opt)**: `122` (precompiled linux binaries to support reference types and externrefs).
+- **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.
+- **wasm-bindgen** (crate + CLI): `0.2.125` in `nook-wasm/Cargo.toml`; CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
 
 ## 4. Docker & CI caching
 

@@ -30,12 +30,3 @@ target "toolchain" {
     "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
   ] : []
 }
-
-// Export recipe.json locally for inspection (not committed; docker build generates it).
-target "generate-recipe" {
-  context    = "."
-  dockerfile = "Dockerfile"
-  target     = "recipe-output"
-  platforms  = ["linux/amd64"]
-  output     = ["type=local,dest=."]
-}
