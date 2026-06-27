@@ -1427,9 +1427,17 @@ export class VaultState {
     await this.storageChain
     await new Promise((resolve) => setTimeout(resolve, 0))
     try {
-      if (this.passwordEntries.length === 0) {
+      // Background sync can refresh wasm password metadata from remote storage
+      // while the UI still holds a stale list — refetch before verify/issue.
+      const refreshed = await this.refreshPasswordEntriesList()
+      if (!refreshed || this.passwordEntries.length === 0) {
         throw new Error(
           'Add a backup vault password first; enrollment codes wrap that password.',
+        )
+      }
+      if (!this.passwordEntries.some((entry) => entry.id === entryId)) {
+        throw new Error(
+          'Password entry not found. Wait for sync to finish and try again.',
         )
       }
       // `verifyVaultPassword` returns false on a wrong password but can
@@ -1438,7 +1446,10 @@ export class VaultState {
       // password" so the UI message stays predictable.
       let verified: boolean
       try {
-        verified = this.manager.verifyVaultPassword(entryId, password)
+        verified = await this.enqueueStorage(async () => {
+          await Promise.resolve()
+          return this.manager!.verifyVaultPassword(entryId, password)
+        })
       } catch {
         verified = false
       }
