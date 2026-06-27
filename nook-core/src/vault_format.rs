@@ -156,15 +156,16 @@ fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
     let envelopes = crate::parse_auth_envelopes(&record.value)
         .expect("auth record must parse before YAML serialization");
     AuthYamlRecord {
-        pk_id: record.key.clone(),
+        pk_id: crate::normalize_auth_key_id(&record.key).unwrap_or_else(|_| record.key.clone()),
         secrets_key: envelopes.secrets_key,
         members_key: envelopes.members_key,
     }
 }
 
 fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
+    let pk_id = crate::normalize_auth_key_id(&record.pk_id).unwrap_or(record.pk_id);
     StoredSecretRecord {
-        key: record.pk_id,
+        key: pk_id.clone(),
         secret_type: None,
         value: serde_json::to_string(&AuthEnvelopes {
             secrets_key: record.secrets_key,
@@ -175,8 +176,9 @@ fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
 }
 
 fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
+    let pk_id = crate::normalize_auth_key_id(&record.pk_id).unwrap_or(record.pk_id);
     StoredSecretRecord {
-        key: crate::member_stored_key(&record.pk_id),
+        key: crate::member_stored_key(&pk_id),
         secret_type: None,
         value: record.ciphertext,
     }
@@ -188,18 +190,32 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
         if is_join_stored_record(record) {
             vault.joins.push(record.clone());
         } else if is_members_stored_record(record) {
-            vault.members.push(MembersYamlRecord {
-                pk_id: record
+            let pk_id = crate::normalize_auth_key_id(
+                record
+                    .key
+                    .strip_prefix(crate::MEMBER_RECORD_PREFIX)
+                    .unwrap_or(&record.key),
+            )
+            .unwrap_or_else(|_| {
+                record
                     .key
                     .strip_prefix(crate::MEMBER_RECORD_PREFIX)
                     .unwrap_or(&record.key)
-                    .to_owned(),
+                    .to_owned()
+            });
+            vault.members.push(MembersYamlRecord {
+                pk_id,
                 ciphertext: record.value.clone(),
             });
         } else if is_auth_stored_record(record) {
             vault.auth.push(stored_record_to_auth(record));
         } else {
             vault.secrets.push(record.clone());
+        }
+    }
+    for secret in &mut vault.secrets {
+        if let Ok(id) = crate::normalize_secret_id_for_write(&secret.key) {
+            secret.key = id;
         }
     }
     vault
@@ -209,10 +225,10 @@ pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> Result<String, S
     serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None)
 }
 
-fn resolve_store_id_for_write(store_id: Option<&str>) -> Result<String, String> {
+fn resolve_store_id_for_write(store_id: Option<&str>) -> Result<Option<String>, String> {
     match store_id.map(str::trim).filter(|id| !id.is_empty()) {
-        Some(id) => crate::validate_store_id(id),
-        None => crate::generate_id(),
+        Some(id) => Ok(Some(crate::normalize_store_id(id)?)),
+        None => Ok(None),
     }
 }
 
@@ -226,7 +242,7 @@ pub fn serialize_stored_yaml_with_unlock(
     store_id: Option<&str>,
 ) -> Result<String, String> {
     let mut vault = partition_yaml_records(records);
-    vault.store_id = Some(resolve_store_id_for_write(store_id)?);
+    vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
@@ -623,7 +639,10 @@ not-json
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key, format!("member:{auth_id}"));
+        assert_eq!(
+            parsed[0].key,
+            format!("member:key_{auth_id}")
+        );
     }
 
     #[test]
@@ -648,7 +667,7 @@ not-json
             &[],
             &VaultUnlock::Keys,
             std::slice::from_ref(&entry),
-            Some("SMypl8K0w9Y"),
+            Some("store_SMypl8K0w9Y"),
         )
         .unwrap();
         assert!(yaml.contains("unlock:"));
@@ -715,22 +734,28 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some("SMypl8K0w9Y"),
+            Some("store_SMypl8K0w9Y"),
         )
         .unwrap();
-        assert!(yaml.contains("store_id: SMypl8K0w9Y"));
+        assert!(yaml.contains("store_id: store_SMypl8K0w9Y"));
         assert_eq!(
             read_vault_store_id(&yaml).unwrap(),
-            Some("SMypl8K0w9Y".to_owned())
+            Some("store_SMypl8K0w9Y".to_owned())
         );
 
         let legacy = "unlock:\n  type: keys\nsecrets: []\n";
         assert!(read_vault_store_id(legacy).unwrap().is_none());
-        let backfilled =
-            serialize_stored_yaml_with_unlock(&records, &VaultUnlock::Keys, &[], None).unwrap();
-        let assigned = read_vault_store_id(&backfilled).unwrap();
-        assert!(assigned.is_some());
-        assert_eq!(assigned.unwrap().len(), 11);
+        let backfilled = serialize_stored_yaml_with_unlock(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+        )
+        .unwrap();
+        assert_eq!(
+            read_vault_store_id(&backfilled).unwrap(),
+            Some("store_SMypl8K0w9Y".to_owned())
+        );
     }
 
     #[test]
@@ -758,7 +783,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
 
         let parsed = deserialize_stored_yaml(&yaml).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key, auth_id);
+        assert_eq!(parsed[0].key, format!("key_{auth_id}"));
 
         let env = crate::parse_auth_envelopes(&parsed[0].value).unwrap();
         assert!(env.secrets_key.contains("BEGIN AGE ENCRYPTED FILE"));

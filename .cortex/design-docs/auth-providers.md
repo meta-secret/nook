@@ -29,7 +29,7 @@ interface StorageProvider {
   label: string
   githubPat?: string   // GitHub only — stored after first sign-in
   githubRepo?: string  // GitHub only — repo name (default `nook`)
-  storeId?: string     // Logical secret store — see secret-store-identity.md
+  storeId?: string     // Logical secret store (`store_{token}`) — see secret-store-identity.md
   createdAt: string    // ISO timestamp
 }
 ```

@@ -19,37 +19,50 @@ Provider credentials and file paths alone are not enough: the same user might po
 
 ---
 
-## 2. `store_id` — logical secret store name
+## 2. Prefixed on-disk ids
 
-Every vault YAML carries a top-level **`store_id`**: a compact random id, same alphabet and length as secret ids (`generate_id()` — 11 chars, base64url, e.g. `SMypl8K0w9Y`).
+Nook uses **typed string prefixes** so ids are self-describing in YAML and logs:
+
+| Prefix | YAML field | Meaning | Example |
+|--------|------------|---------|---------|
+| `store_` | `store_id` | Logical secret store (whole vault database) | `store_SMypl8K0w9Y` |
+| `pass_` | `secrets[].id` | User secret item (generated ids) | `pass_k9Qx2mNp4Rt` |
+| `key_` | `auth[].pk_id`, `members[].pk_id` | Device auth key (SHA-256 of X25519 public key) | `key_1f9ed892…2609439` |
+
+Random suffix tokens use `generate_id()` — 11 chars, base64url. Auth keys append the full 64-hex digest after `key_`.
 
 ```yaml
-store_id: SMypl8K0w9Y
+store_id: store_SMypl8K0w9Y
 unlock:
   type: keys
 secrets:
-  - id: github.com
-    ...
+  - id: pass_k9Qx2mNp4Rt
+    type: api-key
+    data: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
+auth:
+  - pk_id: key_1f9ed892ca49f063bca6cb0d023abd9057aeef6a32e275bc399e5f1412609439
+    secrets_key: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
 ```
+
+**Legacy (still loads):** bare 11-char `store_id`, human secret labels (`github.com`), bare 64-hex `pk_id`. Next save normalizes to prefixed form where applicable.
 
 | Layer | Identifier | Scope | Example |
 |-------|------------|-------|---------|
-| **Secret store** | `store_id` | One logical encrypted database | `SMypl8K0w9Y` |
-| **Storage provider** | `StorageProvider.id` | Saved connection in `nook_auth` | UUID in IndexedDB |
+| **Secret store** | `store_id` | One logical encrypted database | `store_SMypl8K0w9Y` |
+| **Storage provider** | `StorageProvider.id` | Saved connection in `nook_auth` | compact id (no vault prefix) |
 | **Vault file path** | Provider config | Physical blob location | `nook-vault.yaml` in `user/nook` |
 
 **Rules**
 
-1. **Genesis:** assigned on first persist of a new vault (Rust `generate_id()`).
-2. **Replication (future):** every replica of the same store must carry the **same** `store_id`; sync compares `store_id` before merging content.
-3. **Legacy vaults:** files written before `store_id` exist omit the field; the next save backfills a new id (one-time migration per file).
-4. **Provider binding:** `StorageProvider.storeId` in `nook_auth` mirrors the vault's `store_id` after connect so the UI can group replicas and warn on mismatches.
-
-**Not the same as**
-
-- `StorageProvider.id` — browser-local row id for PAT/repo settings.
-- Secret `id` — item label key inside the store (`github.com`, `SMypl8K0w9Y`, …).
-- `device_id` — 16-hex UI fingerprint derived from a device public key.
+1. **Genesis:** `store_{token}` assigned on first persist (`generate_store_id()`).
+2. **New secrets:** UI/WASM use `pass_{token}` via `generate_secret_id()`; e2e may still use human labels.
+3. **Auth rows:** `pk_id` is always `key_{sha256_hex}` on write.
+4. **Replication (future):** same `store_id` on every provider replica; mismatch → hard error.
+5. **Provider binding:** `StorageProvider.storeId` mirrors vault `store_id` after connect.
 
 ---
 
@@ -57,7 +70,7 @@ secrets:
 
 ```mermaid
 flowchart LR
-  subgraph store["store_id: SMypl8K0w9Y"]
+  subgraph store["store_id: store_SMypl8K0w9Y"]
     V[nook-vault.yaml content]
   end
   V --> L[Local IndexedDB]
@@ -65,40 +78,17 @@ flowchart LR
   V --> D[Google Drive appData]
 ```
 
-1. User enrolls multiple providers with the **same** `store_id` (manual today; guided UX later).
-2. Writes fan out to all enrolled providers; reads reconcile by content hash / version (see [auth-providers.md](auth-providers.md) §5).
-3. Connecting to a provider whose file has a **different** `store_id` than expected is a hard error — prevents accidental overwrite of unrelated vaults.
-
-Physical filenames may stay `nook-vault.yaml` per backend; **`store_id` inside the file** is the source of truth for logical identity.
+Physical filenames may stay `nook-vault.yaml` per backend; **`store_id` inside the file** is the source of truth.
 
 ---
 
-## 4. `pk_id` vs short ids
+## 4. `key_{digest}` vs shortening `pk_id`
 
-Auth rows in YAML use **`pk_id`**: full SHA-256 of the device X25519 public key (64 hex chars).
+The **64-hex digest is kept** — only the **`key_` prefix** is added for type clarity. We do **not** shorten the digest to 11 chars:
 
-```yaml
-auth:
-  - pk_id: 1f9ed892ca49f063bca6cb0d023abd9057aeef6a32e275bc399e5f1412609439
-    secrets_key: |
-      -----BEGIN AGE ENCRYPTED FILE-----
-      ...
-```
-
-| Id | Length | Derivation | Role |
-|----|--------|------------|------|
-| `store_id` | 11 | Random (`generate_id`) | Name a logical secret store |
-| Secret `id` | varies / often 11 | Random or user label | Name an item inside the store |
-| `device_id` | 16 hex | Truncated hash of public key | UI, joins, IndexedDB |
-| `pk_id` | 64 hex | Full SHA-256(public key) | Auth row key, member roster |
-
-**Should `pk_id` be shortened?** Not without a migration:
-
-- `pk_id` is **deterministic** from the public key — no lookup table, no collision handling.
-- Shortening to secret-style ids would require storing `{ short_id → public_key }` in the vault and rewriting every `auth:` / `members:` reference.
-- **`device_id` already covers display** (16 hex); keep `pk_id` as the stable cryptographic primary key until a deliberate roster refactor is scheduled.
-
-If we ever add short auth ids, treat it as a breaking on-disk migration — not a cosmetic change.
+- Digest is **deterministic** from the public key.
+- Shortening would require `{ short_id → public_key }` lookup and rewriting all `auth:` / `members:` rows.
+- **`device_id`** (16 hex) remains the short UI fingerprint.
 
 ---
 
@@ -106,7 +96,9 @@ If we ever add short auth ids, treat it as a breaking on-disk migration — not 
 
 | Piece | Status |
 |-------|--------|
-| `store_id` in vault YAML | Implemented — read/write in `nook-core`, session in `NookVaultManager` |
-| `StorageProvider.storeId` | Implemented — set on `ensureProviderSaved()` |
+| Prefixed `store_id` / `pass_` / `key_` in vault YAML | Implemented |
+| `StorageProvider.storeId` | Implemented |
+| Legacy unprefixed read + normalize on write | Implemented |
 | Replication / mismatch guards | Planned |
-| Per-store filename (`nook-{store_id}.yaml`) | Optional future; not required for identity |
+
+Implementation: `nook-core/src/vault_ids.rs`.

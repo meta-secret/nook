@@ -12,6 +12,11 @@ export function generateId(): string {
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+/** Prefixed secret-store item id (`pass_{token}`). */
+export function generateSecretId(): string {
+  return `pass_${generateId()}`
+}
+
 export type SecretRecord = {
   id: string
   type: VaultItemType
@@ -79,7 +84,7 @@ export function vaultItemSecret(item: VaultItem): string {
 export function createVaultItemRecord(item: VaultItemInput): SecretRecord {
   const { type, ...value } = item
   return {
-    id: generateId(),
+    id: generateSecretId(),
     type,
     data: stringifyYaml(value),
   }

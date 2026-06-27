@@ -172,6 +172,10 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn save_current_db(&mut self) -> Result<(), NookError> {
         let _ = self.status_tx.send("SAVE_START".to_owned());
+        if self.store_id.is_empty() {
+            self.store_id =
+                nook_core::generate_store_id().map_err(NookError::Database)?;
+        }
         let records = nook_core::Database::stored_records_from_armored(
             &self.stored_armored,
             &self.secret_types,
@@ -180,18 +184,9 @@ impl NookVaultManager {
             &records,
             &self.unlock,
             &self.password_entries,
-            if self.store_id.is_empty() {
-                None
-            } else {
-                Some(self.store_id.as_str())
-            },
+            Some(self.store_id.as_str()),
         )
         .map_err(NookError::Encryption)?;
-        if self.store_id.is_empty() {
-            if let Ok(Some(id)) = nook_core::read_vault_store_id(&stored) {
-                self.store_id = id;
-            }
-        }
 
         match self.storage_mode {
             nook_core::StorageMode::Local => {

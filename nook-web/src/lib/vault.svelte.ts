@@ -1,5 +1,6 @@
 import {
   generateId,
+  generateSecretId,
   getVaultManager,
   isoTimestamp,
   mapVaultSyncResult,
@@ -1668,7 +1669,7 @@ export class VaultState {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
-      const newId = generateId()
+      const newId = generateSecretId()
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.replace_secret(
           oldId,

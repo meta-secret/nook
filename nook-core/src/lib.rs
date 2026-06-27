@@ -15,6 +15,7 @@ mod session;
 mod validation;
 mod vault_crypto;
 mod vault_format;
+mod vault_ids;
 
 pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
@@ -53,7 +54,13 @@ pub use validation::{
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
     parse_drive_storage_ref, validate_connect, validate_drive_vault_file_name, validate_github_pat,
     validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
-    validate_secret_id, validate_storage_mode, validate_store_id,
+    validate_storage_mode,
+};
+pub use vault_ids::{
+    AUTH_KEY_ID_PREFIX, SECRET_ID_PREFIX, STORE_ID_PREFIX, auth_key_digest, format_auth_key_id,
+    format_secret_id, format_store_id, generate_secret_id, generate_store_id, is_auth_key_id,
+    is_compact_token, normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id,
+    validate_secret_id, validate_store_id,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{
