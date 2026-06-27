@@ -13,7 +13,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 ## 3. Toolchain & Runtime Specs
 - **Rust Version**: `1.96` (using bookworm Debian base).
 - **Bun Version**: `1.3.14`.
-- **Wasm Pack**: `0.15.0` (prebuilt release archive via `curl`, not `cargo install`).
+- **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
+- **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`).
 - **wasm-bindgen CLI**: `0.2.125` (prebuilt; pinned to match `nook-wasm` so wasm-pack skips downloading it at build time).
 - **Binaryen (wasm-opt)**: `122` (precompiled linux binaries to support reference types and externrefs).
 

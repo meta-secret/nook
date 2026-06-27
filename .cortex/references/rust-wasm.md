@@ -8,7 +8,7 @@
 ## 2. Compiling for the web
 - Invoke wasm-pack from the **workspace root** so chef-cached `target/` is reused:
   `wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm`
-- The Docker image installs `wasm-pack` and `wasm-bindgen` from prebuilt release archives (`curl`), not `cargo install`.
+- The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`) and `wasm-bindgen` from its GitHub release tarball — not `cargo install`.
 - `wasm-opt` (Binaryen 122+) runs automatically via wasm-pack.
 
 ## 3. Session state (`NookVaultManager`)

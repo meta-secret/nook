@@ -157,10 +157,10 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 | `target/` at runtime | Cargo always uses **`/opt/nook/target`** in the image — not under `/workspace`, so the repo bind mount never hides the cache and no entrypoint copy is needed. |
 | `nook-web/node_modules` | Each `docker run` overlays an **anonymous volume** at `/workspace/nook-web/node_modules` so parallel containers install independently. `BUN_INSTALL_CACHE_DIR` is baked at `/opt/nook/bun-install-cache`; the entrypoint runs `bun install --frozen-lockfile` (fast link from cache; correct rolldown native bindings). |
 | Web wasm pkg | Baked at `/opt/nook/nook-wasm-pkg` during image build (cached with wasm/core sources). Entrypoint seeds `nook-web/src/lib/nook-wasm` when empty; `task wasm:build` skips wasm-pack when sources are unchanged. |
-| Playwright Chromium | `playwright install --with-deps chromium` during image build at `PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`. |
+| Playwright Chromium | `playwright install --with-deps chromium` in `toolchain-web` (Playwright owns the apt list; reruns only when web deps change). |
 | CI Docker builds | **One `task setup` per workflow run**. Pull `toolchain:latest`, build only changed layers, push after green verify. |
 
-Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (commit `recipe.json` and `Cargo.lock`).
+Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (optional local export). Commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 
 ### Build & verify
 

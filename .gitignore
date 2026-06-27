@@ -19,3 +19,6 @@ nook-web/.env.local
 nook-web/.env.*.local
 *.pdf
 
+
+# Generated locally by task docker:generate-recipe (docker build runs chef prepare itself).
+recipe.json

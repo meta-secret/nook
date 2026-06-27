@@ -216,7 +216,7 @@ tasks:
         {{.DOCKER}} push "${TOOLCHAIN_REGISTRY}:latest"'
 
   docker:generate-recipe:
-    desc: Regenerate recipe.json after Cargo.toml dependency changes (commit the result).
+    desc: Export recipe.json locally after Cargo.toml changes (optional; CI generates it during docker build).
     cmds:
       - '{{.DOCKER}} buildx bake -f docker-bake.hcl generate-recipe'
 

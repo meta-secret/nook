@@ -31,7 +31,7 @@ target "toolchain" {
   ] : []
 }
 
-// Regenerate recipe.json after Cargo.toml / Cargo.lock dependency changes.
+// Export recipe.json locally for inspection (not committed; docker build generates it).
 target "generate-recipe" {
   context    = "."
   dockerfile = "Dockerfile"

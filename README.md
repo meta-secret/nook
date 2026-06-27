@@ -282,12 +282,17 @@ Push your image after local verify (`PUSH_TOOLCHAIN=1`):
 PUSH_TOOLCHAIN=1 task docker:push
 ```
 
-After changing Rust dependencies in any `Cargo.toml`, regenerate and commit the chef
-recipe and lockfile:
+After changing Rust dependencies in any `Cargo.toml`, commit the updated lockfile:
 
 ```sh
-task docker:generate-recipe
-git add recipe.json Cargo.lock
+cargo generate-lockfile   # or let the next docker build refresh it
+git add Cargo.lock
+```
+
+To inspect the chef skeleton locally (optional):
+
+```sh
+task docker:generate-recipe   # writes recipe.json (gitignored)
 ```
 
 ## License
