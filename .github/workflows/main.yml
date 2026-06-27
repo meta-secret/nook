@@ -39,13 +39,8 @@ jobs:
         env:
           CI: true
 
-      - name: E2e local
-        run: task web:test:e2e:local:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-        env:
-          CI: true
-
-      - name: E2e GitHub
-        run: task web:test:e2e:github:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+      - name: E2e (local ‖ GitHub)
+        run: task ci:main:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
