@@ -72,6 +72,7 @@ COPY nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 RUN cargo chef cook --all-targets --recipe-path recipe.json \
     && cargo chef cook --clippy --all-targets --recipe-path recipe.json
 
+COPY Cargo.toml Cargo.lock ./
 COPY nook-core nook-core
 COPY nook-wasm nook-wasm
 RUN cargo clippy -p nook-core --all-targets -- -D warnings \
@@ -82,6 +83,7 @@ FROM builder-debug AS builder-wasm
 
 RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
 RUN cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
 RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 RUN cargo build --release --target wasm32-unknown-unknown -p nook-wasm
 
