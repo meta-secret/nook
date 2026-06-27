@@ -476,7 +476,8 @@ tasks:
       - >-
         sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
         need=0;
-        if [ ! -f "$out" ]; then need=1;
+        if [ -n "${CI:-}" ]; then need=1;
+        elif [ ! -f "$out" ]; then need=1;
         elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
         fi;
         if [ "$need" -eq 1 ]; then
