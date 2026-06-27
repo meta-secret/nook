@@ -21,7 +21,7 @@ jobs:
   cancel-on-close:
     name: Cancel PR runs on close
     if: github.event.action == 'closed'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Cancel in-progress and queued runs for this branch
         uses: actions/github-script@v9
@@ -68,7 +68,7 @@ jobs:
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Cancel superseded workflow runs
         uses: styfle/cancel-workflow-action@0.13.1
