@@ -166,4 +166,4 @@ Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when de
 
 - **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
 - **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (wasm-pack in the image; chef-cached `/opt/nook/target`).
-- **Verify:** `task check` (fmt, clippy, `cargo test -p nook-core`, svelte-check, eslint, vitest, vite build).
+- **Verify:** `task check` (fmt, clippy, `cargo nextest run -p nook-core --profile ci`, svelte-check, eslint, vitest, vite build).

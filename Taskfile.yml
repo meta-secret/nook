@@ -429,7 +429,13 @@ tasks:
   _rust:test:parallel:
     desc: Run nook-core tests when deps are already built (ci:pr parallel track).
     cmds:
-      - cargo test -p nook-core
+      - task: _rust:test:run
+
+  _rust:test:run:
+    internal: true
+    desc: Run nook-core tests via cargo-nextest (ci profile).
+    cmds:
+      - cargo nextest run -p nook-core --profile ci
 
   _format:
     desc: Format all projects.
@@ -451,7 +457,7 @@ tasks:
   _rust:test:
     desc: Test nook-core (wasm is covered by web e2e).
     cmds:
-      - cargo test -p nook-core
+      - task: _rust:test:run
 
   _rust:lint:
     desc: Lint nook-core on host and nook-wasm for wasm32.

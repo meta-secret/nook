@@ -10,7 +10,7 @@ Use this workflow for quality, CI, and deployment changes.
 6. Preserve these gates unless the task explicitly changes them:
    - `cargo fmt --all -- --check`
    - `cargo clippy -p nook-core --all-targets` and `cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm` (`-D warnings`)
-   - `cargo test -p nook-core`
+   - `cargo nextest run -p nook-core --profile ci`
    - `svelte-check`
    - `eslint`
    - `prettier --check`

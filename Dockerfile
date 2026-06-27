@@ -41,6 +41,8 @@ RUN rustup component add rustfmt clippy \
 
 RUN curl -fsSL https://wasm-bindgen.github.io/wasm-pack/installer/init.sh | VERSION="${WASM_PACK_VERSION}" sh
 
+RUN curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C /usr/local/bin
+
 COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/cargo-chef
 
 WORKDIR /workspace
@@ -62,7 +64,7 @@ COPY nook-core nook-core
 COPY nook-wasm nook-wasm
 RUN cargo chef prepare --recipe-path recipe.json
 
-# --- Rust deps + PR warm-up (clippy, test --no-run, build) ---
+# --- Rust deps + PR warm-up (clippy, nextest --no-run, build) ---
 FROM nook-base AS builder-debug
 
 COPY --from=chef-planner /workspace/recipe.json ./recipe.json
@@ -76,7 +78,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY nook-core nook-core
 COPY nook-wasm nook-wasm
 RUN cargo clippy -p nook-core --all-targets -- -D warnings \
-    && cargo test -p nook-core --no-run \
+    && cargo nextest run --no-run -p nook-core --profile ci \
     && cargo build -p nook-core
 
 FROM builder-debug AS builder-wasm

@@ -17,6 +17,6 @@
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`
 
 ## 4. Testing
-- Test vault formats, crypto, validation, and passwords in `nook-core` (`cargo test -p nook-core`).
+- Test vault formats, crypto, validation, and passwords in `nook-core` (`cargo nextest run -p nook-core --profile ci`, or `task rust:test`).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.
 
