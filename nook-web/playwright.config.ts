@@ -10,10 +10,31 @@ dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '1000'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
+/** IndexedDB-only specs — safe to fan out (each test gets an isolated browser context). */
+const LOCAL_SPECS = [
+  'connect.spec.ts',
+  'local-vault.spec.ts',
+  'login-unlock-flow.spec.ts',
+  'onboard-providers.spec.ts',
+  'password-envelope-local.spec.ts',
+  'shell-height.spec.ts',
+  'bip39-seed-phrase.spec.ts',
+] as const
+
+/** Real GitHub API specs — serial within the project; share one CI repo via helpers. */
+const GITHUB_SPECS = [
+  'github-vault.spec.ts',
+  'multi-device-github.spec.ts',
+  'password-envelope-github.spec.ts',
+  'fresh-vault-passwords.spec.ts',
+  'provider-switch-passwords.spec.ts',
+] as const
+
+const specPaths = (files: readonly string[]) =>
+  files.map((file) => path.join('**', file))
+
 export default defineConfig({
   testDir: 'e2e',
-  fullyParallel: false,
-  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   globalTimeout: process.env.CI ? 45 * 60_000 : undefined,
@@ -38,4 +59,19 @@ export default defineConfig({
       NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
     },
   },
+  projects: [
+    {
+      name: 'local',
+      testMatch: specPaths(LOCAL_SPECS),
+      fullyParallel: true,
+      workers: process.env.CI ? 4 : undefined,
+    },
+    {
+      name: 'github',
+      testMatch: specPaths(GITHUB_SPECS),
+      fullyParallel: false,
+      workers: 1,
+      dependencies: ['local'],
+    },
+  ],
 })
