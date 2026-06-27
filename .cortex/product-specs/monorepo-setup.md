@@ -25,5 +25,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Entrypoint seeding.** Only wasm pkg and `Cargo.lock` when missing; Rust `target/` stays at `/opt/nook/target` in the image.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
+- **CI runners:** GitHub-hosted `ubuntu-latest` only. Do not use Blacksmith or other third-party runner labels in workflows.
+- **PR workflow cancellation:** `concurrency` with `cancel-in-progress: true` on `pr-<number>` — no custom cancel scripts. A new push or PR `closed` event queues a run in the same group and GitHub cancels the in-flight one.
 - **PR CI parallelism.** `pr.yml` builds the toolchain once, then `ci:pr` runs format + wasm in one container and Rust tests + web lint/test/build in parallel. **`main.yml`** prepares wasm once, then `ci:main:finish` fans out verify, web build, and **Playwright local ‖ GitHub** as separate `docker:e2e:run` containers (Vite on `127.0.0.1:5173` inside each container — no host port publish; GitHub e2e uses its own `NOOK_GITHUB_E2E_REPO`).
 - **Within a CI job**, wasm build output under `nook-web/src/lib/nook-wasm` persists on the runner via the bind mount; Rust artifacts stay in each container's `/opt/nook/target` from the image.
