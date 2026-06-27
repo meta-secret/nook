@@ -12,13 +12,14 @@ use crate::NookError;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, content_requires_genesis, load_stored_vault,
 };
-use crate::storage::indexed_db::save_device_identity_to_indexed_db;
+use crate::storage::indexed_db::{load_vault_local_cache, save_device_identity_to_indexed_db};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Returns `ready`, `new_vault`, `needs_enrollment`, or `join_pending`.
+    /// Returns `ready`, `new_vault`, `needs_enrollment`, `join_pending`,
+    /// `remote_missing`, or `remote_missing_local_cache`.
     pub async fn assess_vault_connect(
         &mut self,
         storage_mode: String,
@@ -35,6 +36,14 @@ impl NookVaultManager {
             self.password_entries.clear();
             self.unlock = nook_core::VaultUnlock::Keys;
             self.last_synced_content.clear();
+            if vault_file_missing && self.storage_mode != nook_core::StorageMode::Local {
+                if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await? {
+                    if !cached.trim().is_empty() {
+                        return Ok("remote_missing_local_cache".to_owned());
+                    }
+                }
+                return Ok("remote_missing".to_owned());
+            }
             return Ok("new_vault".to_owned());
         }
 
@@ -67,6 +76,18 @@ impl NookVaultManager {
             .await
     }
 
+    /// Next `connect` loads the browser-local vault cache and recreates the
+    /// remote file after a successful unlock.
+    #[wasm_bindgen(js_name = prepareConnectFromLocalCache)]
+    pub fn prepare_connect_from_local_cache(&mut self) {
+        self.use_local_cache_for_connect = true;
+    }
+
+    #[wasm_bindgen(js_name = clearConnectRecovery)]
+    pub fn clear_connect_recovery(&mut self) {
+        self.use_local_cache_for_connect = false;
+    }
+
     async fn connect_internal(
         &mut self,
         storage_mode: String,
@@ -80,7 +101,21 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity().await?;
 
         let mut vault_file_missing = false;
-        let content = self.fetch_vault_content(&mut vault_file_missing).await?;
+        let content = if self.use_local_cache_for_connect {
+            self.use_local_cache_for_connect = false;
+            let cached = load_vault_local_cache(&self.local_cache_ref())
+                .await?
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    NookError::Database(
+                        "No local vault copy is available to recover.".to_owned(),
+                    )
+                })?;
+            vault_file_missing = true;
+            cached
+        } else {
+            self.fetch_vault_content(&mut vault_file_missing).await?
+        };
 
         // First boot for this session — adopt the remote unlock mode so
         // the mode-aware branches below see the right variant.

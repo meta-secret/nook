@@ -88,8 +88,6 @@ Path: `nook-vault.yaml` (GitHub and IndexedDB `encrypted_db`).
 
 ```yaml
 store_id: store_SMypl8K0w9Y
-unlock:
-  type: keys
 secrets:
   - id: secret_k9Qx2mNp4Rt
     type: api-key

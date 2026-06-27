@@ -111,6 +111,12 @@ export class VaultState {
   loginFlowStep = $state<'connection' | 'authorization'>('connection')
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false)
+  /** Remote vault file missing on storage — prompt before unlock. */
+  remoteVaultRecoveryPrompt = $state<'none' | 'with_cache' | 'missing_only'>(
+    'none',
+  )
+  /** How the next unlock should connect after the user confirms recovery. */
+  pendingConnectRecovery = $state<'none' | 'from_cache' | 'fresh'>('none')
   isPasswordBusy = $state(false)
   passwordError = $state('')
   enrollmentCode = $state('')
@@ -604,9 +610,14 @@ export class VaultState {
       return
     }
     this.errorMsg = ''
+    this.clearRemoteVaultRecovery()
     this.isVerifying = true
     try {
       await this.ensureOAuthTokensFresh()
+      const accessStatus = await this.assessVaultConnectStatus()
+      if (await this.handleRemoteVaultAssessStatus(accessStatus)) {
+        return
+      }
       const ok = await this.refreshPasswordEntriesList()
       if (!ok) {
         this.errorMsg =
@@ -621,8 +632,102 @@ export class VaultState {
 
   backToLoginProviderStep() {
     this.loginFlowStep = 'connection'
+    this.clearRemoteVaultRecovery()
     this.resetVaultSessionState()
     this.errorMsg = ''
+  }
+
+  clearRemoteVaultRecovery() {
+    this.remoteVaultRecoveryPrompt = 'none'
+    this.pendingConnectRecovery = 'none'
+    try {
+      this.manager?.clearConnectRecovery()
+    } catch {
+      // Engine not ready yet.
+    }
+  }
+
+  /** User chose to restore a deleted remote vault from the browser cache. */
+  async confirmRecoverRemoteVault(): Promise<void> {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.isVerifying = true
+    try {
+      this.manager.prepareConnectFromLocalCache()
+      this.pendingConnectRecovery = 'from_cache'
+      this.remoteVaultRecoveryPrompt = 'none'
+      if (this.loginSetupType) {
+        await this.loadDb()
+        return
+      }
+      await this.refreshPasswordEntriesList()
+      this.loginFlowStep = 'authorization'
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Could not load the local vault copy.'
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  /** User chose to create a fresh vault file on remote storage. */
+  async confirmCreateFreshRemoteVault(): Promise<void> {
+    if (!this.manager) return
+    this.errorMsg = ''
+    this.pendingConnectRecovery = 'fresh'
+    this.remoteVaultRecoveryPrompt = 'none'
+    if (this.loginSetupType) {
+      this.isVerifying = true
+      try {
+        await this.loadDb()
+      } catch (e: unknown) {
+        this.errorMsg =
+          e instanceof Error ? e.message : 'Could not create a new vault file.'
+      } finally {
+        this.isVerifying = false
+      }
+      return
+    }
+    this.loginFlowStep = 'authorization'
+  }
+
+  private async assessVaultConnectStatus(): Promise<string> {
+    return (await this.enqueueStorage(async () => {
+      const assessPromise = this.manager!.assess_vault_connect(
+        ...this.wasmStorageArgs(),
+      )
+      const assessTimeout = new Promise<never>((_, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Connection timed out. Check your PAT, network, and try again.',
+              ),
+            ),
+          30_000,
+        )
+      })
+      return (await Promise.race([assessPromise, assessTimeout])) as string
+    })) as string
+  }
+
+  private async handleRemoteVaultAssessStatus(
+    accessStatus: string,
+  ): Promise<boolean> {
+    if (accessStatus === 'remote_missing_local_cache') {
+      this.remoteVaultRecoveryPrompt = 'with_cache'
+      await this.refreshPasswordEntriesList()
+      return true
+    }
+    if (accessStatus === 'remote_missing') {
+      // Empty remote on first provider setup is normal — genesis runs on connect.
+      if (this.loginSetupType !== null) {
+        return false
+      }
+      this.remoteVaultRecoveryPrompt = 'missing_only'
+      return true
+    }
+    return false
   }
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
@@ -690,7 +795,7 @@ export class VaultState {
     const driveFile = this.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
     const type = this.loginSetupType ?? this.storageMode
     const isNewSetup = this.loginSetupType !== null
-    const vaultStoreId = this.manager?.vaultStoreId?.()?.trim() || undefined
+    const vaultStoreId = this.manager?.vaultStoreId?.trim() || undefined
     const oauthSnapshot: OAuthFileConfig | undefined =
       type === 'oauth-file'
         ? {
@@ -1227,23 +1332,14 @@ export class VaultState {
       await this.initDeviceIdentity()
       await this.ensureOAuthTokensFresh()
 
-      const accessStatus = await this.enqueueStorage(async () => {
-        const assessPromise = this.manager!.assess_vault_connect(
-          ...this.wasmStorageArgs(),
-        )
-        const assessTimeout = new Promise<never>((_, reject) => {
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  'Connection timed out. Check your PAT, network, and try again.',
-                ),
-              ),
-            30_000,
-          )
-        })
-        return (await Promise.race([assessPromise, assessTimeout])) as string
-      })
+      const accessStatus = await this.assessVaultConnectStatus()
+
+      if (
+        this.pendingConnectRecovery === 'none' &&
+        (await this.handleRemoteVaultAssessStatus(accessStatus))
+      ) {
+        return
+      }
 
       if (accessStatus === 'needs_enrollment') {
         await this.ensureProviderSaved()
@@ -1273,7 +1369,11 @@ export class VaultState {
       }
 
       const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise = this.manager!.connect(...this.wasmStorageArgs())
+        const connectPromise =
+          this.pendingConnectRecovery === 'fresh'
+            ? this.manager!.connect_fresh(...this.wasmStorageArgs())
+            : this.manager!.connect(...this.wasmStorageArgs())
+        this.pendingConnectRecovery = 'none'
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () =>

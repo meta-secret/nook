@@ -614,8 +614,39 @@ export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
-/** Pick device keys or backup password on the login gate unlock form. */
-export async function connectLoginProvider(page: Page) {
+/** Ensure a saved provider is selected on the login gate connection step. */
+export async function selectLoginSavedProvider(
+  page: Page,
+  preferred: 'local' | 'github' = 'local',
+) {
+  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
+  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
+
+  if (preferred === 'github' && (await savedGithubProvider.isVisible())) {
+    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedGithubProvider.click()
+    }
+    return
+  }
+
+  if (await savedLocalProvider.isVisible()) {
+    if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedLocalProvider.click()
+    }
+  } else if (await savedGithubProvider.isVisible()) {
+    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
+      await savedGithubProvider.click()
+    }
+  } else {
+    await page.getByTestId('provider-option-local').click()
+  }
+}
+
+/** Click Connect on the login gate without asserting the next wizard step. */
+export async function clickLoginConnectProvider(
+  page: Page,
+  preferred: 'local' | 'github' = 'local',
+) {
   const authorizationStep = page.getByTestId('login-wizard-authorization-step')
   const connectButton = page.getByTestId('login-connect-provider-btn')
 
@@ -626,23 +657,10 @@ export async function connectLoginProvider(page: Page) {
     return
   }
 
-  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
-  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
-
   await expect
     .poll(
       async () => {
-        if (await savedLocalProvider.isVisible()) {
-          if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
-            await savedLocalProvider.click()
-          }
-        } else if (await savedGithubProvider.isVisible()) {
-          if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
-            await savedGithubProvider.click()
-          }
-        } else if (await page.getByTestId('provider-option-local').isVisible()) {
-          await page.getByTestId('provider-option-local').click()
-        }
+        await selectLoginSavedProvider(page, preferred)
         return connectButton.isEnabled()
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
@@ -650,7 +668,81 @@ export async function connectLoginProvider(page: Page) {
     .toBe(true)
 
   await connectButton.click()
-  await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+/** Pick device keys or backup password on the login gate unlock form. */
+export async function connectLoginProvider(page: Page) {
+  await clickLoginConnectProvider(page)
+  await expect(page.getByTestId('login-wizard-authorization-step')).toBeVisible(
+    { timeout: UI_TIMEOUT_MS },
+  )
+}
+
+export async function assertRemoteVaultRecoveryPanel(
+  page: Page,
+  options: { withLocalCache: boolean },
+) {
+  await expect(page.getByTestId('remote-vault-recovery-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  if (options.withLocalCache) {
+    await expect(page.getByTestId('remote-vault-recover-btn')).toBeVisible()
+  } else {
+    await expect(page.getByTestId('remote-vault-recover-btn')).not.toBeVisible()
+  }
+}
+
+/** Choose recover-from-browser on the remote-missing prompt, then reach unlock. */
+export async function recoverRemoteVaultOnLogin(page: Page) {
+  await page.getByTestId('remote-vault-recover-btn').click()
+  await expect(page.getByTestId('login-wizard-authorization-step')).toBeVisible(
+    { timeout: UI_TIMEOUT_MS },
+  )
+}
+
+/** Choose create-fresh on the remote-missing prompt, then reach unlock. */
+export async function createFreshRemoteVaultOnLogin(page: Page) {
+  await page.getByTestId('remote-vault-create-fresh-btn').click()
+  await expect(page.getByTestId('login-wizard-authorization-step')).toBeVisible(
+    { timeout: UI_TIMEOUT_MS },
+  )
+}
+
+/** Remove browser-local vault mirrors (`vault_cache:*`) while keeping device identity. */
+export async function deleteAllVaultLocalCaches(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_db', 1)
+        request.onerror = () =>
+          reject(request.error ?? new Error('idb open failed'))
+        request.onsuccess = () => {
+          const db = request.result
+          if (!db.objectStoreNames.contains('vault')) {
+            db.close()
+            resolve()
+            return
+          }
+          const tx = db.transaction('vault', 'readwrite')
+          const store = tx.objectStore('vault')
+          const keysReq = store.getAllKeys()
+          keysReq.onerror = () =>
+            reject(keysReq.error ?? new Error('idb keys failed'))
+          keysReq.onsuccess = () => {
+            for (const key of keysReq.result) {
+              if (typeof key === 'string' && key.startsWith('vault_cache:')) {
+                store.delete(key)
+              }
+            }
+          }
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+        }
+      }),
+  )
 }
 
 export async function revealSecretInRow(

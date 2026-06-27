@@ -53,12 +53,13 @@ pub struct PasswordEnvelope {
 
 /// The vault's active unlock mechanism — mutually exclusive across variants.
 ///
-/// Serialised as YAML with `type:` tag plus per-variant data:
+/// Serialised as YAML with `type:` tag plus per-variant data. When embedded
+/// in `nook-vault.yaml`, the whole `unlock:` block is omitted for keys mode
+/// (the default); backup passwords use `password_entries` instead.
 ///
 /// ```yaml
-/// unlock:
-///   type: keys
-/// # OR
+/// # keys mode — no unlock: section
+/// # OR password-only:
 /// unlock:
 ///   type: password
 ///   entries:

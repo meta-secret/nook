@@ -26,7 +26,7 @@
     isInitializing: boolean
     isConnecting?: boolean
     onSelectProvider: (id: string) => void | Promise<void>
-    onConnect: () => void | Promise<void>
+    onConnect?: () => void | Promise<void>
   } = $props()
 </script>
 
@@ -109,8 +109,8 @@
     variant="outline"
     class="w-full border-primary/30 bg-primary/5 font-medium text-foreground hover:bg-primary/10 hover:text-foreground"
     data-testid="login-connect-provider-btn"
-    disabled={isVerifying || isInitializing || !activeProviderId}
-    onclick={() => void onConnect()}
+    disabled={isVerifying || isInitializing || !activeProviderId || !onConnect}
+    onclick={() => void onConnect?.()}
   >
     {#if isConnecting}
       <RefreshCw class="size-4 animate-spin" />

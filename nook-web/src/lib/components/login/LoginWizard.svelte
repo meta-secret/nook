@@ -11,6 +11,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import LoginConnectionStep from '$lib/components/login/LoginConnectionStep.svelte'
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
+  import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
 
   let {
     vault,
@@ -31,6 +32,10 @@
     onUnlock,
     onUnlockWithPassword,
     onConsumeLoginPasswordPrompt,
+    remoteVaultRecoveryPrompt = 'none' as 'none' | 'with_cache' | 'missing_only',
+    onRecoverRemoteVault,
+    onCreateFreshRemoteVault,
+    onDismissRemoteRecovery,
   }: {
     vault: VaultState
     step: 'connection' | 'authorization'
@@ -53,6 +58,10 @@
       password: string,
     ) => void | Promise<void>
     onConsumeLoginPasswordPrompt?: () => void
+    remoteVaultRecoveryPrompt?: 'none' | 'with_cache' | 'missing_only'
+    onRecoverRemoteVault?: () => void | Promise<void>
+    onCreateFreshRemoteVault?: () => void | Promise<void>
+    onDismissRemoteRecovery?: () => void
   } = $props()
 
   const connectionOpen = $derived(step === 'connection')
@@ -135,8 +144,18 @@
           {isInitializing}
           {isConnecting}
           {onSelectProvider}
-          {onConnect}
+          onConnect={remoteVaultRecoveryPrompt === 'none' ? onConnect : undefined}
         />
+        {#if remoteVaultRecoveryPrompt !== 'none'}
+          <RemoteVaultRecoveryPanel
+            {vault}
+            mode={remoteVaultRecoveryPrompt}
+            isBusy={isConnecting}
+            onRecover={onRecoverRemoteVault}
+            onCreateFresh={onCreateFreshRemoteVault}
+            onDismiss={onDismissRemoteRecovery}
+          />
+        {/if}
       </div>
     {/if}
   </section>

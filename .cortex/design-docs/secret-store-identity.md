@@ -33,8 +33,6 @@ Random suffix tokens use `generate_id()` — 11 chars, base64url. Auth keys appe
 
 ```yaml
 store_id: store_SMypl8K0w9Y
-unlock:
-  type: keys
 secrets:
   - id: secret_k9Qx2mNp4Rt
     type: api-key

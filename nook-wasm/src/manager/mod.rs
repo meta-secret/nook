@@ -32,7 +32,10 @@ use crate::storage::{
         write_drive_vault_with_retry,
     },
     github::{ensure_github_repo_exists, fetch_github_username, write_github_text_file_with_retry},
-    indexed_db::{load_from_indexed_db, load_or_create_device_identity, save_to_indexed_db},
+    indexed_db::{
+        load_from_indexed_db, load_or_create_device_identity, save_to_indexed_db,
+        save_vault_local_cache,
+    },
 };
 use std::collections::HashMap;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -64,6 +67,9 @@ pub struct NookVaultManager {
     pub(in crate::manager) store_id: String,
     pub(in crate::manager) status_tx: flume::Sender<String>,
     pub(in crate::manager) status_rx: flume::Receiver<String>,
+    /// When true, the next `connect` loads vault YAML from the browser cache
+    /// instead of remote storage (used to recreate a deleted remote file).
+    pub(in crate::manager) use_local_cache_for_connect: bool,
 }
 
 #[wasm_bindgen]
@@ -91,6 +97,7 @@ impl NookVaultManager {
             file_sha: None,
             last_synced_content: String::new(),
             github_root_empty: false,
+            use_local_cache_for_connect: false,
             status_tx,
             status_rx,
         }
@@ -152,6 +159,7 @@ impl NookVaultManager {
         self.last_synced_content.clear();
         self.github_root_empty = false;
         self.unlock = nook_core::VaultUnlock::Keys;
+        self.use_local_cache_for_connect = false;
     }
 }
 
@@ -223,8 +231,21 @@ impl NookVaultManager {
                 let _ = self.status_tx.send("DRIVE_SAVE_SUCCESS".to_owned());
             }
         }
-        self.last_synced_content = stored;
+        self.last_synced_content = stored.clone();
+        if self.storage_mode != nook_core::StorageMode::Local {
+            save_vault_local_cache(&self.local_cache_ref(), &stored).await?;
+        }
         Ok(())
+    }
+
+    pub(in crate::manager) fn local_cache_ref(&self) -> String {
+        match self.storage_mode {
+            nook_core::StorageMode::Local => "local".to_owned(),
+            nook_core::StorageMode::Github => {
+                format!("github:{}:{}", self.github_repo, self.github_path)
+            }
+            nook_core::StorageMode::GoogleDrive => format!("drive:{}", self.github_repo),
+        }
     }
 
     pub(in crate::manager) fn device_identity(
@@ -407,6 +428,9 @@ impl NookVaultManager {
                 }
             }
         };
+        if !content.trim().is_empty() && self.storage_mode != nook_core::StorageMode::Local {
+            save_vault_local_cache(&self.local_cache_ref(), &content).await?;
+        }
         Ok(content)
     }
 }

@@ -81,11 +81,9 @@ A new top-level YAML section names the active unlock mode using a tagged
 union:
 
 ```yaml
-# Keys mode (historical default)
-unlock:
-  type: keys
+# Keys mode (default) — `unlock:` omitted; device keys live in auth:
 
-# Password mode (mutex with keys: no auth: section, no joins: section)
+# Password-only mode (mutex with auth:/joins:)
 unlock:
   type: password
   envelope:

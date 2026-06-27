@@ -415,7 +415,15 @@
     "before_connect_desc": "Before you can connect, add a storage provider — local device or GitHub.",
     "manage_providers": "Manage storage providers",
     "saved_count": "saved",
-    "manage_providers_desc": "Add or remove saved providers. Vault files on storage are not deleted."
+    "manage_providers_desc": "Add or remove saved providers. Vault files on storage are not deleted.",
+    "remote_recovery": {
+      "title": "Vault file missing on storage",
+      "desc_with_cache": "The encrypted vault file is no longer on your remote storage, but this browser still has a local copy from a previous session. Recover it to recreate the file on storage.",
+      "desc_missing_only": "The encrypted vault file is no longer on your remote storage, and this browser has no local copy to restore. You can create a new vault file from scratch — this replaces what was there before.",
+      "recover_btn": "Recover from this browser",
+      "recovering": "Preparing recovery…",
+      "create_fresh_btn": "Create new vault file"
+    }
   },
   "join_enrollment": {
     "title_join": "Join this vault",

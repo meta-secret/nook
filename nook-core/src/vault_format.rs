@@ -126,10 +126,9 @@ struct StoredVaultYaml {
     /// Logical secret-store identity — same id on every provider replica of this vault.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_id: Option<String>,
-    /// Active unlock mechanism — exactly one variant per vault. New writes
-    /// always emit this field; legacy reads infer it from the absence /
-    /// presence of `password_envelope`.
-    #[serde(default)]
+    /// Active unlock mechanism. Omitted on write when `Keys` (the default);
+    /// legacy reads infer mode from `password_envelope` / `unlock.type: password`.
+    #[serde(default, skip_serializing_if = "vault_unlock_is_keys")]
     unlock: VaultUnlock,
     #[serde(default)]
     secrets: Vec<StoredSecretRecord>,
@@ -247,6 +246,10 @@ pub fn serialize_stored_yaml_with_unlock(
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
     serde_yaml::to_string(&vault).map_err(|e| format!("Failed to serialize stored YAML: {}", e))
+}
+
+fn vault_unlock_is_keys(unlock: &VaultUnlock) -> bool {
+    matches!(unlock, VaultUnlock::Keys)
 }
 
 fn normalize_unlock_for_write(unlock: &VaultUnlock) -> VaultUnlock {
@@ -670,8 +673,7 @@ not-json
             Some("store_SMypl8K0w9Y"),
         )
         .unwrap();
-        assert!(yaml.contains("unlock:"));
-        assert!(yaml.contains("type: keys"));
+        assert!(!yaml.contains("unlock:"));
         assert!(yaml.contains("password_entries:"));
         assert!(!yaml.starts_with("password_envelope:"));
 
@@ -693,7 +695,7 @@ not-json
     fn yaml_keys_unlock_is_default() {
         let records = sample_records();
         let yaml = serialize_stored_yaml(&records).unwrap();
-        assert!(yaml.contains("type: keys"));
+        assert!(!yaml.contains("unlock:"));
         assert!(!yaml.contains("envelope:"));
 
         let (parsed_records, unlock) = deserialize_stored_yaml_with_unlock(&yaml).unwrap();
@@ -722,7 +724,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             None,
         )
         .unwrap();
-        assert!(rewritten.contains("type: keys"));
+        assert!(!rewritten.contains("unlock:"));
         assert!(rewritten.contains("password_entries:"));
         assert!(!rewritten.starts_with("password_envelope:"));
     }
