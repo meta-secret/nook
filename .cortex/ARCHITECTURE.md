@@ -152,18 +152,18 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 
 | What | How it is cached |
 |------|------------------|
-| Toolchain image | Single **`ghcr.io/<owner>/<repo>/toolchain:latest`** image (always **linux/amd64**). `task setup` pulls it; `docker buildx bake` reuses registry layers and only rebuilds invalidated layers. **`toolchain:buildcache`** (BuildKit `mode=max`) stores intermediate layers such as `cargo chef cook` — the final image tag alone cannot restore those. CI pushes `:latest` after green verify; `:buildcache` updates on every registry build. |
-| Rust crate dependencies | **cargo-chef** + clippy/test warm-up during image build. Baked artifacts live at `/opt/nook/target`. |
-| `target/` at runtime | Bind-mounting the repo hides image layers under `/workspace/target`. The **entrypoint** copies `/opt/nook/target` into the workspace when `target/debug/deps` is empty (fresh CI checkout). Within one CI job, later `docker run` invocations reuse the same host `target/` via the bind mount. |
+| Toolchain image | Single **`ghcr.io/<owner>/<repo>/toolchain:latest`** image (always **linux/amd64**). Docker tasks depend on **`setup`**. **`NOOK_ENV=dev`** (default): skip setup if `nook-build:local` exists. **`NOOK_ENV=ci`**: always `docker buildx bake` with GHCR **`toolchain:buildcache`**. |
+| Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) and clippy/test warm-up during image build. Artifacts live at **`/opt/nook/target`** (`CARGO_TARGET_DIR`), outside the bind mount. |
+| `target/` at runtime | Cargo always uses **`/opt/nook/target`** in the image — not under `/workspace`, so the repo bind mount never hides the cache and no entrypoint copy is needed. |
 | `nook-web/node_modules` | Each `docker run` overlays an **anonymous volume** at `/workspace/nook-web/node_modules` so parallel containers install independently. `BUN_INSTALL_CACHE_DIR` is baked at `/opt/nook/bun-install-cache`; the entrypoint runs `bun install --frozen-lockfile` (fast link from cache; correct rolldown native bindings). |
 | Web wasm pkg | Baked at `/opt/nook/nook-wasm-pkg` during image build (cached with wasm/core sources). Entrypoint seeds `nook-web/src/lib/nook-wasm` when empty; `task wasm:build` skips wasm-pack when sources are unchanged. |
-| Playwright Chromium | `playwright install --with-deps chromium` during image build at `PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`. |
-| CI Docker builds | **One `task setup` per workflow run**. Pull `toolchain:latest`, build only changed layers, push after green verify. |
+| Playwright Chromium | `playwright install --with-deps chromium` in `toolchain-web` (Playwright owns the apt list; reruns only when web deps change). |
+| CI Docker builds | **`task ci:pr:publish`** / **`task check`** + **`docker:push`** (buildx `toolchain-push`, not `docker push`). Buildcache during bake; `:latest` after green verify. |
 
-Regenerate chef inputs after dependency changes: `task docker:generate-recipe` (commit `recipe.json` and `Cargo.lock`).
+Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 
 ### Build & verify
 
 - **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
-- **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (prebuilt `wasm-pack` + `wasm-bindgen` in the image; chef-cached `target/` seeded by the entrypoint).
-- **Verify:** `task check` (fmt, clippy, `cargo test -p nook-core`, svelte-check, eslint, vitest, vite build).
+- **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (wasm-pack in the image; chef-cached `/opt/nook/target`).
+- **Verify:** `task check` (fmt, clippy, `cargo nextest run -p nook-core --profile ci`, svelte-check, eslint, vitest, vite build).

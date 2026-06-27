@@ -145,7 +145,7 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 | `validation.rs` | Connect/secret validation, search filter |
 | `password.rs` | CSPRNG password generation |
 
-All format, crypto, validation, and generator behavior must be covered by Rust tests (`cargo test -p nook-core`). Integration workflows live in `nook-core/tests/vault_workflow.rs`.
+All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-core/tests/vault_workflow.rs`.
 
 ---
 

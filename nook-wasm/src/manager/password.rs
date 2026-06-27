@@ -49,6 +49,7 @@ impl NookVaultManager {
         }
         let entries =
             nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;
+        self.password_entries = entries.clone();
         password_entry_summaries_to_js(&entries)
     }
 

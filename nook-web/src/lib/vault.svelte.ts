@@ -496,6 +496,7 @@ export class VaultState {
   }
 
   beginProviderSetup(type: StorageProviderType) {
+    this.resetVaultSessionState()
     this.loginSetupType = type
     this.storageMode = type
     this.githubPat = ''
@@ -507,6 +508,7 @@ export class VaultState {
   }
 
   beginAddProvider() {
+    this.resetVaultSessionState()
     this.addProviderOpen = true
     this.loginSetupType = null
     this.errorMsg = ''
@@ -538,6 +540,15 @@ export class VaultState {
   }
 
   async selectProvider(id: string) {
+    const providerChanged = this.activeProviderId !== id
+    if (providerChanged) {
+      if (this.isAuthenticated) {
+        this.clearUnlockedSession()
+      } else {
+        this.resetVaultSessionState()
+      }
+      this.loginFlowStep = 'connection'
+    }
     this.activeProviderId = id
     this.loginSetupType = null
     this.applyActiveProviderCredentials()
@@ -556,13 +567,6 @@ export class VaultState {
   async refreshPasswordEntriesList(): Promise<boolean> {
     if (!this.manager) return false
     try {
-      if (this.isAuthenticated) {
-        this.passwordEntries = mapWasmPasswordEntries(
-          this.manager.listVaultPasswordEntries(),
-        )
-        this.unlockMode = 'keys'
-        return true
-      }
       if (!this.hasRemoteCredentials()) {
         this.passwordEntries = []
         this.loginUnlockMode = 'unknown'
@@ -589,12 +593,6 @@ export class VaultState {
 
   /** Login gate step 1: highlight a saved provider without reaching storage yet. */
   async selectLoginProvider(id: string): Promise<void> {
-    if (this.activeProviderId !== id) {
-      this.loginFlowStep = 'connection'
-      this.passwordEntries = []
-      this.selectedPasswordEntryId = null
-      this.loginUnlockMode = 'unknown'
-    }
     await this.selectProvider(id)
   }
 
@@ -622,10 +620,21 @@ export class VaultState {
 
   backToLoginProviderStep() {
     this.loginFlowStep = 'connection'
+    this.resetVaultSessionState()
+    this.errorMsg = ''
+  }
+
+  /** Clear wasm session + login password preview so UI matches the active provider. */
+  private resetVaultSessionState() {
+    try {
+      this.manager?.resetVaultSession()
+    } catch {
+      // Engine not ready yet.
+    }
     this.passwordEntries = []
     this.selectedPasswordEntryId = null
     this.loginUnlockMode = 'unknown'
-    this.errorMsg = ''
+    this.loginPasswordPrompt = false
   }
 
   private clearUnlockedSession() {
@@ -637,10 +646,10 @@ export class VaultState {
     this.joinEnrollmentPrompt = 'none'
     this.enrollSecretsKey = ''
     this.enrollMembersKey = ''
-    this.loginUnlockMode = 'unknown'
     this.settingsOpen = false
     this.enrollmentCode = ''
     this.errorMsg = ''
+    this.resetVaultSessionState()
   }
 
   /** Drop a saved provider from this browser. Vault files on storage are untouched. */
@@ -662,18 +671,14 @@ export class VaultState {
       this.activeProviderId = this.providers[0]!.id
       if (signedOut) {
         this.clearUnlockedSession()
+      } else {
+        this.resetVaultSessionState()
       }
+      this.loginFlowStep = 'connection'
     }
 
     this.applyActiveProviderCredentials()
     await this.persistProviders()
-
-    if (!this.isAuthenticated) {
-      this.loginFlowStep = 'connection'
-      this.passwordEntries = []
-      this.selectedPasswordEntryId = null
-      this.loginUnlockMode = 'unknown'
-    }
 
     this.showSuccess(this.t('toasts.removed_device', { label: target.label }))
   }
@@ -873,7 +878,7 @@ export class VaultState {
       this.pendingJoins = mapWasmJoinRequests(snapshot.pendingJoins)
       this.vaultMembers = mapWasmVaultMembers(snapshot.vaultMembers)
       this.unlockMode = 'keys'
-      void this.refreshPasswordEntriesList()
+      await this.refreshPasswordEntriesList()
     } catch {
       this.vaultMembers = []
       this.unlockMode = 'keys'
@@ -948,9 +953,6 @@ export class VaultState {
   lockVault() {
     this.clearUnlockedSession()
     this.loginFlowStep = 'connection'
-    this.passwordEntries = []
-    this.selectedPasswordEntryId = null
-    this.loginUnlockMode = 'unknown'
   }
 
   openHelp() {
@@ -1123,7 +1125,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
-      void this.hydrateMultiDeviceState()
+      await this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess(this.t('toasts.vault_created'))
     } catch (e: unknown) {
@@ -1287,7 +1289,7 @@ export class VaultState {
       this.isAuthenticated = true
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
-      void this.hydrateMultiDeviceState()
+      await this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
         this.showSuccess(this.t('toasts.local_loaded'))

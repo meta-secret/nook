@@ -4,6 +4,9 @@ vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
   DOCKER_PLATFORM: linux/amd64
+  TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
+  # dev (default): skip setup when nook-build:local exists. ci: always build (set in CI via GITHUB_ENV).
+  NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
 
 tasks:
@@ -13,25 +16,46 @@ tasks:
       - task: build
 
   setup:
-    desc: Pull remote toolchain image (when TOOLCHAIN_REGISTRY is set) and build if needed.
+    desc: Build linux/amd64 toolchain (dev skips when image exists; ci always builds with GHCR cache).
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      NOOK_ENV: '{{.NOOK_ENV}}'
     cmds:
-      - task: docker:pull
-      - task: docker:build
+      - >-
+        sh -c 'IMAGE="{{.DOCKER_IMAGE}}"; REG="{{.TOOLCHAIN_REGISTRY}}"; ENV="{{.NOOK_ENV}}";
+        if [ "$ENV" = "dev" ] && {{.DOCKER}} image inspect "$IMAGE" >/dev/null 2>&1; then
+          echo "==> Toolchain image present; skipping setup (NOOK_ENV=dev).";
+          exit 0;
+        fi;
+        echo "==> Building toolchain (NOOK_ENV=$ENV) ...";
+        TOOLCHAIN_REGISTRY="$REG" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
 
   ci:pr:
     desc: PR CI — prepare once, then verify and web build in parallel (separate containers).
+    deps:
+      - setup
     cmds:
       - task: ci:pr:prepare
       - task: ci:pr:parallel
 
   ci:pr:publish:
-    desc: PR CI verify and GHCR push in parallel (after docker setup build).
-    deps:
-      - ci:pr
-      - docker:push:ci
+    desc: PR CI verify, then push toolchain to GHCR on success (buildx registry push).
+    cmds:
+      - task: ci:pr
+      - task: docker:push:ci
+
+  ci:pr:deploy-preview:
+    desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
+    cmds:
+      - task: _deploy-preview
+
+  ci:pr:comment-preview:
+    desc: Comment or update Cloudflare preview URL on the PR (CI; runs on host).
+    cmds:
+      - task: _comment-preview
 
   docker:push:ci:
-    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (used in parallel with ci:pr).
+    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (after green ci:pr).
     env:
       PUSH_TOOLCHAIN: "1"
     cmds:
@@ -63,162 +87,184 @@ tasks:
 
   ci:verify:
     desc: Format, lint, and test in Docker (no web production build).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _verify }
 
-  docker:pull:
-    internal: true
-    env:
-      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
-    cmds:
-      - >-
-        sh -c 'test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        {{.DOCKER}} pull --platform {{.DOCKER_PLATFORM}} "${TOOLCHAIN_REGISTRY}:latest"
-        && {{.DOCKER}} tag "${TOOLCHAIN_REGISTRY}:latest" "{{.DOCKER_IMAGE}}"
-        || true'
-
   build:
     desc: Build Rust crates, wasm package, and web app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _build }
 
   test:
     desc: Run all test suites in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _test }
 
   lint:
     desc: Run all linters in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _lint }
 
   check:
     desc: Run formatting, linting, tests, and builds in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _check }
 
   format:
     desc: Format all projects in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _format }
 
   format:check:
     desc: Check formatting for all projects in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _format:check }
 
   rust:build:
     desc: Build the Rust workspace in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _rust:build }
 
   rust:test:
     desc: Test the Rust workspace in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _rust:test }
 
   rust:lint:
     desc: Lint the Rust workspace in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _rust:lint }
 
   wasm:build:
     desc: Build nook-wasm for the web app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _wasm:build }
 
   web:install:
     desc: Install web dependencies in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:install }
 
   web:build:
     desc: Build the Svelte app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:build }
 
   web:check:
     desc: Run Svelte and TypeScript checks in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:check }
 
   web:test:
     desc: Run web unit tests in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test }
 
   web:test:e2e:
     desc: Run Playwright e2e tests in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:local:
     desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e:local }
 
   web:test:e2e:github:
     desc: Run GitHub vault Playwright e2e in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e:github }
 
   web:test:e2e:multi-device:
     desc: Run multi-device Playwright e2e in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e:multi-device }
 
   web:lint:
     desc: Lint the web app in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:lint }
 
   web:dev:
     desc: Start the Svelte dev server in Docker.
+    deps:
+      - setup
     cmds:
       - task: docker:web:dev
 
   docker:build:
-    desc: Build the linux/amd64 toolchain image (reuses pulled registry layers when available).
-    env:
-      DOCKER_IMAGE: '{{.DOCKER_IMAGE}}'
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+    desc: Alias for setup (build linux/amd64 toolchain image).
     cmds:
-      - '{{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+      - task: setup
 
   docker:push:
-    desc: Push nook-build:local to TOOLCHAIN_REGISTRY (CI after green check, or local with PUSH_TOOLCHAIN=1).
+    desc: Push :latest via buildx registry output (dedupes with buildcache; after green CI).
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
     cmds:
       - >-
         sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        {{.DOCKER}} push "${TOOLCHAIN_REGISTRY}:latest"'
-
-  docker:generate-recipe:
-    desc: Regenerate recipe.json after Cargo.toml dependency changes (commit the result).
-    cmds:
-      - '{{.DOCKER}} buildx bake -f docker-bake.hcl generate-recipe'
+        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain-push'
 
   docker:task:
     internal: true
@@ -236,6 +282,13 @@ tasks:
         -e NOOK_GITHUB_POLL_MS
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -e CLOUDFLARE_API_TOKEN
+        -e CLOUDFLARE_ACCOUNT_ID
+        -e CF_PAGES_BRANCH
+        -e GITHUB_TOKEN
+        -e GITHUB_REPOSITORY
+        -e PR_NUMBER
+        -e PREVIEW_URL
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace
@@ -296,6 +349,65 @@ tasks:
       - task: _format:check
       - task: _wasm:build
 
+  _deploy-preview:
+    desc: Deploy nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
+        if [ ! -d nook-web/dist ]; then
+          echo "error: nook-web/dist not found — run the web build before deploy" >&2;
+          exit 1;
+        fi;
+        bunx wrangler@4 pages project create nook --production-branch=main >/dev/null 2>&1 || true;
+        set +e;
+        deploy_output="$(
+          bunx wrangler@4 pages deploy nook-web/dist \
+            --project-name=nook \
+            --branch="${CF_PAGES_BRANCH}" \
+            --commit-dirty=true 2>&1
+        )";
+        deploy_status=$?;
+        set -e;
+        echo "$deploy_output";
+        if [ "$deploy_status" -ne 0 ]; then
+          log_dir="${HOME:-/root}/.config/.wrangler/logs";
+          if [ -d "$log_dir" ]; then
+            latest_log="$(ls -t "$log_dir"/wrangler-*.log 2>/dev/null | head -1 || true)";
+            if [ -n "$latest_log" ]; then
+              echo "wrangler log ($latest_log):" >&2;
+              cat "$latest_log" >&2;
+            fi;
+          fi;
+          exit "$deploy_status";
+        fi;
+        deployment_url="$(
+          echo "$deploy_output" \
+            | grep -oE "Deployment alias URL: https://[^ ]+" \
+            | sed "s/Deployment alias URL: //" \
+            | tail -1
+        )";
+        if [ -z "$deployment_url" ]; then
+          deployment_url="$(
+            echo "$deploy_output" \
+              | grep -oE "https://[a-zA-Z0-9.-]+\.pages\.dev[^ ]*" \
+              | tail -1
+          )";
+        fi;
+        if [ -z "$deployment_url" ]; then
+          echo "Could not parse Cloudflare deployment URL from wrangler output" >&2;
+          exit 1;
+        fi;
+        echo "$deployment_url" > .cloudflare-preview-url'
+
+  _comment-preview:
+    desc: Comment or update Cloudflare preview URL on the PR.
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        export PREVIEW_URL="${PREVIEW_URL:-$(cat .cloudflare-preview-url)}";
+        bun run .github/scripts/comment-preview-url.ts'
+
   _verify:parallel:
     desc: Lint and test when wasm is already built (ci:pr parallel track).
     cmds:
@@ -303,17 +415,27 @@ tasks:
       - task: _test:parallel
 
   _lint:parallel:
-    desc: Rust and web linters without rebuilding wasm.
+    desc: Web linters only — Rust clippy already runs in the toolchain docker build warm-up.
     cmds:
-      - task: _rust:lint
       - task: _web:lint:parallel
 
   _test:parallel:
-    desc: Rust and web tests without rebuilding wasm.
+    desc: Rust and web tests when wasm is already built (ci:pr parallel track).
     cmds:
-      - task: _rust:test
+      - task: _rust:test:parallel
       - task: _web:check:parallel
       - task: _web:test:parallel
+
+  _rust:test:parallel:
+    desc: Run nook-core tests when deps are already built (ci:pr parallel track).
+    cmds:
+      - task: _rust:test:run
+
+  _rust:test:run:
+    internal: true
+    desc: Run nook-core tests via cargo-nextest (ci profile).
+    cmds:
+      - cargo nextest run -p nook-core --profile ci
 
   _format:
     desc: Format all projects.
@@ -335,7 +457,7 @@ tasks:
   _rust:test:
     desc: Test nook-core (wasm is covered by web e2e).
     cmds:
-      - cargo test -p nook-core
+      - task: _rust:test:run
 
   _rust:lint:
     desc: Lint nook-core on host and nook-wasm for wasm32.
@@ -354,7 +476,8 @@ tasks:
       - >-
         sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
         need=0;
-        if [ ! -f "$out" ]; then need=1;
+        if [ -n "${CI:-}" ]; then need=1;
+        elif [ ! -f "$out" ]; then need=1;
         elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
         fi;
         if [ "$need" -eq 1 ]; then

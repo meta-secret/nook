@@ -10,7 +10,7 @@ Use this workflow for quality, CI, and deployment changes.
 6. Preserve these gates unless the task explicitly changes them:
    - `cargo fmt --all -- --check`
    - `cargo clippy -p nook-core --all-targets` and `cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm` (`-D warnings`)
-   - `cargo test -p nook-core`
+   - `cargo nextest run -p nook-core --profile ci`
    - `svelte-check`
    - `eslint`
    - `prettier --check`
@@ -19,7 +19,7 @@ Use this workflow for quality, CI, and deployment changes.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
-10. **CI policy:** `.github/workflows/pr.yml` — one job: build toolchain once, `task ci:pr:publish` (verify + GHCR push in parallel), then Cloudflare preview deploy. `.github/workflows/main.yml` — one job (`ci`): `task check`, web build, e2e; then GitHub Pages deploy.
+10. **CI policy:** `.github/workflows/pr.yml` — `task ci:pr:publish` (verify, then buildx push `:latest`). `.github/workflows/main.yml` — `task check`, e2e, `docker:push`.
 11. Verify locally with `task check`.
 12. **Docker:** Never kill the Docker daemon (`killall docker`, `pkill docker`, etc.). Stop only specific containers (`docker stop <id>`). See [rules.md §5 — Docker daemon](rules.md#docker-daemon--never-kill-it).
-13. **Local web dev:** `task web:install` then `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.
+13. **Local web dev:** `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.

@@ -13,17 +13,17 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 ## 3. Toolchain & Runtime Specs
 - **Rust Version**: `1.96` (using bookworm Debian base).
 - **Bun Version**: `1.3.14`.
-- **Wasm Pack**: `0.15.0` (prebuilt release archive via `curl`, not `cargo install`).
-- **wasm-bindgen CLI**: `0.2.125` (prebuilt; pinned to match `nook-wasm` so wasm-pack skips downloading it at build time).
-- **Binaryen (wasm-opt)**: `122` (precompiled linux binaries to support reference types and externrefs).
+- **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
+- **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.
+- **wasm-bindgen** (crate + CLI): `0.2.125` in `nook-wasm/Cargo.toml`; CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
 
 ## 4. Docker & CI caching
 
 - **Repo bind mount + per-container `node_modules`.** `docker run` bind-mounts the repo at `/workspace` and overlays an anonymous volume at `nook-web/node_modules` so parallel containers each run `bun install` independently (packages link from `/opt/nook/bun-install-cache` in the image).
-- **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). `task setup` pulls it; build reuses registry layers; CI pushes after green verify. Mac uses `--platform linux/amd64`.
-- **Dependency cache lives in the image.** `cargo-chef` pre-compiles Rust deps; clippy/test/build warm-up runs during `docker build`.
-- **Entrypoint seeding.** The bind mount hides image-baked `target/`. The entrypoint copies from `/opt/nook/target` when empty.
+- **Single remote toolchain image.** `ghcr.io/<owner>/<repo>/toolchain:latest` (linux/amd64). **`NOOK_ENV=dev`** (default): skip setup when local image exists. **`NOOK_ENV=ci`**: always build with GHCR cache. Mac uses `--platform linux/amd64`.
+- **Dependency cache lives in the image.** `builder-deps` runs `cargo chef cook` (native + wasm32) and `cargo fetch` once. **`builder-debug`** (native clippy, nextest `--no-run`, build) and **`builder-wasm`** (wasm clippy, release build, wasm-pack) fork from deps and BuildKit/bake can run them **in parallel**. The final **`toolchain`** stage copies the crates.io registry from deps, native `target/` from debug, wasm32 + pkg from wasm — no serial debug→wasm chain.
+- **Entrypoint seeding.** Only wasm pkg and `Cargo.lock` when missing; Rust `target/` stays at `/opt/nook/target` in the image.
 - **Web deps in the image.** `bun install --frozen-lockfile` runs during `docker build` (layer cached while `package.json` / `bun.lock` are unchanged). Rebuild after web dependency changes.
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
-- **PR CI parallelism.** `pr.yml` builds the toolchain once, then `task ci:pr:publish` runs `ci:pr` and `docker:push:ci` in parallel. `ci:pr` prepares format+wasm (wasm skipped when image-seeded), then verify and web build in separate containers.
-- **Within a CI job**, incremental `target/` and wasm build output persist on the runner filesystem through the bind mount until the job ends.
+- **PR CI parallelism.** `pr.yml` builds the toolchain once (`cargo chef cook`, clippy, `cargo nextest run --no-run`, wasm warm-up in the Dockerfile), then `ci:pr` runs format + wasm in one container and Rust tests + web lint/test/build in parallel — **no second Rust compile in `docker run`**, but `cargo nextest run -p nook-core --profile ci` runs against the PR checkout. `task check` on main still runs the full gate in-container.
+- **Within a CI job**, wasm build output under `nook-web/src/lib/nook-wasm` persists on the runner via the bind mount; Rust artifacts stay in each container's `/opt/nook/target` from the image.

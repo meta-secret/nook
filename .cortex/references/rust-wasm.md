@@ -8,8 +8,7 @@
 ## 2. Compiling for the web
 - Invoke wasm-pack from the **workspace root** so chef-cached `target/` is reused:
   `wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm`
-- The Docker image installs `wasm-pack` and `wasm-bindgen` from prebuilt release archives (`curl`), not `cargo install`.
-- `wasm-opt` (Binaryen 122+) runs automatically via wasm-pack.
+- The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`). `wasm-pack build` installs the matching `wasm-bindgen-cli` itself — not `cargo install`. No Binaryen/`wasm-opt` in the image; wasm builds skip post-link optimization.
 
 ## 3. Session state (`NookVaultManager`)
 - `decrypted_jsonl` — in-memory plaintext session (JSONL)
@@ -18,6 +17,6 @@
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`
 
 ## 4. Testing
-- Test vault formats, crypto, validation, and passwords in `nook-core` (`cargo test -p nook-core`).
+- Test vault formats, crypto, validation, and passwords in `nook-core` (`cargo nextest run -p nook-core --profile ci`, or `task rust:test`).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.
 
