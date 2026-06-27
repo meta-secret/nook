@@ -44,6 +44,27 @@ tasks:
       - task: ci:pr
       - task: docker:push:ci
 
+  ci:main:
+    desc: Main branch CI — prepare once, verify ‖ web build in parallel, then e2e.
+    deps:
+      - setup
+    cmds:
+      - task: ci:pr:prepare
+      - task: ci:main:parallel
+      - task: web:test:e2e:parallel
+
+  ci:main:parallel:
+    desc: Lint/test and production web build in parallel after ci:pr:prepare.
+    deps:
+      - ci:verify:parallel
+      - web:build:parallel
+
+  ci:main:publish:
+    desc: Main CI verify/build/e2e, then push toolchain to GHCR on success.
+    cmds:
+      - task: ci:main
+      - task: docker:push:ci
+
   ci:pr:deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
     cmds:
@@ -212,6 +233,12 @@ tasks:
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e }
+
+  web:test:e2e:parallel:
+    desc: Run Playwright e2e in Docker when wasm is already built (ci:main parallel track).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test:e2e:parallel }
 
   web:test:e2e:local:
     desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
@@ -476,8 +503,7 @@ tasks:
       - >-
         sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
         need=0;
-        if [ -n "${CI:-}" ]; then need=1;
-        elif [ ! -f "$out" ]; then need=1;
+        if [ ! -f "$out" ]; then need=1;
         elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
         fi;
         if [ "$need" -eq 1 ]; then
@@ -538,6 +564,12 @@ tasks:
     desc: Run full Playwright e2e suite.
     deps:
       - _wasm:build
+    cmds:
+      - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:parallel:
+    desc: Run full Playwright e2e when wasm is already built (ci:main parallel track).
     cmds:
       - cd nook-web && bun run test:e2e
       - defer: cd nook-web && bun run test:e2e:cleanup

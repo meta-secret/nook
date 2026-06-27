@@ -21,7 +21,7 @@ If you merge a PR for the user, **confirm squash** before completing the merge. 
 
 1. Branch from `main` (never commit directly on `main`).
 2. Implement; run `task format` and `task check` locally before opening a PR.
-3. Push the branch; open a PR with summary and test plan. `pr.yml` runs `task check` plus a Cloudflare preview; `main.yml` runs the full release pipeline (check, e2e, GitHub Pages) after squash merge.
+3. Push the branch; open a PR with summary and test plan. `pr.yml` runs `task ci:pr:publish` plus a Cloudflare preview; `main.yml` runs `task ci:main:publish` (verify ‖ build, then e2e, GitHub Pages) after squash merge.
 4. After review, **squash merge** into `main`.
 5. Delete the branch (optional but recommended).
 
