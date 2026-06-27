@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
-# Multi-stage Dockerfile: stable infra base → web deps / chef / rust cache → final toolchain.
-# See docker-bake.hcl — always linux/amd64; pull ghcr.io/.../toolchain:latest before build.
+# Multi-stage Dockerfile: infra base → web deps / shared rust deps → parallel native+wasm builders → toolchain.
+# BuildKit runs builder-debug and builder-wasm in parallel after builder-deps. See docker-bake.hcl.
 
 ARG RUST_VERSION=1.96
 ARG BUN_VERSION=1.3.14
@@ -47,7 +47,7 @@ COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/carg
 
 WORKDIR /workspace
 
-# --- Web deps: bun install + browser binary (OS deps already in nook-base) ---
+# --- Web deps: bun install + browser binary (parallel with rust builders via toolchain-web fork) ---
 FROM nook-base AS toolchain-web
 
 COPY nook-web/package.json nook-web/bun.lock ./nook-web/
@@ -64,15 +64,21 @@ COPY nook-core nook-core
 COPY nook-wasm nook-wasm
 RUN cargo chef prepare --recipe-path recipe.json
 
-# --- Rust deps + PR warm-up (clippy, nextest --no-run, build) ---
-FROM nook-base AS builder-debug
+# --- Shared rust dependency cache (chef cook + fetch once) ---
+FROM nook-base AS builder-deps
 
 COPY --from=chef-planner /workspace/recipe.json ./recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 RUN cargo chef cook --all-targets --recipe-path recipe.json \
-    && cargo chef cook --clippy --all-targets --recipe-path recipe.json
+    && cargo chef cook --clippy --all-targets --recipe-path recipe.json \
+    && cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
+    && cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json \
+    && cargo fetch --locked
+
+# --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---
+FROM builder-deps AS builder-debug
 
 COPY Cargo.toml Cargo.lock ./
 COPY nook-core nook-core
@@ -82,20 +88,22 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && cargo nextest run --no-run -p nook-core --profile ci \
     && cargo build -p nook-core
 
-FROM builder-debug AS builder-wasm
+# --- Wasm release build + pkg (parallel with builder-debug after builder-deps) ---
+FROM builder-deps AS builder-wasm
 
-RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json
-RUN cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
-RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
-RUN cargo build --release --target wasm32-unknown-unknown -p nook-wasm
-RUN wasm-pack build nook-wasm --target web --out-dir /opt/nook/nook-wasm-pkg --out-name nook_wasm
+COPY nook-core nook-core
+COPY nook-wasm nook-wasm
+RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings \
+    && cargo build --release --target wasm32-unknown-unknown -p nook-wasm \
+    && wasm-pack build nook-wasm --target web --out-dir /opt/nook/nook-wasm-pkg --out-name nook_wasm
 
-# --- Final dev/CI image ---
+# --- Final dev/CI image: assemble artifacts from parallel builders ---
 FROM toolchain-web AS toolchain
 
-COPY --from=builder-wasm /opt/nook/target /opt/nook/target
-COPY --from=builder-wasm /usr/local/cargo/registry /usr/local/cargo/registry
+COPY --from=builder-deps /usr/local/cargo/registry /usr/local/cargo/registry
+COPY --from=builder-debug /opt/nook/target /opt/nook/target
+COPY --from=builder-wasm /opt/nook/target/wasm32-unknown-unknown /opt/nook/target/wasm32-unknown-unknown
 COPY --from=builder-wasm /opt/nook/nook-wasm-pkg /opt/nook/nook-wasm-pkg
 
 COPY Cargo.lock /opt/nook/Cargo.lock
