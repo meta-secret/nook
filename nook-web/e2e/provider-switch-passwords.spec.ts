@@ -46,6 +46,7 @@ describeGithub('provider switch password entries', () => {
       { timeout: UI_TIMEOUT_MS },
     )
 
+    await disableLoginAutoUnlock(page)
     await seedExtraGithubProviders(page, [
       {
         id: 'e2e-empty-github',
@@ -54,8 +55,18 @@ describeGithub('provider switch password entries', () => {
         githubPat: githubPat!,
       },
     ])
-    await disableLoginAutoUnlock(page)
+    await page.reload()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await page.getByTestId('saved-provider-local').first().click()
+    await page.getByTestId('login-connect-provider-btn').click()
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
 
+    await openStorageSettings(page)
     await expandSettingsSection(page, 'storage')
     await page.getByTestId('lock-vault-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible({
