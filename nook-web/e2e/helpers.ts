@@ -575,6 +575,33 @@ export async function addVaultPassword(
   await page.getByTestId('submit-vault-password').click()
 }
 
+/** Issue an onboard enrollment code and return the code textarea locator. */
+export async function submitOnboardEnrollmentCode(
+  page: Page,
+  password: string,
+) {
+  await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('onboard-password-input').fill(password)
+  await page.getByTestId('onboard-device-submit').click()
+
+  const codeArea = page.getByTestId('onboard-code')
+  const error = page.getByTestId('onboard-error')
+  await expect(codeArea.or(error)).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  if (await error.isVisible()) {
+    throw new Error(
+      `Onboard enrollment failed: ${(await error.textContent())?.trim() ?? 'unknown error'}`,
+    )
+  }
+  return codeArea
+}
+
 /** Reconnect after reload — auto-unlocks when a saved provider exists. */
 export async function reconnectGithubVault(page: Page) {
   await page.goto('/')
@@ -602,19 +629,26 @@ export async function connectLoginProvider(page: Page) {
   const savedLocalProvider = page.getByTestId('saved-provider-local').first()
   const savedGithubProvider = page.getByTestId('saved-provider-github').first()
 
-  if (await savedLocalProvider.isVisible()) {
-    if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedLocalProvider.click()
-    }
-  } else if (await savedGithubProvider.isVisible()) {
-    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedGithubProvider.click()
-    }
-  } else {
-    await page.getByTestId('provider-option-local').click()
-  }
+  await expect
+    .poll(
+      async () => {
+        if (await savedLocalProvider.isVisible()) {
+          if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
+            await savedLocalProvider.click()
+          }
+        } else if (await savedGithubProvider.isVisible()) {
+          if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
+            await savedGithubProvider.click()
+          }
+        } else if (await page.getByTestId('provider-option-local').isVisible()) {
+          await page.getByTestId('provider-option-local').click()
+        }
+        return connectButton.isEnabled()
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
 
-  await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
   await connectButton.click()
   await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
@@ -835,14 +869,21 @@ export async function waitForSecretOnDevice(
     await waitForGithubVaultState(github, (yaml) => yaml.secretIds.length > 0)
   }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  if (await row.isVisible()) {
-    return
-  }
   const refresh = page.getByTestId('vault-sync-refresh-btn')
-  if (await refresh.isVisible()) {
-    await refresh.click()
-  }
-  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const timeout = github ? configuredGithubSyncTimeoutMs() : UI_TIMEOUT_MS
+
+  await expect
+    .poll(
+      async () => {
+        if (await row.isVisible()) return true
+        if (await refresh.isVisible() && (await refresh.isEnabled())) {
+          await refresh.click()
+        }
+        return row.isVisible()
+      },
+      { timeout },
+    )
+    .toBe(true)
 }
 
 export async function deleteSecret(

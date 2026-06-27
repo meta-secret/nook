@@ -1,0 +1,95 @@
+# Manually run Playwright e2e against a pull request branch.
+#
+# PR CI (pr.yml) skips e2e for speed; main.yml runs e2e on merge. Use this
+# workflow from the Actions tab when debugging Playwright on a PR before merge.
+#
+# Inputs:
+#   pr_number — PR to checkout (refs/pull/<n>/head)
+#   suite     — local (no PAT), github (needs NOOK_GITHUB_PAT), or all
+
+name: E2E (PR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to test
+        required: true
+        type: string
+      suite:
+        description: Playwright project(s) to run
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - local
+          - github
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: read
+
+concurrency:
+  group: e2e-pr-${{ inputs.pr_number }}-${{ inputs.suite }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (${{ inputs.suite }})
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    steps:
+      - name: Resolve PR head SHA
+        id: pr
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const prNumber = Number('${{ inputs.pr_number }}')
+            if (!Number.isFinite(prNumber) || prNumber <= 0) {
+              core.setFailed(`Invalid pr_number: ${'${{ inputs.pr_number }}'}`)
+              return
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            })
+            core.setOutput('ref', pr.head.sha)
+            core.setOutput('branch', pr.head.ref)
+            core.info(`PR #${prNumber}: ${pr.head.ref} @ ${pr.head.sha}`)
+
+      - name: Checkout PR head
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.pr.outputs.ref }}
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare (format + wasm)
+        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+
+      - name: Verify and build web
+        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+
+      - name: E2e (local)
+        if: inputs.suite == 'all' || inputs.suite == 'local'
+        run: task web:test:e2e:local:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+
+      - name: E2e (GitHub)
+        if: inputs.suite == 'all' || inputs.suite == 'github'
+        run: task web:test:e2e:github:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-pr-${{ inputs.pr_number }}-${{ github.run_id }}
+          NOOK_GITHUB_POLL_MS: '3000'
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'

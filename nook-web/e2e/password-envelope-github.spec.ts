@@ -13,6 +13,7 @@ import {
   openStorageSettings,
   resetGithubVault,
   revealSecretValue,
+  submitOnboardEnrollmentCode,
   UI_TIMEOUT_MS,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   uniqueSecretKey,
@@ -105,13 +106,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceA.getByTestId('vault-secrets-tab').click()
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
     await deviceA.getByTestId('vault-onboard-tab').click()
-    await deviceA.getByTestId('onboard-password-input').fill(vaultPassword)
-    await deviceA.getByTestId('onboard-device-submit').click()
-
-    const codeArea = deviceA.getByTestId('onboard-code')
-    await expect(codeArea).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    const codeArea = await submitOnboardEnrollmentCode(deviceA, vaultPassword)
     const code = (await codeArea.inputValue()).trim()
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
