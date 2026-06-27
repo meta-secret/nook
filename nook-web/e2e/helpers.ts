@@ -629,19 +629,26 @@ export async function connectLoginProvider(page: Page) {
   const savedLocalProvider = page.getByTestId('saved-provider-local').first()
   const savedGithubProvider = page.getByTestId('saved-provider-github').first()
 
-  if (await savedLocalProvider.isVisible()) {
-    if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedLocalProvider.click()
-    }
-  } else if (await savedGithubProvider.isVisible()) {
-    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedGithubProvider.click()
-    }
-  } else {
-    await page.getByTestId('provider-option-local').click()
-  }
+  await expect
+    .poll(
+      async () => {
+        if (await savedLocalProvider.isVisible()) {
+          if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
+            await savedLocalProvider.click()
+          }
+        } else if (await savedGithubProvider.isVisible()) {
+          if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
+            await savedGithubProvider.click()
+          }
+        } else if (await page.getByTestId('provider-option-local').isVisible()) {
+          await page.getByTestId('provider-option-local').click()
+        }
+        return connectButton.isEnabled()
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
 
-  await expect(connectButton).toBeEnabled({ timeout: UI_TIMEOUT_MS })
   await connectButton.click()
   await expect(authorizationStep).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
@@ -862,14 +869,21 @@ export async function waitForSecretOnDevice(
     await waitForGithubVaultState(github, (yaml) => yaml.secretIds.length > 0)
   }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  if (await row.isVisible()) {
-    return
-  }
   const refresh = page.getByTestId('vault-sync-refresh-btn')
-  if (await refresh.isVisible()) {
-    await refresh.click()
-  }
-  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const timeout = github ? configuredGithubSyncTimeoutMs() : UI_TIMEOUT_MS
+
+  await expect
+    .poll(
+      async () => {
+        if (await row.isVisible()) return true
+        if (await refresh.isVisible() && (await refresh.isEnabled())) {
+          await refresh.click()
+        }
+        return row.isVisible()
+      },
+      { timeout },
+    )
+    .toBe(true)
 }
 
 export async function deleteSecret(

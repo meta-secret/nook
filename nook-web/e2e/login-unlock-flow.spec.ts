@@ -130,6 +130,7 @@ test.describe('login unlock flow (provider + method)', () => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Recovery', 'recovery-pass-99')
 
+    await disableLoginAutoUnlock(page)
     await wipeDeviceIdentity(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
