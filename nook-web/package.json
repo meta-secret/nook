@@ -13,12 +13,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "node ./node_modules/@playwright/test/cli.js test",
-    "test:e2e:local": "node ./node_modules/@playwright/test/cli.js test --project=local",
-    "test:e2e:github": "node ./node_modules/@playwright/test/cli.js test --project=github",
-    "test:e2e:multi-device": "node ./node_modules/@playwright/test/cli.js test --project=github e2e/multi-device-github.spec.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:local": "playwright test --project=local",
+    "test:e2e:github": "playwright test --project=github",
+    "test:e2e:multi-device": "playwright test --project=github e2e/multi-device-github.spec.ts",
     "test:e2e:cleanup": "bun e2e/cleanup-github-repos.ts",
-    "test:all": "vitest run && node ./node_modules/@playwright/test/cli.js test"
+    "test:all": "vitest run && playwright test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

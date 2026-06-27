@@ -11,7 +11,7 @@ ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-bookworm AS cargo-chef
 
-# Playwright worker processes fork a real Node runtime (Bun cannot substitute). Bun handles all installs and app scripts.
+# Bun: package install, Vite, app scripts. Node: Playwright test-runner workers only (fork/IPC).
 FROM ${NODE_IMAGE} AS playwright-node
 
 # --- Super-base: every apt package + CLI that only changes on version bumps (no repo sources) ---
