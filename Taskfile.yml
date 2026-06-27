@@ -45,16 +45,14 @@ tasks:
       - task: docker:push:ci
 
   ci:pr:deploy-preview:
-    desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs in Docker; image must exist).
+    desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
     cmds:
-      - task: docker:task
-        vars: { TASK: _deploy-preview }
+      - task: _deploy-preview
 
   ci:pr:comment-preview:
-    desc: Comment or update Cloudflare preview URL on the PR (CI; runs in Docker).
+    desc: Comment or update Cloudflare preview URL on the PR (CI; runs on host).
     cmds:
-      - task: docker:task
-        vars: { TASK: _comment-preview }
+      - task: _comment-preview
 
   docker:push:ci:
     desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (after green ci:pr).
@@ -373,6 +371,14 @@ tasks:
         set -e;
         echo "$deploy_output";
         if [ "$deploy_status" -ne 0 ]; then
+          log_dir="${HOME:-/root}/.config/.wrangler/logs";
+          if [ -d "$log_dir" ]; then
+            latest_log="$(ls -t "$log_dir"/wrangler-*.log 2>/dev/null | head -1 || true)";
+            if [ -n "$latest_log" ]; then
+              echo "wrangler log ($latest_log):" >&2;
+              cat "$latest_log" >&2;
+            fi;
+          fi;
           exit "$deploy_status";
         fi;
         deployment_url="$(

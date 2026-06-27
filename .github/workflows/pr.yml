@@ -89,6 +89,9 @@ jobs:
           PUSH_TOOLCHAIN: "1"
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2.2.0
+
       - name: Deploy to Cloudflare Pages
         id: deploy
         env:
