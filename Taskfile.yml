@@ -420,10 +420,16 @@ tasks:
       - task: _web:lint:parallel
 
   _test:parallel:
-    desc: Web tests only — nook-core tests already run in the toolchain docker build warm-up.
+    desc: Rust and web tests when wasm is already built (ci:pr parallel track).
     cmds:
+      - task: _rust:test:parallel
       - task: _web:check:parallel
       - task: _web:test:parallel
+
+  _rust:test:parallel:
+    desc: Run nook-core tests when deps are already built (ci:pr parallel track).
+    cmds:
+      - cargo test -p nook-core
 
   _format:
     desc: Format all projects.
