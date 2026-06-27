@@ -72,9 +72,7 @@ describeGithub('provider switch password entries', () => {
     )
 
     await page.getByTestId('login-wizard-connection-toggle').click()
-    await expect(
-      page.getByTestId('login-wizard-connection-step'),
-    ).toBeVisible()
+    await expect(page.getByTestId('login-wizard-connection-step')).toBeVisible()
 
     await page.getByTestId('saved-provider-github').last().click()
     await page.getByTestId('login-connect-provider-btn').click()
