@@ -16,8 +16,10 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  globalTimeout: process.env.CI ? 45 * 60_000 : undefined,
   globalTeardown: './e2e/global-teardown.ts',
   timeout: process.env.CI ? 120_000 : 60_000,
+  reporter: process.env.CI ? [['list'], ['github']] : 'list',
   expect: {
     timeout: 5_000,
   },
@@ -30,7 +32,7 @@ export default defineConfig({
     command: 'bun run dev -- --host 127.0.0.1 --port 5173',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    timeout: process.env.CI ? 120_000 : 30_000,
     env: {
       VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
       NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,

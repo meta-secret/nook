@@ -1,4 +1,6 @@
 const GITHUB_VAULT_PATH = 'nook-vault.yaml'
+const GITHUB_FETCH_TIMEOUT_MS = 30_000
+const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
 
 type RepoContext = {
   headers: Record<string, string>
@@ -36,11 +38,22 @@ function isRateLimitResponse(res: Response, body: string) {
 async function waitForRateLimitReset(res: Response) {
   const resetHeader = res.headers.get('x-ratelimit-reset')
   const resetAt = resetHeader ? Number(resetHeader) * 1000 : Date.now() + 60_000
-  const waitMs = Math.max(0, resetAt - Date.now()) + 1_000
+  const waitMs = Math.min(
+    GITHUB_RATE_LIMIT_MAX_WAIT_MS,
+    Math.max(0, resetAt - Date.now()) + 1_000,
+  )
   console.warn(
     `[e2e] GitHub rate limit hit — waiting ${Math.ceil(waitMs / 1000)}s`,
   )
   await sleep(waitMs)
+}
+
+function githubFetch(url: string, init?: RequestInit): Promise<Response> {
+  return fetch(url, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),
+    cache: 'no-store',
+  })
 }
 
 /** Authenticated fetch with rate-limit backoff (one retry after waiting). */
@@ -50,7 +63,7 @@ export async function githubApiFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const headers = { ...githubApiHeaders(pat), ...init?.headers }
-  let res = await fetch(url, { ...init, headers, cache: 'no-store' })
+  let res = await githubFetch(url, { ...init, headers })
   if (res.ok || res.status === 404 || res.status === 304) {
     return res
   }
@@ -58,7 +71,7 @@ export async function githubApiFetch(
   const body = await res.text().catch(() => '')
   if (isRateLimitResponse(res, body)) {
     await waitForRateLimitReset(res)
-    res = await fetch(url, { ...init, headers, cache: 'no-store' })
+    res = await githubFetch(url, { ...init, headers })
     if (res.ok || res.status === 404 || res.status === 304) {
       return res
     }

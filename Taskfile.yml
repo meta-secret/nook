@@ -45,19 +45,19 @@ tasks:
       - task: docker:push:ci
 
   ci:main:
-    desc: Main branch CI — prepare once, then verify ‖ web build ‖ e2e in parallel containers.
+    desc: Main branch CI — prepare once, verify ‖ web build in parallel, then e2e.
     deps:
       - setup
     cmds:
       - task: ci:pr:prepare
       - task: ci:main:parallel
+      - task: web:test:e2e:parallel
 
   ci:main:parallel:
-    desc: Lint/test, production web build, and Playwright e2e in parallel after ci:pr:prepare.
+    desc: Lint/test and production web build in parallel after ci:pr:prepare.
     deps:
       - ci:verify:parallel
       - web:build:parallel
-      - web:test:e2e:parallel
 
   ci:main:publish:
     desc: Main CI verify/build/e2e, then push toolchain to GHCR on success.
@@ -503,8 +503,7 @@ tasks:
       - >-
         sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
         need=0;
-        if [ -n "${CI:-}" ]; then need=1;
-        elif [ ! -f "$out" ]; then need=1;
+        if [ ! -f "$out" ]; then need=1;
         elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
         fi;
         if [ "$need" -eq 1 ]; then
