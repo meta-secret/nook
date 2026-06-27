@@ -89,19 +89,16 @@ RUN cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-
 COPY Cargo.toml Cargo.lock ./
 RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 RUN cargo build --release --target wasm32-unknown-unknown -p nook-wasm
+RUN wasm-pack build nook-wasm --target web --out-dir /opt/nook/nook-wasm-pkg --out-name nook_wasm
 
 # --- Final dev/CI image ---
 FROM toolchain-web AS toolchain
 
 COPY --from=builder-wasm /opt/nook/target /opt/nook/target
 COPY --from=builder-wasm /usr/local/cargo/registry /usr/local/cargo/registry
+COPY --from=builder-wasm /opt/nook/nook-wasm-pkg /opt/nook/nook-wasm-pkg
 
 COPY Cargo.lock /opt/nook/Cargo.lock
-
-COPY Cargo.toml ./
-COPY nook-core nook-core
-COPY nook-wasm nook-wasm
-RUN wasm-pack build nook-wasm --target web --out-dir /opt/nook/nook-wasm-pkg --out-name nook_wasm
 
 COPY docker-entrypoint.sh /usr/local/bin/nook-entrypoint.sh
 RUN chmod +x /usr/local/bin/nook-entrypoint.sh
