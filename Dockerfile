@@ -50,7 +50,9 @@ FROM builder-base AS builder-debug
 
 COPY recipe.json .
 COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
-RUN cargo chef cook --all-targets --recipe-path recipe.json
+# build + clippy cooks: clippy uses a different driver; without --clippy deps recompile on every source change.
+RUN cargo chef cook --all-targets --recipe-path recipe.json \
+    && cargo chef cook --clippy --all-targets --recipe-path recipe.json
 
 COPY Cargo.toml Cargo.toml
 COPY nook-core/Cargo.toml nook-core/Cargo.toml
@@ -72,7 +74,8 @@ RUN rustup target add wasm32-unknown-unknown
 
 COPY recipe.json .
 COPY --from=chef-planner /workspace/Cargo.lock ./Cargo.lock
-RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json -p nook-wasm
+RUN cargo chef cook --release --target wasm32-unknown-unknown --recipe-path recipe.json \
+    && cargo chef cook --release --clippy --target wasm32-unknown-unknown --recipe-path recipe.json
 RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings \
     && cargo build --release --target wasm32-unknown-unknown -p nook-wasm
 
