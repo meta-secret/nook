@@ -286,6 +286,8 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = nook_core::StorageMode::parse(storage_mode).map_err(NookError::Database)?;
+        let previous_mode = self.storage_mode;
+        let previous_remote_ref = self.github_repo.clone();
         self.storage_mode = mode;
         self.file_sha = None;
 
@@ -324,6 +326,13 @@ impl NookVaultManager {
                 self.github_repo = file_id;
             }
         }
+
+        if previous_mode != self.storage_mode || previous_remote_ref != self.github_repo {
+            self.password_entries.clear();
+            self.unlock = nook_core::VaultUnlock::Keys;
+            self.last_synced_content.clear();
+        }
+
         Ok(())
     }
 

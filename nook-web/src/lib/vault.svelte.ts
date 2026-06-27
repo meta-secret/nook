@@ -508,6 +508,7 @@ export class VaultState {
   }
 
   beginAddProvider() {
+    this.resetVaultSessionState()
     this.addProviderOpen = true
     this.loginSetupType = null
     this.errorMsg = ''
@@ -877,7 +878,7 @@ export class VaultState {
       this.pendingJoins = mapWasmJoinRequests(snapshot.pendingJoins)
       this.vaultMembers = mapWasmVaultMembers(snapshot.vaultMembers)
       this.unlockMode = 'keys'
-      void this.refreshPasswordEntriesList()
+      await this.refreshPasswordEntriesList()
     } catch {
       this.vaultMembers = []
       this.unlockMode = 'keys'
@@ -1124,7 +1125,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
-      void this.hydrateMultiDeviceState()
+      await this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess(this.t('toasts.vault_created'))
     } catch (e: unknown) {
@@ -1288,7 +1289,7 @@ export class VaultState {
       this.isAuthenticated = true
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
-      void this.hydrateMultiDeviceState()
+      await this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
         this.showSuccess(this.t('toasts.local_loaded'))
