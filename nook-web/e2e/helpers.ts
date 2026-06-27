@@ -43,8 +43,8 @@ export const DEFAULT_GITHUB_REPO = 'nook'
 let cachedE2eGithubRepoName: string | null = null
 
 /**
- * One GitHub repo per Playwright run. CI sets NOOK_GITHUB_E2E_REPO=nook-e2e-$RUN_ID;
- * local runs without that env get a random nook-* repo (deleted in global teardown).
+ * One GitHub repo per Playwright container/run. CI sets NOOK_GITHUB_E2E_REPO per
+ * docker:e2e:run (e.g. nook-e2e-github-$RUN_ID); local runs get a random nook-* repo.
  */
 export function createE2eGithubRepoName(): string {
   if (cachedE2eGithubRepoName) {

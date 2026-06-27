@@ -3,11 +3,11 @@ version: '3'
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
-  DOCKER_PLATFORM: linux/amd64
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   # dev (default): skip setup when nook-build:local exists. ci: always build (set in CI via GITHUB_ENV).
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
+  VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
 
 tasks:
   default:
@@ -44,14 +44,36 @@ tasks:
       - task: ci:pr
       - task: docker:push:ci
 
-  ci:main:
-    desc: Main branch CI — prepare once, verify ‖ web build in parallel, then e2e.
+  ci:main:prepare:
+    desc: Toolchain setup, format check, and wasm build (shared artifacts for parallel tracks).
     deps:
       - setup
     cmds:
       - task: ci:pr:prepare
+
+  ci:main:
+    desc: Main branch CI — prepare once, then verify ‖ web build ‖ e2e in parallel containers.
+    cmds:
+      - task: ci:main:prepare
+      - task: ci:main:finish
+
+  ci:main:finish:
+    desc: Verify ‖ web build ‖ e2e (local ‖ github) — each track in its own Docker container.
+    deps:
+      - ci:main:parallel
+      - ci:main:e2e:parallel
+
+  ci:main:e2e:parallel:
+    desc: Playwright local and GitHub projects in parallel (isolated containers, no host :5173).
+    deps:
+      - web:test:e2e:local:parallel
+      - web:test:e2e:github:parallel
+
+  ci:main:build:
+    desc: Format, wasm, and parallel verify/web build only (no e2e).
+    cmds:
+      - task: ci:main:prepare
       - task: ci:main:parallel
-      - task: web:test:e2e:parallel
 
   ci:main:parallel:
     desc: Lint/test and production web build in parallel after ci:pr:prepare.
@@ -227,41 +249,52 @@ tasks:
         vars: { TASK: _web:test }
 
   web:test:e2e:
-    desc: Run Playwright e2e tests in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
+    desc: Run full Playwright e2e suite in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
     deps:
       - setup
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:parallel:
-    desc: Run Playwright e2e in Docker when wasm is already built (ci:main parallel track).
+    desc: Run local ‖ GitHub Playwright projects in parallel Docker containers (ci:main).
     cmds:
-      - task: docker:task
-        vars: { TASK: _web:test:e2e:parallel }
+      - task: ci:main:e2e:parallel
 
   web:test:e2e:local:
     desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
     deps:
       - setup
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:local }
+
+  web:test:e2e:local:parallel:
+    desc: Local Playwright project in Docker when wasm is already built (no host port publish).
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:local:parallel }
 
   web:test:e2e:github:
     desc: Run GitHub vault Playwright e2e in Docker.
     deps:
       - setup
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:github }
+
+  web:test:e2e:github:parallel:
+    desc: GitHub Playwright project in Docker when wasm is already built (set NOOK_GITHUB_E2E_REPO per run).
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:github:parallel }
 
   web:test:e2e:multi-device:
     desc: Run multi-device Playwright e2e in Docker.
     deps:
       - setup
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:multi-device }
 
   web:lint:
@@ -297,12 +330,14 @@ tasks:
     internal: true
     env:
       VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - >-
         {{.DOCKER}} run --rm
-        --platform {{.DOCKER_PLATFORM}}
+        --platform linux/amd64
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
         -e NOOK_GITHUB_PAT
         -e CI
         -e NOOK_GITHUB_E2E_REPO
@@ -322,12 +357,38 @@ tasks:
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
 
+  docker:e2e:run:
+    desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
+    internal: true
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        --ipc=host
+        --init
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
+        -e NOOK_GITHUB_PAT
+        -e CI
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -v "{{.ROOT_DIR}}:/workspace"
+        -v /workspace/nook-web/node_modules
+        -w /workspace
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
+
   docker:web:dev:
     internal: true
     cmds:
       - >-
         {{.DOCKER}} run --rm
-        --platform {{.DOCKER_PLATFORM}}
+        --platform linux/amd64
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
         -v "{{.ROOT_DIR}}:/workspace"
@@ -528,6 +589,7 @@ tasks:
     desc: Build the Svelte app when wasm is already built (ci:pr parallel track).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - cd nook-web && bun run build
 
@@ -569,9 +631,20 @@ tasks:
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Run full Playwright e2e when wasm is already built (ci:main parallel track).
+    desc: Run local then GitHub Playwright projects in one process (local dev only).
     cmds:
       - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:local:parallel:
+    desc: Local Playwright project when wasm is already built (ci:main parallel track).
+    cmds:
+      - cd nook-web && bun run test:e2e:local
+
+  _web:test:e2e:github:parallel:
+    desc: GitHub Playwright project when wasm is already built (ci:main parallel track).
+    cmds:
+      - cd nook-web && bun run test:e2e:github
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:local:

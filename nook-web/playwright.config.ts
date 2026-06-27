@@ -10,6 +10,8 @@ dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '1000'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
+const isCi = !!process.env.CI
+
 /** IndexedDB-only specs — safe to fan out (each test gets an isolated browser context). */
 const LOCAL_SPECS = [
   'connect.spec.ts',
@@ -21,7 +23,7 @@ const LOCAL_SPECS = [
   'bip39-seed-phrase.spec.ts',
 ] as const
 
-/** Real GitHub API specs — serial within the project; share one CI repo via helpers. */
+/** Real GitHub API specs — serial within the project; one repo per container via NOOK_GITHUB_E2E_REPO. */
 const GITHUB_SPECS = [
   'github-vault.spec.ts',
   'multi-device-github.spec.ts',
@@ -35,12 +37,12 @@ const specPaths = (files: readonly string[]) =>
 
 export default defineConfig({
   testDir: 'e2e',
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  globalTimeout: process.env.CI ? 45 * 60_000 : undefined,
+  forbidOnly: isCi,
+  retries: isCi ? 2 : 0,
+  globalTimeout: isCi ? 45 * 60_000 : undefined,
   globalTeardown: './e2e/global-teardown.ts',
-  timeout: process.env.CI ? 120_000 : 60_000,
-  reporter: process.env.CI ? [['list'], ['github']] : 'list',
+  timeout: isCi ? 120_000 : 60_000,
+  reporter: isCi ? 'line' : 'list',
   expect: {
     timeout: 5_000,
   },
@@ -52,8 +54,8 @@ export default defineConfig({
   webServer: {
     command: 'bun run dev -- --host 127.0.0.1 --port 5173',
     url: 'http://127.0.0.1:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: process.env.CI ? 120_000 : 30_000,
+    reuseExistingServer: !isCi,
+    timeout: isCi ? 120_000 : 30_000,
     env: {
       VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
       NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
@@ -64,14 +66,13 @@ export default defineConfig({
       name: 'local',
       testMatch: specPaths(LOCAL_SPECS),
       fullyParallel: true,
-      workers: process.env.CI ? 4 : undefined,
+      workers: isCi ? 2 : undefined,
     },
     {
       name: 'github',
       testMatch: specPaths(GITHUB_SPECS),
       fullyParallel: false,
       workers: 1,
-      dependencies: ['local'],
     },
   ],
 })

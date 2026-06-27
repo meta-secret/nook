@@ -31,17 +31,24 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify, build, e2e, and push toolchain
-        run: task ci:main:publish VITE_BASE=/
+      - name: Prepare (format + wasm)
+        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+
+      - name: Verify, build, and e2e
+        run: task ci:main:finish VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
-          PUSH_TOOLCHAIN: "1"
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          NOOK_GITHUB_E2E_REPO: nook-e2e-${{ github.run_id }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}
           NOOK_GITHUB_POLL_MS: '3000'
           NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
+
+      - name: Push toolchain image
+        run: task docker:push:ci
+        env:
+          PUSH_TOOLCHAIN: "1"
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
