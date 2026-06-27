@@ -94,6 +94,8 @@ RUN cargo build --release --target wasm32-unknown-unknown -p nook-wasm
 FROM toolchain-web AS toolchain
 
 COPY --from=builder-wasm /opt/nook/target /opt/nook/target
+COPY --from=builder-wasm /usr/local/cargo/registry /usr/local/cargo/registry
+
 COPY Cargo.lock /opt/nook/Cargo.lock
 
 COPY Cargo.toml ./
