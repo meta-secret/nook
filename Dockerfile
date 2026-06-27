@@ -67,6 +67,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 # --- Shared rust dependency cache (chef cook + fetch once) ---
 FROM nook-base AS builder-deps
 
+COPY .cargo .cargo
 COPY --from=chef-planner /workspace/recipe.json ./recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY nook-core/Cargo.toml nook-core/Cargo.toml
