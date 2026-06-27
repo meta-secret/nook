@@ -44,6 +44,27 @@ tasks:
       - task: ci:pr
       - task: docker:push:ci
 
+  ci:main:
+    desc: Main branch CI — prepare once, then verify ‖ web build ‖ e2e in parallel containers.
+    deps:
+      - setup
+    cmds:
+      - task: ci:pr:prepare
+      - task: ci:main:parallel
+
+  ci:main:parallel:
+    desc: Lint/test, production web build, and Playwright e2e in parallel after ci:pr:prepare.
+    deps:
+      - ci:verify:parallel
+      - web:build:parallel
+      - web:test:e2e:parallel
+
+  ci:main:publish:
+    desc: Main CI verify/build/e2e, then push toolchain to GHCR on success.
+    cmds:
+      - task: ci:main
+      - task: docker:push:ci
+
   ci:pr:deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
     cmds:
@@ -212,6 +233,12 @@ tasks:
     cmds:
       - task: docker:task
         vars: { TASK: _web:test:e2e }
+
+  web:test:e2e:parallel:
+    desc: Run Playwright e2e in Docker when wasm is already built (ci:main parallel track).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test:e2e:parallel }
 
   web:test:e2e:local:
     desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
@@ -538,6 +565,12 @@ tasks:
     desc: Run full Playwright e2e suite.
     deps:
       - _wasm:build
+    cmds:
+      - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:parallel:
+    desc: Run full Playwright e2e when wasm is already built (ci:main parallel track).
     cmds:
       - cd nook-web && bun run test:e2e
       - defer: cd nook-web && bun run test:e2e:cleanup

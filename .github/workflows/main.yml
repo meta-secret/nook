@@ -1,4 +1,4 @@
-# Main branch: check, web build, and e2e in one job (one Docker build); then deploy.
+# Main branch: prepare once, then verify ‖ web build ‖ e2e in parallel (task ci:main:publish); deploy Pages.
 #
 # Playwright browsers are pre-installed in the toolchain image.
 
@@ -31,23 +31,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check
-        run: task check
-
-      - name: Set Vite base path
-        run: echo "VITE_BASE=/" >> $GITHUB_ENV
-
-      - name: Build web for GitHub Pages
-        run: task web:build VITE_BASE="${{ env.VITE_BASE }}"
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: nook-web/dist
-
-      - name: Run Playwright e2e
-        run: task web:test:e2e
+      - name: Verify, build, e2e, and push toolchain
+        run: task ci:main:publish VITE_BASE=/
         env:
+          PUSH_TOOLCHAIN: "1"
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-${{ github.run_id }}
@@ -55,16 +43,15 @@ jobs:
           NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
 
-      - name: Push toolchain image
-        run: task docker:push
-        env:
-          PUSH_TOOLCHAIN: "1"
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: nook-web/dist
 
   deploy:
     name: Deploy GitHub Pages
     needs: ci
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

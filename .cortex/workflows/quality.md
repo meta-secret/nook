@@ -19,7 +19,7 @@ Use this workflow for quality, CI, and deployment changes.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
-10. **CI policy:** `.github/workflows/pr.yml` — `task ci:pr:publish` (verify, then buildx push `:latest`). `.github/workflows/main.yml` — `task check`, e2e, `docker:push`.
+10. **CI policy:** `.github/workflows/pr.yml` — `task ci:pr:publish` (prepare, then verify ‖ web build in parallel, buildx push `:latest`). `.github/workflows/main.yml` — `task ci:main:publish` (prepare, then verify ‖ web build ‖ e2e in parallel, buildx push `:latest`).
 11. Verify locally with `task check`.
 12. **Docker:** Never kill the Docker daemon (`killall docker`, `pkill docker`, etc.). Stop only specific containers (`docker stop <id>`). See [rules.md §5 — Docker daemon](rules.md#docker-daemon--never-kill-it).
 13. **Local web dev:** `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.
