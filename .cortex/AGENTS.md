@@ -17,6 +17,7 @@ This is the system of record and entry point for all AI agents working in this r
 ## 2. Design Specs & Beliefs (`design-docs/`)
 * [design-docs/index.md](design-docs/index.md) — Index of design specifications and status.
 * [design-docs/core-beliefs.md](design-docs/core-beliefs.md) — Agent-first operating beliefs.
+* [design-docs/unified-vault.md](design-docs/unified-vault.md) — **Local-first unified vault**, version sync, conflict resolution.
 
 ## 3. Product Specifications (`product-specs/`)
 * [product-specs/index.md](product-specs/index.md) — Index of product specifications.
@@ -25,6 +26,7 @@ This is the system of record and entry point for all AI agents working in this r
 
 ## 4. Execution Plans (`exec-plans/`)
 * [exec-plans/tech-debt-tracker.md](exec-plans/tech-debt-tracker.md) — Tech debt and refactoring tasks.
+* [exec-plans/unified-vault-ui-rollout.md](exec-plans/unified-vault-ui-rollout.md) — **Unified vault UI migration** (page-by-page rollout).
 * [exec-plans/completed/cortex-restructure.md](exec-plans/completed/cortex-restructure.md) — Restructure execution plan and walkthrough notes.
 
 ## 5. Technology Cheat Sheets (`references/`)
