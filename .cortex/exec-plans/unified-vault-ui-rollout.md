@@ -28,7 +28,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 | 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | [#74](https://github.com/meta-secret/nook/pull/74) | Ready |
 | 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | [#75](https://github.com/meta-secret/nook/pull/75) | Ready |
 | 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | #76 (pending) | Ready |
-| 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | — | Planned |
+| 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | [#77](https://github.com/meta-secret/nook/pull/77) | Ready |
 | 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | — | Planned |
 
 ---
@@ -134,6 +134,8 @@ No user-visible UI changes yet.
 | 7.1 | Join requests on local vault; fan-out propagates `joins:` |
 | 7.2 | `PendingJoinsBanner` sync layer |
 | 7.3 | `JoinEnrollmentDialog` copy |
+
+**E2E:** `e2e/multi-device-local.spec.ts` (stubbed GitHub sync + keys-mode local vault); existing `multi-device-github.spec.ts` unchanged.
 
 ---
 

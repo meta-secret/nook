@@ -204,8 +204,11 @@ export class VaultState {
   }
 
   private wasmStorageArgs(): [string, string, string] {
-    if (this.isAuthenticated) {
+    if (this.isAuthenticated && this.localVaultPresent) {
       return ['local', '', '']
+    }
+    if (this.isAuthenticated && this.activeProvider) {
+      return this.providerWasmArgs(this.activeProvider)
     }
     const mode = wasmStorageModeForProvider(
       this.storageMode,
@@ -344,6 +347,9 @@ export class VaultState {
         ),
       )
       await this.ensureProviderSaved()
+      if (this.localVaultPresent && this.syncProviders.length > 0) {
+        this.scheduleFanOutSyncAfterLocalSave()
+      }
       this.joinEnrollmentPrompt = 'pending'
       this.startVaultSync()
     } catch (e: unknown) {
@@ -1194,6 +1200,16 @@ export class VaultState {
     if (!options?.force && this.isSaving) return
     if (!options?.force && this.isSyncing) return
     if (!this.hasRemoteCredentials()) return
+
+    if (
+      this.isAuthenticated &&
+      this.localVaultPresent &&
+      this.syncProviders.length > 0
+    ) {
+      await this.syncFromSyncProviders({ quiet: true, force: options?.force })
+      return
+    }
+
     await this.ensureOAuthTokensFresh()
 
     this.isSyncing = true
@@ -1202,6 +1218,37 @@ export class VaultState {
         this.manager!.sync_vault_from_storage(...this.wasmStorageArgs()),
       )
       this.applyVaultSyncResult(mapVaultSyncResult(raw))
+      this.lastSyncedAt = new SvelteDate()
+    } catch {
+      // Background sync should not interrupt the UI.
+    } finally {
+      this.isSyncing = false
+    }
+  }
+
+  /** Pull local vault from every sync provider (background / manual refresh). */
+  private async syncFromSyncProviders(options?: {
+    quiet?: boolean
+    force?: boolean
+  }): Promise<void> {
+    if (!this.manager) return
+    if (this.syncBlocked) return
+    if (!options?.force && this.isVerifying) return
+    if (!options?.force && this.isSaving) return
+    if (!options?.force && this.isSyncing) return
+    if (this.syncProviders.length === 0) return
+
+    this.isSyncing = true
+    try {
+      for (const provider of this.syncProviders) {
+        if (this.syncBlocked) break
+        await this.syncProviderById(provider.id, {
+          quiet: options?.quiet ?? true,
+        })
+      }
+      if (this.isAuthenticated) {
+        await this.hydrateMultiDeviceState()
+      }
       this.lastSyncedAt = new SvelteDate()
     } catch {
       // Background sync should not interrupt the UI.
@@ -1573,6 +1620,9 @@ export class VaultState {
       )
       await this.ensureProviderSaved()
       await this.refreshDeviceState()
+      if (this.localVaultPresent && this.syncProviders.length > 0) {
+        this.scheduleFanOutSyncAfterLocalSave()
+      }
       this.showSuccess(this.t('login.join_request_sent'))
     } catch (e: unknown) {
       this.errorMsg =
@@ -1592,7 +1642,8 @@ export class VaultState {
         this.manager!.approve_join_request(joinDeviceId),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      void this.hydrateMultiDeviceState()
+      await this.hydrateMultiDeviceState()
+      this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(this.t('toasts.device_approved_success'))
     } catch (e: unknown) {
       this.errorMsg =
@@ -1613,6 +1664,7 @@ export class VaultState {
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
       await this.hydrateMultiDeviceState()
+      this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(this.t('toasts.join_denied'))
     } catch (e: unknown) {
       this.errorMsg =
@@ -1632,6 +1684,7 @@ export class VaultState {
         this.manager!.rename_vault_member(authId, label),
       )
       await this.hydrateMultiDeviceState()
+      this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(
         label.trim()
           ? this.t('toasts.device_renamed')
@@ -1667,6 +1720,7 @@ export class VaultState {
       }
       this.secrets = mapWasmRecords(rawRecords)
       await this.hydrateMultiDeviceState()
+      this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(this.t('toasts.device_revoked'))
     } catch (e: unknown) {
       this.errorMsg =
