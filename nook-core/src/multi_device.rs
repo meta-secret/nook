@@ -137,6 +137,19 @@ pub fn member_stored_key(pk_id: &str) -> String {
     format!("{MEMBER_RECORD_PREFIX}{pk_id}")
 }
 
+/// Whether a flat-record key matches the pk_id inside the decrypted member entry.
+/// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
+/// store the bare 64-hex digest — accept both forms.
+fn member_record_key_matches(stored_key: &str, entry_pk_id: &str) -> bool {
+    if stored_key == member_stored_key(entry_pk_id) {
+        return true;
+    }
+    if let Ok(normalized) = crate::normalize_auth_key_id(entry_pk_id) {
+        return stored_key == member_stored_key(&normalized);
+    }
+    false
+}
+
 #[must_use]
 pub fn is_members_stored_record(record: &StoredSecretRecord) -> bool {
     record.key.starts_with(MEMBER_RECORD_PREFIX)
@@ -359,8 +372,10 @@ pub fn resolve_member_roster(
     let mut roster = Vec::new();
     for record in records.iter().filter(|r| is_members_stored_record(r)) {
         let entry = decrypt_member_entry(&record.value, members_key)?;
-        let expected_key = member_stored_key(&entry.pk_id);
-        if record.key != expected_key {
+        if !member_record_key_matches(&record.key, &entry.pk_id) {
+            let expected_key = member_stored_key(
+                &crate::normalize_auth_key_id(&entry.pk_id).unwrap_or_else(|_| entry.pk_id.clone()),
+            );
             return Err(format!(
                 "Member record key mismatch: expected {expected_key}, got {}",
                 record.key
@@ -849,7 +864,9 @@ mod tests {
         assert!(yaml.contains("ciphertext:"));
         assert!(!yaml.contains("age1"));
 
-        let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
+        let roundtripped =
+            crate::deserialize_stored(&yaml, crate::VaultFormat::Yaml).unwrap();
+        let roster = resolve_member_roster(&roundtripped, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 2);
     }
 
