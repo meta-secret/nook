@@ -41,7 +41,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, **agent pipeline** (local checks → PR → monitor → fix loop → squash merge), and PR checklist.
+* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, **agent pipeline** (local checks → PR → monitor → fix loop → squash merge → **duration report**), and PR checklist.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates and release.

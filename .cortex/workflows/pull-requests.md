@@ -33,7 +33,8 @@ flowchart TD
   G -->|no| H[Read logs, fix, push]
   H --> F
   G -->|yes| I[Squash merge PR]
-  I --> J[Done]
+  I --> J[Report task duration]
+  J --> K[Done]
 ```
 
 ### 1. Implement
@@ -107,6 +108,28 @@ gh pr merge <number> --squash
 
 After merge, `main.yml` runs full CI including sync-stub Playwright e2e. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
+### 8. Task completion report
+
+Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
+
+**When to report:** After the task is done — merged PR, delivered answer, or explicit handoff. Do not omit this on multi-step work that spans monitor/fix/merge cycles; report once at the very end.
+
+**What to measure:** Wall-clock time from when you **started working on the user's request** (first implementation step or investigation for that assignment) until you send the final message. Include CI wait time if you monitored checks as part of the task.
+
+**Format** — add a `## Duration` line (or equivalent) in the final reply:
+
+```markdown
+## Duration
+12m 34s (started 2026-06-28T20:15:00Z, finished 2026-06-28T20:27:34Z)
+```
+
+Rules:
+
+- Use a human-readable duration (`Xm Ys`, or `Xh Ym` when over an hour).
+- Include UTC ISO timestamps for start and finish when you can infer them; otherwise duration alone is acceptable.
+- If the task was blocked waiting on the user, exclude idle wait time and note `active time: …` vs `elapsed: …`.
+- For question-only turns with no implementation, a duration line is optional.
+
 **Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 
 ## Standard flow (summary)
@@ -118,6 +141,7 @@ After merge, `main.yml` runs full CI including sync-stub Playwright e2e. Nightly
 5. Monitor CI until green (fix loop).
 6. **Squash merge** into `main`.
 7. Delete the branch (optional).
+8. **Report task duration** in the final message (see [§ Task completion report](#8-task-completion-report)).
 
 ## CLI reference
 
