@@ -32,7 +32,10 @@
     onUnlock,
     onUnlockWithPassword,
     onConsumeLoginPasswordPrompt,
-    remoteVaultRecoveryPrompt = 'none' as 'none' | 'with_cache' | 'missing_only',
+    remoteVaultRecoveryPrompt = 'none' as
+      | 'none'
+      | 'with_cache'
+      | 'missing_only',
     onRecoverRemoteVault,
     onCreateFreshRemoteVault,
     onDismissRemoteRecovery,
@@ -144,7 +147,9 @@
           {isInitializing}
           {isConnecting}
           {onSelectProvider}
-          onConnect={remoteVaultRecoveryPrompt === 'none' ? onConnect : undefined}
+          onConnect={remoteVaultRecoveryPrompt === 'none'
+            ? onConnect
+            : undefined}
         />
         {#if remoteVaultRecoveryPrompt !== 'none'}
           <RemoteVaultRecoveryPanel

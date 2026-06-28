@@ -210,9 +210,7 @@ pub(crate) async fn save_vault_local_cache(
     Ok(())
 }
 
-pub(crate) async fn load_vault_local_cache(
-    cache_ref: &str,
-) -> Result<Option<String>, NookError> {
+pub(crate) async fn load_vault_local_cache(cache_ref: &str) -> Result<Option<String>, NookError> {
     let rexie = rexie::Rexie::builder("nook_db")
         .version(1)
         .add_object_store(rexie::ObjectStore::new("vault"))

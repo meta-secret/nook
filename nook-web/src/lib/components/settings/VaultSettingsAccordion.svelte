@@ -20,8 +20,8 @@
 
   let {
     vault,
-    providers,
-    activeProviderId,
+    syncProviders,
+    syncingProviderId = null,
     isAuthenticated,
     isVerifying,
     isSaving,
@@ -40,7 +40,7 @@
     vaultMembers,
     hasPasswordEnvelope = false,
     onReconnect,
-    onSelectProvider,
+    onSyncProvider,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
@@ -61,8 +61,8 @@
     ),
   }: {
     vault: VaultState
-    providers: StorageProvider[]
-    activeProviderId: string | null
+    syncProviders: StorageProvider[]
+    syncingProviderId?: string | null
     isAuthenticated: boolean
     isVerifying: boolean
     isSaving: boolean
@@ -81,7 +81,7 @@
     vaultMembers: VaultMember[]
     hasPasswordEnvelope?: boolean
     onReconnect: () => void | Promise<void>
-    onSelectProvider: (id: string) => void | Promise<void>
+    onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
@@ -124,25 +124,24 @@
           data-testid="connected-badge"
         >
           <CheckCircle2 class="size-3" />
-          {vault.t('common.active')}
+          {vault.t('settings.vault_unlocked')}
         </span>
       {/if}
     {/snippet}
     <AuthStorage
       {vault}
       embedded
-      {providers}
-      {activeProviderId}
+      {syncProviders}
+      {syncingProviderId}
       {isAuthenticated}
       {isVerifying}
-      {isSaving}
       {isInitializing}
       {addProviderOpen}
       bind:setupType
       bind:githubPat
       bind:githubRepo
       {onReconnect}
-      {onSelectProvider}
+      {onSyncProvider}
       {onBeginAddProvider}
       {onCancelAddProvider}
       {onBeginSetup}

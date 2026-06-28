@@ -191,8 +191,7 @@ impl NookVaultManager {
     pub(in crate::manager) async fn save_current_db(&mut self) -> Result<(), NookError> {
         let _ = self.status_tx.send("SAVE_START".to_owned());
         if self.store_id.is_empty() {
-            self.store_id =
-                nook_core::generate_store_id().map_err(NookError::Database)?;
+            self.store_id = nook_core::generate_store_id().map_err(NookError::Database)?;
         }
         self.vault_version = self.vault_version.saturating_add(1);
         let records = nook_core::Database::stored_records_from_armored(

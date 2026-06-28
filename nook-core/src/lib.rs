@@ -57,18 +57,16 @@ pub use validation::{
     validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
     validate_storage_mode,
 };
-pub use vault_ids::{
-    AUTH_KEY_ID_PREFIX, SECRET_ID_PREFIX, STORE_ID_PREFIX, auth_key_digest, format_auth_key_id,
-    format_secret_id, format_store_id, generate_secret_id, generate_store_id, is_auth_key_id,
-    is_compact_token, normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id,
-    validate_secret_id, validate_store_id,
-};
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
     read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
     serialize_stored, serialize_stored_yaml_with_unlock,
 };
-pub use vault_sync::{
-    VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision,
+pub use vault_ids::{
+    AUTH_KEY_ID_PREFIX, SECRET_ID_PREFIX, STORE_ID_PREFIX, auth_key_digest, format_auth_key_id,
+    format_secret_id, format_store_id, generate_secret_id, generate_store_id, is_auth_key_id,
+    is_compact_token, normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id,
+    validate_secret_id, validate_store_id,
 };
+pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};

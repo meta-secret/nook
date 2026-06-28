@@ -959,7 +959,7 @@ export async function seedExtraGithubProviders(
         getReq.onerror = () =>
           reject(getReq.error ?? new Error('idb read failed'))
         getReq.onsuccess = () => {
-          const snapshot = getReq.result as {
+          const existing = getReq.result as {
             providers: Array<{
               id: string
               type: string
@@ -970,9 +970,9 @@ export async function seedExtraGithubProviders(
             }>
             activeProviderId: string | null
           } | null
-          if (!snapshot?.providers?.length) {
-            reject(new Error('No saved providers in nook_auth.'))
-            return
+          const snapshot = existing ?? {
+            providers: [],
+            activeProviderId: null,
           }
           for (const provider of providers) {
             snapshot.providers.push({
@@ -1069,7 +1069,7 @@ export async function waitForSecretOnDevice(
     .poll(
       async () => {
         if (await row.isVisible()) return true
-        if (await refresh.isVisible() && (await refresh.isEnabled())) {
+        if ((await refresh.isVisible()) && (await refresh.isEnabled())) {
           await refresh.click()
         }
         return row.isVisible()

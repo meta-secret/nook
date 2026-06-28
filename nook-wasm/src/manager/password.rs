@@ -46,11 +46,10 @@ impl NookVaultManager {
         let mut content = self.fetch_vault_content(&mut vault_missing).await?;
         if vault_missing || content.trim().is_empty() {
             if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await? {
-                if !cached.trim().is_empty() {
-                    content = cached;
-                } else {
+                if cached.trim().is_empty() {
                     return Ok(js_sys::Array::new());
                 }
+                content = cached;
             } else {
                 return Ok(js_sys::Array::new());
             }

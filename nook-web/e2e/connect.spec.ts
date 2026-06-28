@@ -4,6 +4,7 @@ import {
   DEFAULT_LOCAL_VAULT_PASSWORD,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openLegacyProviderSetup,
+  seedExtraGithubProviders,
   UI_TIMEOUT_MS,
   waitForEngine,
 } from './helpers'
@@ -47,7 +48,9 @@ test.describe('vault connect flow', () => {
       .getByTestId('login-create-password-confirm')
       .fill('different-password-1')
     await expect(createBtn).toBeDisabled()
-    await page.getByTestId('login-create-password-input').fill('valid-password-1')
+    await page
+      .getByTestId('login-create-password-input')
+      .fill('valid-password-1')
     await page
       .getByTestId('login-create-password-confirm')
       .fill('valid-password-1')
@@ -59,7 +62,9 @@ test.describe('vault connect flow', () => {
 
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(page.getByTestId('login-create-vault-form')).toBeVisible()
-    await expect(page.getByTestId('login-legacy-provider-setup-link')).toBeVisible()
+    await expect(
+      page.getByTestId('login-legacy-provider-setup-link'),
+    ).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(
       page.getByTestId('login-unlock-method-fieldset'),
@@ -96,15 +101,16 @@ test.describe('vault connect flow', () => {
     })
 
     await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('settings-providers-list')).toBeVisible()
+    await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('provider-option-local')).toHaveCount(0)
     await page.getByTestId('provider-option-github').click()
     await expect(page.getByTestId('github-token-setup')).toBeVisible()
     await page.getByTestId('cancel-add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await page.getByTestId('cancel-add-provider-btn').click()
-    await expect(page.getByTestId('settings-providers-list')).toBeVisible()
+    await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 
   test('unlock local vault with master password after reload', async ({
@@ -120,40 +126,57 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await page.getByTestId('login-master-password-input').fill(DEFAULT_LOCAL_VAULT_PASSWORD)
+    await page
+      .getByTestId('login-master-password-input')
+      .fill(DEFAULT_LOCAL_VAULT_PASSWORD)
     await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })
 
-  test('removes a saved provider from vault settings', async ({ page }) => {
+  test('removes a saved sync provider from vault settings', async ({
+    page,
+  }) => {
     await page.goto('/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('vault-settings-tab').click()
-    const localProvider = page.getByTestId('settings-provider-local')
-    await expect(localProvider).toBeVisible()
+    await seedExtraGithubProviders(page, [
+      {
+        id: 'e2e-sync-github',
+        label: 'GitHub (e2e)',
+        githubRepo: 'nook-e2e-remove',
+        githubPat: 'ghp_test_token',
+      },
+    ])
 
-    const providerId = await localProvider.evaluate((el) => {
-      const row = el.closest('li')
-      const removeBtn = row?.querySelector('[data-testid^="remove-provider-"]')
-      return removeBtn
-        ?.getAttribute('data-testid')
-        ?.replace('remove-provider-', '')
-    })
-    expect(providerId).toBeTruthy()
-
-    page.once('dialog', (dialog) => dialog.accept())
-    await page.getByTestId(`remove-provider-${providerId}`).click()
-
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await page.reload()
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible()
-    await expect(page.getByTestId('settings-provider-local')).toHaveCount(0)
+    await page
+      .getByTestId('login-master-password-input')
+      .fill(DEFAULT_LOCAL_VAULT_PASSWORD)
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('vault-settings-tab').click()
+    const githubProvider = page.getByTestId('settings-provider-github')
+    await expect(githubProvider).toBeVisible()
+
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByTestId('remove-provider-e2e-sync-github').click()
+
+    await expect(page.getByTestId('login-gate')).not.toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('connected-badge')).toBeVisible()
+    await expect(page.getByTestId('settings-provider-github')).toHaveCount(0)
+    await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 })

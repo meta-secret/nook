@@ -14,6 +14,7 @@
 mod conversion;
 mod manager;
 mod storage;
+mod sync_io;
 
 pub use manager::NookVaultManager;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -79,6 +80,12 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
         }),
         Err(message) => Err(wasm_bindgen::JsError::new(&message)),
     }
+}
+
+#[wasm_bindgen(js_name = readVaultVersion)]
+#[must_use]
+pub fn read_vault_version(yaml: &str) -> u64 {
+    nook_core::read_vault_version(yaml).unwrap_or(0)
 }
 
 #[wasm_bindgen]

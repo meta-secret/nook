@@ -114,10 +114,7 @@
       !showLegacyProviderSetup,
   )
   const showWizard = $derived(
-    hasProviders &&
-      !vault.localVaultPresent &&
-      !showSetup &&
-      !addProviderOpen,
+    hasProviders && !vault.localVaultPresent && !showSetup && !addProviderOpen,
   )
   const showProviderSetup = $derived(
     (showLegacyProviderSetup || addProviderOpen) &&
@@ -352,7 +349,8 @@
             {onConsumeLoginPasswordPrompt}
             remoteVaultRecoveryPrompt={vault.remoteVaultRecoveryPrompt}
             onRecoverRemoteVault={() => vault.confirmRecoverRemoteVault()}
-            onCreateFreshRemoteVault={() => vault.confirmCreateFreshRemoteVault()}
+            onCreateFreshRemoteVault={() =>
+              vault.confirmCreateFreshRemoteVault()}
             onDismissRemoteRecovery={() => vault.clearRemoteVaultRecovery()}
           />
         {:else if showSetup && setupType}
@@ -384,7 +382,8 @@
                 type="submit"
                 class="sm:min-w-[180px]"
                 data-testid="connect-provider-btn"
-                disabled={!setupCanConnect || vault.remoteVaultRecoveryPrompt !== 'none'}
+                disabled={!setupCanConnect ||
+                  vault.remoteVaultRecoveryPrompt !== 'none'}
               >
                 {#if isInitializing}
                   <RefreshCw class="size-4 animate-spin" />
