@@ -2265,6 +2265,7 @@ export class VaultState {
       )
       await this.refreshPasswordEntriesList()
       this.showSuccess(this.t('toasts.password_updated'))
+      await this.fanOutSyncToProviders({ quiet: true })
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to update vault password.'
