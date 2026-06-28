@@ -18,8 +18,7 @@ fi
 FIX_BRANCH="${FIX_BRANCH:-fix/ci-${GITHUB_RUN_ID}}"
 export FIX_BRANCH GITHUB_RUN_ID GITHUB_REPOSITORY
 
-echo "==> Authenticating gh and git"
-echo "$GH_TOKEN" | gh auth login --hostname github.com --with-token
+echo "==> Configuring gh and git (GH_TOKEN from environment)"
 gh auth setup-git
 
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
