@@ -219,7 +219,7 @@ describeMultiDevice('multi-device approve from settings', () => {
     await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
-  test('approves join from vault banner', async () => {
+  test('approves join from settings', async () => {
     await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
     const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
 

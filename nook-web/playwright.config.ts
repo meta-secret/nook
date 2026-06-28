@@ -49,12 +49,6 @@ const webServerCommand = usePreviewServer
   ? 'bun run preview -- --host 127.0.0.1 --port 5173'
   : 'bun run dev -- --host 127.0.0.1 --port 5173'
 
-if (isCi) {
-  console.log(
-    `[e2e] webServer: ${usePreviewServer ? 'preview (dist/)' : 'dev (dist missing)'}`,
-  )
-}
-
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
