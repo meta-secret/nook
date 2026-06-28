@@ -11,35 +11,36 @@
     theme?: MermaidTheme
   } = $props()
 
-  let container = $state<HTMLDivElement | undefined>()
+  let svgHtml = $state('')
   let renderError = $state('')
 
-  async function paintDiagram() {
-    if (!container) return
+  async function paintDiagram(src: string, diagramTheme: MermaidTheme) {
     renderError = ''
     try {
-      container.innerHTML = await renderMermaidDiagram(source, theme)
+      svgHtml = await renderMermaidDiagram(src, diagramTheme)
     } catch (error: unknown) {
-      container.innerHTML = ''
+      svgHtml = ''
       renderError =
         error instanceof Error ? error.message : 'Failed to render diagram'
     }
   }
 
   $effect(() => {
-    source
-    theme
-    void paintDiagram()
+    void paintDiagram(source, theme)
   })
 </script>
 
 <div
-  bind:this={container}
   class="help-mermaid mt-2 overflow-x-auto rounded-md border border-border/60 bg-background/80 p-2"
   data-testid="help-diagram-{sectionId}"
   role="img"
   aria-label="Architecture diagram"
-></div>
+>
+  {#if svgHtml}
+    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+    {@html svgHtml}
+  {/if}
+</div>
 {#if renderError}
   <p class="mt-1 text-xs text-destructive" data-testid="help-diagram-error">
     {renderError}

@@ -35,6 +35,6 @@ This is the system of record and entry point for all AI agents working in this r
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy** and PR checklist.
+* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, PR checklist, and **CI fix loop** (push → monitor → fix → repeat).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates and release.
