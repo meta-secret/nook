@@ -404,8 +404,8 @@ impl NookVaultManager {
                 self.github_repo = file_id;
             }
             nook_core::StorageMode::ICloud => {
-                self.github_pat =
-                    nook_core::validate_oauth_access_token(github_pat).map_err(NookError::ICloud)?;
+                self.github_pat = nook_core::validate_oauth_access_token(github_pat)
+                    .map_err(NookError::ICloud)?;
                 let (_known_revision, raw_file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name);
                 let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
@@ -413,8 +413,7 @@ impl NookVaultManager {
                 self.github_path = file_name.clone();
                 let _ = self.status_tx.send("ICLOUD_VERIFY".to_owned());
                 verify_icloud_access(&self.github_pat).await?;
-                let record_name =
-                    ensure_icloud_vault_record(&self.github_pat, &file_name).await?;
+                let record_name = ensure_icloud_vault_record(&self.github_pat, &file_name).await?;
                 self.github_repo = record_name;
             }
         }
@@ -484,9 +483,7 @@ impl NookVaultManager {
             }
             nook_core::StorageMode::ICloud => {
                 let _ = self.status_tx.send("ICLOUD_FETCH_START".to_owned());
-                let res =
-                    fetch_icloud_vault(&self.github_pat, &self.github_repo)
-                        .await?;
+                let res = fetch_icloud_vault(&self.github_pat, &self.github_repo).await?;
                 let _ = self.status_tx.send("ICLOUD_FETCH_SUCCESS".to_owned());
                 if let Some(file) = res {
                     self.github_repo = file.record_name;

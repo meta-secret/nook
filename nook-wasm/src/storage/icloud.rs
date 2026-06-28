@@ -285,10 +285,7 @@ async fn write_icloud_vault_once(
     content: &str,
     revision: Option<String>,
 ) -> Result<String, NookError> {
-    let operation_type = if revision
-        .as_ref()
-        .is_some_and(|value| !value.is_empty())
-    {
+    let operation_type = if revision.as_ref().is_some_and(|value| !value.is_empty()) {
         "update"
     } else {
         "create"
@@ -330,7 +327,5 @@ async fn write_icloud_vault_once(
     let record = parsed.records.into_iter().next().ok_or_else(|| {
         NookError::ICloud("CloudKit modify response did not include a record.".to_owned())
     })?;
-    Ok(record
-        .record_change_tag
-        .unwrap_or(record.record_name))
+    Ok(record.record_change_tag.unwrap_or(record.record_name))
 }
