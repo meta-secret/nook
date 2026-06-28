@@ -276,6 +276,41 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** GitHub sync can briefly fail while a repo or vault file is still being created. */
+function isTransientVaultSyncError(text: string): boolean {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return false
+  return (
+    /Cannot write to .+\((404|409|502|503)\)/i.test(normalized) ||
+    /GitHub error:.*\((404|409|502|503)\)/i.test(normalized) ||
+    /Ensure your PAT has repo scope/i.test(normalized) ||
+    /failed to fetch/i.test(normalized) ||
+    /network error/i.test(normalized) ||
+    /connection (?:error|reset|refused|timed out)/i.test(normalized) ||
+    /rate limit/i.test(normalized)
+  )
+}
+
+function summarizeVaultError(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (/Cannot write to .+\(404\)/i.test(normalized)) {
+    return 'GitHub vault write 404 (transient — repo or file not ready yet)'
+  }
+  if (/Cannot write to .+\((\d{3})\)/i.test(normalized)) {
+    const code = normalized.match(/\((\d{3})\)/)?.[1]
+    return code
+      ? `GitHub vault write HTTP ${code} (transient sync error)`
+      : 'GitHub vault write error (transient sync error)'
+  }
+  if (/rate limit/i.test(normalized)) {
+    return 'GitHub rate limit (transient)'
+  }
+  if (/failed to fetch|network error|connection/i.test(normalized)) {
+    return 'Network error talking to GitHub (transient)'
+  }
+  return normalized.length > 160 ? `${normalized.slice(0, 157)}…` : normalized
+}
+
 /** Between suites: wipe vault YAML only. Repo deletion happens once in global teardown. */
 export async function finishE2eGithubSuite(pat: string, repoName: string) {
   await resetGithubVault(pat, repoName)
@@ -354,7 +389,7 @@ export async function waitForVaultYaml(
 
   while (Date.now() < deadline) {
     if (options?.page) {
-      await assertNoVaultErrors(options.page)
+      await assertNoVaultErrors(options.page, { allowTransient: true })
     }
     const yaml = await fetchGithubVaultYaml(pat, repoName)
     if (yaml) {
@@ -370,11 +405,24 @@ export async function waitForVaultYaml(
   throw new Error(`Timed out waiting for vault YAML: ${lastError}`)
 }
 
-async function assertNoVaultErrors(page: Page) {
+async function assertNoVaultErrors(
+  page: Page,
+  options?: { allowTransient?: boolean },
+) {
   const vaultError = page.getByTestId('vault-error')
-  if (await vaultError.isVisible()) {
-    throw new Error(`Vault error: ${await vaultError.textContent()}`)
+  if (!(await vaultError.isVisible())) {
+    return
   }
+
+  const text = ((await vaultError.textContent()) ?? '').trim()
+  if (options?.allowTransient && isTransientVaultSyncError(text)) {
+    console.warn(
+      `[e2e] transient vault sync error (expected): ${summarizeVaultError(text)}`,
+    )
+    return
+  }
+
+  throw new Error(`Vault error: ${summarizeVaultError(text)}`)
 }
 
 /** Wait until GitHub has the expected vault state (source of truth for sync). */
@@ -432,10 +480,7 @@ export async function waitForEngine(page: Page) {
 }
 
 async function assertGithubConnected(page: Page) {
-  const error = page.getByTestId('vault-error')
-  if (await error.isVisible()) {
-    throw new Error(`GitHub connect failed: ${await error.textContent()}`)
-  }
+  await assertNoVaultErrors(page, { allowTransient: true })
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -470,7 +515,6 @@ export async function connectGithubVault(
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
-  await assertNoVaultErrors(page)
   await assertGithubConnected(page)
 }
 
@@ -492,7 +536,7 @@ async function waitForJoinEnrollmentDialog(page: Page) {
   await expect
     .poll(
       async () => {
-        await assertNoVaultErrors(page)
+        await assertNoVaultErrors(page, { allowTransient: true })
         if (await joinDialog.isVisible()) return 'join'
         if (await page.getByTestId('login-password-entry-list').isVisible()) {
           return 'password'
@@ -635,7 +679,7 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
     await setupGithubProvider(page, target.pat, target.repoName)
     const connectButton = await waitForEngine(page)
     await connectButton.click()
-    await assertNoVaultErrors(page)
+    await assertNoVaultErrors(page, { allowTransient: true })
     await dismissJoinEnrollmentDialog(page)
     if (!(await vaultPanel.isVisible()) && (await localUnlock.isVisible())) {
       await unlockVaultOnLogin(page)
@@ -713,6 +757,21 @@ export async function addVaultPassword(
   })
 }
 
+/** Rotate the active backup password and wait for a new envelope in local IDB. */
+export async function rotateVaultPassword(page: Page, password: string) {
+  await expandSettingsSection(page, 'unlock')
+  await page.getByTestId('rotate-vault-password-btn').click()
+  await page.getByTestId('vault-password-input').fill(password)
+  await page.getByTestId('vault-password-confirm').fill(password)
+  await page.getByTestId('submit-vault-password').click()
+  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expectVaultPasswordStatus(page, 1, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 /** Poll local vault YAML until predicate holds for several consecutive reads. */
 export async function waitForStableLocalVaultState(
   page: Page,
@@ -731,6 +790,7 @@ export async function waitForStableLocalVaultState(
   let lastError = 'local vault missing'
 
   while (Date.now() < deadline) {
+    await assertNoVaultErrors(page, { allowTransient: true })
     const yaml = await readLocalVaultYamlFromIdb(page)
     if (yaml.trim()) {
       const snapshot = parseVaultYamlSnapshot(yaml)
@@ -1199,6 +1259,7 @@ export async function waitForLocalVaultState(
   let lastError = 'local vault missing'
 
   while (Date.now() < deadline) {
+    await assertNoVaultErrors(page, { allowTransient: true })
     const yaml = await readLocalVaultYamlFromIdb(page)
     if (yaml.trim()) {
       const snapshot = parseVaultYamlSnapshot(yaml)

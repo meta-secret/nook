@@ -14,6 +14,7 @@ import {
   openStorageSettings,
   resetGithubVault,
   revealSecretValue,
+  rotateVaultPassword,
   submitOnboardEnrollmentCode,
   UI_TIMEOUT_MS,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -194,23 +195,17 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     expect(oldEnvelope).not.toBeNull()
 
     await openStorageSettings(deviceA)
-    await expandSettingsSection(deviceA, 'unlock')
-    await deviceA.getByTestId('rotate-vault-password-btn').click()
-    await deviceA.getByTestId('vault-password-input').fill('rotated-pw-9')
-    await deviceA.getByTestId('vault-password-confirm').fill('rotated-pw-9')
-    await deviceA.getByTestId('submit-vault-password').click()
-    await expectVaultPasswordStatus(deviceA, 1, { timeout: UI_TIMEOUT_MS })
+    await rotateVaultPassword(deviceA, 'rotated-pw-9')
 
-    // GitHub serves the rotated envelope on the next read. A new
-    // ciphertext proves the rotation actually rewrote the file — QR codes
-    // issued before rotation stop unlocking once the password changes.
-    const after = await waitForLocalVaultState(
+    // A new scrypt envelope (different salt + nonce + ciphertext) proves rotation
+    // rewrote the vault — QR codes issued before rotation stop unlocking.
+    const after = await waitForStableLocalVaultState(
       deviceA,
       (snapshot) =>
         snapshot.hasPasswordEnvelope &&
         snapshot.passwordEnvelopeCiphertext !== null &&
         snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
-      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
     )
     expect(after.passwordEnvelopeCiphertext).not.toBe(oldEnvelope)
     expect(after.passwordEnvelopeCiphertext).not.toBeNull()
