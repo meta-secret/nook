@@ -271,6 +271,8 @@ tasks:
 
   web:test:e2e:local:parallel:
     desc: Local Playwright project in Docker when wasm is already built (no host port publish).
+    deps:
+      - _web:e2e:build-dist
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:local:parallel }
@@ -285,6 +287,8 @@ tasks:
 
   web:test:e2e:github:parallel:
     desc: GitHub Playwright project in Docker when wasm is already built (set NOOK_GITHUB_E2E_REPO per run).
+    deps:
+      - _web:e2e:build-dist
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:github:parallel }
@@ -635,6 +639,14 @@ tasks:
     cmds:
       - cd nook-web && bun run test:e2e
       - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:e2e:build-dist:
+    desc: Rebuild web dist with fast vault sync for CI e2e preview (production build keeps 60s).
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+    cmds:
+      - cd nook-web && bun run build
 
   _web:test:e2e:local:parallel:
     desc: Local Playwright project when wasm is already built (ci:main parallel track).
