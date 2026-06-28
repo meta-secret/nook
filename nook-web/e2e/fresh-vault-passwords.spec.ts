@@ -2,15 +2,19 @@ import { expect, test } from '@playwright/test'
 import {
   addVaultPassword,
   clearBrowserVault,
-  connectLocalVaultLegacy as connectLocalVault,
+  connectLocalVault,
   createE2eGithubRepoName,
+  disableLoginAutoUnlock,
+  expectVaultPasswordStatus,
   expandSettingsSection,
   finishE2eGithubSuite,
   githubPat,
   openStorageSettings,
   resetGithubVault,
+  seedExtraGithubProviders,
   UI_TIMEOUT_MS,
-  waitForGithubVaultState,
+  unlockVaultOnLogin,
+  waitForLoadedSyncProviders,
 } from './helpers'
 
 const describeGithub = githubPat ? test.describe : test.describe.skip
@@ -29,7 +33,7 @@ describeGithub('fresh vault password entries', () => {
     await finishE2eGithubSuite(githubPat!, emptyRepo)
   })
 
-  test('settings shows no backup passwords after connecting a new empty github vault', async ({
+  test('local backup passwords persist after adding a github sync provider', async ({
     page,
   }) => {
     await page.goto('/')
@@ -41,36 +45,34 @@ describeGithub('fresh vault password entries', () => {
     await expandSettingsSection(page, 'unlock')
     await addVaultPassword(page, 'Vault A primary', 'vault-a-pass-1')
     await addVaultPassword(page, 'Vault A travel', 'vault-a-pass-2')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '2 passwords',
-      { timeout: UI_TIMEOUT_MS },
-    )
+    await expectVaultPasswordStatus(page, 2)
 
-    await expandSettingsSection(page, 'storage')
-    await page.getByTestId('add-provider-btn').click()
-    await page.getByTestId('provider-option-github').click()
-    await page.getByTestId('github-repo-input').fill(emptyRepo)
-    await page.getByTestId('github-pat-input').fill(githubPat!)
-    await page.getByTestId('connect-provider-btn').click()
-
-    await waitForGithubVaultState(
-      { pat: githubPat!, repoName: emptyRepo },
-      (yaml) => yaml.authPkIds.length >= 1,
-      { page },
-    )
-    await expect(page.getByTestId('app-success')).toContainText('GitHub', {
+    await disableLoginAutoUnlock(page)
+    await seedExtraGithubProviders(page, [
+      {
+        id: 'e2e-empty-github',
+        label: 'Empty GitHub',
+        githubRepo: emptyRepo,
+        githubPat: githubPat!,
+      },
+    ])
+    await page.reload()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await unlockVaultOnLogin(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await waitForLoadedSyncProviders(page, 2)
 
+    await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      'None',
-      { timeout: UI_TIMEOUT_MS },
-    )
-    await expect(page.getByTestId('vault-password-card')).not.toContainText(
+    await expectVaultPasswordStatus(page, 2)
+    await expect(page.getByTestId('vault-password-card')).toContainText(
       'Vault A primary',
     )
-    await expect(page.getByTestId('vault-password-card')).not.toContainText(
+    await expect(page.getByTestId('vault-password-card')).toContainText(
       'Vault A travel',
     )
   })

@@ -5,6 +5,7 @@ import {
   connectLocalVaultLegacy,
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectVaultPasswordStatus,
   openStorageSettings,
   selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
@@ -47,10 +48,7 @@ test.describe('login unlock flow (local-first)', () => {
   }) => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Work backup', 'work-pass-1')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '1 password',
-      { timeout: UI_TIMEOUT_MS },
-    )
+    await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
 
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({

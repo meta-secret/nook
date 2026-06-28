@@ -77,28 +77,24 @@ export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
 export async function openLoginProviderSetup(page: Page) {
   const connectBtn = page.getByTestId('login-connect-storage-btn')
+  const legacyLink = page.getByTestId('login-use-storage-provider-link')
+  const addBtn = page.getByTestId('add-provider-btn')
+
+  await expect(connectBtn.or(legacyLink).or(addBtn)).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+
   if (await connectBtn.isVisible()) {
     await connectBtn.click()
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    return
-  }
-  const legacyLink = page.getByTestId('login-use-storage-provider-link')
-  if (await legacyLink.isVisible()) {
+  } else if (await legacyLink.isVisible()) {
     await legacyLink.click()
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    return
-  }
-  const addBtn = page.getByTestId('add-provider-btn')
-  if (await addBtn.isVisible()) {
+  } else {
     await addBtn.click()
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
   }
+
+  await expect(page.getByTestId('provider-option-github')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 /** @deprecated Use {@link openLoginProviderSetup}. */
@@ -501,7 +497,7 @@ export async function sendJoinRequest(
   const snapshot = await waitForGithubVaultState(
     { pat, repoName },
     (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
-    { page },
+    { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
   assertJoinPendingYaml(snapshot)
   const join = snapshot.joinEntries[0]
@@ -564,17 +560,53 @@ export async function approveJoinFromSettings(
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
-export async function unlockGithubVault(page: Page) {
+async function dismissJoinEnrollmentDialog(page: Page) {
+  for (const testId of ['join-enrollment-dismiss', 'join-enrollment-close']) {
+    const button = page.getByTestId(testId)
+    if (await button.isVisible()) {
+      await button.click()
+    }
+  }
+}
+
+export async function unlockGithubVault(
+  page: Page,
+  target?: GithubE2eTarget,
+) {
   await page.goto('/')
+  await dismissJoinEnrollmentDialog(page)
+
   const vaultPanel = page.getByTestId('vault-panel')
   const autoUnlocked = await vaultPanel
-    .waitFor({ state: 'visible', timeout: UI_TIMEOUT_MS })
+    .waitFor({ state: 'visible', timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     .then(() => true)
     .catch(() => false)
   if (autoUnlocked) {
     return
   }
-  await unlockVaultOnLogin(page)
+
+  const localUnlock = page.getByTestId('login-local-unlock-step')
+  if (await localUnlock.isVisible()) {
+    await unlockVaultOnLogin(page)
+  } else if (await page.getByTestId('login-gate').isVisible()) {
+    if (target) {
+      await setupGithubProvider(page, target.pat, target.repoName)
+      const connectButton = await waitForEngine(page)
+      await connectButton.click()
+      await assertNoVaultErrors(page)
+      await dismissJoinEnrollmentDialog(page)
+    } else {
+      await connectLoginProvider(page)
+    }
+    if (!(await vaultPanel.isVisible())) {
+      if (await localUnlock.isVisible()) {
+        await unlockVaultOnLogin(page)
+      }
+    }
+  } else {
+    await unlockVaultOnLogin(page)
+  }
+
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -628,6 +660,28 @@ export async function addVaultPassword(
   await page.getByTestId('submit-vault-password').click()
 }
 
+/** Match vault password badge copy (`1 item` or legacy `1 password`). */
+export async function expectVaultPasswordStatus(
+  page: Page,
+  count: number | 'none',
+  options?: { timeout?: number },
+) {
+  const status = page.getByTestId('vault-password-status')
+  const timeout = options?.timeout ?? UI_TIMEOUT_MS
+  if (count === 'none') {
+    await expect(status).toContainText('None', { timeout })
+    return
+  }
+  if (count === 1) {
+    await expect(status).toContainText(/1 (password|item)/, { timeout })
+    return
+  }
+  await expect(status).toContainText(
+    new RegExp(`${count} (passwords|items)`),
+    { timeout },
+  )
+}
+
 /** Issue an onboard enrollment code and return the code textarea locator. */
 export async function submitOnboardEnrollmentCode(
   page: Page,
@@ -655,12 +709,9 @@ export async function submitOnboardEnrollmentCode(
   return codeArea
 }
 
-/** Reconnect after reload — auto-unlocks when a saved provider exists. */
+/** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectGithubVault(page: Page) {
-  await page.goto('/')
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await unlockGithubVault(page)
 }
 
 export async function assertVaultReady(page: Page) {
@@ -781,7 +832,9 @@ export async function selectLoginUnlockMethod(
   page: Page,
   method: 'keys' | 'password',
 ) {
-  await page.getByTestId(`login-unlock-method-${method}`).click()
+  const button = page.getByTestId(`login-unlock-method-${method}`)
+  await expect(button).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await button.click()
 }
 
 /** Unlock from the login gate — optional password when device keys are unavailable. */
@@ -867,6 +920,46 @@ export async function disableLoginAutoUnlock(page: Page) {
             githubRepo: 'nook-e2e-dummy',
             createdAt: new Date().toISOString(),
           })
+          const putReq = store.put(snapshot, 'providers')
+          putReq.onerror = () =>
+            reject(putReq.error ?? new Error('idb write failed'))
+          putReq.onsuccess = () => undefined
+        }
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+      }
+    })
+  })
+}
+
+/** Remove the invalid dummy GitHub provider added by {@link disableLoginAutoUnlock}. */
+export async function removeE2eDummyGithubSyncProvider(page: Page) {
+  await page.evaluate(() => {
+    return new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('nook_auth', 1)
+      request.onerror = () =>
+        reject(request.error ?? new Error('idb open failed'))
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('auth', 'readwrite')
+        const store = tx.objectStore('auth')
+        const getReq = store.get('providers')
+        getReq.onerror = () =>
+          reject(getReq.error ?? new Error('idb read failed'))
+        getReq.onsuccess = () => {
+          const snapshot = getReq.result as {
+            providers: Array<{ id: string }>
+          } | null
+          if (!snapshot?.providers) {
+            resolve()
+            return
+          }
+          snapshot.providers = snapshot.providers.filter(
+            (provider) => provider.id !== 'e2e-dummy-github-sync',
+          )
           const putReq = store.put(snapshot, 'providers')
           putReq.onerror = () =>
             reject(putReq.error ?? new Error('idb write failed'))
@@ -998,6 +1091,32 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
       }
     })
   })
+}
+
+/** Poll local vault YAML until predicate passes (local-first canonical copy). */
+export async function waitForLocalVaultState(
+  page: Page,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number },
+): Promise<VaultYamlSnapshot> {
+  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const intervalMs = options?.intervalMs ?? 500
+  const deadline = Date.now() + timeoutMs
+  let lastError = 'local vault missing'
+
+  while (Date.now() < deadline) {
+    const yaml = await readLocalVaultYamlFromIdb(page)
+    if (yaml.trim()) {
+      const snapshot = parseVaultYamlSnapshot(yaml)
+      if (predicate(snapshot)) {
+        return snapshot
+      }
+      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, passwords=${snapshot.hasPasswordEnvelope})`
+    }
+    await sleep(intervalMs)
+  }
+
+  throw new Error(`Timed out waiting for local vault YAML: ${lastError}`)
 }
 
 /** Stub GitHub REST responses so local e2e can exercise sync-provider enrollment. */
@@ -1338,8 +1457,12 @@ export async function deleteSecret(
           'secrets: []',
       ).secretIds.length
     : 0
+  await waitForSecretOnDevice(page, key, github)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await row.getByRole('button', { name: 'Delete item' }).click()
+  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const deleteBtn = row.getByRole('button', { name: 'Delete item' })
+  await expect(deleteBtn).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await deleteBtn.click()
   await expect(row).toHaveCount(0, { timeout: UI_TIMEOUT_MS })
   if (github) {
     await waitForGithubVaultState(

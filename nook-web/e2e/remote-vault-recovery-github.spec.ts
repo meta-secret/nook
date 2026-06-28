@@ -8,12 +8,14 @@ import {
   disableLoginAutoUnlock,
   finishE2eGithubSuite,
   githubPat,
+  removeE2eDummyGithubSyncProvider,
   resetGithubVault,
   revealSecretInRow,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
   unlockVaultOnLogin,
   waitForGithubVaultState,
+  waitForSecretOnDevice,
 } from './helpers'
 
 const describeGithub = githubPat ? test.describe : test.describe.skip
@@ -56,11 +58,12 @@ describeGithub('remote vault recovery (github, local-first)', () => {
     await unlockVaultOnLogin(vaultPage)
     await assertVaultReady(vaultPage)
 
+    await waitForSecretOnDevice(vaultPage, key)
     const row = vaultPage.getByTestId('secret-row').filter({ hasText: key })
-    await row.waitFor()
     await revealSecretInRow(row)
     await row.getByText(value).waitFor()
 
+    await removeE2eDummyGithubSyncProvider(vaultPage)
     await vaultPage.getByTestId('vault-sync-refresh-btn').click()
     await waitForGithubVaultState(
       target(),
