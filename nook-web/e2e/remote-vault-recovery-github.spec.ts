@@ -3,7 +3,6 @@ import {
   addSecret,
   assertVaultReady,
   clearBrowserVault,
-  connectGithubVault,
   disableLoginAutoUnlock,
   removeE2eDummyGithubSyncProvider,
   revealSecretInRow,

@@ -3,7 +3,6 @@ import {
   addSecret,
   addVaultPassword,
   assertVaultReady,
-  connectGithubGenesisDevice,
   createIsolatedContext,
   dismissSyncConflictIfVisible,
   expandSettingsSection,
