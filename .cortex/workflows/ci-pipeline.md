@@ -84,8 +84,13 @@ Defined in `nook-web/playwright.config.ts`:
 All commands run containerized via `Taskfile.yml`:
 
 ```bash
-# PR / local dev
+# Minimum before every agent push
 task check                          # format, clippy, unit tests, web build
+
+# Full PR CI mirror (~3–4 min) — before opening PR; mandatory after any remote CI failure
+task ci:pr                          # prepare → verify ‖ build → local Playwright e2e
+
+# Subsets
 task web:test:e2e:local             # local project only
 task web:test:e2e:sync-stub         # stub sync (no PAT)
 
@@ -99,6 +104,18 @@ task ci:nightly:e2e                 # prepare + build + sync-live
 # Legacy aliases
 task web:test:e2e:github            # → sync-live
 ```
+
+## Local vs remote CI
+
+PR GitHub Actions runs `task ci:pr:publish` (toolchain build, verify, web build, e2e, GHCR push, Cloudflare preview). A single run often takes **5+ minutes** plus queue time. Failing remotely on Prettier, `cargo fmt`, clippy, or a unit test burns that full cycle for a fix that local Docker would catch in seconds.
+
+**Agent efficiency rule:**
+
+1. **Before every push** — at least `task check` (format check, lint, unit tests, build).
+2. **Before opening a PR** — `task ci:pr` (matches PR gates including local Playwright e2e).
+3. **After any remote CI failure** — `task ci:pr` before the next push; do not retry remote CI hoping for a different result.
+
+Local `task ci:pr` completes in roughly **3–4 minutes** on a warm toolchain image and avoids repeated remote failures for the same trivial issue. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -117,7 +134,7 @@ Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` wi
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to `sync-stub` first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** run `task web:test:e2e:sync-stub` (or `local`) before merge when changing web vault/sync flows.
+3. **Do** run `task ci:pr` (or `task web:test:e2e:sync-stub` / `local` for narrower checks) before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
 5. PR CI stays fast: no e2e on `pr.yml`. Main carries stub e2e; nightly carries live.
 

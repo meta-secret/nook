@@ -41,16 +41,39 @@ flowchart TD
 
 Branch from `main` (never commit directly on `main`). Make the requested change.
 
-### 2. Local basic checks (before opening a PR)
+### 2. Local checks (before every push)
 
-Run static analysis and unit tests inside Docker:
+Agents **must** run local checks and unit tests before pushing. Do not open a PR or push fixes on faith that remote CI will catch mistakes — that wastes a full GitHub Actions cycle (~5+ minutes plus queue time) for issues `cargo fmt`, Prettier, clippy, or vitest would catch in seconds.
+
+**Minimum before push:**
 
 ```bash
-task format          # if you changed formatting
-task check           # format check, lint, unit tests, build
+task format:check    # or task format after edits
+task check           # format check, lint, unit tests, web build (Docker)
 ```
 
-For web-only changes, `task web:check` and `task web:test` are faster subsets.
+For scoped changes, faster subsets are acceptable when the touch surface is narrow:
+
+```bash
+task web:check && task web:test    # web-only
+task rust:test                     # nook-core only (still run fmt check)
+```
+
+**Full PR CI mirror** — run before opening a PR, and **mandatory before the next push after any remote CI failure**:
+
+```bash
+task ci:pr    # prepare → verify ‖ web build → local Playwright e2e (~3–4 min)
+```
+
+This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and Cloudflare deploy). One failed remote check is a clear signal: reproduce with `task ci:pr` locally, fix, then push again. That is faster than triggering another full CI run only to fail on formatting or a trivial lint error.
+
+| When | Command | Why |
+|------|---------|-----|
+| Every push | `task check` (or scoped subset) | Catches fmt, lint, unit tests, build cheaply |
+| Before opening PR | `task ci:pr` | Same gates as PR CI including e2e |
+| After **any** CI failure | `task ci:pr` | Avoid repeated 5+ min remote failures for the same trivial issue |
+
+See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 3. Local e2e (when the change is big or complex)
 
@@ -92,11 +115,11 @@ gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name
 ### 6. Fix loop on failure
 
 1. Read the failed job log: `gh run view <run-id> --log-failed`
-2. Reproduce locally when practical:
-   - verify / lint / build → `task check`
-   - PR local e2e failure → `task web:test:e2e:local`
+2. **Run full local PR CI before pushing again:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
 3. Fix the root cause, commit, push.
 4. Return to step 5.
+
+If the failure was obviously fmt/lint-only, `task format:check` + the relevant lint/test subset is enough — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
 
 ### 7. Merge and finish
 
@@ -135,8 +158,8 @@ Rules:
 ## Standard flow (summary)
 
 1. Branch from `main`.
-2. Implement; run `task check` locally.
-3. Run `task web:test:e2e:local` when the web change is big or complex.
+2. Implement; run `task check` (or scoped subset) before every push.
+3. Run `task ci:pr` before opening the PR; run it again after any remote CI failure.
 4. Push; open PR with summary and test plan.
 5. Monitor CI until green (fix loop).
 6. **Squash merge** into `main`.
