@@ -1328,6 +1328,7 @@ export class VaultState {
     if (this.syncBlocked) return
     if (!options?.force && this.isVerifying) return
     if (!options?.force && this.isSaving) return
+    if (!options?.force && this.isPasswordBusy) return
     if (!options?.force && this.isSyncing) return
     if (!this.hasRemoteCredentials()) return
 
@@ -1365,6 +1366,7 @@ export class VaultState {
     if (this.syncBlocked) return
     if (!options?.force && this.isVerifying) return
     if (!options?.force && this.isSaving) return
+    if (!options?.force && this.isPasswordBusy) return
     if (!options?.force && this.isSyncing) return
     if (this.syncProviders.length === 0) return
 
@@ -1475,11 +1477,24 @@ export class VaultState {
     }
   }
 
+  private fanOutSyncChain: Promise<void> = Promise.resolve()
+
   /** Push the local vault to every connected sync provider (after CRUD or manual sync). */
   async fanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void> {
     if (!this.manager || !this.isAuthenticated) return
     if (this.syncBlocked) return
     if (this.syncProviders.length === 0) return
+
+    const run = this.fanOutSyncChain.then(() =>
+      this.runFanOutSyncToProviders(options),
+    )
+    this.fanOutSyncChain = run.catch(() => undefined)
+    return run
+  }
+
+  private async runFanOutSyncToProviders(options?: {
+    quiet?: boolean
+  }): Promise<void> {
     if (this.isFanOutSyncing) return
 
     this.isFanOutSyncing = true
@@ -1530,6 +1545,41 @@ export class VaultState {
     }
 
     if (result.action === 'adopt_remote') {
+      // Reconcile can start from a stale local read while a mutation (e.g.
+      // addVaultPassword) is still landing in IndexedDB, or an in-flight
+      // background sync can finish after a newer local save. Re-read local
+      // before adopting remote so we never clobber a fresher local copy.
+      const freshLocal = await readLocalVaultBlob()
+      if (freshLocal.trim()) {
+        const retry = attemptReconcileVaultSyncBlobs(
+          freshLocal,
+          remote.content,
+          remote.revision,
+        )
+        if (retry.status === 'store_id_mismatch') {
+          await this.stageVaultSyncConflict({
+            providerId,
+            providerLabel:
+              this.providers.find((p) => p.id === providerId)?.label ??
+              providerId,
+            localYaml: freshLocal,
+            remoteYaml: remote.content,
+            mode,
+            pat,
+            repo,
+            remoteRevision: remote.revision,
+            kind: 'store_id',
+            localStoreId: retry.localStoreId,
+            remoteStoreId: retry.remoteStoreId,
+          })
+          return
+        }
+        if (retry.result.action !== 'adopt_remote') {
+          await this.applyReconcileResult(retry.result, ctx, options)
+          return
+        }
+      }
+
       await writeLocalVaultBlob(result.localYaml)
       if (this.isAuthenticated) {
         await this.reloadSessionFromLocal()
