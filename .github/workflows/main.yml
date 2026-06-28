@@ -32,10 +32,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare (format + wasm)
-        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:prepare VITE_BASE=/
 
       - name: Verify and build
-        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:parallel VITE_BASE=/
         env:
           CI: true
 
