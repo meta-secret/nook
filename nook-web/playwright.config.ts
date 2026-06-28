@@ -53,8 +53,9 @@ const webServerCommand = usePreviewServer
   : 'bun run dev -- --host 127.0.0.1 --port 5173'
 
 if (isCi) {
+  const syncProvider = process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github'
   console.log(
-    `[e2e] webServer: ${usePreviewServer ? 'preview (dist/)' : 'dev (dist missing)'}`,
+    `[e2e] webServer: ${usePreviewServer ? 'preview (dist/)' : 'dev (dist missing)'}, sync provider: ${syncProvider}`,
   )
 }
 
@@ -81,11 +82,17 @@ export default defineConfig({
     reuseExistingServer: !isCi,
     timeout: isCi ? 120_000 : 30_000,
     env: usePreviewServer
-      ? { VITE_E2E_EXPOSE_VAULT: 'true' }
+      ? {
+          VITE_E2E_EXPOSE_VAULT: 'true',
+          NOOK_E2E_SYNC_PROVIDER:
+            process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github',
+        }
       : {
           VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
           NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
           VITE_E2E_EXPOSE_VAULT: 'true',
+          NOOK_E2E_SYNC_PROVIDER:
+            process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github',
         },
   },
   projects: [

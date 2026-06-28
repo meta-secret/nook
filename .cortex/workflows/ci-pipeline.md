@@ -25,6 +25,41 @@ flowchart LR
   nightly --> e2e_live[sync-live e2e]
 ```
 
+## Provider selection (`NOOK_E2E_SYNC_PROVIDER`)
+
+The **same sync spec files** run against different backends. CI swaps providers by setting one env var per job:
+
+| Env | Values | Default |
+|-----|--------|---------|
+| `NOOK_E2E_SYNC_PROVIDER` | `github`, `google-drive` | `github` |
+
+Registry and factories live in `nook-web/e2e/sync-provider.ts`:
+
+- **`createSyncTarget()`** — isolated stub remote (reads provider from env)
+- **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
+- **`live/sync.smoke.spec.ts`** — one nightly smoke per matrix row
+
+**Main CI (`sync-stub`):** defaults to `github`; add a parallel job with `NOOK_E2E_SYNC_PROVIDER=google-drive` when Drive UI connect is wired.
+
+**Nightly (`sync-live`):** matrix in `e2e-nightly.yml`:
+
+```yaml
+strategy:
+  matrix:
+    provider: [github]  # add google-drive when secret exists
+env:
+  NOOK_E2E_SYNC_PROVIDER: ${{ matrix.provider }}
+```
+
+Live credentials per provider:
+
+| Provider | Secret / env |
+|----------|----------------|
+| `github` | `NOOK_GITHUB_PAT` |
+| `google-drive` | `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (when live smoke is wired) |
+
+Stub mode uses in-memory route mocks (`sync-stub.ts`, `drive-stub.ts`) — no API quota.
+
 ## Why sync-stub vs sync-live
 
 GitHub REST API rate limits make it expensive to run full Playwright sync coverage on every PR and every main push. Nook therefore:

@@ -1,8 +1,8 @@
-# Nightly live sync provider e2e — real GitHub API (rate-limit sensitive).
+# Nightly live sync provider e2e — real provider APIs (rate-limit sensitive).
 #
 # Stub-backed sync coverage runs on every main merge (main.yml). This workflow
-# validates the production GitHub integration once per day. Add other sync
-# providers here as live smoke suites are introduced.
+# runs the same live smoke spec once per day per provider; swap providers by
+# setting NOOK_E2E_SYNC_PROVIDER on each matrix job.
 
 name: E2E (nightly)
 
@@ -16,14 +16,18 @@ permissions:
   contents: read
   packages: write
 
-concurrency:
-  group: e2e-nightly
-  cancel-in-progress: false
-
 jobs:
   sync-live:
-    name: Live sync providers
+    name: Live sync (${{ matrix.provider }})
     runs-on: ubuntu-latest
+    concurrency:
+      group: e2e-nightly-${{ matrix.provider }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [github]
+        # Add google-drive when NOOK_GOOGLE_E2E_ACCESS_TOKEN secret is configured.
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -37,8 +41,10 @@ jobs:
         run: task ci:nightly:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
           CI: true
+          NOOK_E2E_SYNC_PROVIDER: ${{ matrix.provider }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          NOOK_GITHUB_E2E_REPO: nook-e2e-nightly-${{ github.run_id }}
+          NOOK_GOOGLE_E2E_ACCESS_TOKEN: ${{ secrets.NOOK_GOOGLE_E2E_ACCESS_TOKEN }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-nightly-${{ matrix.provider }}-${{ github.run_id }}
           NOOK_GITHUB_POLL_MS: '3000'
           NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'

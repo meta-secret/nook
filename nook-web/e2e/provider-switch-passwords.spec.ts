@@ -12,17 +12,17 @@ import {
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
 } from './helpers'
-import { createStubSyncTarget, installStubOnPage } from './sync-stub'
+import { createSyncTarget, installSyncStub } from './sync-provider'
 
 test.describe('unified vault backup passwords (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
-  const target = createStubSyncTarget('', 'provider-switch')
+  const target = createSyncTarget('', 'provider-switch')
 
   test('login gate keeps backup passwords after adding sync providers', async ({
     page,
   }) => {
-    await installStubOnPage(page, target)
+    await installSyncStub(page, target)
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()

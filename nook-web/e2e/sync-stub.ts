@@ -23,6 +23,7 @@ export function createE2eStubRepoName(prefix = 'nook-stub'): string {
   return `${prefix}-${suffix}`
 }
 
+/** @deprecated Use {@link createSyncTarget} from `./sync-provider`. */
 export function createStubSyncTarget(
   initialYaml = '',
   prefix?: string,

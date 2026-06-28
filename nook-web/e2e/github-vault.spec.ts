@@ -2,7 +2,6 @@ import { test, expect, type Page } from '@playwright/test'
 import {
   addSecret,
   clearBrowserVault,
-  connectGithubVault,
   deleteSecret,
   assertVaultReady,
   reconnectGithubVault,
@@ -10,37 +9,38 @@ import {
   uniqueSecretKey,
 } from './helpers'
 import {
-  createStubSyncTarget,
-  installStubOnPage,
-  type StubSyncTarget,
-} from './sync-stub'
+  connectSyncVault,
+  createSyncTarget,
+  e2eSyncProviderDef,
+  installSyncStub,
+  resolveE2eSyncProvider,
+  type SyncE2eTarget,
+} from './sync-provider'
 
-test.describe('github vault (stub sync)', () => {
+const providerId = resolveE2eSyncProvider()
+const providerLabel = e2eSyncProviderDef(providerId).label
+
+test.describe(`${providerLabel} vault (stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let target: StubSyncTarget
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    target = createStubSyncTarget('', 'github-vault')
+    target = createSyncTarget('', 'sync-vault')
     vaultPage = await browser.newPage()
-    await installStubOnPage(vaultPage, target)
+    await installSyncStub(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectGithubVault(
-      vaultPage,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await connectSyncVault(vaultPage, target)
   })
 
   test.afterAll(async () => {
     await vaultPage?.close()
   })
 
-  test('connects and shows vault after github sync', async () => {
+  test('connects and shows vault after sync', async () => {
     await expect(vaultPage.getByTestId('vault-panel')).toBeVisible()
     await expect(vaultPage.getByTestId('vault-status-bar')).toContainText(
       'Vault',
@@ -50,17 +50,17 @@ test.describe('github vault (stub sync)', () => {
     )
   })
 
-  test('adds and deletes a secret synced to github', async () => {
-    const key = uniqueSecretKey('e2e-github')
-    const value = 'github-sync-secret'
+  test('adds and deletes a secret synced to remote', async () => {
+    const key = uniqueSecretKey('e2e-sync')
+    const value = 'sync-secret'
 
     await addSecret(vaultPage, key, value, target)
     await deleteSecret(vaultPage, key, target)
   })
 
   test('persists secrets across reload and reconnect', async () => {
-    const key = uniqueSecretKey('e2e-github-persist')
-    const value = 'github-persist-value'
+    const key = uniqueSecretKey('e2e-sync-persist')
+    const value = 'sync-persist-value'
 
     await addSecret(vaultPage, key, value, target)
     await vaultPage.reload()

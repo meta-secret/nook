@@ -14,31 +14,27 @@ import {
   waitForSecretOnDevice,
 } from './helpers'
 import {
-  createStubSyncTarget,
-  installStubOnPage,
-  resetStubVault,
-  type StubSyncTarget,
-} from './sync-stub'
+  createSyncTarget,
+  installSyncStub,
+  connectSyncVault,
+  resetSyncRemote,
+  type SyncE2eTarget,
+} from './sync-provider'
 
 test.describe('remote vault recovery (stub sync, local-first)', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let target: StubSyncTarget
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    target = createStubSyncTarget('', 'remote-recovery')
+    target = createSyncTarget('', 'remote-recovery')
     vaultPage = await browser.newPage()
-    await installStubOnPage(vaultPage, target)
+    await installSyncStub(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectGithubVault(
-      vaultPage,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await connectSyncVault(vaultPage, target)
     await disableLoginAutoUnlock(vaultPage)
   })
 
@@ -51,7 +47,7 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     const value = 'recovered-from-local-vault'
 
     await addSecret(vaultPage, key, value, target)
-    resetStubVault(target)
+    resetSyncRemote(target)
 
     await vaultPage.reload()
     await expect(vaultPage.getByTestId('login-gate')).toBeVisible({

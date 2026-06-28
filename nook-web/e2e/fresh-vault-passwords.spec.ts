@@ -12,21 +12,17 @@ import {
   unlockVaultOnLogin,
   waitForLoadedSyncProviders,
 } from './helpers'
-import {
-  createE2eStubRepoName,
-  createStubSyncTarget,
-  installStubOnPage,
-} from './sync-stub'
+import { createSyncTarget, installSyncStub } from './sync-provider'
 
 test.describe('fresh vault password entries (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
-  const target = createStubSyncTarget('', 'fresh-pw')
+  const target = createSyncTarget('', 'fresh-pw')
 
   test('local backup passwords persist after adding a github sync provider', async ({
     page,
   }) => {
-    await installStubOnPage(page, target)
+    await installSyncStub(page, target)
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()

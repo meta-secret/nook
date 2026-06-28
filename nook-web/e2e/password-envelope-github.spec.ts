@@ -22,10 +22,11 @@ import {
   waitForVaultUnlocked,
 } from './helpers'
 import {
-  createStubSyncTarget,
-  installStubOnPages,
-  type StubSyncTarget,
-} from './sync-stub'
+  createSyncTarget,
+  installSyncStubOnPages,
+  connectSyncGenesisDevice,
+  type SyncE2eTarget,
+} from './sync-provider'
 
 test.describe('vault password envelope (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -35,7 +36,7 @@ test.describe('vault password envelope (stub sync)', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let target: StubSyncTarget
+  let target: SyncE2eTarget
 
   const sharedSecretKey = uniqueSecretKey('e2e-pw-shared')
   const sharedSecretValue = 'shared-via-qr-enrollment'
@@ -43,20 +44,15 @@ test.describe('vault password envelope (stub sync)', () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
-    target = createStubSyncTarget('', 'password-envelope')
+    target = createSyncTarget('', 'password-envelope')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await installStubOnPages([deviceA, deviceB], target)
-    await connectGithubGenesisDevice(
-      deviceA,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
     await addSecret(deviceA, sharedSecretKey, sharedSecretValue, target)
   })
 

@@ -5,8 +5,6 @@ import {
   approveJoinFromSettings,
   assertEnrolledVaultOnGithub,
   assertVaultReady,
-  connectGithubGenesisDevice,
-  connectGithubJoinerDevice,
   createIsolatedContext,
   expandSettingsSection,
   openStorageSettings,
@@ -21,12 +19,18 @@ import {
 } from './helpers'
 import { parseVaultYamlSnapshot, assertGenesisVaultYaml } from './vault-yaml'
 import {
-  createStubSyncTarget,
-  installStubOnPages,
-  type StubSyncTarget,
-} from './sync-stub'
+  createSyncTarget,
+  installSyncStubOnPages,
+  connectSyncGenesisDevice,
+  connectSyncJoinerDevice,
+  e2eSyncProviderDef,
+  resolveE2eSyncProvider,
+  type SyncE2eTarget,
+} from './sync-provider'
 
-test.describe('multi-device github vault (stub sync)', () => {
+const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
+
+test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
@@ -34,7 +38,7 @@ test.describe('multi-device github vault (stub sync)', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let target: StubSyncTarget
+  let target: SyncE2eTarget
 
   const genesisSecretKey = uniqueSecretKey('e2e-md-genesis')
   const genesisSecretValue = 'genesis-device-password'
@@ -43,20 +47,15 @@ test.describe('multi-device github vault (stub sync)', () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    target = createStubSyncTarget('', 'multi-device')
+    target = createSyncTarget('', 'multi-device')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await installStubOnPages([deviceA, deviceB], target)
-    await connectGithubGenesisDevice(
-      deviceA,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
     await addSecret(deviceA, genesisSecretKey, genesisSecretValue, target)
 
     const genesisYaml = await waitForGithubVaultState(
@@ -79,12 +78,7 @@ test.describe('multi-device github vault (stub sync)', () => {
   })
 
   test('device B sees join dialog and sends a join request', async () => {
-    await connectGithubJoinerDevice(
-      deviceB,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await connectSyncJoinerDevice(deviceB, target)
     const join = await sendJoinRequest(
       deviceB,
       target.pat,
@@ -181,7 +175,7 @@ test.describe('multi-device github vault (stub sync)', () => {
   })
 })
 
-test.describe('multi-device approve from settings (stub sync)', () => {
+test.describe(`multi-device approve from settings (${providerLabel} stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
@@ -189,24 +183,19 @@ test.describe('multi-device approve from settings (stub sync)', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let target: StubSyncTarget
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    target = createStubSyncTarget('', 'multi-device-settings')
+    target = createSyncTarget('', 'multi-device-settings')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await installStubOnPages([deviceA, deviceB], target)
-    await connectGithubGenesisDevice(
-      deviceA,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
   })
 
   test.afterAll(async () => {
@@ -217,12 +206,7 @@ test.describe('multi-device approve from settings (stub sync)', () => {
   })
 
   test('approves join from vault banner', async () => {
-    await connectGithubJoinerDevice(
-      deviceB,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await connectSyncJoinerDevice(deviceB, target)
     const join = await sendJoinRequest(
       deviceB,
       target.pat,
@@ -243,7 +227,7 @@ test.describe('multi-device approve from settings (stub sync)', () => {
   })
 })
 
-test.describe('multi-device join background sync (stub sync)', () => {
+test.describe(`multi-device join background sync (${providerLabel} stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
@@ -251,24 +235,19 @@ test.describe('multi-device join background sync (stub sync)', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let target: StubSyncTarget
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    target = createStubSyncTarget('', 'multi-device-bg')
+    target = createSyncTarget('', 'multi-device-bg')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await installStubOnPages([deviceA, deviceB], target)
-    await connectGithubGenesisDevice(
-      deviceA,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
   })
 
   test.afterAll(async () => {
@@ -279,12 +258,7 @@ test.describe('multi-device join background sync (stub sync)', () => {
   })
 
   test('device A eventually sees pending join without manual refresh', async () => {
-    await connectGithubJoinerDevice(
-      deviceB,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    await connectSyncJoinerDevice(deviceB, target)
     const join = await sendJoinRequest(
       deviceB,
       target.pat,
