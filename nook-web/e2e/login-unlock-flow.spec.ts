@@ -154,7 +154,7 @@ test.describe('login storage provider setup', () => {
     await clearBrowserVault(page)
     await page.reload()
 
-    await page.getByTestId('login-use-storage-provider-link').click()
+    await page.getByTestId('login-connect-storage-btn').click()
     await page.getByTestId('provider-option-local').click()
     const connectBtn = page.getByTestId('connect-provider-btn')
     await expect(connectBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })

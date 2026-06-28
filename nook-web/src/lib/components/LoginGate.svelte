@@ -17,7 +17,7 @@
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
-  import LoginCreateVaultStep from '$lib/components/login/LoginCreateVaultStep.svelte'
+  import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
@@ -44,7 +44,7 @@
     onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
-    onCreateLocalVault,
+    onCreateDeviceVault,
     onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
@@ -71,7 +71,7 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
-    onCreateLocalVault?: (password: string) => void | Promise<void>
+    onCreateDeviceVault?: () => void | Promise<void>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
@@ -227,25 +227,16 @@
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}
           </p>
-        {:else if showCreateVault && onCreateLocalVault}
-          <LoginCreateVaultStep
+        {:else if showCreateVault && onCreateDeviceVault}
+          <LoginCreateVaultChooser
             {vault}
             {isVerifying}
             {isInitializing}
-            onCreateVault={onCreateLocalVault}
+            {onCreateDeviceVault}
+            onConnectStorage={() => {
+              showProviderSetupLink = true
+            }}
           />
-          <p class="mt-4 text-center text-xs text-muted-foreground">
-            <button
-              type="button"
-              class="font-medium text-primary underline-offset-4 hover:underline"
-              data-testid="login-use-storage-provider-link"
-              onclick={() => {
-                showProviderSetupLink = true
-              }}
-            >
-              {vault.t('login.use_storage_provider')}
-            </button>
-          </p>
         {:else if showSetup && setupType}
           <form
             novalidate
@@ -292,6 +283,18 @@
             </div>
           </form>
         {:else if showProviderSetup}
+          {#if showProviderSetupLink && !addProviderOpen}
+            <button
+              type="button"
+              class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="login-back-to-get-started"
+              onclick={() => {
+                showProviderSetupLink = false
+              }}
+            >
+              {vault.t('login.back_to_get_started')}
+            </button>
+          {/if}
           <LoginProviderManagement
             {vault}
             variant="setup"

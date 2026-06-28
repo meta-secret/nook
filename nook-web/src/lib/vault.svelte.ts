@@ -563,9 +563,45 @@ export class VaultState {
   }
 
   /**
-   * First-time setup: create a local vault and set the master password.
-   * Closes #62 Phase 1.3.
+   * First-time setup: create an empty local vault secured by this device's keys.
    */
+  async createLocalVaultWithDeviceKeys(): Promise<void> {
+    if (!this.manager) {
+      this.errorMsg = 'Vault engine is not available.'
+      return
+    }
+    if (this.isVerifying) return
+
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.storageMode = 'local'
+    this.githubPat = ''
+    this.oauthFile = null
+    this.isVerifying = true
+
+    try {
+      await this.initDeviceIdentity()
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.connect('local', '', ''),
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      this.isAuthenticated = true
+      this.localVaultPresent = true
+      this.localLoginPrepared = true
+      await this.ensureProviderSaved()
+      await this.hydrateMultiDeviceState()
+      this.showSuccess(this.t('toasts.local_loaded'))
+      this.startVaultSync()
+    } catch (e: unknown) {
+      this.isAuthenticated = false
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to create local vault.'
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  /** @deprecated Use {@link createLocalVaultWithDeviceKeys}. Backup passwords belong in Settings. */
   async createLocalVault(password: string): Promise<void> {
     if (!this.manager) {
       this.errorMsg = 'Vault engine is not available.'

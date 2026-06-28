@@ -137,7 +137,7 @@ pub fn member_stored_key(pk_id: &str) -> String {
     format!("{MEMBER_RECORD_PREFIX}{pk_id}")
 }
 
-/// Whether a flat-record key matches the pk_id inside the decrypted member entry.
+/// Whether a flat-record key matches the `pk_id` inside the decrypted member entry.
 /// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
 /// store the bare 64-hex digest — accept both forms.
 fn member_record_key_matches(stored_key: &str, entry_pk_id: &str) -> bool {
@@ -864,8 +864,7 @@ mod tests {
         assert!(yaml.contains("ciphertext:"));
         assert!(!yaml.contains("age1"));
 
-        let roundtripped =
-            crate::deserialize_stored(&yaml, crate::VaultFormat::Yaml).unwrap();
+        let roundtripped = crate::deserialize_stored(&yaml, crate::VaultFormat::Yaml).unwrap();
         let roster = resolve_member_roster(&roundtripped, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 2);
     }

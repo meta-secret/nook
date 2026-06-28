@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test'
 import {
   addSecret,
   createLocalVaultOnLogin,
-  DEFAULT_LOCAL_VAULT_PASSWORD,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   reloadUnlockWithGithubSync,
   uniqueSecretKey,
@@ -18,10 +17,7 @@ test.describe('sync fan-out on save', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page, {
-      password: DEFAULT_LOCAL_VAULT_PASSWORD,
-      entryLabel: 'Master password',
-    })
+    await reloadUnlockWithGithubSync(page)
 
     await expect(page.getByTestId('vault-status-bar')).toContainText(
       'Local vault',
@@ -40,10 +36,7 @@ test.describe('sync fan-out on save', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page, {
-      password: DEFAULT_LOCAL_VAULT_PASSWORD,
-      entryLabel: 'Master password',
-    })
+    await reloadUnlockWithGithubSync(page)
 
     const key = uniqueSecretKey('e2e-fanout')
     await addSecret(page, key, 'fan-out-test-value')

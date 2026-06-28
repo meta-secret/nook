@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
   createLocalVaultOnLogin,
-  DEFAULT_LOCAL_VAULT_PASSWORD,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openLoginProviderSetup,
   reloadUnlockWithGithubSync,
@@ -10,12 +9,12 @@ import {
 } from './helpers'
 
 test.describe('vault connect flow', () => {
-  test('creates local vault with master password and opens vault', async ({
+  test('creates local vault with device keys and opens vault', async ({
     page,
   }) => {
     await page.goto('/')
 
-    await expect(page.getByTestId('login-create-vault-form')).toBeVisible()
+    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await createLocalVaultOnLogin(page)
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
@@ -35,36 +34,16 @@ test.describe('vault connect flow', () => {
     )
   })
 
-  test('create vault button stays disabled until passwords match', async ({
-    page,
-  }) => {
+  test('shows both setup paths on first visit', async ({ page }) => {
     await page.goto('/')
 
-    const createBtn = page.getByTestId('login-create-vault-btn')
-    await expect(createBtn).toBeDisabled()
-    await page.getByTestId('login-create-password-input').fill('short')
-    await expect(createBtn).toBeDisabled()
-    await page
-      .getByTestId('login-create-password-confirm')
-      .fill('different-password-1')
-    await expect(createBtn).toBeDisabled()
-    await page
-      .getByTestId('login-create-password-input')
-      .fill('valid-password-1')
-    await page
-      .getByTestId('login-create-password-confirm')
-      .fill('valid-password-1')
-    await expect(createBtn).toBeEnabled()
-  })
-
-  test('shows login gate on first visit', async ({ page }) => {
-    await page.goto('/')
-
-    await expect(page.getByTestId('login-gate')).toBeVisible()
-    await expect(page.getByTestId('login-create-vault-form')).toBeVisible()
+    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
+    await expect(page.getByTestId('login-path-local')).toBeVisible()
+    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(
-      page.getByTestId('login-use-storage-provider-link'),
+      page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
+    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(
       page.getByTestId('login-unlock-method-fieldset'),
@@ -75,6 +54,14 @@ test.describe('vault connect flow', () => {
       'href',
       'https://github.com/meta-secret/nook',
     )
+  })
+
+  test('shows login gate on first visit', async ({ page }) => {
+    await page.goto('/')
+
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).not.toBeVisible()
   })
 
   test('opens help page from header', async ({ page }) => {
@@ -114,9 +101,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 
-  test('unlock local vault with master password after reload', async ({
-    page,
-  }) => {
+  test('auto-unlocks device-key vault after reload', async ({ page }) => {
     await page.goto('/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -124,16 +109,10 @@ test.describe('vault connect flow', () => {
     })
 
     await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await page
-      .getByTestId('login-master-password-input')
-      .fill(DEFAULT_LOCAL_VAULT_PASSWORD)
-    await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(page.getByTestId('login-gate')).not.toBeVisible()
   })
 
   test('removes a saved sync provider from vault settings', async ({
@@ -146,8 +125,6 @@ test.describe('vault connect flow', () => {
     })
 
     await reloadUnlockWithGithubSync(page, {
-      password: DEFAULT_LOCAL_VAULT_PASSWORD,
-      entryLabel: 'Master password',
       providers: [
         {
           id: 'e2e-sync-github',

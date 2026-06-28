@@ -76,9 +76,17 @@ export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
 export async function openLoginProviderSetup(page: Page) {
-  const link = page.getByTestId('login-use-storage-provider-link')
-  if (await link.isVisible()) {
-    await link.click()
+  const connectBtn = page.getByTestId('login-connect-storage-btn')
+  if (await connectBtn.isVisible()) {
+    await connectBtn.click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    return
+  }
+  const legacyLink = page.getByTestId('login-use-storage-provider-link')
+  if (await legacyLink.isVisible()) {
+    await legacyLink.click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -96,13 +104,8 @@ export async function openLoginProviderSetup(page: Page) {
 /** @deprecated Use {@link openLoginProviderSetup}. */
 export const openLegacyProviderSetup = openLoginProviderSetup
 
-export async function createLocalVaultOnLogin(
-  page: Page,
-  password = DEFAULT_LOCAL_VAULT_PASSWORD,
-) {
-  await page.getByTestId('login-create-password-input').fill(password)
-  await page.getByTestId('login-create-password-confirm').fill(password)
-  await page.getByTestId('login-create-vault-btn').click()
+export async function createLocalVaultOnLogin(page: Page) {
+  await page.getByTestId('login-create-device-vault-btn').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
@@ -118,8 +121,8 @@ export async function connectLocalVault(page: Page) {
     return
   }
 
-  const createForm = page.getByTestId('login-create-vault-form')
-  if (await createForm.isVisible()) {
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  if (await chooser.isVisible()) {
     await createLocalVaultOnLogin(page)
     return
   }
@@ -798,9 +801,24 @@ export async function unlockVaultOnLogin(
       }
       await page.getByTestId('login-master-password-input').fill(opts.password)
     } else {
-      await selectLoginUnlockMethod(page, 'keys')
+      const keysMethod = page.getByTestId('login-unlock-method-keys')
+      if (await keysMethod.isVisible()) {
+        const checked = await keysMethod.getAttribute('aria-checked')
+        if (checked !== 'true') {
+          await selectLoginUnlockMethod(page, 'keys')
+        }
+      }
     }
-    await page.getByTestId('unlock-vault-btn').click()
+    const unlockBtn = page.getByTestId('unlock-vault-btn')
+    const vaultPanel = page.getByTestId('vault-panel')
+    if (await vaultPanel.isVisible()) {
+      return
+    }
+    await expect(unlockBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+    if (await vaultPanel.isVisible()) {
+      return
+    }
+    await unlockBtn.click()
     return
   }
 

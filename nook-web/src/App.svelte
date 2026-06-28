@@ -353,7 +353,7 @@
           enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
           onUnlockWithPassword={(entryId, password) =>
             vault.unlockWithPassword(entryId, password)}
-          onCreateLocalVault={(password) => vault.createLocalVault(password)}
+          onCreateDeviceVault={() => vault.createLocalVaultWithDeviceKeys()}
           onRemoveProvider={(id) => vault.removeProvider(id)}
         />
         <VaultStatusBar

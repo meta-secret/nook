@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
   createLocalVaultOnLogin,
-  DEFAULT_LOCAL_VAULT_PASSWORD,
   reloadUnlockWithGithubSync,
   UI_TIMEOUT_MS,
 } from './helpers'
@@ -14,10 +13,7 @@ test.describe('sync provider settings', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page, {
-      password: DEFAULT_LOCAL_VAULT_PASSWORD,
-      entryLabel: 'Master password',
-    })
+    await reloadUnlockWithGithubSync(page)
 
     await page.getByTestId('vault-settings-tab').click()
     await expect(page.getByTestId('settings-provider-github')).toBeVisible()
