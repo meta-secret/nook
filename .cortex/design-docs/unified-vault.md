@@ -138,7 +138,7 @@ flowchart TD
 
 No automatic merge of secret records at this stage.
 
-WASM export: `compareVaultSync(local, remote) â†’ "unchanged" | "adopt_remote" | "push_local" | "conflict"`.
+WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVaultBlobs(local, remote, revision)` returns post-reconcile blobs and action label.
 
 ---
 
@@ -200,6 +200,10 @@ After any local vault save (secret CRUD, password change, device roster update â
 
 Manual **Sync all** in the status bar runs the same reconcile loop with user-visible toasts.
 
+### In-memory sync tests
+
+`MemoryVaultStore` in `nook-core/src/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-core/tests/vault_sync_workflow.rs` (no browser required).
+
 ---
 
 ## 10. Implementation status
@@ -208,7 +212,9 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 |-------|--------|
 | `vault_version` in YAML read/write | Done (#61) |
 | `compare_vault_sync` in `nook-core` | Done (#61) |
+| In-memory sync replication tests (`vault_sync_store`) | Done |
 | `compareVaultSync` WASM export | Done (#61) |
+| `reconcileVaultBlobs` WASM export (apply in core) | Done |
 | Version increment on save | Done (#61) |
 | Local-first login gate | Done (#71, Phase 1) |
 | Sync providers in Settings | Done (#72, Phase 2) |
@@ -217,7 +223,7 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 | Fan-out sync after secret CRUD | Done (#74, Phase 4) |
 | Local-first status bar | Done (#74, Phase 4) |
 | Onboard / enrollment QR (local-first) | Done (#75, Phase 5) |
-| Help page rewrite | Planned (Phase 6, #67) |
+| Help page rewrite | Done (#76, Phase 6) |
 | Join sync propagation | Planned (Phase 7, #68) |
 | Legacy multi-vault migration | Planned (Phase 8, #69) |
 

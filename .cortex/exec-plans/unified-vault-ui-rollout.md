@@ -12,7 +12,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 1. **One page at a time** — ship, test, merge each slice before moving on.
 2. **Keep the app usable** — feature-flag or parallel paths during transition if needed.
 3. **E2E after every slice** — update Playwright specs in the same PR as UI changes.
-4. **Rust-first sync logic** — UI only calls WASM (`compareVaultSync`, version getters); no sync rules in TypeScript.
+4. **Rust-first sync logic** — UI calls WASM (`reconcileVaultBlobs`, `compareVaultSync`); apply rules live in `nook-core`.
 5. **Stacked PRs** — each phase branches from the previous; squash-merge in order (#61 → #71 → #72 → …).
 
 ---
@@ -26,8 +26,8 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 | 2 Sync providers | [#63](https://github.com/meta-secret/nook/issues/63) | [#72](https://github.com/meta-secret/nook/pull/72) | Ready |
 | 3 Conflict dialog | [#64](https://github.com/meta-secret/nook/issues/64) | [#73](https://github.com/meta-secret/nook/pull/73) | Ready |
 | 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | [#74](https://github.com/meta-secret/nook/pull/74) | Ready |
-| 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | #75 (pending) | Ready |
-| 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | — | Planned |
+| 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | [#75](https://github.com/meta-secret/nook/pull/75) | Ready |
+| 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | #76 (pending) | Ready |
 | 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | — | Planned |
 | 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | — | Planned |
 
@@ -115,13 +115,15 @@ No user-visible UI changes yet.
 
 ---
 
-## Phase 6 — Help (#67)
+## Phase 6 — Help (#67, #76) ✅
 
 | # | Change |
 |---|--------|
-| 6.1 | Rewrite architecture section |
-| 6.2 | Sync / conflict FAQ |
-| 6.3 | Update mermaid in `help-content.ts` |
+| 6.1 | Rewrite `help-content.ts` for local-first vault + sync providers |
+| 6.2 | Sync / conflict / onboard FAQ sections |
+| 6.3 | Architecture mermaid diagram in help page |
+
+**E2E:** Updated `e2e/connect.spec.ts` help navigation assertions.
 
 ---
 

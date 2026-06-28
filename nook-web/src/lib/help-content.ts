@@ -1,80 +1,109 @@
-/** User-facing product help — keep in sync with .cortex/product-specs/ when architecture changes. */
+/** User-facing product help — keep in sync with .cortex/design-docs/unified-vault.md */
 
 export type HelpSection = {
   id: string
   title: string
   summary: string
   bullets: string[]
+  diagram?: string
 }
+
+/** Mermaid source for the local-first vault model (rendered as monospace in Help). */
+export const HELP_ARCHITECTURE_DIAGRAM = `flowchart TB
+  subgraph local["Browser (always)"]
+    V[nook-vault.yaml in nook_db]
+    P[Master password unlock]
+  end
+  subgraph sync["Optional sync providers"]
+    G[GitHub]
+    D[Google Drive]
+  end
+  V <-->|version-based sync| G
+  V <-->|version-based sync| D
+  P --> V`
 
 export const HELP_SECTIONS: HelpSection[] = [
   {
-    id: 'decentralized',
-    title: 'Why Nook?',
+    id: 'local-first',
+    title: 'Local vault first',
     summary:
-      'Your device is the key. No master password: your approved devices unlock the vault.',
+      'Nook keeps one encrypted vault on this device. Sync providers are optional copies — not separate vaults.',
     bullets: [
-      'Passwordless access to your secrets.',
-      'Your secrets. Your storage. Your keys.',
-      'A decentralized vault for your secrets.',
-      'No Nook account or central account server.',
-      'The code and encryption flow are open source.',
+      'Your vault lives in browser storage (IndexedDB) after first setup.',
+      'Unlock with your master password (or device keys if you set them up).',
+      'Secrets are encrypted before they are saved or synced anywhere.',
+      'No Nook account or central server holds your data.',
+    ],
+    diagram: HELP_ARCHITECTURE_DIAGRAM,
+  },
+  {
+    id: 'unlock',
+    title: 'Unlocking the vault',
+    summary:
+      'The master password decrypts the vault. Device keys remain for quick unlock and multi-device approval.',
+    bullets: [
+      'Create a master password when you set up a new vault.',
+      'Optional backup passwords add recovery options and power onboarding QR codes.',
+      'Each browser can keep its own device key for passwordless unlock after approval.',
+      'Losing every password and every approved device means the vault cannot be recovered.',
     ],
   },
   {
-    id: 'device-keys',
-    title: 'Your devices are the keys',
+    id: 'sync',
+    title: 'Sync providers',
     summary:
-      'An approved browser opens your vault without asking for a password.',
+      'Connect GitHub or Google Drive to push and pull the same vault file — credentials move ciphertext only.',
     bullets: [
-      'Each browser has its own device key.',
-      'A new browser must be approved by a device that already has access.',
-      'No login credentials or private keys are shared between devices.',
+      'Add sync providers in Settings. Local storage stays the canonical copy.',
+      'Use Sync now or Sync all to reconcile with a provider manually.',
+      'After you save a secret, Nook fans out to every connected provider in the background.',
+      'A provider PAT or OAuth token can read/write the encrypted file — it cannot decrypt secrets.',
     ],
   },
   {
-    id: 'recovery',
-    title: 'Your recovery is another device',
+    id: 'conflicts',
+    title: 'Sync conflicts',
     summary:
-      'Nook cannot reset access for you. There is no master password or support desk with a spare key.',
+      'When two copies diverge at the same vault version, Nook asks you which copy to keep.',
     bullets: [
-      'Approve at least two devices.',
-      'If one device is lost, another can still open the vault.',
-      'If every approved device is lost or erased, the vault cannot be recovered.',
+      'Each vault carries a vault_version that increments on every save.',
+      'If local and remote differ at the same version, editing is blocked until you resolve.',
+      'Choose Keep local or Keep remote in the conflict dialog or status banner.',
+      'After resolution, sync continues normally to all providers.',
     ],
   },
   {
-    id: 'providers',
-    title: 'You choose where the vault lives',
+    id: 'onboard',
+    title: 'Onboard another browser',
     summary:
-      'Nook encrypts your secrets first. Only then does it save or sync the vault.',
+      'Generate a QR code that points a new device at a sync provider copy, then share the vault password separately.',
     bullets: [
-      'This device keeps the encrypted database in browser storage.',
-      'GitHub syncs it to a private repository you control.',
-      'Google Drive, Proton Drive, Cloudflare R2, and more are planned.',
-      'A provider credential can move the encrypted vault. It cannot decrypt your secrets.',
+      'Pick a connected sync provider (for example GitHub) on the Onboard tab.',
+      'Confirm a vault password entry — the QR encrypts provider access, not the password itself.',
+      'The new browser downloads the vault from the provider into its local cache, then unlocks with the password you share.',
+      'Onboarding skips the manual join-approval round trip when a password envelope is used.',
     ],
   },
   {
     id: 'join',
-    title: 'Adding another device',
+    title: 'Adding another device (approval flow)',
     summary:
-      'New devices ask to join. An approved device decides whether they receive access.',
+      'Without a QR code, a new browser sends a join request that an approved device must accept.',
     bullets: [
-      'Open Nook in the new browser and send a join request.',
-      'Review the request on an approved device.',
-      'Approve it. The new browser can now unlock the same vault.',
+      'Open Nook in the new browser and connect to the same sync provider.',
+      'Review the pending join on a device that already has access.',
+      'Approve it — the new browser receives vault keys and can unlock.',
     ],
   },
   {
     id: 'technical',
     title: 'Technical details',
     summary:
-      'Nook keeps the security-sensitive work in a small Rust core compiled to WebAssembly.',
+      'Security-sensitive work runs in a Rust core compiled to WebAssembly inside your browser.',
     bullets: [
-      'Every browser creates a public/private keypair. The private key stays in that browser.',
-      'Each secret is typed YAML encrypted independently with age encryption.',
-      'GitHub stores the encrypted database as nook-vault.yaml.',
+      'Each browser creates a public/private keypair; private keys never leave the device.',
+      'Secrets are typed YAML records encrypted independently with age.',
+      'Sync providers store nook-vault.yaml — an encrypted bundle, not plaintext secrets.',
       'Decrypted secrets exist only in the active browser session.',
     ],
   },

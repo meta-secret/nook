@@ -62,14 +62,16 @@ import {
 } from '$lib/locale-catalogs'
 import { hasLocalVault } from '$lib/local-vault'
 import {
-  compareVaultBlobs,
   fetchRemoteVaultBlob,
   readLocalVaultBlob,
   readVaultVersionFromBlob,
+  reconcileVaultSyncBlobs,
+  resolveVaultSyncConflictKeepLocal,
+  resolveVaultSyncConflictKeepRemote,
   writeLocalVaultBlob,
   writeRemoteVaultBlob,
   type PendingSyncConflict,
-  type VaultSyncAction,
+  type ReconcileVaultResult,
 } from '$lib/vault-sync'
 
 export class VaultState {
@@ -1232,7 +1234,7 @@ export class VaultState {
     }
   }
 
-  /** Reconcile local vault with one sync provider using `compareVaultSync`. */
+  /** Reconcile local vault with one sync provider using `reconcileVaultBlobs`. */
   async syncProviderById(
     providerId: string,
     options?: { quiet?: boolean },
@@ -1251,13 +1253,16 @@ export class VaultState {
       const localYaml = await readLocalVaultBlob()
       const [mode, pat, repo] = this.providerWasmArgs(provider)
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)
-      const action = await compareVaultBlobs(localYaml, remote.content)
+      const reconcile = reconcileVaultSyncBlobs(
+        localYaml,
+        remote.content,
+        remote.revision,
+      )
 
-      await this.applyVaultSyncAction(
-        action,
+      await this.applyReconcileResult(
+        reconcile,
         {
           providerId,
-          localYaml,
           remote,
           mode,
           pat,
@@ -1301,11 +1306,10 @@ export class VaultState {
     void this.fanOutSyncToProviders({ quiet: true })
   }
 
-  private async applyVaultSyncAction(
-    action: VaultSyncAction,
+  private async applyReconcileResult(
+    result: ReconcileVaultResult,
     ctx: {
       providerId: string
-      localYaml: string
       remote: Awaited<ReturnType<typeof fetchRemoteVaultBlob>>
       mode: string
       pat: string
@@ -1313,18 +1317,18 @@ export class VaultState {
     },
     options?: { quiet?: boolean },
   ): Promise<void> {
-    const { providerId, localYaml, remote, mode, pat, repo } = ctx
+    const { providerId, remote, mode, pat, repo } = ctx
     const quiet = options?.quiet ?? false
 
-    if (action === 'conflict') {
-      const localVersion = await readVaultVersionFromBlob(localYaml)
-      const remoteVersion = await readVaultVersionFromBlob(remote.content)
+    if (result.action === 'conflict') {
+      const localVersion = await readVaultVersionFromBlob(result.localYaml)
+      const remoteVersion = await readVaultVersionFromBlob(result.remoteYaml)
       const provider = this.providers.find((p) => p.id === providerId)
       this.pendingSyncConflict = {
         providerId,
         providerLabel: provider?.label ?? providerId,
-        localYaml,
-        remoteYaml: remote.content,
+        localYaml: result.localYaml,
+        remoteYaml: result.remoteYaml,
         localVersion,
         remoteVersion,
         mode,
@@ -1336,20 +1340,24 @@ export class VaultState {
       return
     }
 
-    if (action === 'adopt_remote') {
-      await writeLocalVaultBlob(remote.content)
+    if (result.action === 'adopt_remote') {
+      await writeLocalVaultBlob(result.localYaml)
       if (this.isAuthenticated) {
         await this.reloadSessionFromLocal()
       }
-    } else if (action === 'push_local' || remote.missing) {
+    } else if (result.action === 'push_local' || remote.missing) {
       const revision = await writeRemoteVaultBlob(
         mode,
         pat,
         repo,
-        localYaml,
+        result.remoteYaml,
         remote.revision,
       )
-      await this.updateProviderSyncMetadata(providerId, localYaml, revision)
+      await this.updateProviderSyncMetadata(
+        providerId,
+        result.localYaml,
+        revision,
+      )
       if (!quiet) {
         this.showSuccess(this.t('auth_storage.sync_pushed'))
       }
@@ -1358,11 +1366,11 @@ export class VaultState {
 
     await this.updateProviderSyncMetadata(
       providerId,
-      action === 'unchanged' ? localYaml : remote.content,
+      result.localYaml,
       remote.revision,
     )
     if (!quiet) {
-      if (action === 'unchanged') {
+      if (result.action === 'unchanged') {
         this.showSuccess(this.t('auth_storage.sync_up_to_date'))
       } else {
         this.showSuccess(this.t('auth_storage.sync_pulled'))
@@ -1408,11 +1416,16 @@ export class VaultState {
     this.isVerifying = true
     this.errorMsg = ''
     try {
+      const remoteYaml = resolveVaultSyncConflictKeepLocal(
+        conflict.localYaml,
+        conflict.remoteYaml,
+        conflict.remoteRevision,
+      )
       const revision = await writeRemoteVaultBlob(
         conflict.mode,
         conflict.pat,
         conflict.repo,
-        conflict.localYaml,
+        remoteYaml,
         conflict.remoteRevision,
       )
       await this.updateProviderSyncMetadata(
@@ -1441,7 +1454,12 @@ export class VaultState {
     this.isVerifying = true
     this.errorMsg = ''
     try {
-      await writeLocalVaultBlob(conflict.remoteYaml)
+      const localYaml = resolveVaultSyncConflictKeepRemote(
+        conflict.localYaml,
+        conflict.remoteYaml,
+        conflict.remoteRevision,
+      )
+      await writeLocalVaultBlob(localYaml)
       if (this.isAuthenticated) {
         await this.reloadSessionFromLocal()
       }
@@ -1852,6 +1870,7 @@ export class VaultState {
       this.isAuthenticated = true
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
+      await this.loadProviders()
       await this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
@@ -2107,6 +2126,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
+      await this.loadProviders()
       await this.refreshPasswordEntriesList()
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
@@ -2169,18 +2189,18 @@ export class VaultState {
           )
         }
         const localYaml = await readLocalVaultBlob()
-        const action = await compareVaultBlobs(localYaml, remote.content)
-        if (action === 'conflict') {
+        const reconcile = reconcileVaultSyncBlobs(
+          localYaml,
+          remote.content,
+          remote.revision,
+        )
+        if (reconcile.action === 'conflict') {
           throw new Error(
             'Local and sync-provider vaults conflict. Resolve on the issuing device first.',
           )
         }
-        const yamlToAdopt =
-          action === 'adopt_remote' || !localYaml.trim()
-            ? remote.content
-            : localYaml
-        if (!localYaml.trim() || action === 'adopt_remote') {
-          await writeLocalVaultBlob(yamlToAdopt)
+        if (!localYaml.trim() || reconcile.action === 'adopt_remote') {
+          await writeLocalVaultBlob(reconcile.localYaml)
         }
         this.localVaultPresent = true
       }
@@ -2197,6 +2217,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
+      await this.loadProviders()
       await this.refreshPasswordEntriesList()
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'

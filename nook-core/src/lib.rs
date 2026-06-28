@@ -17,6 +17,7 @@ mod vault_crypto;
 mod vault_format;
 mod vault_ids;
 mod vault_sync;
+mod vault_sync_store;
 
 pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
@@ -70,3 +71,7 @@ pub use vault_ids::{
     validate_secret_id, validate_store_id,
 };
 pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};
+pub use vault_sync_store::{
+    MemoryVaultStore, fan_out_sync, reconcile_vault_stores, resolve_conflict_keep_local,
+    resolve_conflict_keep_remote,
+};
