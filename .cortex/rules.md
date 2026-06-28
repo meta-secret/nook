@@ -73,14 +73,15 @@ This document defines the strict development standards, architectural boundaries
 
 ### Docker daemon — never kill it
 
-> ## ⛔ DO NOT KILL THE DOCKER DAEMON
+> ## ⛔ STRICTLY PROHIBITED: killing the Docker daemon
 >
-> **Agents and humans must never stop, restart, or `kill` the Docker Desktop / `dockerd` process.**
+> **Agents and humans must never stop, restart, or kill Docker Desktop, `dockerd`, or the Docker VM.**
+> Only **individual containers** may be stopped. The daemon itself is off limits.
 >
-> - **Forbidden:** `killall Docker`, `pkill docker`, `pkill -f docker`, `osascript` quit Docker, `systemctl stop docker`, or any command aimed at the daemon, VM, or Desktop app.
-> - **Forbidden:** `lsof -ti :<port> | xargs kill` when that port is bound by Docker port-forwarding (e.g. `task web:dev` on `:5173`) — that tears down the daemon connection and breaks the user's environment.
+> - **Forbidden:** `killall Docker`, `killall docker`, `pkill docker`, `pkill -f docker`, `osascript` quit Docker, `systemctl stop docker`, or any command aimed at the daemon, VM, or Desktop app.
+> - **Forbidden:** `lsof -ti :<port> | xargs kill` when that port is bound by Docker port-forwarding (e.g. `task web:dev` on `:5173`) — that can disrupt the daemon and break the user's environment.
 > - **Allowed:** Stop **individual containers** only, e.g. `docker stop <container_id>` or `docker compose down` for a specific project stack.
-> - **Allowed:** Free a dev port by stopping the container that owns it (`docker ps` → `docker stop`), not by killing PIDs blindly.
+> - **Allowed:** Free a dev port by stopping the container that owns it (`docker ps --filter publish=5173` → `docker stop <id>`), not by killing PIDs blindly.
 >
 > Local web dev: `task web:dev`. Install deps: `task web:install`. Do not bypass Taskfile with host `npm`/`vite` unless the user explicitly asks.
 

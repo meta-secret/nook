@@ -43,6 +43,8 @@ After implementation is complete, **do not stop at push** — agents must drive 
 
 PR workflow (`pr.yml`): verify + web build. Main workflow (`main.yml`): full e2e after merge — still run local e2e before merge when the change touches web flows.
 
+**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
+
 ## CLI reference
 
 ```bash

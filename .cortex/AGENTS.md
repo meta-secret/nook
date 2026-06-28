@@ -8,7 +8,13 @@ This is the system of record and entry point for all AI agents working in this r
 
 ## ⛔ Non-negotiable: never kill the Docker daemon
 
-**Do not stop, restart, or `kill` Docker Desktop / `dockerd`.** Stop individual **containers** only (`docker stop <id>`). Never use `killall docker`, `pkill docker`, or `lsof … | xargs kill` on ports Docker forwards (e.g. `:5173` for `task web:dev`). Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
+**Killing the Docker daemon is strictly prohibited.** Only individual **Docker containers** may be stopped — never Docker Desktop, `dockerd`, or the Docker VM.
+
+- **Forbidden:** `killall Docker`, `killall docker`, `pkill docker`, `pkill -f docker`, `osascript` quit Docker, `systemctl stop docker`, or any command aimed at the daemon or Desktop app.
+- **Forbidden:** `lsof -ti :<port> | xargs kill` when that port is forwarded by Docker (e.g. `:5173` for `task web:dev`) — use `docker ps` → `docker stop <container>` instead.
+- **Allowed:** `docker stop <container_id>`, `docker rm`, `docker compose down` for a specific stack.
+
+Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
 ## 1. Rules & Architectural Layout
 * [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
