@@ -1852,6 +1852,7 @@ export class VaultState {
       this.isAuthenticated = true
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
+      await this.loadProviders()
       await this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
@@ -2107,6 +2108,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
+      await this.loadProviders()
       await this.refreshPasswordEntriesList()
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
@@ -2197,6 +2199,7 @@ export class VaultState {
       this.secrets = mapWasmRecords(rawRecords)
       this.isAuthenticated = true
       await this.ensureProviderSaved()
+      await this.loadProviders()
       await this.refreshPasswordEntriesList()
       void this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'

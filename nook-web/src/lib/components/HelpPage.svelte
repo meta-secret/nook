@@ -40,10 +40,11 @@
             class="text-base font-semibold tracking-tight text-foreground inline-flex items-center gap-1.5"
           >
             <BookOpen class="size-4 shrink-0" />
-            Your device is the key
+            Local vault, optional sync
           </CardTitle>
           <CardDescription class="text-pretty text-xs leading-snug">
-            No master password. Your devices unlock the vault.
+            One encrypted vault on this device — sync providers keep copies in
+            sync.
           </CardDescription>
         </div>
         <Button
@@ -107,6 +108,11 @@
                 <li>{bullet}</li>
               {/each}
             </ul>
+            {#if section.diagram}
+              <pre
+                class="mt-2 overflow-x-auto rounded-md border border-border/60 bg-background/80 p-2 text-[11px] leading-snug text-muted-foreground"
+                data-testid="help-diagram-{section.id}">{section.diagram}</pre>
+            {/if}
           </section>
         {/each}
       </div>
