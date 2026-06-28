@@ -7,6 +7,7 @@ import {
   connectLocalVaultLegacy,
   E2E_GITHUB_ONBOARD_PROVIDER,
   expandSettingsSection,
+  expectVaultPasswordStatus,
   openStorageSettings,
   readLocalVaultYamlFromIdb,
   reloadUnlockWithGithubSync,
@@ -42,13 +43,12 @@ test.describe('vault password envelope (local)', () => {
     await expandSettingsSection(page, 'unlock')
 
     const card = page.getByTestId('vault-password-card')
-    const status = page.getByTestId('vault-password-status')
     await expect(card).toBeVisible()
-    await expect(status).toContainText('None')
+    await expectVaultPasswordStatus(page, 'none')
 
     // 1. Set a backup password — device keys still unlock the vault.
     await addVaultPassword(page, 'Primary password', 'correct-horse-1')
-    await expect(status).toContainText('1 password', { timeout: UI_TIMEOUT_MS })
+    await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('app-success')).toContainText(
       'Vault password set',
       { timeout: UI_TIMEOUT_MS },
@@ -59,7 +59,7 @@ test.describe('vault password envelope (local)', () => {
     await page.getByTestId('vault-password-input').fill('rotated-pass-2')
     await page.getByTestId('vault-password-confirm').fill('rotated-pass-2')
     await page.getByTestId('submit-vault-password').click()
-    await expect(status).toContainText('1 password')
+    await expectVaultPasswordStatus(page, 1)
     await expect(page.getByTestId('app-success')).toContainText(
       'password updated',
       { timeout: UI_TIMEOUT_MS },
@@ -68,7 +68,7 @@ test.describe('vault password envelope (local)', () => {
     // 3. Remove backup password — vault still unlocks with device keys.
     await page.getByTestId('remove-vault-password-btn').click()
     await page.getByTestId('confirm-remove-vault-password').click()
-    await expect(status).toContainText('None', { timeout: UI_TIMEOUT_MS })
+    await expectVaultPasswordStatus(page, 'none', { timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('app-success')).toContainText(
       'password removed',
       { timeout: UI_TIMEOUT_MS },
@@ -80,10 +80,7 @@ test.describe('vault password envelope (local)', () => {
   }) => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Reload test', 'reload-pass')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '1 password',
-      { timeout: UI_TIMEOUT_MS },
-    )
+    await expectVaultPasswordStatus(page, 1, { timeout: UI_TIMEOUT_MS })
 
     await page.reload()
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
@@ -150,9 +147,7 @@ test.describe('vault password envelope (local)', () => {
     const error = page.getByTestId('vault-password-error')
     await expect(error).toBeVisible()
     await expect(error).toContainText('at least 5')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      'None',
-    )
+    await expectVaultPasswordStatus(page, 'none')
   })
 
   test('rejects mismatched password / confirmation', async ({ page }) => {
@@ -167,9 +162,7 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-password-error')).toContainText(
       'do not match',
     )
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      'None',
-    )
+    await expectVaultPasswordStatus(page, 'none')
   })
 
   test('issuing an enrollment code rejects the wrong password', async ({
@@ -177,9 +170,8 @@ test.describe('vault password envelope (local)', () => {
   }) => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '1 password',
-    )
+    await expectVaultPasswordStatus(page, 1)
+
 
     await reloadUnlockWithGithubSync(page, {
       password: 'hunter2-secure',
@@ -208,9 +200,8 @@ test.describe('vault password envelope (local)', () => {
   }) => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '1 password',
-    )
+    await expectVaultPasswordStatus(page, 1)
+
 
     await reloadUnlockWithGithubSync(page, {
       password: 'hunter2-secure',
@@ -273,15 +264,11 @@ test.describe('vault password envelope (local)', () => {
 
     await openStorageSettings(page)
     await addVaultPassword(page, 'Temporary', 'temporary-pass')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '1 password',
-    )
+    await expectVaultPasswordStatus(page, 1)
 
     await page.getByTestId('remove-vault-password-btn').click()
     await page.getByTestId('confirm-remove-vault-password').click()
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      'None',
-    )
+    await expectVaultPasswordStatus(page, 'none', { timeout: UI_TIMEOUT_MS })
 
     await page.getByTestId('vault-secrets-tab').click()
     await assertVaultReady(page)

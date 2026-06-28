@@ -145,7 +145,7 @@ describeMultiDevice('multi-device github vault', () => {
   })
 
   test('device B unlocks and reads genesis secret', async () => {
-    await unlockGithubVault(deviceB)
+    await unlockGithubVault(deviceB, { pat: githubPat, repoName: e2eRepo })
     await assertVaultReady(deviceB)
 
     await waitForSecretOnDevice(deviceB, genesisSecretKey, {
@@ -243,7 +243,7 @@ describeMultiDevice('multi-device approve from settings', () => {
     expect(parsed.authPkIds).toHaveLength(2)
     expect(parsed.memberPkIds).toHaveLength(2)
 
-    await unlockGithubVault(deviceB)
+    await unlockGithubVault(deviceB, { pat: githubPat, repoName: e2eRepo })
     await assertVaultReady(deviceB)
   })
 })

@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import {
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  seedExtraGithubProviders,
+  stubGithubVaultForLocalE2e,
   UI_TIMEOUT_MS,
 } from './helpers'
 import type { PendingSyncConflict } from '../src/lib/vault-sync'
@@ -57,6 +59,19 @@ test.describe('sync conflict resolution', () => {
 
     const localYaml = await readLocalVaultYamlFromIdb(page)
     expect(localYaml.trim().length).toBeGreaterThan(0)
+
+    await stubGithubVaultForLocalE2e(page, {
+      repoName: 'nook-e2e-conflict',
+      vaultYaml: localYaml,
+    })
+    await seedExtraGithubProviders(page, [
+      {
+        id: 'e2e-conflict-github',
+        label: 'GitHub (e2e)',
+        githubRepo: 'nook-e2e-conflict',
+        githubPat: 'ghp_test_token',
+      },
+    ])
 
     await stageVaultSyncConflict(page, {
       providerId: 'e2e-conflict-github',

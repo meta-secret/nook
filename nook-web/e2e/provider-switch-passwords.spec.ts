@@ -5,6 +5,8 @@ import {
   connectLocalVault,
   createE2eGithubRepoName,
   disableLoginAutoUnlock,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectVaultPasswordStatus,
   expandSettingsSection,
   finishE2eGithubSuite,
   githubPat,
@@ -42,10 +44,7 @@ describeGithub('unified vault backup passwords', () => {
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')
     await addVaultPassword(page, 'Local backup', 'local-pass-1')
-    await expect(page.getByTestId('vault-password-status')).toContainText(
-      '1 password',
-      { timeout: UI_TIMEOUT_MS },
-    )
+    await expectVaultPasswordStatus(page, 1)
 
     await disableLoginAutoUnlock(page)
     await seedExtraGithubProviders(page, [
@@ -69,13 +68,29 @@ describeGithub('unified vault backup passwords', () => {
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'storage')
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect
+      .poll(async () => page.getByTestId('header-lock-vault-btn').isEnabled(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBe(true)
     await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
-    await page.getByTestId('login-unlock-method-password').click()
-    await expect(page.getByTestId('login-password-entry-list')).toContainText(
+    await unlockVaultOnLogin(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await openStorageSettings(page)
+    await expandSettingsSection(page, 'unlock')
+    await expectVaultPasswordStatus(page, 1)
+    await expect(page.getByTestId('vault-password-card')).toContainText(
       'Local backup',
     )
   })
