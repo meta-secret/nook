@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1.4
+# Cursor Agent CLI + docker/gh/git on top of the Nook toolchain image.
+# Used by main CI auto-fix (mount /var/run/docker.sock for task/docker:* commands).
+
+ARG TOOLCHAIN_IMAGE=nook-build:local
+FROM ${TOOLCHAIN_IMAGE}
+
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        docker.io \
+        git \
+        gettext-base \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# https://cursor.com/docs/cli/overview
+ENV PATH="/root/.local/bin:/root/.cursor/bin:${PATH}"
+RUN curl https://cursor.com/install -fsS | bash \
+    && command -v agent >/dev/null
+
+COPY scripts/ci-fix-agent.sh /usr/local/bin/ci-fix-agent.sh
+RUN chmod +x /usr/local/bin/ci-fix-agent.sh
+
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/ci-fix-agent.sh"]
