@@ -5,7 +5,6 @@ import {
   openLoginProviderSetup,
   reloadUnlockWithGithubSync,
   UI_TIMEOUT_MS,
-  waitForEngine,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -35,17 +34,16 @@ test.describe('vault connect flow', () => {
     )
   })
 
-  test('shows error when github mode has no pat', async ({ page }) => {
+  test('github setup keeps sync step locked until token is entered', async ({
+    page,
+  }) => {
     await page.goto('/')
 
     await openLoginProviderSetup(page)
     await page.getByTestId('provider-option-github').click()
-    const connectButton = await waitForEngine(page)
-    await connectButton.click()
-
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'Enter a GitHub personal access token',
-    )
+    await expect(page.getByTestId('github-setup-connection-step')).toBeVisible()
+    await expect(page.getByTestId('github-setup-sync-step')).toBeVisible()
+    await expect(page.getByTestId('connect-provider-btn')).not.toBeVisible()
   })
 
   test('shows both setup paths on first visit', async ({ page }) => {

@@ -12,6 +12,7 @@
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
+  import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
@@ -88,7 +89,10 @@
   const showSetup = $derived(setupType !== null)
   const addingProvider = $derived(addProviderOpen || showSetup)
   const setupCanConnect = $derived(
-    setupType !== 'oauth-file' || Boolean(vault.oauthFile?.accessToken?.trim()),
+    setupType === 'local' ||
+      (setupType === 'oauth-file' &&
+        Boolean(vault.oauthFile?.accessToken?.trim())) ||
+      (setupType === 'github' && Boolean(githubPat.trim())),
   )
 </script>
 
@@ -157,15 +161,19 @@
             {onCancelSetup}
             onConnect={onReconnect}
           />
-        {:else}
-          <ProviderSetupFields
+        {:else if setupType === 'github'}
+          <GitHubProviderSetupWizard
             {vault}
-            setupType={setupType!}
             bind:githubPat
             bind:githubRepo
             idPrefix="settings"
+            {isVerifying}
+            {isInitializing}
             {onCancelSetup}
+            onConnect={onReconnect}
           />
+        {:else}
+          <ProviderSetupFields {vault} {onCancelSetup} />
         {/if}
       {:else if addProviderOpen}
         <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
@@ -287,7 +295,7 @@
         </fieldset>
       {/if}
 
-      {#if showSetup && setupType !== 'oauth-file'}
+      {#if showSetup && setupType === 'local'}
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >

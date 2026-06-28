@@ -538,6 +538,7 @@
   "provider_setup": {
     "change_provider": "Сменить провайдера",
     "github_pat_desc": "Nook требуется классический персональный токен доступа (PAT, ghp_) с областью действия (scope) repo для синхронизации файла сейфа.",
+    "github_connection_subtitle": "Создайте токен и выберите репозиторий",
     "create_token_github": "Создать токен на GitHub",
     "repo_name": "Имя репозитория",
     "vault_file_desc": "Файл сейфа: nook-vault.yaml в этом репозитории вашего аккаунта.",
