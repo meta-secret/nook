@@ -984,6 +984,17 @@ export async function seedExtraGithubProviders(
               createdAt: new Date().toISOString(),
             })
           }
+          const localProvider = snapshot.providers.find(
+            (p) => p.type === 'local',
+          )
+          if (localProvider) {
+            snapshot.activeProviderId = localProvider.id
+          } else if (
+            !snapshot.activeProviderId &&
+            snapshot.providers.length > 0
+          ) {
+            snapshot.activeProviderId = snapshot.providers[0]!.id
+          }
           const putReq = store.put(snapshot, 'providers')
           putReq.onerror = () =>
             reject(putReq.error ?? new Error('idb write failed'))
@@ -997,6 +1008,157 @@ export async function seedExtraGithubProviders(
       }
     })
   }, extras)
+
+  await page.waitForFunction(
+    (expectedIds) => {
+      return new Promise<boolean>((resolve) => {
+        const request = indexedDB.open('nook_auth', 1)
+        request.onerror = () => resolve(false)
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('auth', 'readonly')
+          const store = tx.objectStore('auth')
+          const getReq = store.get('providers')
+          getReq.onerror = () => resolve(false)
+          getReq.onsuccess = () => {
+            const snapshot = getReq.result as {
+              providers?: Array<{ id: string; type: string }>
+            } | null
+            const ids = new Set(snapshot?.providers?.map((p) => p.id) ?? [])
+            resolve(expectedIds.every((id) => ids.has(id)))
+          }
+          tx.oncomplete = () => db.close()
+        }
+      })
+    },
+    extras.map((p) => p.id),
+    { timeout: UI_TIMEOUT_MS },
+  )
+}
+
+/** Default GitHub sync provider for local e2e onboarding / fan-out specs. */
+export const E2E_GITHUB_ONBOARD_PROVIDER = {
+  id: 'e2e-onboard-github',
+  label: 'GitHub (e2e onboard)',
+  githubRepo: 'nook-e2e-onboard',
+  githubPat: 'ghp_test_token',
+}
+
+/** Read canonical local vault YAML bytes stored in IndexedDB. */
+export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    return new Promise<string>((resolve, reject) => {
+      const request = indexedDB.open('nook_db', 1)
+      request.onerror = () =>
+        reject(request.error ?? new Error('idb open failed'))
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('vault', 'readonly')
+        const store = tx.objectStore('vault')
+        const getReq = store.get('encrypted_db')
+        getReq.onerror = () =>
+          reject(getReq.error ?? new Error('idb read failed'))
+        getReq.onsuccess = () => {
+          resolve(String(getReq.result ?? ''))
+        }
+        tx.oncomplete = () => db.close()
+      }
+    })
+  })
+}
+
+/** Stub GitHub REST responses so local e2e can exercise sync-provider enrollment. */
+export async function stubGithubVaultForLocalE2e(
+  page: Page,
+  opts: { repoName: string; vaultYaml: string; username?: string },
+) {
+  const owner = opts.username ?? 'e2e-user'
+  const fullRepo = `${owner}/${opts.repoName}`
+  const encoded = Buffer.from(opts.vaultYaml, 'utf8').toString('base64')
+
+  await page.route('https://api.github.com/**', async (route) => {
+    const url = route.request().url().split('?')[0]!
+    if (url === 'https://api.github.com/user') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ login: owner }),
+      })
+      return
+    }
+    if (url === `https://api.github.com/repos/${fullRepo}`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 1, name: opts.repoName, private: true }),
+      })
+      return
+    }
+    if (url === `https://api.github.com/repos/${fullRepo}/contents/`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            name: 'nook-vault.yaml',
+            path: 'nook-vault.yaml',
+            type: 'file',
+          },
+        ]),
+      })
+      return
+    }
+    if (
+      url ===
+      `https://api.github.com/repos/${fullRepo}/contents/nook-vault.yaml`
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          content: encoded,
+          sha: 'e2e-stub-sha',
+          encoding: 'base64',
+        }),
+      })
+      return
+    }
+    await route.fulfill({ status: 404, body: '{}' })
+  })
+}
+
+/** Seed a GitHub sync provider, reload, unlock, and wait for status bar sync count. */
+export async function reloadUnlockWithGithubSync(
+  page: Page,
+  opts?: {
+    password?: string
+    entryLabel?: string
+    providers?: Array<{
+      id: string
+      label: string
+      githubRepo: string
+      githubPat: string
+    }>
+  },
+) {
+  await seedExtraGithubProviders(
+    page,
+    opts?.providers ?? [E2E_GITHUB_ONBOARD_PROVIDER],
+  )
+  await page.reload()
+  await expect(page.getByTestId('login-gate')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await unlockVaultOnLogin(
+    page,
+    opts?.password
+      ? { password: opts.password, entryLabel: opts.entryLabel }
+      : undefined,
+  )
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await waitForLoadedSyncProviders(page)
 }
 
 /** Wait until the status bar reflects loaded sync providers. */
@@ -1006,10 +1168,15 @@ export async function waitForLoadedSyncProviders(
   timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
 ) {
   const pattern =
-    minCount === 1 ? /1 sync provider/ : new RegExp(`${minCount} sync providers`)
-  await expect(page.getByTestId('vault-sync-out-status')).toContainText(pattern, {
-    timeout: timeoutMs,
-  })
+    minCount === 1
+      ? /1 sync provider/
+      : new RegExp(`${minCount} sync providers`)
+  await expect(page.getByTestId('vault-sync-out-status')).toContainText(
+    pattern,
+    {
+      timeout: timeoutMs,
+    },
+  )
 }
 
 export async function addSecret(

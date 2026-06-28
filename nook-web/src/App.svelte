@@ -209,8 +209,7 @@
             {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
               <OnboardDevice
                 {vault}
-                providers={vault.providers}
-                activeProviderId={vault.activeProviderId}
+                syncProviders={vault.syncProviders}
                 passwordEntries={vault.passwordEntries}
                 enrollmentCode={vault.enrollmentCode}
                 isBusy={vault.isPasswordBusy}
