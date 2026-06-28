@@ -172,7 +172,6 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
     await expectVaultPasswordStatus(page, 1)
 
-
     await reloadUnlockWithGithubSync(page, {
       password: 'hunter2-secure',
       entryLabel: 'Enrollment test',
@@ -201,7 +200,6 @@ test.describe('vault password envelope (local)', () => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
     await expectVaultPasswordStatus(page, 1)
-
 
     await reloadUnlockWithGithubSync(page, {
       password: 'hunter2-secure',

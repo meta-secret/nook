@@ -569,10 +569,7 @@ async function dismissJoinEnrollmentDialog(page: Page) {
   }
 }
 
-export async function unlockGithubVault(
-  page: Page,
-  target?: GithubE2eTarget,
-) {
+export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
   await page.goto('/')
   await dismissJoinEnrollmentDialog(page)
 
@@ -676,10 +673,9 @@ export async function expectVaultPasswordStatus(
     await expect(status).toContainText(/1 (password|item)/, { timeout })
     return
   }
-  await expect(status).toContainText(
-    new RegExp(`${count} (passwords|items)`),
-    { timeout },
-  )
+  await expect(status).toContainText(new RegExp(`${count} (passwords|items)`), {
+    timeout,
+  })
 }
 
 /** Issue an onboard enrollment code and return the code textarea locator. */
