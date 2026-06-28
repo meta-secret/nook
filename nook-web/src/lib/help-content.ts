@@ -8,7 +8,7 @@ export type HelpSection = {
   diagram?: string
 }
 
-/** Mermaid source for the local-first vault model (rendered as monospace in Help). */
+/** Mermaid source for the local-first vault model (rendered in Help). */
 export const HELP_ARCHITECTURE_DIAGRAM = `flowchart TB
   subgraph device["This browser (working copy)"]
     V[nook-vault.yaml]
