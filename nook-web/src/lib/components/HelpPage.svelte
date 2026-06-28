@@ -1,7 +1,7 @@
 <script lang="ts">
   import { BookOpen, ChevronDown, ChevronLeft } from '@lucide/svelte'
   import { HELP_SECTIONS } from '$lib/help-content'
-  import HelpMermaidDiagram from '$lib/components/HelpMermaidDiagram.svelte'
+  import HelpArchitectureDiagram from '$lib/components/HelpArchitectureDiagram.svelte'
   import { appPath } from '$lib/legal-content'
   import { Button } from '$lib/components/ui/button'
   import {
@@ -11,15 +11,8 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import type { MermaidTheme } from '$lib/mermaid-diagram'
 
-  let {
-    onClose,
-    colorMode = 'dark',
-  }: {
-    onClose: () => void
-    colorMode?: MermaidTheme
-  } = $props()
+  let { onClose }: { onClose: () => void } = $props()
 
   function scrollToSection(id: string) {
     document
@@ -118,11 +111,7 @@
               {/each}
             </ul>
             {#if section.diagram}
-              <HelpMermaidDiagram
-                source={section.diagram}
-                sectionId={section.id}
-                theme={colorMode}
-              />
+              <HelpArchitectureDiagram sectionId={section.id} />
             {/if}
           </section>
         {/each}

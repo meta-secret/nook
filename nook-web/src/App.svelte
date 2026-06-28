@@ -253,7 +253,7 @@
       <LegalDocumentPage pageId={legalPage} onClose={navigateHome} />
     {:else if vault.helpOpen}
       <div class="space-y-4">
-        <HelpPage onClose={() => vault.closeHelp()} {colorMode} />
+        <HelpPage onClose={() => vault.closeHelp()} />
         <VaultStatusBar
           {vault}
           storageMode={vault.storageMode}
