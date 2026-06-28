@@ -26,3 +26,6 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 ## 6. Maximize Reuse via Rust
 * **Rust-First Domain Assets**: Any assets or domain rules (including validation error messages and i18n localization dictionaries) must live in Rust (`nook-core`). Because we plan to build CLI tools and mobile clients in the future, implementing these features in Rust ensures that they can be easily shared across all platforms. Relying on TypeScript or other frontend-specific implementations for domain logic or localized resources makes sharing impossible.
 
+## 7. Close Every Task with a Duration Report
+* **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
+* **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done). See [workflows/pull-requests.md § Task completion report](workflows/pull-requests.md#8-task-completion-report).
