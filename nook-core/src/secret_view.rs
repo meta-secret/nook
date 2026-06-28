@@ -136,7 +136,10 @@ impl SecretRecord {
 }
 
 /// Build a validated YAML payload for `add_secret` / `replace_secret` from form fields.
-pub fn build_secret_yaml(secret_type: SecretType, fields: &serde_json::Value) -> Result<String, String> {
+pub fn build_secret_yaml(
+    secret_type: SecretType,
+    fields: &serde_json::Value,
+) -> Result<String, String> {
     let value = match secret_type {
         SecretType::Login => {
             let payload: crate::LoginSecret = serde_json::from_value(fields.clone())
