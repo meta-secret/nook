@@ -216,7 +216,7 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 | Conflict resolution UI | Done (#73, Phase 3) |
 | Fan-out sync after secret CRUD | Done (#74, Phase 4) |
 | Local-first status bar | Done (#74, Phase 4) |
-| Onboard / enrollment QR (local-first) | Planned (Phase 5, #66) |
+| Onboard / enrollment QR (local-first) | Done (#75, Phase 5) |
 | Help page rewrite | Planned (Phase 6, #67) |
 | Join sync propagation | Planned (Phase 7, #68) |
 | Legacy multi-vault migration | Planned (Phase 8, #69) |

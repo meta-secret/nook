@@ -644,7 +644,17 @@ export class VaultState {
     }
   }
 
-  async persistProviders() {
+  async persistProviders(opts?: { replace?: boolean }) {
+    if (!opts?.replace && this.localVaultPresent) {
+      const snapshot = await loadAuthProviders()
+      const memoryIds = this.providers.map((p) => p.id)
+      const extraSync = snapshot.providers.filter(
+        (p) => p.type !== 'local' && !memoryIds.includes(p.id),
+      )
+      if (extraSync.length > 0) {
+        this.providers = [...this.providers, ...extraSync]
+      }
+    }
     await saveAuthProviders({
       providers: this.providers,
       activeProviderId: this.activeProviderId,
@@ -913,7 +923,8 @@ export class VaultState {
     if (!target) return
 
     const wasActive = this.activeProviderId === id
-    const signedOut = this.isAuthenticated && wasActive
+    const signedOut =
+      this.isAuthenticated && wasActive && !this.localVaultPresent
 
     this.providers = this.providers.filter((p) => p.id !== id)
 
@@ -923,17 +934,18 @@ export class VaultState {
         this.clearUnlockedSession()
       }
     } else if (wasActive) {
-      this.activeProviderId = this.providers[0]!.id
+      const localProvider = this.providers.find((p) => p.type === 'local')
+      this.activeProviderId = localProvider?.id ?? this.providers[0]!.id
       if (signedOut) {
         this.clearUnlockedSession()
-      } else {
+      } else if (!this.localVaultPresent) {
         this.resetVaultSessionState()
+        this.loginFlowStep = 'connection'
       }
-      this.loginFlowStep = 'connection'
     }
 
     this.applyActiveProviderCredentials()
-    await this.persistProviders()
+    await this.persistProviders({ replace: true })
 
     this.showSuccess(this.t('toasts.removed_device', { label: target.label }))
   }
@@ -979,43 +991,68 @@ export class VaultState {
       this.providers = [...this.providers, provider]
       this.activeProviderId = provider.id
     } else if (this.activeProvider) {
-      const updated: StorageProvider = {
-        ...this.activeProvider,
-        type: this.storageMode,
-        githubPat:
-          this.storageMode === 'github'
-            ? pat || this.activeProvider.githubPat
-            : undefined,
-        githubRepo: this.storageMode === 'github' ? repo : undefined,
-        oauthFile:
-          this.storageMode === 'oauth-file'
-            ? (oauthSnapshot ?? this.activeProvider.oauthFile)
-            : undefined,
-        storeId: vaultStoreId ?? this.activeProvider.storeId,
-      }
-      this.providers = this.providers.map((p) =>
-        p.id === updated.id ? updated : p,
-      )
-    } else {
-      const provider: StorageProvider = {
-        id: generateId(),
-        type,
-        label: providerDefaultLabel(
-          type,
-          type === 'github'
-            ? repo
-            : type === 'oauth-file'
-              ? driveFile
+      if (
+        this.storageMode === 'local' &&
+        this.activeProvider.type !== 'local'
+      ) {
+        const localProvider = this.providers.find((p) => p.type === 'local')
+        if (localProvider) {
+          this.activeProviderId = localProvider.id
+        } else {
+          const provider: StorageProvider = {
+            id: generateId(),
+            type: 'local',
+            label: providerDefaultLabel('local'),
+            storeId: vaultStoreId,
+            createdAt: isoTimestamp(),
+          }
+          this.providers = [...this.providers, provider]
+          this.activeProviderId = provider.id
+        }
+      } else {
+        const updated: StorageProvider = {
+          ...this.activeProvider,
+          type: this.storageMode,
+          githubPat:
+            this.storageMode === 'github'
+              ? pat || this.activeProvider.githubPat
               : undefined,
-        ),
-        githubPat: type === 'github' ? pat : undefined,
-        githubRepo: type === 'github' ? repo : undefined,
-        oauthFile: oauthSnapshot,
-        storeId: vaultStoreId,
-        createdAt: isoTimestamp(),
+          githubRepo: this.storageMode === 'github' ? repo : undefined,
+          oauthFile:
+            this.storageMode === 'oauth-file'
+              ? (oauthSnapshot ?? this.activeProvider.oauthFile)
+              : undefined,
+          storeId: vaultStoreId ?? this.activeProvider.storeId,
+        }
+        this.providers = this.providers.map((p) =>
+          p.id === updated.id ? updated : p,
+        )
       }
-      this.providers = [provider]
-      this.activeProviderId = provider.id
+    } else {
+      const localExisting = this.providers.find((p) => p.type === 'local')
+      if (localExisting) {
+        this.activeProviderId = localExisting.id
+      } else {
+        const provider: StorageProvider = {
+          id: generateId(),
+          type,
+          label: providerDefaultLabel(
+            type,
+            type === 'github'
+              ? repo
+              : type === 'oauth-file'
+                ? driveFile
+                : undefined,
+          ),
+          githubPat: type === 'github' ? pat : undefined,
+          githubRepo: type === 'github' ? repo : undefined,
+          oauthFile: oauthSnapshot,
+          storeId: vaultStoreId,
+          createdAt: isoTimestamp(),
+        }
+        this.providers = [...this.providers, provider]
+        this.activeProviderId = provider.id
+      }
     }
 
     if (this.storageMode === 'oauth-file' && this.oauthFile?.fileId) {
@@ -1984,7 +2021,12 @@ export class VaultState {
       }
       const selectedProvider = this.providers.find((p) => p.id === providerId)
       if (!selectedProvider) {
-        throw new Error('Choose an auth provider.')
+        throw new Error('Choose a sync provider.')
+      }
+      if (selectedProvider.type === 'local') {
+        throw new Error(
+          'Choose a cloud sync provider — local vault is already on this device.',
+        )
       }
       const provider: EnrollmentProvider =
         selectedProvider.type === 'github'
@@ -1993,10 +2035,14 @@ export class VaultState {
               pat: selectedProvider.githubPat?.trim() ?? '',
               repo: selectedProvider.githubRepo?.trim() ?? '',
             }
-          : { type: 'local' }
+          : (() => {
+              throw new Error(
+                'Onboarding QR requires a GitHub sync provider for now.',
+              )
+            })()
       if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
         throw new Error(
-          'GitHub provider is missing credentials. Reconnect and try again.',
+          'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
         )
       }
       const payload: EnrollmentIssueInput = {
@@ -2111,9 +2157,39 @@ export class VaultState {
 
       await this.initDeviceIdentity()
 
+      if (payload.provider.type === 'github') {
+        const remote = await fetchRemoteVaultBlob(
+          'github',
+          payload.provider.pat,
+          payload.provider.repo,
+        )
+        if (!remote.content.trim()) {
+          throw new Error(
+            'This sync provider has no vault copy yet. Save secrets on the issuing device first.',
+          )
+        }
+        const localYaml = await readLocalVaultBlob()
+        const action = await compareVaultBlobs(localYaml, remote.content)
+        if (action === 'conflict') {
+          throw new Error(
+            'Local and sync-provider vaults conflict. Resolve on the issuing device first.',
+          )
+        }
+        const yamlToAdopt =
+          action === 'adopt_remote' || !localYaml.trim()
+            ? remote.content
+            : localYaml
+        if (!localYaml.trim() || action === 'adopt_remote') {
+          await writeLocalVaultBlob(yamlToAdopt)
+        }
+        this.localVaultPresent = true
+      }
+
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.connectWithPassword(
-          ...this.wasmStorageArgs(),
+          'local',
+          '',
+          '',
           entryId,
           unlockPassword,
         ),

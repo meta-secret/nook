@@ -5,10 +5,14 @@ import {
   assertVaultReady,
   clearBrowserVault,
   connectLocalVaultLegacy,
+  E2E_GITHUB_ONBOARD_PROVIDER,
   expandSettingsSection,
   openStorageSettings,
+  readLocalVaultYamlFromIdb,
+  reloadUnlockWithGithubSync,
   revealSecretInRow,
   selectLoginUnlockMethod,
+  stubGithubVaultForLocalE2e,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
@@ -177,6 +181,11 @@ test.describe('vault password envelope (local)', () => {
       '1 password',
     )
 
+    await reloadUnlockWithGithubSync(page, {
+      password: 'hunter2-secure',
+      entryLabel: 'Enrollment test',
+    })
+
     await page.getByTestId('vault-onboard-tab').click()
     await page.getByTestId('onboard-password-input').fill('wrong-typo-99')
     await page.getByTestId('onboard-device-submit').click()
@@ -202,6 +211,11 @@ test.describe('vault password envelope (local)', () => {
     await expect(page.getByTestId('vault-password-status')).toContainText(
       '1 password',
     )
+
+    await reloadUnlockWithGithubSync(page, {
+      password: 'hunter2-secure',
+      entryLabel: 'Enrollment test',
+    })
 
     await page.getByTestId('vault-onboard-tab').click()
     await page.getByTestId('onboard-password-input').fill('hunter2-secure')
@@ -293,14 +307,28 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openStorageSettings(pageA)
     await addVaultPassword(pageA, 'Link test', 'link-pass')
+    await reloadUnlockWithGithubSync(pageA, {
+      password: 'link-pass',
+      entryLabel: 'Link test',
+    })
     await pageA.getByTestId('vault-onboard-tab').click()
     await pageA.getByTestId('onboard-password-input').fill('link-pass')
     await pageA.getByTestId('onboard-device-submit').click()
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
+    const vaultYaml = await readLocalVaultYamlFromIdb(pageA)
+    await stubGithubVaultForLocalE2e(pageA, {
+      repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+      vaultYaml,
+    })
+
     // Same browser context shares IndexedDB where the local vault file lives.
     const pageB = await context.newPage()
+    await stubGithubVaultForLocalE2e(pageB, {
+      repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+      vaultYaml,
+    })
     await pageB.goto(link)
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,

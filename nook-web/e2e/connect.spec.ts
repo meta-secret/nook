@@ -4,9 +4,8 @@ import {
   DEFAULT_LOCAL_VAULT_PASSWORD,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openLegacyProviderSetup,
-  seedExtraGithubProviders,
+  reloadUnlockWithGithubSync,
   UI_TIMEOUT_MS,
-  waitForLoadedSyncProviders,
   waitForEngine,
 } from './helpers'
 
@@ -145,27 +144,18 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await seedExtraGithubProviders(page, [
-      {
-        id: 'e2e-sync-github',
-        label: 'GitHub (e2e)',
-        githubRepo: 'nook-e2e-remove',
-        githubPat: 'ghp_test_token',
-      },
-    ])
-
-    await page.reload()
-    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+    await reloadUnlockWithGithubSync(page, {
+      password: DEFAULT_LOCAL_VAULT_PASSWORD,
+      entryLabel: 'Master password',
+      providers: [
+        {
+          id: 'e2e-sync-github',
+          label: 'GitHub (e2e)',
+          githubRepo: 'nook-e2e-remove',
+          githubPat: 'ghp_test_token',
+        },
+      ],
     })
-    await page
-      .getByTestId('login-master-password-input')
-      .fill(DEFAULT_LOCAL_VAULT_PASSWORD)
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await waitForLoadedSyncProviders(page)
 
     await page.getByTestId('vault-settings-tab').click()
     const githubProvider = page.getByTestId('settings-provider-github')

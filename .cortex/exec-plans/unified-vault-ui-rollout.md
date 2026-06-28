@@ -25,8 +25,8 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 | 1 Login gate | [#62](https://github.com/meta-secret/nook/issues/62) | [#71](https://github.com/meta-secret/nook/pull/71) | Ready |
 | 2 Sync providers | [#63](https://github.com/meta-secret/nook/issues/63) | [#72](https://github.com/meta-secret/nook/pull/72) | Ready |
 | 3 Conflict dialog | [#64](https://github.com/meta-secret/nook/issues/64) | [#73](https://github.com/meta-secret/nook/pull/73) | Ready |
-| 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | #74 (pending) | In progress |
-| 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | — | Planned |
+| 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | [#74](https://github.com/meta-secret/nook/pull/74) | Ready |
+| 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | #75 (pending) | Ready |
 | 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | — | Planned |
 | 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | — | Planned |
 | 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | — | Planned |
@@ -90,7 +90,7 @@ No user-visible UI changes yet.
 
 ---
 
-## Phase 4 — Secret vault fan-out (#65, #74)
+## Phase 4 — Secret vault fan-out (#65, #74) ✅
 
 | # | Change | Component |
 |---|--------|-----------|
@@ -102,13 +102,16 @@ No user-visible UI changes yet.
 
 ---
 
-## Phase 5 — Onboard (#66)
+## Phase 5 — Onboard (#66, #75) ✅
 
 | # | Change |
 |---|--------|
-| 5.1 | Enrollment code references sync provider for initial pull |
-| 5.2 | New device: local cache from remote, unlock with password |
-| 5.3 | Update `EnrollmentQrOnboardCard` copy |
+| 5.1 | Enrollment QR embeds **sync provider** credentials (GitHub), not local vault |
+| 5.2 | Joining device: fetch remote → write local cache → unlock via `connectWithPassword('local')` |
+| 5.3 | Onboard picker shows `syncProviders` only; `ensureProviderSaved` preserves sync rows |
+| 5.4 | Updated copy in locales + `EnrollmentQrOnboardCard` |
+
+**E2E:** Updated `e2e/onboard-providers.spec.ts`, `e2e/password-envelope-local.spec.ts`; GitHub API stub for local enroll deep link.
 
 ---
 
