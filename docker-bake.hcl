@@ -87,3 +87,15 @@ target "toolchain-push" {
   output   = ["type=registry"]
   cache-to = []
 }
+
+// Cursor Agent CLI + docker/gh/git — extends local toolchain (ARG TOOLCHAIN_IMAGE).
+target "cursor-agent" {
+  context    = "."
+  dockerfile = "Dockerfile.cursor-agent"
+  platforms  = ["linux/amd64"]
+  args = {
+    TOOLCHAIN_IMAGE = DOCKER_IMAGE
+  }
+  tags   = ["nook-cursor-agent:local"]
+  output = ["type=docker"]
+}

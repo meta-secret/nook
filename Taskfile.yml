@@ -3,6 +3,7 @@ version: '3'
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
+  CURSOR_AGENT_IMAGE: '{{default "nook-cursor-agent:local" .CURSOR_AGENT_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   # dev (default): skip setup when nook-build:local exists. ci: always build (set in CI via GITHUB_ENV).
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
@@ -86,6 +87,23 @@ tasks:
     cmds:
       - task: ci:main
       - task: docker:push:ci
+
+  ci:fix:agent:
+    desc: Run Cursor Agent in Docker to fix a failed main CI run, open a PR, and squash-merge when green.
+    deps:
+      - setup
+      - docker:cursor-agent:build
+    cmds:
+      - task: docker:cursor-agent:run
+
+  docker:cursor-agent:build:
+    desc: Build nook-cursor-agent image (Cursor CLI + docker/gh/git on toolchain).
+    deps:
+      - setup
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake -f docker-bake.hcl cursor-agent
+        --set *.args.TOOLCHAIN_IMAGE={{.DOCKER_IMAGE}}
 
   ci:pr:deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
@@ -374,6 +392,38 @@ tasks:
         -w /workspace
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
+
+  docker:cursor-agent:run:
+    desc: Run ci-fix-agent entrypoint (mount docker.sock for nested task/docker commands).
+    internal: true
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        --ipc=host
+        -v /var/run/docker.sock:/var/run/docker.sock
+        -v "{{.ROOT_DIR}}:/workspace"
+        -v /workspace/nook-web/node_modules
+        -w /workspace
+        -e CURSOR_API_KEY
+        -e GH_TOKEN
+        -e GITHUB_REPOSITORY
+        -e GITHUB_RUN_ID
+        -e FIX_BRANCH
+        -e TOOLCHAIN_REGISTRY
+        -e NOOK_ENV=ci
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
+        -e NOOK_GITHUB_PAT
+        -e CI=true
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        {{.CURSOR_AGENT_IMAGE}}
 
   docker:e2e:run:
     desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
