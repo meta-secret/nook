@@ -700,11 +700,45 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await waitForLocalVaultState(
-    page,
-    (snapshot) => snapshot.hasPasswordEnvelope,
-    { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-  )
+}
+
+/** Poll local vault YAML until predicate holds for several consecutive reads. */
+export async function waitForStableLocalVaultState(
+  page: Page,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: {
+    timeoutMs?: number
+    intervalMs?: number
+    stableReads?: number
+  },
+): Promise<VaultYamlSnapshot> {
+  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const intervalMs = options?.intervalMs ?? 500
+  const stableReads = options?.stableReads ?? 3
+  const deadline = Date.now() + timeoutMs
+  let consecutive = 0
+  let lastError = 'local vault missing'
+
+  while (Date.now() < deadline) {
+    const yaml = await readLocalVaultYamlFromIdb(page)
+    if (yaml.trim()) {
+      const snapshot = parseVaultYamlSnapshot(yaml)
+      if (predicate(snapshot)) {
+        consecutive += 1
+        if (consecutive >= stableReads) {
+          return snapshot
+        }
+      } else {
+        consecutive = 0
+        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, passwords=${snapshot.hasPasswordEnvelope})`
+      }
+    } else {
+      consecutive = 0
+    }
+    await sleep(intervalMs)
+  }
+
+  throw new Error(`Timed out waiting for stable local vault YAML: ${lastError}`)
 }
 
 /** Match vault password badge copy (`1 item` or legacy `1 password`). */
