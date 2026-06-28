@@ -48,7 +48,10 @@ async function waitForRateLimitReset(res: Response) {
   await sleep(waitMs)
 }
 
-function githubFetch(url: string, init?: RequestInit): Promise<Response> {
+export function githubFetch(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
   return fetch(url, {
     ...init,
     signal: init?.signal ?? AbortSignal.timeout(GITHUB_FETCH_TIMEOUT_MS),

@@ -20,6 +20,7 @@ import {
   fetchGithubVaultYaml,
   githubApiFetch,
   githubApiHeaders,
+  githubFetch,
   githubRepoContext,
   GITHUB_VAULT_PATH,
 } from './github-api'
@@ -300,7 +301,7 @@ async function deleteGithubFileIfExists(
     }
 
     const file = (await fileRes.json()) as { sha: string }
-    const deleteRes = await githubApiFetch(pat, contentsUrl, {
+    const deleteRes = await githubFetch(contentsUrl, {
       method: 'DELETE',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -485,6 +486,27 @@ export async function connectGithubGenesisDevice(
   await connectGithubVault(page, pat, repoName)
 }
 
+/** Joiner connect runs GitHub assess + wasm — allow the same budget as genesis connect. */
+async function waitForJoinEnrollmentDialog(page: Page) {
+  const joinDialog = page.getByTestId('join-enrollment-dialog')
+  await expect
+    .poll(
+      async () => {
+        await assertNoVaultErrors(page)
+        if (await joinDialog.isVisible()) return 'join'
+        if (await page.getByTestId('login-password-entry-list').isVisible()) {
+          return 'password'
+        }
+        return 'waiting'
+      },
+      { timeout: GITHUB_CONNECT_TIMEOUT_MS },
+    )
+    .toBe('join')
+  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 /** Second device: same repo → join enrollment dialog. */
 export async function connectGithubJoinerDevice(
   page: Page,
@@ -498,13 +520,7 @@ export async function connectGithubJoinerDevice(
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await assertNoVaultErrors(page)
-  await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await waitForJoinEnrollmentDialog(page)
 }
 
 export async function sendJoinRequest(
@@ -675,7 +691,9 @@ export async function addVaultPassword(
   page: Page,
   label: string,
   password: string,
+  options?: { expectedCount?: number },
 ) {
+  const expectedCount = options?.expectedCount ?? 1
   await expandSettingsSection(page, 'unlock')
   await page.getByTestId('set-vault-password-btn').click()
   await page.getByTestId('vault-password-label').fill(label)
@@ -685,6 +703,53 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await waitForStableLocalVaultState(
+    page,
+    (snapshot) => snapshot.hasPasswordEnvelope,
+    { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
+  )
+  await expectVaultPasswordStatus(page, expectedCount, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
+/** Poll local vault YAML until predicate holds for several consecutive reads. */
+export async function waitForStableLocalVaultState(
+  page: Page,
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: {
+    timeoutMs?: number
+    intervalMs?: number
+    stableReads?: number
+  },
+): Promise<VaultYamlSnapshot> {
+  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const intervalMs = options?.intervalMs ?? 500
+  const stableReads = options?.stableReads ?? 3
+  const deadline = Date.now() + timeoutMs
+  let consecutive = 0
+  let lastError = 'local vault missing'
+
+  while (Date.now() < deadline) {
+    const yaml = await readLocalVaultYamlFromIdb(page)
+    if (yaml.trim()) {
+      const snapshot = parseVaultYamlSnapshot(yaml)
+      if (predicate(snapshot)) {
+        consecutive += 1
+        if (consecutive >= stableReads) {
+          return snapshot
+        }
+      } else {
+        consecutive = 0
+        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, passwords=${snapshot.hasPasswordEnvelope})`
+      }
+    } else {
+      consecutive = 0
+    }
+    await sleep(intervalMs)
+  }
+
+  throw new Error(`Timed out waiting for stable local vault YAML: ${lastError}`)
 }
 
 /** Match vault password badge copy (`1 item` or legacy `1 password`). */
@@ -693,7 +758,10 @@ export async function expectVaultPasswordStatus(
   count: number | 'none',
   options?: { timeout?: number },
 ) {
-  const status = page.getByTestId('vault-password-status')
+  await expandSettingsSection(page, 'unlock')
+  const status = page
+    .getByTestId('vault-unlock-section')
+    .getByTestId('vault-password-status')
   const timeout = options?.timeout ?? UI_TIMEOUT_MS
   if (count === 'none') {
     await expect(status).toContainText('None', { timeout })
@@ -1283,13 +1351,7 @@ export async function connectLocalE2eJoinerDevice(
   await setupGithubProvider(page, 'ghp_test_token', repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await assertNoVaultErrors(page)
-  await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await waitForJoinEnrollmentDialog(page)
 }
 
 /** Send a join request against a stubbed GitHub repo (local e2e). */

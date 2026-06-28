@@ -85,8 +85,10 @@ test.describe('login unlock flow (local-first)', () => {
     page,
   }) => {
     await openStorageSettings(page)
-    await addVaultPassword(page, 'Personal', 'personal-pass')
-    await addVaultPassword(page, 'Travel', 'travel-pass')
+    await addVaultPassword(page, 'Personal', 'personal-pass', {
+      expectedCount: 1,
+    })
+    await addVaultPassword(page, 'Travel', 'travel-pass', { expectedCount: 2 })
 
     await page.reload()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({

@@ -20,6 +20,7 @@ import {
   uniqueSecretKey,
   waitForGithubVaultState,
   waitForLocalVaultState,
+  waitForStableLocalVaultState,
   waitForVaultUnlocked,
 } from './helpers'
 
@@ -79,15 +80,13 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await expectVaultPasswordStatus(deviceA, 'none')
 
     await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
-
-    await expectVaultPasswordStatus(deviceA, 1, { timeout: UI_TIMEOUT_MS })
+    await deviceA.getByTestId('vault-secrets-tab').click()
 
     // Hybrid model: backup password coexists with device-key auth rows.
-    const yaml = await waitForLocalVaultState(
+    const yaml = await waitForStableLocalVaultState(
       deviceA,
       (snapshot) =>
         snapshot.hasPasswordEnvelope && snapshot.authPkIds.length >= 1,
-      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     expect(yaml.unlockMode).toBe('keys')
     expect(yaml.hasPasswordEnvelope).toBe(true)
@@ -211,6 +210,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
         snapshot.hasPasswordEnvelope &&
         snapshot.passwordEnvelopeCiphertext !== null &&
         snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     expect(after.passwordEnvelopeCiphertext).not.toBe(oldEnvelope)
     expect(after.passwordEnvelopeCiphertext).not.toBeNull()

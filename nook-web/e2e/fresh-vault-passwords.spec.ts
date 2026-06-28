@@ -43,8 +43,12 @@ describeGithub('fresh vault password entries', () => {
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')
-    await addVaultPassword(page, 'Vault A primary', 'vault-a-pass-1')
-    await addVaultPassword(page, 'Vault A travel', 'vault-a-pass-2')
+    await addVaultPassword(page, 'Vault A primary', 'vault-a-pass-1', {
+      expectedCount: 1,
+    })
+    await addVaultPassword(page, 'Vault A travel', 'vault-a-pass-2', {
+      expectedCount: 2,
+    })
     await expectVaultPasswordStatus(page, 2)
 
     await disableLoginAutoUnlock(page)
