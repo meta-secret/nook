@@ -13,7 +13,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 2. **Keep the app usable** — feature-flag or parallel paths during transition if needed.
 3. **E2E after every slice** — update Playwright specs in the same PR as UI changes.
 4. **Rust-first sync logic** — UI calls WASM (`reconcileVaultBlobs`, `compareVaultSync`); apply rules live in `nook-core`.
-5. **Stacked PRs** — each phase branches from the previous; squash-merge in order (#61 → #71 → #72 → …).
+5. **Single merge PR** — epic ships as [#79](https://github.com/meta-secret/nook/pull/79) (`feat/unified-vault` → `main`); phase PRs #61–#78 were consolidated and closed.
 
 ---
 
@@ -21,15 +21,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 
 | Phase | Issue | PR | Status |
 |-------|-------|-----|--------|
-| 0 Foundation | — | [#61](https://github.com/meta-secret/nook/pull/61) | Merged / base |
-| 1 Login gate | [#62](https://github.com/meta-secret/nook/issues/62) | [#71](https://github.com/meta-secret/nook/pull/71) | Ready |
-| 2 Sync providers | [#63](https://github.com/meta-secret/nook/issues/63) | [#72](https://github.com/meta-secret/nook/pull/72) | Ready |
-| 3 Conflict dialog | [#64](https://github.com/meta-secret/nook/issues/64) | [#73](https://github.com/meta-secret/nook/pull/73) | Ready |
-| 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | [#74](https://github.com/meta-secret/nook/pull/74) | Ready |
-| 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | [#75](https://github.com/meta-secret/nook/pull/75) | Ready |
-| 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | [#76](https://github.com/meta-secret/nook/pull/76) | Ready |
-| 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | [#77](https://github.com/meta-secret/nook/pull/77) | Ready |
-| 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | [#78](https://github.com/meta-secret/nook/pull/78) | Ready |
+| All (0–8) | [#70](https://github.com/meta-secret/nook/issues/70) | [#79](https://github.com/meta-secret/nook/pull/79) | Ready |
 
 ---
 
@@ -152,10 +144,6 @@ No user-visible UI changes yet.
 
 ---
 
-## Stacked PR merge order
+## Merge
 
-```
-main ← #61 ← #71 ← #72 ← #73 ← #74 ← …
-```
-
-Each PR squash-merged independently per [rules.md §6](../rules.md#6-git--pull-request-workflow).
+Squash-merge [#79](https://github.com/meta-secret/nook/pull/79) (`feat/unified-vault` → `main`) per [rules.md §6](../rules.md#6-git--pull-request-workflow).
