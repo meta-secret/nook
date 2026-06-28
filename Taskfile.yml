@@ -277,6 +277,12 @@ tasks:
           TASK: _web:e2e:build-dist
           VITE_VAULT_SYNC_INTERVAL_MS: '1000'
 
+  web:e2e:restore-prod-dist:
+    desc: Restore production dist after e2e (Docker-owned files cannot be rm'd on the host).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:e2e:restore-prod-dist }
+
   web:test:e2e:local:parallel:
     desc: Local Playwright project in Docker when wasm is already built (no host port publish).
     deps:
@@ -655,6 +661,13 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: '1000'
     cmds:
       - cd nook-web && bun run build
+
+  _web:e2e:restore-prod-dist:
+    desc: Swap e2e dist back to saved production dist (ci:main after parallel e2e).
+    cmds:
+      - rm -rf nook-web/dist
+      - cp -a nook-web/dist-prod nook-web/dist
+      - rm -rf nook-web/dist-prod
 
   _web:test:e2e:local:parallel:
     desc: Local Playwright project when wasm is already built (ci:main parallel track).
