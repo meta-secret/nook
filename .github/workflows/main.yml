@@ -45,10 +45,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare (format + wasm)
-        run: task ci:main:prepare VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
+        run: task ci:main:prepare VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
 
       - name: Verify and build
-        run: task ci:main:parallel VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
+        run: task ci:main:parallel VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
         env:
           CI: true
 

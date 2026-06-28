@@ -165,8 +165,6 @@ tasks:
     desc: Build the Svelte app when wasm is already built (ci:pr parallel track).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
-      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
-      VITE_E2E_EXPOSE_VAULT: 'true'
     cmds:
       - cd nook-web && bun run build
 
