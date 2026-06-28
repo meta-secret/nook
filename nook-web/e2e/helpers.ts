@@ -232,7 +232,12 @@ export async function fillSeedPhraseGrid(page: Page, words: readonly string[]) {
   }
 }
 
-export type GithubE2eTarget = { pat: string; repoName: string }
+export type GithubE2eTarget = {
+  pat: string
+  repoName: string
+  /** In-memory GitHub REST stub — avoids api.github.com (PR/main CI). */
+  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>
+}
 
 function configuredVaultSyncIntervalMs(): number {
   const parsed = Number(process.env.VITE_VAULT_SYNC_INTERVAL_MS)
@@ -430,12 +435,20 @@ async function assertNoVaultErrors(
   throw new Error(`Vault error: ${summarizeVaultError(text)}`)
 }
 
-/** Wait until GitHub has the expected vault state (source of truth for sync). */
+/** Wait until sync target has the expected vault state (stub or live GitHub). */
 export async function waitForGithubVaultState(
   target: GithubE2eTarget,
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
+  if (target.stub) {
+    const { waitForStubVaultState } = await import('./sync-stub')
+    return waitForStubVaultState(
+      { pat: target.pat, repoName: target.repoName, stub: target.stub },
+      predicate,
+      options,
+    )
+  }
   return waitForVaultYaml(target.pat, target.repoName, predicate, options)
 }
 
@@ -509,8 +522,12 @@ export async function connectGithubVault(
   page: Page,
   pat: string,
   repoName = DEFAULT_GITHUB_REPO,
+  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const target = { pat, repoName }
+  const target = { pat, repoName, stub }
+  if (stub) {
+    await stub.install(page, { repoName })
+  }
   await page.goto('/')
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
@@ -528,11 +545,12 @@ export async function connectGithubGenesisDevice(
   page: Page,
   pat: string,
   repoName: string,
+  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
-  await connectGithubVault(page, pat, repoName)
+  await connectGithubVault(page, pat, repoName, stub)
 }
 
 /** Joiner connect runs GitHub assess + wasm — allow the same budget as genesis connect. */
@@ -561,8 +579,13 @@ export async function connectGithubJoinerDevice(
   page: Page,
   pat: string,
   repoName: string,
+  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  await assertGenesisVaultOnGithub(pat, repoName)
+  const target = { pat, repoName, stub }
+  await assertGenesisVaultOnGithub(target)
+  if (stub) {
+    await stub.install(page, { repoName })
+  }
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
@@ -576,11 +599,12 @@ export async function sendJoinRequest(
   page: Page,
   pat: string,
   repoName: string,
+  stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
 
   const snapshot = await waitForGithubVaultState(
-    { pat, repoName },
+    { pat, repoName, stub },
     (yaml) => yaml.joinEntries.length >= 1 || joinCountFromYaml(yaml.raw) >= 1,
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
@@ -619,11 +643,7 @@ export async function approveJoinFromBanner(
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(
-    target.pat,
-    target.repoName,
-    expectedMembers,
-  )
+  await assertEnrolledVaultOnGithub(target, expectedMembers)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
@@ -637,11 +657,7 @@ export async function approveJoinFromSettings(
   await expandSettingsSection(page, 'devices')
   const row = page.getByTestId('pending-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(
-    target.pat,
-    target.repoName,
-    expectedMembers,
-  )
+  await assertEnrolledVaultOnGithub(target, expectedMembers)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
@@ -1527,18 +1543,22 @@ export async function waitForLoadedSyncProviders(
   )
 }
 
+async function syncSecretCount(target: GithubE2eTarget): Promise<number> {
+  if (target.stub) {
+    const yaml = target.stub.getVaultYaml()
+    return yaml.trim() ? parseVaultYamlSnapshot(yaml).secretIds.length : 0
+  }
+  const yaml = await fetchGithubVaultYaml(target.pat, target.repoName)
+  return parseVaultYamlSnapshot(yaml ?? 'secrets: []').secretIds.length
+}
+
 export async function addSecret(
   page: Page,
   key: string,
   value: string,
   github?: GithubE2eTarget,
 ) {
-  const beforeCount = github
-    ? parseVaultYamlSnapshot(
-        (await fetchGithubVaultYaml(github.pat, github.repoName)) ??
-          'secrets: []',
-      ).secretIds.length
-    : 0
+  const beforeCount = github ? await syncSecretCount(github) : 0
   await assertVaultReady(page)
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
@@ -1612,12 +1632,7 @@ export async function deleteSecret(
   key: string,
   github?: GithubE2eTarget,
 ) {
-  const beforeCount = github
-    ? parseVaultYamlSnapshot(
-        (await fetchGithubVaultYaml(github.pat, github.repoName)) ??
-          'secrets: []',
-      ).secretIds.length
-    : 0
+  const beforeCount = github ? await syncSecretCount(github) : 0
   await waitForSecretOnDevice(page, key, github)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
@@ -1635,12 +1650,13 @@ export async function deleteSecret(
 }
 
 export async function assertGenesisVaultOnGithub(
-  pat: string,
-  repoName: string,
+  target: GithubE2eTarget | string,
+  repoName?: string,
 ) {
-  const snapshot = await waitForVaultYaml(
-    pat,
-    repoName,
+  const resolved: GithubE2eTarget =
+    typeof target === 'string' ? { pat: target, repoName: repoName! } : target
+  const snapshot = await waitForGithubVaultState(
+    resolved,
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
   )
   assertGenesisVaultYaml(snapshot)
@@ -1648,18 +1664,25 @@ export async function assertGenesisVaultOnGithub(
 }
 
 export async function assertEnrolledVaultOnGithub(
-  pat: string,
-  repoName: string,
-  expectedMembers: number,
+  target: GithubE2eTarget | string,
+  repoNameOrMembers?: string | number,
+  expectedMembers?: number,
 ) {
-  const snapshot = await waitForVaultYaml(
-    pat,
-    repoName,
+  const resolved: GithubE2eTarget =
+    typeof target === 'string'
+      ? { pat: target, repoName: repoNameOrMembers as string }
+      : target
+  const members =
+    typeof target === 'string'
+      ? (expectedMembers as number)
+      : (repoNameOrMembers as number)
+  const snapshot = await waitForGithubVaultState(
+    resolved,
     (yaml) =>
       yaml.joinEntries.length === 0 &&
-      yaml.authPkIds.length === expectedMembers &&
-      yaml.memberPkIds.length === expectedMembers,
+      yaml.authPkIds.length === members &&
+      yaml.memberPkIds.length === members,
   )
-  assertEnrolledVaultYaml(snapshot, expectedMembers)
+  assertEnrolledVaultYaml(snapshot, members)
   return snapshot
 }

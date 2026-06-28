@@ -1,6 +1,6 @@
 # Pull requests: one job — build toolchain once, verify ‖ web build in parallel containers, deploy preview.
 #
-# Playwright e2e and GitHub Pages deploy run on main only (see main.yml).
+# Playwright e2e runs on main (local + sync-stub) and nightly (sync-live). See e2e-pr.yml for manual PR e2e.
 #
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 

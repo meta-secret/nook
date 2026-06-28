@@ -3,38 +3,41 @@ import {
   addSecret,
   clearBrowserVault,
   connectGithubVault,
-  createE2eGithubRepoName,
   deleteSecret,
-  githubPat,
   assertVaultReady,
   reconnectGithubVault,
-  resetGithubVault,
   revealSecretInRow,
-  finishE2eGithubSuite,
   uniqueSecretKey,
 } from './helpers'
+import {
+  createStubSyncTarget,
+  installStubOnPage,
+  type StubSyncTarget,
+} from './sync-stub'
 
-const describeGithub = githubPat ? test.describe : test.describe.skip
-
-describeGithub('github vault', () => {
+test.describe('github vault (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let e2eRepo: string
+  let target: StubSyncTarget
 
   test.beforeAll(async ({ browser }) => {
-    e2eRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat, e2eRepo)
+    target = createStubSyncTarget('', 'github-vault')
     vaultPage = await browser.newPage()
+    await installStubOnPage(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectGithubVault(vaultPage, githubPat, e2eRepo)
+    await connectGithubVault(
+      vaultPage,
+      target.pat,
+      target.repoName,
+      target.stub,
+    )
   })
 
   test.afterAll(async () => {
     await vaultPage?.close()
-    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('connects and shows vault after github sync', async () => {
@@ -51,21 +54,15 @@ describeGithub('github vault', () => {
     const key = uniqueSecretKey('e2e-github')
     const value = 'github-sync-secret'
 
-    await addSecret(vaultPage, key, value, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
-    await deleteSecret(vaultPage, key, { pat: githubPat, repoName: e2eRepo })
+    await addSecret(vaultPage, key, value, target)
+    await deleteSecret(vaultPage, key, target)
   })
 
   test('persists secrets across reload and reconnect', async () => {
     const key = uniqueSecretKey('e2e-github-persist')
     const value = 'github-persist-value'
 
-    await addSecret(vaultPage, key, value, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
+    await addSecret(vaultPage, key, value, target)
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
     await reconnectGithubVault(vaultPage)
@@ -76,6 +73,6 @@ describeGithub('github vault', () => {
     await revealSecretInRow(row)
     await row.getByText(value).waitFor()
 
-    await deleteSecret(vaultPage, key, { pat: githubPat, repoName: e2eRepo })
+    await deleteSecret(vaultPage, key, target)
   })
 })

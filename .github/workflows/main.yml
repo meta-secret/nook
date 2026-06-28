@@ -1,6 +1,7 @@
 # Main branch: prepare once, then verify ‖ web build ‖ e2e in parallel (task ci:main:publish); deploy Pages.
 #
-# Playwright browsers are pre-installed in the toolchain image.
+# E2e on main uses local + sync-stub projects (no GitHub API). Live sync provider
+# tests run nightly — see e2e-nightly.yml.
 
 name: Main
 
@@ -39,18 +40,13 @@ jobs:
         env:
           CI: true
 
-      - name: E2e (local ‖ GitHub)
+      - name: E2e (local ‖ sync-stub)
         run: |
           cp -a nook-web/dist nook-web/dist-prod
           task ci:main:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
           task web:e2e:restore-prod-dist
         env:
           CI: true
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
-          NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}
-          NOOK_GITHUB_POLL_MS: '3000'
-          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
-          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
 
       - name: Push toolchain image
         run: task docker:push:ci

@@ -1,0 +1,44 @@
+# Nightly live sync provider e2e — real GitHub API (rate-limit sensitive).
+#
+# Stub-backed sync coverage runs on every main merge (main.yml). This workflow
+# validates the production GitHub integration once per day. Add other sync
+# providers here as live smoke suites are introduced.
+
+name: E2E (nightly)
+
+on:
+  schedule:
+    # 03:00 UTC daily
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: e2e-nightly
+  cancel-in-progress: false
+
+jobs:
+  sync-live:
+    name: Live sync providers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare, build, and run live e2e
+        run: task ci:nightly:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-nightly-${{ github.run_id }}
+          NOOK_GITHUB_POLL_MS: '3000'
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'

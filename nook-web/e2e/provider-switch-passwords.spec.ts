@@ -3,39 +3,26 @@ import {
   addVaultPassword,
   clearBrowserVault,
   connectLocalVault,
-  createE2eGithubRepoName,
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectVaultPasswordStatus,
   expandSettingsSection,
-  finishE2eGithubSuite,
-  githubPat,
   openStorageSettings,
-  resetGithubVault,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
 } from './helpers'
+import { createStubSyncTarget, installStubOnPage } from './sync-stub'
 
-const describeGithub = githubPat ? test.describe : test.describe.skip
-
-describeGithub('unified vault backup passwords', () => {
+test.describe('unified vault backup passwords (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
-  let emptyRepo: string
-
-  test.beforeAll(async () => {
-    emptyRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat!, emptyRepo)
-  })
-
-  test.afterAll(async () => {
-    await finishE2eGithubSuite(githubPat!, emptyRepo)
-  })
+  const target = createStubSyncTarget('', 'provider-switch')
 
   test('login gate keeps backup passwords after adding sync providers', async ({
     page,
   }) => {
+    await installStubOnPage(page, target)
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
@@ -51,8 +38,8 @@ describeGithub('unified vault backup passwords', () => {
       {
         id: 'e2e-empty-github',
         label: 'Empty GitHub',
-        githubRepo: emptyRepo,
-        githubPat: githubPat!,
+        githubRepo: target.repoName,
+        githubPat: target.pat,
       },
     ])
     await page.reload()
