@@ -18,7 +18,7 @@
     "test:e2e:sync-stub": "playwright test --project=sync-stub",
     "test:e2e:sync-live": "playwright test --project=sync-live",
     "test:e2e:github": "playwright test --project=sync-live",
-    "test:e2e:multi-device": "playwright test --project=sync-stub e2e/multi-device-github.spec.ts",
+    "test:e2e:multi-device": "playwright test --project=sync-stub e2e/multi-device-sync.spec.ts",
     "test:e2e:cleanup": "bun e2e/cleanup-github-repos.ts",
     "test:all": "vitest run && playwright test"
   },

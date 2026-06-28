@@ -16,6 +16,7 @@ process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
 const distDir = path.join(rootDir, 'dist')
+/** One shared preview/dev server is safe: app state lives in per-context IndexedDB; stubs are per-page. */
 
 /** IndexedDB-only specs — no sync provider HTTP. */
 const LOCAL_SPECS = [
@@ -36,15 +37,15 @@ const LOCAL_SPECS = [
 const SYNC_STUB_SPECS = [
   'sync-fanout.spec.ts',
   'multi-device-local.spec.ts',
-  'github-vault.spec.ts',
-  'multi-device-github.spec.ts',
-  'password-envelope-github.spec.ts',
+  'sync-vault.spec.ts',
+  'multi-device-sync.spec.ts',
+  'password-envelope-sync.spec.ts',
   'fresh-vault-passwords.spec.ts',
   'provider-switch-passwords.spec.ts',
-  'remote-vault-recovery-github.spec.ts',
+  'remote-vault-recovery-sync.spec.ts',
 ] as const
 
-/** Real sync provider API — nightly / manual only (GitHub rate limits). */
+/** Real sync provider API — nightly / manual only. */
 const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
 
 const specPaths = (files: readonly string[]) =>
@@ -101,19 +102,17 @@ export default defineConfig({
       name: 'local',
       testMatch: specPaths(LOCAL_SPECS),
       fullyParallel: true,
-      workers: isCi ? 2 : undefined,
     },
     {
       name: 'sync-stub',
       testMatch: specPaths(SYNC_STUB_SPECS),
       fullyParallel: true,
-      workers: isCi ? 2 : undefined,
     },
     {
       name: 'sync-live',
       testMatch: specPaths(SYNC_LIVE_SPECS),
+      // Real GitHub: CI sets one NOOK_GITHUB_E2E_REPO per container — keep files serial.
       fullyParallel: false,
-      workers: 1,
     },
   ],
 })

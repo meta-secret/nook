@@ -62,12 +62,26 @@ Stub mode uses in-memory route mocks (`sync-stub.ts`, `drive-stub.ts`) — no AP
 
 ## Why sync-stub vs sync-live
 
-GitHub REST API rate limits make it expensive to run full Playwright sync coverage on every PR and every main push. Nook therefore:
+GitHub REST API calls are slow and brittle at CI scale. Nook therefore:
 
 1. **`sync-stub` project** — Playwright `page.route()` intercepts `api.github.com` with an **in-memory vault stub** (`e2e/sync-stub.ts`, `createLocalE2eGithubVaultStub`). Each suite gets a unique fake repo name; no API calls, no cleanup, unlimited parallelism as tests grow.
 2. **`sync-live` project** — Specs under `e2e/live/` hit the **real GitHub API** using `NOOK_GITHUB_PAT`. Minimal smoke coverage; runs **once per day** on the schedule (and manually via workflow dispatch).
 
 When adding Google Drive or other sync providers, add stub-backed specs to `sync-stub` and thin live smoke specs to `e2e/live/`.
+
+## Parallelism and isolation
+
+Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults locally and override with `--workers=N` when you want more parallelism than the default. Spec files that need ordering use `test.describe.configure({ mode: 'serial' })` within the file only.
+
+`sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. Stub projects (`local`, `sync-stub`) use `fullyParallel: true`.
+
+**One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
+
+- Each test gets a fresh browser context → separate IndexedDB / `localStorage`.
+- Stub sync uses `page.route()` with a unique fake repo per suite — no shared remote state.
+- The Nook server is stateless; vault data never lives on the server in e2e.
+
+Do **not** spin up multiple Nook servers for parallel stub e2e unless debugging port conflicts locally with `reuseExistingServer`.
 
 ## Playwright projects
 
@@ -76,7 +90,7 @@ Defined in `nook-web/playwright.config.ts`:
 | Project | Specs | CI |
 |---------|-------|-----|
 | `local` | IndexedDB-only flows (vault CRUD, login, legal, …) | main, e2e-pr |
-| `sync-stub` | GitHub sync flows via route stubs (multi-device, fan-out, password envelope, …) | main, e2e-pr |
+| `sync-stub` | Sync provider flows via route stubs (`sync-vault`, multi-device, fan-out, …) | main, e2e-pr |
 | `sync-live` | `e2e/live/**/*.spec.ts` | e2e-nightly, e2e-pr (manual) |
 
 ## Task commands (Docker)
