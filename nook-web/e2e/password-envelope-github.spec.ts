@@ -80,8 +80,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await expectVaultPasswordStatus(deviceA, 'none')
 
     await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
-
-    await expectVaultPasswordStatus(deviceA, 1, { timeout: UI_TIMEOUT_MS })
     await deviceA.getByTestId('vault-secrets-tab').click()
 
     // Hybrid model: backup password coexists with device-key auth rows.

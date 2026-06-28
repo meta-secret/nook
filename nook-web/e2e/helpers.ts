@@ -700,6 +700,14 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await waitForStableLocalVaultState(
+    page,
+    (snapshot) => snapshot.hasPasswordEnvelope,
+    { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
+  )
+  await expectVaultPasswordStatus(page, 1, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 /** Poll local vault YAML until predicate holds for several consecutive reads. */
@@ -747,7 +755,10 @@ export async function expectVaultPasswordStatus(
   count: number | 'none',
   options?: { timeout?: number },
 ) {
-  const status = page.getByTestId('vault-password-status')
+  await expandSettingsSection(page, 'unlock')
+  const status = page
+    .getByTestId('vault-unlock-section')
+    .getByTestId('vault-password-status')
   const timeout = options?.timeout ?? UI_TIMEOUT_MS
   if (count === 'none') {
     await expect(status).toContainText('None', { timeout })
