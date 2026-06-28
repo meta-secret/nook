@@ -7,6 +7,7 @@
   import HelpPage from '$lib/components/HelpPage.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
+  import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
@@ -26,6 +27,10 @@
       colorMode = savedMode
     }
     void vault.init()
+
+    if (import.meta.env.DEV) {
+      ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
+    }
 
     return () => {
       vault.stopVaultSync()
@@ -272,6 +277,7 @@
               <SecretVault
                 {vault}
                 isSaving={vault.isSaving}
+                syncBlocked={vault.syncBlocked}
                 secrets={vault.secrets}
                 onAddModeChange={(open) => {
                   secretsAddOpen = open
@@ -308,6 +314,11 @@
             isSyncing={vault.isSyncing || vault.isSaving}
             successMsg={vault.successMsg}
             errorMsg={vault.errorMsg}
+            syncConflictLabel={vault.pendingSyncConflict
+              ? vault.t('auth_storage.sync_conflict_banner', {
+                  provider: vault.pendingSyncConflict.providerLabel,
+                })
+              : ''}
             {appVersion}
             onRefresh={() => vault.manualSync()}
             onDismissSuccess={() => vault.dismissSuccess()}
@@ -395,4 +406,14 @@
     onCreateFreshVault={() => vault.createFreshVault()}
     onCancel={() => vault.dismissJoinEnrollment()}
   />
+
+  {#if vault.pendingSyncConflict}
+    <VaultSyncConflictDialog
+      {vault}
+      conflict={vault.pendingSyncConflict}
+      isBusy={vault.isVerifying}
+      onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
+      onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
+    />
+  {/if}
 </main>

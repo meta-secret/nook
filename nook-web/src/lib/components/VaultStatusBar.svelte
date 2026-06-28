@@ -24,6 +24,8 @@
     showStorageIcon = true,
     variant = 'panel',
     onRefresh,
+    syncConflictLabel = '',
+    onOpenSyncConflict,
     onDismissSuccess,
     onDismissError,
   }: {
@@ -39,6 +41,8 @@
     showSyncStatus?: boolean
     showStorageIcon?: boolean
     variant?: 'panel' | 'quiet'
+    syncConflictLabel?: string
+    onOpenSyncConflict?: () => void
     onRefresh?: () => void | Promise<void>
     onDismissSuccess?: () => void
     onDismissError?: () => void
@@ -200,6 +204,27 @@
         </div>
       {/if}
     </div>
+
+    {#if syncConflictLabel}
+      <div
+        class="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300"
+        role="alert"
+        data-testid="vault-sync-conflict-banner"
+      >
+        <TriangleAlert class="size-3.5 shrink-0" />
+        <span class="min-w-0 flex-1 text-pretty">{syncConflictLabel}</span>
+        {#if onOpenSyncConflict}
+          <button
+            type="button"
+            class="shrink-0 rounded border border-amber-500/30 px-2 py-0.5 font-medium hover:bg-amber-500/10"
+            data-testid="vault-sync-conflict-open-btn"
+            onclick={() => onOpenSyncConflict()}
+          >
+            {vault ? vault.t('auth_storage.sync_conflict_resolve') : 'Resolve'}
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     {#if successMsg}
       <div

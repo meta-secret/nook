@@ -24,6 +24,7 @@ const LOCAL_SPECS = [
   'shell-height.spec.ts',
   'bip39-seed-phrase.spec.ts',
   'sync-provider-connect.spec.ts',
+  'sync-conflict-resolution.spec.ts',
 ] as const
 
 /** Real GitHub API specs — serial within the project; one repo per container via NOOK_GITHUB_E2E_REPO. */

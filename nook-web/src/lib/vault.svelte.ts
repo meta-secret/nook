@@ -68,6 +68,7 @@ import {
   readVaultVersionFromBlob,
   writeLocalVaultBlob,
   writeRemoteVaultBlob,
+  type PendingSyncConflict,
   type VaultSyncAction,
 } from '$lib/vault-sync'
 
@@ -118,6 +119,12 @@ export class VaultState {
   isSyncing = $state(false)
   /** Provider id currently running a manual sync (Settings UI). */
   syncingProviderId = $state<string | null>(null)
+  /** User must pick local vs remote before editing when versions match but content differs. */
+  pendingSyncConflict = $state<PendingSyncConflict | null>(null)
+
+  get syncBlocked(): boolean {
+    return this.pendingSyncConflict !== null
+  }
 
   unlockMode = $state<'keys' | 'password'>('keys')
   /** Remote vault unlock mode detected on the login screen (before session open). */
@@ -1121,6 +1128,7 @@ export class VaultState {
 
   async syncFromStorage(options?: { force?: boolean }) {
     if (!this.manager) return
+    if (this.syncBlocked) return
     if (!options?.force && this.isVerifying) return
     if (!options?.force && this.isSaving) return
     if (!options?.force && this.isSyncing) return
@@ -1143,6 +1151,7 @@ export class VaultState {
 
   async manualSync() {
     if (!this.manager) return
+    if (this.syncBlocked) return
     try {
       await this.initDeviceIdentity()
       if (this.syncProviders.length === 0) {
@@ -1167,6 +1176,7 @@ export class VaultState {
   /** Reconcile local vault with one sync provider using `compareVaultSync`. */
   async syncProviderById(providerId: string): Promise<void> {
     if (!this.manager) return
+    if (this.syncBlocked) return
     const provider = this.providers.find((p) => p.id === providerId)
     if (!provider || provider.type === 'local') return
     if (this.syncingProviderId) return
@@ -1209,7 +1219,22 @@ export class VaultState {
     const { providerId, localYaml, remote, mode, pat, repo } = ctx
 
     if (action === 'conflict') {
-      this.errorMsg = this.t('auth_storage.sync_conflict')
+      const localVersion = await readVaultVersionFromBlob(localYaml)
+      const remoteVersion = await readVaultVersionFromBlob(remote.content)
+      const provider = this.providers.find((p) => p.id === providerId)
+      this.pendingSyncConflict = {
+        providerId,
+        providerLabel: provider?.label ?? providerId,
+        localYaml,
+        remoteYaml: remote.content,
+        localVersion,
+        remoteVersion,
+        mode,
+        pat,
+        repo,
+        remoteRevision: remote.revision,
+      }
+      this.errorMsg = ''
       return
     }
 
@@ -1262,6 +1287,79 @@ export class VaultState {
     )
     await this.persistProviders()
     this.lastSyncedAt = new SvelteDate()
+  }
+
+  private clearPendingSyncConflict() {
+    this.pendingSyncConflict = null
+  }
+
+  /** E2E / dev: open the conflict dialog without reaching remote storage. */
+  stageSyncConflict(conflict: PendingSyncConflict) {
+    this.pendingSyncConflict = conflict
+    this.errorMsg = ''
+  }
+
+  async resolveSyncConflictKeepLocal(): Promise<void> {
+    const conflict = this.pendingSyncConflict
+    if (!conflict || this.isVerifying) return
+
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      const revision = await writeRemoteVaultBlob(
+        conflict.mode,
+        conflict.pat,
+        conflict.repo,
+        conflict.localYaml,
+        conflict.remoteRevision,
+      )
+      await this.updateProviderSyncMetadata(
+        conflict.providerId,
+        conflict.localYaml,
+        revision,
+      )
+      this.clearPendingSyncConflict()
+      this.showSuccess(
+        this.t('auth_storage.sync_conflict_resolved_local', {
+          provider: conflict.providerLabel,
+        }),
+      )
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : this.t('auth_storage.sync_failed')
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async resolveSyncConflictKeepRemote(): Promise<void> {
+    const conflict = this.pendingSyncConflict
+    if (!conflict || this.isVerifying) return
+
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      await writeLocalVaultBlob(conflict.remoteYaml)
+      if (this.isAuthenticated) {
+        await this.reloadSessionFromLocal()
+      }
+      await this.updateProviderSyncMetadata(
+        conflict.providerId,
+        conflict.remoteYaml,
+        conflict.remoteRevision,
+      )
+      this.clearPendingSyncConflict()
+      this.showSuccess(
+        this.t('auth_storage.sync_conflict_resolved_remote', {
+          provider: conflict.providerLabel,
+        }),
+      )
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : this.t('auth_storage.sync_failed')
+    } finally {
+      this.isVerifying = false
+    }
   }
 
   private async reloadSessionFromLocal(): Promise<void> {
@@ -1979,6 +2077,10 @@ export class VaultState {
 
   async handleAddSecret(id: string, type: VaultItemType, data: string) {
     if (!this.manager) return
+    if (this.syncBlocked) {
+      this.errorMsg = this.t('auth_storage.sync_blocked_edits')
+      return
+    }
     this.errorMsg = ''
     this.dismissSuccess()
     this.isSaving = true
@@ -2006,6 +2108,10 @@ export class VaultState {
 
   async handleDeleteSecret(id: string) {
     if (!this.manager) return
+    if (this.syncBlocked) {
+      this.errorMsg = this.t('auth_storage.sync_blocked_edits')
+      return
+    }
     this.errorMsg = ''
     this.dismissSuccess()
     this.isSaving = true
@@ -2031,6 +2137,10 @@ export class VaultState {
 
   async handleReplaceSecret(oldId: string, type: VaultItemType, data: string) {
     if (!this.manager) return
+    if (this.syncBlocked) {
+      this.errorMsg = this.t('auth_storage.sync_blocked_edits')
+      return
+    }
     this.errorMsg = ''
     this.dismissSuccess()
     this.isSaving = true
