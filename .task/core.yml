@@ -1,0 +1,165 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build Rust crates, wasm package, and web app in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _build }
+
+  test:
+    desc: Run all test suites in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _test }
+
+  lint:
+    desc: Run all linters in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _lint }
+
+  check:
+    desc: Run formatting, linting, tests, and builds in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _check }
+
+  format:
+    desc: Format all projects in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _format }
+
+  format:check:
+    desc: Check formatting for all projects in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _format:check }
+
+  rust:build:
+    desc: Build the Rust workspace in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:build }
+
+  rust:test:
+    desc: Test the Rust workspace in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:test }
+
+  rust:lint:
+    desc: Lint the Rust workspace in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:lint }
+
+  _build:
+    desc: Build Rust crates, wasm package, and web app.
+    cmds:
+      - task: _rust:build
+      - task: _web:build
+
+  _test:
+    desc: Run all test suites.
+    cmds:
+      - task: _rust:test
+      - task: _web:check
+      - task: _web:test
+
+  _lint:
+    desc: Run all linters.
+    cmds:
+      - task: _rust:lint
+      - task: _web:lint
+
+  _check:
+    desc: Run formatting, linting, tests, and builds.
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
+      - task: _build
+
+  _verify:
+    desc: Format, lint, and test without production web build.
+    cmds:
+      - task: _format:check
+      - task: _lint
+      - task: _test
+
+  _verify:parallel:
+    desc: Lint and test when wasm is already built (ci:pr parallel track).
+    cmds:
+      - task: _lint:parallel
+      - task: _test:parallel
+
+  _lint:parallel:
+    desc: Web linters only — Rust clippy already runs in the toolchain docker build warm-up.
+    cmds:
+      - task: _web:lint:parallel
+
+  _test:parallel:
+    desc: Rust and web tests when wasm is already built (ci:pr parallel track).
+    cmds:
+      - task: _rust:test:parallel
+      - task: _web:check:parallel
+      - task: _web:test:parallel
+
+  _rust:test:parallel:
+    desc: Run nook-core tests when deps are already built (ci:pr parallel track).
+    cmds:
+      - task: _rust:test:run
+
+  _rust:test:run:
+    internal: true
+    desc: Run nook-core tests via cargo-nextest (ci profile).
+    cmds:
+      - cargo nextest run -p nook-core --profile ci
+
+  _format:
+    desc: Format all projects.
+    cmds:
+      - cargo fmt --all
+      - cd nook-web && bun run format
+
+  _format:check:
+    desc: Check formatting for all projects.
+    cmds:
+      - cargo fmt --all -- --check
+      - cd nook-web && bun run format:check
+
+  _rust:build:
+    desc: Build the native Rust crate (wasm is built via _wasm:build).
+    cmds:
+      - cargo build -p nook-core
+
+  _rust:test:
+    desc: Test nook-core (wasm is covered by web e2e).
+    cmds:
+      - task: _rust:test:run
+
+  _rust:lint:
+    desc: Lint nook-core on host and nook-wasm for wasm32.
+    cmds:
+      - cargo clippy -p nook-core --all-targets -- -D warnings
+      - cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
