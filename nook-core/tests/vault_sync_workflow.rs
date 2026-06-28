@@ -45,13 +45,9 @@ fn local_save_then_fan_out_replicates_to_all_providers() {
     ]);
 
     let results = fan_out_sync(&mut local, &mut remotes).unwrap();
-    assert_eq!(
-        results,
-        vec![
-            ("provider-alpha".to_owned(), VaultSyncAction::PushLocal),
-            ("provider-beta".to_owned(), VaultSyncAction::PushLocal),
-        ]
-    );
+    let actions: HashMap<_, _> = results.into_iter().collect();
+    assert_eq!(actions["provider-alpha"], VaultSyncAction::PushLocal);
+    assert_eq!(actions["provider-beta"], VaultSyncAction::PushLocal);
     assert_eq!(remotes["provider-alpha"].blob(), v3);
     assert_eq!(remotes["provider-beta"].blob(), v3);
     assert_eq!(
@@ -153,10 +149,12 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() {
     ]);
 
     let results = fan_out_sync(&mut local, &mut remotes).unwrap();
-    assert_eq!(results[0].1, VaultSyncAction::PushLocal);
-    assert_eq!(results[1].1, VaultSyncAction::AdoptRemote);
+    let actions: HashMap<_, _> = results.into_iter().collect();
+    assert_eq!(actions["stale"], VaultSyncAction::PushLocal);
+    assert_eq!(actions["ahead"], VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remotes["ahead"].blob());
     assert_eq!(read_vault_version(local.blob()).unwrap(), 5);
+    assert_eq!(read_vault_version(remotes["stale"].blob()).unwrap(), 5);
     assert_eq!(
         read_vault_store_id(local.blob()).unwrap(),
         Some(store_id.to_owned())

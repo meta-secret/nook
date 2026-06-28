@@ -138,7 +138,7 @@ flowchart TD
 
 No automatic merge of secret records at this stage.
 
-WASM export: `compareVaultSync(local, remote) → "unchanged" | "adopt_remote" | "push_local" | "conflict"`.
+WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVaultBlobs(local, remote, revision)` returns post-reconcile blobs and action label.
 
 ---
 
@@ -214,6 +214,7 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 | `compare_vault_sync` in `nook-core` | Done (#61) |
 | In-memory sync replication tests (`vault_sync_store`) | Done |
 | `compareVaultSync` WASM export | Done (#61) |
+| `reconcileVaultBlobs` WASM export (apply in core) | Done |
 | Version increment on save | Done (#61) |
 | Local-first login gate | Done (#71, Phase 1) |
 | Sync providers in Settings | Done (#72, Phase 2) |

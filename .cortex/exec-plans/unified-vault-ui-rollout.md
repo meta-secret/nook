@@ -12,7 +12,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 1. **One page at a time** — ship, test, merge each slice before moving on.
 2. **Keep the app usable** — feature-flag or parallel paths during transition if needed.
 3. **E2E after every slice** — update Playwright specs in the same PR as UI changes.
-4. **Rust-first sync logic** — UI only calls WASM (`compareVaultSync`, version getters); no sync rules in TypeScript.
+4. **Rust-first sync logic** — UI calls WASM (`reconcileVaultBlobs`, `compareVaultSync`); apply rules live in `nook-core`.
 5. **Stacked PRs** — each phase branches from the previous; squash-merge in order (#61 → #71 → #72 → …).
 
 ---

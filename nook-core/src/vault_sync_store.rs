@@ -85,7 +85,8 @@ pub fn fan_out_sync(
     local: &mut MemoryVaultStore,
     remotes: &mut HashMap<String, MemoryVaultStore>,
 ) -> Result<Vec<(String, VaultSyncAction)>, String> {
-    let ids: Vec<String> = remotes.keys().cloned().collect();
+    let mut ids: Vec<String> = remotes.keys().cloned().collect();
+    ids.sort();
     let mut results = Vec::with_capacity(ids.len());
     for id in ids {
         let remote = remotes

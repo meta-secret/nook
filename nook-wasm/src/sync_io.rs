@@ -2,7 +2,8 @@
 //!
 //! These helpers fetch or write the encrypted vault YAML without mutating
 //! `NookVaultManager` session state — the web layer uses them together with
-//! `compare_vault_sync` to reconcile local vs remote copies.
+//! `compare_vault_sync` to reconcile local vs remote copies, and
+//! `reconcile_vault_stores` to apply the chosen action in memory before I/O.
 
 use crate::NookError;
 use crate::storage::drive::{
@@ -13,6 +14,10 @@ use crate::storage::github::{
     write_github_text_file_with_retry,
 };
 use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
+use nook_core::{
+    MemoryVaultStore, reconcile_vault_stores, resolve_conflict_keep_local,
+    resolve_conflict_keep_remote,
+};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -131,4 +136,91 @@ pub async fn write_remote_vault_yaml(
         }
     }
     .map_err(|e: NookError| JsError::new(&e.to_string()))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReconcileVaultBlobsResult {
+    action: String,
+    local_yaml: String,
+    remote_yaml: String,
+    remote_revision: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveConflictKeepLocalResult {
+    remote_yaml: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveConflictKeepRemoteResult {
+    local_yaml: String,
+}
+
+fn vault_sync_action_label(action: nook_core::VaultSyncAction) -> &'static str {
+    match action {
+        nook_core::VaultSyncAction::Unchanged => "unchanged",
+        nook_core::VaultSyncAction::AdoptRemote => "adopt_remote",
+        nook_core::VaultSyncAction::PushLocal => "push_local",
+        nook_core::VaultSyncAction::Conflict => "conflict",
+    }
+}
+
+fn remote_memory_store(yaml: String, revision: Option<String>) -> MemoryVaultStore {
+    let mut store = MemoryVaultStore::with_blob(yaml);
+    store.set_revision(revision);
+    store
+}
+
+/// Compare local vs remote YAML, apply the sync action in memory, return post-reconcile blobs.
+#[wasm_bindgen(js_name = reconcileVaultBlobs)]
+pub fn reconcile_vault_blobs(
+    local_yaml: String,
+    remote_yaml: String,
+    remote_revision: Option<String>,
+) -> Result<JsValue, JsError> {
+    let mut local = MemoryVaultStore::with_blob(local_yaml);
+    let mut remote = remote_memory_store(remote_yaml, remote_revision);
+    let action = reconcile_vault_stores(&mut local, &mut remote).map_err(|e| JsError::new(&e))?;
+    serde_wasm_bindgen::to_value(&ReconcileVaultBlobsResult {
+        action: vault_sync_action_label(action).to_owned(),
+        local_yaml: local.blob().to_owned(),
+        remote_yaml: remote.blob().to_owned(),
+        remote_revision: remote.revision().map(str::to_owned),
+    })
+    .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// User chose "keep local" — return the remote blob content to write to storage.
+#[wasm_bindgen(js_name = resolveVaultConflictKeepLocal)]
+pub fn resolve_vault_conflict_keep_local(
+    local_yaml: String,
+    remote_yaml: String,
+    remote_revision: Option<String>,
+) -> Result<JsValue, JsError> {
+    let local = MemoryVaultStore::with_blob(local_yaml);
+    let mut remote = remote_memory_store(remote_yaml, remote_revision);
+    resolve_conflict_keep_local(&local, &mut remote);
+    serde_wasm_bindgen::to_value(&ResolveConflictKeepLocalResult {
+        remote_yaml: remote.blob().to_owned(),
+    })
+    .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// User chose "keep remote" — return the local blob content to write to `IndexedDB`.
+#[wasm_bindgen(js_name = resolveVaultConflictKeepRemote)]
+pub fn resolve_vault_conflict_keep_remote(
+    local_yaml: String,
+    remote_yaml: String,
+    remote_revision: Option<String>,
+) -> Result<JsValue, JsError> {
+    let mut local = MemoryVaultStore::with_blob(local_yaml);
+    let remote = remote_memory_store(remote_yaml, remote_revision);
+    resolve_conflict_keep_remote(&mut local, &remote);
+    serde_wasm_bindgen::to_value(&ResolveConflictKeepRemoteResult {
+        local_yaml: local.blob().to_owned(),
+    })
+    .map_err(|e| JsError::new(&e.to_string()))
 }
