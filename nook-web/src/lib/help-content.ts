@@ -5,8 +5,22 @@ export type HelpSection = {
   title: string
   summary: string
   bullets: string[]
-  diagram?: boolean
+  diagram?: string
 }
+
+/** Mermaid source for the local-first vault model (rendered in Help). */
+export const HELP_ARCHITECTURE_DIAGRAM = `flowchart TB
+  subgraph device["This browser (working copy)"]
+    V[nook-vault.yaml]
+    K[Device keys unlock]
+  end
+  subgraph sync["Sync providers (replicas)"]
+    G[GitHub]
+    D[Google Drive]
+  end
+  V <-->|version-based sync| G
+  V <-->|version-based sync| D
+  K --> V`
 
 export const HELP_SECTIONS: HelpSection[] = [
   {
@@ -20,7 +34,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       'Secrets are encrypted before they are saved or synced anywhere.',
       'No Nook account or central server holds your data.',
     ],
-    diagram: true,
+    diagram: HELP_ARCHITECTURE_DIAGRAM,
   },
   {
     id: 'unlock',
