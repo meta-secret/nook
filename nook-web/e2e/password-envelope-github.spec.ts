@@ -186,8 +186,9 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     // because GitHub CDN caching makes a real two-device race flaky in
     // CI — the cryptographic invariant is what actually matters.
 
-    const before = await waitForLocalVaultState(deviceA, (snapshot) =>
-      snapshot.hasPasswordEnvelope,
+    const before = await waitForLocalVaultState(
+      deviceA,
+      (snapshot) => snapshot.hasPasswordEnvelope,
     )
     const oldEnvelope = before.passwordEnvelopeCiphertext
     expect(oldEnvelope).not.toBeNull()
