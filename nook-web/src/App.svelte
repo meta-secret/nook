@@ -40,11 +40,6 @@
     await vault.connectLoginProvider()
   }
 
-  async function handleProviderReconnect(id: string) {
-    await vault.selectProvider(id)
-    await vault.loadDb()
-  }
-
   async function handleUnlock() {
     if (vault.loginSetupType) {
       await vault.connectStagedProvider()
@@ -54,7 +49,11 @@
   }
 
   async function handleSettingsReconnect() {
-    await handleUnlock()
+    if (vault.loginSetupType) {
+      await vault.connectAndSyncStagedProvider()
+      return
+    }
+    await vault.manualSync()
   }
 
   function toggleColorMode() {
@@ -222,8 +221,8 @@
               <VaultSettingsAccordion
                 {vault}
                 bind:accordionSection={vault.settingsAccordionSection}
-                providers={vault.providers}
-                activeProviderId={vault.activeProviderId}
+                syncProviders={vault.syncProviders}
+                syncingProviderId={vault.syncingProviderId}
                 isAuthenticated={vault.isAuthenticated}
                 isVerifying={vault.isVerifying}
                 isSaving={vault.isSaving}
@@ -242,7 +241,7 @@
                 vaultMembers={vault.vaultMembers}
                 hasPasswordEnvelope={vault.hasPasswordEnvelope}
                 onReconnect={handleSettingsReconnect}
-                onSelectProvider={handleProviderReconnect}
+                onSyncProvider={(id) => vault.syncProviderById(id)}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
                 onBeginSetup={(type) => vault.beginProviderSetup(type)}

@@ -75,12 +75,12 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<VaultSyncAction, 
     let local_rev = read_vault_revision(local_trim)?;
     let remote_rev = read_vault_revision(remote_trim)?;
 
-    if let (Some(local_store), Some(remote_store)) = (&local_rev.store_id, &remote_rev.store_id) {
-        if local_store != remote_store {
-            return Err(format!(
-                "Vault store_id mismatch: local {local_store}, remote {remote_store}"
-            ));
-        }
+    if let (Some(local_store), Some(remote_store)) = (&local_rev.store_id, &remote_rev.store_id)
+        && local_store != remote_store
+    {
+        return Err(format!(
+            "Vault store_id mismatch: local {local_store}, remote {remote_store}"
+        ));
     }
 
     if local_rev.version < remote_rev.version {

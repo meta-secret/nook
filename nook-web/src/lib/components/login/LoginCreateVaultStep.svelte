@@ -22,7 +22,10 @@
     password.length > 0 && password === confirmPassword,
   )
   const canSubmit = $derived(
-    passwordsMatch && password.trim().length >= 8 && !isVerifying && !isInitializing,
+    passwordsMatch &&
+      password.trim().length >= 8 &&
+      !isVerifying &&
+      !isInitializing,
   )
 
   function handleSubmit(e: Event) {
@@ -32,13 +35,20 @@
   }
 </script>
 
-<form class="space-y-4" onsubmit={handleSubmit} data-testid="login-create-vault-form">
+<form
+  class="space-y-4"
+  onsubmit={handleSubmit}
+  data-testid="login-create-vault-form"
+>
   <p class="text-sm text-pretty text-muted-foreground">
     {vault.t('login.create_vault_description')}
   </p>
 
   <div class="space-y-2">
-    <label class="text-sm font-medium text-foreground" for="login-create-password">
+    <label
+      class="text-sm font-medium text-foreground"
+      for="login-create-password"
+    >
       {vault.t('login.master_password_label')}
     </label>
     <input
@@ -55,7 +65,10 @@
   </div>
 
   <div class="space-y-2">
-    <label class="text-sm font-medium text-foreground" for="login-create-password-confirm">
+    <label
+      class="text-sm font-medium text-foreground"
+      for="login-create-password-confirm"
+    >
       {vault.t('login.confirm_password_label')}
     </label>
     <input
@@ -70,7 +83,9 @@
       minlength="8"
     />
     {#if confirmPassword.length > 0 && !passwordsMatch}
-      <p class="text-xs text-destructive">{vault.t('login.passwords_mismatch')}</p>
+      <p class="text-xs text-destructive">
+        {vault.t('login.passwords_mismatch')}
+      </p>
     {/if}
   </div>
 

@@ -38,6 +38,12 @@ export interface StorageProvider {
   oauthFile?: OAuthFileConfig
   /** Logical secret-store id — same across provider replicas of one vault. */
   storeId?: string
+  /** Monotonic vault_version after last successful sync to this provider. */
+  lastSyncedVersion?: number
+  /** ISO timestamp of last successful sync. */
+  lastSyncedAt?: string
+  /** Remote revision token (GitHub sha, Drive revisionId) for the next write. */
+  lastSyncRevision?: string
   createdAt: string
 }
 

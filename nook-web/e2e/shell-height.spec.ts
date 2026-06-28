@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { clearBrowserVault, connectLocalVaultLegacy as connectLocalVault, UI_TIMEOUT_MS } from './helpers'
+import {
+  clearBrowserVault,
+  connectLocalVaultLegacy as connectLocalVault,
+  UI_TIMEOUT_MS,
+} from './helpers'
 
 test.describe('authenticated shell height', () => {
   test.beforeEach(async ({ page }) => {
@@ -27,7 +31,7 @@ test.describe('authenticated shell height', () => {
     expect(onboardHeight).toBeCloseTo(vaultHeight, 0)
 
     await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('settings-providers-list')).toBeVisible()
+    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
     const settingsHeight = (await shell.boundingBox())?.height ?? 0
     expect(settingsHeight).toBeCloseTo(vaultHeight, 0)
 

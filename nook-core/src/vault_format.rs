@@ -224,6 +224,7 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
     vault
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn vault_version_is_zero(version: &u64) -> bool {
     *version == 0
 }
@@ -666,10 +667,7 @@ not-json
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(
-            parsed[0].key,
-            format!("member:key_{auth_id}")
-        );
+        assert_eq!(parsed[0].key, format!("member:key_{auth_id}"));
     }
 
     #[test]
