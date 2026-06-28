@@ -1,6 +1,6 @@
 # Pull Request Workflow
 
-Use this checklist for every change that lands on `main`.
+Use this checklist for every change that lands on `main`. **AI agents must follow the full [agent pipeline](#agent-pipeline) below** — do not stop at push.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -13,37 +13,111 @@ Use this checklist for every change that lands on `main`.
 | One commit per PR on `main` | `gh pr merge --rebase` |
 | | Fast-forward that keeps branch commit history on `main` |
 
-`main` must stay linear: **one squash commit per merged PR**. Feature branches can have many commits; that history is discarded at merge time.
+`main` must stay linear: **one squash commit per PR**. Feature branches can have many commits; that history is discarded at merge time.
 
 If you merge a PR for the user, **confirm squash** before completing the merge. Merging any other way is a process violation.
 
-## Standard flow
+## Agent pipeline
 
-1. Branch from `main` (never commit directly on `main`).
-2. Implement; run `task format` and `task check` locally before opening a PR.
-3. Push the branch; open a PR with summary and test plan. `pr.yml` runs `task ci:pr:publish` plus a Cloudflare preview (no e2e). After squash merge, `main.yml` runs verify, build, **local + sync-stub e2e**, and GitHub Pages deploy. **Live sync provider e2e** runs nightly via `e2e-nightly.yml` — see [ci-pipeline.md](ci-pipeline.md).
-4. **Monitor CI until green** (see [CI fix loop](#ci-fix-loop) below).
-5. After review, **squash merge** into `main`.
-6. Delete the branch (optional but recommended).
+End-to-end flow for autonomous agents working on a task:
 
-## CI fix loop
+```mermaid
+flowchart TD
+  A[Implement on branch] --> B[Local basic checks]
+  B --> C{Big / complex web change?}
+  C -->|yes| D[Local e2e optional]
+  C -->|no| E[Push + open PR]
+  D --> E
+  E --> F[Monitor PR CI]
+  F --> G{All checks green?}
+  G -->|no| H[Read logs, fix, push]
+  H --> F
+  G -->|yes| I[Squash merge PR]
+  I --> J[Done]
+```
 
-After implementation is complete, **do not stop at push** — agents must drive the PR to green CI.
+### 1. Implement
 
-1. **Push** the branch (`git push -u origin HEAD`).
-2. **Monitor checks** on the open PR — poll about **once per minute** until every required check finishes:
-   ```bash
-   gh pr checks <number> --watch          # blocks until done
-   # or poll manually:
-   gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
-   ```
-3. **On failure:** read the failed job log (`gh run view <run-id> --log-failed`), reproduce locally when practical (`task check` for verify/lint/build; `task web:test:e2e:local` or `task web:test:e2e:sync-stub` for e2e on main), fix the root cause, commit, and **push again**.
-4. **Repeat** steps 2–3 until all checks pass.
-5. Only then treat the PR as ready to merge (or merge if the user asked).
+Branch from `main` (never commit directly on `main`). Make the requested change.
 
-PR workflow (`pr.yml`): verify + web build only. Main workflow (`main.yml`): local + **sync-stub** e2e after merge (no GitHub PAT). Nightly (`e2e-nightly.yml`): **sync-live** against real GitHub. Full map: [ci-pipeline.md](ci-pipeline.md).
+### 2. Local basic checks (before opening a PR)
+
+Run static analysis and unit tests inside Docker:
+
+```bash
+task format          # if you changed formatting
+task check           # format check, lint, unit tests, build
+```
+
+For web-only changes, `task web:check` and `task web:test` are faster subsets.
+
+### 3. Local e2e (when the change is big or complex)
+
+PR CI runs **local Playwright e2e** (~1 min, IndexedDB specs, no GitHub API). Agents should still run e2e locally before opening a PR when the change touches:
+
+- vault sync, join, or enrollment flows
+- login / unlock / password envelope UI
+- multi-step web flows or Playwright helpers
+
+```bash
+task web:test:e2e:local    # full local project in Docker
+# or, after task check already built wasm + dist:
+task web:test:e2e:local:parallel
+```
+
+Skip local e2e for small, isolated Rust-only or docs-only changes.
+
+### 4. Push and open a PR
+
+Push the branch and create a PR with summary and test plan:
+
+```bash
+git push -u origin HEAD
+gh pr create --title "…" --body "…"
+```
+
+`pr.yml` runs `task ci:pr:publish`: prepare → verify ‖ web build → **local Playwright e2e** → toolchain push, then deploys a Cloudflare preview.
+
+### 5. Monitor CI until green
+
+**Do not stop after opening the PR.** Poll checks until every required job finishes:
+
+```bash
+gh pr checks <number> --watch          # blocks until done
+# or poll manually:
+gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
+```
+
+### 6. Fix loop on failure
+
+1. Read the failed job log: `gh run view <run-id> --log-failed`
+2. Reproduce locally when practical:
+   - verify / lint / build → `task check`
+   - PR local e2e failure → `task web:test:e2e:local`
+3. Fix the root cause, commit, push.
+4. Return to step 5.
+
+### 7. Merge and finish
+
+When **all PR checks pass** and the user asked you to merge (or the task implies merge-on-green):
+
+```bash
+gh pr merge <number> --squash
+```
+
+After merge, `main.yml` runs full CI including sync-stub Playwright e2e. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
 **Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
+
+## Standard flow (summary)
+
+1. Branch from `main`.
+2. Implement; run `task check` locally.
+3. Run `task web:test:e2e:local` when the web change is big or complex.
+4. Push; open PR with summary and test plan.
+5. Monitor CI until green (fix loop).
+6. **Squash merge** into `main`.
+7. Delete the branch (optional).
 
 ## CLI reference
 
