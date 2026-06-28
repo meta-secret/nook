@@ -46,7 +46,7 @@
       field: string,
     ) => Promise<void>
     vault: VaultState
-    /** Secure note: use the title row as the card header (no duplicate group header). */
+    /** Use the title row as the card header (no duplicate group header). */
     titleAsHeader?: boolean
   } = $props()
 
@@ -104,11 +104,15 @@
             ? 'rotate-180'
             : ''}"
         />
-        {#if item.type === 'secure-note' && titleAsHeader}
+        {#if titleAsHeader}
           <div
             class="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
           >
-            <StickyNote class="size-3.5" />
+            {#if item.type === 'login'}
+              <Globe class="size-3.5" />
+            {:else}
+              <StickyNote class="size-3.5" />
+            {/if}
           </div>
           <h3
             class="truncate text-sm font-semibold tracking-wide text-foreground"

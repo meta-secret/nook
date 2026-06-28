@@ -552,6 +552,7 @@
   "provider_setup": {
     "change_provider": "Change provider",
     "github_pat_desc": "Nook needs a classic personal access token (ghp_) with repo scope to sync your vault file.",
+    "github_connection_subtitle": "Create a token and choose your repository",
     "create_token_github": "Create token on GitHub",
     "repo_name": "Repository name",
     "vault_file_desc": "Vault file: nook-vault.yaml in this repo under your account.",

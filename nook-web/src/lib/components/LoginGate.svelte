@@ -17,6 +17,7 @@
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
+  import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
@@ -116,7 +117,10 @@
   )
 
   const setupCanConnect = $derived(
-    setupType !== 'oauth-file' || Boolean(vault.oauthFile?.accessToken?.trim()),
+    setupType === 'local' ||
+      (setupType === 'oauth-file' &&
+        Boolean(vault.oauthFile?.accessToken?.trim())) ||
+      (setupType === 'github' && Boolean(githubPat.trim())),
   )
 
   function handleFirstConnectSubmit(e: Event) {
@@ -249,37 +253,44 @@
               {onCancelSetup}
               onConnect={onUnlock}
             />
+          {:else if setupType === 'github'}
+            <GitHubProviderSetupWizard
+              {vault}
+              bind:githubPat
+              bind:githubRepo
+              idPrefix="login"
+              {isVerifying}
+              {isInitializing}
+              connectDisabled={vault.remoteVaultRecoveryPrompt !== 'none'}
+              {onCancelSetup}
+              onConnect={onUnlock}
+            >
+              {#snippet beforeConnect()}
+                {#if vault.remoteVaultRecoveryPrompt !== 'none'}
+                  <RemoteVaultRecoveryPanel
+                    {vault}
+                    mode={vault.remoteVaultRecoveryPrompt}
+                    isBusy={isVerifying}
+                    onRecover={() => vault.confirmRecoverRemoteVault()}
+                    onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
+                    onDismiss={() => vault.clearRemoteVaultRecovery()}
+                  />
+                {/if}
+              {/snippet}
+            </GitHubProviderSetupWizard>
           {:else}
             <form
               novalidate
               onsubmit={handleFirstConnectSubmit}
               class="space-y-4"
             >
-              <ProviderSetupFields
-                {vault}
-                {setupType}
-                bind:githubPat
-                bind:githubRepo
-                idPrefix="login"
-                {onCancelSetup}
-              />
-              {#if vault.remoteVaultRecoveryPrompt !== 'none'}
-                <RemoteVaultRecoveryPanel
-                  {vault}
-                  mode={vault.remoteVaultRecoveryPrompt}
-                  isBusy={isVerifying}
-                  onRecover={() => vault.confirmRecoverRemoteVault()}
-                  onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
-                  onDismiss={() => vault.clearRemoteVaultRecovery()}
-                />
-              {/if}
+              <ProviderSetupFields {vault} {onCancelSetup} />
               <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   type="submit"
                   class="sm:min-w-[180px]"
                   data-testid="connect-provider-btn"
-                  disabled={!setupCanConnect ||
-                    vault.remoteVaultRecoveryPrompt !== 'none'}
+                  disabled={!setupCanConnect}
                 >
                   {#if isInitializing}
                     <RefreshCw class="size-4 animate-spin" />
