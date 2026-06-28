@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Cloud, HardDrive } from '@lucide/svelte'
-  import type { StorageProviderType } from '$lib/auth-providers'
+  import type {
+    OAuthFilePreset,
+    StorageProviderType,
+  } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -9,7 +12,7 @@
     excludeLocal = false,
   }: {
     vault: VaultState
-    onSelect: (type: StorageProviderType) => void
+    onSelect: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
     excludeLocal?: boolean
   } = $props()
 </script>
@@ -42,7 +45,7 @@
         type="button"
         class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-oauth-file"
-        onclick={() => onSelect('oauth-file')}
+        onclick={() => onSelect('oauth-file', 'google-drive')}
       >
         <svg
           class="size-4 shrink-0 text-foreground"
@@ -72,6 +75,33 @@
           >
           <span class="block truncate text-xs text-muted-foreground">
             {vault.t('provider_picker.google_drive_desc')}
+          </span>
+        </span>
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        data-testid="provider-option-icloud"
+        onclick={() => onSelect('oauth-file', 'icloud')}
+      >
+        <svg
+          class="size-4 shrink-0 text-foreground"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            fill="currentColor"
+            d="M13.762 4.29a6.51 6.51 0 0 0-11.025 4.126 5.243 5.243 0 0 0-2.326 8.65A4.92 4.92 0 0 0 12 22.5a4.8 4.8 0 0 0 4.7-3.84 6.48 6.48 0 0 0 2.084-12.84 6.5 6.5 0 0 0-4.022-1.59Z"
+          />
+        </svg>
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground"
+            >{vault.t('provider_picker.icloud')}</span
+          >
+          <span class="block truncate text-xs text-muted-foreground">
+            {vault.t('provider_picker.icloud_desc')}
           </span>
         </span>
       </button>

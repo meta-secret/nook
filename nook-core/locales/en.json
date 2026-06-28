@@ -357,7 +357,9 @@
     "sync_failed": "Sync failed for this provider.",
     "no_token_saved": "No token saved",
     "google_signed_in": "Signed in with Google",
-    "google_not_signed_in": "Not signed in with Google"
+    "google_not_signed_in": "Not signed in with Google",
+    "icloud_signed_in": "Signed in with iCloud",
+    "icloud_not_signed_in": "Not signed in with iCloud"
   },
   "pending_joins": {
     "one_wants_join": "1 device wants to join",
@@ -549,7 +551,9 @@
     "github": "GitHub",
     "github_desc": "Sign in to GitHub — sync encrypted vault to your repo",
     "google_drive": "Google Drive",
-    "google_drive_desc": "Sign in with Google — sync encrypted vault to your Drive app data"
+    "google_drive_desc": "Sign in with Google — sync encrypted vault to your Drive app data",
+    "icloud": "iCloud",
+    "icloud_desc": "Sign in with Apple — sync encrypted vault to your iCloud private database"
   },
   "provider_setup": {
     "change_provider": "Change provider",
@@ -570,7 +574,16 @@
     "google_signing_in": "Opening Google sign-in…",
     "google_signed_in_as": "Signed in as {account}",
     "google_tokens_local_desc": "OAuth tokens stay in this browser only, like a saved GitHub token.",
-    "google_oauth_unconfigured": "Google sign-in is not configured. Set GOOGLE_OAUTH_CLIENT_ID in google-oauth-config.ts."
+    "google_oauth_unconfigured": "Google sign-in is not configured. Set GOOGLE_OAUTH_CLIENT_ID in google-oauth-config.ts.",
+    "icloud_desc": "Nook stores your encrypted vault as a private CloudKit record in your iCloud account. Click Sign in with Apple — no API keys to copy.",
+    "icloud_connection_subtitle": "Sign in with Apple and choose your vault file",
+    "icloud_sync_subtitle": "Save this provider and reconcile with your vault",
+    "sign_in_with_icloud": "Sign in with Apple",
+    "icloud_signing_in": "Opening Apple sign-in…",
+    "icloud_signed_in_as": "Signed in as {account}",
+    "icloud_tokens_local_desc": "CloudKit web auth tokens stay in this browser only, like a saved GitHub token.",
+    "icloud_vault_file_desc": "Each name is a separate encrypted vault record in your iCloud private database.",
+    "icloud_oauth_unconfigured": "iCloud sign-in is not configured. Set ICLOUD_CONTAINER_ID and ICLOUD_API_TOKEN in icloud-oauth-config.ts."
   },
   "devices_card": {
     "single_device_warning": "Add another device before removing this one. A backup password helps with recovery, but at least one device key must remain enrolled.",

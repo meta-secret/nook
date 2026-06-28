@@ -6,7 +6,7 @@ import {
 
 export type StorageProviderType = 'local' | 'github' | 'oauth-file'
 
-export type OAuthFilePreset = 'google-drive'
+export type OAuthFilePreset = 'google-drive' | 'icloud'
 
 export interface OAuthFileConfig {
   preset: OAuthFilePreset
@@ -14,7 +14,7 @@ export interface OAuthFileConfig {
   refreshToken?: string
   expiresAt?: string
   fileId?: string
-  /** Vault file name in Drive app data (default `nook-vault.yaml`). */
+  /** Vault file name in Drive app data or CloudKit record name (default `nook-vault.yaml`). */
   fileName?: string
   accountEmail?: string
 }
@@ -134,7 +134,7 @@ function migrateProviderFields(
       return {
         ...provider,
         oauthFile: {
-          preset: 'google-drive' as const,
+          preset: existing?.preset ?? ('google-drive' as const),
           accessToken: existing?.accessToken ?? '',
           refreshToken: existing?.refreshToken,
           expiresAt: existing?.expiresAt,
@@ -241,12 +241,16 @@ export function wasmStorageModeForProvider(
   if (type === 'oauth-file' && oauthPreset === 'google-drive') {
     return 'google-drive'
   }
+  if (type === 'oauth-file' && oauthPreset === 'icloud') {
+    return 'icloud'
+  }
   return type
 }
 
 export function providerDefaultLabel(
   type: StorageProviderType,
   detail?: string,
+  oauthPreset: OAuthFilePreset = 'google-drive',
 ): string {
   if (type === 'github') {
     const repo = detail?.trim() || DEFAULT_GITHUB_REPO
@@ -254,6 +258,9 @@ export function providerDefaultLabel(
   }
   if (type === 'oauth-file') {
     const file = detail?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    if (oauthPreset === 'icloud') {
+      return file === DEFAULT_DRIVE_VAULT_FILE ? 'iCloud' : `iCloud · ${file}`
+    }
     return file === DEFAULT_DRIVE_VAULT_FILE
       ? 'Google Drive'
       : `Google Drive · ${file}`
@@ -277,6 +284,13 @@ export function localizeProviderLabel(
   }
   if (label === 'Google Drive') {
     return t('provider_picker.google_drive')
+  }
+  if (label.startsWith('iCloud · ')) {
+    const file = label.slice('iCloud · '.length)
+    return `${t('provider_picker.icloud')} · ${file}`
+  }
+  if (label === 'iCloud') {
+    return t('provider_picker.icloud')
   }
   if (label.startsWith('GitHub · ')) {
     const repo = label.slice('GitHub · '.length)
@@ -304,7 +318,15 @@ export function maskOAuthAccount(
   const email = oauth?.accountEmail?.trim()
   if (email) return email
   if (oauth?.accessToken?.trim()) {
+    if (oauth.preset === 'icloud') {
+      return t ? t('auth_storage.icloud_signed_in') : 'Signed in with iCloud'
+    }
     return t ? t('auth_storage.google_signed_in') : 'Signed in with Google'
+  }
+  if (oauth?.preset === 'icloud') {
+    return t
+      ? t('auth_storage.icloud_not_signed_in')
+      : 'Not signed in with iCloud'
   }
   return t ? t('auth_storage.google_not_signed_in') : 'Not signed in'
 }
