@@ -181,14 +181,14 @@ export class VaultState {
     return this.passwordEntries.length > 0 || this.unlockMode === 'password'
   }
 
-  /** Default 30s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
+  /** Default 60s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
   private static syncIntervalMs(): number {
     const raw = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS
     const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
     if (Number.isFinite(parsed) && parsed >= 250) {
       return parsed
     }
-    return 30_000
+    return 60_000
   }
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
@@ -2289,6 +2289,7 @@ export class VaultState {
         this.activeEnrollmentEntryId = null
       }
       this.showSuccess(this.t('toasts.password_removed'))
+      await this.fanOutSyncToProviders({ quiet: true })
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to remove vault password.'

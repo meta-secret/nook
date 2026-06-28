@@ -258,10 +258,11 @@ function configuredGithubConnectTimeoutMs(): number {
   return 30_000
 }
 
-/** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
+/** Background sync visibility — allow several ticks plus GitHub poll latency. */
 export const NOTIFICATION_TIMEOUT_MS = Math.max(
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
-  configuredVaultSyncIntervalMs() * 4,
+  configuredVaultSyncIntervalMs() * 6,
 )
 
 /** GitHub YAML polls are slow by design — prefer fewer API calls over fast failure. */
@@ -816,6 +817,15 @@ export async function waitForStableLocalVaultState(
 }
 
 /** Match vault password badge copy (`1 item` or legacy `1 password`). */
+export async function dismissSyncConflictIfVisible(page: Page) {
+  const dialog = page.getByTestId('vault-sync-conflict-dialog')
+  if (!(await dialog.isVisible())) return
+  await page.getByTestId('sync-conflict-keep-local-btn').click()
+  await expect(dialog).not.toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 export async function expectVaultPasswordStatus(
   page: Page,
   count: number | 'none',

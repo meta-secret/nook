@@ -18,8 +18,10 @@ Read `.cortex/AGENTS.md` before making changes.
    ```bash
    task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
    task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-   # If e2e failed:
+   # If e2e failed (match main.yml — save prod dist before e2e, restore after):
+   cp -a nook-web/dist nook-web/dist-prod
    task ci:main:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+   task web:e2e:restore-prod-dist
    ```
 3. Implement the minimal correct fix (match existing conventions).
 4. Verify the same CI tasks pass locally before opening a PR.
