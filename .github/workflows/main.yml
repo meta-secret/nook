@@ -1,5 +1,8 @@
 # Main branch: prepare once, then verify ‖ web build ‖ e2e in parallel (task ci:main:publish); deploy Pages.
 #
+# On CI failure: Cursor Agent (Docker) opens a fix PR and squash-merges when checks pass.
+# Requires repository secret CURSOR_API_KEY — see job ci-fix comments.
+#
 # Playwright browsers are pre-installed in the toolchain image.
 
 name: Main
@@ -18,6 +21,13 @@ concurrency:
   group: main
   cancel-in-progress: true
 
+env:
+  CI_MAIN_VITE_BASE: /
+  CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "1000"
+  CI_MAIN_GITHUB_POLL_MS: "3000"
+  CI_MAIN_GITHUB_SYNC_TIMEOUT_MS: "15000"
+  CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS: "30000"
+
 jobs:
   ci:
     name: Check, build, and e2e
@@ -32,22 +42,22 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare (format + wasm)
-        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:prepare VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
 
       - name: Verify and build
-        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:parallel VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
         env:
           CI: true
 
       - name: E2e (local ‖ GitHub)
-        run: task ci:main:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:e2e:parallel VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
         env:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}
-          NOOK_GITHUB_POLL_MS: '3000'
-          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
-          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
+          NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_SYNC_TIMEOUT_MS }}
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS }}
 
       - name: Push toolchain image
         run: task docker:push:ci
@@ -59,6 +69,44 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: nook-web/dist
+
+  ci-fix:
+    name: AI fix, PR, and merge
+    needs: ci
+    if: failure() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Cursor Agent fix loop
+        run: >-
+          task ci:fix:agent
+          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
+          VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          FIX_BRANCH: fix/ci-${{ github.run_id }}
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}-fix
+          NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_SYNC_TIMEOUT_MS }}
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS }}
 
   deploy:
     name: Deploy GitHub Pages
