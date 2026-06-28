@@ -1,18 +1,22 @@
 import { expect, test } from '@playwright/test'
-import { UI_TIMEOUT_MS, waitForEngine } from './helpers'
+import {
+  createLocalVaultOnLogin,
+  DEFAULT_LOCAL_VAULT_PASSWORD,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  openLegacyProviderSetup,
+  UI_TIMEOUT_MS,
+  waitForEngine,
+} from './helpers'
 
 test.describe('vault connect flow', () => {
-  test('connects local vault and opens vault directly', async ({ page }) => {
+  test('creates local vault with master password and opens vault', async ({
+    page,
+  }) => {
     await page.goto('/')
 
-    await page.getByTestId('provider-option-local').click()
-    const connectButton = await waitForEngine(page)
-    await connectButton.click()
+    await expect(page.getByTestId('login-create-vault-form')).toBeVisible()
+    await createLocalVaultOnLogin(page)
 
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Local vault loaded',
-      { timeout: UI_TIMEOUT_MS },
-    )
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
   })
@@ -20,6 +24,7 @@ test.describe('vault connect flow', () => {
   test('shows error when github mode has no pat', async ({ page }) => {
     await page.goto('/')
 
+    await openLegacyProviderSetup(page)
     await page.getByTestId('provider-option-github').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
@@ -29,27 +34,32 @@ test.describe('vault connect flow', () => {
     )
   })
 
-  test('connect button stays clickable while engine loads', async ({
+  test('create vault button stays disabled until passwords match', async ({
     page,
   }) => {
     await page.goto('/')
 
-    await page.getByTestId('provider-option-local').click()
-    const connectButton = page.getByTestId('connect-provider-btn')
-    await expect(connectButton).toBeVisible()
-    await connectButton.click({ force: true })
-
-    await expect(
-      page.getByTestId('vault-error').or(page.getByTestId('vault-panel')),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const createBtn = page.getByTestId('login-create-vault-btn')
+    await expect(createBtn).toBeDisabled()
+    await page.getByTestId('login-create-password-input').fill('short')
+    await expect(createBtn).toBeDisabled()
+    await page
+      .getByTestId('login-create-password-confirm')
+      .fill('different-password-1')
+    await expect(createBtn).toBeDisabled()
+    await page.getByTestId('login-create-password-input').fill('valid-password-1')
+    await page
+      .getByTestId('login-create-password-confirm')
+      .fill('valid-password-1')
+    await expect(createBtn).toBeEnabled()
   })
 
   test('shows login gate on first visit', async ({ page }) => {
     await page.goto('/')
 
     await expect(page.getByTestId('login-gate')).toBeVisible()
-    await expect(page.getByTestId('provider-option-local')).toBeVisible()
-    await expect(page.getByTestId('provider-option-github')).toBeVisible()
+    await expect(page.getByTestId('login-create-vault-form')).toBeVisible()
+    await expect(page.getByTestId('login-legacy-provider-setup-link')).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(
       page.getByTestId('login-unlock-method-fieldset'),
@@ -80,8 +90,7 @@ test.describe('vault connect flow', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByTestId('provider-option-local').click()
-    await (await waitForEngine(page)).click()
+    await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -98,24 +107,29 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('settings-providers-list')).toBeVisible()
   })
 
-  test('unlock saved local provider without re-setup', async ({ page }) => {
+  test('unlock local vault with master password after reload', async ({
+    page,
+  }) => {
     await page.goto('/')
-    await page.getByTestId('provider-option-local').click()
-    await (await waitForEngine(page)).click()
+    await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
     await page.reload()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
+    })
+    await page.getByTestId('login-master-password-input').fill(DEFAULT_LOCAL_VAULT_PASSWORD)
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })
 
   test('removes a saved provider from vault settings', async ({ page }) => {
     await page.goto('/')
-    await page.getByTestId('provider-option-local').click()
-    await (await waitForEngine(page)).click()
+    await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -139,7 +153,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible()
     await expect(page.getByTestId('settings-provider-local')).toHaveCount(0)
   })
 })

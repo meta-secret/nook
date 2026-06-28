@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { clearBrowserVault, connectLocalVault, UI_TIMEOUT_MS } from './helpers'
+import { clearBrowserVault, connectLocalVaultLegacy as connectLocalVault, UI_TIMEOUT_MS } from './helpers'
 
 test.describe('authenticated shell height', () => {
   test.beforeEach(async ({ page }) => {

@@ -60,6 +60,7 @@ import {
   lookupTranslation,
   resolveTranslationCatalog,
 } from '$lib/locale-catalogs'
+import { hasLocalVault } from '$lib/local-vault'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -75,6 +76,9 @@ export class VaultState {
   providers = $state<StorageProvider[]>([])
   activeProviderId = $state<string | null>(null)
   providersLoaded = $state(false)
+  /** True when `nook_db.encrypted_db` holds a vault blob (local-first model). */
+  localVaultPresent = $state(false)
+  localLoginPrepared = $state(false)
   loginSetupType = $state<StorageProviderType | null>(null)
   addProviderOpen = $state(false)
 
@@ -395,7 +399,14 @@ export class VaultState {
       await this.updateLocale(locale)
 
       await this.loadProviders()
-      this.applyActiveProviderCredentials()
+      this.localVaultPresent = await hasLocalVault()
+      if (this.localVaultPresent) {
+        this.storageMode = 'local'
+        this.githubPat = ''
+        this.oauthFile = null
+      } else {
+        this.applyActiveProviderCredentials()
+      }
       this.manager = await getVaultManager()
       await this.updateLocale(locale, { preferWasm: true })
       await this.initDeviceIdentity()
@@ -409,6 +420,10 @@ export class VaultState {
     }
 
     const hasPendingEnrollment = Boolean(this.pendingEnrollmentFromUrl)
+    if (this.localVaultPresent && this.manager) {
+      this.storageMode = 'local'
+      await this.refreshPasswordEntriesList()
+    }
     const autoUnlock = !hasPendingEnrollment && this.shouldAutoUnlock()
     if (autoUnlock) {
       await this.loadDb()
@@ -439,12 +454,71 @@ export class VaultState {
   }
 
   private shouldAutoUnlock(): boolean {
+    if (this.localVaultPresent && this.passwordEntries.length > 0) {
+      return false
+    }
     return (
       this.providers.length === 1 &&
       this.activeProvider !== null &&
       this.loginSetupType === null &&
       !this.addProviderOpen
     )
+  }
+
+  /** Prepare login gate for local vault unlock (password or device keys). */
+  async prepareLocalLogin(): Promise<void> {
+    if (!this.localVaultPresent || this.localLoginPrepared) return
+    this.storageMode = 'local'
+    this.githubPat = ''
+    this.oauthFile = null
+    this.loginFlowStep = 'authorization'
+    await this.refreshPasswordEntriesList()
+    this.localLoginPrepared = true
+  }
+
+  /**
+   * First-time setup: create a local vault and set the master password.
+   * Closes #62 Phase 1.3.
+   */
+  async createLocalVault(password: string): Promise<void> {
+    if (!this.manager) {
+      this.errorMsg = 'Vault engine is not available.'
+      return
+    }
+    if (this.isVerifying) return
+    if (password.trim().length < 8) {
+      this.errorMsg = this.t('login.password_too_short')
+      return
+    }
+
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.storageMode = 'local'
+    this.githubPat = ''
+    this.oauthFile = null
+    this.isVerifying = true
+
+    try {
+      await this.initDeviceIdentity()
+      const rawRecords = (await this.enqueueStorage(() =>
+        this.manager!.connect('local', '', ''),
+      )) as NookSecretRecord[]
+      this.secrets = mapWasmRecords(rawRecords)
+      this.isAuthenticated = true
+      await this.addVaultPassword(this.t('login.master_password_label'), password)
+      this.localVaultPresent = true
+      this.localLoginPrepared = true
+      await this.ensureProviderSaved()
+      await this.hydrateMultiDeviceState()
+      this.showSuccess(this.t('toasts.local_loaded'))
+      this.startVaultSync()
+    } catch (e: unknown) {
+      this.isAuthenticated = false
+      this.errorMsg =
+        e instanceof Error ? e.message : 'Failed to create local vault.'
+    } finally {
+      this.isVerifying = false
+    }
   }
 
   async loadProviders() {

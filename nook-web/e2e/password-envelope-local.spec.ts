@@ -4,10 +4,11 @@ import {
   addVaultPassword,
   assertVaultReady,
   clearBrowserVault,
-  connectLocalVault,
+  connectLocalVaultLegacy,
   expandSettingsSection,
   openStorageSettings,
   revealSecretInRow,
+  selectLoginUnlockMethod,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
@@ -26,7 +27,7 @@ test.describe('vault password envelope (local)', () => {
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVault(page)
+    await connectLocalVaultLegacy(page)
   })
 
   test('adds backup passwords without replacing device-key unlock', async ({
@@ -81,9 +82,13 @@ test.describe('vault password envelope (local)', () => {
     )
 
     await page.reload()
-    // Single saved provider auto-unlocks with device keys — no password prompt.
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
+    })
+    await selectLoginUnlockMethod(page, 'keys')
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
 
@@ -282,7 +287,7 @@ test.describe('enrollment link deep link (local)', () => {
     await pageA.goto('/')
     await clearBrowserVault(pageA)
     await pageA.reload()
-    await connectLocalVault(pageA)
+    await connectLocalVaultLegacy(pageA)
     const secretKey = uniqueSecretKey('e2e-link')
     await addSecret(pageA, secretKey, 'via-hash-enroll')
 

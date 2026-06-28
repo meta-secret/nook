@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import {
   addVaultPassword,
   clearBrowserVault,
-  connectLocalVault,
+  connectLocalVaultLegacy as connectLocalVault,
   createE2eGithubRepoName,
   disableLoginAutoUnlock,
   expandSettingsSection,
