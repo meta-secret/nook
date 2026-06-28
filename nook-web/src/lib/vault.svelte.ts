@@ -73,6 +73,7 @@ import {
   parseVaultStoreIdMismatch,
   readLocalVaultBlob,
   readVaultVersionFromBlob,
+  resolveVaultSyncIntervalMs,
   resolveVaultSyncConflictKeepLocal,
   resolveVaultSyncConflictKeepRemote,
   writeLocalVaultBlob,
@@ -181,14 +182,9 @@ export class VaultState {
     return this.passwordEntries.length > 0 || this.unlockMode === 'password'
   }
 
-  /** Default 60s; override with VITE_VAULT_SYNC_INTERVAL_MS (min 250) for e2e. */
+  /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
   private static syncIntervalMs(): number {
-    const raw = import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS
-    const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
-    if (Number.isFinite(parsed) && parsed >= 250) {
-      return parsed
-    }
-    return 60_000
+    return resolveVaultSyncIntervalMs(import.meta.env)
   }
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
