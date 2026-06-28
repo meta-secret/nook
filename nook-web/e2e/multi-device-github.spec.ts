@@ -5,30 +5,32 @@ import {
   approveJoinFromSettings,
   assertEnrolledVaultOnGithub,
   assertVaultReady,
-  connectGithubGenesisDevice,
-  connectGithubJoinerDevice,
-  createE2eGithubRepoName,
   createIsolatedContext,
   expandSettingsSection,
-  githubPat,
   openStorageSettings,
-  resetGithubVault,
-  finishE2eGithubSuite,
   revealSecretValue,
   sendJoinRequest,
   unlockGithubVault,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   NOTIFICATION_TIMEOUT_MS,
-  waitForSecretOnDevice,
   waitForGithubVaultState,
-  waitForVaultYaml,
+  waitForSecretOnDevice,
 } from './helpers'
 import { parseVaultYamlSnapshot, assertGenesisVaultYaml } from './vault-yaml'
+import {
+  createSyncTarget,
+  installSyncStubOnPages,
+  connectSyncGenesisDevice,
+  connectSyncJoinerDevice,
+  e2eSyncProviderDef,
+  resolveE2eSyncProvider,
+  type SyncE2eTarget,
+} from './sync-provider'
 
-const describeMultiDevice = githubPat ? test.describe : test.describe.skip
+const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
-describeMultiDevice('multi-device github vault', () => {
+test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
@@ -36,7 +38,7 @@ describeMultiDevice('multi-device github vault', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let e2eRepo: string
+  let target: SyncE2eTarget
 
   const genesisSecretKey = uniqueSecretKey('e2e-md-genesis')
   const genesisSecretValue = 'genesis-device-password'
@@ -45,22 +47,19 @@ describeMultiDevice('multi-device github vault', () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    e2eRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat, e2eRepo)
+    target = createSyncTarget('', 'multi-device')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await connectGithubGenesisDevice(deviceA, githubPat, e2eRepo)
-    await addSecret(deviceA, genesisSecretKey, genesisSecretValue, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
+    await addSecret(deviceA, genesisSecretKey, genesisSecretValue, target)
 
     const genesisYaml = await waitForGithubVaultState(
-      { pat: githubPat, repoName: e2eRepo },
+      target,
       (yaml) =>
         yaml.authPkIds.length >= 1 &&
         yaml.memberPkIds.length >= 1 &&
@@ -76,19 +75,22 @@ describeMultiDevice('multi-device github vault', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('device B sees join dialog and sends a join request', async () => {
-    await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
-    const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
+    await connectSyncJoinerDevice(deviceB, target)
+    const join = await sendJoinRequest(
+      deviceB,
+      target.pat,
+      target.repoName,
+      target.stub,
+    )
 
     expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
     expect(join.publicKey).toMatch(/^age1/)
 
-    const yaml = await waitForVaultYaml(
-      githubPat,
-      e2eRepo,
+    const yaml = await waitForGithubVaultState(
+      target,
       (snapshot) => snapshot.joinEntries.length === 1,
     )
     expect(yaml.joinEntries[0].deviceId).toBe(join.deviceId)
@@ -96,7 +98,6 @@ describeMultiDevice('multi-device github vault', () => {
   })
 
   test('device A sees pending join after manual vault refresh', async () => {
-    const target = { pat: githubPat, repoName: e2eRepo }
     const join = (
       await waitForGithubVaultState(
         target,
@@ -118,7 +119,6 @@ describeMultiDevice('multi-device github vault', () => {
   })
 
   test('device A sees pending join and approves from banner', async () => {
-    const target = { pat: githubPat, repoName: e2eRepo }
     const join = (
       await waitForGithubVaultState(
         target,
@@ -132,11 +132,7 @@ describeMultiDevice('multi-device github vault', () => {
 
     await approveJoinFromBanner(deviceA, join.deviceId, target, 2)
 
-    const enrolledYaml = await assertEnrolledVaultOnGithub(
-      githubPat,
-      e2eRepo,
-      2,
-    )
+    const enrolledYaml = await assertEnrolledVaultOnGithub(target, 2)
     expect(enrolledYaml.secretIds).toHaveLength(1)
     expect(enrolledYaml.authPkIds).toHaveLength(2)
     expect(enrolledYaml.memberPkIds).toHaveLength(2)
@@ -145,33 +141,24 @@ describeMultiDevice('multi-device github vault', () => {
   })
 
   test('device B unlocks and reads genesis secret', async () => {
-    await unlockGithubVault(deviceB, { pat: githubPat, repoName: e2eRepo })
+    await unlockGithubVault(deviceB, target)
     await assertVaultReady(deviceB)
 
-    await waitForSecretOnDevice(deviceB, genesisSecretKey, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
+    await waitForSecretOnDevice(deviceB, genesisSecretKey, target)
     const revealed = await revealSecretValue(deviceB, genesisSecretKey)
     expect(revealed).toBe(genesisSecretValue)
   })
 
   test('both devices can add secrets and see shared vault state', async () => {
-    await addSecret(deviceB, joinerSecretKey, joinerSecretValue, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
+    await addSecret(deviceB, joinerSecretKey, joinerSecretValue, target)
 
     const yaml = await waitForGithubVaultState(
-      { pat: githubPat, repoName: e2eRepo },
+      target,
       (snapshot) => snapshot.secretIds.length >= 2,
     )
     expect(yaml.secretIds).toHaveLength(2)
 
-    await waitForSecretOnDevice(deviceA, joinerSecretKey, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
+    await waitForSecretOnDevice(deviceA, joinerSecretKey, target)
     const revealed = await revealSecretValue(deviceA, joinerSecretKey)
     expect(revealed).toBe(joinerSecretValue)
   })
@@ -188,7 +175,7 @@ describeMultiDevice('multi-device github vault', () => {
   })
 })
 
-describeMultiDevice('multi-device approve from settings', () => {
+test.describe(`multi-device approve from settings (${providerLabel} stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
@@ -196,19 +183,19 @@ describeMultiDevice('multi-device approve from settings', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let e2eRepo: string
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    e2eRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat, e2eRepo)
+    target = createSyncTarget('', 'multi-device-settings')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await connectGithubGenesisDevice(deviceA, githubPat, e2eRepo)
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
   })
 
   test.afterAll(async () => {
@@ -216,39 +203,31 @@ describeMultiDevice('multi-device approve from settings', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('approves join from vault banner', async () => {
-    await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
-    const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
-
-    await approveJoinFromSettings(
-      deviceA,
-      join.deviceId,
-      {
-        pat: githubPat,
-        repoName: e2eRepo,
-      },
-      2,
+    await connectSyncJoinerDevice(deviceB, target)
+    const join = await sendJoinRequest(
+      deviceB,
+      target.pat,
+      target.repoName,
+      target.stub,
     )
 
-    const enrolledYaml = await assertEnrolledVaultOnGithub(
-      githubPat,
-      e2eRepo,
-      2,
-    )
+    await approveJoinFromSettings(deviceA, join.deviceId, target, 2)
+
+    const enrolledYaml = await assertEnrolledVaultOnGithub(target, 2)
     const parsed = parseVaultYamlSnapshot(enrolledYaml.raw)
     expect(parsed.joinEntries).toHaveLength(0)
     expect(parsed.authPkIds).toHaveLength(2)
     expect(parsed.memberPkIds).toHaveLength(2)
 
-    await unlockGithubVault(deviceB, { pat: githubPat, repoName: e2eRepo })
+    await unlockGithubVault(deviceB, target)
     await assertVaultReady(deviceB)
   })
 })
 
-describeMultiDevice('multi-device join background sync', () => {
+test.describe(`multi-device join background sync (${providerLabel} stub sync)`, () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
@@ -256,19 +235,19 @@ describeMultiDevice('multi-device join background sync', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let e2eRepo: string
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(120_000)
-    e2eRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat, e2eRepo)
+    target = createSyncTarget('', 'multi-device-bg')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await connectGithubGenesisDevice(deviceA, githubPat, e2eRepo)
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
   })
 
   test.afterAll(async () => {
@@ -276,15 +255,19 @@ describeMultiDevice('multi-device join background sync', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('device A eventually sees pending join without manual refresh', async () => {
-    await connectGithubJoinerDevice(deviceB, githubPat, e2eRepo)
-    const join = await sendJoinRequest(deviceB, githubPat, e2eRepo)
+    await connectSyncJoinerDevice(deviceB, target)
+    const join = await sendJoinRequest(
+      deviceB,
+      target.pat,
+      target.repoName,
+      target.stub,
+    )
 
     await waitForGithubVaultState(
-      { pat: githubPat, repoName: e2eRepo },
+      target,
       (snapshot) => snapshot.joinEntries.length === 1,
     )
 

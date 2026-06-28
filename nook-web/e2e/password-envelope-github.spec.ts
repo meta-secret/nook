@@ -3,17 +3,12 @@ import {
   addSecret,
   addVaultPassword,
   assertVaultReady,
-  connectGithubGenesisDevice,
-  createE2eGithubRepoName,
   createIsolatedContext,
   dismissSyncConflictIfVisible,
   expandSettingsSection,
   expandLoginEnrollmentPanel,
   expectVaultPasswordStatus,
-  finishE2eGithubSuite,
-  githubPat,
   openStorageSettings,
-  resetGithubVault,
   revealSecretValue,
   rotateVaultPassword,
   submitOnboardEnrollmentCode,
@@ -25,20 +20,14 @@ import {
   waitForStableLocalVaultState,
   waitForVaultUnlocked,
 } from './helpers'
+import {
+  createSyncTarget,
+  installSyncStubOnPages,
+  connectSyncGenesisDevice,
+  type SyncE2eTarget,
+} from './sync-provider'
 
-/**
- * Multi-device coverage for the password-envelope feature on GitHub.
- *
- * Verifies the one-step QR enrolment flow that bypasses the approval
- * round-trip: device A wraps the active vault keys with a password,
- * issues an enrollment code (provider creds + password), and device B
- * pastes the code into its login screen — no second device approval
- * needed.
- */
-
-const describePasswordEnvelope = githubPat ? test.describe : test.describe.skip
-
-describePasswordEnvelope('vault password envelope (github)', () => {
+test.describe('vault password envelope (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(180_000)
 
@@ -46,7 +35,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let e2eRepo: string
+  let target: SyncE2eTarget
 
   const sharedSecretKey = uniqueSecretKey('e2e-pw-shared')
   const sharedSecretValue = 'shared-via-qr-enrollment'
@@ -54,19 +43,16 @@ describePasswordEnvelope('vault password envelope (github)', () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000)
-    e2eRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat, e2eRepo)
+    target = createSyncTarget('', 'password-envelope')
 
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await connectGithubGenesisDevice(deviceA, githubPat, e2eRepo)
-    await addSecret(deviceA, sharedSecretKey, sharedSecretValue, {
-      pat: githubPat,
-      repoName: e2eRepo,
-    })
+    await installSyncStubOnPages([deviceA, deviceB], target)
+    await connectSyncGenesisDevice(deviceA, target)
+    await addSecret(deviceA, sharedSecretKey, sharedSecretValue, target)
   })
 
   test.afterAll(async () => {
@@ -74,7 +60,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceB?.close()
     await contextA?.close()
     await contextB?.close()
-    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('attaching a password switches the vault to password unlock mode', async () => {
@@ -84,7 +69,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await addVaultPassword(deviceA, 'GitHub vault', vaultPassword)
     await deviceA.getByTestId('vault-secrets-tab').click()
 
-    // Hybrid model: backup password coexists with device-key auth rows.
     const yaml = await waitForStableLocalVaultState(
       deviceA,
       (snapshot) =>
@@ -94,10 +78,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     expect(yaml.hasPasswordEnvelope).toBe(true)
     expect(yaml.authPkIds.length).toBeGreaterThanOrEqual(1)
     expect(yaml.joinEntries).toHaveLength(0)
-    // Members roster survives the mode switch.
     expect(yaml.memberPkIds.length).toBeGreaterThanOrEqual(1)
-    // Secrets are unchanged. The vault stores generated IDs (not the
-    // user-typed label) so we assert presence by count rather than name.
     expect(yaml.secretIds.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -125,19 +106,14 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     expect(typeof outer.issued_at).toBe('string')
     expect(Date.parse(outer.issued_at)).not.toBeNaN()
 
-    // Persist the code for the next test.
     test.info().annotations.push({ type: 'enrollment-code', description: code })
   })
 
   test('device B self-enrols via the pasted code without approval', async () => {
-    // Recover the code emitted in the previous test. (Tests are serial.)
     const codeArea = deviceA.getByTestId('onboard-code')
     const code = (await codeArea.inputValue()).trim()
     expect(code.length).toBeGreaterThan(40)
 
-    // Device B starts from a clean state — no saved providers, no device
-    // identity. The enrollment code is the only thing it knows about the
-    // vault.
     await deviceB.goto('/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -152,8 +128,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await waitForVaultUnlocked(deviceB, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await assertVaultReady(deviceB)
 
-    // The shared secret decrypts on device B with the keys it pulled from
-    // the password envelope — no auth row was ever written for device B.
     const row = deviceB
       .getByTestId('secret-row')
       .filter({ hasText: sharedSecretKey })
@@ -161,8 +135,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     const revealed = await revealSecretValue(deviceB, sharedSecretKey)
     expect(revealed).toBe(sharedSecretValue)
 
-    // Local-first: device B holds an enrolled copy locally; GitHub roster may
-    // lag until fan-out sync completes.
     const localYaml = await waitForLocalVaultState(
       deviceB,
       (snapshot) =>
@@ -172,7 +144,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     expect(localYaml.secretIds.length).toBeGreaterThanOrEqual(1)
 
     const yaml = await waitForGithubVaultState(
-      { pat: githubPat, repoName: e2eRepo },
+      target,
       (snapshot) => snapshot.memberPkIds.length >= 1,
       { page: deviceB, timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
@@ -181,13 +153,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
   })
 
   test('rotating the password rewrites the envelope on github', async () => {
-    // The cryptographic guarantee is straightforward: rotation produces a
-    // brand-new scrypt envelope (different salt + nonce + ciphertext) so a
-    // code carrying the old password can no longer decrypt it. We verify
-    // this at the YAML level rather than via a second-device paste,
-    // because GitHub CDN caching makes a real two-device race flaky in
-    // CI — the cryptographic invariant is what actually matters.
-
     const before = await waitForLocalVaultState(
       deviceA,
       (snapshot) => snapshot.hasPasswordEnvelope,
@@ -198,8 +163,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await openStorageSettings(deviceA)
     await rotateVaultPassword(deviceA, 'rotated-pw-9')
 
-    // A new scrypt envelope (different salt + nonce + ciphertext) proves rotation
-    // rewrote the vault — QR codes issued before rotation stop unlocking.
     const after = await waitForStableLocalVaultState(
       deviceA,
       (snapshot) =>
@@ -213,13 +176,11 @@ describePasswordEnvelope('vault password envelope (github)', () => {
   })
 
   test('removing the backup password leaves device-key unlock intact', async () => {
-    // Settings panel is still open from the previous test; only re-open
-    // when it's been closed.
     if (!(await deviceA.getByTestId('storage-settings-panel').isVisible())) {
       await openStorageSettings(deviceA)
     }
     await waitForGithubVaultState(
-      { pat: githubPat, repoName: e2eRepo },
+      target,
       (snapshot) => snapshot.hasPasswordEnvelope,
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
@@ -228,7 +189,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     await deviceA.getByTestId('remove-vault-password-btn').click()
     await deviceA.getByTestId('confirm-remove-vault-password').click()
     await waitForGithubVaultState(
-      { pat: githubPat, repoName: e2eRepo },
+      target,
       (snapshot) => !snapshot.hasPasswordEnvelope,
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
@@ -236,7 +197,6 @@ describePasswordEnvelope('vault password envelope (github)', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    // Local vault stays in keys mode; only the backup password section is removed.
     const yaml = await waitForLocalVaultState(
       deviceA,
       (snapshot) =>
