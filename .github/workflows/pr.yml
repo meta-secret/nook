@@ -1,7 +1,7 @@
-# Pull requests: one job — build toolchain once, verify ‖ web build in parallel containers, deploy preview.
+# Pull requests: build toolchain once, verify ‖ web build, local Playwright e2e, deploy preview.
 #
-# Playwright e2e runs on main (local + sync-stub) and nightly (sync-live). See e2e-pr.yml for manual PR e2e.
-#
+# Local e2e (~1 min) runs in ci:pr — IndexedDB specs, no external API rate limits.
+# Main CI adds sync-stub e2e; nightly runs sync-live. See e2e-pr.yml for manual PR e2e.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
@@ -36,6 +36,7 @@ jobs:
       - name: Verify, build preview, and push toolchain
         run: task ci:pr:publish VITE_BASE=/
         env:
+          CI: true
           PUSH_TOOLCHAIN: "1"
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 

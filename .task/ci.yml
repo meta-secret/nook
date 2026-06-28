@@ -2,12 +2,20 @@ version: '3'
 
 tasks:
   ci:pr:
-    desc: PR CI — prepare once, then verify and web build in parallel (separate containers).
+    desc: PR CI — prepare, verify ‖ build, then local Playwright e2e (~1 min).
     deps:
       - setup
     cmds:
       - task: ci:pr:prepare
       - task: ci:pr:parallel
+      - task: ci:pr:e2e:local
+
+  ci:pr:e2e:local:
+    desc: Local Playwright e2e for PR CI (IndexedDB specs; restores dist for Cloudflare preview).
+    cmds:
+      - cp -a nook-web/dist nook-web/dist-prod
+      - task: web:test:e2e:local:parallel
+      - task: web:e2e:restore-prod-dist
 
   ci:pr:publish:
     desc: PR CI verify, then push toolchain to GHCR on success (buildx registry push).
