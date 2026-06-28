@@ -70,6 +70,7 @@ import {
 import {
   attemptReconcileVaultSyncBlobs,
   fetchRemoteVaultBlob,
+  parseVaultStoreIdMismatch,
   readLocalVaultBlob,
   readVaultVersionFromBlob,
   resolveVaultSyncConflictKeepLocal,
@@ -312,6 +313,50 @@ export class VaultState {
     if (!remote.content.trim()) {
       return 'ok'
     }
+
+    try {
+      return await this.reconcileStagedRemoteWithLocalBlobs({
+        localYaml,
+        remote,
+        mode,
+        pat,
+        repo,
+        options,
+      })
+    } catch (error: unknown) {
+      const mismatch = parseVaultStoreIdMismatch(error)
+      if (!mismatch) {
+        throw error
+      }
+      await this.stageVaultSyncConflict({
+        providerId:
+          options?.providerId ??
+          this.syncProviders[this.syncProviders.length - 1]?.id ??
+          '__pending_provider__',
+        providerLabel: this.stagedProviderLabel(),
+        localYaml,
+        remoteYaml: remote.content,
+        mode,
+        pat,
+        repo,
+        remoteRevision: remote.revision,
+        kind: 'store_id',
+        localStoreId: mismatch.localStoreId,
+        remoteStoreId: mismatch.remoteStoreId,
+      })
+      return 'conflict'
+    }
+  }
+
+  private async reconcileStagedRemoteWithLocalBlobs(ctx: {
+    localYaml: string
+    remote: Awaited<ReturnType<typeof fetchRemoteVaultBlob>>
+    mode: string
+    pat: string
+    repo: string
+    options?: { providerId?: string; quiet?: boolean }
+  }): Promise<'ok' | 'conflict'> {
+    const { localYaml, remote, mode, pat, repo, options } = ctx
 
     const attempt = attemptReconcileVaultSyncBlobs(
       localYaml,
