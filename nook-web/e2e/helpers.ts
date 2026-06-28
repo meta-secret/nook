@@ -56,7 +56,6 @@ export function createE2eGithubRepoName(): string {
   if (override) {
     registerE2eGithubRepo(override)
     cachedE2eGithubRepoName = override
-    console.log(`[e2e] shared GitHub repo: ${override}`)
     return override
   }
 
@@ -64,7 +63,6 @@ export function createE2eGithubRepoName(): string {
   const repoName = `nook-${suffix}`
   registerE2eGithubRepo(repoName)
   cachedE2eGithubRepoName = repoName
-  console.log(`[e2e] GitHub repo: ${repoName}`)
   return repoName
 }
 
@@ -643,7 +641,7 @@ export async function approveJoinFromBanner(
   await waitForPendingJoinOnDevice(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(target, expectedMembers)
+  await assertEnrolledVaultOnGithub(target, expectedMembers, undefined, page)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
@@ -655,10 +653,28 @@ export async function approveJoinFromSettings(
 ) {
   await openStorageSettings(page)
   await expandSettingsSection(page, 'devices')
+  await waitForPendingJoinInSettings(page, deviceId)
   const row = page.getByTestId('pending-join-row').filter({ hasText: deviceId })
   await row.getByTestId('approve-join-btn').click()
-  await assertEnrolledVaultOnGithub(target, expectedMembers)
+  await assertEnrolledVaultOnGithub(target, expectedMembers, undefined, page)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+async function waitForPendingJoinInSettings(page: Page, deviceId: string) {
+  const row = page.getByTestId('pending-join-row').filter({ hasText: deviceId })
+  const refresh = page.getByTestId('vault-sync-refresh-btn')
+  await expect
+    .poll(
+      async () => {
+        if (await row.isVisible()) return true
+        if ((await refresh.isVisible()) && (await refresh.isEnabled())) {
+          await refresh.click()
+        }
+        return row.isVisible()
+      },
+      { timeout: configuredGithubSyncTimeoutMs() },
+    )
+    .toBe(true)
 }
 
 async function dismissJoinEnrollmentDialog(page: Page) {
@@ -1667,6 +1683,7 @@ export async function assertEnrolledVaultOnGithub(
   target: GithubE2eTarget | string,
   repoNameOrMembers?: string | number,
   expectedMembers?: number,
+  page?: Page,
 ) {
   const resolved: GithubE2eTarget =
     typeof target === 'string'
@@ -1682,6 +1699,7 @@ export async function assertEnrolledVaultOnGithub(
       yaml.joinEntries.length === 0 &&
       yaml.authPkIds.length === members &&
       yaml.memberPkIds.length === members,
+    { page },
   )
   assertEnrolledVaultYaml(snapshot, members)
   return snapshot

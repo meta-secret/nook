@@ -205,7 +205,7 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
     await contextB?.close()
   })
 
-  test('approves join from vault banner', async () => {
+  test('approves join from settings', async () => {
     await connectSyncJoinerDevice(deviceB, target)
     const join = await sendJoinRequest(
       deviceB,

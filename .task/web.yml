@@ -266,6 +266,8 @@ tasks:
 
   _web:test:e2e:local:parallel:
     desc: Local Playwright project when wasm is already built (ci:main parallel track).
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
     cmds:
       - echo "==> Playwright local project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
       - cd nook-web && bun run test:e2e:local
