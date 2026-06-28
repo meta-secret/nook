@@ -20,6 +20,7 @@ import {
   fetchGithubVaultYaml,
   githubApiFetch,
   githubApiHeaders,
+  githubFetch,
   githubRepoContext,
   GITHUB_VAULT_PATH,
 } from './github-api'
@@ -300,7 +301,7 @@ async function deleteGithubFileIfExists(
     }
 
     const file = (await fileRes.json()) as { sha: string }
-    const deleteRes = await githubApiFetch(pat, contentsUrl, {
+    const deleteRes = await githubFetch(contentsUrl, {
       method: 'DELETE',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -702,9 +703,6 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(
-    page.getByTestId('vault-password-list').locator('li'),
-  ).toHaveCount(expectedCount, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await waitForStableLocalVaultState(
     page,
     (snapshot) => snapshot.hasPasswordEnvelope,

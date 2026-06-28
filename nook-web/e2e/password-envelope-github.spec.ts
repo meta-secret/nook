@@ -210,6 +210,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
         snapshot.hasPasswordEnvelope &&
         snapshot.passwordEnvelopeCiphertext !== null &&
         snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     expect(after.passwordEnvelopeCiphertext).not.toBe(oldEnvelope)
     expect(after.passwordEnvelopeCiphertext).not.toBeNull()

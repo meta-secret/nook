@@ -2082,7 +2082,7 @@ export class VaultState {
           ? this.t('toasts.password_added_rotate')
           : this.t('toasts.password_set'),
       )
-      this.scheduleFanOutSyncAfterLocalSave()
+      await this.fanOutSyncToProviders({ quiet: true })
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to add vault password.'
