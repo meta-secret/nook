@@ -297,13 +297,15 @@
         <div class="space-y-3">
           {#each groups as group (group.site)}
             {@const Icon = getGroupIcon(group.items)}
-            {@const loneSecureNote =
-              group.items.length === 1 && group.items[0].type === 'secure-note'}
+            {@const titleAsCardHeader =
+              group.items.length === 1 &&
+              (group.items[0].type === 'secure-note' ||
+                group.items[0].type === 'login')}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"
             >
-              {#if !loneSecureNote}
+              {#if !titleAsCardHeader}
                 <div
                   class="flex items-center gap-2.5 border-b border-border/30 bg-muted/10 px-3 py-2.5 sm:border-border/50"
                 >
@@ -330,7 +332,7 @@
               {/if}
 
               <CardContent
-                class="space-y-3 divide-y divide-border/30 p-3 sm:divide-border/45 {loneSecureNote
+                class="space-y-3 divide-y divide-border/30 p-3 sm:divide-border/45 {titleAsCardHeader
                   ? '!p-0'
                   : ''}"
               >
@@ -338,7 +340,7 @@
                   <SecretDetailRow
                     {item}
                     {index}
-                    titleAsHeader={loneSecureNote}
+                    titleAsHeader={titleAsCardHeader}
                     expanded={Boolean(expandedSecrets[item.id])}
                     {revealSecrets}
                     {copiedKey}
