@@ -19,9 +19,9 @@ mod types;
 
 pub use manager::NookVaultManager;
 pub use types::{
-    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult,
-    NookRemoteVaultFetch, NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult,
-    NookSecretFormFields, NookVaultMember, NookVaultSyncResult,
+    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
+    NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult, NookSecretFormFields,
+    NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 

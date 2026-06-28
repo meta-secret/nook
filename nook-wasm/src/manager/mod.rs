@@ -26,8 +26,6 @@ mod sync;
 
 use crate::NookError;
 use crate::conversion::{apply_member_records, pending_joins_to_vec, vault_members_to_vec};
-use crate::types::records_to_vec;
-use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use crate::storage::{
     drive::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
@@ -39,6 +37,8 @@ use crate::storage::{
         save_vault_local_cache,
     },
 };
+use crate::types::records_to_vec;
+use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::wasm_bindgen;
 

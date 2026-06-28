@@ -172,7 +172,9 @@ pub fn resolve_vault_conflict_keep_local(
     let local = MemoryVaultStore::with_blob(local_yaml);
     let mut remote = remote_memory_store(remote_yaml, remote_revision);
     resolve_conflict_keep_local(&local, &mut remote);
-    Ok(NookResolveConflictKeepLocalResult::new(remote.blob().to_owned()))
+    Ok(NookResolveConflictKeepLocalResult::new(
+        remote.blob().to_owned(),
+    ))
 }
 
 /// User chose "keep remote" — return the local blob content to write to `IndexedDB`.
@@ -185,5 +187,7 @@ pub fn resolve_vault_conflict_keep_remote(
     let mut local = MemoryVaultStore::with_blob(local_yaml);
     let remote = remote_memory_store(remote_yaml, remote_revision);
     resolve_conflict_keep_remote(&mut local, &remote);
-    Ok(NookResolveConflictKeepRemoteResult::new(local.blob().to_owned()))
+    Ok(NookResolveConflictKeepRemoteResult::new(
+        local.blob().to_owned(),
+    ))
 }

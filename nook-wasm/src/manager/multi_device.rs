@@ -206,7 +206,10 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub async fn revoke_vault_member(&mut self, auth_id: String) -> Result<Vec<NookSecretRecord>, JsError> {
+    pub async fn revoke_vault_member(
+        &mut self,
+        auth_id: String,
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let identity = self.device_identity()?;
         let is_self = auth_id == identity.auth_id();
         let records = self.stored_records_snapshot();

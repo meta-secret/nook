@@ -1,8 +1,6 @@
 //! Glue between `nook_core` data structures and typed wasm exports.
 
-use crate::types::{
-    NookVaultSyncResult, joins_to_vec, members_to_vec,
-};
+use crate::types::{NookVaultSyncResult, joins_to_vec, members_to_vec};
 use crate::{NookError, NookVaultManager};
 use std::collections::HashMap;
 use wasm_bindgen::JsError;

@@ -187,10 +187,7 @@ impl NookVaultSyncResult {
         }
     }
 
-    pub(crate) fn session(
-        manager: &NookVaultManager,
-        changed: bool,
-    ) -> Result<Self, NookError> {
+    pub(crate) fn session(manager: &NookVaultManager, changed: bool) -> Result<Self, NookError> {
         Ok(Self {
             changed,
             access_status: String::new(),

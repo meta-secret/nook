@@ -7,11 +7,11 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::NookVaultSyncResult;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
     sync_result_session, sync_result_unchanged,
 };
-use crate::NookVaultSyncResult;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
