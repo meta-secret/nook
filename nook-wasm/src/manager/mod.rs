@@ -65,6 +65,8 @@ pub struct NookVaultManager {
     pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
     /// Logical secret-store id — persisted in vault YAML and mirrored on saved providers.
     pub(in crate::manager) store_id: String,
+    /// Monotonic vault revision — incremented on every save.
+    pub(in crate::manager) vault_version: u64,
     pub(in crate::manager) status_tx: flume::Sender<String>,
     pub(in crate::manager) status_rx: flume::Receiver<String>,
     /// When true, the next `connect` loads vault YAML from the browser cache
@@ -93,6 +95,7 @@ impl NookVaultManager {
             unlock: nook_core::VaultUnlock::Keys,
             password_entries: Vec::new(),
             store_id: String::new(),
+            vault_version: 0,
             decrypted_jsonl: String::new(),
             file_sha: None,
             last_synced_content: String::new(),
@@ -111,6 +114,11 @@ impl NookVaultManager {
     #[wasm_bindgen(getter, js_name = vaultStoreId)]
     pub fn vault_store_id(&self) -> String {
         self.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultVersion)]
+    pub fn vault_version(&self) -> u64 {
+        self.vault_version
     }
 
     #[wasm_bindgen(getter)]
@@ -160,6 +168,8 @@ impl NookVaultManager {
         self.github_root_empty = false;
         self.unlock = nook_core::VaultUnlock::Keys;
         self.use_local_cache_for_connect = false;
+        self.store_id.clear();
+        self.vault_version = 0;
     }
 }
 
@@ -184,6 +194,7 @@ impl NookVaultManager {
             self.store_id =
                 nook_core::generate_store_id().map_err(NookError::Database)?;
         }
+        self.vault_version = self.vault_version.saturating_add(1);
         let records = nook_core::Database::stored_records_from_armored(
             &self.stored_armored,
             &self.secret_types,
@@ -193,6 +204,7 @@ impl NookVaultManager {
             &self.unlock,
             &self.password_entries,
             Some(self.store_id.as_str()),
+            Some(self.vault_version),
         )
         .map_err(NookError::Encryption)?;
 
@@ -274,6 +286,9 @@ impl NookVaultManager {
         }
         if let Ok(Some(store_id)) = nook_core::read_vault_store_id(content) {
             self.store_id = store_id;
+        }
+        if let Ok(version) = nook_core::read_vault_version(content) {
+            self.vault_version = version;
         }
     }
 

@@ -66,6 +66,21 @@ pub fn validate_bip39_mnemonic(mnemonic: &str) -> bool {
     nook_core::validate_bip39_mnemonic(mnemonic).is_ok()
 }
 
+/// Compare local vs remote vault YAML and return a sync action label:
+/// `unchanged`, `adopt_remote`, `push_local`, or `conflict`.
+#[wasm_bindgen(js_name = compareVaultSync)]
+pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
+    match nook_core::compare_vault_sync(local, remote) {
+        Ok(action) => Ok(match action {
+            nook_core::VaultSyncAction::Unchanged => "unchanged".to_owned(),
+            nook_core::VaultSyncAction::AdoptRemote => "adopt_remote".to_owned(),
+            nook_core::VaultSyncAction::PushLocal => "push_local".to_owned(),
+            nook_core::VaultSyncAction::Conflict => "conflict".to_owned(),
+        }),
+        Err(message) => Err(wasm_bindgen::JsError::new(&message)),
+    }
+}
+
 #[wasm_bindgen]
 pub struct NookSecretRecord {
     id: String,

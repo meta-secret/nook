@@ -1,6 +1,8 @@
 # Auth Providers & Login UX
 
-This document describes how Nook persists storage provider credentials, the login-first UI model, and the roadmap for multi-provider vault replication.
+This document describes how Nook persists storage provider credentials, the login-first UI model, and sync provider replication.
+
+> **Architecture migration:** Nook is moving from **provider-as-vault** to a **local-first unified vault** with optional sync providers. See [unified-vault.md](unified-vault.md) and [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md). The sections below describe the **current** implementation; they will be updated as each UI phase lands.
 
 **Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [password-manager.md](../product-specs/password-manager.md) §2A.
 
@@ -140,11 +142,13 @@ WASM still receives `(storageMode, githubPat)` per call — no change to the Rus
 
 ## 5. Future: multi-provider replication
 
-Planned capabilities (not yet implemented):
+> **Update:** Version-based sync is implemented in `nook-core/src/vault_sync.rs` (`vault_version` + `compare_vault_sync`). UI migration to local-first sync providers is tracked in [unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
+
+Planned capabilities (partially implemented):
 
 1. **Multiple active backends:** User authenticates to several providers (e.g. GitHub + local + future S3/IPFS).
 2. **Single logical vault:** One encrypted database identified by **`store_id`** (11-char id in vault YAML and on each `StorageProvider`) — see [secret-store-identity.md](secret-store-identity.md). Writes propagate to all providers enrolled for that `store_id`.
-3. **Consistency:** Content-hash or version vector on the vault file; background sync resolves conflicts (last-write-wins initially, then CRDT or explicit merge UI).
+3. **Consistency:** Monotonic `vault_version` on the vault file; `compare_vault_sync` resolves non-conflicting divergence (higher version wins). Equal version + different content → explicit user choice (see [unified-vault.md](unified-vault.md) §5).
 4. **Provider-scoped credentials:** Each `StorageProvider` carries its own auth material; unlock may require all providers reachable or a quorum.
 5. **Mismatch protection:** Reject connect when on-disk `store_id` ≠ provider's expected `storeId`.
 

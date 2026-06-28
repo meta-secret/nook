@@ -16,6 +16,7 @@ mod validation;
 mod vault_crypto;
 mod vault_format;
 mod vault_ids;
+mod vault_sync;
 
 pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
@@ -65,6 +66,9 @@ pub use vault_ids::{
 pub use vault_crypto::VaultCrypto;
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
-    read_vault_password_entries, read_vault_store_id, read_vault_unlock, serialize_stored,
-    serialize_stored_yaml_with_unlock,
+    read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
+    serialize_stored, serialize_stored_yaml_with_unlock,
+};
+pub use vault_sync::{
+    VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision,
 };
