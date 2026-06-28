@@ -1986,8 +1986,7 @@ export class VaultState {
   async revokeDevice(authId: string) {
     if (!this.manager) return
     const isSelf = this.vaultMembers.some(
-      (member) =>
-        member.authId === authId && member.deviceId === this.deviceId,
+      (member) => member.authId === authId && member.deviceId === this.deviceId,
     )
     this.errorMsg = ''
     this.dismissSuccess()

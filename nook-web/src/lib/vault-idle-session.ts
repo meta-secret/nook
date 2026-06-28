@@ -16,8 +16,7 @@ export function resolveVaultIdleTimeoutMs(env: {
   VITE_E2E_EXPOSE_VAULT?: string
   VITE_VAULT_IDLE_TIMEOUT_MS?: string
 }): number {
-  const allowFastIdle =
-    env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
+  const allowFastIdle = env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
   if (!allowFastIdle) {
     return DEFAULT_VAULT_IDLE_TIMEOUT_MS
   }
@@ -35,8 +34,7 @@ export function resolveVaultIdleWarningMs(env: {
   VITE_E2E_EXPOSE_VAULT?: string
   VITE_VAULT_IDLE_WARNING_MS?: string
 }): number {
-  const allowFastIdle =
-    env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
+  const allowFastIdle = env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
   if (!allowFastIdle) {
     return DEFAULT_VAULT_IDLE_WARNING_MS
   }

@@ -135,11 +135,8 @@ export function resolveVaultSyncConflictKeepLocal(
   remoteYaml: string,
   remoteRevision: string | null,
 ): string {
-  return resolveVaultConflictKeepLocal(
-    localYaml,
-    remoteYaml,
-    remoteRevision,
-  ).remoteYaml
+  return resolveVaultConflictKeepLocal(localYaml, remoteYaml, remoteRevision)
+    .remoteYaml
 }
 
 export function resolveVaultSyncConflictKeepRemote(
@@ -147,11 +144,8 @@ export function resolveVaultSyncConflictKeepRemote(
   remoteYaml: string,
   remoteRevision: string | null,
 ): string {
-  return resolveVaultConflictKeepRemote(
-    localYaml,
-    remoteYaml,
-    remoteRevision,
-  ).localYaml
+  return resolveVaultConflictKeepRemote(localYaml, remoteYaml, remoteRevision)
+    .localYaml
 }
 
 export async function writeLocalVaultBlob(content: string): Promise<void> {
