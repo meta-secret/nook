@@ -69,7 +69,7 @@ describeGithub('unified vault backup passwords', () => {
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'storage')
-    await page.getByTestId('lock-vault-btn').click()
+    await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

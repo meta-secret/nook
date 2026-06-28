@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BookOpen, ChevronDown, ChevronLeft } from '@lucide/svelte'
   import { HELP_SECTIONS } from '$lib/help-content'
+  import { appPath } from '$lib/legal-content'
   import { Button } from '$lib/components/ui/button'
   import {
     Card,
@@ -40,7 +41,7 @@
             class="text-base font-semibold tracking-tight text-foreground inline-flex items-center gap-1.5"
           >
             <BookOpen class="size-4 shrink-0" />
-            Local vault, optional sync
+            Your vault, optional sync replicas
           </CardTitle>
           <CardDescription class="text-pretty text-xs leading-snug">
             One encrypted vault on this device — sync providers keep copies in
@@ -116,6 +117,25 @@
           </section>
         {/each}
       </div>
+
+      <nav
+        class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground"
+        aria-label="Legal"
+      >
+        <a
+          href={appPath('/privacy')}
+          class="font-medium underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Privacy Policy
+        </a>
+        <span aria-hidden="true">·</span>
+        <a
+          href={appPath('/terms')}
+          class="font-medium underline-offset-4 hover:text-foreground hover:underline"
+        >
+          Terms of Service
+        </a>
+      </nav>
     </CardContent>
   </Card>
 </div>

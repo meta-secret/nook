@@ -7,11 +7,11 @@
     Plus,
     ChevronLeft,
     Trash2,
-    Lock,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
@@ -27,7 +27,6 @@
     vault,
     syncProviders,
     syncingProviderId = null,
-    isAuthenticated,
     isVerifying,
     isInitializing,
     addProviderOpen = false,
@@ -42,12 +41,10 @@
     onBeginSetup,
     onCancelSetup,
     onRemoveProvider,
-    onLockVault,
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
     syncingProviderId?: string | null
-    isAuthenticated: boolean
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
@@ -62,7 +59,6 @@
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onLockVault?: () => void
   } = $props()
 
   function confirmRemoveProvider(provider: StorageProvider) {
@@ -142,21 +138,6 @@
   {/if}
 
   <div class="space-y-4">
-    {#if isAuthenticated && onLockVault && !addingProvider}
-      <div class="flex justify-end">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-          data-testid="lock-vault-btn"
-          disabled={isVerifying || isInitializing}
-          onclick={() => onLockVault()}
-        >
-          <Lock class="size-3.5" />
-          {vault.t('common.lock_vault')}
-        </button>
-      </div>
-    {/if}
-
     <form
       novalidate
       onsubmit={(e) => {
@@ -166,25 +147,63 @@
       class="space-y-4"
     >
       {#if showSetup}
-        <ProviderSetupFields
-          {vault}
-          setupType={setupType!}
-          bind:githubPat
-          bind:githubRepo
-          idPrefix="settings"
-          {onCancelSetup}
-        />
+        {#if setupType === 'oauth-file'}
+          <OAuthProviderSetupWizard
+            {vault}
+            bind:githubRepo
+            idPrefix="settings"
+            {isVerifying}
+            {isInitializing}
+            {onCancelSetup}
+            onConnect={onReconnect}
+          />
+        {:else}
+          <ProviderSetupFields
+            {vault}
+            setupType={setupType!}
+            bind:githubPat
+            bind:githubRepo
+            idPrefix="settings"
+            {onCancelSetup}
+          />
+        {/if}
       {:else if addProviderOpen}
         <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
       {:else}
-        <fieldset class="space-y-2">
+        <fieldset class="space-y-3">
           {#if syncProviders.length === 0}
-            <p
-              class="text-xs text-muted-foreground"
+            <div
+              class="rounded-lg border border-dashed border-border/50 bg-muted/10 px-4 py-4"
               data-testid="sync-providers-empty"
             >
-              {vault.t('auth_storage.no_sync_providers')}
-            </p>
+              <div class="flex items-start gap-3">
+                <div
+                  class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground"
+                >
+                  <Cloud class="size-4" />
+                </div>
+                <div class="min-w-0 space-y-1">
+                  <p class="text-sm font-medium text-foreground">
+                    {vault.t('auth_storage.no_sync_providers')}
+                  </p>
+                  <p class="text-xs text-pretty text-muted-foreground">
+                    {vault.t('auth_storage.sync_providers_desc')}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="add-provider-btn"
+                  onclick={() => onBeginAddProvider?.()}
+                >
+                  <Plus class="size-4" />
+                  {vault.t('settings.add_sync_provider')}
+                </Button>
+              </div>
+            </div>
           {:else}
             <ul
               class="divide-y divide-border/60"
@@ -254,21 +273,21 @@
                 </li>
               {/each}
             </ul>
-          {/if}
 
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            data-testid="add-provider-btn"
-            onclick={() => onBeginAddProvider?.()}
-          >
-            <Plus class="size-4" />
-            {vault.t('settings.add_sync_provider')}
-          </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              data-testid="add-provider-btn"
+              onclick={() => onBeginAddProvider?.()}
+            >
+              <Plus class="size-4" />
+              {vault.t('settings.add_sync_provider')}
+            </button>
+          {/if}
         </fieldset>
       {/if}
 
-      {#if showSetup}
+      {#if showSetup && setupType !== 'oauth-file'}
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >

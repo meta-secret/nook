@@ -18,6 +18,7 @@ This is the system of record and entry point for all AI agents working in this r
 * [design-docs/index.md](design-docs/index.md) — Index of design specifications and status.
 * [design-docs/core-beliefs.md](design-docs/core-beliefs.md) — Agent-first operating beliefs.
 * [design-docs/unified-vault.md](design-docs/unified-vault.md) — **Local-first unified vault**, version sync, conflict resolution.
+* [design-docs/vault-session-and-lock.md](design-docs/vault-session-and-lock.md) — **Lock**, in-memory session, vault vs sync provider model.
 
 ## 3. Product Specifications (`product-specs/`)
 * [product-specs/index.md](product-specs/index.md) — Index of product specifications.

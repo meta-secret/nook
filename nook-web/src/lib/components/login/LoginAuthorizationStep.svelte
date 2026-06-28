@@ -164,9 +164,7 @@
           placeholder={vault.t('login.password_selected_placeholder')}
           bind:value={passwordInput}
           autocomplete="current-password"
-          data-testid={loginPasswordPrompt
-            ? 'login-master-password-input'
-            : 'login-password-input'}
+          data-testid="login-password-input"
           required
         />
       </div>

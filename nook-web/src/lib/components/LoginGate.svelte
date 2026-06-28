@@ -16,6 +16,7 @@
   } from '$lib/components/ui/card'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
@@ -238,50 +239,62 @@
             }}
           />
         {:else if showSetup && setupType}
-          <form
-            novalidate
-            onsubmit={handleFirstConnectSubmit}
-            class="space-y-4"
-          >
-            <ProviderSetupFields
+          {#if setupType === 'oauth-file'}
+            <OAuthProviderSetupWizard
               {vault}
-              {setupType}
-              bind:githubPat
               bind:githubRepo
               idPrefix="login"
+              {isVerifying}
+              {isInitializing}
               {onCancelSetup}
+              onConnect={onUnlock}
             />
-            {#if vault.remoteVaultRecoveryPrompt !== 'none'}
-              <RemoteVaultRecoveryPanel
+          {:else}
+            <form
+              novalidate
+              onsubmit={handleFirstConnectSubmit}
+              class="space-y-4"
+            >
+              <ProviderSetupFields
                 {vault}
-                mode={vault.remoteVaultRecoveryPrompt}
-                isBusy={isVerifying}
-                onRecover={() => vault.confirmRecoverRemoteVault()}
-                onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
-                onDismiss={() => vault.clearRemoteVaultRecovery()}
+                {setupType}
+                bind:githubPat
+                bind:githubRepo
+                idPrefix="login"
+                {onCancelSetup}
               />
-            {/if}
-            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="submit"
-                class="sm:min-w-[180px]"
-                data-testid="connect-provider-btn"
-                disabled={!setupCanConnect ||
-                  vault.remoteVaultRecoveryPrompt !== 'none'}
-              >
-                {#if isInitializing}
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('onboarding.loading_engine')}
-                {:else if isVerifying}
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('common.connecting')}
-                {:else}
-                  <ShieldCheck class="size-4" />
-                  {vault.t('common.connect')}
-                {/if}
-              </Button>
-            </div>
-          </form>
+              {#if vault.remoteVaultRecoveryPrompt !== 'none'}
+                <RemoteVaultRecoveryPanel
+                  {vault}
+                  mode={vault.remoteVaultRecoveryPrompt}
+                  isBusy={isVerifying}
+                  onRecover={() => vault.confirmRecoverRemoteVault()}
+                  onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
+                  onDismiss={() => vault.clearRemoteVaultRecovery()}
+                />
+              {/if}
+              <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="submit"
+                  class="sm:min-w-[180px]"
+                  data-testid="connect-provider-btn"
+                  disabled={!setupCanConnect ||
+                    vault.remoteVaultRecoveryPrompt !== 'none'}
+                >
+                  {#if isInitializing}
+                    <RefreshCw class="size-4 animate-spin" />
+                    {vault.t('onboarding.loading_engine')}
+                  {:else if isVerifying}
+                    <RefreshCw class="size-4 animate-spin" />
+                    {vault.t('common.connecting')}
+                  {:else}
+                    <ShieldCheck class="size-4" />
+                    {vault.t('common.connect')}
+                  {/if}
+                </Button>
+              </div>
+            </form>
+          {/if}
         {:else if showProviderSetup}
           {#if showProviderSetupLink && !addProviderOpen}
             <button

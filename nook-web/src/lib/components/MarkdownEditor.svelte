@@ -7,11 +7,14 @@
     placeholder = '',
     testId = 'secret-value',
     minHeight = 'min-h-[24rem]',
+    fill = false,
   }: {
     value?: string
     placeholder?: string
     testId?: string
     minHeight?: string
+    /** Grow to fill the parent flex container instead of using a fixed min-height. */
+    fill?: boolean
   } = $props()
 
   let tab = $state<'write' | 'preview'>('write')
@@ -21,26 +24,26 @@
   let textareaEl: HTMLTextAreaElement | undefined = $state()
 
   function adjustHeight() {
-    if (textareaEl) {
-      textareaEl.style.height = 'auto'
-      textareaEl.style.height = `${textareaEl.scrollHeight}px`
-    }
+    if (fill || !textareaEl) return
+    textareaEl.style.height = 'auto'
+    textareaEl.style.height = `${textareaEl.scrollHeight}px`
   }
 
-  // Adjust height whenever tab or value changes
   $effect(() => {
-    if (tab === 'write' && value !== undefined) {
+    if (!fill && tab === 'write' && value !== undefined) {
       setTimeout(adjustHeight, 0)
     }
   })
 </script>
 
 <div
-  class="overflow-hidden rounded-md border border-border bg-background"
+  class="overflow-hidden rounded-md border border-border bg-background {fill
+    ? 'flex h-full min-h-0 flex-1 flex-col'
+    : ''}"
   data-testid="markdown-editor"
 >
   <div
-    class="flex items-center gap-1 border-b border-border bg-muted/25 px-2 py-1.5"
+    class="flex shrink-0 items-center gap-1 border-b border-border bg-muted/25 px-2 py-1.5"
     role="tablist"
     aria-label="Markdown editor"
   >
@@ -72,7 +75,9 @@
     </button>
   </div>
 
-  <div class="{minHeight} flex flex-col">
+  <div
+    class={fill ? 'flex min-h-0 flex-1 flex-col' : `${minHeight} flex flex-col`}
+  >
     {#if tab === 'write'}
       <textarea
         bind:this={textareaEl}
@@ -81,10 +86,16 @@
         bind:value
         {placeholder}
         oninput={adjustHeight}
-        class="block w-full {minHeight} resize-none border-0 bg-transparent px-3 py-2 font-mono text-sm leading-relaxed focus:outline-hidden focus:ring-0"
-      ></textarea>
+        class="block w-full border-0 bg-transparent px-3 py-2 font-mono text-sm leading-relaxed focus:outline-hidden focus:ring-0 {fill
+          ? 'min-h-0 flex-1 resize-none'
+          : `${minHeight} resize-none`}"></textarea>
     {:else}
-      <div role="tabpanel" class="{minHeight} px-3 py-2 overflow-y-auto">
+      <div
+        role="tabpanel"
+        class="px-3 py-2 {fill
+          ? 'min-h-0 flex-1 overflow-y-auto'
+          : `${minHeight} overflow-y-auto`}"
+      >
         {#if value.trim()}
           <MarkdownBody html={previewHtml} testId="markdown-preview" />
         {:else}

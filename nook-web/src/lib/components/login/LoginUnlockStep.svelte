@@ -25,8 +25,6 @@
       password: string,
     ) => void | Promise<void>
   } = $props()
-
-  const passwordFirst = $derived(passwordEntries.length > 0)
 </script>
 
 <div class="space-y-3" data-testid="login-local-unlock-step">
@@ -41,7 +39,10 @@
     {isVerifying}
     {isInitializing}
     {isUnlocking}
-    loginPasswordPrompt={passwordFirst}
+    loginPasswordPrompt={vault.loginPasswordPrompt}
+    onConsumeLoginPasswordPrompt={() => {
+      vault.loginPasswordPrompt = false
+    }}
     {onUnlock}
     {onUnlockWithPassword}
   />

@@ -19,9 +19,7 @@ test.describe('sync fan-out on save', () => {
 
     await reloadUnlockWithGithubSync(page)
 
-    await expect(page.getByTestId('vault-status-bar')).toContainText(
-      'Local vault',
-    )
+    await expect(page.getByTestId('vault-status-bar')).toContainText('Vault')
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
       '1 sync provider',
     )

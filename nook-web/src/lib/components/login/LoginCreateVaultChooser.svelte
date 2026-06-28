@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cloud, HardDrive, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { Cloud, ShieldCheck, RefreshCw } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -26,7 +26,7 @@
     data-testid="login-path-local"
   >
     <div class="flex items-start gap-3">
-      <HardDrive class="mt-0.5 size-5 shrink-0 text-foreground" />
+      <ShieldCheck class="mt-0.5 size-5 shrink-0 text-foreground" />
       <div class="min-w-0 space-y-1">
         <p class="text-sm font-semibold text-foreground">
           {vault.t('login.path_local_title')}

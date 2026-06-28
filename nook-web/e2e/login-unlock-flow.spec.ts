@@ -60,7 +60,11 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
-    await expect(page.getByTestId('login-master-password-input')).toBeVisible()
+    await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await expect(page.getByTestId('login-password-input')).not.toBeVisible()
   })
 
   test('unlocks with device keys from local login step', async ({ page }) => {
@@ -102,7 +106,7 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(
       entryList.getByRole('button', { name: 'Travel' }),
     ).toBeVisible()
-    await expect(page.getByTestId('login-master-password-input')).toBeVisible()
+    await expect(page.getByTestId('login-password-input')).toBeVisible()
   })
 
   test('unlocks with backup password when device keys are missing', async ({

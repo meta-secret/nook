@@ -26,6 +26,7 @@ const LOCAL_SPECS = [
   'sync-provider-connect.spec.ts',
   'sync-conflict-resolution.spec.ts',
   'sync-fanout.spec.ts',
+  'legal-pages.spec.ts',
   'multi-device-local.spec.ts',
 ] as const
 

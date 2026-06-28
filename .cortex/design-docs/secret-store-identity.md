@@ -64,21 +64,23 @@ auth:
 
 ---
 
-## 3. Multi-provider replication
+## 3. Multi-provider replication (one vault)
 
-> **Target architecture:** [unified-vault.md](unified-vault.md) — one local vault, sync providers as replicas, `vault_version` reconciliation.
+> **Architecture:** [unified-vault.md](unified-vault.md) — local cache + sync replicas; [vault-session-and-lock.md](vault-session-and-lock.md) — vault vs provider.
 
 ```mermaid
 flowchart LR
-  subgraph store["store_id: store_SMypl8K0w9Y"]
+  subgraph store["Vault store_id: store_SMypl8K0w9Y"]
     V[nook-vault.yaml content]
   end
-  V --> L[Local IndexedDB — authoritative]
+  V --> L[Local IndexedDB — authoritative cache]
   V --> G[GitHub user/nook]
   V --> D[Google Drive appData]
 ```
 
-Physical filenames may stay `nook-vault.yaml` per backend; **`store_id` + `vault_version` inside the file** are the source of truth for sync.
+Many **sync providers**, one **`store_id`** per active vault. Physical filenames may stay `nook-vault.yaml`; **`store_id` + `vault_version`** inside the file drive reconciliation.
+
+**Multiple vaults:** a user may have unrelated vaults (different `store_id`) on different providers or, in future, multiple caches in one browser. Replication never crosses `store_id` boundaries.
 
 ---
 

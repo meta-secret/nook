@@ -10,27 +10,27 @@ export type HelpSection = {
 
 /** Mermaid source for the local-first vault model (rendered as monospace in Help). */
 export const HELP_ARCHITECTURE_DIAGRAM = `flowchart TB
-  subgraph local["Browser (always)"]
-    V[nook-vault.yaml in nook_db]
-    P[Master password unlock]
+  subgraph device["This browser (working copy)"]
+    V[nook-vault.yaml]
+    K[Device keys unlock]
   end
-  subgraph sync["Optional sync providers"]
+  subgraph sync["Sync providers (replicas)"]
     G[GitHub]
     D[Google Drive]
   end
   V <-->|version-based sync| G
   V <-->|version-based sync| D
-  P --> V`
+  K --> V`
 
 export const HELP_SECTIONS: HelpSection[] = [
   {
     id: 'local-first',
-    title: 'Local vault first',
+    title: 'Your vault',
     summary:
-      'Nook keeps one encrypted vault on this device. Sync providers are optional copies — not separate vaults.',
+      'A vault is one encrypted database. It always starts in this browser; sync providers are optional replicas — not separate vaults.',
     bullets: [
-      'Your vault lives in browser storage (IndexedDB) after first setup.',
-      'Unlock with your master password (or device keys if you set them up).',
+      'Create a vault here, then add GitHub or Drive in Settings to replicate it.',
+      'Unlock with device keys (default) or a backup password from Settings.',
       'Secrets are encrypted before they are saved or synced anywhere.',
       'No Nook account or central server holds your data.',
     ],

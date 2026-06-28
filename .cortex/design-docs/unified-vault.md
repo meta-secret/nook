@@ -1,20 +1,14 @@
 # Unified Vault Architecture
 
-This document defines Nook's target architecture: **one logical vault per user**, stored locally first, unlocked with a single master password, and replicated to optional sync providers with version-based reconciliation.
+This document defines Nook's architecture: **vaults** (logical encrypted databases), **sync providers** (replica targets), local-first storage, and version-based reconciliation.
 
-**Related:** [auth-providers.md](auth-providers.md), [secret-store-identity.md](secret-store-identity.md), [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
+**Related:** [auth-providers.md](auth-providers.md), [vault-session-and-lock.md](vault-session-and-lock.md), [secret-store-identity.md](secret-store-identity.md), [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
 
 ---
 
-## 1. Problem with the current model
+## 1. Problem with the old model
 
-Today each saved **storage provider** can point at a **separate vault file**. The login wizard asks "where is the encrypted vault?" before "how do you decrypt it?" — treating provider choice as vault selection.
-
-That leads to:
-
-- Duplicate vaults across Local / GitHub / Drive with no automatic reconciliation.
-- User confusion: switching providers switches databases.
-- Sync is provider-scoped (`sync_vault_from_storage` polls only the active backend).
+Previously each saved **storage provider** could point at a **separate vault file**. Login treated provider choice as vault selection — duplicate databases, confusion when switching GitHub repos, and provider-scoped sync.
 
 ---
 
@@ -22,26 +16,33 @@ That leads to:
 
 ```mermaid
 flowchart TB
-  subgraph local["Browser (always)"]
-    V[nook-vault.yaml in nook_db]
-    P[Master password unlock]
+  subgraph vault["Vault (store_id)"]
+    V[nook-vault.yaml]
   end
-  subgraph sync["Optional sync providers"]
+  subgraph local["Browser"]
+    L[nook_db.encrypted_db — local cache]
+    S[Unlocked session — memory only]
+  end
+  subgraph sync["Sync providers (replicas)"]
     G[GitHub]
     D[Google Drive]
   end
-  V <-->|"version-based sync"| G
-  V <-->|"version-based sync"| D
-  P --> V
+  L --- V
+  V <-->|"vault_version sync"| G
+  V <-->|"vault_version sync"| D
+  S --> V
 ```
 
 | Concept | Old | New |
 |---------|-----|-----|
-| **Primary vault location** | Whichever provider is active | Always local IndexedDB (`nook_db.encrypted_db`) |
-| **Unlock** | Device keys first, backup passwords optional | Master password first (device keys remain for multi-device) |
-| **Storage providers** | Vault selectors | Sync destinations only |
-| **Multiple providers** | Independent vaults per provider | Replicas of the **same** `store_id` |
-| **Conflict handling** | Last poll wins (implicit) | Explicit user choice |
+| **Vault** | Implicit per provider | Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](vault-session-and-lock.md)) |
+| **Primary copy** | Whichever provider is active | Local IndexedDB (`nook_db.encrypted_db`) for the **active** vault |
+| **Unlock** | Provider-first wizard | Login gate: unlock local cache or connect provider to fetch a vault |
+| **Sync providers** | Vault selectors | **Replica targets** for the current vault — many providers, one `store_id` |
+| **Lock** | N/A | Clear decrypted session; encrypted vault + providers remain |
+| **Conflict handling** | Last poll wins | Explicit user choice on version tie |
+
+**Today:** one active vault per browser profile. **Target:** vault picker after lock for users with multiple `store_id`s on the same device.
 
 ---
 
@@ -142,29 +143,30 @@ WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVault
 
 ---
 
-## 6. Connect / unlock flow (target)
+## 6. Connect / unlock / lock flow
 
 ```mermaid
 stateDiagram-v2
   [*] --> CheckLocal: app init
-  CheckLocal --> CreateVault: no local vault
+  CheckLocal --> GetStarted: no local vault
   CheckLocal --> Unlock: local vault exists
-  CreateVault --> SetPassword: user sets master password
-  SetPassword --> Vault: unlock success
-  Unlock --> Vault: password correct
-  Vault --> SyncSetup: user adds sync provider (optional)
-  SyncSetup --> Reconcile: remote vault exists
-  SyncSetup --> Push: remote empty
-  Reconcile --> Vault: auto or user-resolved
-  Push --> Vault
+  GetStarted --> CreateLocal: device-key vault
+  GetStarted --> ConnectProvider: cloud provider
+  CreateLocal --> Vault: session unlocked
+  ConnectProvider --> Reconcile: remote exists
+  ConnectProvider --> Vault: genesis / pull
+  Unlock --> Vault: device keys or backup password
+  Vault --> LoginGate: Lock (clear session)
+  LoginGate --> Unlock
+  Vault --> SyncSetup: add sync provider (optional)
 ```
 
-1. **Always load local vault first** — no provider picker on unlock.
-2. **Master password** decrypts the vault (via `password_entries` or primary envelope).
-3. **After unlock**, user may connect sync providers in Settings.
-4. **On provider connect**, fetch remote → `compareVaultSync` → act or prompt.
+1. **Load local cache** on init when present — may auto-unlock if device keys suffice and no sync friction.
+2. **First visit:** login chooser — create local vault (device keys) **or** connect sync provider.
+3. **Lock** (`VaultState.lockVault`) clears in-memory secrets; user returns to login gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
+4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).
 
-Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue to work alongside password unlock — they are orthogonal to sync.
+Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside optional backup passwords.
 
 ---
 

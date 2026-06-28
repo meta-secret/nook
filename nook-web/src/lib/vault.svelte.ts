@@ -28,6 +28,7 @@ import {
   mapWasmPasswordEntries,
   type VaultPasswordEntrySummary,
 } from '$lib/vault-password'
+import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_VAULT_FILE,
   DEFAULT_GITHUB_REPO,
@@ -85,9 +86,9 @@ export class VaultState {
 
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard'>('storage')
-  settingsAccordionSection = $state<'storage' | 'passwords' | 'devices'>(
-    'storage',
-  )
+  settingsAccordionSection = $state<
+    'storage' | 'passwords' | 'devices' | 'language' | null
+  >('storage')
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -206,7 +207,7 @@ export class VaultState {
   }
 
   private wasmStorageArgs(): [string, string, string] {
-    if (this.isAuthenticated && this.localVaultPresent) {
+    if (this.localVaultPresent) {
       return ['local', '', '']
     }
     if (this.isAuthenticated && this.syncProviders[0]) {
@@ -228,6 +229,133 @@ export class VaultState {
       ]
     }
     return [mode, this.githubPat, this.githubRepo]
+  }
+
+  /** WASM connect always uses the local cache when one exists (unified vault). */
+  private connectStorageArgs(): [string, string, string] {
+    return this.wasmStorageArgs()
+  }
+
+  private stagedRemoteStorageArgs(): [string, string, string] | null {
+    const type = this.loginSetupType ?? this.storageMode
+    if (type === 'local') {
+      return null
+    }
+    if (type === 'github') {
+      const pat = this.githubPat.trim()
+      const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
+      if (!pat) {
+        return null
+      }
+      return ['github', pat, repo]
+    }
+    if (type === 'oauth-file') {
+      const token = this.oauthFile?.accessToken?.trim()
+      if (!token) {
+        return null
+      }
+      const fileName =
+        this.githubRepo.trim() ||
+        this.oauthFile?.fileName?.trim() ||
+        DEFAULT_DRIVE_VAULT_FILE
+      return [
+        wasmStorageModeForProvider('oauth-file', this.oauthFile?.preset),
+        token,
+        formatDriveStorageRef(this.oauthFile?.fileId, fileName),
+      ]
+    }
+    return null
+  }
+
+  private stagedProviderLabel(): string {
+    const type = this.loginSetupType ?? this.storageMode
+    if (type === 'github') {
+      return providerDefaultLabel(
+        'github',
+        this.githubRepo.trim() || DEFAULT_GITHUB_REPO,
+      )
+    }
+    if (type === 'oauth-file') {
+      return providerDefaultLabel(
+        'oauth-file',
+        this.githubRepo.trim() ||
+          this.oauthFile?.fileName?.trim() ||
+          DEFAULT_DRIVE_VAULT_FILE,
+      )
+    }
+    return providerDefaultLabel(type)
+  }
+
+  /**
+   * Compare local IndexedDB vault with a staged remote provider before connect.
+   * Newer version wins automatically; equal version + different content → conflict UI.
+   */
+  private async reconcileStagedRemoteWithLocal(options?: {
+    providerId?: string
+    quiet?: boolean
+  }): Promise<'ok' | 'conflict' | 'skip'> {
+    if (!this.localVaultPresent) {
+      return 'skip'
+    }
+    const args = this.stagedRemoteStorageArgs()
+    if (!args) {
+      return 'skip'
+    }
+
+    const localYaml = await readLocalVaultBlob()
+    if (!localYaml.trim()) {
+      return 'skip'
+    }
+
+    const [mode, pat, repo] = args
+    const remote = await fetchRemoteVaultBlob(mode, pat, repo)
+    if (!remote.content.trim()) {
+      return 'ok'
+    }
+
+    const reconcile = reconcileVaultSyncBlobs(
+      localYaml,
+      remote.content,
+      remote.revision,
+    )
+
+    if (reconcile.action === 'conflict') {
+      const localVersion = await readVaultVersionFromBlob(reconcile.localYaml)
+      const remoteVersion = await readVaultVersionFromBlob(reconcile.remoteYaml)
+      this.pendingSyncConflict = {
+        providerId:
+          options?.providerId ??
+          this.syncProviders[this.syncProviders.length - 1]?.id ??
+          '__pending_provider__',
+        providerLabel: this.stagedProviderLabel(),
+        localYaml: reconcile.localYaml,
+        remoteYaml: reconcile.remoteYaml,
+        localVersion,
+        remoteVersion,
+        mode,
+        pat,
+        repo,
+        remoteRevision: remote.revision,
+      }
+      this.errorMsg = ''
+      return 'conflict'
+    }
+
+    await this.applyReconcileResult(
+      reconcile,
+      {
+        providerId:
+          options?.providerId ??
+          this.syncProviders[this.syncProviders.length - 1]?.id ??
+          '__pending_provider__',
+        remote,
+        mode,
+        pat,
+        repo,
+      },
+      { quiet: options?.quiet ?? false },
+    )
+    return 'ok'
   }
 
   private hasRemoteCredentials(): boolean {
@@ -541,6 +669,9 @@ export class VaultState {
   }
 
   private shouldAutoUnlock(): boolean {
+    if (isVaultSessionLocked()) {
+      return false
+    }
     if (this.localVaultPresent && this.passwordEntries.length > 0) {
       return false
     }
@@ -585,7 +716,7 @@ export class VaultState {
         this.manager!.connect('local', '', ''),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       this.localVaultPresent = true
       this.localLoginPrepared = true
       await this.ensureProviderSaved()
@@ -626,7 +757,7 @@ export class VaultState {
         this.manager!.connect('local', '', ''),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       await this.addVaultPassword(
         this.t('login.master_password_label'),
         password,
@@ -899,6 +1030,11 @@ export class VaultState {
     this.selectedPasswordEntryId = null
     this.loginUnlockMode = 'unknown'
     this.loginPasswordPrompt = false
+  }
+
+  private markVaultUnlocked() {
+    setVaultSessionLocked(false)
+    this.isAuthenticated = true
   }
 
   private clearUnlockedSession() {
@@ -1324,7 +1460,7 @@ export class VaultState {
       if (this.isAuthenticated) {
         await this.reloadSessionFromLocal()
       }
-    } else if (result.action === 'push_local' || remote.missing) {
+    } else if (result.action === 'push_local') {
       const revision = await writeRemoteVaultBlob(
         mode,
         pat,
@@ -1407,8 +1543,9 @@ export class VaultState {
         remoteYaml,
         conflict.remoteRevision,
       )
+      const providerId = await this.ensureProviderSavedAfterConflict(conflict)
       await this.updateProviderSyncMetadata(
-        conflict.providerId,
+        providerId,
         conflict.localYaml,
         revision,
       )
@@ -1442,8 +1579,9 @@ export class VaultState {
       if (this.isAuthenticated) {
         await this.reloadSessionFromLocal()
       }
+      const providerId = await this.ensureProviderSavedAfterConflict(conflict)
       await this.updateProviderSyncMetadata(
-        conflict.providerId,
+        providerId,
         conflict.remoteYaml,
         conflict.remoteRevision,
       )
@@ -1459,6 +1597,25 @@ export class VaultState {
     } finally {
       this.isVerifying = false
     }
+  }
+
+  private async ensureProviderSavedAfterConflict(
+    conflict: PendingSyncConflict,
+  ): Promise<string> {
+    if (
+      conflict.providerId !== '__pending_provider__' &&
+      this.providers.some((p) => p.id === conflict.providerId)
+    ) {
+      return conflict.providerId
+    }
+    await this.ensureProviderSaved()
+    const provider =
+      this.syncProviders[this.syncProviders.length - 1] ??
+      this.providers[this.providers.length - 1]
+    if (!provider || provider.type === 'local') {
+      throw new Error('Choose a cloud sync provider.')
+    }
+    return provider.id
   }
 
   private async reloadSessionFromLocal(): Promise<void> {
@@ -1477,6 +1634,11 @@ export class VaultState {
     if (this.isVerifying) return
     this.isVerifying = true
     try {
+      const reconcileOutcome = await this.reconcileStagedRemoteWithLocal()
+      if (reconcileOutcome === 'conflict') {
+        return
+      }
+
       await this.ensureProviderSaved()
       const provider =
         this.syncProviders[this.syncProviders.length - 1] ??
@@ -1485,7 +1647,7 @@ export class VaultState {
         this.errorMsg = 'Choose a cloud sync provider.'
         return
       }
-      await this.syncProviderById(provider.id)
+      await this.syncProviderById(provider.id, { quiet: true })
       this.loginSetupType = null
       this.addProviderOpen = false
     } finally {
@@ -1495,7 +1657,7 @@ export class VaultState {
 
   openSettings(
     section: 'storage' | 'onboard' = 'storage',
-    accordion: 'storage' | 'passwords' | 'devices' = 'storage',
+    accordion: 'storage' | 'passwords' | 'devices' | 'language' = 'storage',
   ) {
     this.helpOpen = false
     this.settingsSection = section
@@ -1510,8 +1672,10 @@ export class VaultState {
     this.settingsOpen = false
   }
 
-  /** End the in-memory session and return to the login gate (device keys stay in this browser). */
+  /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
   lockVault() {
+    this.helpOpen = false
+    setVaultSessionLocked(true)
     this.clearUnlockedSession()
   }
 
@@ -1689,7 +1853,7 @@ export class VaultState {
         ])) as NookSecretRecord[]
       })
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       await this.ensureProviderSaved()
       await this.hydrateMultiDeviceState()
       this.joinEnrollmentPrompt = 'none'
@@ -1721,7 +1885,7 @@ export class VaultState {
         ),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       this.enrollSecretsKey = ''
       this.enrollMembersKey = ''
       await this.ensureProviderSaved()
@@ -1826,11 +1990,18 @@ export class VaultState {
         return
       }
 
+      if (this.stagedRemoteStorageArgs()) {
+        const reconcileOutcome = await this.reconcileStagedRemoteWithLocal()
+        if (reconcileOutcome === 'conflict') {
+          return
+        }
+      }
+
       const rawRecords = await this.enqueueStorage(async () => {
         const connectPromise =
           this.pendingConnectRecovery === 'fresh'
-            ? this.manager!.connect_fresh(...this.wasmStorageArgs())
-            : this.manager!.connect(...this.wasmStorageArgs())
+            ? this.manager!.connect_fresh(...this.connectStorageArgs())
+            : this.manager!.connect(...this.connectStorageArgs())
         this.pendingConnectRecovery = 'none'
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
@@ -1849,7 +2020,7 @@ export class VaultState {
         ])) as NookSecretRecord[]
       })
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
       await this.loadProviders()
@@ -2123,7 +2294,7 @@ export class VaultState {
         ),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       await this.ensureProviderSaved()
       await this.loadProviders()
       await this.refreshPasswordEntriesList()
@@ -2214,7 +2385,7 @@ export class VaultState {
         ),
       )) as NookSecretRecord[]
       this.secrets = mapWasmRecords(rawRecords)
-      this.isAuthenticated = true
+      this.markVaultUnlocked()
       await this.ensureProviderSaved()
       await this.loadProviders()
       await this.refreshPasswordEntriesList()

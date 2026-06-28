@@ -55,7 +55,8 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
 - **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
-- **`LoginGate`:** Login-first UX when vault is locked; provider picker + one-time GitHub setup.
+- **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
+- **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
 - **`nook.ts`:** WASM loader + thin record mapping.
 - **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
 
@@ -108,6 +109,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 | Device identity (X25519 private) | age secret string | IndexedDB `device_identity_secret` only |
 | Auth providers (GitHub PAT, labels) | JSON snapshot | IndexedDB `nook_auth` → `providers` key |
 
+See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.
 See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
 See [auth-providers.md](design-docs/auth-providers.md) for login UX and sync provider roadmap.
 See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture and version sync.

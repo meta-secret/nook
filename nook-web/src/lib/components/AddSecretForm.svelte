@@ -31,6 +31,7 @@
     onGeneratePassword,
     onCancel,
     initialItem = null,
+    selectedType = $bindable(null as VaultItemType | null),
   }: {
     vault: VaultState
     isSaving: boolean
@@ -53,11 +54,11 @@
     ) => string
     onCancel: () => void
     initialItem?: VaultItem | null
+    selectedType?: VaultItemType | null
   } = $props()
 
   const isEditMode = $derived(initialItem !== null)
 
-  let selectedType = $state<VaultItemType | null>(null)
   let showPasswordOptions = $state(false)
   let showPasswordValue = $state(false)
 
@@ -207,6 +208,20 @@
       genSymbols,
     )
   }
+
+  const isSecureNoteForm = $derived(selectedType === 'secure-note')
+
+  const canSubmit = $derived(
+    !isSaving && (selectedType !== 'seed-phrase' || seedPhraseValid),
+  )
+
+  const saveLabel = $derived(
+    isSaving
+      ? vault.t('add_secret.working')
+      : isEditMode
+        ? vault.t('add_secret.save_changes')
+        : vault.t('common.save'),
+  )
 </script>
 
 {#if selectedType === null && !isEditMode}
@@ -297,21 +312,56 @@
 {:else}
   <form
     onsubmit={handleSubmit}
-    class="space-y-5"
+    class={isSecureNoteForm
+      ? 'flex min-h-0 flex-1 flex-col gap-4'
+      : 'space-y-4'}
     data-testid={isEditMode ? 'edit-secret-form' : undefined}
   >
-    <div class="space-y-3">
-      {#if !isEditMode}
-        <button
+    <div
+      class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border/40 pb-3"
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        {#if !isEditMode}
+          <button
+            type="button"
+            class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            onclick={() => (selectedType = null)}
+          >
+            <ArrowLeft class="size-3.5" />
+            {vault.t('add_secret.change_type')}
+          </button>
+          <span class="text-muted-foreground/50" aria-hidden="true">·</span>
+        {/if}
+        <h3 class="truncate text-sm font-semibold text-foreground">
+          {typeTitle}
+        </h3>
+      </div>
+      <div
+        class="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto"
+      >
+        <Button
           type="button"
-          class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          onclick={() => (selectedType = null)}
+          variant="outline"
+          size="sm"
+          class="sm:min-w-[5rem]"
+          data-testid="add-secret-cancel-btn"
+          onclick={handleCancel}
         >
-          <ArrowLeft class="size-4" />
-          {vault.t('add_secret.change_type')}
-        </button>
-      {/if}
-      <h3 class="text-base font-semibold text-foreground">{typeTitle}</h3>
+          {vault.t('common.cancel')}
+        </Button>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!canSubmit}
+          class="sm:min-w-[5rem]"
+          data-testid="save-secret-btn"
+        >
+          {#if isSaving}
+            <RefreshCw class="size-4 animate-spin" />
+          {/if}
+          {saveLabel}
+        </Button>
+      </div>
     </div>
 
     {#if selectedType === 'login' || selectedType === 'api-key'}
@@ -510,7 +560,7 @@
         />
       </div>
     {:else}
-      <div class="space-y-1.5">
+      <div class="shrink-0 space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >{vault.t('vault.fields.title')}</label
         >
@@ -523,46 +573,17 @@
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
       </div>
-      <div class="space-y-1.5">
-        <span class="text-xs font-medium"
+      <div class="flex min-h-0 flex-1 flex-col gap-1.5">
+        <span class="shrink-0 text-xs font-medium"
           >{vault.t('vault.fields.note')}
           <span class="text-muted-foreground">(Markdown)</span></span
         >
         <MarkdownEditor
           bind:value={noteBody}
           placeholder={vault.t('add_secret.placeholder_note')}
+          fill
         />
       </div>
     {/if}
-
-    <div
-      class="flex flex-col-reverse gap-2 border-t border-border/35 pt-4 sm:flex-row sm:justify-end sm:border-border/60"
-    >
-      <Button
-        type="button"
-        variant="outline"
-        class="sm:min-w-[7rem]"
-        data-testid="add-secret-cancel-btn"
-        onclick={handleCancel}
-      >
-        {vault.t('common.cancel')}
-      </Button>
-      <Button
-        type="submit"
-        disabled={isSaving ||
-          (selectedType === 'seed-phrase' && !seedPhraseValid)}
-        class="sm:min-w-[7rem]"
-        data-testid="save-secret-btn"
-      >
-        {#if isSaving}
-          <RefreshCw class="size-4 animate-spin" />
-          {vault.t('add_secret.working')}
-        {:else}
-          {isEditMode
-            ? vault.t('add_secret.save_changes')
-            : vault.t('add_secret.save_item')}
-        {/if}
-      </Button>
-    </div>
   </form>
 {/if}

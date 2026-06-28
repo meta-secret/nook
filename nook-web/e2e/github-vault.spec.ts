@@ -40,7 +40,7 @@ describeGithub('github vault', () => {
   test('connects and shows vault after github sync', async () => {
     await expect(vaultPage.getByTestId('vault-panel')).toBeVisible()
     await expect(vaultPage.getByTestId('vault-status-bar')).toContainText(
-      'Local vault',
+      'Vault',
     )
     await expect(vaultPage.getByTestId('vault-sync-out-status')).toContainText(
       'sync provider',

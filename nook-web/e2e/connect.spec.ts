@@ -19,6 +19,20 @@ test.describe('vault connect flow', () => {
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
+    await expect(page.getByTestId('local-only-vault-warning')).toBeVisible()
+    await expect(page.getByTestId('local-only-vault-warning')).toHaveAttribute(
+      'data-folded',
+      'true',
+    )
+    await expect(
+      page.getByTestId('local-only-warning-details'),
+    ).not.toBeVisible()
+    await page.getByTestId('local-only-warning-toggle').click()
+    await expect(page.getByTestId('local-only-warning-details')).toBeVisible()
+    await expect(page.getByTestId('local-only-vault-warning')).toHaveAttribute(
+      'data-folded',
+      'false',
+    )
   })
 
   test('shows error when github mode has no pat', async ({ page }) => {
@@ -113,6 +127,27 @@ test.describe('vault connect flow', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
+  })
+
+  test('stays locked after reload when user locked the vault', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await createLocalVaultOnLogin(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('header-lock-vault-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+
+    await page.reload()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('vault-panel')).not.toBeVisible()
   })
 
   test('removes a saved sync provider from vault settings', async ({

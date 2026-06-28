@@ -799,7 +799,7 @@ export async function unlockVaultOnLogin(
           .getByRole('button', { name: opts.entryLabel })
           .click()
       }
-      await page.getByTestId('login-master-password-input').fill(opts.password)
+      await page.getByTestId('login-password-input').fill(opts.password)
     } else {
       const keysMethod = page.getByTestId('login-unlock-method-keys')
       if (await keysMethod.isVisible()) {
