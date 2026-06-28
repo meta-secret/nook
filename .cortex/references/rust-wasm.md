@@ -16,7 +16,25 @@
 - `crypto` — `nook_core::VaultCrypto` (derived once per connect)
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`
 
-## 4. Vault secrets at the JS boundary
+## 4. Typed WASM boundary (`nook-wasm/src/types.rs`)
+
+**Prefer typed `#[wasm_bindgen]` structs over raw `JsValue`, `js_sys::Array`, and `Reflect`.** Errors may still surface as `JsError`; data crossing the boundary should not.
+
+| Export | Use |
+|--------|-----|
+| `NookSecretRecord` | Decrypted vault items (getters + view helpers) |
+| `NookJoinRequest` | Pending device join rows (`deviceId`, `publicKey`, `requestedAt`) |
+| `NookVaultMember` | Enrolled devices (`authId`, `deviceId`, …) |
+| `NookPasswordEntrySummary` | Backup-password list entries |
+| `NookVaultSyncResult` | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
+| `NookRemoteVaultFetch` | `fetchRemoteVaultYaml` |
+| `NookReconcileVaultBlobsResult` | `reconcileVaultBlobs` |
+| `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution |
+| `NookSecretFormFields` | `buildSecretYaml` input (flat constructor; unused fields empty) |
+
+**Web layer:** import these types from `./nook-wasm/nook_wasm` (or re-export via `nook.ts`). Do **not** add TS mappers that rebuild plain objects from wasm output.
+
+## 5. Vault secrets at the JS boundary
 
 **Canonical schema:** `nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
 
@@ -25,12 +43,12 @@
 | Layer | Responsibility |
 |-------|----------------|
 | `nook-core` | Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`) |
-| `nook-wasm` | `NookSecretRecord` wrappers, `buildSecretYaml`, session CRUD |
+| `nook-wasm` | Typed boundary structs, `buildSecretYaml`, session CRUD |
 | `nook-web` | Svelte forms + rendering; `VaultItemType` string union for the type picker only |
 
-**Reads:** `records_to_array` builds `NookSecretRecord` from `nook_core::SecretRecord` — no YAML round-trip to JS.
+**Reads:** `records_to_vec` builds `Vec<NookSecretRecord>` from `nook_core::SecretRecord` — no YAML round-trip to JS.
 
-**Writes:** Forms call `buildSecretYaml(type, fields)` (Rust validation) then `add_secret` / `replace_secret`. New item ids use `NookVaultManager.generate_secret_id()`.
+**Writes:** Forms construct `NookSecretFormFields`, call `buildSecretYaml(type, fields)` (Rust validation), then `add_secret` / `replace_secret`. New item ids use `NookVaultManager.generate_secret_id()`.
 
 **Mobile / other hosts:** Link `nook-core` directly (UniFFI, JNI, etc.) and reuse the same `SecretRecord`, `SecretValue`, and `secret_view` helpers — no TS mirror required.
 
@@ -43,6 +61,6 @@
 5. **`nook-web`** — add-secret form fields + `SecretDetailRow` rendering only. **No** new TS struct mirror or `parseVaultItem` arm.
 6. **Playwright** — e2e for the new form if user-visible.
 
-## 5. Testing
+## 6. Testing
 - Test vault formats, crypto, validation, and passwords in `nook-core` (`cargo nextest run -p nook-core --profile ci`, or `task rust:test`).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.

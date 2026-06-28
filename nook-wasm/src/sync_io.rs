@@ -14,19 +14,15 @@ use crate::storage::github::{
     write_github_text_file_with_retry,
 };
 use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
+use crate::{
+    NookReconcileVaultBlobsResult, NookRemoteVaultFetch, NookResolveConflictKeepLocalResult,
+    NookResolveConflictKeepRemoteResult,
+};
 use nook_core::{
     MemoryVaultStore, reconcile_vault_stores, resolve_conflict_keep_local,
     resolve_conflict_keep_remote,
 };
-use serde::Serialize;
 use wasm_bindgen::prelude::*;
-
-#[derive(Serialize)]
-struct RemoteVaultFetchResult {
-    content: String,
-    revision: Option<String>,
-    missing: bool,
-}
 
 #[wasm_bindgen(js_name = readLocalVaultYaml)]
 pub async fn read_local_vault_yaml() -> Result<String, JsError> {
@@ -48,7 +44,7 @@ pub async fn fetch_remote_vault_yaml(
     storage_mode: String,
     github_pat: String,
     github_repo: String,
-) -> Result<JsValue, JsError> {
+) -> Result<NookRemoteVaultFetch, JsError> {
     let mode = nook_core::StorageMode::parse(&storage_mode).map_err(NookError::Database)?;
     let mut github_root_empty = false;
 
@@ -85,12 +81,7 @@ pub async fn fetch_remote_vault_yaml(
         }
     };
 
-    serde_wasm_bindgen::to_value(&RemoteVaultFetchResult {
-        content,
-        revision,
-        missing,
-    })
-    .map_err(|e| JsError::new(&e.to_string()))
+    Ok(NookRemoteVaultFetch::new(content, revision, missing))
 }
 
 #[wasm_bindgen(js_name = writeRemoteVaultYaml)]
@@ -138,27 +129,6 @@ pub async fn write_remote_vault_yaml(
     .map_err(|e: NookError| JsError::new(&e.to_string()))
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReconcileVaultBlobsResult {
-    action: String,
-    local_yaml: String,
-    remote_yaml: String,
-    remote_revision: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ResolveConflictKeepLocalResult {
-    remote_yaml: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ResolveConflictKeepRemoteResult {
-    local_yaml: String,
-}
-
 fn vault_sync_action_label(action: nook_core::VaultSyncAction) -> &'static str {
     match action {
         nook_core::VaultSyncAction::Unchanged => "unchanged",
@@ -180,17 +150,16 @@ pub fn reconcile_vault_blobs(
     local_yaml: String,
     remote_yaml: String,
     remote_revision: Option<String>,
-) -> Result<JsValue, JsError> {
+) -> Result<NookReconcileVaultBlobsResult, JsError> {
     let mut local = MemoryVaultStore::with_blob(local_yaml);
     let mut remote = remote_memory_store(remote_yaml, remote_revision);
     let action = reconcile_vault_stores(&mut local, &mut remote).map_err(|e| JsError::new(&e))?;
-    serde_wasm_bindgen::to_value(&ReconcileVaultBlobsResult {
-        action: vault_sync_action_label(action).to_owned(),
-        local_yaml: local.blob().to_owned(),
-        remote_yaml: remote.blob().to_owned(),
-        remote_revision: remote.revision().map(str::to_owned),
-    })
-    .map_err(|e| JsError::new(&e.to_string()))
+    Ok(NookReconcileVaultBlobsResult::new(
+        vault_sync_action_label(action).to_owned(),
+        local.blob().to_owned(),
+        remote.blob().to_owned(),
+        remote.revision().map(str::to_owned),
+    ))
 }
 
 /// User chose "keep local" — return the remote blob content to write to storage.
@@ -199,14 +168,11 @@ pub fn resolve_vault_conflict_keep_local(
     local_yaml: String,
     remote_yaml: String,
     remote_revision: Option<String>,
-) -> Result<JsValue, JsError> {
+) -> Result<NookResolveConflictKeepLocalResult, JsError> {
     let local = MemoryVaultStore::with_blob(local_yaml);
     let mut remote = remote_memory_store(remote_yaml, remote_revision);
     resolve_conflict_keep_local(&local, &mut remote);
-    serde_wasm_bindgen::to_value(&ResolveConflictKeepLocalResult {
-        remote_yaml: remote.blob().to_owned(),
-    })
-    .map_err(|e| JsError::new(&e.to_string()))
+    Ok(NookResolveConflictKeepLocalResult::new(remote.blob().to_owned()))
 }
 
 /// User chose "keep remote" — return the local blob content to write to `IndexedDB`.
@@ -215,12 +181,9 @@ pub fn resolve_vault_conflict_keep_remote(
     local_yaml: String,
     remote_yaml: String,
     remote_revision: Option<String>,
-) -> Result<JsValue, JsError> {
+) -> Result<NookResolveConflictKeepRemoteResult, JsError> {
     let mut local = MemoryVaultStore::with_blob(local_yaml);
     let remote = remote_memory_store(remote_yaml, remote_revision);
     resolve_conflict_keep_remote(&mut local, &remote);
-    serde_wasm_bindgen::to_value(&ResolveConflictKeepRemoteResult {
-        local_yaml: local.blob().to_owned(),
-    })
-    .map_err(|e| JsError::new(&e.to_string()))
+    Ok(NookResolveConflictKeepRemoteResult::new(local.blob().to_owned()))
 }

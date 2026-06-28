@@ -6,18 +6,13 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::NookPasswordEntrySummary;
+use crate::NookSecretRecord;
 use crate::conversion::{records_to_armored, records_to_secret_types, wasm_iso_timestamp};
 use crate::storage::indexed_db::{load_vault_local_cache, save_device_identity_to_indexed_db};
-use serde::Serialize;
+use crate::types::password_entries_to_vec;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-#[derive(Serialize)]
-struct PasswordEntrySummary {
-    id: String,
-    label: String,
-    created_at: String,
-}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -29,8 +24,8 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(js_name = "listVaultPasswordEntries")]
-    pub fn list_vault_password_entries(&self) -> Result<js_sys::Array, JsError> {
-        password_entry_summaries_to_js(&self.password_entries)
+    pub fn list_vault_password_entries(&self) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
+        Ok(password_entries_to_vec(&self.password_entries))
     }
 
     #[wasm_bindgen(js_name = "fetchVaultPasswordEntries")]
@@ -39,7 +34,7 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let mut vault_missing = false;
@@ -47,17 +42,17 @@ impl NookVaultManager {
         if vault_missing || content.trim().is_empty() {
             if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await? {
                 if cached.trim().is_empty() {
-                    return Ok(js_sys::Array::new());
+                    return Ok(Vec::new());
                 }
                 content = cached;
             } else {
-                return Ok(js_sys::Array::new());
+                return Ok(Vec::new());
             }
         }
         let entries =
             nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;
         self.password_entries = entries.clone();
-        password_entry_summaries_to_js(&entries)
+        Ok(password_entries_to_vec(&entries))
     }
 
     #[wasm_bindgen(js_name = "verifyVaultPassword")]
@@ -158,7 +153,7 @@ impl NookVaultManager {
         github_repo: String,
         entry_id: String,
         password: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
@@ -236,24 +231,6 @@ impl NookVaultManager {
             .map_err(NookError::Decryption)?;
         self.decrypted_jsonl = database.to_jsonl().map_err(NookError::Database)?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
-}
-
-fn password_entry_summaries_to_js(
-    entries: &[nook_core::PasswordUnlockEntry],
-) -> Result<js_sys::Array, JsError> {
-    let array = js_sys::Array::new();
-    for entry in entries {
-        let summary = PasswordEntrySummary {
-            id: entry.id.clone(),
-            label: entry.label.clone(),
-            created_at: entry.created_at.clone(),
-        };
-        array.push(
-            &serde_wasm_bindgen::to_value(&summary)
-                .map_err(|e| NookError::Database(e.to_string()))?,
-        );
-    }
-    Ok(array)
 }

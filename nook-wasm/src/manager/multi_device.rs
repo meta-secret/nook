@@ -12,8 +12,8 @@ use crate::conversion::{
     records_to_secret_types, wasm_iso_timestamp,
 };
 use crate::storage::indexed_db::save_device_identity_to_indexed_db;
+use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use wasm_bindgen::JsError;
-use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -24,77 +24,13 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub fn list_pending_joins(&self) -> Result<js_sys::Array, JsError> {
-        let records = self.stored_records_snapshot();
-        let pending = nook_core::list_join_requests(&records);
-        let array = js_sys::Array::new();
-        for join in pending {
-            let obj = js_sys::Object::new();
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("device_id"),
-                &JsValue::from_str(&join.device_id),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build join object.".to_owned()))?;
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("public_key"),
-                &JsValue::from_str(&join.public_key),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build join object.".to_owned()))?;
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("requested_at"),
-                &JsValue::from_str(&join.requested_at),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build join object.".to_owned()))?;
-            array.push(&obj);
-        }
-        Ok(array)
+    pub fn list_pending_joins(&self) -> Result<Vec<NookJoinRequest>, JsError> {
+        Ok(self.pending_joins()?)
     }
 
     /// Pull the latest vault file from storage when it changed; update the active session.
-    pub fn list_vault_members(&self) -> Result<js_sys::Array, JsError> {
-        let records = self.stored_records_snapshot();
-        let members_key = self.members_key.clone();
-        let members = nook_core::resolve_member_roster(&records, &members_key)
-            .map_err(NookError::Decryption)?;
-        let array = js_sys::Array::new();
-        for member in members {
-            let obj = js_sys::Object::new();
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("auth_id"),
-                &JsValue::from_str(&member.auth_id),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("device_id"),
-                &JsValue::from_str(&member.device_id),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("public_key"),
-                &JsValue::from_str(&member.public_key),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("enrolled_at"),
-                &JsValue::from_str(&member.enrolled_at),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
-            js_sys::Reflect::set(
-                &obj,
-                &JsValue::from_str("label"),
-                &JsValue::from_str(member.label.as_deref().unwrap_or_default()),
-            )
-            .map_err(|_| NookError::Serialization("Failed to build member object.".to_owned()))?;
-            array.push(&obj);
-        }
-        Ok(array)
+    pub fn list_vault_members(&self) -> Result<Vec<NookVaultMember>, JsError> {
+        Ok(self.vault_members()?)
     }
 
     /// Device B requests access without decrypting the vault (writes join record only).
@@ -150,7 +86,7 @@ impl NookVaultManager {
         github_repo: String,
         secrets_key: String,
         members_key: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity().await?;
@@ -197,7 +133,7 @@ impl NookVaultManager {
         self.decrypted_jsonl = jsonl;
         self.stored_armored = armored;
         self.secret_types = secret_types;
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     /// Device B publishes a join request record with its public key.
@@ -214,7 +150,7 @@ impl NookVaultManager {
     pub async fn approve_join_request(
         &mut self,
         join_device_id: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
         let pending = nook_core::list_join_requests(&records);
@@ -235,13 +171,13 @@ impl NookVaultManager {
             .insert(auth_record.key.clone(), auth_record.value);
         apply_member_records(&mut self.stored_armored, &member_records);
         self.save_current_db().await?;
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     pub async fn deny_join_request(
         &mut self,
         join_device_id: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let records = self.stored_records_snapshot();
         if !records.iter().any(|record| {
             nook_core::parse_join_request(&record.value)
@@ -253,7 +189,7 @@ impl NookVaultManager {
         self.stored_armored = records_to_armored(&updated);
         self.secret_types = records_to_secret_types(&updated);
         self.save_current_db().await?;
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     pub async fn rename_vault_member(
@@ -270,7 +206,7 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub async fn revoke_vault_member(&mut self, auth_id: String) -> Result<js_sys::Array, JsError> {
+    pub async fn revoke_vault_member(&mut self, auth_id: String) -> Result<Vec<NookSecretRecord>, JsError> {
         let identity = self.device_identity()?;
         let is_self = auth_id == identity.auth_id();
         let records = self.stored_records_snapshot();
@@ -285,10 +221,10 @@ impl NookVaultManager {
             self.members_key.clear();
             self.crypto = None;
             self.decrypted_jsonl.clear();
-            return Ok(js_sys::Array::new());
+            return Ok(Vec::new());
         }
 
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     /// Device B self-enrolls when it already holds `secrets_key` and `members_key` out-of-band.
@@ -296,7 +232,7 @@ impl NookVaultManager {
         &mut self,
         secrets_key: String,
         members_key: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let identity = self.device_identity()?;
         let (auth, members) = nook_core::enroll_device_with_keys(
             &secrets_key,
@@ -311,11 +247,11 @@ impl NookVaultManager {
             self.stored_armored.insert(member.key.clone(), member.value);
         }
         self.save_current_db().await?;
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     /// Back-compat alias — `members_key` must equal `secrets_key` (legacy test path only).
-    pub async fn enroll_with_dec(&mut self, dec: String) -> Result<js_sys::Array, JsError> {
+    pub async fn enroll_with_dec(&mut self, dec: String) -> Result<Vec<NookSecretRecord>, JsError> {
         self.enroll_with_keys(dec.clone(), dec).await
     }
 }

@@ -25,7 +25,9 @@ mod secrets;
 mod sync;
 
 use crate::NookError;
-use crate::conversion::{apply_member_records, records_to_array};
+use crate::conversion::{apply_member_records, pending_joins_to_vec, vault_members_to_vec};
+use crate::types::records_to_vec;
+use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use crate::storage::{
     drive::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
@@ -180,12 +182,19 @@ impl NookVaultManager {
 // submodules can call them without leaking into the rest of the crate.
 
 impl NookVaultManager {
-    /// `pub(crate)` because `conversion::sync_result_session` reads it when
-    /// building the sync-result JS object.
-    pub(crate) fn get_records_as_array(&self) -> Result<js_sys::Array, NookError> {
+    /// Typed secret list for the active decrypted session.
+    pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
         let db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
-        records_to_array(db.list())
+        records_to_vec(db.list())
+    }
+
+    pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {
+        Ok(pending_joins_to_vec(&self.stored_records_snapshot()))
+    }
+
+    pub(crate) fn vault_members(&self) -> Result<Vec<NookVaultMember>, NookError> {
+        vault_members_to_vec(&self.stored_records_snapshot(), &self.members_key)
     }
 
     pub(in crate::manager) async fn save_current_db(&mut self) -> Result<(), NookError> {

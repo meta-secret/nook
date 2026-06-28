@@ -9,6 +9,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::NookSecretRecord;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, content_requires_genesis, load_stored_vault,
 };
@@ -60,7 +61,7 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         self.connect_internal(storage_mode, github_pat, github_repo, false)
             .await
     }
@@ -71,7 +72,7 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         self.connect_internal(storage_mode, github_pat, github_repo, true)
             .await
     }
@@ -94,7 +95,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
         force_genesis: bool,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
@@ -159,7 +160,7 @@ impl NookVaultManager {
         }
 
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     fn initialize_genesis_vault(
@@ -188,7 +189,7 @@ impl NookVaultManager {
     }
 
     // Initialize an empty database
-    pub async fn initialize_empty(&mut self) -> Result<js_sys::Array, JsError> {
+    pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("INITIALIZE_START".to_owned());
         self.decrypted_jsonl = String::new();
         self.stored_armored.retain(|key, value| {
@@ -215,6 +216,6 @@ impl NookVaultManager {
         }
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 }

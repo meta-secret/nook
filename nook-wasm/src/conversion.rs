@@ -1,35 +1,13 @@
-//! Glue between `nook_core` data structures and the JS-facing shapes the
-//! session manager exposes.
-//!
-//! Contents:
-//! - `records_to_array` — wraps a `Vec<SecretRecord>` into a `js_sys::Array`
-//!   of `NookSecretRecord` wasm objects.
-//! - `records_to_armored` / `records_to_secret_types` — derive the in-memory
-//!   caches we hold on `NookVaultManager` from a freshly-loaded record list.
-//! - `content_requires_genesis` / `access_status_for_vault_content` —
-//!   pre-flight checks used by `connect` and `assess_vault_connect` to
-//!   decide whether the device needs to write a genesis vault or block on
-//!   join/approval.
-//! - `sync_result_*` — the JS object shapes returned by
-//!   `sync_vault_from_storage` (`{changed, ...}`).
-//! - `LoadedVault` + `load_stored_vault` — single-shot decryption of a YAML
-//!   file into the armored cache + plaintext JSONL session string for the
-//!   keys-mode connect path.
+//! Glue between `nook_core` data structures and typed wasm exports.
 
-use crate::{NookError, NookSecretRecord, NookVaultManager};
+use crate::types::{
+    NookVaultSyncResult, joins_to_vec, members_to_vec,
+};
+use crate::{NookError, NookVaultManager};
 use std::collections::HashMap;
-use wasm_bindgen::{JsError, JsValue};
+use wasm_bindgen::JsError;
 
-pub(crate) fn records_to_array(
-    records: Vec<nook_core::SecretRecord>,
-) -> Result<js_sys::Array, NookError> {
-    let array = js_sys::Array::new();
-    for record in records {
-        let wasm_record = NookSecretRecord::from_record(record);
-        array.push(&JsValue::from(wasm_record));
-    }
-    Ok(array)
-}
+pub(crate) use crate::types::records_to_vec;
 
 pub(crate) fn records_to_armored(
     records: &[nook_core::StoredSecretRecord],
@@ -88,36 +66,19 @@ pub(crate) fn access_status_for_vault_content(
     .to_owned())
 }
 
-pub(crate) fn sync_result_unchanged() -> Result<JsValue, JsError> {
-    let obj = js_sys::Object::new();
-    js_set(&obj, "changed", &JsValue::FALSE)?;
-    Ok(obj.into())
+pub(crate) fn sync_result_unchanged() -> Result<NookVaultSyncResult, JsError> {
+    Ok(NookVaultSyncResult::unchanged())
 }
 
-pub(crate) fn sync_result_access_status(status: &str) -> Result<JsValue, JsError> {
-    let obj = js_sys::Object::new();
-    js_set(&obj, "changed", &JsValue::TRUE)?;
-    js_set(&obj, "access_status", &JsValue::from_str(status))?;
-    Ok(obj.into())
+pub(crate) fn sync_result_access_status(status: &str) -> Result<NookVaultSyncResult, JsError> {
+    Ok(NookVaultSyncResult::with_access_status(status.to_owned()))
 }
 
 pub(crate) fn sync_result_session(
     manager: &NookVaultManager,
     changed: bool,
-) -> Result<JsValue, JsError> {
-    let obj = js_sys::Object::new();
-    js_set(&obj, "changed", &JsValue::from_bool(changed))?;
-    js_set(&obj, "secrets", &manager.get_records_as_array()?.into())?;
-    js_set(&obj, "pending_joins", &manager.list_pending_joins()?.into())?;
-    js_set(&obj, "vault_members", &manager.list_vault_members()?.into())?;
-    Ok(obj.into())
-}
-
-fn js_set(obj: &js_sys::Object, key: &str, value: &JsValue) -> Result<(), NookError> {
-    js_sys::Reflect::set(obj, &JsValue::from_str(key), value).map_err(|_| {
-        NookError::Serialization(format!("Failed to set sync result field `{key}`."))
-    })?;
-    Ok(())
+) -> Result<NookVaultSyncResult, JsError> {
+    Ok(NookVaultSyncResult::session(manager, changed)?)
 }
 
 pub(crate) fn apply_member_records(
@@ -170,4 +131,30 @@ pub(crate) fn load_stored_vault(
         secrets_key,
         members_key,
     })
+}
+
+pub(crate) fn pending_join_records(
+    records: &[nook_core::StoredSecretRecord],
+) -> Vec<nook_core::JoinRequest> {
+    nook_core::list_join_requests(records)
+}
+
+pub(crate) fn vault_member_records(
+    records: &[nook_core::StoredSecretRecord],
+    members_key: &str,
+) -> Result<Vec<nook_core::VaultMember>, NookError> {
+    nook_core::resolve_member_roster(records, members_key).map_err(NookError::Decryption)
+}
+
+pub(crate) fn pending_joins_to_vec(
+    records: &[nook_core::StoredSecretRecord],
+) -> Vec<crate::NookJoinRequest> {
+    joins_to_vec(pending_join_records(records))
+}
+
+pub(crate) fn vault_members_to_vec(
+    records: &[nook_core::StoredSecretRecord],
+    members_key: &str,
+) -> Result<Vec<crate::NookVaultMember>, NookError> {
+    Ok(members_to_vec(vault_member_records(records, members_key)?))
 }

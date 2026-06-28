@@ -15,10 +15,15 @@ mod conversion;
 mod manager;
 mod storage;
 mod sync_io;
+mod types;
 
 pub use manager::NookVaultManager;
+pub use types::{
+    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult,
+    NookRemoteVaultFetch, NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult,
+    NookSecretFormFields, NookVaultMember, NookVaultSyncResult,
+};
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug)]
 pub enum NookError {
@@ -90,6 +95,7 @@ pub fn read_vault_version(yaml: &str) -> u64 {
 }
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookSecretRecord {
     record: nook_core::SecretRecord,
 }
@@ -221,12 +227,10 @@ impl NookSecretRecord {
 #[wasm_bindgen(js_name = buildSecretYaml)]
 pub fn build_secret_yaml(
     secret_type: &str,
-    fields: JsValue,
+    fields: &NookSecretFormFields,
 ) -> Result<String, wasm_bindgen::JsError> {
     let parsed = nook_core::SecretType::parse(secret_type).map_err(NookError::Database)?;
-    let json: serde_json::Value = serde_wasm_bindgen::from_value(fields)
-        .map_err(|error| NookError::Serialization(error.to_string()))?;
-    nook_core::build_secret_yaml(parsed, &json)
+    nook_core::build_secret_yaml(parsed, &fields.to_json_value())
         .map_err(NookError::Database)
         .map_err(Into::into)
 }
