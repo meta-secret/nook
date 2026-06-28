@@ -166,7 +166,7 @@ pub fn build_secret_yaml(secret_type: SecretType, fields: &serde_json::Value) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ApiKeySecret, LoginSecret, SecureNoteSecret, SeedPhraseSecret};
+    use crate::LoginSecret;
 
     fn login_record() -> SecretRecord {
         SecretRecord {
