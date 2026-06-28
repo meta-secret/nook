@@ -12,7 +12,7 @@
 
   let {
     vault,
-    storageMode,
+    storageMode = 'local' as StorageProviderType,
     githubRepo = '',
     lastSyncedAt = null as Date | null,
     isSyncing = false,
@@ -23,14 +23,14 @@
     showSyncStatus = true,
     showStorageIcon = true,
     variant = 'panel',
-    onRefresh,
     syncConflictLabel = '',
     onOpenSyncConflict,
+    onRefresh,
     onDismissSuccess,
     onDismissError,
   }: {
     vault?: VaultState
-    storageMode: StorageProviderType
+    storageMode?: StorageProviderType
     githubRepo?: string
     lastSyncedAt?: Date | null
     isSyncing?: boolean
@@ -77,19 +77,47 @@
       : `${Math.floor(mins / 60)}h ago`
   }
 
+  const isAuthenticatedVault = $derived(Boolean(vault?.isAuthenticated))
+  const isQuiet = $derived(variant === 'quiet')
+
   const statusLabel = $derived(
     label ??
-      (storageMode === 'github'
-        ? githubRepo.trim() || 'GitHub'
-        : storageMode === 'oauth-file'
-          ? vault
-            ? vault.t('provider_picker.google_drive')
-            : 'Google Drive'
-          : vault
-            ? vault.t('provider_picker.this_device')
-            : 'This device'),
+      (isAuthenticatedVault
+        ? vault!.t('status_bar.local_vault')
+        : storageMode === 'github'
+          ? githubRepo.trim() || 'GitHub'
+          : storageMode === 'oauth-file'
+            ? vault
+              ? vault.t('provider_picker.google_drive')
+              : 'Google Drive'
+            : vault
+              ? vault.t('provider_picker.this_device')
+              : 'This device'),
   )
-  const isQuiet = $derived(variant === 'quiet')
+
+  const syncDetail = $derived.by(() => {
+    if (!vault || !showSyncStatus) return ''
+    if (vault.syncingProviderLabel) {
+      return vault.t('status_bar.syncing_to', {
+        provider: vault.syncingProviderLabel,
+      })
+    }
+    if (vault.isFanOutSyncing) {
+      return vault.t('status_bar.syncing_providers')
+    }
+    if (vault.syncProviderCount > 0) {
+      return vault.syncProviderCount === 1
+        ? vault.t('status_bar.sync_providers_singular')
+        : vault.t('status_bar.sync_providers_plural', {
+            count: String(vault.syncProviderCount),
+          })
+    }
+    return vault.t('status_bar.saved_local_only')
+  })
+
+  const showRefresh = $derived(
+    Boolean(onRefresh && (isAuthenticatedVault || storageMode === 'github')),
+  )
 </script>
 
 <div
@@ -106,7 +134,12 @@
     >
       <div class="flex min-w-0 items-center gap-2 text-muted-foreground">
         {#if showStorageIcon}
-          {#if storageMode === 'github'}
+          {#if isAuthenticatedVault}
+            <HardDrive
+              class="size-3.5 shrink-0 text-primary/80"
+              aria-hidden="true"
+            />
+          {:else if storageMode === 'github'}
             <Cloud
               class="size-3.5 shrink-0 text-primary/80"
               aria-hidden="true"
@@ -139,7 +172,32 @@
             v{appVersion}
           </span>
         {/if}
-        {#if showSyncStatus}
+        {#if showSyncStatus && isAuthenticatedVault}
+          <span
+            class="hidden text-muted-foreground sm:inline"
+            aria-hidden="true">·</span
+          >
+          <span
+            class="shrink-0 text-muted-foreground"
+            data-testid="vault-last-sync"
+          >
+            {vault!.t('status_bar.saved')}
+            {formatLastSync(lastSyncedAt)}
+          </span>
+          {#if syncDetail}
+            <span
+              class="hidden text-muted-foreground sm:inline"
+              aria-hidden="true">·</span
+            >
+            <span
+              class="shrink-0 text-muted-foreground"
+              data-testid="vault-sync-out-status"
+              class:animate-pulse={vault!.isSyncActivityVisible}
+            >
+              {syncDetail}
+            </span>
+          {/if}
+        {:else if showSyncStatus}
           <span
             class="hidden text-muted-foreground sm:inline"
             aria-hidden="true">·</span
@@ -160,46 +218,52 @@
         {/if}
       </div>
 
-      {#if onRefresh}
+      {#if showRefresh}
         <div class="group relative inline-block">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             class="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
-            disabled={isSyncing}
+            disabled={isSyncing || vault?.syncBlocked}
             data-testid="vault-sync-refresh-btn"
-            aria-label={storageMode === 'github'
-              ? vault
-                ? vault.t('status_bar.sync_aria_github')
-                : 'Sync vault with GitHub'
-              : vault
-                ? vault.t('status_bar.refresh_aria_local')
-                : 'Refresh vault from browser storage'}
-            onclick={() => void onRefresh()}
+            aria-label={isAuthenticatedVault
+              ? vault!.t('status_bar.sync_all_aria')
+              : storageMode === 'github'
+                ? vault
+                  ? vault.t('status_bar.sync_aria_github')
+                  : 'Sync vault with GitHub'
+                : vault
+                  ? vault.t('status_bar.refresh_aria_local')
+                  : 'Refresh vault from browser storage'}
+            onclick={() => void onRefresh?.()}
           >
             <RefreshCw class="size-3.5 {isSyncing ? 'animate-spin' : ''}" />
             <span class="ml-1"
-              >{storageMode === 'github'
-                ? vault
-                  ? vault.t('status_bar.sync')
-                  : 'Sync'
-                : vault
-                  ? vault.t('status_bar.refresh')
-                  : 'Refresh'}</span
+              >{isAuthenticatedVault
+                ? vault!.t('status_bar.sync_all')
+                : storageMode === 'github'
+                  ? vault
+                    ? vault.t('status_bar.sync')
+                    : 'Sync'
+                  : vault
+                    ? vault.t('status_bar.refresh')
+                    : 'Refresh'}</span
             >
           </Button>
           <div
             class="pointer-events-none absolute bottom-full right-0 z-50 mb-2 rounded-md border border-border bg-popover px-2.5 py-1 text-[11px] font-medium text-popover-foreground opacity-0 shadow-md transition-opacity duration-200 group-hover:opacity-100 whitespace-nowrap"
             role="tooltip"
           >
-            {storageMode === 'github'
-              ? vault
-                ? vault.t('status_bar.sync_tooltip_github')
-                : 'Synchronize latest changes with your storage provider'
-              : vault
-                ? vault.t('status_bar.refresh_tooltip_local')
-                : 'Reload latest changes from browser storage'}
+            {isAuthenticatedVault
+              ? vault!.t('status_bar.sync_all_tooltip')
+              : storageMode === 'github'
+                ? vault
+                  ? vault.t('status_bar.sync_tooltip_github')
+                  : 'Synchronize latest changes with your storage provider'
+                : vault
+                  ? vault.t('status_bar.refresh_tooltip_local')
+                  : 'Reload latest changes from browser storage'}
           </div>
         </div>
       {/if}

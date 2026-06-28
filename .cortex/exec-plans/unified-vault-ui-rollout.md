@@ -2,7 +2,8 @@
 
 Gradual UI migration from **provider-as-vault** to **local-first unified vault** with optional sync providers. Work proceeds page-by-page so each step is reviewable and e2e-testable.
 
-**Related:** [design-docs/unified-vault.md](../design-docs/unified-vault.md).
+**Related:** [design-docs/unified-vault.md](../design-docs/unified-vault.md).  
+**Epic:** [GitHub #70](https://github.com/meta-secret/nook/issues/70).
 
 ---
 
@@ -12,10 +13,27 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 2. **Keep the app usable** — feature-flag or parallel paths during transition if needed.
 3. **E2E after every slice** — update Playwright specs in the same PR as UI changes.
 4. **Rust-first sync logic** — UI only calls WASM (`compareVaultSync`, version getters); no sync rules in TypeScript.
+5. **Stacked PRs** — each phase branches from the previous; squash-merge in order (#61 → #71 → #72 → …).
 
 ---
 
-## Phase 0 — Foundation (this PR)
+## Progress tracker
+
+| Phase | Issue | PR | Status |
+|-------|-------|-----|--------|
+| 0 Foundation | — | [#61](https://github.com/meta-secret/nook/pull/61) | Merged / base |
+| 1 Login gate | [#62](https://github.com/meta-secret/nook/issues/62) | [#71](https://github.com/meta-secret/nook/pull/71) | Ready |
+| 2 Sync providers | [#63](https://github.com/meta-secret/nook/issues/63) | [#72](https://github.com/meta-secret/nook/pull/72) | Ready |
+| 3 Conflict dialog | [#64](https://github.com/meta-secret/nook/issues/64) | [#73](https://github.com/meta-secret/nook/pull/73) | Ready |
+| 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | #74 (pending) | In progress |
+| 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | — | Planned |
+| 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | — | Planned |
+| 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | — | Planned |
+| 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | — | Planned |
+
+---
+
+## Phase 0 — Foundation (#61)
 
 | Deliverable | Location |
 |-------------|----------|
@@ -29,126 +47,106 @@ No user-visible UI changes yet.
 
 ---
 
-## Phase 1 — Login gate (`LoginGate`)
-
-**Current:** Two-step wizard — (1) pick storage provider, (2) unlock method.
+## Phase 1 — Login gate (#62, #71) ✅
 
 **Target:** Single unlock screen when local vault exists.
 
-| # | Change | Component | Test id / e2e |
-|---|--------|-----------|---------------|
-| 1.1 | Detect local vault on init; skip provider picker when present | `VaultState.init()` | `login-local-vault-detected` |
-| 1.2 | Replace connection step with **master password** field as primary unlock | `LoginGate`, new `LoginUnlockStep` | `login-master-password-input`, `unlock-vault-btn` |
-| 1.3 | Move "first-time setup" to **Create vault** flow: set password → create local vault | `LoginGate` (no providers variant) | `login-create-vault-btn` |
-| 1.4 | Collapse provider management into "Sync later" link (Settings) | Remove `LoginConnectionStep` from default path | — |
-| 1.5 | Keep device-key unlock as advanced option (accordion) | `LoginAuthorizationStep` (simplified) | `login-unlock-method-keys` |
-| 1.6 | Update copy: "Your vault lives on this device" | `ProductIntro`, locale catalogs | — |
+| # | Change | Component |
+|---|--------|-----------|
+| 1.1 | Detect local vault on init | `VaultState.init()`, `local-vault.ts` |
+| 1.2 | Master password primary unlock | `LoginUnlockStep`, `LoginCreateVaultStep` |
+| 1.3 | Create vault flow | `LoginGate` |
+| 1.4 | Legacy provider wizard escape hatch | `LoginGate` |
+| 1.5 | Device-key unlock accordion | `LoginAuthorizationStep` |
 
-**E2E:** Rewrite `e2e/login-unlock-flow.spec.ts` for password-first local unlock.
-
-**Exit criteria:** New user creates local vault with password; returning user unlocks without picking a provider.
+**E2E:** `e2e/login-unlock-flow.spec.ts`
 
 ---
 
-## Phase 2 — Settings: sync providers (`AuthStorage` / `VaultSettingsAccordion`)
-
-**Current:** Providers list with "active provider" switch; reconnect reloads vault from that provider.
-
-**Target:** Sync providers are optional replicas; local vault is always canonical.
+## Phase 2 — Sync providers (#63, #72) ✅
 
 | # | Change | Component |
 |---|--------|-----------|
-| 2.1 | Rename "Storage providers" → **Sync providers** | `VaultSettingsAccordion`, locale |
-| 2.2 | Remove "active provider" concept — all enabled providers sync | `VaultState`, `auth-providers.ts` → `sync-providers.ts` |
-| 2.3 | **Add sync provider** flow: connect credentials → fetch remote → reconcile | New `SyncProviderSetup` |
-| 2.4 | Show per-provider sync status (version, last synced) | `AuthStorage` row metadata |
-| 2.5 | **Reconnect** → re-run `compareVaultSync`, not full vault reload | `VaultState.manualSync()` |
+| 2.1 | Rename → **Sync providers** | `VaultSettingsAccordion`, locales |
+| 2.2 | Local vault canonical; no active switch | `VaultState`, `AuthStorage` |
+| 2.3 | Connect + reconcile flow | `connectAndSyncStagedProvider`, `sync_io.rs` |
+| 2.4 | Per-provider sync status | `AuthStorage` |
+| 2.5 | Manual sync via `compareVaultSync` | `syncProviderById`, `manualSync` |
 
-**E2E:** Add `e2e/sync-provider-connect.spec.ts` — local vault + GitHub push on connect.
+**E2E:** `e2e/sync-provider-connect.spec.ts`, updated `connect.spec.ts`
 
 ---
 
-## Phase 3 — Conflict resolution dialog
-
-**Trigger:** `compareVaultSync` returns `conflict`.
+## Phase 3 — Conflict dialog (#64, #73) ✅
 
 | # | Change | Component |
 |---|--------|-----------|
-| 3.1 | Modal: "Local and remote vaults diverged" with version + timestamp | `VaultSyncConflictDialog` |
-| 3.2 | Actions: **Keep local** / **Keep remote** | Calls WASM push or adopt path |
-| 3.3 | Block vault edits until conflict resolved | `VaultState.syncBlocked` flag |
-| 3.4 | Show conflict banner in status bar | `VaultStatusBar` |
+| 3.1 | Conflict modal | `VaultSyncConflictDialog` |
+| 3.2 | Keep local / Keep remote | `resolveSyncConflictKeepLocal/Remote` |
+| 3.3 | Block edits until resolved | `syncBlocked`, `SecretVault` |
+| 3.4 | Status bar banner | `VaultStatusBar` |
 
-**E2E:** `e2e/sync-conflict-resolution.spec.ts` with fixture vaults at same version.
+**E2E:** `e2e/sync-conflict-resolution.spec.ts`
 
 ---
 
-## Phase 4 — Secret vault (`SecretVault`)
-
-Minimal changes — vault CRUD stays the same once unlocked.
+## Phase 4 — Secret vault fan-out (#65, #74)
 
 | # | Change | Component |
 |---|--------|-----------|
-| 4.1 | After save, fan-out push to all enabled sync providers | `VaultState.handleAddSecret` etc. |
-| 4.2 | Status bar shows "Syncing to GitHub…" per provider | `VaultStatusBar` |
-| 4.3 | Remove storage-mode icon dependency on active provider | `VaultStatusBar` |
+| 4.1 | Fan-out push after secret CRUD | `fanOutSyncToProviders`, `scheduleFanOutSyncAfterLocalSave` |
+| 4.2 | Status bar: local vault + sync activity | `VaultStatusBar` (`vault-sync-out-status`) |
+| 4.3 | Remove active-provider icon dependency | Status bar always shows local icon when authenticated |
+
+**E2E:** `e2e/sync-fanout.spec.ts`; update `github-vault.spec.ts` for local-first status bar.
 
 ---
 
-## Phase 5 — Onboard (`OnboardDevice`)
-
-**Current:** QR bundles provider credentials + vault password.
-
-**Target:** QR bundles sync provider + enrollment keys; vault is always local-first on new device.
+## Phase 5 — Onboard (#66)
 
 | # | Change |
 |---|--------|
-| 5.1 | Enrollment code references sync provider for initial pull, not vault location |
-| 5.2 | New device: create local cache from remote, then unlock with password |
+| 5.1 | Enrollment code references sync provider for initial pull |
+| 5.2 | New device: local cache from remote, unlock with password |
 | 5.3 | Update `EnrollmentQrOnboardCard` copy |
 
 ---
 
-## Phase 6 — Help (`HelpPage`)
+## Phase 6 — Help (#67)
 
 | # | Change |
 |---|--------|
-| 6.1 | Rewrite architecture section for unified vault model |
-| 6.2 | Add sync / conflict resolution FAQ |
-| 6.3 | Update mermaid diagrams in `help-content.ts` |
+| 6.1 | Rewrite architecture section |
+| 6.2 | Sync / conflict FAQ |
+| 6.3 | Update mermaid in `help-content.ts` |
 
 ---
 
-## Phase 7 — Join / multi-device flows
+## Phase 7 — Join / multi-device (#68)
 
 | # | Change |
 |---|--------|
-| 7.1 | Join requests operate on local vault; sync propagates `joins:` to providers |
-| 7.2 | `PendingJoinsBanner` unchanged visually; sync layer updated |
-| 7.3 | `JoinEnrollmentDialog` — clarify device keys vs master password |
+| 7.1 | Join requests on local vault; fan-out propagates `joins:` |
+| 7.2 | `PendingJoinsBanner` sync layer |
+| 7.3 | `JoinEnrollmentDialog` copy |
 
 ---
 
-## Phase 8 — Migration & cleanup
+## Phase 8 — Migration & cleanup (#69)
 
 | # | Change |
 |---|--------|
-| 8.1 | One-time migration: copy active provider vault → local `encrypted_db` |
-| 8.2 | Deprecate `LoginConnectionStep`, `LoginWizard` two-step flow |
+| 8.1 | Copy active provider vault → local `encrypted_db` |
+| 8.2 | Deprecate legacy login wizard paths |
 | 8.3 | Remove `activeProviderId` from auth snapshot |
-| 8.4 | Update all e2e helpers (`resetBrowserState`) |
+| 8.4 | Update e2e helpers |
 
 ---
 
-## Suggested PR sequence
+## Stacked PR merge order
 
-| PR | Scope |
-|----|-------|
-| **#1 (this)** | Core versioning + docs + rollout plan |
-| **#2** | Phase 1 — Login gate |
-| **#3** | Phase 2 — Sync providers in Settings |
-| **#4** | Phase 3 — Conflict dialog |
-| **#5** | Phases 4–5 — Vault fan-out + Onboard |
-| **#6** | Phases 6–8 — Help, multi-device, migration cleanup |
+```
+main ← #61 ← #71 ← #72 ← #73 ← #74 ← …
+```
 
-Each PR should be squash-merged independently per [rules.md §6](../rules.md#6-git--pull-request-workflow).
+Each PR squash-merged independently per [rules.md §6](../rules.md#6-git--pull-request-workflow).

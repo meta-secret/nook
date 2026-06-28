@@ -119,11 +119,33 @@ export class VaultState {
   isSyncing = $state(false)
   /** Provider id currently running a manual sync (Settings UI). */
   syncingProviderId = $state<string | null>(null)
+  /** Background push to all sync providers after a local vault mutation. */
+  isFanOutSyncing = $state(false)
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | null>(null)
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== null
+  }
+
+  get syncProviderCount(): number {
+    return this.syncProviders.length
+  }
+
+  get syncingProviderLabel(): string | null {
+    if (!this.syncingProviderId) return null
+    return (
+      this.providers.find((p) => p.id === this.syncingProviderId)?.label ?? null
+    )
+  }
+
+  get isSyncActivityVisible(): boolean {
+    return (
+      this.isFanOutSyncing ||
+      this.syncingProviderId !== null ||
+      this.isSyncing ||
+      this.isSaving
+    )
   }
 
   unlockMode = $state<'keys' | 'password'>('keys')
@@ -1174,35 +1196,72 @@ export class VaultState {
   }
 
   /** Reconcile local vault with one sync provider using `compareVaultSync`. */
-  async syncProviderById(providerId: string): Promise<void> {
+  async syncProviderById(
+    providerId: string,
+    options?: { quiet?: boolean },
+  ): Promise<void> {
     if (!this.manager) return
     if (this.syncBlocked) return
     const provider = this.providers.find((p) => p.id === providerId)
     if (!provider || provider.type === 'local') return
-    if (this.syncingProviderId) return
+    if (this.syncingProviderId && this.syncingProviderId !== providerId) return
 
     this.syncingProviderId = providerId
-    this.errorMsg = ''
+    if (!options?.quiet) {
+      this.errorMsg = ''
+    }
     try {
       const localYaml = await readLocalVaultBlob()
       const [mode, pat, repo] = this.providerWasmArgs(provider)
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)
       const action = await compareVaultBlobs(localYaml, remote.content)
 
-      await this.applyVaultSyncAction(action, {
-        providerId,
-        localYaml,
-        remote,
-        mode,
-        pat,
-        repo,
-      })
+      await this.applyVaultSyncAction(
+        action,
+        {
+          providerId,
+          localYaml,
+          remote,
+          mode,
+          pat,
+          repo,
+        },
+        options,
+      )
     } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Sync failed for this provider.'
+      if (!options?.quiet) {
+        this.errorMsg =
+          e instanceof Error ? e.message : 'Sync failed for this provider.'
+      }
     } finally {
-      this.syncingProviderId = null
+      if (this.syncingProviderId === providerId) {
+        this.syncingProviderId = null
+      }
     }
+  }
+
+  /** Push the local vault to every connected sync provider (after CRUD or manual sync). */
+  async fanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void> {
+    if (!this.manager || !this.isAuthenticated) return
+    if (this.syncBlocked) return
+    if (this.syncProviders.length === 0) return
+    if (this.isFanOutSyncing) return
+
+    this.isFanOutSyncing = true
+    try {
+      for (const provider of this.syncProviders) {
+        if (this.syncBlocked) break
+        await this.syncProviderById(provider.id, {
+          quiet: options?.quiet ?? true,
+        })
+      }
+    } finally {
+      this.isFanOutSyncing = false
+    }
+  }
+
+  private scheduleFanOutSyncAfterLocalSave(): void {
+    void this.fanOutSyncToProviders({ quiet: true })
   }
 
   private async applyVaultSyncAction(
@@ -1215,8 +1274,10 @@ export class VaultState {
       pat: string
       repo: string
     },
+    options?: { quiet?: boolean },
   ): Promise<void> {
     const { providerId, localYaml, remote, mode, pat, repo } = ctx
+    const quiet = options?.quiet ?? false
 
     if (action === 'conflict') {
       const localVersion = await readVaultVersionFromBlob(localYaml)
@@ -1252,7 +1313,9 @@ export class VaultState {
         remote.revision,
       )
       await this.updateProviderSyncMetadata(providerId, localYaml, revision)
-      this.showSuccess(this.t('auth_storage.sync_pushed'))
+      if (!quiet) {
+        this.showSuccess(this.t('auth_storage.sync_pushed'))
+      }
       return
     }
 
@@ -1261,10 +1324,12 @@ export class VaultState {
       action === 'unchanged' ? localYaml : remote.content,
       remote.revision,
     )
-    if (action === 'unchanged') {
-      this.showSuccess(this.t('auth_storage.sync_up_to_date'))
-    } else {
-      this.showSuccess(this.t('auth_storage.sync_pulled'))
+    if (!quiet) {
+      if (action === 'unchanged') {
+        this.showSuccess(this.t('auth_storage.sync_up_to_date'))
+      } else {
+        this.showSuccess(this.t('auth_storage.sync_pulled'))
+      }
     }
   }
 
@@ -2098,6 +2163,7 @@ export class VaultState {
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_saved'))
+      this.scheduleFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
@@ -2127,6 +2193,7 @@ export class VaultState {
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_deleted'))
+      this.scheduleFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
@@ -2160,6 +2227,7 @@ export class VaultState {
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.item_updated'))
+      this.scheduleFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`
       throw e

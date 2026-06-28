@@ -187,7 +187,7 @@
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
-          isSyncing={vault.isSyncing || vault.isSaving}
+          isSyncing={vault.isSyncActivityVisible}
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
           {appVersion}
@@ -311,7 +311,7 @@
             storageMode={vault.storageMode}
             githubRepo={vault.githubRepo}
             lastSyncedAt={vault.lastSyncedAt}
-            isSyncing={vault.isSyncing || vault.isSaving}
+            isSyncing={vault.isSyncActivityVisible}
             successMsg={vault.successMsg}
             errorMsg={vault.errorMsg}
             syncConflictLabel={vault.pendingSyncConflict
@@ -376,7 +376,7 @@
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
-          isSyncing={vault.isSyncing || vault.isSaving}
+          isSyncing={vault.isSyncActivityVisible}
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
           {appVersion}

@@ -5,6 +5,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
+  waitForLoadedSyncProviders,
 } from './helpers'
 
 test.describe('sync provider settings', () => {
@@ -35,6 +36,7 @@ test.describe('sync provider settings', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await waitForLoadedSyncProviders(page)
 
     await page.getByTestId('vault-settings-tab').click()
     await expect(page.getByTestId('settings-provider-github')).toBeVisible()

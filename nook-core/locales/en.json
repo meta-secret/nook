@@ -401,7 +401,16 @@
     "sync_aria_github": "Sync vault with GitHub",
     "refresh_aria_local": "Refresh vault from browser storage",
     "sync_tooltip_github": "Synchronize latest changes with your storage provider",
-    "refresh_tooltip_local": "Reload latest changes from browser storage"
+    "refresh_tooltip_local": "Reload latest changes from browser storage",
+    "local_vault": "Local vault",
+    "syncing_to": "Syncing to {provider}…",
+    "syncing_providers": "Syncing to providers…",
+    "sync_providers_singular": "1 sync provider",
+    "sync_providers_plural": "{count} sync providers",
+    "saved_local_only": "No sync providers",
+    "sync_all": "Sync all",
+    "sync_all_aria": "Sync vault to all connected providers",
+    "sync_all_tooltip": "Push local vault to every connected sync provider"
   },
   "toasts": {
     "removed_device": "Removed {label}.",

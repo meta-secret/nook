@@ -6,6 +6,7 @@ import {
   openLegacyProviderSetup,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
+  waitForLoadedSyncProviders,
   waitForEngine,
 } from './helpers'
 
@@ -164,6 +165,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await waitForLoadedSyncProviders(page)
 
     await page.getByTestId('vault-settings-tab').click()
     const githubProvider = page.getByTestId('settings-provider-github')
