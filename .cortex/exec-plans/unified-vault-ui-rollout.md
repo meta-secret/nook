@@ -29,7 +29,7 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 | 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | [#75](https://github.com/meta-secret/nook/pull/75) | Ready |
 | 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | [#76](https://github.com/meta-secret/nook/pull/76) | Ready |
 | 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | [#77](https://github.com/meta-secret/nook/pull/77) | Ready |
-| 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | #78 (pending) | Ready |
+| 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | [#78](https://github.com/meta-secret/nook/pull/78) | Ready |
 
 ---
 
