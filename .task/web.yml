@@ -1,0 +1,263 @@
+version: '3'
+
+tasks:
+  web:install:
+    desc: Install web dependencies in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:install }
+
+  web:build:
+    desc: Build the Svelte app in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:build }
+
+  web:build:parallel:
+    desc: Production web build in Docker without rebuilding wasm.
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:build:parallel }
+
+  web:check:
+    desc: Run Svelte and TypeScript checks in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:check }
+
+  web:test:
+    desc: Run web unit tests in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:test }
+
+  web:test:e2e:
+    desc: Run full Playwright e2e suite in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
+    deps:
+      - setup
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e }
+
+  web:test:e2e:parallel:
+    desc: Run local ‖ GitHub Playwright projects in parallel Docker containers (ci:main).
+    cmds:
+      - task: ci:main:e2e:parallel
+
+  web:test:e2e:local:
+    desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
+    deps:
+      - setup
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:local }
+
+  web:e2e:build-dist:
+    desc: Rebuild web dist with fast vault sync for CI e2e preview (runs in Docker).
+    cmds:
+      - task: docker:task
+        vars:
+          TASK: _web:e2e:build-dist
+          VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+
+  web:e2e:restore-prod-dist:
+    desc: Restore production dist after e2e (Docker-owned files cannot be rm'd on the host).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:e2e:restore-prod-dist }
+
+  web:test:e2e:local:parallel:
+    desc: Local Playwright project in Docker when wasm is already built (no host port publish).
+    deps:
+      - web:e2e:build-dist
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:local:parallel }
+
+  web:test:e2e:github:
+    desc: Run GitHub vault Playwright e2e in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:github }
+
+  web:test:e2e:github:parallel:
+    desc: GitHub Playwright project in Docker when wasm is already built (set NOOK_GITHUB_E2E_REPO per run).
+    deps:
+      - web:e2e:build-dist
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:github:parallel }
+
+  web:test:e2e:multi-device:
+    desc: Run multi-device Playwright e2e in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:multi-device }
+
+  web:lint:
+    desc: Lint the web app in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:lint }
+
+  web:dev:
+    desc: Start the Svelte dev server in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:web:dev
+
+  _web:install:
+    desc: Sync web dependencies after package.json or bun.lock changes.
+    cmds:
+      - cd nook-web && bun install --frozen-lockfile
+
+  _web:build:
+    desc: Build the Svelte app.
+    deps:
+      - _wasm:build
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - cd nook-web && bun run build
+
+  _web:build:parallel:
+    desc: Build the Svelte app when wasm is already built (ci:pr parallel track).
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      VITE_E2E_EXPOSE_VAULT: 'true'
+    cmds:
+      - cd nook-web && bun run build
+
+  _web:check:parallel:
+    desc: Run Svelte and TypeScript checks when wasm is already built.
+    cmds:
+      - cd nook-web && bun run check
+
+  _web:test:parallel:
+    desc: Run web unit tests when wasm is already built.
+    cmds:
+      - cd nook-web && bun run test
+
+  _web:lint:parallel:
+    desc: Lint the web app when wasm is already built.
+    cmds:
+      - cd nook-web && bun run lint
+
+  _web:check:
+    desc: Run Svelte and TypeScript checks.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run check
+
+  _web:test:
+    desc: Run web unit tests.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run test
+
+  _web:test:e2e:
+    desc: Run full Playwright e2e suite.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:parallel:
+    desc: Run local then GitHub Playwright projects in one process (local dev only).
+    cmds:
+      - cd nook-web && bun run test:e2e
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:e2e:build-dist:
+    desc: Rebuild web dist with fast vault sync for CI e2e preview (production build keeps 60s).
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+    cmds:
+      - cd nook-web && bun run build
+
+  _web:e2e:restore-prod-dist:
+    desc: Swap e2e dist back to saved production dist (ci:main after parallel e2e).
+    cmds:
+      - rm -rf nook-web/dist
+      - cp -a nook-web/dist-prod nook-web/dist
+      - rm -rf nook-web/dist-prod
+
+  _web:test:e2e:local:parallel:
+    desc: Local Playwright project when wasm is already built (ci:main parallel track).
+    cmds:
+      - echo "==> Playwright local project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
+      - cd nook-web && bun run test:e2e:local
+
+  _web:test:e2e:github:parallel:
+    desc: GitHub Playwright project when wasm is already built (ci:main parallel track).
+    cmds:
+      - echo "==> Playwright GitHub project (CI=${CI:-}, repo=${NOOK_GITHUB_E2E_REPO:-unset})"
+      - cd nook-web && bun run test:e2e:github
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:local:
+    desc: Run local-only Playwright e2e specs.
+    deps:
+      - _wasm:build
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+    cmds:
+      - cd nook-web && bun run build
+      - cd nook-web && bun run test:e2e:local
+
+  _web:test:e2e:github:
+    desc: Run GitHub vault Playwright e2e specs.
+    deps:
+      - _wasm:build
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+    cmds:
+      - cd nook-web && bun run build
+      - cd nook-web && bun run test:e2e:github
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:multi-device:
+    desc: Run multi-device Playwright e2e specs.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run test:e2e:multi-device
+      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:lint:
+    desc: Lint the web app.
+    deps:
+      - _wasm:build
+    cmds:
+      - cd nook-web && bun run lint
+
+  _web:dev:
+    desc: Start the Svelte dev server.
+    deps:
+      - _wasm:build
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      - cd nook-web && bun run dev -- --host 0.0.0.0

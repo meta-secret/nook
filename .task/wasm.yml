@@ -1,0 +1,28 @@
+version: '3'
+
+tasks:
+  wasm:build:
+    desc: Build nook-wasm for the web app in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _wasm:build }
+
+  _wasm:build:
+    desc: Build nook-wasm for the web app when sources changed (skips if image-seeded pkg is current).
+    cmds:
+      - task: _wasm:build:run
+
+  _wasm:build:run:
+    internal: true
+    cmds:
+      - >-
+        sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
+        need=0;
+        if [ ! -f "$out" ]; then need=1;
+        elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
+        fi;
+        if [ "$need" -eq 1 ]; then
+          wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm;
+        fi'

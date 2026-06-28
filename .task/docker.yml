@@ -1,0 +1,127 @@
+version: '3'
+
+tasks:
+  docker:build:
+    desc: Alias for setup (build linux/amd64 toolchain image).
+    cmds:
+      - task: setup
+
+  docker:push:
+    desc: Push :latest via buildx registry output (dedupes with buildcache; after green CI).
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+    cmds:
+      - >-
+        sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain-push'
+
+  docker:task:
+    internal: true
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        --ipc=host
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
+        -e NOOK_GITHUB_PAT
+        -e CI
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -e CLOUDFLARE_API_TOKEN
+        -e CLOUDFLARE_ACCOUNT_ID
+        -e CF_PAGES_BRANCH
+        -e GITHUB_TOKEN
+        -e GITHUB_REPOSITORY
+        -e PR_NUMBER
+        -e PREVIEW_URL
+        -v "{{.ROOT_DIR}}:/workspace"
+        -v /workspace/nook-web/node_modules
+        -w /workspace
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
+
+  docker:e2e:run:
+    desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
+    internal: true
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        --ipc=host
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
+        -e NOOK_GITHUB_PAT
+        -e CI
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -v "{{.ROOT_DIR}}:/workspace"
+        -v /workspace/nook-web/node_modules
+        -w /workspace
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
+
+  docker:web:dev:
+    internal: true
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -p 5173:5173
+        -v "{{.ROOT_DIR}}:/workspace"
+        -v /workspace/nook-web/node_modules
+        -w /workspace
+        {{.DOCKER_IMAGE}}
+        sh -c "cd nook-web && bun install && task _web:dev"
+
+  docker:cursor-agent:build:
+    desc: Build nook-cursor-agent image (Cursor CLI + docker/gh/git on toolchain).
+    deps:
+      - setup
+    cmds:
+      - >-
+        {{.DOCKER}} buildx bake -f docker-bake.hcl cursor-agent
+        --set *.args.TOOLCHAIN_IMAGE={{.DOCKER_IMAGE}}
+
+  docker:cursor-agent:run:
+    desc: Run ci-fix-agent entrypoint (mount docker.sock for nested task/docker commands).
+    internal: true
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        --ipc=host
+        -v /var/run/docker.sock:/var/run/docker.sock
+        -v "{{.ROOT_DIR}}:/workspace"
+        -v /workspace/nook-web/node_modules
+        -w /workspace
+        -e CURSOR_API_KEY
+        -e GH_TOKEN
+        -e GITHUB_REPOSITORY
+        -e GITHUB_RUN_ID
+        -e FIX_BRANCH
+        -e TOOLCHAIN_REGISTRY
+        -e NOOK_ENV=ci
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
+        -e NOOK_GITHUB_PAT
+        -e CI=true
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        {{.CURSOR_AGENT_IMAGE}}
