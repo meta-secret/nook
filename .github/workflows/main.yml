@@ -1,6 +1,6 @@
 # Main branch: prepare once, then verify ‖ web build ‖ e2e in parallel (task ci:main:publish); deploy Pages.
 #
-# E2e on main uses local + sync-stub projects (no GitHub API). Live sync provider
+# E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
 #
 # On CI failure: Cursor Agent (Docker) opens a fix PR and squash-merges when checks pass.
@@ -52,10 +52,10 @@ jobs:
         env:
           CI: true
 
-      - name: E2e (local ‖ sync-stub)
+      - name: E2e (stub)
         run: |
           cp -a nook-web/dist nook-web/dist-prod
-          task ci:main:e2e:parallel VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
+          task ci:main:e2e VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
           task web:e2e:restore-prod-dist
         env:
           CI: true

@@ -11,7 +11,7 @@
 - The Svelte config is located in `svelte.config.js` and Vite config in `vite.config.ts`.
 
 ## 3. E2e tests
-- Local Playwright (`local` project): `task web:test:e2e:local` — vault CRUD, login, legal pages (no sync HTTP).
-- Stub sync Playwright (`sync-stub` project): `task web:test:e2e:sync-stub` — GitHub sync flows via in-memory route stubs; runs on main CI.
+- Fast PR Playwright (`e2e-pr` project): `task web:test:e2e:pr` — vault CRUD, login, legal pages (no sync HTTP).
+- Full stub Playwright (`e2e` project): `task web:test:e2e` — all stub specs including sync; runs on main CI.
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-web/.env.test.local`.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.

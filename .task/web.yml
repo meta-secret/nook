@@ -40,7 +40,7 @@ tasks:
         vars: { TASK: _web:test }
 
   web:test:e2e:
-    desc: Run full Playwright e2e suite in Docker (requires NOOK_GITHUB_PAT for GitHub suites).
+    desc: Run full stub Playwright e2e in Docker (e2e project; no PAT).
     deps:
       - setup
     cmds:
@@ -48,25 +48,38 @@ tasks:
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:parallel:
-    desc: Run local ‖ sync-stub Playwright projects in parallel Docker containers (ci:main).
-    cmds:
-      - task: ci:main:e2e:parallel
-
-  web:test:e2e:sync-stub:
-    desc: Run stub-sync Playwright e2e in Docker (no GitHub PAT).
-    deps:
-      - setup
-    cmds:
-      - task: docker:e2e:run
-        vars: { TASK: _web:test:e2e:sync-stub }
-
-  web:test:e2e:sync-stub:parallel:
-    desc: Stub-sync Playwright project in Docker when wasm/dist already built.
+    desc: Full stub Playwright e2e in Docker when wasm/dist already built (ci:main).
     deps:
       - web:e2e:build-dist
     cmds:
       - task: docker:e2e:run
-        vars: { TASK: _web:test:e2e:sync-stub:parallel }
+        vars: { TASK: _web:test:e2e:parallel }
+
+  web:test:e2e:pr:
+    desc: Fast Playwright e2e-pr in Docker (IndexedDB specs only).
+    deps:
+      - setup
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:pr }
+
+  web:test:e2e:pr:parallel:
+    desc: Fast Playwright e2e-pr when wasm/dist already built (ci:pr).
+    deps:
+      - web:e2e:build-dist
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:pr:parallel }
+
+  web:test:e2e:sync-stub:
+    desc: Alias for web:test:e2e (full stub suite in Docker).
+    cmds:
+      - task: web:test:e2e
+
+  web:test:e2e:sync-stub:parallel:
+    desc: Alias for web:test:e2e:parallel.
+    cmds:
+      - task: web:test:e2e:parallel
 
   web:test:e2e:sync-live:
     desc: Run live sync provider Playwright e2e in Docker (requires provider credentials).
@@ -90,12 +103,14 @@ tasks:
       - task: web:test:e2e:sync-live
 
   web:test:e2e:local:
-    desc: Run local-only Playwright e2e in Docker (no GitHub PAT required).
-    deps:
-      - setup
+    desc: Alias for web:test:e2e:pr (fast IndexedDB specs).
     cmds:
-      - task: docker:e2e:run
-        vars: { TASK: _web:test:e2e:local }
+      - task: web:test:e2e:pr
+
+  web:test:e2e:local:parallel:
+    desc: Alias for web:test:e2e:pr:parallel.
+    cmds:
+      - task: web:test:e2e:pr:parallel
 
   web:e2e:build-dist:
     desc: Rebuild web dist with fast vault sync for CI e2e preview (runs in Docker).
@@ -112,14 +127,6 @@ tasks:
     cmds:
       - task: docker:task
         vars: { TASK: _web:e2e:restore-prod-dist }
-
-  web:test:e2e:local:parallel:
-    desc: Local Playwright project in Docker when wasm is already built (no host port publish).
-    deps:
-      - web:e2e:build-dist
-    cmds:
-      - task: docker:e2e:run
-        vars: { TASK: _web:test:e2e:local:parallel }
 
   web:test:e2e:github:parallel:
     desc: Alias for web:test:e2e:sync-live:parallel (real provider API).
@@ -208,10 +215,33 @@ tasks:
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Run local then GitHub Playwright projects in one process (local dev only).
+    desc: Full stub Playwright e2e when wasm/dist already built (ci:main).
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
     cmds:
+      - echo "==> Playwright e2e project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
       - cd nook-web && bun run test:e2e
-      - defer: cd nook-web && bun run test:e2e:cleanup
+
+  _web:test:e2e:pr:parallel:
+    desc: Fast Playwright e2e-pr when wasm/dist already built (ci:pr).
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
+    cmds:
+      - echo "==> Playwright e2e-pr project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
+      - cd nook-web && bun run test:e2e:pr
+
+  _web:test:e2e:pr:
+    desc: Fast Playwright e2e-pr with production build.
+    deps:
+      - _wasm:build
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
+    cmds:
+      - cd nook-web && bun run build
+      - cd nook-web && bun run test:e2e:pr
 
   _web:e2e:build-dist:
     desc: Rebuild web dist with fast vault sync for CI e2e preview (production build keeps 60s).
@@ -231,10 +261,9 @@ tasks:
       - rm -rf nook-web/dist-prod
 
   _web:test:e2e:sync-stub:parallel:
-    desc: Stub-sync Playwright project when wasm/dist already built (ci:main).
+    desc: Alias for _web:test:e2e:parallel.
     cmds:
-      - echo "==> Playwright sync-stub project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github})"
-      - cd nook-web && bun run test:e2e:sync-stub
+      - task: _web:test:e2e:parallel
 
   _web:test:e2e:sync-live:parallel:
     desc: Live sync Playwright project when wasm/dist already built (nightly).
@@ -244,7 +273,7 @@ tasks:
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:sync-stub:
-    desc: Run stub-sync Playwright e2e specs.
+    desc: Alias for _web:test:e2e stub run (build + full e2e project).
     deps:
       - _wasm:build
     env:
@@ -254,7 +283,7 @@ tasks:
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
       - cd nook-web && bun run build
-      - cd nook-web && bun run test:e2e:sync-stub
+      - cd nook-web && bun run test:e2e
 
   _web:test:e2e:sync-live:
     desc: Run live sync provider Playwright e2e specs.
@@ -271,25 +300,14 @@ tasks:
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:local:parallel:
-    desc: Local Playwright project when wasm is already built (ci:main parallel track).
-    env:
-      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
+    desc: Alias for _web:test:e2e:pr:parallel.
     cmds:
-      - echo "==> Playwright local project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
-      - cd nook-web && bun run test:e2e:local
+      - task: _web:test:e2e:pr:parallel
 
   _web:test:e2e:local:
-    desc: Run local-only Playwright e2e specs.
-    deps:
-      - _wasm:build
-    env:
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+    desc: Alias for _web:test:e2e:pr.
     cmds:
-      - cd nook-web && bun run build
-      - cd nook-web && bun run test:e2e:local
+      - task: _web:test:e2e:pr
 
   _web:test:e2e:github:
     desc: Alias for _web:test:e2e:sync-live.

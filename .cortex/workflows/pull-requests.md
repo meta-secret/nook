@@ -62,7 +62,7 @@ task rust:test                     # nook-core only (still run fmt check)
 **Full PR CI mirror** — run before opening a PR, and **mandatory before the next push after any remote CI failure**:
 
 ```bash
-task ci:pr    # prepare → verify ‖ web build → local Playwright e2e (~3–4 min)
+task ci:pr    # prepare → verify ‖ web build → e2e-pr (~3–4 min)
 ```
 
 This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and Cloudflare deploy). One failed remote check is a clear signal: reproduce with `task ci:pr` locally, fix, then push again. That is faster than triggering another full CI run only to fail on formatting or a trivial lint error.
@@ -77,19 +77,19 @@ See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 3. Local e2e (when the change is big or complex)
 
-PR CI runs **local Playwright e2e** (~1 min, IndexedDB specs, no GitHub API). Agents should still run e2e locally before opening a PR when the change touches:
+PR CI runs **e2e-pr** (~1 min, IndexedDB specs). Agents should still run e2e locally before opening a PR when the change touches:
 
 - vault sync, join, or enrollment flows
 - login / unlock / password envelope UI
 - multi-step web flows or Playwright helpers
 
 ```bash
-task web:test:e2e:local    # full local project in Docker
+task web:test:e2e:pr       # fast e2e-pr project in Docker
 # or, after task check already built wasm + dist:
-task web:test:e2e:local:parallel
+task web:test:e2e:pr:parallel
 ```
 
-Skip local e2e for small, isolated Rust-only or docs-only changes.
+Skip e2e-pr for small, isolated Rust-only or docs-only changes.
 
 ### 4. Push and open a PR
 
@@ -100,7 +100,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-`pr.yml` runs `task ci:pr:publish`: prepare → verify ‖ web build → **local Playwright e2e** → toolchain push, then deploys a Cloudflare preview.
+`pr.yml` runs `task ci:pr:publish`: prepare → verify ‖ web build → **e2e-pr** → toolchain push, then deploys a Cloudflare preview.
 
 ### 5. Monitor CI until green
 
@@ -129,7 +129,7 @@ When **all PR checks pass** and the user asked you to merge (or the task implies
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full CI including sync-stub Playwright e2e. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
+After merge, `main.yml` runs full stub **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
 ### 8. Task completion report
 

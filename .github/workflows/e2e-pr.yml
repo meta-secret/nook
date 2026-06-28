@@ -1,11 +1,10 @@
 # Manually run Playwright e2e against a pull request branch.
 #
-# PR CI (pr.yml) runs local e2e automatically via ci:pr:e2e:local. Main CI adds
-# sync-stub after merge; nightly runs sync-live. Use this workflow to re-run or
-# debug sync-stub/sync-live on a PR branch.
+# PR CI (pr.yml) runs e2e-pr automatically via ci:pr:e2e. Main CI runs full e2e
+# after merge; nightly runs sync-live. Use this workflow to re-run or debug on a PR branch.
 # Inputs:
 #   pr_number — PR to checkout (refs/pull/<n>/head)
-#   suite     — local, sync-stub, sync-live, or all
+#   suite     — e2e-pr, e2e, sync-live, or all
 
 name: E2E (PR)
 
@@ -23,9 +22,11 @@ on:
         default: all
         options:
           - all
+          - e2e-pr
+          - e2e
+          - sync-live
           - local
           - sync-stub
-          - sync-live
 
 permissions:
   contents: read
@@ -78,15 +79,17 @@ jobs:
         env:
           CI: true
 
-      - name: E2e (local)
-        if: inputs.suite == 'all' || inputs.suite == 'local'
-        run: task web:test:e2e:local:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+      - name: E2e (e2e-pr)
+        if: inputs.suite == 'e2e-pr' || inputs.suite == 'local'
+        run: task web:test:e2e:pr:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
           CI: true
 
-      - name: E2e (sync-stub)
-        if: inputs.suite == 'all' || inputs.suite == 'sync-stub'
-        run: task web:test:e2e:sync-stub:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+      - name: E2e (e2e)
+        if: >-
+          inputs.suite == 'all' || inputs.suite == 'e2e' ||
+          inputs.suite == 'sync-stub'
+        run: task web:test:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
           CI: true
 
