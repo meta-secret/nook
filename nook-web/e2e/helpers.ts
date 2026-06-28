@@ -690,7 +690,9 @@ export async function addVaultPassword(
   page: Page,
   label: string,
   password: string,
+  options?: { expectedCount?: number },
 ) {
+  const expectedCount = options?.expectedCount ?? 1
   await expandSettingsSection(page, 'unlock')
   await page.getByTestId('set-vault-password-btn').click()
   await page.getByTestId('vault-password-label').fill(label)
@@ -700,12 +702,15 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await expect(
+    page.getByTestId('vault-password-list').locator('li'),
+  ).toHaveCount(expectedCount, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await waitForStableLocalVaultState(
     page,
     (snapshot) => snapshot.hasPasswordEnvelope,
     { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
   )
-  await expectVaultPasswordStatus(page, 1, {
+  await expectVaultPasswordStatus(page, expectedCount, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
