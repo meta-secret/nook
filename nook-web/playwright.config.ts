@@ -58,6 +58,7 @@ if (isCi) {
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
+  maxFailures: isCi ? 1 : undefined,
   retries: isCi ? 2 : 0,
   globalTimeout: isCi ? 45 * 60_000 : undefined,
   globalTeardown: './e2e/global-teardown.ts',

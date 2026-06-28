@@ -76,13 +76,33 @@ export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
 export async function openLoginProviderSetup(page: Page) {
+  if (await page.getByTestId('provider-option-github').isVisible()) {
+    return
+  }
+
   const connectBtn = page.getByTestId('login-connect-storage-btn')
   const legacyLink = page.getByTestId('login-use-storage-provider-link')
   const addBtn = page.getByTestId('add-provider-btn')
+  const providerSetup = page.getByTestId('login-provider-setup')
 
-  await expect(connectBtn.or(legacyLink).or(addBtn)).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  await expect(
+    connectBtn
+      .or(legacyLink)
+      .or(addBtn)
+      .or(providerSetup)
+      .or(page.getByTestId('provider-option-github')),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+
+  if (await page.getByTestId('provider-option-github').isVisible()) {
+    return
+  }
+
+  if (await providerSetup.isVisible()) {
+    await expect(page.getByTestId('provider-option-github')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    return
+  }
 
   if (await connectBtn.isVisible()) {
     await connectBtn.click()
@@ -574,37 +594,44 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
   await dismissJoinEnrollmentDialog(page)
 
   const vaultPanel = page.getByTestId('vault-panel')
-  const autoUnlocked = await vaultPanel
-    .waitFor({ state: 'visible', timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    .then(() => true)
-    .catch(() => false)
-  if (autoUnlocked) {
+  const localUnlock = page.getByTestId('login-local-unlock-step')
+
+  await expect
+    .poll(
+      async () => {
+        await dismissJoinEnrollmentDialog(page)
+        if (await vaultPanel.isVisible()) return 'vault'
+        if (await localUnlock.isVisible()) return 'unlock'
+        if (await page.getByTestId('login-gate').isVisible()) return 'gate'
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .not.toBe('waiting')
+
+  if (await vaultPanel.isVisible()) {
     return
   }
 
-  const localUnlock = page.getByTestId('login-local-unlock-step')
   if (await localUnlock.isVisible()) {
     await unlockVaultOnLogin(page)
+  } else if (target) {
+    await setupGithubProvider(page, target.pat, target.repoName)
+    const connectButton = await waitForEngine(page)
+    await connectButton.click()
+    await assertNoVaultErrors(page)
+    await dismissJoinEnrollmentDialog(page)
+    if (!(await vaultPanel.isVisible()) && (await localUnlock.isVisible())) {
+      await unlockVaultOnLogin(page)
+    }
   } else if (await page.getByTestId('login-gate').isVisible()) {
-    if (target) {
-      await setupGithubProvider(page, target.pat, target.repoName)
-      const connectButton = await waitForEngine(page)
-      await connectButton.click()
-      await assertNoVaultErrors(page)
-      await dismissJoinEnrollmentDialog(page)
-    } else {
-      await connectLoginProvider(page)
+    await connectLoginProvider(page)
+    if (!(await vaultPanel.isVisible()) && (await localUnlock.isVisible())) {
+      await unlockVaultOnLogin(page)
     }
-    if (!(await vaultPanel.isVisible())) {
-      if (await localUnlock.isVisible()) {
-        await unlockVaultOnLogin(page)
-      }
-    }
-  } else {
-    await unlockVaultOnLogin(page)
   }
 
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(vaultPanel).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
@@ -655,6 +682,9 @@ export async function addVaultPassword(
   await page.getByTestId('vault-password-input').fill(password)
   await page.getByTestId('vault-password-confirm').fill(password)
   await page.getByTestId('submit-vault-password').click()
+  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 /** Match vault password badge copy (`1 item` or legacy `1 password`). */

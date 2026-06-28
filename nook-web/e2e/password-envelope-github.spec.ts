@@ -87,6 +87,7 @@ describePasswordEnvelope('vault password envelope (github)', () => {
       deviceA,
       (snapshot) =>
         snapshot.hasPasswordEnvelope && snapshot.authPkIds.length >= 1,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     expect(yaml.unlockMode).toBe('keys')
     expect(yaml.hasPasswordEnvelope).toBe(true)
