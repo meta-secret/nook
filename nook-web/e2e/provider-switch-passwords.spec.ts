@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import {
   addVaultPassword,
   clearBrowserVault,
-  connectLocalVaultLegacy as connectLocalVault,
+  connectLocalVault,
   createE2eGithubRepoName,
   disableLoginAutoUnlock,
   expandSettingsSection,
@@ -12,11 +12,12 @@ import {
   resetGithubVault,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
+  unlockVaultOnLogin,
 } from './helpers'
 
 const describeGithub = githubPat ? test.describe : test.describe.skip
 
-describeGithub('provider switch password entries', () => {
+describeGithub('unified vault backup passwords', () => {
   test.describe.configure({ mode: 'serial' })
 
   let emptyRepo: string
@@ -30,7 +31,7 @@ describeGithub('provider switch password entries', () => {
     await finishE2eGithubSuite(githubPat!, emptyRepo)
   })
 
-  test('login gate drops stale backup passwords when switching providers', async ({
+  test('login gate keeps backup passwords after adding sync providers', async ({
     page,
   }) => {
     await page.goto('/')
@@ -59,9 +60,9 @@ describeGithub('provider switch password entries', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await page.getByTestId('saved-provider-local').first().click()
-    await page.getByTestId('login-connect-provider-btn').click()
-    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+
+    await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -73,26 +74,9 @@ describeGithub('provider switch password entries', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('saved-provider-local').first().click()
-    await page.getByTestId('login-connect-provider-btn').click()
-    await expect(
-      page.getByTestId('login-wizard-authorization-step'),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await page.getByTestId('login-unlock-method-password').click()
     await expect(page.getByTestId('login-password-entry-list')).toContainText(
       'Local backup',
     )
-
-    await page.getByTestId('login-wizard-connection-toggle').click()
-    await expect(page.getByTestId('login-wizard-connection-step')).toBeVisible()
-
-    await page.getByTestId('saved-provider-github').last().click()
-    await page.getByTestId('login-connect-provider-btn').click()
-    await expect(
-      page.getByTestId('login-wizard-authorization-step'),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(
-      page.getByTestId('login-unlock-method-password'),
-    ).not.toBeVisible()
   })
 })

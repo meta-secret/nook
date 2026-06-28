@@ -27,9 +27,9 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 | 3 Conflict dialog | [#64](https://github.com/meta-secret/nook/issues/64) | [#73](https://github.com/meta-secret/nook/pull/73) | Ready |
 | 4 Fan-out sync | [#65](https://github.com/meta-secret/nook/issues/65) | [#74](https://github.com/meta-secret/nook/pull/74) | Ready |
 | 5 Onboard | [#66](https://github.com/meta-secret/nook/issues/66) | [#75](https://github.com/meta-secret/nook/pull/75) | Ready |
-| 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | #76 (pending) | Ready |
+| 6 Help | [#67](https://github.com/meta-secret/nook/issues/67) | [#76](https://github.com/meta-secret/nook/pull/76) | Ready |
 | 7 Multi-device | [#68](https://github.com/meta-secret/nook/issues/68) | [#77](https://github.com/meta-secret/nook/pull/77) | Ready |
-| 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | — | Planned |
+| 8 Migration | [#69](https://github.com/meta-secret/nook/issues/69) | #78 (pending) | Ready |
 
 ---
 
@@ -127,7 +127,7 @@ No user-visible UI changes yet.
 
 ---
 
-## Phase 7 — Join / multi-device (#68)
+## Phase 7 — Join / multi-device (#68, #77) ✅
 
 | # | Change |
 |---|--------|
@@ -139,14 +139,16 @@ No user-visible UI changes yet.
 
 ---
 
-## Phase 8 — Migration & cleanup (#69)
+## Phase 8 — Migration & cleanup (#69, #78) ✅
 
 | # | Change |
 |---|--------|
-| 8.1 | Copy active provider vault → local `encrypted_db` |
-| 8.2 | Deprecate legacy login wizard paths |
+| 8.1 | Copy active provider vault → local `encrypted_db` (`vault-migration.ts`, init migration) |
+| 8.2 | Remove legacy login wizard (`LoginWizard`, `LoginConnectionStep`) |
 | 8.3 | Remove `activeProviderId` from auth snapshot |
-| 8.4 | Update e2e helpers |
+| 8.4 | Update e2e helpers for local-first login |
+
+**E2E:** Updated `login-unlock-flow`, `connect`, `provider-switch-passwords`, `remote-vault-recovery-github`.
 
 ---
 

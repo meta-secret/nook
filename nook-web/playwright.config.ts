@@ -77,10 +77,11 @@ export default defineConfig({
     timeout: isCi ? 120_000 : 30_000,
     // Do not set stdout/stderr to 'pipe' — an undrained pipe can block Vite with no visible output.
     env: usePreviewServer
-      ? undefined
+      ? { VITE_E2E_EXPOSE_VAULT: 'true' }
       : {
           VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
           NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
+          VITE_E2E_EXPOSE_VAULT: 'true',
         },
   },
   projects: [

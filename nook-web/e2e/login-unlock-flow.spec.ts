@@ -146,15 +146,15 @@ test.describe('login unlock flow (local-first)', () => {
   })
 })
 
-test.describe('login unlock flow (legacy provider wizard)', () => {
-  test('legacy wizard still works via storage provider link', async ({
+test.describe('login storage provider setup', () => {
+  test('connects via storage provider link on create-vault screen', async ({
     page,
   }) => {
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
 
-    await page.getByTestId('login-legacy-provider-setup-link').click()
+    await page.getByTestId('login-use-storage-provider-link').click()
     await page.getByTestId('provider-option-local').click()
     const connectBtn = page.getByTestId('connect-provider-btn')
     await expect(connectBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })

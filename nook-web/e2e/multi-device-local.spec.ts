@@ -8,7 +8,6 @@ import {
   createLocalE2eGithubVaultStub,
   E2E_GITHUB_ONBOARD_PROVIDER,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  NOTIFICATION_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   reloadUnlockLocalVaultWithGithubSync,
   sendJoinRequestLocalE2e,
@@ -85,15 +84,19 @@ test.describe('multi-device local vault with sync provider', () => {
 
   test('genesis device eventually sees pending join without manual refresh', async () => {
     await connectLocalE2eJoinerDevice(deviceB, repoName)
-    await sendJoinRequestLocalE2e(deviceB, stub)
+    const join = await sendJoinRequestLocalE2e(deviceB, stub)
+
+    await expect
+      .poll(() => joinCountFromYaml(stub.getVaultYaml()), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThanOrEqual(1)
 
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: NOTIFICATION_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(
-      deviceA.getByTestId('device-join-row').filter({
-        hasText: parseJoinFromStub(stub).deviceId,
-      }),
+      deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
     ).toBeVisible()
   })
 })

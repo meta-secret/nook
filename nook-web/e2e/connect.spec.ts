@@ -3,7 +3,7 @@ import {
   createLocalVaultOnLogin,
   DEFAULT_LOCAL_VAULT_PASSWORD,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  openLegacyProviderSetup,
+  openLoginProviderSetup,
   reloadUnlockWithGithubSync,
   UI_TIMEOUT_MS,
   waitForEngine,
@@ -25,7 +25,7 @@ test.describe('vault connect flow', () => {
   test('shows error when github mode has no pat', async ({ page }) => {
     await page.goto('/')
 
-    await openLegacyProviderSetup(page)
+    await openLoginProviderSetup(page)
     await page.getByTestId('provider-option-github').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
@@ -63,7 +63,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(page.getByTestId('login-create-vault-form')).toBeVisible()
     await expect(
-      page.getByTestId('login-legacy-provider-setup-link'),
+      page.getByTestId('login-use-storage-provider-link'),
     ).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(

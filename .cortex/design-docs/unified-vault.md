@@ -227,6 +227,6 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 | Onboard / enrollment QR (local-first) | Done (#75, Phase 5) |
 | Help page rewrite | Done (#76, Phase 6) |
 | Join sync propagation | Done (#77, Phase 7) |
-| Legacy multi-vault migration | Planned (Phase 8, #69) |
+| Legacy multi-vault migration | Done (#78, Phase 8) |
 
 UI rollout details: [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).

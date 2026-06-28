@@ -28,7 +28,10 @@
     }
     void vault.init()
 
-    if (import.meta.env.DEV) {
+    if (
+      import.meta.env.DEV ||
+      import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true'
+    ) {
       ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
     }
 
@@ -36,14 +39,6 @@
       vault.stopVaultSync()
     }
   })
-
-  async function handleLoginProviderSelect(id: string) {
-    await vault.selectLoginProvider(id)
-  }
-
-  async function handleLoginProviderConnect() {
-    await vault.connectLoginProvider()
-  }
 
   async function handleUnlock() {
     if (vault.loginSetupType) {
@@ -340,11 +335,6 @@
         <LoginGate
           {vault}
           providers={vault.providers}
-          activeProviderId={vault.activeProviderId}
-          loginFlowStep={vault.loginFlowStep}
-          loginPasswordPrompt={vault.loginPasswordPrompt}
-          passwordEntries={vault.passwordEntries}
-          bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
           bind:setupType={vault.loginSetupType}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
@@ -352,9 +342,6 @@
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
           onUnlock={handleUnlock}
-          onSelectProvider={handleLoginProviderSelect}
-          onConnectProvider={handleLoginProviderConnect}
-          onBackToLoginProvider={() => vault.backToLoginProviderStep()}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(type) => vault.beginProviderSetup(type)}
@@ -368,7 +355,6 @@
             vault.unlockWithPassword(entryId, password)}
           onCreateLocalVault={(password) => vault.createLocalVault(password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}
-          onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
         />
         <VaultStatusBar
           {vault}

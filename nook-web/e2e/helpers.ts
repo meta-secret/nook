@@ -75,15 +75,26 @@ export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 /** Default password used by e2e create-vault and local-unlock helpers. */
 export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
-export async function openLegacyProviderSetup(page: Page) {
-  const link = page.getByTestId('login-legacy-provider-setup-link')
+export async function openLoginProviderSetup(page: Page) {
+  const link = page.getByTestId('login-use-storage-provider-link')
   if (await link.isVisible()) {
     await link.click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    return
+  }
+  const addBtn = page.getByTestId('add-provider-btn')
+  if (await addBtn.isVisible()) {
+    await addBtn.click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
   }
 }
+
+/** @deprecated Use {@link openLoginProviderSetup}. */
+export const openLegacyProviderSetup = openLoginProviderSetup
 
 export async function createLocalVaultOnLogin(
   page: Page,
@@ -97,7 +108,29 @@ export async function createLocalVaultOnLogin(
   })
 }
 
-/** Legacy device-key genesis path (provider picker → local connect). */
+export async function connectLocalVault(page: Page) {
+  await page.goto('/')
+  await expect(
+    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+
+  if (await page.getByTestId('vault-panel').isVisible()) {
+    return
+  }
+
+  const createForm = page.getByTestId('login-create-vault-form')
+  if (await createForm.isVisible()) {
+    await createLocalVaultOnLogin(page)
+    return
+  }
+
+  await unlockVaultOnLogin(page)
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
+/** Device-key genesis via storage provider picker (e2e / migration fallback). */
 export async function connectLocalVaultLegacy(page: Page) {
   await page.goto('/')
   await expect(
@@ -108,28 +141,21 @@ export async function connectLocalVaultLegacy(page: Page) {
     return
   }
 
-  await openLegacyProviderSetup(page)
-
-  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
-  if (await savedLocalProvider.isVisible()) {
-    await savedLocalProvider.click()
-    await page.getByTestId('login-connect-provider-btn').click()
+  const localUnlock = page.getByTestId('login-local-unlock-step')
+  if (await localUnlock.isVisible()) {
     await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Local vault loaded',
-      { timeout: UI_TIMEOUT_MS },
-    )
-  } else {
-    await page.getByTestId('provider-option-local').click()
-    const connectButton = await waitForEngine(page)
-    await connectButton.click()
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Local vault loaded',
-      { timeout: UI_TIMEOUT_MS },
-    )
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    return
   }
+
+  await openLoginProviderSetup(page)
+  await page.getByTestId('provider-option-local').click()
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
 
@@ -396,6 +422,7 @@ async function assertGithubConnected(page: Page) {
 }
 
 async function setupGithubProvider(page: Page, pat: string, repoName: string) {
+  await openLoginProviderSetup(page)
   await page.getByTestId('provider-option-github').click()
   await page.getByTestId('github-repo-input').fill(repoName)
   await page.getByTestId('github-pat-input').fill(pat)
@@ -406,61 +433,6 @@ export async function waitForVaultUnlocked(
   timeout = UI_TIMEOUT_MS,
 ) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
-}
-
-export async function connectLocalVault(page: Page) {
-  await page.goto('/')
-  await expect(
-    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-
-  if (await page.getByTestId('vault-panel').isVisible()) {
-    return
-  }
-
-  const createForm = page.getByTestId('login-create-vault-form')
-  if (await createForm.isVisible()) {
-    await createLocalVaultOnLogin(page)
-    return
-  }
-
-  const localUnlock = page.getByTestId('login-local-vault-detected')
-  if (await localUnlock.isVisible()) {
-    const masterPassword = page.getByTestId('login-master-password-input')
-    if (await masterPassword.isVisible()) {
-      await masterPassword.fill(DEFAULT_LOCAL_VAULT_PASSWORD)
-      await page.getByTestId('unlock-vault-btn').click()
-    } else {
-      await page.getByTestId('unlock-vault-btn').click()
-    }
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    return
-  }
-
-  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
-  if (await savedLocalProvider.isVisible()) {
-    await savedLocalProvider.click()
-    await page.getByTestId('login-connect-provider-btn').click()
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Local vault loaded',
-      { timeout: UI_TIMEOUT_MS },
-    )
-  } else {
-    await openLegacyProviderSetup(page)
-    await page.getByTestId('provider-option-local').click()
-    const connectButton = await waitForEngine(page)
-    await connectButton.click()
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Local vault loaded',
-      { timeout: UI_TIMEOUT_MS },
-    )
-  }
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
 }
 
 export async function connectGithubVault(
@@ -599,14 +571,9 @@ export async function unlockGithubVault(page: Page) {
   if (autoUnlocked) {
     return
   }
-  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
-  if (await savedGithubProvider.isVisible()) {
-    await savedGithubProvider.click()
-    await page.getByTestId('login-connect-provider-btn').click()
-    await page.getByTestId('unlock-vault-btn').click()
-  }
+  await unlockVaultOnLogin(page)
   await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
 
@@ -697,68 +664,33 @@ export async function assertVaultReady(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
-/** Ensure a saved provider is selected on the login gate connection step. */
-export async function selectLoginSavedProvider(
+/** Start a GitHub connect from the login gate (saved provider or fresh setup). */
+export async function clickLoginConnectProvider(
   page: Page,
-  preferred: 'local' | 'github' = 'local',
+  preferred: 'local' | 'github' = 'github',
 ) {
-  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
-  const savedGithubProvider = page.getByTestId('saved-provider-github').first()
-
-  if (preferred === 'github' && (await savedGithubProvider.isVisible())) {
-    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedGithubProvider.click()
+  await openLoginProviderSetup(page)
+  if (preferred === 'github') {
+    const savedGithub = page.getByTestId('saved-provider-github').first()
+    if (await savedGithub.isVisible()) {
+      await savedGithub.click()
     }
-    return
-  }
-
-  if (await savedLocalProvider.isVisible()) {
-    if ((await savedLocalProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedLocalProvider.click()
-    }
-  } else if (await savedGithubProvider.isVisible()) {
-    if ((await savedGithubProvider.getAttribute('aria-checked')) !== 'true') {
-      await savedGithubProvider.click()
-    }
+    await page.getByTestId('provider-option-github').click()
   } else {
     await page.getByTestId('provider-option-local').click()
   }
-}
-
-/** Click Connect on the login gate without asserting the next wizard step. */
-export async function clickLoginConnectProvider(
-  page: Page,
-  preferred: 'local' | 'github' = 'local',
-) {
-  const authorizationStep = page.getByTestId('login-wizard-authorization-step')
-  const connectButton = page.getByTestId('login-connect-provider-btn')
-
-  await expect(authorizationStep.or(connectButton)).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  if (await authorizationStep.isVisible()) {
-    return
-  }
-
-  await expect
-    .poll(
-      async () => {
-        await selectLoginSavedProvider(page, preferred)
-        return connectButton.isEnabled()
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .toBe(true)
-
+  const connectButton = await waitForEngine(page)
   await connectButton.click()
 }
 
-/** Pick device keys or backup password on the login gate unlock form. */
+/** Connect a saved provider on the login gate and reach unlock or vault. */
 export async function connectLoginProvider(page: Page) {
   await clickLoginConnectProvider(page)
-  await expect(page.getByTestId('login-wizard-authorization-step')).toBeVisible(
-    { timeout: UI_TIMEOUT_MS },
-  )
+  await expect(
+    page
+      .getByTestId('login-local-unlock-step')
+      .or(page.getByTestId('vault-panel')),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
 export async function assertRemoteVaultRecoveryPanel(
@@ -778,17 +710,21 @@ export async function assertRemoteVaultRecoveryPanel(
 /** Choose recover-from-browser on the remote-missing prompt, then reach unlock. */
 export async function recoverRemoteVaultOnLogin(page: Page) {
   await page.getByTestId('remote-vault-recover-btn').click()
-  await expect(page.getByTestId('login-wizard-authorization-step')).toBeVisible(
-    { timeout: UI_TIMEOUT_MS },
-  )
+  await expect(
+    page
+      .getByTestId('login-local-unlock-step')
+      .or(page.getByTestId('vault-panel')),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 /** Choose create-fresh on the remote-missing prompt, then reach unlock. */
 export async function createFreshRemoteVaultOnLogin(page: Page) {
   await page.getByTestId('remote-vault-create-fresh-btn').click()
-  await expect(page.getByTestId('login-wizard-authorization-step')).toBeVisible(
-    { timeout: UI_TIMEOUT_MS },
-  )
+  await expect(
+    page
+      .getByTestId('login-local-unlock-step')
+      .or(page.getByTestId('vault-panel')),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 /** Remove browser-local vault mirrors (`vault_cache:*`) while keeping device identity. */
@@ -868,22 +804,13 @@ export async function unlockVaultOnLogin(
     return
   }
 
-  await connectLoginProvider(page)
-  if (opts?.password) {
-    await selectLoginUnlockMethod(page, 'password')
-    if (opts.entryLabel) {
-      await page
-        .getByTestId('login-password-entry-list')
-        .getByRole('button', { name: opts.entryLabel })
-        .click()
-    }
-    await page.getByTestId('login-password-input').fill(opts.password)
-  }
-  await page.getByTestId('unlock-vault-btn').click()
+  throw new Error(
+    'Login gate has no local unlock step — use createLocalVaultOnLogin or clickLoginConnectProvider.',
+  )
 }
 
 /**
- * Add a second saved provider so `VaultState.shouldAutoUnlock()` stays false
+ * Add a saved sync provider so `VaultState.shouldAutoUnlock()` stays false
  * and the login gate remains visible after reload.
  */
 export async function disableLoginAutoUnlock(page: Page) {
@@ -905,18 +832,21 @@ export async function disableLoginAutoUnlock(page: Page) {
               id: string
               type: string
               label: string
+              githubPat?: string
+              githubRepo?: string
               createdAt: string
             }>
-            activeProviderId: string | null
           } | null
           if (!snapshot?.providers?.length) {
             reject(new Error('No saved providers in nook_auth.'))
             return
           }
           snapshot.providers.push({
-            id: 'e2e-dummy-local',
-            type: 'local',
-            label: 'This device (e2e)',
+            id: 'e2e-dummy-github-sync',
+            type: 'github',
+            label: 'GitHub (e2e auto-unlock block)',
+            githubPat: 'ghp_e2e_dummy',
+            githubRepo: 'nook-e2e-dummy',
             createdAt: new Date().toISOString(),
           })
           const putReq = store.put(snapshot, 'providers')
@@ -968,12 +898,8 @@ export async function seedExtraGithubProviders(
               githubPat?: string
               createdAt: string
             }>
-            activeProviderId: string | null
           } | null
-          const snapshot = existing ?? {
-            providers: [],
-            activeProviderId: null,
-          }
+          const snapshot = existing ?? { providers: [] }
           for (const provider of providers) {
             snapshot.providers.push({
               id: provider.id,
@@ -983,17 +909,6 @@ export async function seedExtraGithubProviders(
               githubPat: provider.githubPat,
               createdAt: new Date().toISOString(),
             })
-          }
-          const localProvider = snapshot.providers.find(
-            (p) => p.type === 'local',
-          )
-          if (localProvider) {
-            snapshot.activeProviderId = localProvider.id
-          } else if (
-            !snapshot.activeProviderId &&
-            snapshot.providers.length > 0
-          ) {
-            snapshot.activeProviderId = snapshot.providers[0]!.id
           }
           const putReq = store.put(snapshot, 'providers')
           putReq.onerror = () =>
@@ -1202,7 +1117,6 @@ export async function connectLocalE2eJoinerDevice(
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
-  await openLegacyProviderSetup(page)
   await setupGithubProvider(page, 'ghp_test_token', repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()

@@ -1,4 +1,8 @@
 import { generateId } from '$lib/nook'
+import {
+  migrateLegacyVaultToLocal,
+  normalizeAuthSnapshot,
+} from '$lib/vault-migration'
 
 export type StorageProviderType = 'local' | 'github' | 'oauth-file'
 
@@ -49,7 +53,6 @@ export interface StorageProvider {
 
 export interface AuthProvidersSnapshot {
   providers: StorageProvider[]
-  activeProviderId: string | null
 }
 
 /** Plain snapshot safe for IndexedDB structured clone (no reactive proxies). */
@@ -107,7 +110,6 @@ function migrateFromLocalStorage(
 
   return {
     providers: [provider],
-    activeProviderId: provider.id,
   }
 }
 
@@ -153,30 +155,61 @@ function migrateProviderFields(
 export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
   const db = await openDb()
   try {
-    const snapshot = await new Promise<AuthProvidersSnapshot>(
-      (resolve, reject) => {
-        const tx = db.transaction(STORE, 'readonly')
-        const store = tx.objectStore(STORE)
-        const request = store.get(STATE_KEY)
-        request.onsuccess = () => {
-          const value = request.result as AuthProvidersSnapshot | undefined
-          resolve(
-            value ?? {
-              providers: [],
-              activeProviderId: null,
-            },
-          )
-        }
-        request.onerror = () =>
-          reject(request.error ?? new Error('Failed to read auth providers.'))
-      },
-    )
-    const fromLocalStorage = migrateFromLocalStorage(snapshot)
-    const migrated = migrateProviderFields(fromLocalStorage)
-    if (migrated !== snapshot) {
-      await saveAuthProviders(migrated)
+    const loaded = await new Promise<{
+      snapshot: AuthProvidersSnapshot
+      legacyActiveProviderId: string | null
+      changed: boolean
+    }>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly')
+      const store = tx.objectStore(STORE)
+      const request = store.get(STATE_KEY)
+      request.onsuccess = () => {
+        resolve(normalizeAuthSnapshot(request.result))
+      }
+      request.onerror = () =>
+        reject(request.error ?? new Error('Failed to read auth providers.'))
+    })
+    let snapshot = migrateFromLocalStorage(loaded.snapshot)
+    snapshot = migrateProviderFields(snapshot)
+    if (loaded.changed || snapshot !== loaded.snapshot) {
+      await saveAuthProviders(snapshot)
     }
-    return migrated
+    return snapshot
+  } finally {
+    db.close()
+  }
+}
+
+/** Load providers, strip legacy fields, and copy a remote vault into local storage once. */
+export async function loadAuthProvidersWithVaultMigration(): Promise<AuthProvidersSnapshot> {
+  const db = await openDb()
+  try {
+    const loaded = await new Promise<{
+      snapshot: AuthProvidersSnapshot
+      legacyActiveProviderId: string | null
+      changed: boolean
+    }>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly')
+      const store = tx.objectStore(STORE)
+      const request = store.get(STATE_KEY)
+      request.onsuccess = () => {
+        resolve(normalizeAuthSnapshot(request.result))
+      }
+      request.onerror = () =>
+        reject(request.error ?? new Error('Failed to read auth providers.'))
+    })
+    let snapshot = migrateFromLocalStorage(loaded.snapshot)
+    snapshot = migrateProviderFields(snapshot)
+    const { snapshot: migratedSnapshot, migrated: copiedVault } =
+      await migrateLegacyVaultToLocal(snapshot, loaded.legacyActiveProviderId)
+    const shouldSave =
+      loaded.changed ||
+      copiedVault ||
+      migratedSnapshot.providers.length !== snapshot.providers.length
+    if (shouldSave) {
+      await saveAuthProviders(migratedSnapshot)
+    }
+    return migratedSnapshot
   } finally {
     db.close()
   }

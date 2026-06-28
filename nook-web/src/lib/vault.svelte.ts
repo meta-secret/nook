@@ -33,6 +33,7 @@ import {
   DEFAULT_GITHUB_REPO,
   formatDriveStorageRef,
   loadAuthProviders,
+  loadAuthProvidersWithVaultMigration,
   providerDefaultLabel,
   saveAuthProviders,
   wasmStorageModeForProvider,
@@ -62,6 +63,10 @@ import {
 } from '$lib/locale-catalogs'
 import { hasLocalVault } from '$lib/local-vault'
 import {
+  ensureLocalProviderRow,
+  migrateLegacyVaultToLocal,
+} from '$lib/vault-migration'
+import {
   fetchRemoteVaultBlob,
   readLocalVaultBlob,
   readVaultVersionFromBlob,
@@ -86,7 +91,6 @@ export class VaultState {
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
-  activeProviderId = $state<string | null>(null)
   providersLoaded = $state(false)
   /** True when `nook_db.encrypted_db` holds a vault blob (local-first model). */
   localVaultPresent = $state(false)
@@ -153,8 +157,6 @@ export class VaultState {
   unlockMode = $state<'keys' | 'password'>('keys')
   /** Remote vault unlock mode detected on the login screen (before session open). */
   loginUnlockMode = $state<'unknown' | 'keys' | 'password'>('unknown')
-  /** Login gate phase: connect to storage, then authorize to decrypt. */
-  loginFlowStep = $state<'connection' | 'authorization'>('connection')
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false)
   /** Remote vault file missing on storage — prompt before unlock. */
@@ -207,8 +209,8 @@ export class VaultState {
     if (this.isAuthenticated && this.localVaultPresent) {
       return ['local', '', '']
     }
-    if (this.isAuthenticated && this.activeProvider) {
-      return this.providerWasmArgs(this.activeProvider)
+    if (this.isAuthenticated && this.syncProviders[0]) {
+      return this.providerWasmArgs(this.syncProviders[0])
     }
     const mode = wasmStorageModeForProvider(
       this.storageMode,
@@ -261,9 +263,9 @@ export class VaultState {
       return
     }
     this.oauthFile = refreshed
-    if (this.activeProvider?.type === 'oauth-file') {
+    if (this.oauthFile && this.providers.some((p) => p.type === 'oauth-file')) {
       this.providers = this.providers.map((provider) =>
-        provider.id === this.activeProviderId
+        provider.type === 'oauth-file'
           ? { ...provider, oauthFile: refreshed }
           : provider,
       )
@@ -368,8 +370,13 @@ export class VaultState {
     }, 5000)
   }
 
+  get localProvider(): StorageProvider | null {
+    return this.providers.find((p) => p.type === 'local') ?? null
+  }
+
+  /** Canonical on-device vault row — alias kept while settings code migrates. */
   get activeProvider(): StorageProvider | null {
-    return this.providers.find((p) => p.id === this.activeProviderId) ?? null
+    return this.localProvider
   }
 
   /** Cloud sync destinations — local vault is always canonical and omitted. */
@@ -478,7 +485,7 @@ export class VaultState {
       const locale = savedLocale ?? browserLocale
       await this.updateLocale(locale)
 
-      await this.loadProviders()
+      await this.loadProviders({ migrateLegacyVault: true })
       this.localVaultPresent = await hasLocalVault()
       if (this.localVaultPresent) {
         this.storageMode = 'local'
@@ -507,7 +514,7 @@ export class VaultState {
     const autoUnlock = !hasPendingEnrollment && this.shouldAutoUnlock()
     if (autoUnlock) {
       await this.loadDb()
-      if (!this.isAuthenticated && this.activeProvider) {
+      if (!this.isAuthenticated && this.localProvider) {
         void this.probeLoginUnlockMode()
       }
     } else {
@@ -538,8 +545,8 @@ export class VaultState {
       return false
     }
     return (
-      this.providers.length === 1 &&
-      this.activeProvider !== null &&
+      this.localVaultPresent &&
+      this.syncProviders.length === 0 &&
       this.loginSetupType === null &&
       !this.addProviderOpen
     )
@@ -551,7 +558,6 @@ export class VaultState {
     this.storageMode = 'local'
     this.githubPat = ''
     this.oauthFile = null
-    this.loginFlowStep = 'authorization'
     await this.refreshPasswordEntriesList()
     this.localLoginPrepared = true
   }
@@ -604,50 +610,59 @@ export class VaultState {
     }
   }
 
-  async loadProviders() {
-    const snapshot = await loadAuthProviders()
+  async loadProviders(options?: { migrateLegacyVault?: boolean }) {
+    const snapshot = options?.migrateLegacyVault
+      ? await loadAuthProvidersWithVaultMigration()
+      : await loadAuthProviders()
     this.providers = snapshot.providers.map((p) =>
       p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
     )
-    this.activeProviderId =
-      snapshot.activeProviderId ?? snapshot.providers[0]?.id ?? null
     this.providersLoaded = true
   }
 
   applyActiveProviderCredentials() {
-    const stagingGoogle =
-      this.loginSetupType === 'oauth-file' &&
-      Boolean(this.oauthFile?.accessToken?.trim())
+    if (this.localVaultPresent) {
+      this.storageMode = 'local'
+      this.githubPat = ''
+      this.oauthFile = null
+      return
+    }
 
-    const provider = this.activeProvider
-    if (!provider) {
-      if (this.loginSetupType) {
-        this.storageMode = this.loginSetupType
-        if (this.loginSetupType !== 'github') {
-          this.githubPat = ''
-        }
-        if (this.loginSetupType !== 'oauth-file') {
-          this.oauthFile = null
-        }
+    if (this.loginSetupType) {
+      this.storageMode = this.loginSetupType
+      if (this.loginSetupType !== 'github') {
+        this.githubPat = ''
+      }
+      if (this.loginSetupType !== 'oauth-file') {
+        this.oauthFile = null
       }
       return
     }
 
-    if (stagingGoogle && this.addProviderOpen) {
-      this.storageMode = provider.type
-      this.githubPat = provider.githubPat ?? ''
-      this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+    const stagingGoogle =
+      this.loginSetupType === 'oauth-file' &&
+      Boolean(this.oauthFile?.accessToken?.trim())
+
+    const syncProvider = this.syncProviders[0]
+    if (!syncProvider) {
       return
     }
 
-    this.storageMode = provider.type
-    this.githubPat = provider.githubPat ?? ''
-    if (provider.type === 'oauth-file') {
-      this.oauthFile = provider.oauthFile ?? null
+    if (stagingGoogle && this.addProviderOpen) {
+      this.storageMode = syncProvider.type
+      this.githubPat = syncProvider.githubPat ?? ''
+      this.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+      return
+    }
+
+    this.storageMode = syncProvider.type
+    this.githubPat = syncProvider.githubPat ?? ''
+    if (syncProvider.type === 'oauth-file') {
+      this.oauthFile = syncProvider.oauthFile ?? null
       this.githubRepo =
-        provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+        syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
     } else {
-      this.githubRepo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+      this.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
       this.oauthFile = null
     }
   }
@@ -665,7 +680,6 @@ export class VaultState {
     }
     await saveAuthProviders({
       providers: this.providers,
-      activeProviderId: this.activeProviderId,
     })
   }
 
@@ -713,26 +727,8 @@ export class VaultState {
     this.errorMsg = ''
   }
 
-  async selectProvider(id: string) {
-    const providerChanged = this.activeProviderId !== id
-    if (providerChanged) {
-      if (this.isAuthenticated) {
-        this.clearUnlockedSession()
-      } else {
-        this.resetVaultSessionState()
-      }
-      this.loginFlowStep = 'connection'
-    }
-    this.activeProviderId = id
-    this.loginSetupType = null
-    this.applyActiveProviderCredentials()
-    await this.persistProviders()
-    this.errorMsg = ''
-  }
-
   /**
-   * Detect whether the active provider's vault unlocks with device keys or a
-   * password envelope — drives login-screen copy and routing.
+   * Detect whether the vault unlocks with device keys or a password envelope.
    */
   async probeLoginUnlockMode(): Promise<void> {
     await this.refreshPasswordEntriesList()
@@ -765,45 +761,6 @@ export class VaultState {
     }
   }
 
-  /** Login gate step 1: highlight a saved provider without reaching storage yet. */
-  async selectLoginProvider(id: string): Promise<void> {
-    await this.selectProvider(id)
-  }
-
-  /** Login gate step 1 → 2: reach the vault file and load password-entry metadata. */
-  async connectLoginProvider(): Promise<void> {
-    if (!this.activeProviderId) {
-      this.errorMsg = 'Choose a storage provider.'
-      return
-    }
-    this.errorMsg = ''
-    this.clearRemoteVaultRecovery()
-    this.isVerifying = true
-    try {
-      await this.ensureOAuthTokensFresh()
-      const accessStatus = await this.assessVaultConnectStatus()
-      if (await this.handleRemoteVaultAssessStatus(accessStatus)) {
-        return
-      }
-      const ok = await this.refreshPasswordEntriesList()
-      if (!ok) {
-        this.errorMsg =
-          'Could not reach the vault on this provider. Check credentials and try again.'
-        return
-      }
-      this.loginFlowStep = 'authorization'
-    } finally {
-      this.isVerifying = false
-    }
-  }
-
-  backToLoginProviderStep() {
-    this.loginFlowStep = 'connection'
-    this.clearRemoteVaultRecovery()
-    this.resetVaultSessionState()
-    this.errorMsg = ''
-  }
-
   clearRemoteVaultRecovery() {
     this.remoteVaultRecoveryPrompt = 'none'
     this.pendingConnectRecovery = 'none'
@@ -828,7 +785,6 @@ export class VaultState {
         return
       }
       await this.refreshPasswordEntriesList()
-      this.loginFlowStep = 'authorization'
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Could not load the local vault copy.'
@@ -855,7 +811,6 @@ export class VaultState {
       }
       return
     }
-    this.loginFlowStep = 'authorization'
   }
 
   private async assessVaultConnectStatus(): Promise<string> {
@@ -925,31 +880,15 @@ export class VaultState {
     this.resetVaultSessionState()
   }
 
-  /** Drop a saved provider from this browser. Vault files on storage are untouched. */
+  /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
   async removeProvider(id: string): Promise<void> {
     const target = this.providers.find((p) => p.id === id)
-    if (!target) return
-
-    const wasActive = this.activeProviderId === id
-    const signedOut =
-      this.isAuthenticated && wasActive && !this.localVaultPresent
+    if (!target || target.type === 'local') return
 
     this.providers = this.providers.filter((p) => p.id !== id)
 
-    if (this.providers.length === 0) {
-      this.activeProviderId = null
-      if (this.isAuthenticated) {
-        this.clearUnlockedSession()
-      }
-    } else if (wasActive) {
-      const localProvider = this.providers.find((p) => p.type === 'local')
-      this.activeProviderId = localProvider?.id ?? this.providers[0]!.id
-      if (signedOut) {
-        this.clearUnlockedSession()
-      } else if (!this.localVaultPresent) {
-        this.resetVaultSessionState()
-        this.loginFlowStep = 'connection'
-      }
+    if (this.providers.length === 0 && this.isAuthenticated) {
+      this.clearUnlockedSession()
     }
 
     this.applyActiveProviderCredentials()
@@ -978,7 +917,7 @@ export class VaultState {
           }
         : undefined
 
-    if (isNewSetup) {
+    if (isNewSetup && type !== 'local') {
       const provider: StorageProvider = {
         id: generateId(),
         type,
@@ -997,97 +936,54 @@ export class VaultState {
         createdAt: isoTimestamp(),
       }
       this.providers = [...this.providers, provider]
-      this.activeProviderId = provider.id
-    } else if (this.activeProvider) {
-      if (
-        this.storageMode === 'local' &&
-        this.activeProvider.type !== 'local'
-      ) {
-        const localProvider = this.providers.find((p) => p.type === 'local')
-        if (localProvider) {
-          this.activeProviderId = localProvider.id
-        } else {
-          const provider: StorageProvider = {
-            id: generateId(),
-            type: 'local',
-            label: providerDefaultLabel('local'),
-            storeId: vaultStoreId,
-            createdAt: isoTimestamp(),
-          }
-          this.providers = [...this.providers, provider]
-          this.activeProviderId = provider.id
-        }
-      } else {
-        const updated: StorageProvider = {
-          ...this.activeProvider,
-          type: this.storageMode,
-          githubPat:
-            this.storageMode === 'github'
-              ? pat || this.activeProvider.githubPat
-              : undefined,
-          githubRepo: this.storageMode === 'github' ? repo : undefined,
-          oauthFile:
-            this.storageMode === 'oauth-file'
-              ? (oauthSnapshot ?? this.activeProvider.oauthFile)
-              : undefined,
-          storeId: vaultStoreId ?? this.activeProvider.storeId,
-        }
-        this.providers = this.providers.map((p) =>
-          p.id === updated.id ? updated : p,
-        )
+    } else if (isNewSetup && type === 'local' && !this.localProvider) {
+      const provider: StorageProvider = {
+        id: generateId(),
+        type: 'local',
+        label: providerDefaultLabel('local'),
+        storeId: vaultStoreId,
+        createdAt: isoTimestamp(),
       }
+      this.providers = [...this.providers, provider]
+    } else if (this.localProvider) {
+      this.providers = this.providers.map((provider) =>
+        provider.type === 'local'
+          ? {
+              ...provider,
+              storeId: vaultStoreId ?? provider.storeId,
+            }
+          : provider,
+      )
     } else {
-      const localExisting = this.providers.find((p) => p.type === 'local')
-      if (localExisting) {
-        this.activeProviderId = localExisting.id
-      } else {
-        const provider: StorageProvider = {
-          id: generateId(),
-          type,
-          label: providerDefaultLabel(
-            type,
-            type === 'github'
-              ? repo
-              : type === 'oauth-file'
-                ? driveFile
-                : undefined,
-          ),
-          githubPat: type === 'github' ? pat : undefined,
-          githubRepo: type === 'github' ? repo : undefined,
-          oauthFile: oauthSnapshot,
-          storeId: vaultStoreId,
-          createdAt: isoTimestamp(),
-        }
-        this.providers = [...this.providers, provider]
-        this.activeProviderId = provider.id
-      }
+      this.providers = ensureLocalProviderRow({
+        providers: this.providers,
+      }).providers
     }
 
     if (this.storageMode === 'oauth-file' && this.oauthFile?.fileId) {
-      const active = this.providers.find((p) => p.id === this.activeProviderId)
-      if (
-        active?.oauthFile &&
-        active.oauthFile.fileId !== this.oauthFile.fileId
-      ) {
+      this.providers = this.providers.map((provider) => {
+        if (provider.type !== 'oauth-file' || !provider.oauthFile) {
+          return provider
+        }
         const merged: OAuthFileConfig = {
           preset: 'google-drive',
           accessToken:
-            this.oauthFile.accessToken || active.oauthFile.accessToken,
-          refreshToken: active.oauthFile.refreshToken,
-          expiresAt: active.oauthFile.expiresAt ?? this.oauthFile.expiresAt,
-          fileId: this.oauthFile.fileId,
+            this.oauthFile!.accessToken || provider.oauthFile.accessToken,
+          refreshToken: provider.oauthFile.refreshToken,
+          expiresAt: provider.oauthFile.expiresAt ?? this.oauthFile!.expiresAt,
+          fileId: this.oauthFile!.fileId,
           fileName:
-            active.oauthFile.fileName?.trim() ||
-            this.oauthFile.fileName?.trim() ||
+            provider.oauthFile.fileName?.trim() ||
+            this.oauthFile!.fileName?.trim() ||
             driveFile,
           accountEmail:
-            active.oauthFile.accountEmail ?? this.oauthFile.accountEmail,
+            provider.oauthFile.accountEmail ?? this.oauthFile!.accountEmail,
         }
-        this.oauthFile = merged
-        this.providers = this.providers.map((p) =>
-          p.id === this.activeProviderId ? { ...p, oauthFile: merged } : p,
-        )
-      }
+        return { ...provider, oauthFile: merged }
+      })
+      this.oauthFile =
+        this.providers.find((p) => p.type === 'oauth-file')?.oauthFile ??
+        this.oauthFile
     }
 
     this.loginSetupType = null
@@ -1547,7 +1443,7 @@ export class VaultState {
     try {
       await this.ensureProviderSaved()
       const provider =
-        this.providers.find((p) => p.id === this.activeProviderId) ??
+        this.syncProviders[this.syncProviders.length - 1] ??
         this.providers[this.providers.length - 1]
       if (!provider || provider.type === 'local') {
         this.errorMsg = 'Choose a cloud sync provider.'
@@ -1581,7 +1477,6 @@ export class VaultState {
   /** End the in-memory session and return to the login gate (device keys stay in this browser). */
   lockVault() {
     this.clearUnlockedSession()
-    this.loginFlowStep = 'connection'
   }
 
   openHelp() {
@@ -1714,7 +1609,6 @@ export class VaultState {
       )) as NookSecretRecord[]
       if (isSelf) {
         this.clearUnlockedSession()
-        this.loginFlowStep = 'connection'
         this.showSuccess(this.t('toasts.device_removed'))
         return
       }
@@ -1875,7 +1769,6 @@ export class VaultState {
         await this.ensureProviderSaved()
         const hasPasswordFallback = await this.refreshPasswordEntriesList()
         if (hasPasswordFallback && this.passwordEntries.length > 0) {
-          this.loginFlowStep = 'authorization'
           this.loginPasswordPrompt = true
           this.joinEnrollmentPrompt = 'none'
           return
@@ -1888,7 +1781,6 @@ export class VaultState {
         await this.ensureProviderSaved()
         const hasPasswordFallback = await this.refreshPasswordEntriesList()
         if (hasPasswordFallback && this.passwordEntries.length > 0) {
-          this.loginFlowStep = 'authorization'
           this.loginPasswordPrompt = true
           this.joinEnrollmentPrompt = 'none'
           return
@@ -1925,6 +1817,7 @@ export class VaultState {
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
       await this.loadProviders()
+      await this.promoteSessionVaultToLocalIfNeeded()
       await this.hydrateMultiDeviceState()
       await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
@@ -1941,6 +1834,22 @@ export class VaultState {
       this.errorMsg = this.resolveErrorMessage(message)
     } finally {
       this.isVerifying = false
+    }
+  }
+
+  private async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
+    const { snapshot, migrated } = await migrateLegacyVaultToLocal({
+      providers: this.providers,
+    })
+    if (migrated || snapshot.providers.length !== this.providers.length) {
+      this.providers = snapshot.providers
+      await saveAuthProviders(snapshot)
+    }
+    this.localVaultPresent = await hasLocalVault()
+    if (this.localVaultPresent) {
+      this.storageMode = 'local'
+      this.githubPat = ''
+      this.oauthFile = null
     }
   }
 
@@ -2046,7 +1955,7 @@ export class VaultState {
   async issueEnrollmentCode(
     entryId: string,
     password: string,
-    providerId = this.activeProviderId ?? '',
+    providerId = this.syncProviders[0]?.id ?? '',
   ): Promise<string> {
     if (!this.manager) {
       throw new Error('Vault engine is not available.')
