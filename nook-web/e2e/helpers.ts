@@ -485,6 +485,27 @@ export async function connectGithubGenesisDevice(
   await connectGithubVault(page, pat, repoName)
 }
 
+/** Joiner connect runs GitHub assess + wasm — allow the same budget as genesis connect. */
+async function waitForJoinEnrollmentDialog(page: Page) {
+  const joinDialog = page.getByTestId('join-enrollment-dialog')
+  await expect
+    .poll(
+      async () => {
+        await assertNoVaultErrors(page)
+        if (await joinDialog.isVisible()) return 'join'
+        if (await page.getByTestId('login-password-entry-list').isVisible()) {
+          return 'password'
+        }
+        return 'waiting'
+      },
+      { timeout: GITHUB_CONNECT_TIMEOUT_MS },
+    )
+    .toBe('join')
+  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 /** Second device: same repo → join enrollment dialog. */
 export async function connectGithubJoinerDevice(
   page: Page,
@@ -498,13 +519,7 @@ export async function connectGithubJoinerDevice(
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await assertNoVaultErrors(page)
-  await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await waitForJoinEnrollmentDialog(page)
 }
 
 export async function sendJoinRequest(
@@ -685,6 +700,11 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await waitForLocalVaultState(
+    page,
+    (snapshot) => snapshot.hasPasswordEnvelope,
+    { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+  )
 }
 
 /** Match vault password badge copy (`1 item` or legacy `1 password`). */
@@ -1283,13 +1303,7 @@ export async function connectLocalE2eJoinerDevice(
   await setupGithubProvider(page, 'ghp_test_token', repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await assertNoVaultErrors(page)
-  await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await waitForJoinEnrollmentDialog(page)
 }
 
 /** Send a join request against a stubbed GitHub repo (local e2e). */
