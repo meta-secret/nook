@@ -24,8 +24,7 @@
 
   let {
     vault,
-    providers,
-    activeProviderId,
+    syncProviders,
     passwordEntries,
     enrollmentCode,
     isBusy,
@@ -35,8 +34,7 @@
     onOpenPasswordSettings,
   }: {
     vault: VaultState
-    providers: StorageProvider[]
-    activeProviderId: string | null
+    syncProviders: StorageProvider[]
     passwordEntries: VaultPasswordEntrySummary[]
     enrollmentCode: string
     isBusy: boolean
@@ -50,7 +48,7 @@
     onOpenPasswordSettings?: () => void
   } = $props()
 
-  let providerId = $state(activeProviderId ?? providers[0]?.id ?? '')
+  let providerId = $state(syncProviders[0]?.id ?? '')
   let passwordEntryId = $state(passwordEntries[0]?.id ?? '')
   let passwordInput = $state('')
   let localError = $state('')
@@ -58,7 +56,7 @@
   let qrDataUrl = $state('')
 
   const selectedProvider = $derived(
-    providers.find((provider) => provider.id === providerId) ?? null,
+    syncProviders.find((provider) => provider.id === providerId) ?? null,
   )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === passwordEntryId) ?? null,
@@ -74,11 +72,11 @@
   $effect(() => {
     if (
       providerId &&
-      !providers.some((provider) => provider.id === providerId)
+      !syncProviders.some((provider) => provider.id === providerId)
     ) {
-      providerId = providers[0]?.id ?? ''
-    } else if (!providerId && providers[0]) {
-      providerId = providers[0].id
+      providerId = syncProviders[0]?.id ?? ''
+    } else if (!providerId && syncProviders[0]) {
+      providerId = syncProviders[0].id
     }
   })
 
@@ -117,7 +115,7 @@
     localError = ''
     onClearCode()
     if (!selectedProvider) {
-      localError = vault.t('onboard_device.choose_provider_err')
+      localError = vault.t('onboard_device.choose_sync_provider_err')
       return
     }
     if (!selectedPassword) {
@@ -178,7 +176,7 @@
             id="onboard-provider-label"
             class="text-sm font-medium text-muted-foreground"
           >
-            {vault.t('onboard_device.auth_provider')}
+            {vault.t('onboard_device.sync_provider')}
           </p>
           {#if onOpenStorageSettings}
             <button
@@ -191,9 +189,9 @@
             </button>
           {/if}
         </div>
-        {#if providers.length === 0}
+        {#if syncProviders.length === 0}
           <p class="text-xs text-muted-foreground">
-            {vault.t('onboard_device.no_providers')}
+            {vault.t('onboard_device.no_sync_providers')}
             {#if onOpenStorageSettings}
               <button
                 type="button"
@@ -212,7 +210,7 @@
             aria-labelledby="onboard-provider-label"
             data-testid="onboard-provider-list"
           >
-            {#each providers as provider (provider.id)}
+            {#each syncProviders as provider (provider.id)}
               {@const selected = provider.id === providerId}
               <button
                 type="button"
@@ -247,14 +245,6 @@
                     <span class="truncate font-medium"
                       >{localizeProviderLabel(provider.label, vault.t)}</span
                     >
-                    {#if provider.id === activeProviderId}
-                      <span
-                        class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
-                        data-testid="onboard-provider-active-{provider.id}"
-                      >
-                        {vault.t('common.active')}
-                      </span>
-                    {/if}
                   </div>
                   <div
                     class="truncate font-mono text-[11px] {selected
@@ -336,7 +326,7 @@
     <Button
       type="submit"
       disabled={isBusy ||
-        providers.length === 0 ||
+        syncProviders.length === 0 ||
         passwordEntries.length === 0}
       data-testid="onboard-device-submit"
     >

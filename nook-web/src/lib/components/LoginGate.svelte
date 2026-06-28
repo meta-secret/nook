@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RefreshCw, ShieldCheck, ChevronLeft } from '@lucide/svelte'
+  import { RefreshCw, ShieldCheck } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
@@ -16,7 +16,9 @@
   } from '$lib/components/ui/card'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
-  import LoginWizard from '$lib/components/login/LoginWizard.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
+  import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
+  import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
@@ -25,12 +27,10 @@
     peekEnrollmentEntryId,
     peekEnrollmentEntryLabel,
   } from '$lib/enrollment-code'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
     vault,
     providers,
-    activeProviderId,
     setupType = $bindable(null as StorageProviderType | null),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
@@ -38,9 +38,6 @@
     isInitializing,
     addProviderOpen = false,
     onUnlock,
-    onSelectProvider,
-    onConnectProvider,
-    onBackToLoginProvider,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
@@ -48,19 +45,13 @@
     onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
-    loginFlowStep = 'connection',
-    passwordEntries = [] as VaultPasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(null as string | null),
+    onCreateDeviceVault,
     onRemoveProvider,
-    loginPasswordPrompt = false,
-    onConsumeLoginPasswordPrompt,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
   }: {
     vault: VaultState
     providers: StorageProvider[]
-    activeProviderId: string | null
-    loginFlowStep?: 'connection' | 'authorization'
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
@@ -68,9 +59,6 @@
     isInitializing: boolean
     addProviderOpen?: boolean
     onUnlock: () => void | Promise<void>
-    onSelectProvider: (id: string) => void | Promise<void>
-    onConnectProvider?: () => void | Promise<void>
-    onBackToLoginProvider?: () => void
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
@@ -84,33 +72,37 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
+    onCreateDeviceVault?: () => void | Promise<void>
     onRemoveProvider?: (id: string) => void | Promise<void>
-    loginPasswordPrompt?: boolean
-    passwordEntries?: VaultPasswordEntrySummary[]
-    selectedPasswordEntryId?: string | null
-    onConsumeLoginPasswordPrompt?: () => void
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
   } = $props()
 
-  let manageProvidersOpen = $state(false)
   let enrollmentPanelOpen = $state(false)
+  let showProviderSetupLink = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
-  const showWizard = $derived(hasProviders && !showSetup && !addProviderOpen)
-  const showProviderSetup = $derived(!showSetup && !showWizard)
-  const activeProvider = $derived(
-    providers.find((p) => p.id === activeProviderId) ?? null,
+  const showLocalUnlock = $derived(
+    vault.localVaultPresent && !showSetup && !addProviderOpen,
   )
-  const isConnecting = $derived(
-    isVerifying && showWizard && loginFlowStep === 'connection' && !showSetup,
+  const showCreateVault = $derived(
+    !vault.localVaultPresent &&
+      !hasProviders &&
+      !showSetup &&
+      !addProviderOpen &&
+      !showProviderSetupLink,
+  )
+  const showProviderSetup = $derived(
+    (showProviderSetupLink ||
+      addProviderOpen ||
+      (hasProviders && !vault.localVaultPresent)) &&
+      !showSetup &&
+      !showLocalUnlock &&
+      !showCreateVault,
   )
   const isUnlocking = $derived(
-    isVerifying &&
-      showWizard &&
-      loginFlowStep === 'authorization' &&
-      !showSetup,
+    isVerifying && (showLocalUnlock || showSetup) && !showSetup,
   )
   const showQrOnboarding = $derived(
     Boolean(
@@ -120,7 +112,7 @@
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
-      (showProviderSetup || showWizard || showSetup),
+      (showProviderSetup || showSetup || showCreateVault),
   )
 
   const setupCanConnect = $derived(
@@ -131,11 +123,18 @@
     e.preventDefault()
     void onUnlock()
   }
+
+  $effect(() => {
+    if (showLocalUnlock) {
+      void vault.prepareLocalLogin()
+    }
+  })
 </script>
 
 <div
   class="w-full space-y-3 animate-in fade-in duration-300"
   data-testid="login-gate"
+  data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
   {#if showQrOnboarding}
     <EnrollmentQrOnboardCard
@@ -148,49 +147,31 @@
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}
     />
   {:else}
-    {#if showWizard}
-      <LoginProviderManagement
-        {vault}
-        variant="manage"
-        {providers}
-        {isVerifying}
-        {isInitializing}
-        bind:open={manageProvidersOpen}
-        {onRemoveProvider}
-        {onBeginAddProvider}
-      />
+    {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
+      <ProductIntro {vault} {onOpenHelp} />
     {/if}
 
-    {#if !hasProviders && !showSetup && onOpenHelp}
-      <ProductIntro {vault} {onOpenHelp} />
+    {#if showLocalUnlock}
+      <p
+        class="text-xs text-muted-foreground"
+        data-testid="login-local-vault-detected"
+      >
+        {vault.t('login.local_vault_hint')}
+      </p>
     {/if}
 
     <Card
       class="gap-0 border-border bg-card/80 py-0 shadow-lg shadow-black/20 backdrop-blur-sm overflow-hidden"
     >
-      <CardHeader
-        class={showWizard
-          ? 'border-b-0 px-5 pb-1 pt-3 sm:px-6'
-          : 'border-b border-border/60 px-6 pb-4 pt-5'}
-      >
+      <CardHeader class="border-b border-border/60 px-6 pb-4 pt-5">
         <div class="space-y-1">
-          {#if addProviderOpen && showWizard}
-            <button
-              type="button"
-              class="mb-2 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              data-testid="cancel-add-provider-btn"
-              onclick={() => onCancelAddProvider?.()}
-            >
-              <ChevronLeft class="size-3.5" />
-              {vault.t('onboarding.back_to_saved')}
-            </button>
-          {/if}
-
           <CardTitle
             class="text-lg font-semibold tracking-tight text-foreground"
           >
-            {#if showWizard}
+            {#if showLocalUnlock}
               {vault.t('login.unlock_vault')}
+            {:else if showCreateVault}
+              {vault.t('login.create_vault_title')}
             {:else if showSetup}
               {vault.t('onboarding.connect_to', {
                 provider:
@@ -198,8 +179,6 @@
                     ? 'GitHub'
                     : vault.t('onboarding.local_storage'),
               })}
-            {:else if !hasProviders}
-              {vault.t('onboarding.setup_storage')}
             {:else if addProviderOpen}
               {vault.t('onboarding.add_provider')}
             {:else}
@@ -210,13 +189,13 @@
             <CardDescription class="text-pretty"
               >{vault.t('login.unlocking')}</CardDescription
             >
-          {:else if isConnecting}
-            <CardDescription class="text-pretty"
-              >{vault.t('common.connecting')}</CardDescription
-            >
-          {:else if showWizard}
+          {:else if showLocalUnlock}
             <CardDescription class="text-pretty">
-              {vault.t('login.connect_prompt')}
+              {vault.t('login.local_vault_description')}
+            </CardDescription>
+          {:else if showCreateVault}
+            <CardDescription class="text-pretty">
+              {vault.t('login.create_vault_subtitle')}
             </CardDescription>
           {:else if showSetup && setupType === 'github'}
             <CardDescription class="text-pretty">
@@ -226,10 +205,6 @@
             <CardDescription class="text-pretty">
               {vault.t('onboarding.local_description')}
             </CardDescription>
-          {:else if !hasProviders}
-            <CardDescription class="text-pretty">
-              {vault.t('onboarding.intro_description')}
-            </CardDescription>
           {:else if addProviderOpen}
             <CardDescription class="text-pretty">
               {vault.t('onboarding.another_provider')}
@@ -238,81 +213,101 @@
         </div>
       </CardHeader>
 
-      <CardContent
-        class={showWizard
-          ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6'
-          : 'px-6 pb-5 pt-4 sm:pb-6'}
-      >
-        {#if showWizard}
-          <LoginWizard
+      <CardContent class="px-6 pb-5 pt-4 sm:pb-6">
+        {#if showLocalUnlock}
+          <LoginUnlockStep
             {vault}
-            step={loginFlowStep}
-            {providers}
-            {activeProviderId}
-            {activeProvider}
-            {passwordEntries}
-            bind:selectedPasswordEntryId
+            passwordEntries={vault.passwordEntries}
+            bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
             {isVerifying}
             {isInitializing}
-            {isConnecting}
             {isUnlocking}
-            {loginPasswordPrompt}
-            {onSelectProvider}
-            onConnect={() => onConnectProvider?.()}
-            onBackToConnection={onBackToLoginProvider}
             {onUnlock}
             {onUnlockWithPassword}
-            {onConsumeLoginPasswordPrompt}
-            remoteVaultRecoveryPrompt={vault.remoteVaultRecoveryPrompt}
-            onRecoverRemoteVault={() => vault.confirmRecoverRemoteVault()}
-            onCreateFreshRemoteVault={() => vault.confirmCreateFreshRemoteVault()}
-            onDismissRemoteRecovery={() => vault.clearRemoteVaultRecovery()}
+          />
+          <p class="mt-4 text-center text-xs text-muted-foreground">
+            {vault.t('login.sync_after_unlock')}
+          </p>
+        {:else if showCreateVault && onCreateDeviceVault}
+          <LoginCreateVaultChooser
+            {vault}
+            {isVerifying}
+            {isInitializing}
+            {onCreateDeviceVault}
+            onConnectStorage={() => {
+              showProviderSetupLink = true
+            }}
           />
         {:else if showSetup && setupType}
-          <form
-            novalidate
-            onsubmit={handleFirstConnectSubmit}
-            class="space-y-4"
-          >
-            <ProviderSetupFields
+          {#if setupType === 'oauth-file'}
+            <OAuthProviderSetupWizard
               {vault}
-              {setupType}
-              bind:githubPat
               bind:githubRepo
               idPrefix="login"
+              {isVerifying}
+              {isInitializing}
               {onCancelSetup}
+              onConnect={onUnlock}
             />
-            {#if vault.remoteVaultRecoveryPrompt !== 'none'}
-              <RemoteVaultRecoveryPanel
+          {:else}
+            <form
+              novalidate
+              onsubmit={handleFirstConnectSubmit}
+              class="space-y-4"
+            >
+              <ProviderSetupFields
                 {vault}
-                mode={vault.remoteVaultRecoveryPrompt}
-                isBusy={isVerifying}
-                onRecover={() => vault.confirmRecoverRemoteVault()}
-                onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
-                onDismiss={() => vault.clearRemoteVaultRecovery()}
+                {setupType}
+                bind:githubPat
+                bind:githubRepo
+                idPrefix="login"
+                {onCancelSetup}
               />
-            {/if}
-            <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="submit"
-                class="sm:min-w-[180px]"
-                data-testid="connect-provider-btn"
-                disabled={!setupCanConnect || vault.remoteVaultRecoveryPrompt !== 'none'}
-              >
-                {#if isInitializing}
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('onboarding.loading_engine')}
-                {:else if isVerifying}
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('common.connecting')}
-                {:else}
-                  <ShieldCheck class="size-4" />
-                  {vault.t('common.connect')}
-                {/if}
-              </Button>
-            </div>
-          </form>
+              {#if vault.remoteVaultRecoveryPrompt !== 'none'}
+                <RemoteVaultRecoveryPanel
+                  {vault}
+                  mode={vault.remoteVaultRecoveryPrompt}
+                  isBusy={isVerifying}
+                  onRecover={() => vault.confirmRecoverRemoteVault()}
+                  onCreateFresh={() => vault.confirmCreateFreshRemoteVault()}
+                  onDismiss={() => vault.clearRemoteVaultRecovery()}
+                />
+              {/if}
+              <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="submit"
+                  class="sm:min-w-[180px]"
+                  data-testid="connect-provider-btn"
+                  disabled={!setupCanConnect ||
+                    vault.remoteVaultRecoveryPrompt !== 'none'}
+                >
+                  {#if isInitializing}
+                    <RefreshCw class="size-4 animate-spin" />
+                    {vault.t('onboarding.loading_engine')}
+                  {:else if isVerifying}
+                    <RefreshCw class="size-4 animate-spin" />
+                    {vault.t('common.connecting')}
+                  {:else}
+                    <ShieldCheck class="size-4" />
+                    {vault.t('common.connect')}
+                  {/if}
+                </Button>
+              </div>
+            </form>
+          {/if}
         {:else if showProviderSetup}
+          {#if showProviderSetupLink && !addProviderOpen}
+            <button
+              type="button"
+              class="mb-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="login-back-to-get-started"
+              onclick={() => {
+                showProviderSetupLink = false
+              }}
+            >
+              {vault.t('login.back_to_get_started')}
+            </button>
+          {/if}
           <LoginProviderManagement
             {vault}
             variant="setup"
@@ -320,6 +315,7 @@
             {isVerifying}
             {isInitializing}
             addingProvider={addProviderOpen}
+            {onBeginAddProvider}
             {onBeginSetup}
             {onCancelAddProvider}
             {onRemoveProvider}

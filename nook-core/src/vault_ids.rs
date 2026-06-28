@@ -99,10 +99,10 @@ pub fn validate_secret_id(id: &str) -> Result<String, String> {
         return Ok(format!("{SECRET_ID_PREFIX}{token}"));
     }
     // Brief rollout alias — normalize to `secret_` on read.
-    if let Some(token) = trimmed.strip_prefix("pass_") {
-        if is_compact_token(token) {
-            return format_secret_id(token);
-        }
+    if let Some(token) = trimmed.strip_prefix("pass_")
+        && is_compact_token(token)
+    {
+        return format_secret_id(token);
     }
     if is_device_id(trimmed) || is_auth_key_id(trimmed) || trimmed.starts_with(STORE_ID_PREFIX) {
         return Err("errors.validation.secret_id_reserved".to_owned());

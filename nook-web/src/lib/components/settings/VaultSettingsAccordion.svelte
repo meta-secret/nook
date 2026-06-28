@@ -18,10 +18,16 @@
   } from '$lib/auth-providers'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
+  export type VaultSettingsAccordionSection =
+    | 'storage'
+    | 'passwords'
+    | 'devices'
+    | 'language'
+
   let {
     vault,
-    providers,
-    activeProviderId,
+    syncProviders,
+    syncingProviderId = null,
     isAuthenticated,
     isVerifying,
     isSaving,
@@ -40,13 +46,12 @@
     vaultMembers,
     hasPasswordEnvelope = false,
     onReconnect,
-    onSelectProvider,
+    onSyncProvider,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
     onRemoveProvider,
-    onLockVault,
     onAddPassword,
     onUpdatePassword,
     onRemovePassword,
@@ -56,13 +61,11 @@
     onDenyJoin,
     onRenameDevice,
     onRevokeDevice,
-    accordionSection = $bindable(
-      'storage' as 'storage' | 'passwords' | 'devices' | 'language',
-    ),
+    accordionSection = $bindable(null as VaultSettingsAccordionSection | null),
   }: {
     vault: VaultState
-    providers: StorageProvider[]
-    activeProviderId: string | null
+    syncProviders: StorageProvider[]
+    syncingProviderId?: string | null
     isAuthenticated: boolean
     isVerifying: boolean
     isSaving: boolean
@@ -81,13 +84,12 @@
     vaultMembers: VaultMember[]
     hasPasswordEnvelope?: boolean
     onReconnect: () => void | Promise<void>
-    onSelectProvider: (id: string) => void | Promise<void>
+    onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onLockVault?: () => void
     onAddPassword: (label: string, password: string) => void | Promise<void>
     onUpdatePassword: (
       entryId: string,
@@ -100,7 +102,7 @@
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
-    accordionSection?: 'storage' | 'passwords' | 'devices' | 'language'
+    accordionSection?: VaultSettingsAccordionSection | null
   } = $props()
 
   const hasPasswords = $derived(passwordEntries.length > 0)
@@ -111,11 +113,9 @@
   <SettingsAccordionSection
     title={vault.t('settings.storage')}
     subtitle={vault.t('settings.storage_desc')}
-    open={accordionSection === 'storage'}
+    section="storage"
+    bind:activeSection={accordionSection}
     testId="storage-providers-section"
-    onToggle={() => {
-      accordionSection = 'storage'
-    }}
   >
     {#snippet badge()}
       {#if isAuthenticated}
@@ -124,42 +124,37 @@
           data-testid="connected-badge"
         >
           <CheckCircle2 class="size-3" />
-          {vault.t('common.active')}
+          {vault.t('settings.vault_unlocked')}
         </span>
       {/if}
     {/snippet}
     <AuthStorage
       {vault}
       embedded
-      {providers}
-      {activeProviderId}
-      {isAuthenticated}
+      {syncProviders}
+      {syncingProviderId}
       {isVerifying}
-      {isSaving}
       {isInitializing}
       {addProviderOpen}
       bind:setupType
       bind:githubPat
       bind:githubRepo
       {onReconnect}
-      {onSelectProvider}
+      {onSyncProvider}
       {onBeginAddProvider}
       {onCancelAddProvider}
       {onBeginSetup}
       {onCancelSetup}
       {onRemoveProvider}
-      {onLockVault}
     />
   </SettingsAccordionSection>
 
   <SettingsAccordionSection
     title={vault.t('settings.passwords')}
     subtitle={vault.t('settings.passwords_desc')}
-    open={accordionSection === 'passwords'}
+    section="passwords"
+    bind:activeSection={accordionSection}
     testId="vault-unlock-section"
-    onToggle={() => {
-      accordionSection = 'passwords'
-    }}
   >
     {#snippet badge()}
       <span
@@ -200,11 +195,9 @@
   <SettingsAccordionSection
     title={vault.t('settings.devices')}
     subtitle={vault.t('settings.devices_desc')}
-    open={accordionSection === 'devices'}
+    section="devices"
+    bind:activeSection={accordionSection}
     testId="vault-devices-section"
-    onToggle={() => {
-      accordionSection = 'devices'
-    }}
   >
     {#snippet badge()}
       <span
@@ -239,11 +232,9 @@
   <SettingsAccordionSection
     title={vault.t('settings.language')}
     subtitle={vault.t('settings.select_language')}
-    open={accordionSection === 'language'}
+    section="language"
+    bind:activeSection={accordionSection}
     testId="vault-language-section"
-    onToggle={() => {
-      accordionSection = 'language'
-    }}
   >
     {#snippet badge()}
       <span

@@ -23,6 +23,11 @@ const LOCAL_SPECS = [
   'password-envelope-local.spec.ts',
   'shell-height.spec.ts',
   'bip39-seed-phrase.spec.ts',
+  'sync-provider-connect.spec.ts',
+  'sync-conflict-resolution.spec.ts',
+  'sync-fanout.spec.ts',
+  'legal-pages.spec.ts',
+  'multi-device-local.spec.ts',
 ] as const
 
 /** Real GitHub API specs — serial within the project; one repo per container via NOOK_GITHUB_E2E_REPO. */
@@ -73,10 +78,11 @@ export default defineConfig({
     timeout: isCi ? 120_000 : 30_000,
     // Do not set stdout/stderr to 'pipe' — an undrained pipe can block Vite with no visible output.
     env: usePreviewServer
-      ? undefined
+      ? { VITE_E2E_EXPOSE_VAULT: 'true' }
       : {
           VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
           NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
+          VITE_E2E_EXPOSE_VAULT: 'true',
         },
   },
   projects: [

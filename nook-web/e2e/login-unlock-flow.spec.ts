@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test'
 import {
   addVaultPassword,
   clearBrowserVault,
-  connectLocalVault,
-  connectLoginProvider,
+  connectLocalVaultLegacy,
   disableLoginAutoUnlock,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openStorageSettings,
   selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
@@ -34,15 +34,15 @@ async function wipeDeviceIdentity(page: import('@playwright/test').Page) {
   )
 }
 
-test.describe('login unlock flow (provider + method)', () => {
+test.describe('login unlock flow (local-first)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVault(page)
+    await connectLocalVaultLegacy(page)
   })
 
-  test('shows storage provider and unlock method as two sequential steps', async ({
+  test('shows local unlock step when vault has backup passwords', async ({
     page,
   }) => {
     await openStorageSettings(page)
@@ -52,40 +52,27 @@ test.describe('login unlock flow (provider + method)', () => {
       { timeout: UI_TIMEOUT_MS },
     )
 
-    await disableLoginAutoUnlock(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-
-    await expect(page.getByTestId('saved-providers-list')).toBeVisible()
-    await expect(page.getByTestId('login-wizard-connection-step')).toBeVisible()
-    await expect(
-      page.getByTestId('login-wizard-authorization-step'),
-    ).not.toBeVisible()
-    await expect(page.getByTestId('login-connect-provider-btn')).toBeVisible()
-
-    await connectLoginProvider(page)
-    await expect(
-      page.getByTestId('login-wizard-authorization-step'),
-    ).toBeVisible()
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
+    await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
       'aria-checked',
       'true',
     )
-    await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
     await expect(page.getByTestId('login-password-input')).not.toBeVisible()
   })
 
-  test('defaults to device keys and unlocks after connect', async ({
-    page,
-  }) => {
+  test('unlocks with device keys from local login step', async ({ page }) => {
     await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await connectLoginProvider(page)
     await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
       'aria-checked',
       'true',
@@ -103,13 +90,11 @@ test.describe('login unlock flow (provider + method)', () => {
     await addVaultPassword(page, 'Personal', 'personal-pass')
     await addVaultPassword(page, 'Travel', 'travel-pass')
 
-    await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
-    await connectLoginProvider(page)
     await selectLoginUnlockMethod(page, 'password')
     await expect(
       page.getByTestId('login-unlock-method-password'),
@@ -130,7 +115,6 @@ test.describe('login unlock flow (provider + method)', () => {
     await openStorageSettings(page)
     await addVaultPassword(page, 'Recovery', 'recovery-pass-99')
 
-    await disableLoginAutoUnlock(page)
     await wipeDeviceIdentity(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
@@ -147,23 +131,40 @@ test.describe('login unlock flow (provider + method)', () => {
       password: 'recovery-pass-99',
     })
     await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })
 
   test('hides backup password option when vault has no password entries', async ({
     page,
   }) => {
-    await disableLoginAutoUnlock(page)
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await connectLoginProvider(page)
     await expect(page.getByTestId('login-unlock-method-fieldset')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
     await expect(
       page.getByTestId('login-unlock-method-password'),
     ).not.toBeVisible()
+  })
+})
+
+test.describe('login storage provider setup', () => {
+  test('connects via storage provider link on create-vault screen', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await clearBrowserVault(page)
+    await page.reload()
+
+    await page.getByTestId('login-connect-storage-btn').click()
+    await page.getByTestId('provider-option-local').click()
+    const connectBtn = page.getByTestId('connect-provider-btn')
+    await expect(connectBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+    await connectBtn.click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
   })
 })

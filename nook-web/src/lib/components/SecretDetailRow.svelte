@@ -29,6 +29,7 @@
     onDeleteSecret,
     onCopyToClipboard,
     vault,
+    titleAsHeader = false,
   }: {
     item: VaultItem
     index: number
@@ -45,6 +46,8 @@
       field: string,
     ) => Promise<void>
     vault: VaultState
+    /** Secure note: use the title row as the card header (no duplicate group header). */
+    titleAsHeader?: boolean
   } = $props()
 
   const summary = $derived.by(() => {
@@ -73,16 +76,22 @@
 
 <div data-testid="vault-group-{item.type}">
   <div
-    class="pt-3 first:pt-0"
-    class:border-t={index > 0}
+    class="first:pt-0"
+    class:pt-3={!titleAsHeader}
+    class:border-t={index > 0 && !titleAsHeader}
     role="listitem"
     data-testid="secret-row"
   >
-    <!-- Item Section Header -->
-    <div class="flex items-center justify-between gap-2 pb-1">
+    <div
+      class="flex items-center justify-between gap-2 {titleAsHeader
+        ? 'border-b border-border/30 bg-muted/10 px-3 py-2.5 sm:border-border/50'
+        : 'pb-1'}"
+    >
       <button
         type="button"
-        class="flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left transition-colors hover:bg-accent/40"
+        class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors {titleAsHeader
+          ? 'py-0 hover:opacity-90'
+          : 'py-1 hover:bg-accent/40'}"
         aria-expanded={expanded}
         aria-label={expanded
           ? vault.t('vault.collapse_secret')
@@ -95,28 +104,44 @@
             ? 'rotate-180'
             : ''}"
         />
-        <span
-          class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
-        >
-          {#if item.type === 'login'}
-            <Globe class="size-3 text-primary/70" />
-            {vault.t('vault.types.login')}
-          {:else if item.type === 'api-key'}
-            <Braces class="size-3 text-primary/70" />
-            {vault.t('vault.types.api_key')}
-          {:else if item.type === 'seed-phrase'}
-            <Sprout class="size-3 text-primary/70" />
-            {vault.t('vault.types.seed_phrase')}
-          {:else}
-            <StickyNote class="size-3 text-primary/70" />
-            {vault.t('vault.types.secure_note')}
+        {#if item.type === 'secure-note' && titleAsHeader}
+          <div
+            class="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
+          >
+            <StickyNote class="size-3.5" />
+          </div>
+          <h3
+            class="truncate text-sm font-semibold tracking-wide text-foreground"
+          >
+            {summary}
+          </h3>
+        {:else}
+          <span
+            class="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80"
+          >
+            {#if item.type === 'login'}
+              <Globe class="size-3 text-primary/70" />
+              {vault.t('vault.types.login')}
+            {:else if item.type === 'api-key'}
+              <Braces class="size-3 text-primary/70" />
+              {vault.t('vault.types.api_key')}
+            {:else if item.type === 'seed-phrase'}
+              <Sprout class="size-3 text-primary/70" />
+              {vault.t('vault.types.seed_phrase')}
+            {:else}
+              <StickyNote class="size-3 text-primary/70" />
+              {vault.t('vault.types.secure_note')}
+            {/if}
+          </span>
+          {#if !expanded}
+            <span class="truncate text-xs text-muted-foreground">{summary}</span
+            >
           {/if}
-        </span>
-        {#if !expanded}
-          <span class="truncate text-xs text-muted-foreground">{summary}</span>
         {/if}
       </button>
-      <div class="flex shrink-0 items-center gap-0.5">
+      <div
+        class="flex shrink-0 items-center gap-0.5 {titleAsHeader ? 'pr-1' : ''}"
+      >
         <button
           type="button"
           onclick={() => onToggleReveal(item.id)}
@@ -149,7 +174,7 @@
 
     <!-- Item Structured Details -->
     {#if expanded}
-      <div class="space-y-1.5">
+      <div class="space-y-1.5 {titleAsHeader ? 'px-3 py-3' : ''}">
         {#if item.type === 'login'}
           <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium"
@@ -373,32 +398,6 @@
             />
           </div>
         {:else}
-          <div class="grid grid-cols-[85px_1fr] items-center gap-2 text-xs">
-            <span class="text-muted-foreground/70 font-medium"
-              >{vault.t('vault.fields.title')}</span
-            >
-            <div
-              class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
-            >
-              <span class="truncate text-foreground"
-                >{item.title || vault.t('vault.fields.no_title')}</span
-              >
-              {#if item.title}
-                <button
-                  type="button"
-                  onclick={() =>
-                    void onCopyToClipboard(item.title, item.id, 'title')}
-                  aria-label="Copy title"
-                  class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors"
-                >
-                  {#if copiedKey === `${item.id}-title`}<Check
-                      class="size-3 text-emerald-500"
-                    />{:else}<Copy class="size-3" />{/if}
-                </button>
-              {/if}
-            </div>
-          </div>
-
           <div class="grid grid-cols-[85px_1fr] items-start gap-2 text-xs">
             <span class="text-muted-foreground/70 font-medium pt-1"
               >{vault.t('vault.fields.note')}</span

@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 import {
   clearBrowserVault,
-  connectLocalVault,
-  connectLoginProvider,
+  connectLocalVaultLegacy,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
+  waitForLoadedSyncProviders,
 } from './helpers'
 
 test.describe('onboard provider picker', () => {
@@ -12,7 +12,7 @@ test.describe('onboard provider picker', () => {
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVault(page)
+    await connectLocalVaultLegacy(page)
   })
 
   test('shows repository and token hints for multiple GitHub providers', async ({
@@ -37,14 +37,14 @@ test.describe('onboard provider picker', () => {
     ])
 
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await connectLoginProvider(page)
     await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await waitForLoadedSyncProviders(page, 2)
 
     await page.getByTestId('vault-onboard-tab').click()
     const providerList = page.getByTestId('onboard-provider-list')
@@ -65,10 +65,7 @@ test.describe('onboard provider picker', () => {
     await expect(providerList).toContainText('github_pat_22E…')
     await expect(providerList).not.toContainText(fullPatAlpha)
     await expect(providerList).not.toContainText(fullPatBeta)
-
-    await expect(
-      page.locator('[data-testid^="onboard-provider-active-"]'),
-    ).toHaveCount(1)
+    await expect(page.getByTestId('onboard-provider-local')).toHaveCount(0)
 
     await beta.click()
     await expect(beta).toHaveAttribute('aria-checked', 'true')

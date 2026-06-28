@@ -46,7 +46,7 @@ keys.
 4. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
 5. **Encryption keys (auto-managed):** On first connect, vault keys are generated and written to the vault file. Device private key stays in IndexedDB (`device_identity_secret`). GitHub only stores the encrypted vault file.
 6. **Vault connection:** Rust validates storage mode and PAT before I/O, loads/decrypts the vault, or initializes empty storage.
-7. **Future:** Multiple providers per vault with replicated secret-store file and consistency — see [auth-providers.md](../design-docs/auth-providers.md).
+7. **Future:** Sync providers replicate one local vault with version-based reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
 
 ### B. Managing Vault Secrets
 1. **Secrets List:** Plaintext secrets are listed alphabetically by key (service name).
@@ -87,6 +87,7 @@ The WASM session holds a UTF-8 JSONL string (`decrypted_jsonl`). Each line is on
 Path: `nook-vault.yaml` (GitHub and IndexedDB `encrypted_db`).
 
 ```yaml
+vault_version: 1
 store_id: store_SMypl8K0w9Y
 secrets:
   - id: secret_k9Qx2mNp4Rt
@@ -98,6 +99,7 @@ secrets:
 ```
 
 - **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../design-docs/secret-store-identity.md).
+- **`vault_version`:** Monotonic revision counter incremented on every save. Used for sync reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Legacy JSONL on-disk format** is still supported on load (`from_stored_auto` / format detection). New saves always use YAML.

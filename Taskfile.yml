@@ -589,6 +589,7 @@ tasks:
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      VITE_E2E_EXPOSE_VAULT: 'true'
     cmds:
       - cd nook-web && bun run build
 
@@ -652,14 +653,22 @@ tasks:
     desc: Run local-only Playwright e2e specs.
     deps:
       - _wasm:build
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
     cmds:
+      - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:local
 
   _web:test:e2e:github:
     desc: Run GitHub vault Playwright e2e specs.
     deps:
       - _wasm:build
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
     cmds:
+      - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:github
       - defer: cd nook-web && bun run test:e2e:cleanup
 

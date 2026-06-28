@@ -164,6 +164,7 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
 
 /// Compact random id (`generate_id` — 11 chars, base64url).
 #[must_use]
+#[allow(dead_code)]
 pub fn is_compact_id(key: &str) -> bool {
     crate::is_compact_token(key)
 }
@@ -263,7 +264,10 @@ mod tests {
             validate_store_id("store_SMypl8K0w9Y").unwrap(),
             "store_SMypl8K0w9Y"
         );
-        assert_eq!(validate_store_id("SMypl8K0w9Y").unwrap(), "store_SMypl8K0w9Y");
+        assert_eq!(
+            validate_store_id("SMypl8K0w9Y").unwrap(),
+            "store_SMypl8K0w9Y"
+        );
         assert!(validate_store_id("short").is_err());
         assert_eq!(
             validate_secret_id("secret_SMypl8K0w9Y").unwrap(),

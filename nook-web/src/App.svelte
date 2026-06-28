@@ -1,24 +1,50 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, Moon, Sun } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
+  import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
+  import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
+  import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
+  import LocalOnlyVaultWarningBanner from '$lib/components/LocalOnlyVaultWarningBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
   import { Button } from '$lib/components/ui/button'
+  import {
+    appPath,
+    getLegalPageFromPath,
+    legalPageForId,
+    type LegalPageId,
+  } from '$lib/legal-content'
+  import type { VaultItemType } from '$lib/nook'
 
   const vault = new VaultState()
   type ColorMode = 'light' | 'dark'
   const THEME_STORAGE_KEY = 'nook_color_mode'
   let colorMode = $state<ColorMode>('dark')
+  let legalPage = $state<LegalPageId | null>(
+    typeof window !== 'undefined'
+      ? getLegalPageFromPath(window.location.pathname)
+      : null,
+  )
+
+  function syncLegalRoute() {
+    legalPage = getLegalPageFromPath(window.location.pathname)
+  }
+
+  function navigateHome() {
+    vault.closeHelp()
+    history.pushState(null, '', appPath('/'))
+    legalPage = null
+  }
 
   onMount(() => {
     const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
@@ -27,23 +53,29 @@
     }
     void vault.init()
 
+    if (
+      import.meta.env.DEV ||
+      import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true'
+    ) {
+      ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
+    }
+
+    syncLegalRoute()
+    window.addEventListener('popstate', syncLegalRoute)
+
     return () => {
       vault.stopVaultSync()
+      window.removeEventListener('popstate', syncLegalRoute)
     }
   })
 
-  async function handleLoginProviderSelect(id: string) {
-    await vault.selectLoginProvider(id)
-  }
-
-  async function handleLoginProviderConnect() {
-    await vault.connectLoginProvider()
-  }
-
-  async function handleProviderReconnect(id: string) {
-    await vault.selectProvider(id)
-    await vault.loadDb()
-  }
+  $effect(() => {
+    if (legalPage) {
+      document.title = `${legalPageForId(legalPage).title} · Nook`
+      return
+    }
+    document.title = 'Nook'
+  })
 
   async function handleUnlock() {
     if (vault.loginSetupType) {
@@ -54,7 +86,11 @@
   }
 
   async function handleSettingsReconnect() {
-    await handleUnlock()
+    if (vault.loginSetupType) {
+      await vault.connectAndSyncStagedProvider()
+      return
+    }
+    await vault.manualSync()
   }
 
   function toggleColorMode() {
@@ -69,6 +105,10 @@
   )
   const appVersion = '0.1.0'
   let secretsAddOpen = $state(false)
+  let secretsAddFormType = $state<VaultItemType | null>(null)
+  const secretsNoteEditorOpen = $derived(
+    secretsAddOpen && secretsAddFormType === 'secure-note',
+  )
   const authenticatedShellSpacing = $derived(
     secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
   )
@@ -94,6 +134,26 @@
       </div>
 
       <div class="flex items-center gap-2">
+        {#if vault.isAuthenticated && !vault.helpOpen && !legalPage}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+            data-testid="header-lock-vault-btn"
+            title={vault.t('session.lock_desc')}
+            disabled={vault.isVerifying || vault.isInitializing}
+            onclick={() => vault.lockVault()}
+          >
+            <Lock class="size-4" />
+            <span class="hidden sm:inline">{vault.t('common.lock_vault')}</span>
+          </Button>
+          <div
+            class="mx-0.5 h-6 w-px shrink-0 bg-border/60"
+            aria-hidden="true"
+          ></div>
+        {/if}
+
         <HeaderLanguageSelect {vault} />
 
         <button
@@ -141,7 +201,19 @@
           >
         </a>
 
-        {#if vault.helpOpen}
+        {#if legalPage}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+            data-testid="legal-header-back"
+            onclick={navigateHome}
+          >
+            <ArrowLeft class="size-4" />
+            <span class="hidden sm:inline">Back</span>
+          </Button>
+        {:else if vault.helpOpen}
           <Button
             type="button"
             variant="outline"
@@ -171,11 +243,15 @@
   </header>
 
   <div
-    class="mx-auto px-4 sm:px-6 {shellWidth} {vault.isAuthenticated
-      ? authenticatedShellSpacing
-      : 'py-5 sm:py-6'}"
+    class="mx-auto px-4 sm:px-6 {shellWidth} {legalPage
+      ? 'py-5 sm:py-6'
+      : vault.isAuthenticated
+        ? authenticatedShellSpacing
+        : 'py-5 sm:py-6'}"
   >
-    {#if vault.helpOpen}
+    {#if legalPage}
+      <LegalDocumentPage pageId={legalPage} onClose={navigateHome} />
+    {:else if vault.helpOpen}
       <div class="space-y-4">
         <HelpPage onClose={() => vault.closeHelp()} />
         <VaultStatusBar
@@ -183,7 +259,7 @@
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
-          isSyncing={vault.isSyncing || vault.isSaving}
+          isSyncing={vault.isSyncActivityVisible}
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
           {appVersion}
@@ -200,13 +276,27 @@
         class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
         data-testid="authenticated-shell"
       >
-        <div class="shell-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
-          <div class="space-y-4 p-4 sm:p-5">
+        <div
+          class="shell-scroll min-h-0 min-w-0 flex-1 flex flex-col {secretsNoteEditorOpen
+            ? 'overflow-hidden'
+            : 'overflow-y-auto'}"
+        >
+          <div
+            class="p-4 sm:p-5 {vault.settingsOpen
+              ? 'space-y-4'
+              : 'flex min-h-0 flex-1 flex-col gap-4'}"
+          >
+            {#if vault.syncProviders.length === 0}
+              <LocalOnlyVaultWarningBanner
+                {vault}
+                onAddSyncProvider={() =>
+                  vault.openSettings('storage', 'storage')}
+              />
+            {/if}
             {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
               <OnboardDevice
                 {vault}
-                providers={vault.providers}
-                activeProviderId={vault.activeProviderId}
+                syncProviders={vault.syncProviders}
                 passwordEntries={vault.passwordEntries}
                 enrollmentCode={vault.enrollmentCode}
                 isBusy={vault.isPasswordBusy}
@@ -222,8 +312,8 @@
               <VaultSettingsAccordion
                 {vault}
                 bind:accordionSection={vault.settingsAccordionSection}
-                providers={vault.providers}
-                activeProviderId={vault.activeProviderId}
+                syncProviders={vault.syncProviders}
+                syncingProviderId={vault.syncingProviderId}
                 isAuthenticated={vault.isAuthenticated}
                 isVerifying={vault.isVerifying}
                 isSaving={vault.isSaving}
@@ -242,13 +332,12 @@
                 vaultMembers={vault.vaultMembers}
                 hasPasswordEnvelope={vault.hasPasswordEnvelope}
                 onReconnect={handleSettingsReconnect}
-                onSelectProvider={handleProviderReconnect}
+                onSyncProvider={(id) => vault.syncProviderById(id)}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
                 onBeginSetup={(type) => vault.beginProviderSetup(type)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
                 onRemoveProvider={(id) => vault.removeProvider(id)}
-                onLockVault={() => vault.lockVault()}
                 onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
                 onUpdatePassword={(id, pw) =>
                   vault.updateVaultPasswordEntry(id, pw)}
@@ -261,42 +350,48 @@
                 onRevokeDevice={(id) => vault.revokeDevice(id)}
               />
             {:else}
-              <PendingJoinsBanner
-                {vault}
-                pendingJoins={vault.pendingJoins}
-                isBusy={vault.isSaving || vault.isVerifying}
-                onApproveJoin={(id) => vault.approveJoin(id)}
-                onRefresh={() => vault.manualSync()}
-                onOpenDevicesSettings={() =>
-                  vault.openSettings('storage', 'devices')}
-              />
-              <SecretVault
-                {vault}
-                isSaving={vault.isSaving}
-                secrets={vault.secrets}
-                onAddModeChange={(open) => {
-                  secretsAddOpen = open
-                }}
-                onAddSecret={(id, type, data) =>
-                  vault.handleAddSecret(id, type, data)}
-                onReplaceSecret={(oldId, type, data) =>
-                  vault.handleReplaceSecret(oldId, type, data)}
-                onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
-                onGeneratePassword={(
-                  length,
-                  lowercase,
-                  uppercase,
-                  numbers,
-                  symbols,
-                ) =>
-                  vault.generatePassword(
+              {#if !secretsNoteEditorOpen}
+                <PendingJoinsBanner
+                  {vault}
+                  pendingJoins={vault.pendingJoins}
+                  isBusy={vault.isSaving || vault.isVerifying}
+                  onApproveJoin={(id) => vault.approveJoin(id)}
+                  onRefresh={() => vault.manualSync()}
+                  onOpenDevicesSettings={() =>
+                    vault.openSettings('storage', 'devices')}
+                />
+              {/if}
+              <div class="flex min-h-0 flex-1 flex-col">
+                <SecretVault
+                  {vault}
+                  isSaving={vault.isSaving}
+                  syncBlocked={vault.syncBlocked}
+                  secrets={vault.secrets}
+                  onAddModeChange={(open, type = null) => {
+                    secretsAddOpen = open
+                    secretsAddFormType = type
+                  }}
+                  onAddSecret={(id, type, data) =>
+                    vault.handleAddSecret(id, type, data)}
+                  onReplaceSecret={(oldId, type, data) =>
+                    vault.handleReplaceSecret(oldId, type, data)}
+                  onDeleteSecret={(id) => vault.handleDeleteSecret(id)}
+                  onGeneratePassword={(
                     length,
                     lowercase,
                     uppercase,
                     numbers,
                     symbols,
-                  )}
-              />
+                  ) =>
+                    vault.generatePassword(
+                      length,
+                      lowercase,
+                      uppercase,
+                      numbers,
+                      symbols,
+                    )}
+                />
+              </div>
             {/if}
           </div>
         </div>
@@ -306,9 +401,14 @@
             storageMode={vault.storageMode}
             githubRepo={vault.githubRepo}
             lastSyncedAt={vault.lastSyncedAt}
-            isSyncing={vault.isSyncing || vault.isSaving}
+            isSyncing={vault.isSyncActivityVisible}
             successMsg={vault.successMsg}
             errorMsg={vault.errorMsg}
+            syncConflictLabel={vault.pendingSyncConflict
+              ? vault.t('auth_storage.sync_conflict_banner', {
+                  provider: vault.pendingSyncConflict.providerLabel,
+                })
+              : ''}
             {appVersion}
             onRefresh={() => vault.manualSync()}
             onDismissSuccess={() => vault.dismissSuccess()}
@@ -331,11 +431,6 @@
         <LoginGate
           {vault}
           providers={vault.providers}
-          activeProviderId={vault.activeProviderId}
-          loginFlowStep={vault.loginFlowStep}
-          loginPasswordPrompt={vault.loginPasswordPrompt}
-          passwordEntries={vault.passwordEntries}
-          bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
           bind:setupType={vault.loginSetupType}
           bind:githubPat={vault.githubPat}
           bind:githubRepo={vault.githubRepo}
@@ -343,9 +438,6 @@
           isVerifying={vault.isVerifying}
           isInitializing={vault.isInitializing}
           onUnlock={handleUnlock}
-          onSelectProvider={handleLoginProviderSelect}
-          onConnectProvider={handleLoginProviderConnect}
-          onBackToLoginProvider={() => vault.backToLoginProviderStep()}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
           onBeginSetup={(type) => vault.beginProviderSetup(type)}
@@ -357,15 +449,15 @@
           enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
           onUnlockWithPassword={(entryId, password) =>
             vault.unlockWithPassword(entryId, password)}
+          onCreateDeviceVault={() => vault.createLocalVaultWithDeviceKeys()}
           onRemoveProvider={(id) => vault.removeProvider(id)}
-          onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
         />
         <VaultStatusBar
           {vault}
           storageMode={vault.storageMode}
           githubRepo={vault.githubRepo}
           lastSyncedAt={vault.lastSyncedAt}
-          isSyncing={vault.isSyncing || vault.isSaving}
+          isSyncing={vault.isSyncActivityVisible}
           successMsg={vault.successMsg}
           errorMsg={vault.errorMsg}
           {appVersion}
@@ -379,6 +471,10 @@
       </div>
     {/if}
   </div>
+
+  {#if !legalPage}
+    <SiteFooter />
+  {/if}
 
   <JoinEnrollmentDialog
     {vault}
@@ -395,4 +491,14 @@
     onCreateFreshVault={() => vault.createFreshVault()}
     onCancel={() => vault.dismissJoinEnrollment()}
   />
+
+  {#if vault.pendingSyncConflict}
+    <VaultSyncConflictDialog
+      {vault}
+      conflict={vault.pendingSyncConflict}
+      isBusy={vault.isVerifying}
+      onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
+      onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
+    />
+  {/if}
 </main>

@@ -48,6 +48,7 @@ pub fn detect_stored_format(stored: &str) -> Result<VaultFormat, String> {
         || first_line.starts_with("%YAML")
         || first_line.starts_with("secrets:")
         || first_line.starts_with("store_id:")
+        || first_line.starts_with("vault_version:")
         || first_line.starts_with("auth:")
         || first_line.starts_with("joins:")
         || first_line.starts_with("members:")
@@ -123,6 +124,9 @@ struct MembersYamlRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct StoredVaultYaml {
+    /// Monotonic revision counter — incremented on every save.
+    #[serde(default, skip_serializing_if = "vault_version_is_zero")]
+    vault_version: u64,
     /// Logical secret-store identity — same id on every provider replica of this vault.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_id: Option<String>,
@@ -220,8 +224,13 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
     vault
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn vault_version_is_zero(version: &u64) -> bool {
+    *version == 0
+}
+
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> Result<String, String> {
-    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None)
+    serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None, None)
 }
 
 fn resolve_store_id_for_write(store_id: Option<&str>) -> Result<Option<String>, String> {
@@ -239,13 +248,29 @@ pub fn serialize_stored_yaml_with_unlock(
     unlock: &VaultUnlock,
     password_entries: &[PasswordUnlockEntry],
     store_id: Option<&str>,
+    vault_version: Option<u64>,
 ) -> Result<String, String> {
     let mut vault = partition_yaml_records(records);
+    vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
     serde_yaml::to_string(&vault).map_err(|e| format!("Failed to serialize stored YAML: {}", e))
+}
+
+/// Read the monotonic revision counter from on-disk YAML (0 for legacy vaults).
+pub fn read_vault_version(stored: &str) -> Result<u64, String> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(0);
+    }
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Ok(0);
+    }
+    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
+        .map_err(|e| format!("Failed to parse stored YAML for vault version: {}", e))?;
+    Ok(vault.vault_version)
 }
 
 fn vault_unlock_is_keys(unlock: &VaultUnlock) -> bool {
@@ -642,10 +667,7 @@ not-json
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(
-            parsed[0].key,
-            format!("member:key_{auth_id}")
-        );
+        assert_eq!(parsed[0].key, format!("member:key_{auth_id}"));
     }
 
     #[test]
@@ -671,6 +693,7 @@ not-json
             &VaultUnlock::Keys,
             std::slice::from_ref(&entry),
             Some("store_SMypl8K0w9Y"),
+            Some(1),
         )
         .unwrap();
         assert!(!yaml.contains("unlock:"));
@@ -722,6 +745,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             &parsed_unlock,
             &crate::read_vault_password_entries(legacy).unwrap(),
             None,
+            None,
         )
         .unwrap();
         assert!(!rewritten.contains("unlock:"));
@@ -737,9 +761,12 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             &VaultUnlock::Keys,
             &[],
             Some("store_SMypl8K0w9Y"),
+            Some(1),
         )
         .unwrap();
         assert!(yaml.contains("store_id: store_SMypl8K0w9Y"));
+        assert!(yaml.contains("vault_version: 1"));
+        assert_eq!(read_vault_version(&yaml).unwrap(), 1);
         assert_eq!(
             read_vault_store_id(&yaml).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
@@ -752,6 +779,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             &VaultUnlock::Keys,
             &[],
             Some("store_SMypl8K0w9Y"),
+            Some(1),
         )
         .unwrap();
         assert_eq!(

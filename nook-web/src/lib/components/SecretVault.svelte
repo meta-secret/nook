@@ -23,6 +23,7 @@
   let {
     vault,
     isSaving,
+    syncBlocked = false,
     secrets = [] as SecretRecord[],
     onAddSecret,
     onReplaceSecret,
@@ -32,6 +33,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
+    syncBlocked?: boolean
     secrets?: SecretRecord[]
     onAddSecret: (
       id: string,
@@ -51,7 +53,7 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onAddModeChange?: (open: boolean) => void
+    onAddModeChange?: (open: boolean, type?: VaultItemType | null) => void
   } = $props()
 
   let searchPattern = $state('')
@@ -59,6 +61,7 @@
   let expandedSecrets = $state<Record<string, boolean>>({})
   let copiedKey = $state<string | null>(null)
   let addSecretOpen = $state(false)
+  let formSelectedType = $state<VaultItemType | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let editItem = $state<VaultItem | null>(null)
 
@@ -129,28 +132,45 @@
     return fields.some((field) => field.toLowerCase().includes(needle))
   }
 
+  function notifyAddMode() {
+    onAddModeChange?.(addSecretOpen, formSelectedType)
+  }
+
   function openAddSecret() {
     editItem = null
+    formSelectedType = null
     addSecretOpen = true
-    onAddModeChange?.(true)
+    notifyAddMode()
   }
 
   function closeAddSecret() {
     addSecretOpen = false
-    onAddModeChange?.(false)
+    formSelectedType = null
+    notifyAddMode()
   }
 
   function openEditItem(item: VaultItem) {
     addSecretOpen = false
     editItem = item
-    onAddModeChange?.(true)
+    notifyAddMode()
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function closeEditItem() {
     editItem = null
-    onAddModeChange?.(false)
+    notifyAddMode()
   }
+
+  $effect(() => {
+    if (addSecretOpen) {
+      void formSelectedType
+      notifyAddMode()
+    }
+  })
+
+  const isSecureNoteEditor = $derived(
+    addSecretOpen && formSelectedType === 'secure-note',
+  )
 
   async function copyToClipboard(text: string, id: string, field: string) {
     await navigator.clipboard.writeText(text)
@@ -173,32 +193,39 @@
   }
 </script>
 
-<div class="animate-in fade-in duration-200" data-testid="vault-panel">
+<div
+  class="animate-in fade-in duration-200 {addSecretOpen && isSecureNoteEditor
+    ? 'flex min-h-0 flex-1 flex-col'
+    : !addSecretOpen
+      ? 'flex min-h-0 flex-1 flex-col'
+      : ''}"
+  data-testid="vault-panel"
+>
   {#if addSecretOpen}
     <div
-      class="animate-in fade-in slide-in-from-right-2 duration-200"
+      class="animate-in fade-in slide-in-from-right-2 duration-200 {isSecureNoteEditor
+        ? 'flex min-h-0 flex-1 flex-col'
+        : ''}"
       data-testid="add-secret-panel"
     >
-      <div class="mb-5 flex items-center gap-3">
-        <button
-          type="button"
-          class="inline-flex items-center gap-1.5 rounded-lg border border-border/40 bg-background/70 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background"
-          data-testid="add-secret-back-btn"
-          onclick={closeAddSecret}
-        >
-          <ArrowLeft class="size-4" />
-          {vault.t('common.back')}
-        </button>
-        <div class="min-w-0">
-          <h2 class="text-base font-semibold text-foreground">
-            {vault.t('vault.add_secret')}
-          </h2>
+      {#if formSelectedType === null}
+        <div class="mb-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            data-testid="add-secret-back-btn"
+            onclick={closeAddSecret}
+          >
+            <ArrowLeft class="size-4" />
+            {vault.t('common.back')}
+          </button>
         </div>
-      </div>
+      {/if}
 
       <AddSecretForm
         {vault}
         {isSaving}
+        bind:selectedType={formSelectedType}
         {onAddSecret}
         {onReplaceSecret}
         {onGeneratePassword}
@@ -206,7 +233,7 @@
       />
     </div>
   {:else}
-    <div class="space-y-4">
+    <div class="flex min-h-0 flex-1 flex-col gap-4">
       <div
         class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
@@ -228,6 +255,10 @@
             variant="outline"
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
+            disabled={syncBlocked}
+            title={syncBlocked
+              ? vault.t('auth_storage.sync_blocked_edits')
+              : undefined}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
@@ -248,9 +279,11 @@
       </div>
 
       {#if filteredItems.length === 0}
-        <Card class="border-border/45 bg-card sm:border-border/70">
+        <Card
+          class="flex min-h-0 flex-1 flex-col gap-0 border-border/45 bg-card py-0 sm:border-border/70"
+        >
           <CardContent
-            class="space-y-2 p-10 text-center text-muted-foreground"
+            class="flex flex-1 items-center justify-center p-10 text-center text-muted-foreground"
             data-testid="vault-empty-search"
           >
             <p>
@@ -264,41 +297,48 @@
         <div class="space-y-3">
           {#each groups as group (group.site)}
             {@const Icon = getGroupIcon(group.items)}
+            {@const loneSecureNote =
+              group.items.length === 1 && group.items[0].type === 'secure-note'}
             <Card
               class="gap-0 overflow-hidden border-border/35 bg-card py-0 shadow-xs sm:border-border/60"
               data-testid="vault-site-group"
             >
-              <div
-                class="flex items-center gap-2.5 border-b border-border/30 bg-muted/10 px-3 py-2.5 sm:border-border/50"
-              >
+              {#if !loneSecureNote}
                 <div
-                  class="flex size-6 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
+                  class="flex items-center gap-2.5 border-b border-border/30 bg-muted/10 px-3 py-2.5 sm:border-border/50"
                 >
-                  <Icon class="size-3.5" />
-                </div>
-                <h3
-                  class="truncate text-sm font-semibold tracking-wide text-foreground"
-                >
-                  {group.site}
-                </h3>
-                {#if group.items.length > 1}
-                  <span
-                    class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  <div
+                    class="flex size-6 items-center justify-center rounded-md border border-border/35 bg-muted/35 text-muted-foreground sm:border-border/60"
                   >
-                    {vault.t('vault.secret_count', {
-                      count: String(group.items.length),
-                    })}
-                  </span>
-                {/if}
-              </div>
+                    <Icon class="size-3.5" />
+                  </div>
+                  <h3
+                    class="truncate text-sm font-semibold tracking-wide text-foreground"
+                  >
+                    {group.site}
+                  </h3>
+                  {#if group.items.length > 1}
+                    <span
+                      class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                    >
+                      {vault.t('vault.secret_count', {
+                        count: String(group.items.length),
+                      })}
+                    </span>
+                  {/if}
+                </div>
+              {/if}
 
               <CardContent
-                class="space-y-3 divide-y divide-border/30 p-3 sm:divide-border/45"
+                class="space-y-3 divide-y divide-border/30 p-3 sm:divide-border/45 {loneSecureNote
+                  ? '!p-0'
+                  : ''}"
               >
                 {#each group.items as item, index (item.id)}
                   <SecretDetailRow
                     {item}
                     {index}
+                    titleAsHeader={loneSecureNote}
                     expanded={Boolean(expandedSecrets[item.id])}
                     {revealSecrets}
                     {copiedKey}

@@ -4,15 +4,14 @@
     RefreshCw,
     HardDrive,
     Cloud,
-    CheckCircle2,
     Plus,
     ChevronLeft,
     Trash2,
-    Lock,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import type {
     StorageProvider,
     StorageProviderType,
@@ -23,11 +22,11 @@
     providerStorageDetail,
   } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
+
   let {
     vault,
-    providers,
-    activeProviderId,
-    isAuthenticated,
+    syncProviders,
+    syncingProviderId = null,
     isVerifying,
     isInitializing,
     addProviderOpen = false,
@@ -36,20 +35,17 @@
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
-    onSelectProvider,
+    onSyncProvider,
     onBeginAddProvider,
     onCancelAddProvider,
     onBeginSetup,
     onCancelSetup,
     onRemoveProvider,
-    onLockVault,
   }: {
     vault: VaultState
-    providers: StorageProvider[]
-    activeProviderId: string | null
-    isAuthenticated: boolean
+    syncProviders: StorageProvider[]
+    syncingProviderId?: string | null
     isVerifying: boolean
-    isSaving: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
@@ -57,30 +53,36 @@
     githubPat: string
     githubRepo: string
     onReconnect: () => void | Promise<void>
-    onSelectProvider: (id: string) => void | Promise<void>
+    onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
     onBeginSetup: (type: StorageProviderType) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
-    onLockVault?: () => void
   } = $props()
 
   function confirmRemoveProvider(provider: StorageProvider) {
     if (!onRemoveProvider) return
-    const signedOutNote =
-      isAuthenticated && provider.id === activeProviderId
-        ? vault.t('auth_storage.signed_out_note')
-        : ''
     const ok = confirm(
       vault.t('auth_storage.confirm_remove', {
         label: provider.label,
-        signedOutNote,
+        signedOutNote: '',
       }),
     )
     if (ok) {
       void onRemoveProvider(provider.id)
     }
+  }
+
+  function formatSyncStatus(provider: StorageProvider): string {
+    if (provider.lastSyncedAt) {
+      const version =
+        provider.lastSyncedVersion != null && provider.lastSyncedVersion > 0
+          ? ` · v${provider.lastSyncedVersion}`
+          : ''
+      return `${vault.t('auth_storage.last_synced')}${version}`
+    }
+    return vault.t('auth_storage.not_synced_yet')
   }
 
   const showSetup = $derived(setupType !== null)
@@ -117,21 +119,21 @@
                     : vault.t('auth_storage.this_device'),
             })}
           {:else}
-            {vault.t('onboarding.add_provider')}
+            {vault.t('settings.add_sync_provider')}
           {/if}
         </h2>
         <p class="text-xs text-muted-foreground text-pretty">
           {#if showSetup}
-            {vault.t('auth_storage.setup_desc')}
+            {vault.t('auth_storage.sync_setup_desc')}
           {:else}
-            {vault.t('auth_storage.choose_desc')}
+            {vault.t('auth_storage.sync_choose_desc')}
           {/if}
         </p>
       </div>
     </div>
   {:else if !embedded}
     <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t('auth_storage.switch_providers_desc')}
+      {vault.t('auth_storage.sync_providers_desc')}
     </p>
   {/if}
 
@@ -145,41 +147,75 @@
       class="space-y-4"
     >
       {#if showSetup}
-        <ProviderSetupFields
-          {vault}
-          setupType={setupType!}
-          bind:githubPat
-          bind:githubRepo
-          idPrefix="settings"
-          {onCancelSetup}
-        />
+        {#if setupType === 'oauth-file'}
+          <OAuthProviderSetupWizard
+            {vault}
+            bind:githubRepo
+            idPrefix="settings"
+            {isVerifying}
+            {isInitializing}
+            {onCancelSetup}
+            onConnect={onReconnect}
+          />
+        {:else}
+          <ProviderSetupFields
+            {vault}
+            setupType={setupType!}
+            bind:githubPat
+            bind:githubRepo
+            idPrefix="settings"
+            {onCancelSetup}
+          />
+        {/if}
       {:else if addProviderOpen}
-        <ProviderPicker {vault} onSelect={onBeginSetup} />
+        <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
       {:else}
-        <fieldset class="space-y-2">
-          {#if providers.length === 0}
-            <p class="text-xs text-muted-foreground">
-              {vault.t('auth_storage.no_providers_saved')}
-            </p>
+        <fieldset class="space-y-3">
+          {#if syncProviders.length === 0}
+            <div
+              class="rounded-lg border border-dashed border-border/50 bg-muted/10 px-4 py-4"
+              data-testid="sync-providers-empty"
+            >
+              <div class="flex items-start gap-3">
+                <div
+                  class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground"
+                >
+                  <Cloud class="size-4" />
+                </div>
+                <div class="min-w-0 space-y-1">
+                  <p class="text-sm font-medium text-foreground">
+                    {vault.t('auth_storage.no_sync_providers')}
+                  </p>
+                  <p class="text-xs text-pretty text-muted-foreground">
+                    {vault.t('auth_storage.sync_providers_desc')}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  data-testid="add-provider-btn"
+                  onclick={() => onBeginAddProvider?.()}
+                >
+                  <Plus class="size-4" />
+                  {vault.t('settings.add_sync_provider')}
+                </Button>
+              </div>
+            </div>
           {:else}
             <ul
               class="divide-y divide-border/60"
               data-testid="settings-providers-list"
             >
-              {#each providers as provider (provider.id)}
+              {#each syncProviders as provider (provider.id)}
                 <li class="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
-                  <button
-                    type="button"
-                    class="group flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors {provider.id ===
-                    activeProviderId
-                      ? 'text-foreground'
-                      : 'text-muted-foreground hover:text-foreground'}"
+                  <div
+                    class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
                     data-testid="settings-provider-{provider.type}"
-                    disabled={isVerifying || isInitializing}
-                    aria-busy={isVerifying && provider.id === activeProviderId}
-                    onclick={() => void onSelectProvider(provider.id)}
                   >
-                    {#if provider.type === 'github'}
+                    {#if provider.type === 'github' || provider.type === 'oauth-file'}
                       <Cloud class="size-4 shrink-0 text-primary" />
                     {:else}
                       <HardDrive class="size-4 shrink-0 text-primary" />
@@ -193,39 +229,31 @@
                       >
                         {providerStorageDetail(provider, vault.t)}
                       </span>
-                    </span>
-                    {#if provider.id === activeProviderId}
-                      {#if isVerifying}
-                        <RefreshCw
-                          class="size-3.5 shrink-0 animate-spin text-primary"
-                        />
-                      {:else}
-                        <span
-                          class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400"
-                        >
-                          <CheckCircle2 class="size-3" />
-                          {vault.t('common.active')}
-                        </span>
-                      {/if}
-                    {:else}
                       <span
-                        class="shrink-0 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                        class="block truncate text-[11px] text-muted-foreground"
+                        data-testid="sync-status-{provider.id}"
                       >
-                        {vault.t('common.switch')}
+                        {formatSyncStatus(provider)}
                       </span>
-                    {/if}
-                  </button>
-                  {#if provider.id === activeProviderId && isAuthenticated && onLockVault}
+                    </span>
+                  </div>
+                  {#if onSyncProvider}
                     <button
                       type="button"
-                      class="inline-flex shrink-0 items-center justify-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-primary disabled:opacity-50"
-                      aria-label={vault.t('common.lock_vault')}
-                      title={vault.t('common.lock_vault')}
-                      data-testid="lock-vault-btn"
-                      disabled={isVerifying || isInitializing}
-                      onclick={() => onLockVault()}
+                      class="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+                      data-testid="sync-provider-{provider.id}"
+                      disabled={isVerifying ||
+                        isInitializing ||
+                        syncingProviderId !== null}
+                      aria-busy={syncingProviderId === provider.id}
+                      onclick={() => void onSyncProvider(provider.id)}
                     >
-                      <Lock class="size-4" />
+                      {#if syncingProviderId === provider.id}
+                        <RefreshCw class="size-3.5 animate-spin" />
+                      {:else}
+                        <RefreshCw class="size-3.5" />
+                      {/if}
+                      {vault.t('auth_storage.sync_now')}
                     </button>
                   {/if}
                   {#if onRemoveProvider}
@@ -245,21 +273,21 @@
                 </li>
               {/each}
             </ul>
-          {/if}
 
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 pt-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            data-testid="add-provider-btn"
-            onclick={() => onBeginAddProvider?.()}
-          >
-            <Plus class="size-4" />
-            {vault.t('onboarding.add_provider')}
-          </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              data-testid="add-provider-btn"
+              onclick={() => onBeginAddProvider?.()}
+            >
+              <Plus class="size-4" />
+              {vault.t('settings.add_sync_provider')}
+            </button>
+          {/if}
         </fieldset>
       {/if}
 
-      {#if showSetup}
+      {#if showSetup && setupType !== 'oauth-file'}
         <div
           class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
         >
@@ -274,10 +302,10 @@
               {vault.t('onboarding.loading_engine')}
             {:else if isVerifying}
               <RefreshCw class="size-4 animate-spin" />
-              {vault.t('common.connecting')}
+              {vault.t('auth_storage.sync_connecting')}
             {:else}
               <ShieldCheck class="size-4" />
-              {vault.t('common.connect')}
+              {vault.t('auth_storage.connect_and_sync')}
             {/if}
           </Button>
         </div>

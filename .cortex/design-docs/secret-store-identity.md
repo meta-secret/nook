@@ -64,19 +64,23 @@ auth:
 
 ---
 
-## 3. Multi-provider replication (planned)
+## 3. Multi-provider replication (one vault)
+
+> **Architecture:** [unified-vault.md](unified-vault.md) — local cache + sync replicas; [vault-session-and-lock.md](vault-session-and-lock.md) — vault vs provider.
 
 ```mermaid
 flowchart LR
-  subgraph store["store_id: store_SMypl8K0w9Y"]
+  subgraph store["Vault store_id: store_SMypl8K0w9Y"]
     V[nook-vault.yaml content]
   end
-  V --> L[Local IndexedDB]
+  V --> L[Local IndexedDB — authoritative cache]
   V --> G[GitHub user/nook]
   V --> D[Google Drive appData]
 ```
 
-Physical filenames may stay `nook-vault.yaml` per backend; **`store_id` inside the file** is the source of truth.
+Many **sync providers**, one **`store_id`** per active vault. Physical filenames may stay `nook-vault.yaml`; **`store_id` + `vault_version`** inside the file drive reconciliation.
+
+**Multiple vaults:** a user may have unrelated vaults (different `store_id`) on different providers or, in future, multiple caches in one browser. Replication never crosses `store_id` boundaries.
 
 ---
 
@@ -97,6 +101,7 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 | Prefixed `store_id` / `secret_` / `key_` in vault YAML | Implemented |
 | `StorageProvider.storeId` | Implemented |
 | Legacy unprefixed read + normalize on write | Implemented |
-| Replication / mismatch guards | Planned |
+| Replication / mismatch guards | Planned (sync logic in `vault_sync.rs`) |
+| `vault_version` monotonic counter | Implemented |
 
 Implementation: `nook-core/src/vault_ids.rs`.
