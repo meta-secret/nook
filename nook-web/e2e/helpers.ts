@@ -258,10 +258,11 @@ function configuredGithubConnectTimeoutMs(): number {
   return 30_000
 }
 
-/** A few background sync ticks — scales with VITE_VAULT_SYNC_INTERVAL_MS. */
+/** Background sync visibility — allow several ticks plus GitHub poll latency. */
 export const NOTIFICATION_TIMEOUT_MS = Math.max(
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
-  configuredVaultSyncIntervalMs() * 4,
+  configuredVaultSyncIntervalMs() * 6,
 )
 
 /** GitHub YAML polls are slow by design — prefer fewer API calls over fast failure. */
