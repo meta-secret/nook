@@ -52,8 +52,8 @@ let initPromise: Promise<void> | null = null
 export function isICloudOAuthConfigured(): boolean {
   return Boolean(
     ICLOUD_CONTAINER_ID.trim() &&
-      ICLOUD_API_TOKEN.trim() &&
-      ICLOUD_CONTAINER_ID.startsWith('iCloud.'),
+    ICLOUD_API_TOKEN.trim() &&
+    ICLOUD_CONTAINER_ID.startsWith('iCloud.'),
   )
 }
 
@@ -63,7 +63,9 @@ function loadCloudKitScript(): Promise<void> {
       resolve()
       return
     }
-    const existing = document.querySelector(`script[src="${CLOUDKIT_SCRIPT_URL}"]`)
+    const existing = document.querySelector(
+      `script[src="${CLOUDKIT_SCRIPT_URL}"]`,
+    )
     if (existing) {
       existing.addEventListener('load', () => resolve(), { once: true })
       existing.addEventListener(

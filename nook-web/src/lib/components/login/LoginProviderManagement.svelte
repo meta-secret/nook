@@ -40,7 +40,10 @@
     isInitializing: boolean
     open?: boolean
     addingProvider?: boolean
-    onBeginSetup?: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
+    onBeginSetup?: (
+      type: StorageProviderType,
+      oauthPreset?: OAuthFilePreset,
+    ) => void
     onCancelAddProvider?: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void

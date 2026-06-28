@@ -259,9 +259,7 @@ export function providerDefaultLabel(
   if (type === 'oauth-file') {
     const file = detail?.trim() || DEFAULT_DRIVE_VAULT_FILE
     if (oauthPreset === 'icloud') {
-      return file === DEFAULT_DRIVE_VAULT_FILE
-        ? 'iCloud'
-        : `iCloud · ${file}`
+      return file === DEFAULT_DRIVE_VAULT_FILE ? 'iCloud' : `iCloud · ${file}`
     }
     return file === DEFAULT_DRIVE_VAULT_FILE
       ? 'Google Drive'
@@ -326,7 +324,9 @@ export function maskOAuthAccount(
     return t ? t('auth_storage.google_signed_in') : 'Signed in with Google'
   }
   if (oauth?.preset === 'icloud') {
-    return t ? t('auth_storage.icloud_not_signed_in') : 'Not signed in with iCloud'
+    return t
+      ? t('auth_storage.icloud_not_signed_in')
+      : 'Not signed in with iCloud'
   }
   return t ? t('auth_storage.google_not_signed_in') : 'Not signed in'
 }

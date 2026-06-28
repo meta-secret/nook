@@ -63,7 +63,10 @@
     onUnlock: () => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
+    onBeginSetup: (
+      type: StorageProviderType,
+      oauthPreset?: OAuthFilePreset,
+    ) => void
     onCancelSetup: () => void
     onOpenHelp?: () => void
     onUseEnrollmentCode?: (

@@ -153,9 +153,7 @@
         data-testid={isICloud ? 'icloud-sign-in-btn' : 'google-sign-in-btn'}
         disabled={oauthBusy}
         onclick={() =>
-          void (isICloud
-            ? vault.signInWithICloud()
-            : vault.signInWithGoogle())}
+          void (isICloud ? vault.signInWithICloud() : vault.signInWithGoogle())}
       >
         {#if oauthBusy}
           {isICloud

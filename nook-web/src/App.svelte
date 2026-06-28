@@ -446,7 +446,8 @@
           onUnlock={handleUnlock}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type, preset) => vault.beginProviderSetup(type, preset)}
+          onBeginSetup={(type, preset) =>
+            vault.beginProviderSetup(type, preset)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onOpenHelp={() => vault.openHelp()}
           onUseEnrollmentCode={(code, password) =>

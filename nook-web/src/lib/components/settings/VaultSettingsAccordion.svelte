@@ -88,7 +88,10 @@
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
+    onBeginSetup: (
+      type: StorageProviderType,
+      oauthPreset?: OAuthFilePreset,
+    ) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onAddPassword: (label: string, password: string) => void | Promise<void>

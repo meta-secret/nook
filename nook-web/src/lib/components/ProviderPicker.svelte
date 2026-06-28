@@ -1,6 +1,9 @@
 <script lang="ts">
   import { Cloud, HardDrive } from '@lucide/svelte'
-  import type { OAuthFilePreset, StorageProviderType } from '$lib/auth-providers'
+  import type {
+    OAuthFilePreset,
+    StorageProviderType,
+  } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
