@@ -13,6 +13,7 @@
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import type { JoinRequest, VaultMember } from '$lib/nook'
   import type {
+    OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
@@ -87,7 +88,7 @@
     onSyncProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (type: StorageProviderType) => void
+    onBeginSetup: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
     onCancelSetup: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onAddPassword: (label: string, password: string) => void | Promise<void>

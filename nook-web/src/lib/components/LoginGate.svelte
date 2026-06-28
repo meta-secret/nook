@@ -3,6 +3,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
+    OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
@@ -62,7 +63,7 @@
     onUnlock: () => void | Promise<void>
     onBeginAddProvider?: () => void
     onCancelAddProvider?: () => void
-    onBeginSetup: (type: StorageProviderType) => void
+    onBeginSetup: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
     onCancelSetup: () => void
     onOpenHelp?: () => void
     onUseEnrollmentCode?: (
@@ -258,6 +259,9 @@
               {vault}
               bind:githubRepo
               idPrefix="login"
+              preset={vault.oauthFile?.preset ??
+                vault.oauthSetupPreset ??
+                'google-drive'}
               {isVerifying}
               {isInitializing}
               {onCancelSetup}

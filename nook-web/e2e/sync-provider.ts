@@ -8,11 +8,12 @@ import {
   type GithubE2eTarget,
 } from './helpers'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { createLocalE2eICloudVaultStub } from './icloud-stub'
 import { E2E_STUB_PAT, createE2eStubRepoName } from './sync-stub'
 import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from './vault-yaml'
 
 /** Sync providers supported in Playwright e2e (stub + live). */
-export type E2eSyncProviderId = 'github' | 'google-drive'
+export type E2eSyncProviderId = 'github' | 'google-drive' | 'icloud'
 
 export type E2eSyncProviderDef = {
   id: E2eSyncProviderId
@@ -41,6 +42,13 @@ export const E2E_SYNC_PROVIDERS: Record<E2eSyncProviderId, E2eSyncProviderDef> =
       liveCredentialEnv: 'NOOK_GOOGLE_E2E_ACCESS_TOKEN',
       stubCredential: 'ya29.e2e_stub_access_token',
       label: 'Google Drive',
+    },
+    icloud: {
+      id: 'icloud',
+      providerOptionTestId: 'provider-option-icloud',
+      liveCredentialEnv: 'NOOK_ICLOUD_E2E_WEB_AUTH_TOKEN',
+      stubCredential: 'ck-web-auth-e2e-stub-token',
+      label: 'iCloud',
     },
   }
 
@@ -78,6 +86,7 @@ export function hasLiveSyncCredential(
 export type SyncStubHandle =
   | ReturnType<typeof createLocalE2eGithubVaultStub>
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+  | ReturnType<typeof createLocalE2eICloudVaultStub>
 
 export type SyncE2eTarget = GithubE2eTarget & {
   providerId: E2eSyncProviderId
@@ -91,6 +100,9 @@ function createStubHandle(
 ): SyncStubHandle {
   if (providerId === 'google-drive') {
     return createLocalE2eGoogleDriveVaultStub(initialYaml, remoteId)
+  }
+  if (providerId === 'icloud') {
+    return createLocalE2eICloudVaultStub(initialYaml, remoteId)
   }
   return createLocalE2eGithubVaultStub(initialYaml)
 }
@@ -121,6 +133,12 @@ export async function installSyncStub(
     await (
       target.stub as ReturnType<typeof createLocalE2eGithubVaultStub>
     ).install(page, { repoName: target.repoName, vaultYaml })
+    return
+  }
+  if (target.providerId === 'icloud') {
+    await (
+      target.stub as ReturnType<typeof createLocalE2eICloudVaultStub>
+    ).install(page, { fileName: target.repoName, vaultYaml })
     return
   }
   await (
@@ -233,7 +251,7 @@ export function defaultOnboardSyncProvider(
     return E2E_GITHUB_ONBOARD_PROVIDER
   }
   return {
-    id: 'e2e-onboard-drive',
+    id: `e2e-onboard-${providerId}`,
     label: `${def.label} (e2e onboard)`,
     githubRepo: 'nook-vault.yaml',
     githubPat: def.stubCredential,

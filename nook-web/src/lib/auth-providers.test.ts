@@ -143,4 +143,13 @@ describe('providerDefaultLabel', () => {
     )
     expect(providerDefaultLabel('oauth-file')).toBe('Google Drive')
   })
+
+  test('includes file name for non-default iCloud vaults', () => {
+    expect(providerDefaultLabel('oauth-file', 'work.yaml', 'icloud')).toBe(
+      'iCloud · work.yaml',
+    )
+    expect(providerDefaultLabel('oauth-file', undefined, 'icloud')).toBe(
+      'iCloud',
+    )
+  })
 })

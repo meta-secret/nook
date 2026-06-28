@@ -13,6 +13,10 @@ use crate::storage::github::{
     ensure_github_repo_exists, fetch_github_username, fetch_github_vault,
     write_github_text_file_with_retry,
 };
+use crate::storage::icloud::{
+    ensure_icloud_vault_record, fetch_icloud_vault, verify_icloud_access,
+    write_icloud_vault_with_retry,
+};
 use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
 use crate::{
     NookReconcileVaultBlobsResult, NookRemoteVaultFetch, NookResolveConflictKeepLocalResult,
@@ -79,6 +83,19 @@ pub async fn fetch_remote_vault_yaml(
                 None => (String::new(), None, true),
             }
         }
+        nook_core::StorageMode::ICloud => {
+            let token =
+                nook_core::validate_oauth_access_token(&github_pat).map_err(NookError::ICloud)?;
+            verify_icloud_access(&token).await?;
+            let (_known_revision, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
+            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
+                .map_err(NookError::Database)?;
+            let _ = ensure_icloud_vault_record(&token, &record_name).await?;
+            match fetch_icloud_vault(&token, &record_name).await? {
+                Some(file) => (file.content, Some(file.revision), false),
+                None => (String::new(), None, true),
+            }
+        }
     };
 
     Ok(NookRemoteVaultFetch::new(content, revision, missing))
@@ -123,6 +140,17 @@ pub async fn write_remote_vault_yaml(
                 write_drive_vault_with_retry(&token, &file_id, &file_name, &content, revision)
                     .await?;
             let _ = new_file_id;
+            Ok(new_revision)
+        }
+        nook_core::StorageMode::ICloud => {
+            let token =
+                nook_core::validate_oauth_access_token(&github_pat).map_err(NookError::ICloud)?;
+            verify_icloud_access(&token).await?;
+            let (_known_revision, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
+            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
+                .map_err(NookError::Database)?;
+            let (_resolved_name, new_revision) =
+                write_icloud_vault_with_retry(&token, &record_name, &content, revision).await?;
             Ok(new_revision)
         }
     }

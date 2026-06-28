@@ -6,4 +6,5 @@
 
 pub(crate) mod drive;
 pub(crate) mod github;
+pub(crate) mod icloud;
 pub(crate) mod indexed_db;

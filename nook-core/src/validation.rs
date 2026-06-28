@@ -12,6 +12,8 @@ pub enum StorageMode {
     Github,
     /// Google Drive app-data folder (authenticated with OAuth access token).
     GoogleDrive,
+    /// iCloud private `CloudKit` database (authenticated with `CloudKit` web auth token).
+    ICloud,
 }
 
 impl StorageMode {
@@ -23,6 +25,7 @@ impl StorageMode {
             Self::Local => "local",
             Self::Github => "github",
             Self::GoogleDrive => "google-drive",
+            Self::ICloud => "icloud",
         }
     }
 
@@ -34,6 +37,7 @@ impl StorageMode {
             "local" => Ok(Self::Local),
             "github" => Ok(Self::Github),
             "google-drive" => Ok(Self::GoogleDrive),
+            "icloud" => Ok(Self::ICloud),
             other => Err(format!("errors.validation.unknown_storage_mode:{}", other)),
         }
     }
@@ -154,7 +158,7 @@ pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<S
     let mode = StorageMode::parse(storage_mode)?;
     match mode {
         StorageMode::Github => Ok(Some(validate_github_pat(github_pat)?)),
-        StorageMode::GoogleDrive => {
+        StorageMode::GoogleDrive | StorageMode::ICloud => {
             validate_oauth_access_token(github_pat)?;
             Ok(None)
         }
@@ -297,12 +301,14 @@ mod tests {
         assert_eq!(StorageMode::Local.as_str(), "local");
         assert_eq!(StorageMode::Github.as_str(), "github");
         assert_eq!(StorageMode::GoogleDrive.as_str(), "google-drive");
+        assert_eq!(StorageMode::ICloud.as_str(), "icloud");
         assert_eq!(StorageMode::parse("local").unwrap(), StorageMode::Local);
         assert_eq!(StorageMode::parse("github").unwrap(), StorageMode::Github);
         assert_eq!(
             StorageMode::parse("google-drive").unwrap(),
             StorageMode::GoogleDrive
         );
+        assert_eq!(StorageMode::parse("icloud").unwrap(), StorageMode::ICloud);
         assert!(StorageMode::parse("s3").is_err());
         assert_eq!(format!("{}", StorageMode::Local), "local");
     }
@@ -314,8 +320,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_connect_rejects_unknown_mode() {
-        assert!(validate_connect("icloud", "token").is_err());
+    fn validate_connect_icloud_requires_access_token() {
+        assert!(validate_connect("icloud", "  ").is_err());
+        assert_eq!(validate_connect("icloud", " ck-web-token ").unwrap(), None);
     }
 
     #[test]

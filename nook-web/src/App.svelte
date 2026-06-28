@@ -336,7 +336,8 @@
                 onSyncProvider={(id) => vault.syncProviderById(id)}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
-                onBeginSetup={(type) => vault.beginProviderSetup(type)}
+                onBeginSetup={(type, preset) =>
+                  vault.beginProviderSetup(type, preset)}
                 onCancelSetup={() => vault.cancelProviderSetup()}
                 onRemoveProvider={(id) => vault.removeProvider(id)}
                 onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
@@ -445,7 +446,7 @@
           onUnlock={handleUnlock}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
-          onBeginSetup={(type) => vault.beginProviderSetup(type)}
+          onBeginSetup={(type, preset) => vault.beginProviderSetup(type, preset)}
           onCancelSetup={() => vault.cancelProviderSetup()}
           onOpenHelp={() => vault.openHelp()}
           onUseEnrollmentCode={(code, password) =>

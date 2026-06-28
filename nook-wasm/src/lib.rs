@@ -36,6 +36,9 @@ pub enum NookError {
     #[error("Drive error: {0}")]
     Drive(String),
 
+    #[error("iCloud error: {0}")]
+    ICloud(String),
+
     #[error("Decryption failed: {0}")]
     Decryption(String),
 

@@ -9,6 +9,7 @@
   } from '@lucide/svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import type {
+    OAuthFilePreset,
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
@@ -39,7 +40,7 @@
     isInitializing: boolean
     open?: boolean
     addingProvider?: boolean
-    onBeginSetup?: (type: StorageProviderType) => void
+    onBeginSetup?: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
     onCancelAddProvider?: () => void
     onRemoveProvider?: (id: string) => void | Promise<void>
     onBeginAddProvider?: () => void

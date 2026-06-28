@@ -29,6 +29,7 @@ import {
   saveAuthProviders,
   wasmStorageModeForProvider,
   type OAuthFileConfig,
+  type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
@@ -41,6 +42,15 @@ import {
   requestGoogleAccessToken,
   type GoogleOAuthTokens,
 } from '$lib/google-oauth'
+import {
+  ensureValidICloudOAuthFileConfig,
+  fetchICloudAccountEmail,
+  initICloudAuth,
+  isICloudOAuthConfigured,
+  oauthTokensToICloudConfig,
+  requestICloudWebAuthToken,
+  type ICloudOAuthTokens,
+} from '$lib/icloud-oauth'
 import {
   getBrowserAppLocale,
   parseAppLocale,
@@ -101,7 +111,9 @@ export class VaultState {
   githubPat = $state('')
   githubRepo = $state(DEFAULT_GITHUB_REPO)
   oauthFile = $state<OAuthFileConfig | null>(null)
+  oauthSetupPreset = $state<OAuthFilePreset | null>(null)
   googleOAuthBusy = $state(false)
+  icloudOAuthBusy = $state(false)
 
   manager = $state<NookVaultManager | null>(null)
   isAuthenticated = $state(false)
@@ -277,6 +289,7 @@ export class VaultState {
         this.githubRepo.trim() ||
           this.oauthFile?.fileName?.trim() ||
           DEFAULT_DRIVE_VAULT_FILE,
+        this.oauthFile?.preset ?? this.oauthSetupPreset ?? 'google-drive',
       )
     }
     return providerDefaultLabel(type)
@@ -440,7 +453,10 @@ export class VaultState {
     if (this.storageMode !== 'oauth-file' || !this.oauthFile) {
       return
     }
-    const refreshed = await ensureValidOAuthFileConfig(this.oauthFile)
+    const refreshed =
+      this.oauthFile.preset === 'icloud'
+        ? await ensureValidICloudOAuthFileConfig(this.oauthFile)
+        : await ensureValidOAuthFileConfig(this.oauthFile)
     if (
       refreshed.accessToken === this.oauthFile.accessToken &&
       refreshed.expiresAt === this.oauthFile.expiresAt
@@ -450,7 +466,8 @@ export class VaultState {
     this.oauthFile = refreshed
     if (this.oauthFile && this.providers.some((p) => p.type === 'oauth-file')) {
       this.providers = this.providers.map((provider) =>
-        provider.type === 'oauth-file'
+        provider.type === 'oauth-file' &&
+        provider.oauthFile?.preset === refreshed.preset
           ? { ...provider, oauthFile: refreshed }
           : provider,
       )
@@ -477,6 +494,49 @@ export class VaultState {
     }
   }
 
+  async signInWithICloud(): Promise<void> {
+    if (!isICloudOAuthConfigured()) {
+      this.errorMsg = this.t('provider_setup.icloud_oauth_unconfigured')
+      return
+    }
+    this.icloudOAuthBusy = true
+    this.errorMsg = ''
+    try {
+      await initICloudAuth()
+      const tokens = await requestICloudWebAuthToken()
+      await this.applyICloudOAuthTokens(tokens)
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error ? error.message : 'iCloud sign-in failed.'
+    } finally {
+      this.icloudOAuthBusy = false
+    }
+  }
+
+  private async applyICloudOAuthTokens(
+    tokens: ICloudOAuthTokens,
+  ): Promise<void> {
+    const account = await fetchICloudAccountEmail()
+    this.loginSetupType = 'oauth-file'
+    if (!this.addProviderOpen) {
+      this.storageMode = 'oauth-file'
+    }
+    this.oauthSetupPreset = 'icloud'
+    this.oauthFile = oauthTokensToICloudConfig(tokens, {
+      preset: 'icloud',
+      accessToken: tokens.accessToken,
+      fileId: this.oauthFile?.fileId,
+      fileName:
+        this.oauthFile?.fileName?.trim() ||
+        this.githubRepo.trim() ||
+        DEFAULT_DRIVE_VAULT_FILE,
+      accountEmail: account,
+    })
+    this.githubPat = ''
+    this.githubRepo =
+      this.oauthFile.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+  }
+
   private async applyGoogleOAuthTokens(
     tokens: GoogleOAuthTokens,
   ): Promise<void> {
@@ -485,6 +545,7 @@ export class VaultState {
     if (!this.addProviderOpen) {
       this.storageMode = 'oauth-file'
     }
+    this.oauthSetupPreset = 'google-drive'
     this.oauthFile = oauthTokensToConfig(tokens, {
       preset: 'google-drive',
       accessToken: tokens.accessToken,
@@ -907,14 +968,25 @@ export class VaultState {
     })
   }
 
-  beginProviderSetup(type: StorageProviderType) {
+  beginProviderSetup(type: StorageProviderType, oauthPreset?: OAuthFilePreset) {
     this.resetVaultSessionState()
     this.loginSetupType = type
     this.storageMode = type
     this.githubPat = ''
     this.githubRepo =
       type === 'oauth-file' ? DEFAULT_DRIVE_VAULT_FILE : DEFAULT_GITHUB_REPO
-    this.oauthFile = type === 'oauth-file' ? this.oauthFile : null
+    if (type === 'oauth-file') {
+      const preset = oauthPreset ?? 'google-drive'
+      this.oauthSetupPreset = preset
+      this.oauthFile = {
+        preset,
+        accessToken: '',
+        fileName: DEFAULT_DRIVE_VAULT_FILE,
+      }
+    } else {
+      this.oauthSetupPreset = null
+      this.oauthFile = null
+    }
     this.errorMsg = ''
     this.dismissSuccess()
   }
@@ -1167,10 +1239,12 @@ export class VaultState {
     const type = this.loginSetupType ?? this.storageMode
     const isNewSetup = this.loginSetupType !== null
     const vaultStoreId = this.manager?.vaultStoreId?.trim() || undefined
+    const oauthPreset =
+      this.oauthFile?.preset ?? this.oauthSetupPreset ?? 'google-drive'
     const oauthSnapshot: OAuthFileConfig | undefined =
       type === 'oauth-file'
         ? {
-            preset: 'google-drive',
+            preset: oauthPreset,
             accessToken: this.oauthFile?.accessToken ?? '',
             refreshToken: this.oauthFile?.refreshToken,
             expiresAt: this.oauthFile?.expiresAt,
@@ -1191,6 +1265,7 @@ export class VaultState {
             : type === 'oauth-file'
               ? driveFile
               : undefined,
+          oauthPreset,
         ),
         githubPat: type === 'github' ? pat : undefined,
         githubRepo: type === 'github' ? repo : undefined,
@@ -1224,12 +1299,17 @@ export class VaultState {
     }
 
     if (this.storageMode === 'oauth-file' && this.oauthFile?.fileId) {
+      const activePreset = this.oauthFile.preset
       this.providers = this.providers.map((provider) => {
-        if (provider.type !== 'oauth-file' || !provider.oauthFile) {
+        if (
+          provider.type !== 'oauth-file' ||
+          !provider.oauthFile ||
+          provider.oauthFile.preset !== activePreset
+        ) {
           return provider
         }
         const merged: OAuthFileConfig = {
-          preset: 'google-drive',
+          preset: activePreset,
           accessToken:
             this.oauthFile!.accessToken || provider.oauthFile.accessToken,
           refreshToken: provider.oauthFile.refreshToken,
@@ -1245,8 +1325,10 @@ export class VaultState {
         return { ...provider, oauthFile: merged }
       })
       this.oauthFile =
-        this.providers.find((p) => p.type === 'oauth-file')?.oauthFile ??
-        this.oauthFile
+        this.providers.find(
+          (p) =>
+            p.type === 'oauth-file' && p.oauthFile?.preset === activePreset,
+        )?.oauthFile ?? this.oauthFile
     }
 
     this.loginSetupType = null
