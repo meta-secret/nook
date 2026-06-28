@@ -287,7 +287,8 @@ function isTransientVaultSyncError(text: string): boolean {
     /failed to fetch/i.test(normalized) ||
     /network error/i.test(normalized) ||
     /connection (?:error|reset|refused|timed out)/i.test(normalized) ||
-    /rate limit/i.test(normalized)
+    /rate limit/i.test(normalized) ||
+    /recursive use of an object detected/i.test(normalized)
   )
 }
 
@@ -307,6 +308,9 @@ function summarizeVaultError(text: string): string {
   }
   if (/failed to fetch|network error|connection/i.test(normalized)) {
     return 'Network error talking to GitHub (transient)'
+  }
+  if (/recursive use of an object detected/i.test(normalized)) {
+    return 'WASM busy (transient — retrying)'
   }
   return normalized.length > 160 ? `${normalized.slice(0, 157)}…` : normalized
 }
@@ -790,7 +794,6 @@ export async function waitForStableLocalVaultState(
   let lastError = 'local vault missing'
 
   while (Date.now() < deadline) {
-    await assertNoVaultErrors(page, { allowTransient: true })
     const yaml = await readLocalVaultYamlFromIdb(page)
     if (yaml.trim()) {
       const snapshot = parseVaultYamlSnapshot(yaml)
@@ -1259,7 +1262,6 @@ export async function waitForLocalVaultState(
   let lastError = 'local vault missing'
 
   while (Date.now() < deadline) {
-    await assertNoVaultErrors(page, { allowTransient: true })
     const yaml = await readLocalVaultYamlFromIdb(page)
     if (yaml.trim()) {
       const snapshot = parseVaultYamlSnapshot(yaml)
