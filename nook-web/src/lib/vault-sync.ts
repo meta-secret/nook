@@ -19,6 +19,20 @@ export type RemoteVaultFetch = {
   missing: boolean
 }
 
+/** Pending user choice when local and remote vaults share a version but differ in content. */
+export type PendingSyncConflict = {
+  providerId: string
+  providerLabel: string
+  localYaml: string
+  remoteYaml: string
+  localVersion: number
+  remoteVersion: number
+  mode: string
+  pat: string
+  repo: string
+  remoteRevision: string | null
+}
+
 export async function readLocalVaultBlob(): Promise<string> {
   return readLocalVaultYaml()
 }

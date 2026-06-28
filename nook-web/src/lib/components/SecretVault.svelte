@@ -23,6 +23,7 @@
   let {
     vault,
     isSaving,
+    syncBlocked = false,
     secrets = [] as SecretRecord[],
     onAddSecret,
     onReplaceSecret,
@@ -32,6 +33,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
+    syncBlocked?: boolean
     secrets?: SecretRecord[]
     onAddSecret: (
       id: string,
@@ -228,6 +230,10 @@
             variant="outline"
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
+            disabled={syncBlocked}
+            title={syncBlocked
+              ? vault.t('auth_storage.sync_blocked_edits')
+              : undefined}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
