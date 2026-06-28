@@ -336,9 +336,9 @@
   "pending_joins": {
     "one_wants_join": "1 device wants to join",
     "count_wants_join": "{count} devices want to join",
-    "instructions": "Approve here or manage requests in Settings → Devices.",
+    "instructions": "Join requests sync from your cloud providers into the local vault. Approve here or in Settings → Devices.",
     "devices": "Devices",
-    "refresh_aria": "Refresh join requests"
+    "refresh_aria": "Refresh join requests from sync providers"
   },
   "add_secret": {
     "title_edit_login": "Edit login",
@@ -483,13 +483,13 @@
   "join_enrollment": {
     "title_join": "Join this vault",
     "title_pending": "Waiting for approval",
-    "desc_join": "This browser is not enrolled yet. Join links your device to the vault without a central nook account.",
-    "desc_pending": "Your join request was sent. Try unlocking again after an enrolled device approves you.",
+    "desc_join": "This browser is not enrolled yet. Device keys (not your master password) link this browser to the vault roster.",
+    "desc_pending": "Your join request was sent to the vault copy on the sync provider. Try unlocking again after an enrolled device approves you.",
     "this_browser": "This browser",
-    "explainer_item1": "Join is required so only trusted browsers receive vault keys — reading the encrypted file from GitHub is not enough.",
-    "explainer_item2": "Send a request; an enrolled device approves it under Vault settings.",
+    "explainer_item1": "Join uses device keys — your master password unlocks secrets after enrollment, but cannot replace the approval step.",
+    "explainer_item2": "Send a request; an enrolled device approves it under Vault → Settings → Devices.",
     "explainer_item3": "Approval wraps the vault keys for this browser’s public key — no plaintext secrets are shared.",
-    "explainer_item4": "More enrolled devices mean more recovery paths if one browser is lost.",
+    "explainer_item4": "Approved roster changes fan out to every connected sync provider automatically.",
     "sending": "Sending…",
     "send_request": "Send join request",
     "have_transfer_keys": "Have transfer keys from another device?",

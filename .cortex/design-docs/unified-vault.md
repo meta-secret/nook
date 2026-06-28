@@ -192,11 +192,13 @@ Migration runs once on `VaultState.init()` when detecting legacy provider-as-vau
 
 ## 9. Fan-out sync on mutation
 
-After any local vault save (secret CRUD, password change, device roster update — phased rollout), the web layer pushes to **all connected sync providers**:
+After any local vault save (secret CRUD, join approve/deny, device roster change — phased rollout), the web layer pushes to **all connected sync providers**:
 
 1. Read authoritative blob from `nook_db.encrypted_db` (`readLocalVaultYaml`).
-2. For each non-local provider in `nook_auth`: `compareVaultSync` → push/adopt/conflict.
+2. For each non-local provider in `nook_auth`: `reconcileVaultBlobs` → push/adopt/conflict.
 3. Background fan-out is **quiet** (no per-provider toast spam); status bar shows `Syncing to {provider}…`.
+
+Background **pull** (sync timer, `PendingJoinsBanner` refresh) reconciles every sync provider into the local vault, then `hydrateMultiDeviceState()` reads pending `joins:` from the unlocked session.
 
 Manual **Sync all** in the status bar runs the same reconcile loop with user-visible toasts.
 
@@ -224,7 +226,7 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 | Local-first status bar | Done (#74, Phase 4) |
 | Onboard / enrollment QR (local-first) | Done (#75, Phase 5) |
 | Help page rewrite | Done (#76, Phase 6) |
-| Join sync propagation | Planned (Phase 7, #68) |
+| Join sync propagation | Done (#77, Phase 7) |
 | Legacy multi-vault migration | Planned (Phase 8, #69) |
 
 UI rollout details: [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).

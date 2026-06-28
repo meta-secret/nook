@@ -26,6 +26,7 @@ const LOCAL_SPECS = [
   'sync-provider-connect.spec.ts',
   'sync-conflict-resolution.spec.ts',
   'sync-fanout.spec.ts',
+  'multi-device-local.spec.ts',
 ] as const
 
 /** Real GitHub API specs — serial within the project; one repo per container via NOOK_GITHUB_E2E_REPO. */

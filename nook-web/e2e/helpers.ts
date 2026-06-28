@@ -1072,59 +1072,195 @@ export async function stubGithubVaultForLocalE2e(
   page: Page,
   opts: { repoName: string; vaultYaml: string; username?: string },
 ) {
-  const owner = opts.username ?? 'e2e-user'
-  const fullRepo = `${owner}/${opts.repoName}`
-  const encoded = Buffer.from(opts.vaultYaml, 'utf8').toString('base64')
+  const stub = createLocalE2eGithubVaultStub(opts.vaultYaml)
+  await stub.install(page, opts)
+}
 
-  await page.route('https://api.github.com/**', async (route) => {
-    const url = route.request().url().split('?')[0]!
-    if (url === 'https://api.github.com/user') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ login: owner }),
-      })
-      return
-    }
-    if (url === `https://api.github.com/repos/${fullRepo}`) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ id: 1, name: opts.repoName, private: true }),
-      })
-      return
-    }
-    if (url === `https://api.github.com/repos/${fullRepo}/contents/`) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([
-          {
-            name: 'nook-vault.yaml',
-            path: 'nook-vault.yaml',
-            type: 'file',
-          },
-        ]),
-      })
-      return
-    }
-    if (
-      url ===
-      `https://api.github.com/repos/${fullRepo}/contents/nook-vault.yaml`
+/** In-memory GitHub vault stub with GET/PUT support for local multi-device e2e. */
+export function createLocalE2eGithubVaultStub(initialYaml = '') {
+  let vaultYaml = initialYaml
+  let sha = 'e2e-stub-sha'
+
+  return {
+    getVaultYaml: () => vaultYaml,
+    setVaultYaml: (yaml: string) => {
+      vaultYaml = yaml
+    },
+    async install(
+      page: Page,
+      opts: { repoName: string; vaultYaml?: string; username?: string },
     ) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          content: encoded,
-          sha: 'e2e-stub-sha',
-          encoding: 'base64',
-        }),
+      if (opts.vaultYaml !== undefined) {
+        vaultYaml = opts.vaultYaml
+      }
+      const owner = opts.username ?? 'e2e-user'
+      const fullRepo = `${owner}/${opts.repoName}`
+
+      await page.route('https://api.github.com/**', async (route) => {
+        const request = route.request()
+        const url = request.url().split('?')[0]!
+        const method = request.method()
+
+        if (url === 'https://api.github.com/user') {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ login: owner }),
+          })
+          return
+        }
+        if (url === `https://api.github.com/repos/${fullRepo}`) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ id: 1, name: opts.repoName, private: true }),
+          })
+          return
+        }
+        if (url === `https://api.github.com/repos/${fullRepo}/contents/`) {
+          const files =
+            vaultYaml.trim().length > 0
+              ? [
+                  {
+                    name: 'nook-vault.yaml',
+                    path: 'nook-vault.yaml',
+                    type: 'file',
+                  },
+                ]
+              : []
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(files),
+          })
+          return
+        }
+        if (
+          url ===
+          `https://api.github.com/repos/${fullRepo}/contents/nook-vault.yaml`
+        ) {
+          if (method === 'PUT') {
+            const body = request.postDataJSON() as {
+              content?: string
+              sha?: string
+            }
+            if (body.content) {
+              vaultYaml = Buffer.from(body.content, 'base64').toString('utf8')
+              sha = `e2e-stub-sha-${Date.now()}`
+            }
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                content: { sha },
+              }),
+            })
+            return
+          }
+          if (!vaultYaml.trim()) {
+            await route.fulfill({ status: 404, body: '{}' })
+            return
+          }
+          const encoded = Buffer.from(vaultYaml, 'utf8').toString('base64')
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              content: encoded,
+              sha,
+              encoding: 'base64',
+            }),
+          })
+          return
+        }
+        await route.fulfill({ status: 404, body: '{}' })
       })
-      return
-    }
-    await route.fulfill({ status: 404, body: '{}' })
+    },
+  }
+}
+
+/** Seed sync provider + unlock a keys-mode local vault for multi-device local e2e. */
+export async function reloadUnlockLocalVaultWithGithubSync(page: Page) {
+  await seedExtraGithubProviders(page, [E2E_GITHUB_ONBOARD_PROVIDER])
+  await page.reload()
+  await expect(page.getByTestId('login-gate')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
   })
+  await selectLoginUnlockMethod(page, 'keys')
+  await page.getByTestId('unlock-vault-btn').click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await waitForLoadedSyncProviders(page)
+}
+
+/** Connect a joiner browser to a stubbed GitHub repo (keys-mode join dialog). */
+export async function connectLocalE2eJoinerDevice(
+  page: Page,
+  repoName: string,
+) {
+  await page.goto('/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await openLegacyProviderSetup(page)
+  await setupGithubProvider(page, 'ghp_test_token', repoName)
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
+  await assertNoVaultErrors(page)
+  await expect(page.getByTestId('join-enrollment-dialog')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('join-enrollment-confirm')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
+/** Send a join request against a stubbed GitHub repo (local e2e). */
+export async function sendJoinRequestLocalE2e(
+  page: Page,
+  stub: ReturnType<typeof createLocalE2eGithubVaultStub>,
+) {
+  await page.getByTestId('join-enrollment-confirm').click()
+
+  await expect
+    .poll(() => joinCountFromYaml(stub.getVaultYaml()), {
+      timeout: UI_TIMEOUT_MS,
+    })
+    .toBeGreaterThanOrEqual(1)
+
+  const snapshot = parseVaultYamlSnapshot(stub.getVaultYaml())
+  assertJoinPendingYaml(snapshot)
+  const join = snapshot.joinEntries[0]!
+
+  await expect(page.getByTestId('join-enrollment-dialog')).toContainText(
+    'Waiting for approval',
+    { timeout: UI_TIMEOUT_MS },
+  )
+  await page.getByTestId('join-enrollment-dismiss').click()
+  await expect(page.getByTestId('join-enrollment-dialog')).not.toBeVisible()
+
+  return join
+}
+
+export async function approveJoinLocalE2eFromBanner(
+  page: Page,
+  deviceId: string,
+  stub: ReturnType<typeof createLocalE2eGithubVaultStub>,
+  expectedMembers: number,
+) {
+  await waitForPendingJoinOnDevice(page, deviceId)
+  const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
+  await row.getByTestId('approve-join-btn').click()
+  await expect
+    .poll(
+      () => parseVaultYamlSnapshot(stub.getVaultYaml()).memberPkIds.length,
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(expectedMembers)
+  await expect
+    .poll(() => parseVaultYamlSnapshot(stub.getVaultYaml()).joinEntries.length)
+    .toBe(0)
+  await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
 /** Seed a GitHub sync provider, reload, unlock, and wait for status bar sync count. */
