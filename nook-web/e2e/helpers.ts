@@ -72,6 +72,67 @@ export const UI_TIMEOUT_MS = 5_000
 /** Password unlock / enrollment runs scrypt in wasm — allow more time on CI. */
 export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 
+/** Default password used by e2e create-vault and local-unlock helpers. */
+export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
+
+export async function openLegacyProviderSetup(page: Page) {
+  const link = page.getByTestId('login-legacy-provider-setup-link')
+  if (await link.isVisible()) {
+    await link.click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+  }
+}
+
+export async function createLocalVaultOnLogin(
+  page: Page,
+  password = DEFAULT_LOCAL_VAULT_PASSWORD,
+) {
+  await page.getByTestId('login-create-password-input').fill(password)
+  await page.getByTestId('login-create-password-confirm').fill(password)
+  await page.getByTestId('login-create-vault-btn').click()
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
+/** Legacy device-key genesis path (provider picker → local connect). */
+export async function connectLocalVaultLegacy(page: Page) {
+  await page.goto('/')
+  await expect(
+    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
+  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+
+  if (await page.getByTestId('vault-panel').isVisible()) {
+    return
+  }
+
+  await openLegacyProviderSetup(page)
+
+  const savedLocalProvider = page.getByTestId('saved-provider-local').first()
+  if (await savedLocalProvider.isVisible()) {
+    await savedLocalProvider.click()
+    await page.getByTestId('login-connect-provider-btn').click()
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
+  } else {
+    await page.getByTestId('provider-option-local').click()
+    const connectButton = await waitForEngine(page)
+    await connectButton.click()
+    await expect(page.getByTestId('app-success')).toContainText(
+      'Local vault loaded',
+      { timeout: UI_TIMEOUT_MS },
+    )
+  }
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
 
 /** Valid BIP-39 test mnemonic (12 words). */
@@ -357,6 +418,27 @@ export async function connectLocalVault(page: Page) {
     return
   }
 
+  const createForm = page.getByTestId('login-create-vault-form')
+  if (await createForm.isVisible()) {
+    await createLocalVaultOnLogin(page)
+    return
+  }
+
+  const localUnlock = page.getByTestId('login-local-vault-detected')
+  if (await localUnlock.isVisible()) {
+    const masterPassword = page.getByTestId('login-master-password-input')
+    if (await masterPassword.isVisible()) {
+      await masterPassword.fill(DEFAULT_LOCAL_VAULT_PASSWORD)
+      await page.getByTestId('unlock-vault-btn').click()
+    } else {
+      await page.getByTestId('unlock-vault-btn').click()
+    }
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    return
+  }
+
   const savedLocalProvider = page.getByTestId('saved-provider-local').first()
   if (await savedLocalProvider.isVisible()) {
     await savedLocalProvider.click()
@@ -367,6 +449,7 @@ export async function connectLocalVault(page: Page) {
       { timeout: UI_TIMEOUT_MS },
     )
   } else {
+    await openLegacyProviderSetup(page)
     await page.getByTestId('provider-option-local').click()
     const connectButton = await waitForEngine(page)
     await connectButton.click()
@@ -767,6 +850,24 @@ export async function unlockVaultOnLogin(
   page: Page,
   opts?: { password?: string; entryLabel?: string },
 ) {
+  const localUnlock = page.getByTestId('login-local-unlock-step')
+  if (await localUnlock.isVisible()) {
+    if (opts?.password) {
+      await selectLoginUnlockMethod(page, 'password')
+      if (opts.entryLabel) {
+        await page
+          .getByTestId('login-password-entry-list')
+          .getByRole('button', { name: opts.entryLabel })
+          .click()
+      }
+      await page.getByTestId('login-master-password-input').fill(opts.password)
+    } else {
+      await selectLoginUnlockMethod(page, 'keys')
+    }
+    await page.getByTestId('unlock-vault-btn').click()
+    return
+  }
+
   await connectLoginProvider(page)
   if (opts?.password) {
     await selectLoginUnlockMethod(page, 'password')

@@ -17,6 +17,8 @@
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import LoginWizard from '$lib/components/login/LoginWizard.svelte'
+  import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
+  import LoginCreateVaultStep from '$lib/components/login/LoginCreateVaultStep.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
@@ -48,6 +50,7 @@
     onOpenHelp,
     onUseEnrollmentCode,
     onUnlockWithPassword,
+    onCreateLocalVault,
     loginFlowStep = 'connection',
     passwordEntries = [] as VaultPasswordEntrySummary[],
     selectedPasswordEntryId = $bindable(null as string | null),
@@ -84,6 +87,7 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
+    onCreateLocalVault?: (password: string) => void | Promise<void>
     onRemoveProvider?: (id: string) => void | Promise<void>
     loginPasswordPrompt?: boolean
     passwordEntries?: VaultPasswordEntrySummary[]
@@ -95,11 +99,33 @@
 
   let manageProvidersOpen = $state(false)
   let enrollmentPanelOpen = $state(false)
+  let showLegacyProviderSetup = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
-  const showWizard = $derived(hasProviders && !showSetup && !addProviderOpen)
-  const showProviderSetup = $derived(!showSetup && !showWizard)
+  const showLocalUnlock = $derived(
+    vault.localVaultPresent && !showSetup && !addProviderOpen,
+  )
+  const showCreateVault = $derived(
+    !vault.localVaultPresent &&
+      !hasProviders &&
+      !showSetup &&
+      !addProviderOpen &&
+      !showLegacyProviderSetup,
+  )
+  const showWizard = $derived(
+    hasProviders &&
+      !vault.localVaultPresent &&
+      !showSetup &&
+      !addProviderOpen,
+  )
+  const showProviderSetup = $derived(
+    (showLegacyProviderSetup || addProviderOpen) &&
+      !showSetup &&
+      !showWizard &&
+      !showLocalUnlock &&
+      !showCreateVault,
+  )
   const activeProvider = $derived(
     providers.find((p) => p.id === activeProviderId) ?? null,
   )
@@ -108,8 +134,8 @@
   )
   const isUnlocking = $derived(
     isVerifying &&
-      showWizard &&
-      loginFlowStep === 'authorization' &&
+      (showWizard || showLocalUnlock) &&
+      (showLocalUnlock || loginFlowStep === 'authorization') &&
       !showSetup,
   )
   const showQrOnboarding = $derived(
@@ -120,7 +146,7 @@
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
-      (showProviderSetup || showWizard || showSetup),
+      (showProviderSetup || showWizard || showSetup || showCreateVault),
   )
 
   const setupCanConnect = $derived(
@@ -131,11 +157,18 @@
     e.preventDefault()
     void onUnlock()
   }
+
+  $effect(() => {
+    if (showLocalUnlock) {
+      void vault.prepareLocalLogin()
+    }
+  })
 </script>
 
 <div
   class="w-full space-y-3 animate-in fade-in duration-300"
   data-testid="login-gate"
+  data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
   {#if showQrOnboarding}
     <EnrollmentQrOnboardCard
@@ -161,8 +194,17 @@
       />
     {/if}
 
-    {#if !hasProviders && !showSetup && onOpenHelp}
+    {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
       <ProductIntro {vault} {onOpenHelp} />
+    {/if}
+
+    {#if showLocalUnlock}
+      <p
+        class="text-xs text-muted-foreground"
+        data-testid="login-local-vault-detected"
+      >
+        {vault.t('login.local_vault_hint')}
+      </p>
     {/if}
 
     <Card
@@ -189,7 +231,11 @@
           <CardTitle
             class="text-lg font-semibold tracking-tight text-foreground"
           >
-            {#if showWizard}
+            {#if showLocalUnlock}
+              {vault.t('login.unlock_vault')}
+            {:else if showCreateVault}
+              {vault.t('login.create_vault_title')}
+            {:else if showWizard}
               {vault.t('login.unlock_vault')}
             {:else if showSetup}
               {vault.t('onboarding.connect_to', {
@@ -214,6 +260,14 @@
             <CardDescription class="text-pretty"
               >{vault.t('common.connecting')}</CardDescription
             >
+          {:else if showLocalUnlock}
+            <CardDescription class="text-pretty">
+              {vault.t('login.local_vault_description')}
+            </CardDescription>
+          {:else if showCreateVault}
+            <CardDescription class="text-pretty">
+              {vault.t('login.create_vault_subtitle')}
+            </CardDescription>
           {:else if showWizard}
             <CardDescription class="text-pretty">
               {vault.t('login.connect_prompt')}
@@ -243,7 +297,40 @@
           ? 'px-5 pb-5 pt-0 sm:px-6 sm:pb-6'
           : 'px-6 pb-5 pt-4 sm:pb-6'}
       >
-        {#if showWizard}
+        {#if showLocalUnlock}
+          <LoginUnlockStep
+            {vault}
+            passwordEntries={vault.passwordEntries}
+            bind:selectedPasswordEntryId
+            {isVerifying}
+            {isInitializing}
+            {isUnlocking}
+            {onUnlock}
+            {onUnlockWithPassword}
+          />
+          <p class="mt-4 text-center text-xs text-muted-foreground">
+            {vault.t('login.sync_after_unlock')}
+          </p>
+        {:else if showCreateVault && onCreateLocalVault}
+          <LoginCreateVaultStep
+            {vault}
+            {isVerifying}
+            {isInitializing}
+            onCreateVault={onCreateLocalVault}
+          />
+          <p class="mt-4 text-center text-xs text-muted-foreground">
+            <button
+              type="button"
+              class="font-medium text-primary underline-offset-4 hover:underline"
+              data-testid="login-legacy-provider-setup-link"
+              onclick={() => {
+                showLegacyProviderSetup = true
+              }}
+            >
+              {vault.t('login.use_storage_provider')}
+            </button>
+          </p>
+        {:else if showWizard}
           <LoginWizard
             {vault}
             step={loginFlowStep}

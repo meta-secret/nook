@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import {
   BIP39_SAMPLE_WORDS,
   clearBrowserVault,
-  connectLocalVault,
+  connectLocalVaultLegacy as connectLocalVault,
   expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,

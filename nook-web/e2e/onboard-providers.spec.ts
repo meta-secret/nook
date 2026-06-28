@@ -1,8 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   clearBrowserVault,
-  connectLocalVault,
-  connectLoginProvider,
+  connectLocalVaultLegacy,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
 } from './helpers'
@@ -12,7 +11,7 @@ test.describe('onboard provider picker', () => {
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVault(page)
+    await connectLocalVaultLegacy(page)
   })
 
   test('shows repository and token hints for multiple GitHub providers', async ({
@@ -37,10 +36,9 @@ test.describe('onboard provider picker', () => {
     ])
 
     await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await connectLoginProvider(page)
     await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,

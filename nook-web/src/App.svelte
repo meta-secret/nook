@@ -357,6 +357,7 @@
           enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
           onUnlockWithPassword={(entryId, password) =>
             vault.unlockWithPassword(entryId, password)}
+          onCreateLocalVault={(password) => vault.createLocalVault(password)}
           onRemoveProvider={(id) => vault.removeProvider(id)}
           onConsumeLoginPasswordPrompt={() => vault.clearLoginPasswordPrompt()}
         />
