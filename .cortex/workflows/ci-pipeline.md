@@ -69,6 +69,18 @@ GitHub REST API rate limits make it expensive to run full Playwright sync covera
 
 When adding Google Drive or other sync providers, add stub-backed specs to `sync-stub` and thin live smoke specs to `e2e/live/`.
 
+## Parallelism and isolation
+
+`local` and `sync-stub` run with `workers = os.cpus().length` (one worker per logical CPU). Spec files that need ordering use `test.describe.configure({ mode: 'serial' })` within the file only.
+
+**One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
+
+- Each test gets a fresh browser context → separate IndexedDB / `localStorage`.
+- Stub sync uses `page.route()` with a unique fake repo per suite — no shared remote state.
+- The Nook server is stateless; vault data never lives on the server in e2e.
+
+Do **not** spin up multiple Nook servers for parallel stub e2e unless debugging port conflicts locally with `reuseExistingServer`.
+
 ## Playwright projects
 
 Defined in `nook-web/playwright.config.ts`:
@@ -76,7 +88,7 @@ Defined in `nook-web/playwright.config.ts`:
 | Project | Specs | CI |
 |---------|-------|-----|
 | `local` | IndexedDB-only flows (vault CRUD, login, legal, …) | main, e2e-pr |
-| `sync-stub` | GitHub sync flows via route stubs (multi-device, fan-out, password envelope, …) | main, e2e-pr |
+| `sync-stub` | Sync provider flows via route stubs (`sync-vault`, multi-device, fan-out, …) | main, e2e-pr |
 | `sync-live` | `e2e/live/**/*.spec.ts` | e2e-nightly, e2e-pr (manual) |
 
 ## Task commands (Docker)
