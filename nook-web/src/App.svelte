@@ -405,9 +405,13 @@
             successMsg={vault.successMsg}
             errorMsg={vault.errorMsg}
             syncConflictLabel={vault.pendingSyncConflict
-              ? vault.t('auth_storage.sync_conflict_banner', {
-                  provider: vault.pendingSyncConflict.providerLabel,
-                })
+              ? vault.pendingSyncConflict.kind === 'store_id'
+                ? vault.t('auth_storage.sync_conflict_store_id_banner', {
+                    provider: vault.pendingSyncConflict.providerLabel,
+                  })
+                : vault.t('auth_storage.sync_conflict_banner', {
+                    provider: vault.pendingSyncConflict.providerLabel,
+                  })
               : ''}
             {appVersion}
             onRefresh={() => vault.manualSync()}

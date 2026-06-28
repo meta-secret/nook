@@ -30,7 +30,7 @@ export type ReconcileVaultResult = {
   remoteRevision: string | null
 }
 
-/** Pending user choice when local and remote vaults share a version but differ in content. */
+/** Pending user choice when local and remote vaults diverge. */
 export type PendingSyncConflict = {
   providerId: string
   providerLabel: string
@@ -42,6 +42,52 @@ export type PendingSyncConflict = {
   pat: string
   repo: string
   remoteRevision: string | null
+  /** Same version but different ciphertext, or different vault store_id values. */
+  kind?: 'content' | 'store_id'
+  localStoreId?: string
+  remoteStoreId?: string
+}
+
+const STORE_ID_MISMATCH_RE =
+  /Vault store_id mismatch: local (\S+), remote (\S+)/
+
+export function parseVaultStoreIdMismatch(
+  error: unknown,
+): { localStoreId: string; remoteStoreId: string } | null {
+  const message = error instanceof Error ? error.message : String(error)
+  const match = message.match(STORE_ID_MISMATCH_RE)
+  if (!match) {
+    return null
+  }
+  return { localStoreId: match[1], remoteStoreId: match[2] }
+}
+
+export type ReconcileVaultAttempt =
+  | { status: 'ok'; result: ReconcileVaultResult }
+  | {
+      status: 'store_id_mismatch'
+      localStoreId: string
+      remoteStoreId: string
+    }
+
+/** Run reconcile; map store_id mismatch to a structured outcome instead of throwing. */
+export function attemptReconcileVaultSyncBlobs(
+  localYaml: string,
+  remoteYaml: string,
+  remoteRevision: string | null,
+): ReconcileVaultAttempt {
+  try {
+    return {
+      status: 'ok',
+      result: reconcileVaultSyncBlobs(localYaml, remoteYaml, remoteRevision),
+    }
+  } catch (error: unknown) {
+    const mismatch = parseVaultStoreIdMismatch(error)
+    if (mismatch) {
+      return { status: 'store_id_mismatch', ...mismatch }
+    }
+    throw error
+  }
 }
 
 export async function readLocalVaultBlob(): Promise<string> {
