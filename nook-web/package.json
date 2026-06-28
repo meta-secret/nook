@@ -53,6 +53,7 @@
     "dompurify": "3.4.11",
     "github-markdown-css": "5.8.1",
     "markdown-it": "14.2.0",
+    "mermaid": "^11.16.0",
     "qrcode": "^1.5.4",
     "tailwind-merge": "3.6.0",
     "tailwind-variants": "3.2.2",
