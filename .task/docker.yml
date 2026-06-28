@@ -90,12 +90,9 @@ tasks:
 
   docker:cursor-agent:build:
     desc: Build nook-cursor-agent image (Cursor CLI + docker/gh/git on toolchain).
-    deps:
-      - setup
     cmds:
       - >-
         {{.DOCKER}} buildx bake -f docker-bake.hcl cursor-agent
-        --set *.args.TOOLCHAIN_IMAGE={{.DOCKER_IMAGE}}
 
   docker:cursor-agent:run:
     desc: Run ci-fix-agent entrypoint (mount docker.sock for nested task/docker commands).

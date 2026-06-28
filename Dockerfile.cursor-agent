@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.4
 # Cursor Agent CLI + docker/gh/git on top of the Nook toolchain image.
 # Used by main CI auto-fix (mount /var/run/docker.sock for task/docker:* commands).
+# Base image is a named build context — see cursor-agent target in docker-bake.hcl.
 
-ARG TOOLCHAIN_IMAGE=nook-build:local
-FROM ${TOOLCHAIN_IMAGE}
+FROM toolchain
 
 USER root
 
