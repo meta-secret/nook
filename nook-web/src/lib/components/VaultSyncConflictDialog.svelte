@@ -26,9 +26,28 @@
   } = $props()
 
   const versionLabel = $derived(
-    conflict.localVersion === conflict.remoteVersion
-      ? String(conflict.localVersion)
-      : `${conflict.localVersion} / ${conflict.remoteVersion}`,
+    conflict.kind === 'store_id'
+      ? `${conflict.localStoreId ?? '?'} / ${conflict.remoteStoreId ?? '?'}`
+      : conflict.localVersion === conflict.remoteVersion
+        ? String(conflict.localVersion)
+        : `${conflict.localVersion} / ${conflict.remoteVersion}`,
+  )
+  const conflictDescription = $derived(
+    conflict.kind === 'store_id'
+      ? vault.t('auth_storage.sync_conflict_store_id_desc', {
+          provider: conflict.providerLabel,
+          localStore: conflict.localStoreId ?? '?',
+          remoteStore: conflict.remoteStoreId ?? '?',
+        })
+      : vault.t('auth_storage.sync_conflict_desc', {
+          provider: conflict.providerLabel,
+          version: versionLabel,
+        }),
+  )
+  const conflictTitle = $derived(
+    conflict.kind === 'store_id'
+      ? vault.t('auth_storage.sync_conflict_store_id_title')
+      : vault.t('auth_storage.sync_conflict_title'),
   )
 </script>
 
@@ -55,13 +74,10 @@
             class="text-lg font-semibold tracking-tight text-foreground inline-flex items-center gap-2"
           >
             <TriangleAlert class="size-4 shrink-0 text-amber-500" />
-            {vault.t('auth_storage.sync_conflict_title')}
+            {conflictTitle}
           </CardTitle>
           <CardDescription class="text-pretty">
-            {vault.t('auth_storage.sync_conflict_desc', {
-              provider: conflict.providerLabel,
-              version: versionLabel,
-            })}
+            {conflictDescription}
           </CardDescription>
         </div>
       </div>
@@ -79,9 +95,15 @@
               {vault.t('auth_storage.sync_conflict_local_copy')}
             </span>
             <span class="block text-xs text-muted-foreground">
-              {vault.t('auth_storage.sync_conflict_version', {
-                version: String(conflict.localVersion),
-              })}
+              {#if conflict.kind === 'store_id'}
+                {vault.t('auth_storage.sync_conflict_store_id_local', {
+                  store: conflict.localStoreId ?? '?',
+                })}
+              {:else}
+                {vault.t('auth_storage.sync_conflict_version', {
+                  version: String(conflict.localVersion),
+                })}
+              {/if}
             </span>
           </span>
         </li>
@@ -97,9 +119,15 @@
               })}
             </span>
             <span class="block text-xs text-muted-foreground">
-              {vault.t('auth_storage.sync_conflict_version', {
-                version: String(conflict.remoteVersion),
-              })}
+              {#if conflict.kind === 'store_id'}
+                {vault.t('auth_storage.sync_conflict_store_id_remote', {
+                  store: conflict.remoteStoreId ?? '?',
+                })}
+              {:else}
+                {vault.t('auth_storage.sync_conflict_version', {
+                  version: String(conflict.remoteVersion),
+                })}
+              {/if}
             </span>
           </span>
         </li>

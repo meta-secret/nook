@@ -68,10 +68,11 @@ import {
   migrateLegacyVaultToLocal,
 } from '$lib/vault-migration'
 import {
+  attemptReconcileVaultSyncBlobs,
   fetchRemoteVaultBlob,
+  parseVaultStoreIdMismatch,
   readLocalVaultBlob,
   readVaultVersionFromBlob,
-  reconcileVaultSyncBlobs,
   resolveVaultSyncConflictKeepLocal,
   resolveVaultSyncConflictKeepRemote,
   writeLocalVaultBlob,
@@ -313,16 +314,79 @@ export class VaultState {
       return 'ok'
     }
 
-    const reconcile = reconcileVaultSyncBlobs(
+    try {
+      return await this.reconcileStagedRemoteWithLocalBlobs({
+        localYaml,
+        remote,
+        mode,
+        pat,
+        repo,
+        options,
+      })
+    } catch (error: unknown) {
+      const mismatch = parseVaultStoreIdMismatch(error)
+      if (!mismatch) {
+        throw error
+      }
+      await this.stageVaultSyncConflict({
+        providerId:
+          options?.providerId ??
+          this.syncProviders[this.syncProviders.length - 1]?.id ??
+          '__pending_provider__',
+        providerLabel: this.stagedProviderLabel(),
+        localYaml,
+        remoteYaml: remote.content,
+        mode,
+        pat,
+        repo,
+        remoteRevision: remote.revision,
+        kind: 'store_id',
+        localStoreId: mismatch.localStoreId,
+        remoteStoreId: mismatch.remoteStoreId,
+      })
+      return 'conflict'
+    }
+  }
+
+  private async reconcileStagedRemoteWithLocalBlobs(ctx: {
+    localYaml: string
+    remote: Awaited<ReturnType<typeof fetchRemoteVaultBlob>>
+    mode: string
+    pat: string
+    repo: string
+    options?: { providerId?: string; quiet?: boolean }
+  }): Promise<'ok' | 'conflict'> {
+    const { localYaml, remote, mode, pat, repo, options } = ctx
+
+    const attempt = attemptReconcileVaultSyncBlobs(
       localYaml,
       remote.content,
       remote.revision,
     )
+    if (attempt.status === 'store_id_mismatch') {
+      await this.stageVaultSyncConflict({
+        providerId:
+          options?.providerId ??
+          this.syncProviders[this.syncProviders.length - 1]?.id ??
+          '__pending_provider__',
+        providerLabel: this.stagedProviderLabel(),
+        localYaml,
+        remoteYaml: remote.content,
+        mode,
+        pat,
+        repo,
+        remoteRevision: remote.revision,
+        kind: 'store_id',
+        localStoreId: attempt.localStoreId,
+        remoteStoreId: attempt.remoteStoreId,
+      })
+      return 'conflict'
+    }
+
+    const reconcile = attempt.result
 
     if (reconcile.action === 'conflict') {
-      const localVersion = await readVaultVersionFromBlob(reconcile.localYaml)
-      const remoteVersion = await readVaultVersionFromBlob(reconcile.remoteYaml)
-      this.pendingSyncConflict = {
+      await this.stageVaultSyncConflict({
         providerId:
           options?.providerId ??
           this.syncProviders[this.syncProviders.length - 1]?.id ??
@@ -330,14 +394,12 @@ export class VaultState {
         providerLabel: this.stagedProviderLabel(),
         localYaml: reconcile.localYaml,
         remoteYaml: reconcile.remoteYaml,
-        localVersion,
-        remoteVersion,
         mode,
         pat,
         repo,
         remoteRevision: remote.revision,
-      }
-      this.errorMsg = ''
+        kind: 'content',
+      })
       return 'conflict'
     }
 
@@ -1368,14 +1430,30 @@ export class VaultState {
       const localYaml = await readLocalVaultBlob()
       const [mode, pat, repo] = this.providerWasmArgs(provider)
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)
-      const reconcile = reconcileVaultSyncBlobs(
+      const attempt = attemptReconcileVaultSyncBlobs(
         localYaml,
         remote.content,
         remote.revision,
       )
+      if (attempt.status === 'store_id_mismatch') {
+        await this.stageVaultSyncConflict({
+          providerId,
+          providerLabel: provider.label,
+          localYaml,
+          remoteYaml: remote.content,
+          mode,
+          pat,
+          repo,
+          remoteRevision: remote.revision,
+          kind: 'store_id',
+          localStoreId: attempt.localStoreId,
+          remoteStoreId: attempt.remoteStoreId,
+        })
+        return
+      }
 
       await this.applyReconcileResult(
-        reconcile,
+        attempt.result,
         {
           providerId,
           remote,
@@ -1436,22 +1514,18 @@ export class VaultState {
     const quiet = options?.quiet ?? false
 
     if (result.action === 'conflict') {
-      const localVersion = await readVaultVersionFromBlob(result.localYaml)
-      const remoteVersion = await readVaultVersionFromBlob(result.remoteYaml)
-      const provider = this.providers.find((p) => p.id === providerId)
-      this.pendingSyncConflict = {
+      await this.stageVaultSyncConflict({
         providerId,
-        providerLabel: provider?.label ?? providerId,
+        providerLabel:
+          this.providers.find((p) => p.id === providerId)?.label ?? providerId,
         localYaml: result.localYaml,
         remoteYaml: result.remoteYaml,
-        localVersion,
-        remoteVersion,
         mode,
         pat,
         repo,
         remoteRevision: remote.revision,
-      }
-      this.errorMsg = ''
+        kind: 'content',
+      })
       return
     }
 
@@ -1514,6 +1588,24 @@ export class VaultState {
     this.lastSyncedAt = new SvelteDate()
   }
 
+  private async stageVaultSyncConflict(
+    conflict: Omit<
+      PendingSyncConflict,
+      'localVersion' | 'remoteVersion' | 'kind'
+    > &
+      Pick<PendingSyncConflict, 'kind' | 'localStoreId' | 'remoteStoreId'>,
+  ): Promise<void> {
+    const localVersion = await readVaultVersionFromBlob(conflict.localYaml)
+    const remoteVersion = await readVaultVersionFromBlob(conflict.remoteYaml)
+    this.pendingSyncConflict = {
+      ...conflict,
+      kind: conflict.kind ?? 'content',
+      localVersion,
+      remoteVersion,
+    }
+    this.errorMsg = ''
+  }
+
   private clearPendingSyncConflict() {
     this.pendingSyncConflict = null
   }
@@ -1550,6 +1642,7 @@ export class VaultState {
         revision,
       )
       this.clearPendingSyncConflict()
+      this.finishStagedProviderConnectAfterConflict(conflict)
       this.showSuccess(
         this.t('auth_storage.sync_conflict_resolved_local', {
           provider: conflict.providerLabel,
@@ -1586,6 +1679,7 @@ export class VaultState {
         conflict.remoteRevision,
       )
       this.clearPendingSyncConflict()
+      this.finishStagedProviderConnectAfterConflict(conflict)
       this.showSuccess(
         this.t('auth_storage.sync_conflict_resolved_remote', {
           provider: conflict.providerLabel,
@@ -1597,6 +1691,16 @@ export class VaultState {
     } finally {
       this.isVerifying = false
     }
+  }
+
+  private finishStagedProviderConnectAfterConflict(
+    conflict: PendingSyncConflict,
+  ): void {
+    if (conflict.providerId !== '__pending_provider__') {
+      return
+    }
+    this.loginSetupType = null
+    this.addProviderOpen = false
   }
 
   private async ensureProviderSavedAfterConflict(
@@ -1650,6 +1754,9 @@ export class VaultState {
       await this.syncProviderById(provider.id, { quiet: true })
       this.loginSetupType = null
       this.addProviderOpen = false
+    } catch (e: unknown) {
+      this.errorMsg =
+        e instanceof Error ? e.message : this.t('auth_storage.sync_failed')
     } finally {
       this.isVerifying = false
     }
@@ -2360,11 +2467,19 @@ export class VaultState {
           )
         }
         const localYaml = await readLocalVaultBlob()
-        const reconcile = reconcileVaultSyncBlobs(
+        const attempt = attemptReconcileVaultSyncBlobs(
           localYaml,
           remote.content,
           remote.revision,
         )
+        if (attempt.status === 'store_id_mismatch') {
+          throw new Error(
+            this.t('auth_storage.sync_store_id_mismatch', {
+              provider: 'GitHub',
+            }),
+          )
+        }
+        const reconcile = attempt.result
         if (reconcile.action === 'conflict') {
           throw new Error(
             'Local and sync-provider vaults conflict. Resolve on the issuing device first.',
