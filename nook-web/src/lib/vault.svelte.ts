@@ -2289,6 +2289,7 @@ export class VaultState {
         this.activeEnrollmentEntryId = null
       }
       this.showSuccess(this.t('toasts.password_removed'))
+      await this.fanOutSyncToProviders({ quiet: true })
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to remove vault password.'

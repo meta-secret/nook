@@ -6,6 +6,7 @@ import {
   connectGithubGenesisDevice,
   createE2eGithubRepoName,
   createIsolatedContext,
+  dismissSyncConflictIfVisible,
   expandSettingsSection,
   expandLoginEnrollmentPanel,
   expectVaultPasswordStatus,
@@ -217,9 +218,20 @@ describePasswordEnvelope('vault password envelope (github)', () => {
     if (!(await deviceA.getByTestId('storage-settings-panel').isVisible())) {
       await openStorageSettings(deviceA)
     }
+    await waitForGithubVaultState(
+      { pat: githubPat, repoName: e2eRepo },
+      (snapshot) => snapshot.hasPasswordEnvelope,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
     await expandSettingsSection(deviceA, 'unlock')
+    await dismissSyncConflictIfVisible(deviceA)
     await deviceA.getByTestId('remove-vault-password-btn').click()
     await deviceA.getByTestId('confirm-remove-vault-password').click()
+    await waitForGithubVaultState(
+      { pat: githubPat, repoName: e2eRepo },
+      (snapshot) => !snapshot.hasPasswordEnvelope,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
     await expectVaultPasswordStatus(deviceA, 'none', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

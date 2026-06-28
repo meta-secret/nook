@@ -817,6 +817,15 @@ export async function waitForStableLocalVaultState(
 }
 
 /** Match vault password badge copy (`1 item` or legacy `1 password`). */
+export async function dismissSyncConflictIfVisible(page: Page) {
+  const dialog = page.getByTestId('vault-sync-conflict-dialog')
+  if (!(await dialog.isVisible())) return
+  await page.getByTestId('sync-conflict-keep-local-btn').click()
+  await expect(dialog).not.toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 export async function expectVaultPasswordStatus(
   page: Page,
   count: number | 'none',
