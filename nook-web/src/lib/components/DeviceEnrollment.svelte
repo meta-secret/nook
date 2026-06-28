@@ -78,8 +78,8 @@
   {#if pendingJoins.length > 0 || vaultMembers.length > 0}
     <div class="space-y-3">
       <ul class="space-y-2.5" data-testid="vault-members-list">
-        {#each vaultMembers as member (member.auth_id)}
-          {@const isCurrent = member.device_id === deviceId}
+        {#each vaultMembers as member (member.authId)}
+          {@const isCurrent = member.deviceId === deviceId}
           <li
             class="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/50 p-3"
             data-testid="vault-member-row"
@@ -99,14 +99,14 @@
                   {#if isCurrent}
                     {getCurrentDeviceName()}
                   {:else}
-                    Device {member.device_id}
+                    Device {member.deviceId}
                   {/if}
                 </span>
                 <span class="text-xs text-muted-foreground">
                   {#if isCurrent}
                     Web
                   {:else}
-                    Web · {member.device_id === 'genesis'
+                    Web · {member.deviceId === 'genesis'
                       ? 'Genesis'
                       : 'Enrolled'}
                   {/if}
@@ -123,7 +123,7 @@
           </li>
         {/each}
 
-        {#each pendingJoins as join (join.device_id)}
+        {#each pendingJoins as join (join.deviceId)}
           <li
             class="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/50 p-3"
             data-testid="device-join-row"
@@ -136,11 +136,11 @@
               </div>
               <div class="flex flex-col min-w-0">
                 <span class="text-sm font-medium text-foreground truncate">
-                  Device {join.device_id}
+                  Device {join.deviceId}
                 </span>
                 <span class="text-xs text-muted-foreground">
                   Web · Requested {new Date(
-                    join.requested_at,
+                    join.requestedAt,
                   ).toLocaleDateString()}
                 </span>
               </div>
@@ -151,7 +151,7 @@
                 size="sm"
                 disabled={isBusy}
                 data-testid="approve-join-btn"
-                onclick={() => void onApproveJoin(join.device_id)}
+                onclick={() => void onApproveJoin(join.deviceId)}
               >
                 Approve
               </Button>

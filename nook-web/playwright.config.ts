@@ -9,6 +9,9 @@ dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 
 /** Fast GitHub sync in e2e — production default stays 60s via app code. */
 process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '1000'
+/** Fast idle auto-lock in e2e — production default stays 5 minutes via app code. */
+process.env.VITE_VAULT_IDLE_TIMEOUT_MS ??= '2500'
+process.env.VITE_VAULT_IDLE_WARNING_MS ??= '0'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
@@ -19,6 +22,7 @@ const LOCAL_SPECS = [
   'connect.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',
+  'idle-session-lock.spec.ts',
   'onboard-providers.spec.ts',
   'password-envelope-local.spec.ts',
   'shell-height.spec.ts',
@@ -77,11 +81,15 @@ export default defineConfig({
     env: usePreviewServer
       ? {
           VITE_E2E_EXPOSE_VAULT: 'true',
+          VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
+          VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
           NOOK_E2E_SYNC_PROVIDER:
             process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github',
         }
       : {
           VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
+          VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
+          VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
           NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
           VITE_E2E_EXPOSE_VAULT: 'true',
           NOOK_E2E_SYNC_PROVIDER:

@@ -15,8 +15,14 @@ mod conversion;
 mod manager;
 mod storage;
 mod sync_io;
+mod types;
 
 pub use manager::NookVaultManager;
+pub use types::{
+    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
+    NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult, NookSecretFormFields,
+    NookVaultMember, NookVaultSyncResult,
+};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(thiserror::Error, Debug)]
@@ -89,35 +95,142 @@ pub fn read_vault_version(yaml: &str) -> u64 {
 }
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookSecretRecord {
-    id: String,
-    secret_type: String,
-    data: String,
+    record: nook_core::SecretRecord,
 }
 
 #[wasm_bindgen]
 impl NookSecretRecord {
-    #[wasm_bindgen(constructor)]
-    pub fn new(id: String, secret_type: String, data: String) -> Self {
-        Self {
-            id,
-            secret_type,
-            data,
-        }
+    pub(crate) fn from_record(record: nook_core::SecretRecord) -> Self {
+        Self { record }
     }
 
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> String {
-        self.id.clone()
+        self.record.id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
     pub fn secret_type(&self) -> String {
-        self.secret_type.clone()
+        self.record.secret_type.as_str().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = displayTitle)]
+    pub fn display_title(&self) -> String {
+        self.record.display_title()
+    }
+
+    #[wasm_bindgen(getter, js_name = groupKey)]
+    pub fn group_key(&self) -> String {
+        self.record.group_key()
+    }
+
+    #[wasm_bindgen(getter, js_name = summary)]
+    pub fn summary(&self) -> String {
+        self.record.summary()
+    }
+
+    #[wasm_bindgen(js_name = matchesSearch)]
+    pub fn matches_search(&self, query: &str) -> bool {
+        self.record.matches_search(query)
+    }
+
+    #[wasm_bindgen(getter, js_name = primaryCredential)]
+    pub fn primary_credential(&self) -> String {
+        self.record.primary_credential().to_owned()
+    }
+
+    #[wasm_bindgen(getter, js_name = websiteUrl)]
+    pub fn website_url(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Login(value) => value.website_url.clone(),
+            nook_core::SecretValue::ApiKey(value) => value.website_url.clone(),
+            _ => String::new(),
+        }
     }
 
     #[wasm_bindgen(getter)]
-    pub fn data(&self) -> String {
-        self.data.clone()
+    pub fn username(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Login(value) => value.username.clone(),
+            _ => String::new(),
+        }
     }
+
+    #[wasm_bindgen(getter)]
+    pub fn password(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Login(value) => value.password.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn notes(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::Login(value) => value.notes.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = key)]
+    pub fn api_key(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::ApiKey(value) => value.key.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = expiresAt)]
+    pub fn expires_at(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::ApiKey(value) => value.expires_at.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::SeedPhrase(value) => value.name.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn seed(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::SeedPhrase(value) => value.seed.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn title(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::SecureNote(value) => value.title.clone(),
+            _ => String::new(),
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn note(&self) -> String {
+        match &self.record.data {
+            nook_core::SecretValue::SecureNote(value) => value.note.clone(),
+            _ => String::new(),
+        }
+    }
+}
+
+/// Serialize validated form fields into the YAML payload expected by `add_secret`.
+#[wasm_bindgen(js_name = buildSecretYaml)]
+pub fn build_secret_yaml(
+    secret_type: &str,
+    fields: &NookSecretFormFields,
+) -> Result<String, wasm_bindgen::JsError> {
+    let parsed = nook_core::SecretType::parse(secret_type).map_err(NookError::Database)?;
+    nook_core::build_secret_yaml(parsed, &fields.to_json_value())
+        .map_err(NookError::Database)
+        .map_err(Into::into)
 }

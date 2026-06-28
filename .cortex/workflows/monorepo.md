@@ -23,3 +23,16 @@ nook-core → nook-wasm → nook-web
 Do not make `nook-core` depend on wasm, browser, Svelte, or Bun concepts.
 
 Use Bun for JavaScript tooling and run project commands through Taskfile/Docker. Do not introduce npm command flows or npm lockfiles.
+
+## New vault item type checklist
+
+Portable work belongs in `nook-core` first so web, mobile, and CLI can share it:
+
+1. `nook-core/src/secret_types.rs` — enum variant + payload struct + `SecretValue` parse/serialize.
+2. `nook-core/src/secret_view.rs` — list/search/build helpers (`display_title`, `group_key`, `build_secret_yaml`, …).
+3. `nook-wasm` — expose fields on `NookSecretRecord`; extend `records_to_array` if needed.
+4. `nook-core` tests — payload round-trips and validation (no TS mirror tests).
+5. `nook-web` — form + detail UI only; use `buildSecretYaml` and wasm getters, not duplicated TS schemas.
+6. Playwright — user flow coverage when the type is exposed in the vault UI.
+
+See [references/rust-wasm.md](../references/rust-wasm.md) §4 for the boundary pattern.

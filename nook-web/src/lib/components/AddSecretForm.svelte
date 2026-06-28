@@ -13,10 +13,8 @@
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import {
-    createVaultItemRecord,
-    vaultItemDataYaml,
-    type VaultItem,
-    type VaultItemInput,
+    buildSecretYaml,
+    type NookSecretRecord,
     type VaultItemType,
   } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
@@ -53,7 +51,7 @@
       symbols: boolean,
     ) => string
     onCancel: () => void
-    initialItem?: VaultItem | null
+    initialItem?: NookSecretRecord | null
     selectedType?: VaultItemType | null
   } = $props()
 
@@ -105,7 +103,7 @@
   $effect(() => {
     const item = initialItem
     if (!item) return
-    selectedType = item.type
+    selectedType = item.type as VaultItemType
     if (item.type === 'login') {
       websiteUrl = item.websiteUrl
       username = item.username
@@ -124,10 +122,9 @@
     }
   })
 
-  function buildItem(): VaultItemInput {
+  function secretFields(): Record<string, string> {
     if (selectedType === 'login') {
       return {
-        type: 'login',
         websiteUrl: websiteUrl.trim(),
         username: username.trim(),
         password,
@@ -136,7 +133,6 @@
     }
     if (selectedType === 'api-key') {
       return {
-        type: 'api-key',
         websiteUrl: websiteUrl.trim(),
         key: apiKey,
         expiresAt,
@@ -144,13 +140,11 @@
     }
     if (selectedType === 'seed-phrase') {
       return {
-        type: 'seed-phrase',
         name: accountName.trim(),
         seed: seedPhrase.trim(),
       }
     }
     return {
-      type: 'secure-note',
       title: noteTitle.trim(),
       note: noteBody,
     }
@@ -181,19 +175,20 @@
     e.preventDefault()
     if (!selectedType) return
 
-    const item = buildItem()
     if (selectedType === 'secure-note' && !noteBody.trim()) return
     if (selectedType === 'seed-phrase' && !seedPhraseValid) return
 
+    const dataYaml = buildSecretYaml(selectedType, secretFields())
+
     if (isEditMode && initialItem && onReplaceSecret) {
-      await onReplaceSecret(
-        initialItem.id,
-        selectedType,
-        vaultItemDataYaml(item),
-      )
+      await onReplaceSecret(initialItem.id, selectedType, dataYaml)
     } else {
-      const record = createVaultItemRecord(item)
-      await onAddSecret(record.id, record.type, record.data)
+      const manager = vault.manager
+      if (!manager) {
+        throw new Error('Vault engine is not available.')
+      }
+      const id = manager.generate_secret_id()
+      await onAddSecret(id, selectedType, dataYaml)
     }
     resetForm()
     onCancel()

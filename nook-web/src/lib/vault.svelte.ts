@@ -1,14 +1,10 @@
 import {
   generateId,
-  generateSecretId,
   getVaultManager,
   isoTimestamp,
-  mapVaultSyncResult,
-  mapWasmRecords,
-  mapWasmJoinRequests,
-  mapWasmVaultMembers,
   type JoinRequest,
-  type SecretRecord,
+  type NookSecretRecord,
+  type NookVaultSyncResult,
   type VaultItemType,
   type VaultMember,
 } from '$lib/nook'
@@ -20,14 +16,8 @@ import {
   type EnrollmentProvider,
 } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
-import type {
-  NookVaultManager,
-  NookSecretRecord,
-} from '$lib/nook-wasm/nook_wasm'
-import {
-  mapWasmPasswordEntries,
-  type VaultPasswordEntrySummary,
-} from '$lib/vault-password'
+import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
+import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_VAULT_FILE,
@@ -81,6 +71,12 @@ import {
   type PendingSyncConflict,
   type ReconcileVaultResult,
 } from '$lib/vault-sync'
+import {
+  createVaultIdleSessionTracker,
+  resolveVaultIdleTimeoutMs,
+  resolveVaultIdleWarningMs,
+  type VaultIdleSessionTracker,
+} from '$lib/vault-idle-session'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -109,7 +105,9 @@ export class VaultState {
 
   manager = $state<NookVaultManager | null>(null)
   isAuthenticated = $state(false)
-  secrets = $state<SecretRecord[]>([])
+  /** True when the login gate should explain that the last lock was due to idle timeout. */
+  sessionExpiredByIdle = $state(false)
+  secrets = $state<NookSecretRecord[]>([])
 
   errorMsg = $state('')
   successMsg = $state('')
@@ -188,6 +186,7 @@ export class VaultState {
   }
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
+  private idleSessionTracker: VaultIdleSessionTracker | null = null
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private initPromise: Promise<void> | null = null
   private storageChain: Promise<unknown> = Promise.resolve()
@@ -773,7 +772,7 @@ export class VaultState {
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.connect('local', '', ''),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       this.localVaultPresent = true
       this.localLoginPrepared = true
@@ -814,7 +813,7 @@ export class VaultState {
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.connect('local', '', ''),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       await this.addVaultPassword(
         this.t('login.master_password_label'),
@@ -971,7 +970,7 @@ export class VaultState {
       const raw = await this.enqueueStorage(() =>
         this.manager!.fetchVaultPasswordEntries(...this.wasmStorageArgs()),
       )
-      this.passwordEntries = mapWasmPasswordEntries(raw)
+      this.passwordEntries = raw
       this.loginUnlockMode = 'keys'
       if (this.passwordEntries.length === 1 && !this.selectedPasswordEntryId) {
         this.selectedPasswordEntryId = this.passwordEntries[0]!.id
@@ -1090,12 +1089,46 @@ export class VaultState {
     this.loginPasswordPrompt = false
   }
 
+  private ensureIdleSessionTracker() {
+    if (this.idleSessionTracker) return
+    this.idleSessionTracker = createVaultIdleSessionTracker({
+      timeoutMs: resolveVaultIdleTimeoutMs(import.meta.env),
+      warningMs: resolveVaultIdleWarningMs(import.meta.env),
+      onExpire: () => this.lockVaultDueToIdle(),
+      onWarning: () => this.showIdleLockWarning(),
+    })
+  }
+
+  startIdleSessionTracking() {
+    if (!this.isAuthenticated) return
+    this.ensureIdleSessionTracker()
+    this.idleSessionTracker!.start()
+  }
+
+  stopIdleSessionTracking() {
+    this.idleSessionTracker?.stop()
+  }
+
+  private showIdleLockWarning() {
+    if (!this.isAuthenticated) return
+    this.showSuccess(this.t('session.idle_warning'))
+  }
+
+  private lockVaultDueToIdle() {
+    if (!this.isAuthenticated) return
+    this.sessionExpiredByIdle = true
+    this.lockVault()
+  }
+
   private markVaultUnlocked() {
     setVaultSessionLocked(false)
     this.isAuthenticated = true
+    this.sessionExpiredByIdle = false
+    this.startIdleSessionTracking()
   }
 
   private clearUnlockedSession() {
+    this.stopIdleSessionTracking()
     this.stopVaultSync()
     this.isAuthenticated = false
     this.secrets = []
@@ -1255,16 +1288,18 @@ export class VaultState {
     }
   }
 
-  private applyVaultSyncResult(result: ReturnType<typeof mapVaultSyncResult>) {
+  private applyVaultSyncResult(result: NookVaultSyncResult) {
     if (this.isAuthenticated) {
-      if (result.secrets) {
+      const unchanged =
+        !result.changed &&
+        !result.accessStatus &&
+        result.secrets.length === 0 &&
+        result.pendingJoins.length === 0 &&
+        result.vaultMembers.length === 0
+      if (!unchanged) {
         this.secrets = result.secrets
-      }
-      if (result.pending_joins !== undefined) {
-        this.pendingJoins = result.pending_joins
-      }
-      if (result.vault_members !== undefined) {
-        this.vaultMembers = result.vault_members
+        this.pendingJoins = result.pendingJoins
+        this.vaultMembers = result.vaultMembers
       }
       return
     }
@@ -1272,13 +1307,13 @@ export class VaultState {
     if (!result.changed) return
 
     if (
-      result.access_status === 'ready' &&
+      result.accessStatus === 'ready' &&
       this.joinEnrollmentPrompt === 'pending'
     ) {
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess(this.t('toasts.device_approved'))
     } else if (
-      result.access_status === 'join_pending' &&
+      result.accessStatus === 'join_pending' &&
       this.joinEnrollmentPrompt === 'none'
     ) {
       this.joinEnrollmentPrompt = 'pending'
@@ -1305,8 +1340,8 @@ export class VaultState {
           unlockMode: this.manager!.vaultUnlockMode(),
         }
       })
-      this.pendingJoins = mapWasmJoinRequests(snapshot.pendingJoins)
-      this.vaultMembers = mapWasmVaultMembers(snapshot.vaultMembers)
+      this.pendingJoins = snapshot.pendingJoins
+      this.vaultMembers = snapshot.vaultMembers
       this.unlockMode = 'keys'
       await this.refreshPasswordEntriesList()
     } catch {
@@ -1344,7 +1379,7 @@ export class VaultState {
       const raw = await this.enqueueStorage(() =>
         this.manager!.sync_vault_from_storage(...this.wasmStorageArgs()),
       )
-      this.applyVaultSyncResult(mapVaultSyncResult(raw))
+      this.applyVaultSyncResult(raw)
       this.lastSyncedAt = new SvelteDate()
     } catch {
       // Background sync should not interrupt the UI.
@@ -1773,7 +1808,7 @@ export class VaultState {
     const raw = await this.enqueueStorage(() =>
       this.manager!.sync_vault_from_storage('local', '', ''),
     )
-    this.applyVaultSyncResult(mapVaultSyncResult(raw))
+    this.applyVaultSyncResult(raw)
     this.refreshSecretsFromSession()
     void this.hydrateMultiDeviceState()
   }
@@ -1828,6 +1863,7 @@ export class VaultState {
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
   lockVault() {
     this.helpOpen = false
+    this.stopIdleSessionTracking()
     setVaultSessionLocked(true)
     this.clearUnlockedSession()
   }
@@ -1841,9 +1877,9 @@ export class VaultState {
     this.helpOpen = false
   }
 
-  filterSecrets(query: string): SecretRecord[] {
+  filterSecrets(query: string): NookSecretRecord[] {
     if (!this.manager) return []
-    return mapWasmRecords(this.manager.filter_secrets(query))
+    return this.manager.filter_secrets(query)
   }
 
   private refreshSecretsFromSession() {
@@ -1889,7 +1925,7 @@ export class VaultState {
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.approve_join_request(joinDeviceId),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       await this.hydrateMultiDeviceState()
       this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(this.t('toasts.device_approved_success'))
@@ -1910,7 +1946,7 @@ export class VaultState {
       const rawRecords = (await this.enqueueStorage(() =>
         this.manager!.deny_join_request(joinDeviceId),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       await this.hydrateMultiDeviceState()
       this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(this.t('toasts.join_denied'))
@@ -1950,8 +1986,7 @@ export class VaultState {
   async revokeDevice(authId: string) {
     if (!this.manager) return
     const isSelf = this.vaultMembers.some(
-      (member) =>
-        member.auth_id === authId && member.device_id === this.deviceId,
+      (member) => member.authId === authId && member.deviceId === this.deviceId,
     )
     this.errorMsg = ''
     this.dismissSuccess()
@@ -1965,7 +2000,7 @@ export class VaultState {
         this.showSuccess(this.t('toasts.device_removed'))
         return
       }
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       await this.hydrateMultiDeviceState()
       this.scheduleFanOutSyncAfterLocalSave()
       this.showSuccess(this.t('toasts.device_revoked'))
@@ -2005,7 +2040,7 @@ export class VaultState {
           timeoutPromise,
         ])) as NookSecretRecord[]
       })
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       await this.ensureProviderSaved()
       await this.hydrateMultiDeviceState()
@@ -2037,7 +2072,7 @@ export class VaultState {
           membersKey,
         ),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       this.enrollSecretsKey = ''
       this.enrollMembersKey = ''
@@ -2172,7 +2207,7 @@ export class VaultState {
           timeoutPromise,
         ])) as NookSecretRecord[]
       })
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       this.syncOAuthRemoteRefFromManager()
       await this.ensureProviderSaved()
@@ -2449,7 +2484,7 @@ export class VaultState {
           password,
         ),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       await this.ensureProviderSaved()
       await this.loadProviders()
@@ -2548,7 +2583,7 @@ export class VaultState {
           unlockPassword,
         ),
       )) as NookSecretRecord[]
-      this.secrets = mapWasmRecords(rawRecords)
+      this.secrets = rawRecords
       this.markVaultUnlocked()
       await this.ensureProviderSaved()
       await this.loadProviders()
@@ -2590,7 +2625,7 @@ export class VaultState {
           type,
           data,
         )) as NookSecretRecord[]
-        this.secrets = mapWasmRecords(rawRecords)
+        this.secrets = rawRecords
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_saved'))
@@ -2620,7 +2655,7 @@ export class VaultState {
         const rawRecords = (await this.manager!.delete_secret(
           id,
         )) as NookSecretRecord[]
-        this.secrets = mapWasmRecords(rawRecords)
+        this.secrets = rawRecords
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_deleted'))
@@ -2646,7 +2681,7 @@ export class VaultState {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
-      const newId = generateSecretId()
+      const newId = this.manager!.generate_secret_id()
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.replace_secret(
           oldId,
@@ -2654,7 +2689,7 @@ export class VaultState {
           type,
           data,
         )) as NookSecretRecord[]
-        this.secrets = mapWasmRecords(rawRecords)
+        this.secrets = rawRecords
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.item_updated'))

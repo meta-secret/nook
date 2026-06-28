@@ -3,17 +3,18 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::conversion::records_to_array;
+use crate::NookSecretRecord;
+use crate::conversion::records_to_vec;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    pub fn filter_secrets(&self, query: &str) -> Result<js_sys::Array, JsError> {
+    pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
         let db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
         let filtered = nook_core::filter_secrets(&db.list(), query);
-        records_to_array(filtered).map_err(Into::into)
+        records_to_vec(filtered).map_err(Into::into)
     }
 
     /// Cryptographically secure password generation (same rules as the vault UI).
@@ -67,7 +68,7 @@ impl NookVaultManager {
         id: String,
         secret_type: String,
         data: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
         let id = nook_core::validate_secret_id(&id).map_err(NookError::Database)?;
         nook_core::validate_secret_data(&data).map_err(NookError::Database)?;
@@ -92,7 +93,7 @@ impl NookVaultManager {
 
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     // Replace a secret (new id + payload, single save)
@@ -102,7 +103,7 @@ impl NookVaultManager {
         new_id: String,
         secret_type: String,
         data: String,
-    ) -> Result<js_sys::Array, JsError> {
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("REPLACE_SECRET_START".to_owned());
         let secret_type =
             nook_core::SecretType::parse(&secret_type).map_err(NookError::Database)?;
@@ -129,11 +130,11 @@ impl NookVaultManager {
 
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
 
     // Delete a secret
-    pub async fn delete_secret(&mut self, id: String) -> Result<js_sys::Array, JsError> {
+    pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
         let id = nook_core::validate_secret_id(&id).map_err(NookError::Database)?;
         let mut db =
@@ -145,8 +146,6 @@ impl NookVaultManager {
         self.secret_types.remove(&id);
         self.save_current_db().await?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records_as_array()?)
+        Ok(self.get_records()?)
     }
-
-    // Helper: list secrets as array of NookSecretRecord
 }

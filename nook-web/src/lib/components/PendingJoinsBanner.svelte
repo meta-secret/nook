@@ -79,18 +79,18 @@
     </div>
 
     <ul class="mt-3 space-y-2" data-testid="pending-joins-list">
-      {#each pendingJoins as join (join.device_id)}
+      {#each pendingJoins as join (join.deviceId)}
         <li
           class="flex items-center justify-between gap-3 rounded-md border border-border bg-background/70 px-3 py-2.5"
           data-testid="device-join-row"
         >
           <div class="min-w-0">
-            <p class="font-mono text-xs text-foreground">{join.device_id}</p>
+            <p class="font-mono text-xs text-foreground">{join.deviceId}</p>
             <p
               class="truncate text-[11px] text-muted-foreground"
-              title={join.public_key}
+              title={join.publicKey}
             >
-              {truncate(join.public_key, 10, 8)}
+              {truncate(join.publicKey, 10, 8)}
             </p>
           </div>
           <Button
@@ -98,7 +98,7 @@
             size="sm"
             disabled={isBusy}
             data-testid="approve-join-btn"
-            onclick={() => void onApproveJoin(join.device_id)}
+            onclick={() => void onApproveJoin(join.deviceId)}
           >
             {vault.t('settings.approve')}
           </Button>

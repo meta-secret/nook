@@ -7,12 +7,12 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::NookVaultSyncResult;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
     sync_result_session, sync_result_unchanged,
 };
 use wasm_bindgen::JsError;
-use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -22,7 +22,7 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-    ) -> Result<JsValue, JsError> {
+    ) -> Result<NookVaultSyncResult, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let mut vault_file_missing = false;

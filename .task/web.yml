@@ -104,6 +104,8 @@ tasks:
         vars:
           TASK: _web:e2e:build-dist
           VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+          VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+          VITE_VAULT_IDLE_WARNING_MS: '0'
 
   web:e2e:restore-prod-dist:
     desc: Restore production dist after e2e (Docker-owned files cannot be rm'd on the host).
@@ -216,6 +218,8 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
       VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
       - cd nook-web && bun run build
 
@@ -246,6 +250,8 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
       VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
       - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:sync-stub
@@ -257,6 +263,8 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
       VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
       - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:sync-live
@@ -277,6 +285,8 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
       VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
       - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:local

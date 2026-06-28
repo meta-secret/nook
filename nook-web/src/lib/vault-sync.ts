@@ -99,11 +99,7 @@ export async function fetchRemoteVaultBlob(
   githubPat: string,
   githubRepo: string,
 ): Promise<RemoteVaultFetch> {
-  const raw = (await fetchRemoteVaultYaml(
-    storageMode,
-    githubPat,
-    githubRepo,
-  )) as RemoteVaultFetch
+  const raw = await fetchRemoteVaultYaml(storageMode, githubPat, githubRepo)
   return {
     content: raw.content ?? '',
     revision: raw.revision ?? null,
@@ -119,32 +115,19 @@ export async function compareVaultBlobs(
   return compareVaultSync(local, remote) as VaultSyncAction
 }
 
-function parseReconcileResult(
-  raw: Record<string, unknown>,
-): ReconcileVaultResult {
-  return {
-    action: String(raw.action) as VaultSyncAction,
-    localYaml: String(raw.localYaml ?? ''),
-    remoteYaml: String(raw.remoteYaml ?? ''),
-    remoteRevision:
-      raw.remoteRevision === undefined || raw.remoteRevision === null
-        ? null
-        : String(raw.remoteRevision),
-  }
-}
-
 /** Compare and apply sync rules in WASM; returns blobs to persist via I/O helpers. */
 export function reconcileVaultSyncBlobs(
   localYaml: string,
   remoteYaml: string,
   remoteRevision: string | null,
 ): ReconcileVaultResult {
-  return parseReconcileResult(
-    reconcileVaultBlobs(localYaml, remoteYaml, remoteRevision) as Record<
-      string,
-      unknown
-    >,
-  )
+  const raw = reconcileVaultBlobs(localYaml, remoteYaml, remoteRevision)
+  return {
+    action: raw.action as VaultSyncAction,
+    localYaml: raw.localYaml,
+    remoteYaml: raw.remoteYaml,
+    remoteRevision: raw.remoteRevision ?? null,
+  }
 }
 
 export function resolveVaultSyncConflictKeepLocal(
@@ -152,12 +135,8 @@ export function resolveVaultSyncConflictKeepLocal(
   remoteYaml: string,
   remoteRevision: string | null,
 ): string {
-  const raw = resolveVaultConflictKeepLocal(
-    localYaml,
-    remoteYaml,
-    remoteRevision,
-  ) as { remoteYaml: string }
-  return raw.remoteYaml
+  return resolveVaultConflictKeepLocal(localYaml, remoteYaml, remoteRevision)
+    .remoteYaml
 }
 
 export function resolveVaultSyncConflictKeepRemote(
@@ -165,12 +144,8 @@ export function resolveVaultSyncConflictKeepRemote(
   remoteYaml: string,
   remoteRevision: string | null,
 ): string {
-  const raw = resolveVaultConflictKeepRemote(
-    localYaml,
-    remoteYaml,
-    remoteRevision,
-  ) as { localYaml: string }
-  return raw.localYaml
+  return resolveVaultConflictKeepRemote(localYaml, remoteYaml, remoteRevision)
+    .localYaml
 }
 
 export async function writeLocalVaultBlob(content: string): Promise<void> {

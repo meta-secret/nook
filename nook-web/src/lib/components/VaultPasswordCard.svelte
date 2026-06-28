@@ -285,10 +285,10 @@
                 <p class="truncate text-sm font-medium text-foreground">
                   {entry.label}
                 </p>
-                {#if entry.created_at}
+                {#if entry.createdAt}
                   <p class="text-xs text-muted-foreground">
                     {vault.t('vault_passwords.added_date', {
-                      date: entry.created_at.slice(0, 10),
+                      date: entry.createdAt.slice(0, 10),
                     })}
                   </p>
                 {/if}
