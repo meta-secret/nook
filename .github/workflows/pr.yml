@@ -1,7 +1,7 @@
-# Pull requests: build toolchain once, verify ‖ web build, local Playwright e2e, deploy preview.
+# Pull requests: build toolchain once, verify ‖ web build, e2e-pr, deploy preview.
 #
-# Local e2e (~1 min) runs in ci:pr — IndexedDB specs, no external API rate limits.
-# Main CI adds sync-stub e2e; nightly runs sync-live. See e2e-pr.yml for manual PR e2e.
+# Fast e2e-pr (~1 min) runs in ci:pr — IndexedDB specs only.
+# Main CI runs full stub e2e; nightly runs sync-live. See e2e-pr.yml for manual PR e2e.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR

@@ -51,7 +51,7 @@ This document defines the strict development standards, architectural boundaries
 ## 4. Testing Requirements
 
 - **Vault domain logic:** Add or update tests in `nook-core` (`task rust:test` / `cargo nextest run -p nook-core --profile ci`). Prefer module unit tests; use `tests/vault_workflow.rs` for end-to-end vault save paths.
-- **UI / integration:** Playwright e2e in `nook-web/e2e/` — `task web:test:e2e:local` and `task web:test:e2e:sync-stub` on every merge (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
+- **UI / integration:** Playwright e2e in `nook-web/e2e/` — `task web:test:e2e:pr` on PR CI, `task web:test:e2e` on main (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
 - **Do not** re-implement vault rules in TypeScript for testing — if TS needs behavior, expose it from WASM/core first.
 
 ---

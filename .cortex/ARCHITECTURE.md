@@ -142,7 +142,7 @@ members:  members_key-encrypted catalog entries
 | Package | Tests |
 |---------|-------|
 | `nook-core` | `task rust:test` — unit + integration (`tests/vault_workflow.rs`) |
-| `nook-web` | Playwright e2e: `task web:test:e2e:local` (IndexedDB), `task web:test:e2e:sync-stub` (stub sync, no PAT), `task web:test:e2e:sync-live` (real GitHub, nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
+| `nook-web` | Playwright e2e: `task web:test:e2e:pr` (PR), `task web:test:e2e` (main stub suite), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
 
 Domain logic changes **must** add or update Rust tests before merge.

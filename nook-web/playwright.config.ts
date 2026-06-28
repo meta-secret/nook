@@ -18,8 +18,8 @@ const isCi = !!process.env.CI
 const distDir = path.join(rootDir, 'dist')
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; stubs are per-page. */
 
-/** IndexedDB-only specs — no sync provider HTTP. */
-const LOCAL_SPECS = [
+/** IndexedDB-only specs — PR CI subset (~1 min). */
+const PR_SPECS = [
   'connect.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',
@@ -33,7 +33,7 @@ const LOCAL_SPECS = [
   'legal-pages.spec.ts',
 ] as const
 
-/** Sync provider flows via in-memory GitHub REST stubs (unlimited isolated repos). */
+/** Sync provider flows via in-memory REST stubs (unlimited isolated repos). */
 const SYNC_STUB_SPECS = [
   'sync-fanout.spec.ts',
   'multi-device-local.spec.ts',
@@ -44,6 +44,9 @@ const SYNC_STUB_SPECS = [
   'provider-switch-passwords.spec.ts',
   'remote-vault-recovery-sync.spec.ts',
 ] as const
+
+/** All stub-backed e2e — main CI and local full runs. */
+const E2E_SPECS = [...PR_SPECS, ...SYNC_STUB_SPECS] as const
 
 /** Real sync provider API — nightly / manual only. */
 const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
@@ -99,13 +102,13 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'local',
-      testMatch: specPaths(LOCAL_SPECS),
+      name: 'e2e',
+      testMatch: specPaths(E2E_SPECS),
       fullyParallel: true,
     },
     {
-      name: 'sync-stub',
-      testMatch: specPaths(SYNC_STUB_SPECS),
+      name: 'e2e-pr',
+      testMatch: specPaths(PR_SPECS),
       fullyParallel: true,
     },
     {

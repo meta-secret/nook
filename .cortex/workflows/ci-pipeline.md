@@ -7,9 +7,9 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | Workflow | Trigger | What runs | GitHub PAT |
 |----------|---------|-----------|------------|
 | [`pr.yml`](../../.github/workflows/pr.yml) | PR open/sync | Format, verify, web build, Cloudflare preview | No |
-| [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Verify, build, **local + sync-stub e2e**, Pages deploy, push toolchain | No |
+| [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Verify, build, **full stub e2e**, Pages deploy, push toolchain | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today) | Yes (`NOOK_GITHUB_PAT`) |
-| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch (local / sync-stub / sync-live) | Only for `sync-live` |
+| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`) | Only for `sync-live` |
 
 ```mermaid
 flowchart LR
@@ -18,7 +18,7 @@ flowchart LR
 
   merge[Squash merge to main] --> main_yml[main.yml]
   main_yml --> verify[Verify + build]
-  main_yml --> e2e_stub[local ‖ sync-stub e2e]
+  main_yml --> e2e_stub[stub e2e — one container]
   main_yml --> pages[GitHub Pages deploy]
 
   cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
@@ -39,7 +39,7 @@ Registry and factories live in `nook-web/e2e/sync-provider.ts`:
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
 - **`live/sync.smoke.spec.ts`** — one nightly smoke per matrix row
 
-**Main CI (`sync-stub`):** defaults to `github`; add a parallel job with `NOOK_E2E_SYNC_PROVIDER=google-drive` when Drive UI connect is wired.
+**Main CI (`e2e`):** defaults to `github` stub provider; add a matrix row with `NOOK_E2E_SYNC_PROVIDER=google-drive` when Drive UI connect is wired.
 
 **Nightly (`sync-live`):** matrix in `e2e-nightly.yml`:
 
@@ -60,20 +60,21 @@ Live credentials per provider:
 
 Stub mode uses in-memory route mocks (`sync-stub.ts`, `drive-stub.ts`) — no API quota.
 
-## Why sync-stub vs sync-live
+## Why stub e2e vs sync-live
 
-GitHub REST API calls are slow and brittle at CI scale. Nook therefore:
+Real provider API calls are slow and brittle at CI scale. Nook therefore:
 
-1. **`sync-stub` project** — Playwright `page.route()` intercepts `api.github.com` with an **in-memory vault stub** (`e2e/sync-stub.ts`, `createLocalE2eGithubVaultStub`). Each suite gets a unique fake repo name; no API calls, no cleanup, unlimited parallelism as tests grow.
-2. **`sync-live` project** — Specs under `e2e/live/` hit the **real GitHub API** using `NOOK_GITHUB_PAT`. Minimal smoke coverage; runs **once per day** on the schedule (and manually via workflow dispatch).
+1. **`e2e` project** — all stub-backed specs (IndexedDB flows + sync via `page.route()` mocks). One Playwright process, fully parallel, one preview server.
+2. **`e2e-pr` project** — subset of `e2e` (IndexedDB-only specs) for fast PR CI (~1 min).
+3. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; nightly + manual only.
 
-When adding Google Drive or other sync providers, add stub-backed specs to `sync-stub` and thin live smoke specs to `e2e/live/`.
+When adding Google Drive or other sync providers, add stub-backed specs to the `e2e` list and thin live smoke specs to `e2e/live/`.
 
 ## Parallelism and isolation
 
 Do **not** set `workers` in `playwright.config.ts` — use Playwright defaults locally and override with `--workers=N` when you want more parallelism than the default. Spec files that need ordering use `test.describe.configure({ mode: 'serial' })` within the file only.
 
-`sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. Stub projects (`local`, `sync-stub`) use `fullyParallel: true`.
+`sync-live` keeps `fullyParallel: false` because CI assigns one `NOOK_GITHUB_E2E_REPO` per container; parallel live files would share that remote. Stub projects (`e2e`, `e2e-pr`) use `fullyParallel: true`.
 
 **One web server per Playwright process is enough.** CI serves static `dist/` via `vite preview`; workers share that HTTP endpoint. Isolation is at the browser layer:
 
@@ -89,9 +90,11 @@ Defined in `nook-web/playwright.config.ts`:
 
 | Project | Specs | CI |
 |---------|-------|-----|
-| `local` | IndexedDB-only flows (vault CRUD, login, legal, …) | main, e2e-pr |
-| `sync-stub` | Sync provider flows via route stubs (`sync-vault`, multi-device, fan-out, …) | main, e2e-pr |
+| `e2e` | All stub-backed specs (IndexedDB + sync stubs) | main, e2e-pr (manual) |
+| `e2e-pr` | IndexedDB-only subset (~1 min) | pr.yml |
 | `sync-live` | `e2e/live/**/*.spec.ts` | e2e-nightly, e2e-pr (manual) |
+
+Legacy script aliases: `test:e2e:local` → `e2e-pr`, `test:e2e:sync-stub` → `e2e`.
 
 ## Task commands (Docker)
 
@@ -102,14 +105,14 @@ All commands run containerized via `Taskfile.yml`:
 task check                          # format, clippy, unit tests, web build
 
 # Full PR CI mirror (~3–4 min) — before opening PR; mandatory after any remote CI failure
-task ci:pr                          # prepare → verify ‖ build → local Playwright e2e
+task ci:pr                          # prepare → verify ‖ build → e2e-pr
 
 # Subsets
-task web:test:e2e:local             # local project only
-task web:test:e2e:sync-stub         # stub sync (no PAT)
+task web:test:e2e:pr                # e2e-pr only (PR gate)
+task web:test:e2e                   # full stub e2e (main gate)
 
 # Main CI equivalent
-task ci:main:e2e:parallel           # local ‖ sync-stub in parallel containers
+task ci:main:e2e                    # one container, full e2e project
 
 # Nightly / live GitHub (needs NOOK_GITHUB_PAT in env or .env.test.local)
 task web:test:e2e:sync-live
@@ -126,7 +129,7 @@ PR GitHub Actions runs `task ci:pr:publish` (toolchain build, verify, web build,
 **Agent efficiency rule:**
 
 1. **Before every push** — at least `task check` (format check, lint, unit tests, build).
-2. **Before opening a PR** — `task ci:pr` (matches PR gates including local Playwright e2e).
+2. **Before opening a PR** — `task ci:pr` (matches PR gates including e2e-pr).
 3. **After any remote CI failure** — `task ci:pr` before the next push; do not retry remote CI hoping for a different result.
 
 Local `task ci:pr` completes in roughly **3–4 minutes** on a warm toolchain image and avoids repeated remote failures for the same trivial issue. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push).
@@ -147,9 +150,9 @@ Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` wi
 ## Agent checklist when touching CI or e2e
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
-2. **Do** add new sync-provider integration tests to `sync-stub` first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** run `task ci:pr` (or `task web:test:e2e:sync-stub` / `local` for narrower checks) before merge when changing web vault/sync flows.
+2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
+3. **Do** run `task ci:pr` (or `task web:test:e2e` for full stub suite) before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI stays fast: no e2e on `pr.yml`. Main carries stub e2e; nightly carries live.
+5. PR CI runs fast **e2e-pr** only; main runs full **e2e**; nightly runs **sync-live**.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).

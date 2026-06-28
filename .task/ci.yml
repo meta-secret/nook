@@ -2,20 +2,25 @@ version: '3'
 
 tasks:
   ci:pr:
-    desc: PR CI — prepare, verify ‖ build, then local Playwright e2e (~1 min).
+    desc: PR CI — prepare, verify ‖ build, then fast Playwright e2e-pr (~1 min).
     deps:
       - setup
     cmds:
       - task: ci:pr:prepare
       - task: ci:pr:parallel
-      - task: ci:pr:e2e:local
+      - task: ci:pr:e2e
 
-  ci:pr:e2e:local:
-    desc: Local Playwright e2e for PR CI (IndexedDB specs; restores dist for Cloudflare preview).
+  ci:pr:e2e:
+    desc: Fast Playwright e2e-pr for PR CI (IndexedDB specs; restores dist for Cloudflare preview).
     cmds:
       - cp -a nook-web/dist nook-web/dist-prod
-      - task: web:test:e2e:local:parallel
+      - task: web:test:e2e:pr:parallel
       - task: web:e2e:restore-prod-dist
+
+  ci:pr:e2e:local:
+    desc: Alias for ci:pr:e2e.
+    cmds:
+      - task: ci:pr:e2e
 
   ci:pr:publish:
     desc: PR CI verify, then push toolchain to GHCR on success (buildx registry push).
@@ -37,16 +42,20 @@ tasks:
       - task: ci:main:finish
 
   ci:main:finish:
-    desc: Verify ‖ web build ‖ e2e (local ‖ sync-stub) — each track in its own Docker container.
+    desc: Verify ‖ web build ‖ stub e2e — e2e runs in one Docker container.
     deps:
       - ci:main:parallel
-      - ci:main:e2e:parallel
+      - ci:main:e2e
+
+  ci:main:e2e:
+    desc: Full stub Playwright e2e in one container (no GitHub PAT).
+    deps:
+      - web:test:e2e:parallel
 
   ci:main:e2e:parallel:
-    desc: Playwright local and stub-sync projects in parallel (no GitHub PAT).
-    deps:
-      - web:test:e2e:local:parallel
-      - web:test:e2e:sync-stub:parallel
+    desc: Alias for ci:main:e2e.
+    cmds:
+      - task: ci:main:e2e
 
   ci:nightly:e2e:
     desc: Nightly live sync provider e2e (real APIs; requires provider credentials).

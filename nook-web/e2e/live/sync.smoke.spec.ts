@@ -25,7 +25,7 @@ const describeLive = hasLiveSyncCredential(providerId)
 
 /**
  * Nightly smoke: one real API round-trip per provider job.
- * CI sets `NOOK_E2E_SYNC_PROVIDER` per matrix row; stub coverage is sync-stub project.
+ * CI sets `NOOK_E2E_SYNC_PROVIDER` per matrix row; stub coverage is the e2e project.
  */
 describeLive(`live ${providerDef.label} sync smoke`, () => {
   test.describe.configure({ mode: 'serial' })
