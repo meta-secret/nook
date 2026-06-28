@@ -999,6 +999,19 @@ export async function seedExtraGithubProviders(
   }, extras)
 }
 
+/** Wait until the status bar reflects loaded sync providers. */
+export async function waitForLoadedSyncProviders(
+  page: Page,
+  minCount = 1,
+  timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
+) {
+  const pattern =
+    minCount === 1 ? /1 sync provider/ : new RegExp(`${minCount} sync providers`)
+  await expect(page.getByTestId('vault-sync-out-status')).toContainText(pattern, {
+    timeout: timeoutMs,
+  })
+}
+
 export async function addSecret(
   page: Page,
   key: string,

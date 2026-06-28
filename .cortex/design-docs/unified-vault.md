@@ -190,16 +190,35 @@ Migration runs once on `VaultState.init()` when detecting legacy provider-as-vau
 
 ---
 
-## 9. Implementation status
+## 9. Fan-out sync on mutation
+
+After any local vault save (secret CRUD, password change, device roster update — phased rollout), the web layer pushes to **all connected sync providers**:
+
+1. Read authoritative blob from `nook_db.encrypted_db` (`readLocalVaultYaml`).
+2. For each non-local provider in `nook_auth`: `compareVaultSync` → push/adopt/conflict.
+3. Background fan-out is **quiet** (no per-provider toast spam); status bar shows `Syncing to {provider}…`.
+
+Manual **Sync all** in the status bar runs the same reconcile loop with user-visible toasts.
+
+---
+
+## 10. Implementation status
 
 | Piece | Status |
 |-------|--------|
-| `vault_version` in YAML read/write | Implemented |
-| `compare_vault_sync` in `nook-core` | Implemented |
-| `compareVaultSync` WASM export | Implemented |
-| Version increment on save | Implemented |
-| Local-first connect path | Planned |
-| Sync provider model (replace vault selector) | Planned |
-| Conflict resolution UI | Planned |
-| Legacy multi-vault migration | Planned |
-| UI rollout | See [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md) |
+| `vault_version` in YAML read/write | Done (#61) |
+| `compare_vault_sync` in `nook-core` | Done (#61) |
+| `compareVaultSync` WASM export | Done (#61) |
+| Version increment on save | Done (#61) |
+| Local-first login gate | Done (#71, Phase 1) |
+| Sync providers in Settings | Done (#72, Phase 2) |
+| Session-independent sync I/O (`sync_io.rs`) | Done (#72) |
+| Conflict resolution UI | Done (#73, Phase 3) |
+| Fan-out sync after secret CRUD | Done (#74, Phase 4) |
+| Local-first status bar | Done (#74, Phase 4) |
+| Onboard / enrollment QR (local-first) | Planned (Phase 5, #66) |
+| Help page rewrite | Planned (Phase 6, #67) |
+| Join sync propagation | Planned (Phase 7, #68) |
+| Legacy multi-vault migration | Planned (Phase 8, #69) |
+
+UI rollout details: [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
