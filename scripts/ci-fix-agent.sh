@@ -19,10 +19,10 @@ FIX_BRANCH="${FIX_BRANCH:-fix/ci-${GITHUB_RUN_ID}}"
 export FIX_BRANCH GITHUB_RUN_ID GITHUB_REPOSITORY
 
 echo "==> Configuring gh and git (GH_TOKEN from environment)"
-gh auth setup-git
-
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git config user.name "github-actions[bot]"
+git config --global --add safe.directory "$REPO_ROOT"
+git config --global credential.helper '!gh auth git-credential'
+git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+git config --global user.name "github-actions[bot]"
 
 if existing_pr="$(gh pr list --head "$FIX_BRANCH" --state open --json number -q '.[0].number' 2>/dev/null || true)" \
   && [[ -n "$existing_pr" ]]; then
