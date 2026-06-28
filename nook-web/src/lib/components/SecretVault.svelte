@@ -13,18 +13,13 @@
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import {
-    parseVaultItem,
-    type SecretRecord,
-    type VaultItem,
-    type VaultItemType,
-  } from '$lib/nook'
+  import type { NookSecretRecord, VaultItemType } from '$lib/nook'
 
   let {
     vault,
     isSaving,
     syncBlocked = false,
-    secrets = [] as SecretRecord[],
+    secrets = [] as NookSecretRecord[],
     onAddSecret,
     onReplaceSecret,
     onDeleteSecret,
@@ -34,7 +29,7 @@
     vault: VaultState
     isSaving: boolean
     syncBlocked?: boolean
-    secrets?: SecretRecord[]
+    secrets?: NookSecretRecord[]
     onAddSecret: (
       id: string,
       type: VaultItemType,
@@ -63,37 +58,19 @@
   let addSecretOpen = $state(false)
   let formSelectedType = $state<VaultItemType | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let editItem = $state<VaultItem | null>(null)
+  let editItem = $state<NookSecretRecord | null>(null)
 
-  const items = $derived(secrets.map(parseVaultItem))
   const filteredItems = $derived.by(() => {
-    const needle = searchPattern.trim().toLowerCase()
-    if (!needle) return items
-    return items.filter((item) => itemMatchesSearch(item, needle))
+    const needle = searchPattern.trim()
+    if (!needle) return secrets
+    return secrets.filter((item) => item.matchesSearch(needle))
   })
 
   const visibleItemCount = $derived(
-    searchPattern.trim() ? filteredItems.length : items.length,
+    searchPattern.trim() ? filteredItems.length : secrets.length,
   )
 
-  function getSiteGroupKey(item: VaultItem): string {
-    if (item.type === 'seed-phrase') {
-      return item.name.trim() || 'Unnamed Seed Phrase'
-    }
-    if (item.type === 'secure-note') {
-      return item.title.trim() || 'Unnamed Note'
-    }
-    const url = item.websiteUrl.trim()
-    if (!url) return 'No Website'
-    try {
-      const parsed = new URL(url.startsWith('http') ? url : `https://${url}`)
-      return parsed.hostname.replace(/^www\./, '')
-    } catch {
-      return url
-    }
-  }
-
-  function getGroupIcon(items: VaultItem[]) {
+  function getGroupIcon(items: NookSecretRecord[]) {
     if (items.some((item) => item.type === 'login')) return Globe
     if (items.some((item) => item.type === 'api-key')) return Braces
     if (items.some((item) => item.type === 'seed-phrase')) return Sprout
@@ -101,9 +78,9 @@
   }
 
   const groups = $derived.by(() => {
-    const dict: Record<string, VaultItem[]> = {}
+    const dict: Record<string, NookSecretRecord[]> = {}
     for (const item of filteredItems) {
-      const key = getSiteGroupKey(item)
+      const key = item.groupKey
       if (!dict[key]) {
         dict[key] = []
       }
@@ -116,21 +93,6 @@
       }))
       .sort((a, b) => a.site.localeCompare(b.site))
   })
-
-  function itemMatchesSearch(item: VaultItem, needle: string): boolean {
-    const fields = [getSiteGroupKey(item)]
-    if (item.type === 'login') {
-      fields.push(item.websiteUrl.trim(), item.username.trim())
-    } else if (item.type === 'api-key') {
-      fields.push(item.websiteUrl.trim())
-      if (item.expiresAt) fields.push(item.expiresAt)
-    } else if (item.type === 'seed-phrase') {
-      fields.push(item.name.trim())
-    } else {
-      fields.push(item.title.trim())
-    }
-    return fields.some((field) => field.toLowerCase().includes(needle))
-  }
 
   function notifyAddMode() {
     onAddModeChange?.(addSecretOpen, formSelectedType)
@@ -149,7 +111,7 @@
     notifyAddMode()
   }
 
-  function openEditItem(item: VaultItem) {
+  function openEditItem(item: NookSecretRecord) {
     addSecretOpen = false
     editItem = item
     notifyAddMode()
@@ -239,10 +201,10 @@
       >
         <div>
           <p class="text-sm font-semibold text-foreground">
-            {searchPattern.trim() && visibleItemCount !== items.length
+            {searchPattern.trim() && visibleItemCount !== secrets.length
               ? vault.t('vault.secret_count_filtered', {
                   count: String(visibleItemCount),
-                  total: String(items.length),
+                  total: String(secrets.length),
                 })
               : vault.t('vault.secret_count', {
                   count: String(visibleItemCount),
@@ -287,7 +249,7 @@
             data-testid="vault-empty-search"
           >
             <p>
-              {items.length === 0
+              {secrets.length === 0
                 ? vault.t('vault.no_secrets')
                 : vault.t('vault.no_secrets')}
             </p>

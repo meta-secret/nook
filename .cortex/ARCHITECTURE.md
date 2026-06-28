@@ -41,6 +41,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load; `vault_version` monotonic counter.
 - **`vault_sync`:** Version-based local/remote reconciliation (`compare_vault_sync`).
 - **`vault_crypto`:** Session-scoped age encrypt/decrypt with cached scrypt identity/recipient.
+- **`secret_types` / `secret_view`:** Typed secret payloads, YAML parse/serialize, display/search helpers shared across hosts.
 - **`validation`:** Storage mode, PAT, secret field validation; label search filter.
 - **`password`:** CSPRNG password generation via `getrandom`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
@@ -57,7 +58,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
 - **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
 - **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
-- **`nook.ts`:** WASM loader + thin record mapping.
+- **`nook.ts`:** WASM loader + sync result mapping; vault secrets are `NookSecretRecord` wasm objects (no TS schema mirror).
 - **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
 
 ---

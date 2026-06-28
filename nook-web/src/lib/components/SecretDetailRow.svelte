@@ -12,7 +12,7 @@
     Check,
     ChevronDown,
   } from '@lucide/svelte'
-  import type { VaultItem } from '$lib/nook'
+  import type { NookSecretRecord } from '$lib/nook'
   import type { VaultState } from '$lib/vault.svelte'
   import MarkdownContent from './MarkdownContent.svelte'
   import SeedPhraseGrid from './SeedPhraseGrid.svelte'
@@ -31,14 +31,14 @@
     vault,
     titleAsHeader = false,
   }: {
-    item: VaultItem
+    item: NookSecretRecord
     index: number
     expanded: boolean
     revealSecrets: Record<string, boolean>
     copiedKey: string | null
     onToggleExpand: (id: string) => void
     onToggleReveal: (id: string) => void
-    onEditItem: (item: VaultItem) => void
+    onEditItem: (item: NookSecretRecord) => void
     onDeleteSecret: (id: string) => Promise<void>
     onCopyToClipboard: (
       text: string,

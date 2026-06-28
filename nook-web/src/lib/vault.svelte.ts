@@ -1,6 +1,5 @@
 import {
   generateId,
-  generateSecretId,
   getVaultManager,
   isoTimestamp,
   mapVaultSyncResult,
@@ -8,7 +7,7 @@ import {
   mapWasmJoinRequests,
   mapWasmVaultMembers,
   type JoinRequest,
-  type SecretRecord,
+  type NookSecretRecord,
   type VaultItemType,
   type VaultMember,
 } from '$lib/nook'
@@ -20,10 +19,7 @@ import {
   type EnrollmentProvider,
 } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
-import type {
-  NookVaultManager,
-  NookSecretRecord,
-} from '$lib/nook-wasm/nook_wasm'
+import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
 import {
   mapWasmPasswordEntries,
   type VaultPasswordEntrySummary,
@@ -81,6 +77,12 @@ import {
   type PendingSyncConflict,
   type ReconcileVaultResult,
 } from '$lib/vault-sync'
+import {
+  createVaultIdleSessionTracker,
+  resolveVaultIdleTimeoutMs,
+  resolveVaultIdleWarningMs,
+  type VaultIdleSessionTracker,
+} from '$lib/vault-idle-session'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -109,7 +111,9 @@ export class VaultState {
 
   manager = $state<NookVaultManager | null>(null)
   isAuthenticated = $state(false)
-  secrets = $state<SecretRecord[]>([])
+  /** True when the login gate should explain that the last lock was due to idle timeout. */
+  sessionExpiredByIdle = $state(false)
+  secrets = $state<NookSecretRecord[]>([])
 
   errorMsg = $state('')
   successMsg = $state('')
@@ -188,6 +192,7 @@ export class VaultState {
   }
 
   private successDismissTimer: ReturnType<typeof setTimeout> | null = null
+  private idleSessionTracker: VaultIdleSessionTracker | null = null
   private syncTimer: ReturnType<typeof setInterval> | null = null
   private initPromise: Promise<void> | null = null
   private storageChain: Promise<unknown> = Promise.resolve()
@@ -1090,12 +1095,46 @@ export class VaultState {
     this.loginPasswordPrompt = false
   }
 
+  private ensureIdleSessionTracker() {
+    if (this.idleSessionTracker) return
+    this.idleSessionTracker = createVaultIdleSessionTracker({
+      timeoutMs: resolveVaultIdleTimeoutMs(import.meta.env),
+      warningMs: resolveVaultIdleWarningMs(import.meta.env),
+      onExpire: () => this.lockVaultDueToIdle(),
+      onWarning: () => this.showIdleLockWarning(),
+    })
+  }
+
+  startIdleSessionTracking() {
+    if (!this.isAuthenticated) return
+    this.ensureIdleSessionTracker()
+    this.idleSessionTracker!.start()
+  }
+
+  stopIdleSessionTracking() {
+    this.idleSessionTracker?.stop()
+  }
+
+  private showIdleLockWarning() {
+    if (!this.isAuthenticated) return
+    this.showSuccess(this.t('session.idle_warning'))
+  }
+
+  private lockVaultDueToIdle() {
+    if (!this.isAuthenticated) return
+    this.sessionExpiredByIdle = true
+    this.lockVault()
+  }
+
   private markVaultUnlocked() {
     setVaultSessionLocked(false)
     this.isAuthenticated = true
+    this.sessionExpiredByIdle = false
+    this.startIdleSessionTracking()
   }
 
   private clearUnlockedSession() {
+    this.stopIdleSessionTracking()
     this.stopVaultSync()
     this.isAuthenticated = false
     this.secrets = []
@@ -1828,6 +1867,7 @@ export class VaultState {
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
   lockVault() {
     this.helpOpen = false
+    this.stopIdleSessionTracking()
     setVaultSessionLocked(true)
     this.clearUnlockedSession()
   }
@@ -1841,7 +1881,7 @@ export class VaultState {
     this.helpOpen = false
   }
 
-  filterSecrets(query: string): SecretRecord[] {
+  filterSecrets(query: string): NookSecretRecord[] {
     if (!this.manager) return []
     return mapWasmRecords(this.manager.filter_secrets(query))
   }
@@ -2646,7 +2686,7 @@ export class VaultState {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
-      const newId = generateSecretId()
+      const newId = this.manager!.generate_secret_id()
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.replace_secret(
           oldId,

@@ -65,6 +65,7 @@
 
     return () => {
       vault.stopVaultSync()
+      vault.stopIdleSessionTracking()
       window.removeEventListener('popstate', syncLegalRoute)
     }
   })

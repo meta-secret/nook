@@ -18,7 +18,9 @@
     "lock_vault": "Lock vault"
   },
   "session": {
-    "lock_desc": "Clear decrypted secrets from memory and return to the login screen. Your encrypted vault and sync providers stay on this device."
+    "lock_desc": "Clear decrypted secrets from memory and return to the login screen. Your encrypted vault and sync providers stay on this device.",
+    "expired_idle": "Session expired — unlock again to continue.",
+    "idle_warning": "Locking in 30 seconds due to inactivity…"
   },
   "nav": {
     "vault": "Vault",

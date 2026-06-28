@@ -25,9 +25,7 @@ pub(crate) fn records_to_array(
 ) -> Result<js_sys::Array, NookError> {
     let array = js_sys::Array::new();
     for record in records {
-        let data = record.data.to_yaml().map_err(NookError::Serialization)?;
-        let wasm_record =
-            NookSecretRecord::new(record.id, record.secret_type.as_str().to_owned(), data);
+        let wasm_record = NookSecretRecord::from_record(record);
         array.push(&JsValue::from(wasm_record));
     }
     Ok(array)

@@ -11,6 +11,7 @@ mod multi_device;
 mod password;
 mod password_envelope;
 mod secret_types;
+mod secret_view;
 mod session;
 mod validation;
 mod vault_crypto;
@@ -26,6 +27,7 @@ pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredSecretRecord,
 };
+pub use secret_view::build_secret_yaml;
 
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,

@@ -140,6 +140,16 @@
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
+  {#if vault.sessionExpiredByIdle}
+    <p
+      class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+      data-testid="login-session-expired"
+      role="status"
+    >
+      {vault.t('session.expired_idle')}
+    </p>
+  {/if}
+
   {#if showQrOnboarding}
     <EnrollmentQrOnboardCard
       {vault}
