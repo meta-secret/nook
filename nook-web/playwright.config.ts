@@ -14,7 +14,7 @@ process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 const isCi = !!process.env.CI
 const distDir = path.join(rootDir, 'dist')
 
-/** IndexedDB-only specs — safe to fan out (each test gets an isolated browser context). */
+/** IndexedDB-only specs — no sync provider HTTP. */
 const LOCAL_SPECS = [
   'connect.spec.ts',
   'local-vault.spec.ts',
@@ -25,13 +25,13 @@ const LOCAL_SPECS = [
   'bip39-seed-phrase.spec.ts',
   'sync-provider-connect.spec.ts',
   'sync-conflict-resolution.spec.ts',
-  'sync-fanout.spec.ts',
   'legal-pages.spec.ts',
-  'multi-device-local.spec.ts',
 ] as const
 
-/** Real GitHub API specs — serial within the project; one repo per container via NOOK_GITHUB_E2E_REPO. */
-const GITHUB_SPECS = [
+/** Sync provider flows via in-memory GitHub REST stubs (unlimited isolated repos). */
+const SYNC_STUB_SPECS = [
+  'sync-fanout.spec.ts',
+  'multi-device-local.spec.ts',
   'github-vault.spec.ts',
   'multi-device-github.spec.ts',
   'password-envelope-github.spec.ts',
@@ -39,6 +39,9 @@ const GITHUB_SPECS = [
   'provider-switch-passwords.spec.ts',
   'remote-vault-recovery-github.spec.ts',
 ] as const
+
+/** Real sync provider API — nightly / manual only (GitHub rate limits). */
+const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
 
 const specPaths = (files: readonly string[]) =>
   files.map((file) => path.join('**', file))
@@ -71,13 +74,18 @@ export default defineConfig({
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !isCi,
     timeout: isCi ? 120_000 : 30_000,
-    // Do not set stdout/stderr to 'pipe' — an undrained pipe can block Vite with no visible output.
     env: usePreviewServer
-      ? { VITE_E2E_EXPOSE_VAULT: 'true' }
+      ? {
+          VITE_E2E_EXPOSE_VAULT: 'true',
+          NOOK_E2E_SYNC_PROVIDER:
+            process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github',
+        }
       : {
           VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
           NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
           VITE_E2E_EXPOSE_VAULT: 'true',
+          NOOK_E2E_SYNC_PROVIDER:
+            process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github',
         },
   },
   projects: [
@@ -88,8 +96,14 @@ export default defineConfig({
       workers: isCi ? 2 : undefined,
     },
     {
-      name: 'github',
-      testMatch: specPaths(GITHUB_SPECS),
+      name: 'sync-stub',
+      testMatch: specPaths(SYNC_STUB_SPECS),
+      fullyParallel: true,
+      workers: isCi ? 2 : undefined,
+    },
+    {
+      name: 'sync-live',
+      testMatch: specPaths(SYNC_LIVE_SPECS),
       fullyParallel: false,
       workers: 1,
     },

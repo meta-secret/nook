@@ -1,11 +1,12 @@
 # Manually run Playwright e2e against a pull request branch.
 #
-# PR CI (pr.yml) skips e2e for speed; main.yml runs e2e on merge. Use this
-# workflow from the Actions tab when debugging Playwright on a PR before merge.
+# PR CI (pr.yml) skips e2e for speed. Main CI runs local + sync-stub after merge.
+# Nightly (e2e-nightly.yml) runs live sync providers. Use this workflow when
+# debugging Playwright on a PR before merge.
 #
 # Inputs:
 #   pr_number — PR to checkout (refs/pull/<n>/head)
-#   suite     — local (no PAT), github (needs NOOK_GITHUB_PAT), or all
+#   suite     — local, sync-stub, sync-live, or all
 
 name: E2E (PR)
 
@@ -24,7 +25,8 @@ on:
         options:
           - all
           - local
-          - github
+          - sync-stub
+          - sync-live
 
 permissions:
   contents: read
@@ -83,9 +85,15 @@ jobs:
         env:
           CI: true
 
-      - name: E2e (GitHub)
-        if: inputs.suite == 'all' || inputs.suite == 'github'
-        run: task web:test:e2e:github:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+      - name: E2e (sync-stub)
+        if: inputs.suite == 'all' || inputs.suite == 'sync-stub'
+        run: task web:test:e2e:sync-stub:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        env:
+          CI: true
+
+      - name: E2e (sync-live)
+        if: inputs.suite == 'all' || inputs.suite == 'sync-live'
+        run: task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
         env:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}

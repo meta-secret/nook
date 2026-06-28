@@ -66,6 +66,8 @@ tasks:
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS
         -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
         -e NOOK_E2E_SKIP_GITHUB_CLEANUP
+        -e NOOK_E2E_SYNC_PROVIDER
+        -e NOOK_GOOGLE_E2E_ACCESS_TOKEN
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace

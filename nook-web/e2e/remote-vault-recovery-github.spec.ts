@@ -3,13 +3,8 @@ import {
   addSecret,
   assertVaultReady,
   clearBrowserVault,
-  connectGithubVault,
-  createE2eGithubRepoName,
   disableLoginAutoUnlock,
-  finishE2eGithubSuite,
-  githubPat,
   removeE2eDummyGithubSyncProvider,
-  resetGithubVault,
   revealSecretInRow,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
@@ -17,38 +12,41 @@ import {
   waitForGithubVaultState,
   waitForSecretOnDevice,
 } from './helpers'
+import {
+  createSyncTarget,
+  installSyncStub,
+  connectSyncVault,
+  resetSyncRemote,
+  type SyncE2eTarget,
+} from './sync-provider'
 
-const describeGithub = githubPat ? test.describe : test.describe.skip
-
-describeGithub('remote vault recovery (github, local-first)', () => {
+test.describe('remote vault recovery (stub sync, local-first)', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
-  let e2eRepo: string
-  const target = () => ({ pat: githubPat, repoName: e2eRepo })
+  let target: SyncE2eTarget
 
   test.beforeAll(async ({ browser }) => {
-    e2eRepo = createE2eGithubRepoName()
-    await resetGithubVault(githubPat, e2eRepo)
+    target = createSyncTarget('', 'remote-recovery')
     vaultPage = await browser.newPage()
+    await installSyncStub(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectGithubVault(vaultPage, githubPat, e2eRepo)
+    await connectSyncVault(vaultPage, target)
     await disableLoginAutoUnlock(vaultPage)
   })
 
   test.afterAll(async () => {
     await vaultPage?.close()
-    await finishE2eGithubSuite(githubPat, e2eRepo)
   })
 
   test('unlocks from local vault and re-syncs after remote file was deleted', async () => {
     const key = uniqueSecretKey('e2e-recover')
     const value = 'recovered-from-local-vault'
 
-    await addSecret(vaultPage, key, value, target())
-    await resetGithubVault(githubPat, e2eRepo)
+    await addSecret(vaultPage, key, value, target)
+    resetSyncRemote(target)
 
     await vaultPage.reload()
     await expect(vaultPage.getByTestId('login-gate')).toBeVisible({
@@ -66,7 +64,7 @@ describeGithub('remote vault recovery (github, local-first)', () => {
     await removeE2eDummyGithubSyncProvider(vaultPage)
     await vaultPage.getByTestId('vault-sync-refresh-btn').click()
     await waitForGithubVaultState(
-      target(),
+      target,
       (yaml) => yaml.secretIds.length >= 1,
       { page: vaultPage },
     )
