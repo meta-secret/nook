@@ -155,6 +155,7 @@ impl NookVaultManager {
     pub(in crate::manager) async fn apply_event_projection_to_session(
         &mut self,
     ) -> Result<(), NookError> {
+        self.ensure_vault_crypto_from_cache().await?;
         let store = load_local_event_store(&self.store_id).await?;
         let graph = store
             .load_graph(&self.store_id)

@@ -133,22 +133,22 @@ impl NookVaultManager {
             self.persist_projection_cache().await?;
         } else if !content.trim().is_empty() {
             if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
+                self.event_log_mode = true;
                 let cache = crate::storage::indexed_db::load_from_indexed_db()
                     .await?
-                    .unwrap_or(content.clone());
-                if !cache.trim().is_empty() {
-                    let LoadedVault {
-                        armored,
-                        secret_types,
-                        secrets_key,
-                        members_key,
-                        ..
-                    } = load_stored_vault(&cache, &identity)?;
-                    self.apply_vault_keys(&secrets_key, &members_key)?;
-                    self.stored_armored = armored;
-                    self.secret_types = secret_types;
-                    self.capture_vault_unlock(&cache);
-                }
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| content.clone());
+                let LoadedVault {
+                    armored,
+                    secret_types,
+                    secrets_key,
+                    members_key,
+                    ..
+                } = load_stored_vault(&cache, &identity)?;
+                self.apply_vault_keys(&secrets_key, &members_key)?;
+                self.stored_armored = armored;
+                self.secret_types = secret_types;
+                self.capture_vault_unlock(&cache);
                 self.sync_events_from_current_provider().await?;
                 self.apply_event_projection_to_session().await?;
             } else {

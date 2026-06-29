@@ -26,7 +26,9 @@ mod secrets;
 mod sync;
 
 use crate::NookError;
-use crate::conversion::{apply_member_records, pending_joins_to_vec, vault_members_to_vec};
+use crate::conversion::{
+    apply_member_records, load_stored_vault, pending_joins_to_vec, vault_members_to_vec,
+};
 use crate::storage::{
     drive::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
@@ -350,6 +352,33 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Restore `VaultCrypto` from the local projection-cache YAML when the in-memory
+    /// session lost it (for example after switching sync providers).
+    pub(in crate::manager) async fn ensure_vault_crypto_from_cache(
+        &mut self,
+    ) -> Result<(), NookError> {
+        if self.crypto.is_some() {
+            return Ok(());
+        }
+        let identity = self.ensure_device_identity().await?;
+        if !self.last_synced_content.trim().is_empty() {
+            let loaded = load_stored_vault(&self.last_synced_content, &identity)?;
+            self.apply_vault_keys(&loaded.secrets_key, &loaded.members_key)?;
+            return Ok(());
+        }
+        if let Some(cache) = load_from_indexed_db().await?
+            && !cache.trim().is_empty()
+        {
+            let loaded = load_stored_vault(&cache, &identity)?;
+            self.apply_vault_keys(&loaded.secrets_key, &loaded.members_key)?;
+            self.last_synced_content = cache;
+            return Ok(());
+        }
+        Err(NookError::Encryption(
+            "Vault crypto not initialized.".to_owned(),
+        ))
+    }
+
     pub(in crate::manager) async fn maybe_sync_self_into_roster(
         &mut self,
         identity: &nook_core::DeviceIdentity,
@@ -441,7 +470,6 @@ impl NookVaultManager {
         if previous_mode != self.storage_mode || previous_remote_ref != self.github_repo {
             self.password_entries.clear();
             self.unlock = nook_core::VaultUnlock::Keys;
-            self.last_synced_content.clear();
         }
 
         Ok(())

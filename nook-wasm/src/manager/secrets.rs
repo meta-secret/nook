@@ -70,6 +70,7 @@ impl NookVaultManager {
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
+        self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id).map_err(NookError::Database)?;
         nook_core::validate_secret_data(&data).map_err(NookError::Database)?;
         let secret_type =
@@ -113,6 +114,7 @@ impl NookVaultManager {
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("REPLACE_SECRET_START".to_owned());
+        self.ensure_vault_crypto_from_cache().await?;
         let secret_type =
             nook_core::SecretType::parse(&secret_type).map_err(NookError::Database)?;
         let crypto = self
@@ -193,6 +195,7 @@ impl NookVaultManager {
     // Delete a secret
     pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
+        self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id).map_err(NookError::Database)?;
         let mut db =
             nook_core::Database::from_jsonl(&self.decrypted_jsonl).map_err(NookError::Database)?;
