@@ -19,7 +19,7 @@ tasks:
       - src/**/*
       - tsconfig.json
     generates:
-      - dist/main.js
+      - dist/main/main.js
     cmds:
       - npm run build
 
@@ -40,7 +40,7 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
-      - node {{.CI_AGENT_DIR}}/dist/main.js agent
+      - node {{.CI_AGENT_DIR}}/dist/main/main.js agent
 
   ci-agent:fix:
     desc: Full CI fix loop — agent, GitHub REST API (PR, checks, squash merge).
@@ -51,4 +51,4 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
-      - node {{.CI_AGENT_DIR}}/dist/main.js fix
+      - node {{.CI_AGENT_DIR}}/dist/main/main.js fix

@@ -6,8 +6,10 @@
 
 nook-web/node_modules/
 nook-web/dist/
+nook-web/dist-prod/
 agentic-ai/ci-agent/node_modules/
 agentic-ai/ci-agent/dist/
+agentic-ai/ci-agent/dist-test/
 nook-web/test-results/
 nook-web/package-lock.json
 nook-web/src/lib/nook-wasm/
