@@ -16,8 +16,8 @@ includes:
   ci:
     taskfile: .task/ci.yml
     flatten: true
-  ci-agent:
-    taskfile: .task/ci-agent.yml
+  agentic-ai:
+    taskfile: .task/agentic-ai.yml
     flatten: true
   core:
     taskfile: .task/core.yml
