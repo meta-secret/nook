@@ -18,11 +18,14 @@ mod validation;
 mod vault_crypto;
 mod vault_epoch;
 mod vault_event;
+mod vault_event_builder;
 mod vault_event_graph;
+mod vault_event_store;
 mod vault_format;
 mod vault_ids;
 mod vault_import;
 mod vault_projection;
+mod vault_signing;
 mod vault_sync;
 mod vault_sync_store;
 
@@ -80,7 +83,11 @@ pub use vault_event::{
     EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
     build_genesis_import_event,
 };
+pub use vault_event_builder::{
+    AppendEventInput, build_signed_event, encrypted_secret_from_armored, parents_from_heads,
+};
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
+pub use vault_event_store::{LocalEventStore, union_remote_events};
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
     read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
@@ -100,6 +107,7 @@ pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,
 };
+pub use vault_signing::SigningIdentity;
 pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};
 pub use vault_sync_store::{
     MemoryVaultStore, fan_out_sync, reconcile_vault_stores, resolve_conflict_keep_local,

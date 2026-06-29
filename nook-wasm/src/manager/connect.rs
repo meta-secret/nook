@@ -126,37 +126,67 @@ impl NookVaultManager {
 
         if use_genesis {
             self.initialize_genesis_vault(&identity)?;
-        } else {
-            let format =
-                nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-            let records =
-                nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
-            if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
-                return Err(NookError::Database(message).into());
+            if self.store_id.is_empty() {
+                self.store_id = nook_core::generate_store_id().map_err(NookError::Database)?;
             }
-            let _ = self.status_tx.send("DECRYPT_START".to_owned());
-            let LoadedVault {
-                jsonl,
-                armored,
-                secret_types,
-                secrets_key,
-                members_key,
-            } = load_stored_vault(&content, &identity)?;
-            self.apply_vault_keys(&secrets_key, &members_key)?;
-            self.decrypted_jsonl = jsonl;
-            self.stored_armored = armored;
-            self.secret_types = secret_types;
-            self.maybe_sync_self_into_roster(&identity).await?;
-            let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
-            self.last_synced_content = content.clone();
+            self.bootstrap_event_log_genesis().await?;
+            self.persist_projection_cache().await?;
+        } else if !content.trim().is_empty() {
+            if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
+                let cache = crate::storage::indexed_db::load_from_indexed_db()
+                    .await?
+                    .unwrap_or(content.clone());
+                if !cache.trim().is_empty() {
+                    let LoadedVault {
+                        armored,
+                        secret_types,
+                        secrets_key,
+                        members_key,
+                        ..
+                    } = load_stored_vault(&cache, &identity)?;
+                    self.apply_vault_keys(&secrets_key, &members_key)?;
+                    self.stored_armored = armored;
+                    self.secret_types = secret_types;
+                    self.capture_vault_unlock(&cache);
+                }
+                self.sync_events_from_current_provider().await?;
+                self.apply_event_projection_to_session().await?;
+            } else {
+                let format =
+                    nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+                let records = nook_core::deserialize_stored(&content, format)
+                    .map_err(NookError::Decryption)?;
+                if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
+                    return Err(NookError::Database(message).into());
+                }
+                let _ = self.status_tx.send("DECRYPT_START".to_owned());
+                let LoadedVault {
+                    jsonl,
+                    armored,
+                    secret_types,
+                    secrets_key,
+                    members_key,
+                } = load_stored_vault(&content, &identity)?;
+                self.apply_vault_keys(&secrets_key, &members_key)?;
+                self.decrypted_jsonl = jsonl;
+                self.stored_armored = armored;
+                self.secret_types = secret_types;
+                self.maybe_sync_self_into_roster(&identity).await?;
+                let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
+                self.last_synced_content = content.clone();
+                self.migrate_legacy_yaml_to_event_log(&content).await?;
+                self.flush_event_outbox().await?;
+            }
         }
 
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
-        if use_genesis || vault_file_missing {
+        if (use_genesis || vault_file_missing) && !self.event_log_mode {
             let _ = self.status_tx.send("GITHUB_INIT_START".to_owned());
             self.save_current_db().await?;
             let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
+        } else if use_genesis || vault_file_missing {
+            self.flush_event_outbox().await?;
         }
 
         let _ = self.status_tx.send("READY".to_owned());

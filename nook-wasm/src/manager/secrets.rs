@@ -89,9 +89,17 @@ impl NookVaultManager {
             .encrypt_value(&data)
             .map_err(NookError::Encryption)?;
         self.stored_armored.insert(id.clone(), armored);
-        self.secret_types.insert(id, secret_type);
+        self.secret_types.insert(id.clone(), secret_type);
 
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            let ciphertext = self.stored_armored.get(&id).cloned().unwrap_or_default();
+            self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
+                secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
+            }])
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }
@@ -128,9 +136,49 @@ impl NookVaultManager {
         .map_err(NookError::Database)?;
         self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
 
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            let validated_new =
+                nook_core::validate_secret_id(&new_id).map_err(NookError::Database)?;
+            let validated_old =
+                nook_core::validate_secret_id(&old_id).map_err(NookError::Database)?;
+            let ciphertext = self
+                .stored_armored
+                .get(&validated_new)
+                .cloned()
+                .unwrap_or_default();
+            self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
+                old_id: validated_old,
+                new_secret: nook_core::encrypted_secret_from_armored(
+                    &validated_new,
+                    secret_type,
+                    &ciphertext,
+                ),
+            }])
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
+    }
+
+    #[wasm_bindgen(js_name = syncEventLogForProvider)]
+    pub async fn sync_event_log_for_provider(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<(), JsError> {
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        self.sync_events_from_current_provider().await?;
+        self.flush_event_outbox().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen(getter, js_name = eventLogMode)]
+    pub fn event_log_mode(&self) -> bool {
+        self.event_log_mode
     }
 
     // Delete a secret
@@ -144,7 +192,14 @@ impl NookVaultManager {
         self.decrypted_jsonl = new_jsonl;
         self.stored_armored.remove(&id);
         self.secret_types.remove(&id);
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
+                secret_id: id.clone(),
+            }])
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

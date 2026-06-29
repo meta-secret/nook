@@ -19,6 +19,7 @@
 //! in this file because every submodule depends on it.
 
 mod connect;
+mod event_log;
 mod multi_device;
 mod password;
 mod secrets;
@@ -31,6 +32,7 @@ use crate::storage::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
         write_drive_vault_with_retry,
     },
+    event_db::is_event_log_mode,
     github::{ensure_github_repo_exists, fetch_github_username, write_github_text_file_with_retry},
     icloud::{
         ensure_icloud_vault_record, fetch_icloud_vault, verify_icloud_access,
@@ -78,6 +80,10 @@ pub struct NookVaultManager {
     /// When true, the next `connect` loads vault YAML from the browser cache
     /// instead of remote storage (used to recreate a deleted remote file).
     pub(in crate::manager) use_local_cache_for_connect: bool,
+    pub(in crate::manager) event_log_mode: bool,
+    pub(in crate::manager) signing_seed: String,
+    pub(in crate::manager) key_epoch: String,
+    pub(in crate::manager) event_heads: Vec<String>,
 }
 
 #[wasm_bindgen]
@@ -107,6 +113,10 @@ impl NookVaultManager {
             last_synced_content: String::new(),
             github_root_empty: false,
             use_local_cache_for_connect: false,
+            event_log_mode: false,
+            signing_seed: String::new(),
+            key_epoch: String::new(),
+            event_heads: Vec::new(),
             status_tx,
             status_rx,
         }
@@ -176,6 +186,10 @@ impl NookVaultManager {
         self.use_local_cache_for_connect = false;
         self.store_id.clear();
         self.vault_version = 0;
+        self.event_log_mode = false;
+        self.signing_seed.clear();
+        self.key_epoch.clear();
+        self.event_heads.clear();
     }
 }
 
@@ -202,6 +216,12 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) async fn save_current_db(&mut self) -> Result<(), NookError> {
+        if self.event_log_mode || is_event_log_mode().await? {
+            self.event_log_mode = true;
+            self.persist_projection_cache().await?;
+            self.flush_event_outbox().await?;
+            return Ok(());
+        }
         let _ = self.status_tx.send("SAVE_START".to_owned());
         if self.store_id.is_empty() {
             self.store_id = nook_core::generate_store_id().map_err(NookError::Database)?;

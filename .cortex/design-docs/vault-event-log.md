@@ -1,6 +1,6 @@
 # Vault Event Log
 
-**Status:** Phase 1 in progress (see [#112](https://github.com/meta-secret/nook/issues/112))  
+**Status:** Implemented (see [#112](https://github.com/meta-secret/nook/issues/112), PR #118+)  
 **Supersedes (eventually):** scalar `vault_version` whole-blob sync in [unified-vault.md](unified-vault.md)
 
 ## Decision

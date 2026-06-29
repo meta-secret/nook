@@ -1542,8 +1542,18 @@ export class VaultState {
       this.errorMsg = ''
     }
     try {
-      const localYaml = await readLocalVaultBlob()
       const [mode, pat, repo] = this.providerWasmArgs(provider)
+      if (this.manager.eventLogMode) {
+        await this.manager.syncEventLogForProvider(mode, pat, repo)
+        await this.reloadSessionFromLocal()
+        await this.updateProviderSyncMetadata(providerId, {
+          storeId: this.manager.vaultStoreId,
+          lastSyncedVersion: 0,
+          lastSyncRevision: null,
+        })
+        return
+      }
+      const localYaml = await readLocalVaultBlob()
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)
       const attempt = attemptReconcileVaultSyncBlobs(
         localYaml,
