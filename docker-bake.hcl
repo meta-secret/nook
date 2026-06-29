@@ -87,17 +87,3 @@ target "toolchain-push" {
   output   = ["type=registry"]
   cache-to = []
 }
-
-// Cursor Agent CLI + docker/gh/git — extends toolchain via a named build context.
-// CI: pull GHCR :latest (buildx container driver cannot use daemon-only tags).
-// Dev: bake builds toolchain target inside buildkit (target:toolchain).
-target "cursor-agent" {
-  context    = "."
-  dockerfile = "Dockerfile.cursor-agent"
-  platforms  = ["linux/amd64"]
-  contexts = {
-    toolchain = TOOLCHAIN_REGISTRY != "" ? "docker-image://${TOOLCHAIN_REGISTRY}:latest" : "target:toolchain"
-  }
-  tags   = ["nook-cursor-agent:local"]
-  output = ["type=docker"]
-}

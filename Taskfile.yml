@@ -3,7 +3,6 @@ version: '3'
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
   DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
-  CURSOR_AGENT_IMAGE: '{{default "nook-cursor-agent:local" .CURSOR_AGENT_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   # dev (default): skip setup when nook-build:local exists. ci: always build (set in CI via GITHUB_ENV).
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
@@ -16,6 +15,9 @@ includes:
     flatten: true
   ci:
     taskfile: .task/ci.yml
+    flatten: true
+  agentic-ai:
+    taskfile: .task/agentic-ai.yml
     flatten: true
   core:
     taskfile: .task/core.yml

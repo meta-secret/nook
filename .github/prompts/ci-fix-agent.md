@@ -24,26 +24,18 @@ Read `.cortex/AGENTS.md` before making changes.
    task web:e2e:restore-prod-dist
    ```
 3. Implement the minimal correct fix (match existing conventions).
-4. Verify the same CI tasks pass locally before opening a PR.
-5. Git workflow (squash merge policy — one commit per PR on main):
+4. Verify the same CI tasks pass locally before pushing.
+5. Push the fix branch (the workflow opens the PR and merges after CI):
    ```bash
    git checkout -B ${FIX_BRANCH}
    git add -A
    git commit -m "Fix main CI failure (run ${GITHUB_RUN_ID})."
    git push -u origin HEAD
-   gh pr create --title "Fix main CI (run ${GITHUB_RUN_ID})" --body "$(cat <<'EOF'
-   ## Summary
-   Auto-fix for failed main CI run ${GITHUB_RUN_ID}.
-
-   ## Test plan
-   - [ ] CI green on this PR
-   EOF
-   )"
    ```
 
 ## Rules
 
-- Do **not** squash merge or merge the PR — the outer CI script merges after checks pass.
+- Do **not** create or merge a PR — GitHub Actions opens the PR and squash-merges after checks pass.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the CI failure root cause.
 - Follow `.cortex/rules.md` (squash merge only; never kill Docker daemon).
