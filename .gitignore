@@ -12,6 +12,8 @@ nook-web/test-results/
 nook-web/package-lock.json
 nook-web/src/lib/nook-wasm/
 
+.task/checksum/
+
 # Local env files with secrets (never commit)
 .env
 .env.local
