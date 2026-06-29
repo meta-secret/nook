@@ -10,9 +10,13 @@ import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
+  ICLOUD_E2E_STUB_WEB_AUTH_TOKEN,
+  isICloudE2eStubMode,
 } from '$lib/icloud-oauth-config'
 
 const CLOUDKIT_SCRIPT_URL = 'https://cdn.apple-cloudkit.com/ck/2/cloudkit.js'
+const CLOUDKIT_SIGN_IN_BUTTON_ID = 'apple-sign-in-button'
+const CLOUDKIT_SIGN_OUT_BUTTON_ID = 'apple-sign-out-button'
 
 export type ICloudOAuthTokens = {
   accessToken: string
@@ -21,6 +25,11 @@ export type ICloudOAuthTokens = {
 type CloudKitUserIdentity = {
   nameComponents?: { givenName?: string; familyName?: string }
   lookupInfo?: { emailAddress?: string }
+}
+
+type CloudKitAuthError = {
+  _reason?: string
+  message?: string
 }
 
 type CloudKitContainer = {
@@ -34,8 +43,13 @@ type CloudKitGlobal = {
   configure: (config: {
     containers: Array<{
       containerIdentifier: string
-      apiToken: string
       environment: 'development' | 'production'
+      apiTokenAuth: {
+        apiToken: string
+        persist: boolean
+        signInButton: { id: string }
+        signOutButton: { id: string }
+      }
     }>
   }) => void
   getDefaultContainer: () => CloudKitContainer
@@ -103,18 +117,46 @@ function readWebAuthTokenFromCookie(): string | undefined {
   return undefined
 }
 
+function writeWebAuthTokenCookie(token: string): void {
+  document.cookie = `ckWebAuthToken=${encodeURIComponent(token)}; path=/`
+}
+
+function cloudKitAuthErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === 'object' && error !== null) {
+    const authError = error as CloudKitAuthError
+    if (authError._reason?.trim()) {
+      return authError._reason.trim()
+    }
+    if (authError.message?.trim()) {
+      return authError.message.trim()
+    }
+  }
+  return 'iCloud sign-in failed.'
+}
+
 export async function initICloudAuth(): Promise<void> {
   if (initPromise) {
     return initPromise
   }
   initPromise = (async () => {
+    if (isICloudE2eStubMode()) {
+      return
+    }
     await loadCloudKitScript()
     window.CloudKit!.configure({
       containers: [
         {
           containerIdentifier: ICLOUD_CONTAINER_ID,
-          apiToken: ICLOUD_API_TOKEN,
           environment: ICLOUD_ENVIRONMENT,
+          apiTokenAuth: {
+            apiToken: ICLOUD_API_TOKEN,
+            persist: true,
+            signInButton: { id: CLOUDKIT_SIGN_IN_BUTTON_ID },
+            signOutButton: { id: CLOUDKIT_SIGN_OUT_BUTTON_ID },
+          },
         },
       ],
     })
@@ -123,9 +165,18 @@ export async function initICloudAuth(): Promise<void> {
 }
 
 export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
+  if (isICloudE2eStubMode()) {
+    writeWebAuthTokenCookie(ICLOUD_E2E_STUB_WEB_AUTH_TOKEN)
+    return { accessToken: ICLOUD_E2E_STUB_WEB_AUTH_TOKEN }
+  }
+
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
-  await container.setUpAuth({ grabAuthToken: true, persist: true })
+  try {
+    await container.setUpAuth({ grabAuthToken: true, persist: true })
+  } catch (error) {
+    throw new Error(cloudKitAuthErrorMessage(error))
+  }
   const token = readWebAuthTokenFromCookie()
   if (!token) {
     throw new Error('iCloud sign-in did not return a web auth token.')
