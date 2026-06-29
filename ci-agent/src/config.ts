@@ -1,7 +1,6 @@
 export type CiAgentConfig = {
   repoRoot: string;
   cursorApiKey: string;
-  ghToken: string;
   githubRepository: string;
   githubRunId: string;
   fixBranch: string;
@@ -15,27 +14,17 @@ export function loadConfig(): CiAgentConfig | null {
     return null;
   }
 
-  const ghToken = requireEnv("GH_TOKEN");
-  const githubRepository = requireEnv("GITHUB_REPOSITORY");
-  const githubRunId = requireEnv("GITHUB_RUN_ID");
-  const fixBranch = process.env.FIX_BRANCH?.trim() || `fix/ci-${githubRunId}`;
+  const githubRunId = process.env.GITHUB_RUN_ID?.trim() ?? "";
+  const fixBranch =
+    process.env.FIX_BRANCH?.trim() || (githubRunId ? `fix/ci-${githubRunId}` : "");
 
   return {
-    repoRoot: process.env.REPO_ROOT?.trim() || "/workspace",
+    repoRoot: process.env.REPO_ROOT?.trim() || process.cwd(),
     cursorApiKey,
-    ghToken,
-    githubRepository,
+    githubRepository: process.env.GITHUB_REPOSITORY?.trim() ?? "",
     githubRunId,
     fixBranch,
     promptFile: ".github/prompts/ci-fix-agent.md",
     modelId: process.env.CURSOR_AGENT_MODEL?.trim() || "composer-2.5",
   };
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`${name} is required`);
-  }
-  return value;
 }
