@@ -2,12 +2,14 @@
  * Nook iCloud CloudKit — browser-only web auth (CloudKit JS).
  *
  * Apple Developer → CloudKit Dashboard → enable Web Services for the container:
- * - Container: iCloud.dev.nook (development) / production container when shipped
- * - API token with private-database access
- * - Sign in with Apple ID via CloudKit JS setUpAuth
+ * - Container: iCloud.metasecret.project.com
+ * - API token (Tokens & Keys) with private-database access
+ * - Allowed origins: https://nokey.sh, http://localhost:5173
+ * - Sign in with Apple ID via CloudKit JS setUpAuth (Post Message callback)
  */
-export const ICLOUD_CONTAINER_ID = 'iCloud.dev.nook'
-export const ICLOUD_API_TOKEN = 'e2e-stub-token'
+export const ICLOUD_CONTAINER_ID = 'iCloud.metasecret.project.com'
+export const ICLOUD_API_TOKEN =
+  '3cb4e4323cddc52e7e91af453b3d4f80d90c12fa395647b1b47b3cd72b66bf5b'
 export const ICLOUD_ENVIRONMENT: 'development' | 'production' = 'development'
 
 /** Web auth token used with the in-memory CloudKit REST stub in Playwright e2e. */
