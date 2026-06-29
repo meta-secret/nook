@@ -1,6 +1,6 @@
 //! Construct signed vault events from session state.
 
-use crate::error::VaultResult;
+use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::{
     EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
@@ -35,7 +35,7 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEven
         operations: input.operations,
     };
     let event = VaultEvent::sign(body, input.signing_identity.signing_key())?;
-    let bytes = serde_json::to_vec(&event).map_err(crate::VaultError::EventSerialize)?;
+    let bytes = serde_json::to_vec(&event).map_err(EventError::from)?;
     Ok((event, bytes))
 }
 

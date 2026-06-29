@@ -1,6 +1,6 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use crate::{
     AppendEventInput, Database, EventId, LocalEventStore, SigningIdentity, StoredSecretRecord,
     VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
@@ -94,11 +94,8 @@ impl VaultEventSession {
         let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<StoredSecretRecord> = live.into_values().collect();
-        let db = VaultError::from_database(Database::from_stored_records_with_crypto(
-            &user_records,
-            crypto,
-        ))?;
-        let jsonl = VaultError::from_database(db.to_jsonl())?;
+        let db = Database::from_stored_records_with_crypto(&user_records, crypto)?;
+        let jsonl = db.to_jsonl()?;
         armored.retain(|key, value| {
             is_vault_meta_record(&StoredSecretRecord {
                 key: key.clone(),
@@ -120,11 +117,9 @@ impl VaultEventSession {
         records: &[StoredSecretRecord],
         members_key: &str,
     ) -> VaultResult<String> {
-        let roster =
-            VaultError::from_multi_device(resolve_member_roster(records, members_key))?;
-        let member_records =
-            VaultError::from_multi_device(build_members_records(&roster, members_key))?;
-        let json = serde_json::to_string(&member_records).map_err(VaultError::MemberRecordsSerialize)?;
+        let roster = resolve_member_roster(records, members_key)?;
+        let member_records = build_members_records(&roster, members_key)?;
+        let json = serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
         Ok(sha256_hex(json.as_bytes()))
     }
 
@@ -155,7 +150,7 @@ impl VaultEventSession {
         let trigger_id = self.append_operations(vec![trigger], created_at, provider_id)?;
         trigger_id.as_str().clone_into(&mut self.key_epoch);
         let (new_keys, secrets) =
-            VaultError::from_epoch(rotate_vault_keys_with_secrets(user_records, old_secrets_key))?;
+            rotate_vault_keys_with_secrets(user_records, old_secrets_key)?;
         let members_checkpoint_hash =
             Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
         self.append_operations(

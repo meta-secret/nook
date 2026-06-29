@@ -1,6 +1,6 @@
 //! Deterministic encrypted vault projection from the causal event log.
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_epoch::{
@@ -87,11 +87,11 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultPro
     let mut replacements_by_old: BTreeMap<String, Vec<(EventId, String)>> = BTreeMap::new();
 
     for event_id in order {
-        let event = graph.get(&event_id).ok_or(VaultError::MissingEvent {
+        let event = graph.get(&event_id).ok_or(EventError::MissingEvent {
             event_id: event_id.as_str().to_owned(),
         })?;
         if event.body.store_id != store_id {
-            return Err(VaultError::ProjectionStoreMismatch);
+            return Err(EventError::ProjectionStoreMismatch.into());
         }
         if event.body.schema_version > crate::vault_event::VAULT_EVENT_SCHEMA_VERSION {
             projection.unresolved_schema = true;
@@ -270,7 +270,7 @@ pub fn assert_projection_permutation_invariant(
     for _ in 0..3 {
         let again = project_vault(graph, store_id)?;
         if again != baseline {
-            return Err(VaultError::ProjectionReplayMismatch);
+            return Err(EventError::ProjectionReplayMismatch.into());
         }
     }
     Ok(())

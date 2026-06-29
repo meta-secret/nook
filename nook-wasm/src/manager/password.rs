@@ -50,7 +50,7 @@ impl NookVaultManager {
             }
         }
         let entries =
-            nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;
+            nook_core::read_vault_password_entries(&content)?;
         self.password_entries = entries.clone();
         Ok(password_entries_to_vec(&entries))
     }
@@ -85,12 +85,12 @@ impl NookVaultManager {
         };
         let entry = nook_core::create_password_entry(
             &keys,
-            &nook_core::generate_id().map_err(NookError::Database)?,
+            &nook_core::generate_id()?,
             &label,
             &wasm_iso_timestamp(),
             &password,
         )
-        .map_err(NookError::Encryption)?;
+        ?;
 
         self.password_entries.push(entry);
         self.unlock = nook_core::VaultUnlock::Keys;
@@ -138,7 +138,7 @@ impl NookVaultManager {
             .find(|entry| entry.id == entry_id)
             .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
         target.envelope =
-            nook_core::attach_password_envelope(&keys, &password).map_err(NookError::Encryption)?;
+            nook_core::attach_password_envelope(&keys, &password)?;
         let envelope_ciphertext = serde_json::to_string(&target.envelope)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         if self.event_log_mode || self.ensure_event_log_mode().await? {
@@ -222,17 +222,17 @@ impl NookVaultManager {
             })?
             .clone();
         let keys =
-            nook_core::resolve_keys_from_entry(&entry, &password).map_err(NookError::Decryption)?;
+            nook_core::resolve_keys_from_entry(&entry, &password)?;
 
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content)?;
         let mut records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+            nook_core::deserialize_stored(&content, format)?;
 
         records.retain(|record| !nook_core::is_join_stored_record(record));
 
         let auth_id = nook_core::dec_auth_id(&identity);
         let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
-            .map_err(NookError::Encryption)?;
+            ?;
         records.retain(|record| !nook_core::is_auth_stored_record(record) || record.key != auth_id);
         records.push(auth);
 
@@ -249,7 +249,7 @@ impl NookVaultManager {
         records.retain(|record| !nook_core::is_members_stored_record(record));
         records.extend(
             nook_core::build_members_records(&updated_roster, &keys.members_key)
-                .map_err(NookError::Encryption)?,
+                ?,
         );
 
         self.stored_armored = records_to_armored(&records);
@@ -260,12 +260,12 @@ impl NookVaultManager {
         self.save_current_db().await?;
 
         let crypto =
-            nook_core::VaultCrypto::new(&keys.secrets_key).map_err(NookError::Encryption)?;
+            nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let stored_records = self.stored_records_snapshot();
         let user_records = nook_core::user_stored_records(&stored_records);
         let database = nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)
-            .map_err(NookError::Decryption)?;
-        self.decrypted_jsonl = database.to_jsonl().map_err(NookError::Database)?;
+            ?;
+        self.decrypted_jsonl = database.to_jsonl()?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

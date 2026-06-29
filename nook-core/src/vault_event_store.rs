@@ -1,6 +1,6 @@
 //! In-memory event store and set-union synchronization helpers.
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::VaultEvent;
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
@@ -63,7 +63,7 @@ impl LocalEventStore {
     pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
         for bytes in self.events.values() {
-            let event: VaultEvent = serde_json::from_slice(bytes).map_err(VaultError::ParseStoredEvent)?;
+            let event: VaultEvent = serde_json::from_slice(bytes).map_err(EventError::ParseStoredEvent)?;
             let _ = graph.insert(event, store_id)?;
         }
         Ok(graph)
@@ -76,7 +76,7 @@ impl LocalEventStore {
         store_id: &str,
     ) -> VaultResult<(EventId, EventInsertStatus)> {
         let event_id = event.validate_envelope(store_id)?;
-        let bytes = serde_json::to_vec(event).map_err(VaultError::EventSerialize)?;
+        let bytes = serde_json::to_vec(event).map_err(EventError::EventSerialize)?;
         if self.events.contains_key(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
@@ -104,11 +104,12 @@ pub fn union_remote_events(
         if local.get_bytes(event_id).is_some() {
             continue;
         }
-        let event: VaultEvent = serde_json::from_slice(bytes).map_err(VaultError::ParseRemoteEvent)?;
+        let event: VaultEvent = serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
         if event.id()? != *event_id {
-            return Err(VaultError::RemoteEventIdMismatch {
+            return Err(EventError::RemoteEventIdMismatch {
                 event_id: event_id.as_str().to_owned(),
-            });
+            }
+            .into());
         }
         local.put_event(event_id.clone(), bytes.clone());
         imported.push(event_id.clone());
@@ -144,7 +145,7 @@ mod tests {
             &signing_key,
         )?;
         let id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis)?;
+        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
 
         let mut local = LocalEventStore::new();
         union_remote_events(&mut local, &[(id.clone(), bytes)], store)?;
@@ -188,7 +189,7 @@ mod tests {
         assert_eq!(local.pending_outbox("github").len(), 1);
         let dequeued = local
             .dequeue_outbox("github", &id)
-            .ok_or(VaultError::MissingOutboxEntry)?;
+            .ok_or(EventError::MissingOutboxEntry)?;
         assert_eq!(dequeued, bytes);
         assert!(local.pending_outbox("github").is_empty());
         Ok(())

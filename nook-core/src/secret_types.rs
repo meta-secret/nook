@@ -11,6 +11,7 @@
 //! - `StoredSecretRecord` — the on-disk shape: same triple but `value` is an
 //!   age-encrypted ciphertext string. Sorted, written to YAML/JSONL.
 
+use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -23,13 +24,15 @@ pub enum SecretType {
 }
 
 impl SecretType {
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> SecretPayloadResult<Self> {
         match value {
             "login" => Ok(Self::Login),
             "api-key" => Ok(Self::ApiKey),
             "seed-phrase" => Ok(Self::SeedPhrase),
             "secure-note" => Ok(Self::SecureNote),
-            _ => Err(format!("Unknown secret type: {value}")),
+            _ => Err(SecretPayloadError::UnknownSecretType {
+                value: value.to_owned(),
+            }),
         }
     }
 
@@ -85,34 +88,34 @@ pub enum SecretValue {
 }
 
 impl SecretValue {
-    pub fn from_yaml(secret_type: SecretType, yaml: &str) -> Result<Self, String> {
+    pub fn from_yaml(secret_type: SecretType, yaml: &str) -> SecretPayloadResult<Self> {
         match secret_type {
             SecretType::Login => serde_yaml::from_str(yaml)
                 .map(Self::Login)
-                .map_err(|error| format!("Invalid login payload: {error}")),
+                .map_err(SecretPayloadError::InvalidLogin),
             SecretType::ApiKey => serde_yaml::from_str(yaml)
                 .map(Self::ApiKey)
-                .map_err(|error| format!("Invalid API key payload: {error}")),
+                .map_err(SecretPayloadError::InvalidApiKey),
             SecretType::SeedPhrase => {
-                let secret: SeedPhraseSecret = serde_yaml::from_str(yaml)
-                    .map_err(|error| format!("Invalid seed phrase payload: {error}"))?;
+                let secret: SeedPhraseSecret =
+                    serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
                 crate::bip39::validate_bip39_mnemonic(&secret.seed)?;
                 Ok(Self::SeedPhrase(secret))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)
                 .map(Self::SecureNote)
-                .map_err(|error| format!("Invalid secure note payload: {error}")),
+                .map_err(SecretPayloadError::InvalidSecureNote),
         }
     }
 
-    pub fn to_yaml(&self) -> Result<String, String> {
+    pub fn to_yaml(&self) -> SecretPayloadResult<String> {
         match self {
             Self::Login(value) => serde_yaml::to_string(value),
             Self::ApiKey(value) => serde_yaml::to_string(value),
             Self::SeedPhrase(value) => serde_yaml::to_string(value),
             Self::SecureNote(value) => serde_yaml::to_string(value),
         }
-        .map_err(|error| format!("Failed to serialize secret payload: {error}"))
+        .map_err(SecretPayloadError::Serialize)
     }
 
     #[must_use]

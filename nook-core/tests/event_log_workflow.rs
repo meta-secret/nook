@@ -8,7 +8,7 @@ use harness::{
     union_device_from_providers,
 };
 use nook_core::{
-    AppendEventInput, EncryptedSecretPayload, SecretType, VaultError, VaultOperation, VaultResult,
+    AppendEventInput, EncryptedSecretPayload, EventError, SecretType, VaultOperation, VaultResult,
     build_signed_event,
 };
 use std::collections::HashMap;
@@ -90,7 +90,7 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
         .session
         .store
         .get_bytes(&genesis_head)
-        .ok_or(VaultError::MissingGenesisBytes)?
+        .ok_or(EventError::MissingGenesisBytes)?
         .to_vec();
 
     let child_ops = vec![VaultOperation::SecretCreated {
@@ -196,8 +196,8 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
     )?;
     assert_ne!(new_secrets, device.secrets_key);
     device.secrets_key = new_secrets.clone();
-    device.crypto = VaultError::from_crypto(nook_core::VaultCrypto::new(&new_secrets))?;
-    VaultError::from_crypto(device.crypto.encrypt_value("post-epoch"))?;
+    device.crypto = nook_core::VaultCrypto::new(&new_secrets)?;
+    device.crypto.encrypt_value("post-epoch")?;
     Ok(())
 }
 
@@ -210,7 +210,7 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     for (id, bytes) in a.remote_events() {
         providers
             .get_mut("github")
-            .ok_or(VaultError::MissingProviderBucket)?
+            .ok_or(EventError::MissingProviderBucket)?
             .put_event(id, bytes);
     }
 

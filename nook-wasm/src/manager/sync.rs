@@ -6,7 +6,6 @@
 //! and just reuses the session keys to refresh the armored cache.
 
 use super::NookVaultManager;
-use crate::NookError;
 use crate::NookVaultSyncResult;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
@@ -59,9 +58,9 @@ impl NookVaultManager {
         }
 
         let identity = self.device_identity()?;
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content)?;
         let fresh_records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+            nook_core::deserialize_stored(&content, format)?;
 
         nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
         let LoadedVault {

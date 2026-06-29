@@ -14,7 +14,7 @@ fn api_key(website_url: &str, key: &str) -> SecretValue {
     })
 }
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures");
     fs::create_dir_all(&fixtures_dir).map_err(|e| format!("create fixtures dir: {e}"))?;
 

@@ -1,6 +1,6 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::VaultEvent;
 use std::collections::{BTreeMap, BTreeSet};
@@ -202,7 +202,7 @@ impl EventGraph {
                 .cloned()
                 .collect();
             if ready.is_empty() {
-                return Err(VaultError::GraphCycle);
+                return Err(EventError::GraphCycle.into());
             }
             for id in ready {
                 remaining.remove(&id);
@@ -210,7 +210,7 @@ impl EventGraph {
                 progress = true;
             }
             if !progress {
-                return Err(VaultError::TopologicalSortStalled);
+                return Err(EventError::TopologicalSortStalled.into());
             }
         }
         Ok(ordered)

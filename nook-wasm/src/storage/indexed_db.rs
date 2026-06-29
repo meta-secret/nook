@@ -27,7 +27,7 @@ pub(crate) async fn load_or_create_device_identity() -> Result<DeviceIdentityRec
     if let Some(existing) = load_device_identity_from_indexed_db().await? {
         return Ok(existing);
     }
-    let identity = nook_core::DeviceIdentity::generate().map_err(NookError::Encryption)?;
+    let identity = nook_core::DeviceIdentity::generate()?;
     Ok(DeviceIdentityRecord {
         device_id: identity.device_id().to_owned(),
         secret: identity.secret_string(),

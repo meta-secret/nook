@@ -82,7 +82,7 @@ impl NookVaultManager {
         legacy_yaml: &str,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id().map_err(NookError::Database)?;
+            self.store_id = nook_core::generate_store_id()?;
         }
         save_legacy_backup(&self.store_id, legacy_yaml).await?;
         let signing = self.ensure_signing_identity().await?;
@@ -122,7 +122,7 @@ impl NookVaultManager {
         operations: Vec<VaultOperation>,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id().map_err(NookError::Database)?;
+            self.store_id = nook_core::generate_store_id()?;
         }
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
@@ -163,8 +163,8 @@ impl NookVaultManager {
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         let db = nook_core::Database::from_stored_records_with_crypto(&user_records, crypto)
-            .map_err(NookError::Decryption)?;
-        self.decrypted_jsonl = db.to_jsonl().map_err(NookError::Database)?;
+            ?;
+        self.decrypted_jsonl = db.to_jsonl()?;
         self.stored_armored.retain(|key, value| {
             nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
                 key: key.clone(),
@@ -195,7 +195,7 @@ impl NookVaultManager {
             Some(self.store_id.as_str()),
             None,
         )
-        .map_err(NookError::Encryption)?;
+        ?;
         save_to_indexed_db(&yaml).await?;
         self.last_synced_content = yaml;
         Ok(())
@@ -339,9 +339,9 @@ impl NookVaultManager {
     fn members_checkpoint_hash(&self) -> Result<String, NookError> {
         let records = self.stored_records_snapshot();
         let roster = nook_core::resolve_member_roster(&records, &self.members_key)
-            .map_err(NookError::Database)?;
+            ?;
         let member_records = nook_core::build_members_records(&roster, &self.members_key)
-            .map_err(NookError::Encryption)?;
+            ?;
         let json = serde_json::to_string(&member_records)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         Ok(nook_core::sha256_hex(json.as_bytes()))
@@ -369,7 +369,7 @@ impl NookVaultManager {
             .collect();
         let (new_keys, secrets) =
             rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)
-                .map_err(NookError::Encryption)?;
+                ?;
         self.apply_vault_keys(&new_keys.secrets_key, &new_keys.members_key)?;
         for payload in &secrets {
             self.stored_armored

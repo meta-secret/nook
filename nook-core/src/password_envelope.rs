@@ -16,6 +16,7 @@
 //! See `.cortex/product-specs/password-envelope.md` for the full design.
 
 use crate::multi_device::VaultKeys;
+use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -166,10 +167,10 @@ pub fn create_password_entry(
     label: &str,
     created_at: &str,
     password: &str,
-) -> Result<PasswordUnlockEntry, String> {
+) -> PasswordResult<PasswordUnlockEntry> {
     let trimmed_label = label.trim();
     if trimmed_label.is_empty() {
-        return Err("Password label cannot be empty.".to_owned());
+        return Err(PasswordError::LabelEmpty);
     }
     Ok(PasswordUnlockEntry {
         id: id.to_owned(),
@@ -183,7 +184,7 @@ pub fn create_password_entry(
 pub fn resolve_keys_from_entry(
     entry: &PasswordUnlockEntry,
     password: &str,
-) -> Result<VaultKeys, String> {
+) -> PasswordResult<VaultKeys> {
     resolve_keys_from_password(&entry.envelope, password)
 }
 
@@ -206,19 +207,18 @@ const ENVELOPE_KDF: &str = "scrypt";
 pub fn attach_password_envelope(
     keys: &VaultKeys,
     password: &str,
-) -> Result<PasswordEnvelope, String> {
+) -> PasswordResult<PasswordEnvelope> {
     if password.len() < PASSWORD_MIN_LENGTH {
-        return Err(format!(
-            "Password must be at least {} characters.",
-            PASSWORD_MIN_LENGTH
-        ));
+        return Err(PasswordError::TooShort {
+            min: PASSWORD_MIN_LENGTH,
+        });
     }
 
     let plaintext = serde_json::to_string(&EnvelopePlaintext {
         secrets_key: keys.secrets_key.clone(),
         members_key: keys.members_key.clone(),
     })
-    .map_err(|e| format!("Failed to serialize envelope plaintext: {}", e))?;
+    .map_err(PasswordError::EnvelopePlaintextSerialize)?;
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let mut recipient = age::scrypt::Recipient::new(secret);
@@ -238,27 +238,25 @@ pub fn attach_password_envelope(
 pub fn resolve_keys_from_password(
     envelope: &PasswordEnvelope,
     password: &str,
-) -> Result<VaultKeys, String> {
+) -> PasswordResult<VaultKeys> {
     if envelope.version != ENVELOPE_VERSION {
-        return Err(format!(
-            "Unsupported password envelope version: {}",
-            envelope.version
-        ));
+        return Err(PasswordError::UnsupportedEnvelopeVersion {
+            version: envelope.version,
+        });
     }
     if envelope.kdf != ENVELOPE_KDF {
-        return Err(format!(
-            "Unsupported password envelope KDF: {}",
-            envelope.kdf
-        ));
+        return Err(PasswordError::UnsupportedEnvelopeKdf {
+            kdf: envelope.kdf.clone(),
+        });
     }
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let identity = age::scrypt::Identity::new(secret);
     let plaintext_bytes = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
     let plaintext_str = String::from_utf8(plaintext_bytes)
-        .map_err(|e| format!("Envelope plaintext is not valid UTF-8: {}", e))?;
+        .map_err(PasswordError::EnvelopePlaintextUtf8)?;
     let parsed: EnvelopePlaintext = serde_json::from_str(&plaintext_str)
-        .map_err(|e| format!("Invalid envelope plaintext JSON: {}", e))?;
+        .map_err(PasswordError::EnvelopePlaintextJson)?;
 
     Ok(VaultKeys {
         secrets_key: parsed.secrets_key,
@@ -275,44 +273,45 @@ pub fn verify_password(envelope: &PasswordEnvelope, password: &str) -> bool {
 fn age_encrypt_scrypt(
     recipient: &age::scrypt::Recipient,
     plaintext: &[u8],
-) -> Result<String, String> {
+) -> PasswordResult<String> {
     use age::armor::{ArmoredWriter, Format};
 
     let encryptor =
         age::Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
-            .map_err(|e| format!("Envelope encryption setup error: {}", e))?;
+            .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(e.to_string())))?;
 
     let mut armored = Vec::new();
     let armor_writer = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
-        .map_err(|e| format!("Envelope armor wrap error: {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeArmorWrap(e.to_string())))?;
     let mut writer = encryptor
         .wrap_output(armor_writer)
-        .map_err(|e| format!("Envelope encryption error: {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeEncrypt(e.to_string())))?;
     writer
         .write_all(plaintext)
-        .map_err(|e| format!("Envelope write error: {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeWrite(e.to_string())))?;
     writer
         .finish()
-        .map_err(|e| format!("Envelope finish error: {}", e))?
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeFinish(e.to_string())))?
         .finish()
-        .map_err(|e| format!("Envelope armor finish error: {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeArmorFinish(e.to_string())))?;
 
-    String::from_utf8(armored).map_err(|e| format!("Envelope armor is not UTF-8: {}", e))
+    String::from_utf8(armored)
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(e.to_string())))
 }
 
-fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> Result<Vec<u8>, String> {
+fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> PasswordResult<Vec<u8>> {
     use age::armor::ArmoredReader;
 
     let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored))
-        .map_err(|e| format!("Envelope decryption setup error: {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(e.to_string())))?;
     let mut reader = decryptor
         .decrypt(std::iter::once(identity as &dyn age::Identity))
-        .map_err(|e| format!("Envelope decryption error (wrong password?): {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(e.to_string())))?;
 
     let mut plaintext = Vec::new();
     reader
         .read_to_end(&mut plaintext)
-        .map_err(|e| format!("Envelope read error: {}", e))?;
+        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeRead(e.to_string())))?;
     Ok(plaintext)
 }
 
@@ -353,7 +352,7 @@ mod tests {
     #[test]
     fn short_password_rejected() {
         let err = attach_password_envelope(&sample_keys(), "abc").unwrap_err();
-        assert!(err.contains("at least"));
+        assert!(err.to_string().contains("at least"));
     }
 
     #[test]

@@ -5,10 +5,10 @@
 
 use nook_core::{
     Database, DeviceIdentity, EventId, LocalEventStore, SecretType, SigningIdentity, VaultCrypto,
-    VaultError, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
-    VaultUnlock, encrypted_secret_from_armored, genesis_auth_record, genesis_members_records,
-    generate_store_id, generate_vault_keys, hydrate_keys_from_projection_yaml,
-    legacy_vault_to_import_event, serialize_stored_yaml_with_unlock,
+    VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult, VaultUnlock,
+    encrypted_secret_from_armored, genesis_auth_record, genesis_members_records, generate_store_id,
+    generate_vault_keys, hydrate_keys_from_projection_yaml, legacy_vault_to_import_event,
+    serialize_stored_yaml_with_unlock,
 };
 use std::collections::HashMap;
 
@@ -26,13 +26,13 @@ pub struct EventLogDevice {
 
 impl EventLogDevice {
     pub fn genesis(label: &str) -> VaultResult<Self> {
-        let keys = VaultError::from_multi_device(generate_vault_keys())?;
-        let identity = VaultError::from_multi_device(DeviceIdentity::generate())?;
-        let store_id = VaultError::from_multi_device(generate_store_id())?;
+        let keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let store_id = generate_store_id()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let session = VaultEventSession::new(store_id.clone(), signing, signing_seed);
         let projection_cache_yaml = genesis_yaml(&keys, &identity, &store_id)?;
-        let crypto = VaultError::from_crypto(VaultCrypto::new(&keys.secrets_key))?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut device = Self {
             session,
             identity,
@@ -51,11 +51,11 @@ impl EventLogDevice {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         Ok(Self {
             session: VaultEventSession::new(peer.store_id().to_owned(), signing, signing_seed),
-            identity: VaultError::from_multi_device(DeviceIdentity::generate())?,
+            identity: DeviceIdentity::generate()?,
             secrets_key: peer.secrets_key.clone(),
             members_key: peer.members_key.clone(),
             projection_cache_yaml: peer.projection_cache_yaml.clone(),
-            crypto: VaultError::from_crypto(VaultCrypto::new(&peer.secrets_key))?,
+            crypto: VaultCrypto::new(&peer.secrets_key)?,
         })
     }
 
@@ -68,7 +68,7 @@ impl EventLogDevice {
     }
 
     pub fn append_secret(&mut self, secret_id: &str, plaintext: &str) -> VaultResult<EventId> {
-        let ciphertext = VaultError::from_crypto(self.crypto.encrypt_value(plaintext))?;
+        let ciphertext = self.crypto.encrypt_value(plaintext)?;
         self.append_signed(vec![VaultOperation::SecretCreated {
             secret: encrypted_secret_from_armored(secret_id, SecretType::ApiKey, &ciphertext),
         }])
@@ -133,7 +133,7 @@ impl EventLogDevice {
             hydrate_keys_from_projection_yaml(&self.projection_cache_yaml, &self.identity)?;
         self.secrets_key.clone_from(&secrets_key);
         self.members_key = members_key;
-        self.crypto = VaultError::from_crypto(VaultCrypto::new(&secrets_key))?;
+        self.crypto = VaultCrypto::new(&secrets_key)?;
         Ok(())
     }
 
@@ -146,7 +146,7 @@ impl EventLogDevice {
             TS,
         )?;
         let id = event.id()?;
-        let bytes = serde_json::to_vec(&event)?;
+        let bytes = serde_json::to_vec(&event).map_err(nook_core::EventError::from)?;
         self.session.store.put_event(id.clone(), bytes);
         self.session.set_heads_from_graph()?;
         Ok(id)
@@ -154,23 +154,23 @@ impl EventLogDevice {
 }
 
 fn genesis_yaml(keys: &VaultKeys, identity: &DeviceIdentity, store_id: &str) -> VaultResult<String> {
-    let mut records = vec![VaultError::from_multi_device(genesis_auth_record(
+    let mut records = vec![genesis_auth_record(
         identity,
         &keys.secrets_key,
         &keys.members_key,
-    ))?];
-    records.extend(VaultError::from_multi_device(genesis_members_records(
+    )?];
+    records.extend(genesis_members_records(
         identity,
         &keys.members_key,
         TS,
-    ))?);
-    VaultError::from_vault_format(serialize_stored_yaml_with_unlock(
+    )?);
+    Ok(serialize_stored_yaml_with_unlock(
         &records,
         &VaultUnlock::Keys,
         &[],
         Some(store_id),
         None,
-    ))
+    )?)
 }
 
 /// Remote provider bucket keyed by provider id.
@@ -211,9 +211,9 @@ pub fn sample_legacy_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
             expires_at: String::new(),
         }),
     );
-    let records = VaultError::from_database(db.to_stored_records_with_crypto(crypto))?;
-    VaultError::from_vault_format(nook_core::serialize_stored(
+    let records = db.to_stored_records_with_crypto(crypto)?;
+    Ok(nook_core::serialize_stored(
         &records,
         nook_core::VaultFormat::Yaml,
-    ))
+    )?)
 }

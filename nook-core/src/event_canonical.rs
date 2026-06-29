@@ -4,7 +4,7 @@
 //! representation with lexicographically sorted object keys at every level.
 //! Array order is preserved (parent lists are sorted before hashing).
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -17,14 +17,15 @@ impl EventId {
     pub fn parse(raw: &str) -> VaultResult<Self> {
         let trimmed = raw.trim();
         let hex = trimmed.strip_prefix("sha256:").ok_or_else(|| {
-            VaultError::EventIdMissingPrefix {
+            EventError::EventIdMissingPrefix {
                 raw: trimmed.to_owned(),
             }
         })?;
         if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(VaultError::EventIdInvalidDigest {
+            return Err(EventError::EventIdInvalidDigest {
                 hex: hex.to_owned(),
-            });
+            }
+            .into());
         }
         Ok(Self(format!("sha256:{hex}")))
     }
@@ -83,20 +84,20 @@ pub fn canonicalize_json(value: &Value) -> Value {
 /// Serialize a JSON value to canonical compact UTF-8 bytes.
 pub fn canonical_json_bytes(value: &Value) -> VaultResult<Vec<u8>> {
     let canonical = canonicalize_json(value);
-    serde_json::to_vec(&canonical).map_err(VaultError::from)
+    Ok(serde_json::to_vec(&canonical).map_err(EventError::from)?)
 }
 
 /// Parse an `ed25519:{hex}` signature string.
 pub fn parse_ed25519_signature(raw: &str) -> VaultResult<Signature> {
     let hex = raw.strip_prefix("ed25519:").ok_or_else(|| {
-        VaultError::SignatureMissingPrefix {
+        EventError::SignatureMissingPrefix {
             raw: raw.to_owned(),
         }
     })?;
-    let bytes = hex::decode(hex)?;
+    let bytes = hex::decode(hex).map_err(EventError::from)?;
     let array: [u8; 64] = bytes
         .try_into()
-        .map_err(|_| VaultError::SignatureWrongLength)?;
+        .map_err(|_| EventError::SignatureWrongLength)?;
     Ok(Signature::from_bytes(&array))
 }
 
@@ -121,7 +122,8 @@ pub fn verify_body_signature(
     let parsed = parse_ed25519_signature(signature)?;
     verifying_key
         .verify(body_bytes, &parsed)
-        .map_err(|_| VaultError::SignatureVerificationFailed)
+        .map_err(|_| EventError::SignatureVerificationFailed)?;
+    Ok(())
 }
 
 #[cfg(test)]

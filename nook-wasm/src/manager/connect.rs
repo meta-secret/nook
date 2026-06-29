@@ -127,7 +127,7 @@ impl NookVaultManager {
         if use_genesis {
             self.initialize_genesis_vault(&identity)?;
             if self.store_id.is_empty() {
-                self.store_id = nook_core::generate_store_id().map_err(NookError::Database)?;
+                self.store_id = nook_core::generate_store_id()?;
             }
             self.bootstrap_event_log_genesis().await?;
             self.persist_projection_cache().await?;
@@ -153,9 +153,9 @@ impl NookVaultManager {
                 self.apply_event_projection_to_session().await?;
             } else {
                 let format =
-                    nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
+                    nook_core::detect_stored_format(&content)?;
                 let records = nook_core::deserialize_stored(&content, format)
-                    .map_err(NookError::Decryption)?;
+                    ?;
                 if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
                     return Err(NookError::Database(message).into());
                 }
@@ -200,15 +200,15 @@ impl NookVaultManager {
         self.password_entries.clear();
         self.unlock = nook_core::VaultUnlock::Keys;
         self.stored_armored.clear();
-        let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
+        let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
         let genesis =
             nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)
-                .map_err(NookError::Encryption)?;
+                ?;
         self.stored_armored
             .insert(genesis.key.clone(), genesis.value);
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")
-            .map_err(NookError::Encryption)?
+            ?
         {
             self.stored_armored.insert(member.key.clone(), member.value);
         }
@@ -235,11 +235,11 @@ impl NookVaultManager {
             let secrets_key = self.secrets_key.clone();
             let members_key = self.members_key.clone();
             let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)
-                .map_err(NookError::Encryption)?;
+                ?;
             self.stored_armored
                 .insert(genesis.key.clone(), genesis.value);
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")
-                .map_err(NookError::Encryption)?
+                ?
             {
                 self.stored_armored.insert(member.key.clone(), member.value);
             }

@@ -1,6 +1,6 @@
 //! Legacy whole-vault YAML → genesis import event conversion.
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::VaultResult;
 use crate::event_canonical::{EventId, sha256_hex};
 use crate::multi_device::user_stored_records;
 use crate::secret_types::StoredSecretRecord;
@@ -16,8 +16,8 @@ pub fn legacy_vault_content_hash(stored: &str) -> String {
 
 /// Extract user secret ciphertext records from a legacy vault blob.
 pub fn legacy_encrypted_secrets(stored: &str) -> VaultResult<Vec<EncryptedSecretPayload>> {
-    let format = crate::vault_format::detect_stored_format(stored).map_err(VaultError::vault_format)?;
-    let records = deserialize_stored(stored, format).map_err(VaultError::vault_format)?;
+    let format = crate::vault_format::detect_stored_format(stored)?;
+    let records = deserialize_stored(stored, format)?;
     Ok(user_stored_records(&records)
         .iter()
         .map(EncryptedSecretPayload::from_stored)
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn legacy_yaml_import_is_idempotent_by_content_hash() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store_id = generate_store_id().map_err(VaultError::multi_device)?;
+        let store_id = generate_store_id()?;
         let actor = "key_1111111111111111111111111111111111111111111111111111111111111111";
 
         let mut db = Database::new();
@@ -97,7 +97,7 @@ mod tests {
             }),
         );
         let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
-        let yaml = db.to_stored_yaml(passphrase).map_err(VaultError::database)?;
+        let yaml = db.to_stored_yaml(passphrase)?;
 
         let first = legacy_vault_to_import_event(
             &yaml,
@@ -124,7 +124,7 @@ mod tests {
             assert_eq!(secrets[0].secret_type, SecretType::ApiKey);
             assert_eq!(source_content_hash, &legacy_vault_content_hash(&yaml));
         } else {
-            return Err(VaultError::vault_format("expected import operation"));
+            return Err(crate::errors::EventError::ExpectedImportOperation.into());
         }
         Ok(())
     }

@@ -7,6 +7,9 @@
 use std::collections::HashMap;
 
 use crate::vault_sync::{VaultSyncAction, compare_vault_sync};
+use crate::errors::VaultSyncError;
+
+type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
 /// A single vault blob plus an optional provider revision token (e.g. GitHub sha).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -69,7 +72,7 @@ impl MemoryVaultStore {
 pub fn reconcile_vault_stores(
     local: &mut MemoryVaultStore,
     remote: &mut MemoryVaultStore,
-) -> Result<VaultSyncAction, String> {
+) -> VaultSyncResult<VaultSyncAction> {
     let action = compare_vault_sync(local.blob(), remote.blob())?;
     apply_vault_sync_action(action, local, remote);
     Ok(action)
@@ -84,14 +87,14 @@ pub fn reconcile_vault_stores(
 pub fn fan_out_sync(
     local: &mut MemoryVaultStore,
     remotes: &mut HashMap<String, MemoryVaultStore>,
-) -> Result<Vec<(String, VaultSyncAction)>, String> {
+) -> VaultSyncResult<Vec<(String, VaultSyncAction)>> {
     let mut ids: Vec<String> = remotes.keys().cloned().collect();
     ids.sort();
     let mut results = Vec::with_capacity(ids.len());
     for id in ids {
-        let remote = remotes
-            .get_mut(&id)
-            .ok_or_else(|| format!("sync provider {id} disappeared during fan-out"))?;
+        let remote = remotes.get_mut(&id).ok_or(VaultSyncError::ProviderDisappeared {
+            provider_id: id.clone(),
+        })?;
         let action = reconcile_vault_stores(local, remote)?;
         results.push((id, action));
     }

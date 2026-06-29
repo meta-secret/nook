@@ -1,6 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::{
     EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes, sign_body,
     verify_body_signature,
@@ -121,7 +121,7 @@ pub struct VaultEventBody {
 
 impl VaultEventBody {
     pub fn to_canonical_value(&self) -> VaultResult<Value> {
-        let mut value = serde_json::to_value(self).map_err(VaultError::EventBodySerialize)?;
+        let mut value = serde_json::to_value(self).map_err(EventError::EventBodySerialize)?;
         if let Value::Object(ref mut map) = value {
             let mut sorted_parents = self.parents.clone();
             sorted_parents.sort();
@@ -166,15 +166,17 @@ impl VaultEvent {
 
     pub fn validate_envelope(&self, expected_store_id: &str) -> VaultResult<EventId> {
         if self.body.schema_version > VAULT_EVENT_SCHEMA_VERSION {
-            return Err(VaultError::UnsupportedSchemaVersion {
+            return Err(EventError::UnsupportedSchemaVersion {
                 version: self.body.schema_version,
-            });
+            }
+            .into());
         }
         if self.body.store_id != expected_store_id {
-            return Err(VaultError::EventStoreIdMismatch {
+            return Err(EventError::EventStoreIdMismatch {
                 expected: expected_store_id.to_owned(),
                 actual: self.body.store_id.clone(),
-            });
+            }
+            .into());
         }
         if self.body.parents.is_empty()
             && !matches!(
@@ -182,7 +184,7 @@ impl VaultEvent {
                 [VaultOperation::VaultImported { .. }]
             )
         {
-            return Err(VaultError::MissingEventParents);
+            return Err(EventError::MissingEventParents.into());
         }
         for parent in &self.body.parents {
             EventId::parse(parent)?;

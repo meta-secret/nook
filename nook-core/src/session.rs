@@ -3,6 +3,7 @@
 use crate::{
     Database, SecretType, SecretValue, VaultCrypto, validate_secret_data, validate_secret_id,
 };
+use crate::errors::{SessionError, SessionResult};
 use std::collections::HashMap;
 
 /// Replacement payload for [`replace_secret`].
@@ -24,18 +25,18 @@ pub fn replace_secret(
     secret_types: &mut HashMap<String, SecretType>,
     crypto: &VaultCrypto,
     input: &ReplaceSecretInput<'_>,
-) -> Result<(), String> {
+) -> SessionResult<()> {
     let old_id = validate_secret_id(input.old_id)?;
     let new_id = validate_secret_id(input.new_id)?;
     if old_id == new_id {
-        return Err("Replacement id must differ from the item being replaced.".to_owned());
+        return Err(SessionError::ReplacementIdUnchanged);
     }
     validate_secret_data(input.data_yaml)?;
     if !db.list().iter().any(|record| record.id == old_id) {
-        return Err(format!("Secret {old_id} not found."));
+        return Err(SessionError::SecretNotFound { id: old_id });
     }
     if db.list().iter().any(|record| record.id == new_id) {
-        return Err(format!("Secret {new_id} already exists."));
+        return Err(SessionError::SecretAlreadyExists { id: new_id });
     }
 
     let typed_value = SecretValue::from_yaml(input.secret_type, input.data_yaml)?;

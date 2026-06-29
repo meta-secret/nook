@@ -63,7 +63,7 @@ fn escape_drive_query_literal(value: &str) -> String {
 }
 
 pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
+    let token = nook_core::validate_oauth_access_token(access_token)?;
     let client = reqwest::Client::new();
     let mut request = client
         .get("https://www.googleapis.com/drive/v3/about")
@@ -163,9 +163,9 @@ pub(crate) async fn ensure_drive_vault_file(
     known_file_id: &str,
     file_name: &str,
 ) -> Result<String, NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
+    let token = nook_core::validate_oauth_access_token(access_token)?;
     let validated_name =
-        nook_core::validate_drive_vault_file_name(file_name).map_err(NookError::Drive)?;
+        nook_core::validate_drive_vault_file_name(file_name)?;
     let trimmed_id = known_file_id.trim();
     if !trimmed_id.is_empty() && fetch_file_metadata(&token, trimmed_id).await.is_ok() {
         return Ok(trimmed_id.to_owned());
@@ -213,7 +213,7 @@ pub(crate) async fn fetch_drive_vault(
     file_id: &str,
     file_name: &str,
 ) -> Result<Option<DriveVaultFile>, NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
+    let token = nook_core::validate_oauth_access_token(access_token)?;
     let resolved_id = ensure_drive_vault_file(&token, file_id, file_name).await?;
     let meta = fetch_file_metadata(&token, &resolved_id).await?;
     let content = read_file_content(&token, &resolved_id).await?;
@@ -238,7 +238,7 @@ pub(crate) async fn write_drive_vault_with_retry(
     content: &str,
     revision: Option<String>,
 ) -> Result<(String, String), NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token).map_err(NookError::Drive)?;
+    let token = nook_core::validate_oauth_access_token(access_token)?;
     let resolved_id = ensure_drive_vault_file(&token, file_id, file_name).await?;
     let mut current_revision = revision;
 

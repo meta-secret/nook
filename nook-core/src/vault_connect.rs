@@ -1,6 +1,6 @@
 //! Connect-time vault assessment and session hydration from stored YAML.
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::VaultResult;
 use crate::{
     Database, DeviceIdentity, SecretType, StoredSecretRecord, VaultCrypto, VaultUnlock,
     assess_connect_access, deserialize_stored, detect_stored_format, resolve_members_key,
@@ -25,8 +25,8 @@ pub fn content_requires_genesis(content: &str, force_genesis: bool) -> VaultResu
     if content.trim().is_empty() {
         return Ok(true);
     }
-    let format = VaultError::from_vault_format(detect_stored_format(content))?;
-    let records = VaultError::from_vault_format(deserialize_stored(content, format))?;
+    let format = detect_stored_format(content)?;
+    let records = deserialize_stored(content, format)?;
     Ok(!vault_has_multi_device_records(&records))
 }
 
@@ -38,8 +38,8 @@ pub fn access_status_for_vault_content(
     if content.trim().is_empty() {
         return Ok("new_vault".to_owned());
     }
-    let format = VaultError::from_vault_format(detect_stored_format(content))?;
-    let records = VaultError::from_vault_format(deserialize_stored(content, format))?;
+    let format = detect_stored_format(content)?;
+    let records = deserialize_stored(content, format)?;
     if !vault_has_multi_device_records(&records) {
         return Ok("new_vault".to_owned());
     }
@@ -68,23 +68,18 @@ pub fn load_stored_vault(
     content: &str,
     identity: &DeviceIdentity,
 ) -> VaultResult<LoadedVault> {
-    let format = VaultError::from_vault_format(detect_stored_format(content))?;
-    let stored_records = VaultError::from_vault_format(deserialize_stored(content, format))?;
-    let secrets_key =
-        VaultError::from_multi_device(resolve_secrets_key(&stored_records, identity))?;
-    let members_key =
-        VaultError::from_multi_device(resolve_members_key(&stored_records, identity))?;
-    let crypto = VaultError::from_crypto(VaultCrypto::new(&secrets_key))?;
+    let format = detect_stored_format(content)?;
+    let stored_records = deserialize_stored(content, format)?;
+    let secrets_key = resolve_secrets_key(&stored_records, identity)?;
+    let members_key = resolve_members_key(&stored_records, identity)?;
+    let crypto = VaultCrypto::new(&secrets_key)?;
     let mut armored = HashMap::with_capacity(stored_records.len());
     for record in &stored_records {
         armored.insert(record.key.clone(), record.value.clone());
     }
     let user_records = user_stored_records(&stored_records);
-    let db = VaultError::from_database(Database::from_stored_records_with_crypto(
-        &user_records,
-        &crypto,
-    ))?;
-    let jsonl = VaultError::from_database(db.to_jsonl())?;
+    let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
+    let jsonl = db.to_jsonl()?;
     let secret_types = records_to_secret_types(&stored_records);
     Ok(LoadedVault {
         jsonl,
@@ -135,25 +130,25 @@ mod tests {
 
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
-        let keys = VaultError::from_multi_device(generate_vault_keys())?;
-        let identity = VaultError::from_multi_device(DeviceIdentity::generate())?;
-        let mut records = vec![VaultError::from_multi_device(genesis_auth_record(
+        let keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let mut records = vec![genesis_auth_record(
             &identity,
             &keys.secrets_key,
             &keys.members_key,
-        ))?];
-        records.extend(VaultError::from_multi_device(genesis_members_records(
+        )?];
+        records.extend(genesis_members_records(
             &identity,
             &keys.members_key,
             "2026-06-28T00:00:00Z",
-        ))?);
-        let yaml = VaultError::from_vault_format(serialize_stored_yaml_with_unlock(
+        )?);
+        let yaml = serialize_stored_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(&VaultError::from_multi_device(generate_store_id())?),
+            Some(&generate_store_id()?),
             None,
-        ))?;
+        )?;
         assert!(!content_requires_genesis(&yaml, false)?);
         assert_eq!(access_status_for_vault_content(&yaml, &identity)?, "ready");
         let loaded = load_stored_vault(&yaml, &identity)?;

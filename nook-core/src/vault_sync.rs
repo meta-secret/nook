@@ -6,6 +6,9 @@
 //! user choice (never auto-merged).
 
 use crate::read_vault_store_id;
+use crate::errors::VaultSyncError;
+
+type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
 /// Outcome of comparing a local vault blob against a remote one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +33,7 @@ pub struct VaultRevision {
 }
 
 /// Read revision metadata without decrypting secret values.
-pub fn read_vault_revision(stored: &str) -> Result<VaultRevision, String> {
+pub fn read_vault_revision(stored: &str) -> VaultSyncResult<VaultRevision> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(VaultRevision {
@@ -54,7 +57,7 @@ pub fn read_vault_revision(stored: &str) -> Result<VaultRevision, String> {
 /// 3. `store_id` mismatch (both present) → error (different logical vaults).
 /// 4. Higher `vault_version` wins → [`AdoptRemote`] or [`PushLocal`].
 /// 5. Equal version, different content → [`VaultSyncAction::Conflict`].
-pub fn compare_vault_sync(local: &str, remote: &str) -> Result<VaultSyncAction, String> {
+pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyncAction> {
     let local_trim = local.trim();
     let remote_trim = remote.trim();
 
@@ -78,9 +81,10 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<VaultSyncAction, 
     if let (Some(local_store), Some(remote_store)) = (&local_rev.store_id, &remote_rev.store_id)
         && local_store != remote_store
     {
-        return Err(format!(
-            "Vault store_id mismatch: local {local_store}, remote {remote_store}"
-        ));
+        return Err(VaultSyncError::StoreIdMismatch {
+            local_store: local_store.clone(),
+            remote_store: remote_store.clone(),
+        });
     }
 
     if local_rev.version < remote_rev.version {

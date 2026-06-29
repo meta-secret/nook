@@ -1,6 +1,6 @@
 //! Ed25519 signing identity for vault events (separate from X25519 encryption keys).
 
-use crate::error::{VaultError, VaultResult};
+use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::format_ed25519_signature;
 use crate::format_auth_key_id;
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
@@ -18,15 +18,15 @@ impl SigningIdentity {
     pub fn generate() -> VaultResult<(Self, String)> {
         let mut seed = [0u8; SIGNING_SEED_LEN];
         getrandom::getrandom(&mut seed)
-            .map_err(|error| VaultError::SigningSeedGeneration(error.to_string()))?;
+            .map_err(|error| EventError::SigningSeedGeneration(error.to_string()))?;
         Self::from_seed_hex(&hex::encode(seed))
     }
 
     pub fn from_seed_hex(seed_hex: &str) -> VaultResult<(Self, String)> {
-        let bytes = hex::decode(seed_hex.trim())?;
+        let bytes = hex::decode(seed_hex.trim()).map_err(EventError::from)?;
         let seed: [u8; SIGNING_SEED_LEN] = bytes
             .try_into()
-            .map_err(|_| VaultError::SigningSeedWrongLength)?;
+            .map_err(|_| EventError::SigningSeedWrongLength)?;
         let signing_key = SigningKey::from_bytes(&seed);
         Ok((Self { signing_key }, hex::encode(seed)))
     }
@@ -48,7 +48,7 @@ impl SigningIdentity {
     /// `key_{sha256_hex}` actor id derived from the Ed25519 public key.
     pub fn actor_id(&self) -> VaultResult<String> {
         let digest = hex::encode(Sha256::digest(self.verifying_key().as_bytes()));
-        format_auth_key_id(&digest).map_err(VaultError::AuthKeyId)
+        Ok(format_auth_key_id(&digest)?)
     }
 
     #[must_use]

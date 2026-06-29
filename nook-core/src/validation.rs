@@ -1,3 +1,4 @@
+use crate::errors::{ValidationError, ValidationResult};
 use crate::{is_auth_key_id, is_device_id};
 
 /// Backend that persists the encrypted vault file.
@@ -32,13 +33,15 @@ impl StorageMode {
     /// Parse a tag string (typically arriving from the JS layer) into the
     /// enum. Unknown values are rejected at the boundary so no caller has
     /// to defend against typos downstream.
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> Result<Self, ValidationError> {
         match value {
             "local" => Ok(Self::Local),
             "github" => Ok(Self::Github),
             "google-drive" => Ok(Self::GoogleDrive),
             "icloud" => Ok(Self::ICloud),
-            other => Err(format!("errors.validation.unknown_storage_mode:{}", other)),
+            other => Err(ValidationError::UnknownStorageMode {
+                mode: other.to_owned(),
+            }),
         }
     }
 }
@@ -63,59 +66,59 @@ pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
 /// Boundary helper: confirms a raw string is a known storage mode. Prefer
 /// `StorageMode::parse` when you also want the parsed value.
-pub fn validate_storage_mode(mode: &str) -> Result<(), String> {
+pub fn validate_storage_mode(mode: &str) -> ValidationResult<()> {
     StorageMode::parse(mode).map(|_| ())
 }
 
-pub fn validate_github_pat(pat: &str) -> Result<String, String> {
+pub fn validate_github_pat(pat: &str) -> ValidationResult<String> {
     let trimmed = pat.trim();
     if trimmed.is_empty() {
-        return Err("errors.validation.github_pat_empty".to_owned());
+        return Err(ValidationError::GithubPatEmpty);
     }
     Ok(trimmed.to_owned())
 }
 
 /// Validates a GitHub repository name (not `owner/name`). Empty uses [`DEFAULT_GITHUB_REPO_NAME`].
-pub fn validate_github_repo_name(name: &str) -> Result<String, String> {
+pub fn validate_github_repo_name(name: &str) -> ValidationResult<String> {
     let repo = if name.trim().is_empty() {
         DEFAULT_GITHUB_REPO_NAME.to_owned()
     } else {
         name.trim().to_owned()
     };
     if repo.len() > 100 {
-        return Err("errors.validation.github_repo_length".to_owned());
+        return Err(ValidationError::GithubRepoLength);
     }
     if repo == "." || repo == ".." {
-        return Err("errors.validation.github_repo_invalid".to_owned());
+        return Err(ValidationError::GithubRepoInvalid);
     }
     if !repo
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
     {
-        return Err("errors.validation.github_repo_chars".to_owned());
+        return Err(ValidationError::GithubRepoChars);
     }
     Ok(repo)
 }
 
 /// Validates a Google Drive app-data vault file name. Empty uses
 /// [`DEFAULT_DRIVE_VAULT_FILE_NAME`].
-pub fn validate_drive_vault_file_name(name: &str) -> Result<String, String> {
+pub fn validate_drive_vault_file_name(name: &str) -> ValidationResult<String> {
     let file_name = if name.trim().is_empty() {
         DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
     } else {
         name.trim().to_owned()
     };
     if file_name.len() > 100 {
-        return Err("errors.validation.drive_file_name_length".to_owned());
+        return Err(ValidationError::DriveFileNameLength);
     }
     if file_name == "." || file_name == ".." {
-        return Err("errors.validation.drive_file_name_invalid".to_owned());
+        return Err(ValidationError::DriveFileNameInvalid);
     }
     if !file_name
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
     {
-        return Err("errors.validation.drive_file_name_chars".to_owned());
+        return Err(ValidationError::DriveFileNameChars);
     }
     Ok(file_name)
 }
@@ -142,10 +145,10 @@ pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
     }
 }
 
-pub fn validate_oauth_access_token(token: &str) -> Result<String, String> {
+pub fn validate_oauth_access_token(token: &str) -> ValidationResult<String> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
-        return Err("errors.validation.oauth_access_token_empty".to_owned());
+        return Err(ValidationError::OauthAccessTokenEmpty);
     }
     Ok(trimmed.to_owned())
 }
@@ -154,7 +157,10 @@ pub fn validate_oauth_access_token(token: &str) -> Result<String, String> {
 ///
 /// Accepts a string-typed `storage_mode` purely as a boundary convenience
 /// for callers crossing FFI; the canonical internal type is `StorageMode`.
-pub fn validate_connect(storage_mode: &str, github_pat: &str) -> Result<Option<String>, String> {
+pub fn validate_connect(
+    storage_mode: &str,
+    github_pat: &str,
+) -> Result<Option<String>, ValidationError> {
     let mode = StorageMode::parse(storage_mode)?;
     match mode {
         StorageMode::Github => Ok(Some(validate_github_pat(github_pat)?)),
@@ -191,9 +197,9 @@ pub fn filter_secrets(records: &[crate::SecretRecord], query: &str) -> Vec<crate
         .collect()
 }
 
-pub fn validate_secret_data(data: &str) -> Result<(), String> {
+pub fn validate_secret_data(data: &str) -> ValidationResult<()> {
     if data.is_empty() {
-        return Err("errors.validation.secret_data_required".to_owned());
+        return Err(ValidationError::SecretDataRequired);
     }
     Ok(())
 }

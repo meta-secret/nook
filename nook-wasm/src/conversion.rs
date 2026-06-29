@@ -101,10 +101,7 @@ pub(crate) fn vault_member_records(
     records: &[nook_core::StoredSecretRecord],
     members_key: &str,
 ) -> Result<Vec<nook_core::VaultMember>, NookError> {
-    Ok(nook_core::VaultError::from_multi_device(nook_core::resolve_member_roster(
-        records,
-        members_key,
-    ))?)
+    Ok(nook_core::resolve_member_roster(records, members_key)?)
 }
 
 pub(crate) fn pending_joins_to_vec(

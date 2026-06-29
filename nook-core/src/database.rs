@@ -6,6 +6,7 @@
 //! through this struct, so encryption boundaries stay localised.
 
 use crate::multi_device;
+use crate::errors::{DatabaseError, DatabaseResult};
 use crate::secret_types::{SecretRecord, SecretType, SecretValue, StoredSecretRecord};
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_format::{self, VaultFormat, detect_stored_format};
@@ -24,15 +25,15 @@ impl Database {
         }
     }
 
-    pub fn from_jsonl(jsonl: &str) -> Result<Self, String> {
+    pub fn from_jsonl(jsonl: &str) -> DatabaseResult<Self> {
         let mut records = HashMap::new();
         for line in jsonl.lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
             }
-            let record: SecretRecord = serde_json::from_str(line)
-                .map_err(|e| format!("Failed to parse JSONL line: {}", e))?;
+            let record: SecretRecord =
+                serde_json::from_str(line).map_err(DatabaseError::JsonlParse)?;
             records.insert(record.id.clone(), record);
         }
         Ok(Self { records })
@@ -42,47 +43,46 @@ impl Database {
         stored: &str,
         passphrase: &str,
         format: VaultFormat,
-    ) -> Result<Self, String> {
+    ) -> DatabaseResult<Self> {
         let stored_records = vault_format::deserialize_stored(stored, format)?;
         Self::from_stored_records(&stored_records, passphrase)
     }
 
-    pub fn from_stored_auto(stored: &str, passphrase: &str) -> Result<Self, String> {
+    pub fn from_stored_auto(stored: &str, passphrase: &str) -> DatabaseResult<Self> {
         let format = detect_stored_format(stored)?;
         Self::from_stored(stored, passphrase, format)
     }
 
-    pub fn from_stored_jsonl(stored_jsonl: &str, passphrase: &str) -> Result<Self, String> {
+    pub fn from_stored_jsonl(stored_jsonl: &str, passphrase: &str) -> DatabaseResult<Self> {
         Self::from_stored(stored_jsonl, passphrase, VaultFormat::Jsonl)
     }
 
-    pub fn from_stored_yaml(stored_yaml: &str, passphrase: &str) -> Result<Self, String> {
+    pub fn from_stored_yaml(stored_yaml: &str, passphrase: &str) -> DatabaseResult<Self> {
         Self::from_stored(stored_yaml, passphrase, VaultFormat::Yaml)
     }
 
-    pub fn to_jsonl(&self) -> Result<String, String> {
+    pub fn to_jsonl(&self) -> DatabaseResult<String> {
         let mut lines = Vec::new();
         let mut keys: Vec<&String> = self.records.keys().collect();
         keys.sort();
         for key in keys {
             let record = self.records.get(key).unwrap();
-            let line = serde_json::to_string(&record)
-                .map_err(|e| format!("Failed to serialize record: {}", e))?;
+            let line = serde_json::to_string(&record).map_err(DatabaseError::JsonlSerialize)?;
             lines.push(line);
         }
         Ok(lines.join("\n"))
     }
 
-    pub fn to_stored(&self, passphrase: &str, format: VaultFormat) -> Result<String, String> {
+    pub fn to_stored(&self, passphrase: &str, format: VaultFormat) -> DatabaseResult<String> {
         let stored_records = self.to_stored_records(passphrase)?;
-        vault_format::serialize_stored(&stored_records, format)
+        Ok(vault_format::serialize_stored(&stored_records, format)?)
     }
 
-    pub fn to_stored_jsonl(&self, passphrase: &str) -> Result<String, String> {
+    pub fn to_stored_jsonl(&self, passphrase: &str) -> DatabaseResult<String> {
         self.to_stored(passphrase, VaultFormat::Jsonl)
     }
 
-    pub fn to_stored_yaml(&self, passphrase: &str) -> Result<String, String> {
+    pub fn to_stored_yaml(&self, passphrase: &str) -> DatabaseResult<String> {
         self.to_stored(passphrase, VaultFormat::Yaml)
     }
 
@@ -111,7 +111,7 @@ impl Database {
     fn from_stored_records(
         stored_records: &[StoredSecretRecord],
         passphrase: &str,
-    ) -> Result<Self, String> {
+    ) -> DatabaseResult<Self> {
         let crypto = VaultCrypto::new(passphrase)?;
         Self::from_stored_records_with_crypto(stored_records, &crypto)
     }
@@ -119,12 +119,12 @@ impl Database {
     pub fn from_stored_records_with_crypto(
         stored_records: &[StoredSecretRecord],
         crypto: &VaultCrypto,
-    ) -> Result<Self, String> {
+    ) -> DatabaseResult<Self> {
         let user_records = multi_device::user_stored_records(stored_records);
         let mut records = HashMap::new();
         for stored in user_records {
-            let secret_type = stored.secret_type.ok_or_else(|| {
-                format!("Secret {} is missing required type metadata.", stored.key)
+            let secret_type = stored.secret_type.ok_or(DatabaseError::MissingSecretType {
+                key: stored.key.clone(),
             })?;
             let decrypted = crypto.decrypt_value(&stored.value)?;
             let value = SecretValue::from_yaml(secret_type, &decrypted)?;
@@ -140,7 +140,7 @@ impl Database {
         Ok(Self { records })
     }
 
-    fn to_stored_records(&self, passphrase: &str) -> Result<Vec<StoredSecretRecord>, String> {
+    fn to_stored_records(&self, passphrase: &str) -> DatabaseResult<Vec<StoredSecretRecord>> {
         let crypto = VaultCrypto::new(passphrase)?;
         self.to_stored_records_with_crypto(&crypto)
     }
@@ -148,7 +148,7 @@ impl Database {
     pub fn to_stored_records_with_crypto(
         &self,
         crypto: &VaultCrypto,
-    ) -> Result<Vec<StoredSecretRecord>, String> {
+    ) -> DatabaseResult<Vec<StoredSecretRecord>> {
         let mut keys: Vec<&String> = self.records.keys().collect();
         keys.sort();
         let mut stored_records = Vec::with_capacity(keys.len());
@@ -433,7 +433,7 @@ mod tests {
 {broken"#,
         )
         .unwrap_err();
-        assert!(err.contains("Failed to parse JSONL line"));
+        assert!(err.to_string().contains("Failed to parse JSONL line"));
     }
 
     #[test]
