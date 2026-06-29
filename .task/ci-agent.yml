@@ -1,0 +1,40 @@
+version: '3'
+
+tasks:
+  ci-agent:install:
+    internal: true
+    dir: ci-agent
+    cmds:
+      - npm ci
+
+  ci-agent:build:
+    internal: true
+    dir: ci-agent
+    deps:
+      - ci-agent:install
+    sources:
+      - src/**/*
+      - tsconfig.json
+    generates:
+      - dist/main.js
+    cmds:
+      - npm run build
+
+  ci-agent:prepare:
+    desc: Install and build ci-agent (Node 22.13+ required).
+    cmds:
+      - >-
+        node -e "const [maj,min]=process.versions.node.split('.').map(Number);
+        if(maj<22||(maj===22&&min<13)){console.error('ci-agent requires Node.js 22.13+ (have '+process.versions.node+')');process.exit(1)}"
+      - task: ci-agent:build
+
+  ci-agent:run:
+    desc: Run ci-agent harness (CURSOR_API_KEY, GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID).
+    deps:
+      - ci-agent:prepare
+    env:
+      REPO_ROOT: '{{.ROOT_DIR}}'
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - node ci-agent/dist/main.js

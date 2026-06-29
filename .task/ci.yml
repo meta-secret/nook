@@ -86,12 +86,9 @@ tasks:
       - task: docker:push:ci
 
   ci:fix:agent:
-    desc: Run Cursor SDK ci-agent in Docker to fix a failed main CI run, open a PR, and squash-merge when green.
-    deps:
-      - setup
-      - docker:cursor-agent:build
+    desc: Run ci-agent SDK harness to fix a failed main CI run, open a PR, and squash-merge when green.
     cmds:
-      - task: docker:cursor-agent:run
+      - task: ci-agent:run
 
   ci:pr:deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).

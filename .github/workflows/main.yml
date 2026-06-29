@@ -3,7 +3,7 @@
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
 #
-# On CI failure: Cursor Agent (Docker) opens a fix PR and squash-merges when checks pass.
+# On CI failure: ci-agent (task ci:fix:agent) opens a fix PR and squash-merges when checks pass.
 # Requires repository secret CURSOR_API_KEY — see job ci-fix comments.
 #
 # Playwright browsers are pre-installed in the toolchain image.
@@ -92,7 +92,12 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Cursor Agent fix loop
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run ci-agent fix loop
         run: >-
           task ci:fix:agent
           VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
