@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { AgentTextLog, ShellStreamLog } from "../dist/interaction-log.js";
+import { AgentTextLog, ShellStreamLog } from "../main/interaction-log.js";
 
 function captureLog() {
   const lines: string[] = [];

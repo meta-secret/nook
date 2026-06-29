@@ -7,7 +7,7 @@ import {
   extractShellOutputChunk,
   formatToolCompleted,
   formatToolStarted,
-} from "../dist/tool-summary.js";
+} from "../main/tool-summary.js";
 
 test("formatToolStarted shortens CI workspace paths", () => {
   const toolCall = {
