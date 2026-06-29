@@ -120,9 +120,7 @@ pub fn union_remote_events(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vault_event::{
-        VaultEvent, VaultEventBody, VaultOperation, build_genesis_import_event,
-    };
+    use crate::vault_event::build_genesis_import_event;
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
