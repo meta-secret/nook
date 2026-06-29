@@ -12,7 +12,8 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@cursor/sdk": "^1.0.22"
+    "@cursor/sdk": "^1.0.22",
+    "@octokit/rest": "^22.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.19.11",

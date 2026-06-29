@@ -3,7 +3,7 @@
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
 #
-# On CI failure: ci-agent fixes and pushes a branch; this workflow opens the PR and squash-merges.
+# On CI failure: task ci-agent:fix (Cursor SDK + GitHub REST API) fixes, opens PR, squash-merges.
 # Requires repository secret CURSOR_API_KEY — see job ci-fix comments.
 #
 # Playwright browsers are pre-installed in the toolchain image.
@@ -80,9 +80,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      checks: read
       packages: write
     env:
-      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
       FIX_BRANCH: fix/ci-${{ github.run_id }}
       GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_RUN_ID: ${{ github.run_id }}
@@ -102,19 +103,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Set git committer for agent commits
-        run: |
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-
-      - name: Find existing fix PR
-        id: find_pr
-        run: |
-          number="$(gh pr list --head "$FIX_BRANCH" --state open --json number -q '.[0].number' || true)"
-          echo "number=${number}" >> "$GITHUB_OUTPUT"
-
-      - name: Run ci-agent
-        if: steps.find_pr.outputs.number == ''
+      - name: Run ci-fix
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           REPO_ROOT: ${{ github.workspace }}
@@ -125,55 +114,7 @@ jobs:
           NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}
           NOOK_GITHUB_SYNC_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_SYNC_TIMEOUT_MS }}
           NOOK_GITHUB_CONNECT_TIMEOUT_MS: ${{ env.CI_MAIN_GITHUB_CONNECT_TIMEOUT_MS }}
-        run: |
-          if [ -z "${CURSOR_API_KEY:-}" ]; then
-            echo "::warning::CURSOR_API_KEY is not set — skipping AI CI fix job."
-            echo "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys)."
-            exit 0
-          fi
-          task ci-agent:run
-
-      - name: Create fix PR
-        if: steps.find_pr.outputs.number == ''
-        id: create_pr
-        run: |
-          if ! git ls-remote --exit-code --heads origin "$FIX_BRANCH" >/dev/null 2>&1; then
-            echo "::warning::Fix branch ${FIX_BRANCH} was not pushed — skipping PR creation."
-            exit 0
-          fi
-          if [ -z "$(gh pr list --head "$FIX_BRANCH" --state open --json number -q '.[0].number' || true)" ]; then
-            gh pr create \
-              --base main \
-              --head "$FIX_BRANCH" \
-              --title "Fix main CI (run ${GITHUB_RUN_ID})" \
-              --body "$(cat <<EOF
-          ## Summary
-          Auto-fix for failed main CI run ${GITHUB_RUN_ID}.
-
-          ## Test plan
-          - [ ] CI green on this PR
-          EOF
-          )"
-          fi
-          number="$(gh pr list --head "$FIX_BRANCH" --state open --json number -q '.[0].number')"
-          echo "number=${number}" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve PR number
-        id: pr
-        run: |
-          if [ -n "${{ steps.find_pr.outputs.number }}" ]; then
-            echo "number=${{ steps.find_pr.outputs.number }}" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ steps.create_pr.outputs.number }}" ]; then
-            echo "number=${{ steps.create_pr.outputs.number }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Wait for PR checks
-        if: steps.pr.outputs.number != ''
-        run: gh pr checks "${{ steps.pr.outputs.number }}" --watch --fail-fast
-
-      - name: Squash merge fix PR
-        if: steps.pr.outputs.number != ''
-        run: gh pr merge "${{ steps.pr.outputs.number }}" --squash --delete-branch
+        run: task ci-agent:fix
 
   deploy:
     name: Deploy GitHub Pages

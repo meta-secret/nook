@@ -29,7 +29,7 @@ tasks:
       - task: ci-agent:build
 
   ci-agent:run:
-    desc: Run Cursor SDK agent only (fix code and open PR via prompt; Task handles merge).
+    desc: Run Cursor SDK agent only (fix and push branch).
     deps:
       - ci-agent:prepare
     env:
@@ -37,4 +37,15 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
-      - node ci-agent/dist/main.js
+      - node ci-agent/dist/main.js agent
+
+  ci-agent:fix:
+    desc: Full CI fix loop — agent, GitHub REST API (PR, checks, squash merge).
+    deps:
+      - ci-agent:prepare
+    env:
+      REPO_ROOT: '{{.ROOT_DIR}}'
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - node ci-agent/dist/main.js fix
