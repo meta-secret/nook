@@ -5,6 +5,8 @@ const WORKSPACE_PREFIXES = [
   "/workspace/",
 ];
 
+const MAX_SHELL_STREAM_CHARS = 16_000;
+
 export function formatToolStarted(toolCall: ToolCall): string {
   switch (toolCall.type) {
     case "read":
@@ -46,7 +48,7 @@ export function formatToolStarted(toolCall: ToolCall): string {
   }
 }
 
-export function formatToolCompleted(toolCall: ToolCall): string | null {
+export function formatToolCompleted(toolCall: ToolCall): string[] | null {
   const result = toolCall.result;
   if (!result) {
     return null;
@@ -54,21 +56,86 @@ export function formatToolCompleted(toolCall: ToolCall): string | null {
 
   if (result.status === "error") {
     const message = errorMessage(result.error);
-    return `${toolCall.type} failed: ${truncate(message, 120)}`;
+    return [`${toolCall.type} failed: ${truncate(message, 120)}`];
   }
 
   switch (toolCall.type) {
     case "shell": {
+      const lines: string[] = [];
+      lines.push(...formatShellOutputBlocks(result.value));
       const exitCode = shellExitCode(result.value);
-      return exitCode === 0 ? "shell exit 0" : `shell exit ${exitCode}`;
+      lines.push(exitCode === 0 ? "shell exit 0" : `shell exit ${exitCode}`);
+      return lines;
     }
     case "task":
-      return "task done";
+      return ["task done"];
     case "mcp":
-      return "mcp done";
+      return ["mcp done"];
     default:
       return null;
   }
+}
+
+export function extractShellOutputChunk(event: Record<string, unknown> | undefined): string {
+  if (!event) {
+    return "";
+  }
+
+  const direct = readShellText(event);
+  if (direct) {
+    return direct;
+  }
+
+  const nested = event.value;
+  if (nested && typeof nested === "object") {
+    return readShellText(nested as Record<string, unknown>);
+  }
+
+  return "";
+}
+
+function formatShellOutputBlocks(value: unknown): string[] {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const { stdout, stderr } = value as { stdout?: unknown; stderr?: unknown };
+  const lines: string[] = [];
+
+  if (typeof stdout === "string" && stdout.length > 0) {
+    lines.push(...formatOutputBlock("stdout", stdout));
+  }
+  if (typeof stderr === "string" && stderr.length > 0) {
+    lines.push(...formatOutputBlock("stderr", stderr));
+  }
+
+  return lines;
+}
+
+function formatOutputBlock(label: string, text: string): string[] {
+  const capped = capShellOutput(text);
+  const body = capped.split("\n").map((line) => `    ${line}`);
+  return [`--- ${label} ---`, ...body];
+}
+
+function capShellOutput(text: string): string {
+  if (text.length <= MAX_SHELL_STREAM_CHARS) {
+    return text.replace(/\n$/, "");
+  }
+
+  const omitted = text.length - MAX_SHELL_STREAM_CHARS;
+  const tail = text.slice(-MAX_SHELL_STREAM_CHARS).replace(/^\n?/, "");
+  return `... (${omitted} chars omitted) ...\n${tail}`.replace(/\n$/, "");
+}
+
+function readShellText(value: Record<string, unknown>): string {
+  for (const key of ["text", "content", "data", "stdout", "stderr", "chunk"]) {
+    const candidate = value[key];
+    if (typeof candidate === "string" && candidate.length > 0) {
+      return candidate;
+    }
+  }
+  return "";
 }
 
 function stringArg(args: ToolCall["args"] | undefined, key: string): string {

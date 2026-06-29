@@ -3,7 +3,11 @@ import test from "node:test";
 
 import type { ToolCall } from "@cursor/sdk";
 
-import { formatToolCompleted, formatToolStarted } from "./tool-summary.js";
+import {
+  extractShellOutputChunk,
+  formatToolCompleted,
+  formatToolStarted,
+} from "./tool-summary.js";
 
 test("formatToolStarted shortens CI workspace paths", () => {
   const toolCall = {
@@ -30,7 +34,33 @@ test("formatToolStarted summarizes shell commands", () => {
   );
 });
 
-test("formatToolCompleted reports shell exit codes", () => {
+test("formatToolCompleted includes shell stdout and stderr", () => {
+  const toolCall = {
+    type: "shell",
+    args: { command: "task ci:main:parallel" },
+    result: {
+      status: "success",
+      value: {
+        exitCode: 1,
+        signal: "",
+        stdout: "task: ci:verify:parallel\nerror: test failed",
+        stderr: "warning: slow step",
+        executionTime: 42,
+      },
+    },
+  } satisfies ToolCall;
+
+  assert.deepEqual(formatToolCompleted(toolCall), [
+    "--- stdout ---",
+    "    task: ci:verify:parallel",
+    "    error: test failed",
+    "--- stderr ---",
+    "    warning: slow step",
+    "shell exit 1",
+  ]);
+});
+
+test("formatToolCompleted reports shell exit codes without empty output blocks", () => {
   const success = {
     type: "shell",
     args: { command: "true" },
@@ -46,23 +76,7 @@ test("formatToolCompleted reports shell exit codes", () => {
     },
   } satisfies ToolCall;
 
-  const failure = {
-    type: "shell",
-    args: { command: "false" },
-    result: {
-      status: "success",
-      value: {
-        exitCode: 1,
-        signal: "",
-        stdout: "",
-        stderr: "boom",
-        executionTime: 1,
-      },
-    },
-  } satisfies ToolCall;
-
-  assert.equal(formatToolCompleted(success), "shell exit 0");
-  assert.equal(formatToolCompleted(failure), "shell exit 1");
+  assert.deepEqual(formatToolCompleted(success), ["shell exit 0"]);
 });
 
 test("formatToolCompleted skips noisy read completions", () => {
@@ -88,5 +102,11 @@ test("formatToolCompleted surfaces tool errors", () => {
     },
   } satisfies ToolCall;
 
-  assert.equal(formatToolCompleted(toolCall), "shell failed: command not found");
+  assert.deepEqual(formatToolCompleted(toolCall), ["shell failed: command not found"]);
+});
+
+test("extractShellOutputChunk reads common event shapes", () => {
+  assert.equal(extractShellOutputChunk({ text: "line 1\n" }), "line 1\n");
+  assert.equal(extractShellOutputChunk({ case: "stdout", value: { content: "ok" } }), "ok");
+  assert.equal(extractShellOutputChunk(undefined), "");
 });

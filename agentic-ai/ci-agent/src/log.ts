@@ -2,7 +2,11 @@
 
 import type { InteractionUpdate } from "@cursor/sdk";
 
-import { formatToolCompleted, formatToolStarted } from "./tool-summary.js";
+import {
+  extractShellOutputChunk,
+  formatToolCompleted,
+  formatToolStarted,
+} from "./tool-summary.js";
 
 export function logInteractionUpdate(update: InteractionUpdate): void {
   switch (update.type) {
@@ -13,13 +17,22 @@ export function logInteractionUpdate(update: InteractionUpdate): void {
       break;
     case "thinking-delta":
       break;
+    case "shell-output-delta": {
+      const chunk = extractShellOutputChunk(update.event);
+      if (chunk) {
+        process.stdout.write(chunk);
+      }
+      break;
+    }
     case "tool-call-started":
       console.log(`\n==> ${formatToolStarted(update.toolCall)}`);
       break;
     case "tool-call-completed": {
-      const summary = formatToolCompleted(update.toolCall);
-      if (summary) {
-        console.log(`==> ${summary}`);
+      const lines = formatToolCompleted(update.toolCall);
+      if (lines) {
+        for (const line of lines) {
+          console.log(`==> ${line}`);
+        }
       }
       break;
     }
