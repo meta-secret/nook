@@ -34,7 +34,7 @@ run_agent_if_needed() {
   local pr_num
   pr_num="$(find_open_pr)"
   if [[ -n "$pr_num" ]]; then
-    echo "==> Open PR already exists for $FIX_BRANCH (#$pr_num) — waiting for checks"
+    echo "==> Open PR already exists for $FIX_BRANCH (#$pr_num) — waiting for checks" >&2
     echo "$pr_num"
     return
   fi
@@ -45,7 +45,7 @@ run_agent_if_needed() {
     echo "::error::ci-agent did not open a PR for branch ${FIX_BRANCH}." >&2
     exit 1
   fi
-  echo "==> Agent opened PR #${pr_num}"
+  echo "==> Agent opened PR #${pr_num}" >&2
   echo "$pr_num"
 }
 
