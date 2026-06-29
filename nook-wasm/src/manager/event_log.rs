@@ -2,7 +2,8 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::storage::drive_events::{list_drive_event_ids, put_drive_event_if_absent};
+use crate::conversion::wasm_iso_timestamp;
+use crate::storage::drive_events::{fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent};
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
@@ -14,13 +15,12 @@ use crate::storage::github_events::{
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultOperation, build_signed_event,
-    legacy_vault_to_import_event, project_vault, union_remote_events,
+    legacy_vault_to_import_event, project_vault, rotate_vault_keys_with_secrets,
+    union_remote_events,
 };
 
 fn iso_timestamp() -> String {
-    let ms = js_sys::Date::now() as i64;
-    let secs = ms / 1000;
-    format!("{secs}") // audit-only; sufficient for v1
+    wasm_iso_timestamp()
 }
 
 impl NookVaultManager {
@@ -258,7 +258,7 @@ impl NookVaultManager {
                 list_github_event_ids(&self.github_pat, &self.github_repo).await?
             }
             nook_core::StorageMode::GoogleDrive => {
-                list_drive_event_ids(&self.github_pat, &format!("{}.event", self.store_id)).await?
+                list_drive_event_ids(&self.github_pat).await?
             }
             _ => Vec::new(),
         };
@@ -269,6 +269,9 @@ impl NookVaultManager {
             let bytes = match self.storage_mode {
                 nook_core::StorageMode::Github => {
                     fetch_github_event(&self.github_pat, &self.github_repo, &event_id).await?
+                }
+                nook_core::StorageMode::GoogleDrive => {
+                    fetch_drive_event(&self.github_pat, &event_id).await?
                 }
                 _ => continue,
             };
@@ -322,5 +325,85 @@ impl NookVaultManager {
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
         Ok(())
+    }
+
+    pub(in crate::manager) async fn persist_vault_change(
+        &mut self,
+        operations: Vec<VaultOperation>,
+    ) -> Result<(), NookError> {
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            if operations.is_empty() {
+                self.persist_projection_cache().await?;
+                self.flush_event_outbox().await?;
+            } else {
+                self.append_vault_operations(operations).await?;
+            }
+        } else {
+            self.save_current_db().await?;
+        }
+        Ok(())
+    }
+
+    fn members_checkpoint_hash(&self) -> Result<String, NookError> {
+        let records = self.stored_records_snapshot();
+        let roster = nook_core::resolve_member_roster(&records, &self.members_key)
+            .map_err(NookError::Database)?;
+        let member_records = nook_core::build_members_records(&roster, &self.members_key)
+            .map_err(NookError::Encryption)?;
+        let json = serde_json::to_string(&member_records)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        Ok(nook_core::sha256_hex(json.as_bytes()))
+    }
+
+    pub(in crate::manager) async fn rotate_security_epoch(
+        &mut self,
+        trigger: VaultOperation,
+    ) -> Result<(), NookError> {
+        self.activate_event_log_mode().await?;
+        self.append_vault_operations(vec![trigger]).await?;
+        let new_epoch = self
+            .event_heads
+            .last()
+            .cloned()
+            .unwrap_or_else(|| self.key_epoch.clone());
+        self.key_epoch = new_epoch.clone();
+        save_key_epoch(&self.store_id, &self.key_epoch).await?;
+
+        let old_secrets_key = self.secrets_key.clone();
+        let user_records: Vec<nook_core::StoredSecretRecord> = self
+            .stored_records_snapshot()
+            .into_iter()
+            .filter(|record| !nook_core::is_vault_meta_record(record))
+            .collect();
+        let (new_keys, secrets) =
+            rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)
+                .map_err(NookError::Encryption)?;
+        self.apply_vault_keys(&new_keys.secrets_key, &new_keys.members_key)?;
+        for payload in &secrets {
+            self.stored_armored
+                .insert(payload.id.clone(), payload.ciphertext.clone());
+            self.secret_types
+                .insert(payload.id.clone(), payload.secret_type);
+        }
+        let members_checkpoint_hash = self.members_checkpoint_hash()?;
+        self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
+            secrets,
+            members_checkpoint_hash,
+        }])
+        .await?;
+        Ok(())
+    }
+
+    pub(in crate::manager) async fn load_projection_conflicts(
+        &self,
+    ) -> Result<nook_core::VaultProjection, NookError> {
+        if self.store_id.is_empty() {
+            return Ok(nook_core::VaultProjection::default());
+        }
+        let store = load_local_event_store(&self.store_id).await?;
+        let graph = store
+            .load_graph(&self.store_id)
+            .map_err(NookError::Database)?;
+        project_vault(&graph, &self.store_id).map_err(NookError::Database)
     }
 }

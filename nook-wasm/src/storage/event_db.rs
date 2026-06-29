@@ -1,4 +1,4 @@
-//! IndexedDB persistence for the immutable vault event log.
+//! `IndexedDB` persistence for the immutable vault event log.
 
 use crate::NookError;
 use nook_core::{EventId, LocalEventStore};
@@ -160,14 +160,14 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
                 .get(js_key)
                 .await
                 .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?
+                && !val.is_undefined()
+                && !val.is_null()
             {
-                if !val.is_undefined() && !val.is_null() {
-                    let bytes: String = serde_wasm_bindgen::from_value(val).map_err(|e| {
-                        NookError::IndexedDb(format!("Deserialization error: {e:?}"))
-                    })?;
-                    if let Ok(event_id) = EventId::parse(&raw_id) {
-                        local.put_event(event_id, bytes.into_bytes());
-                    }
+                let bytes: String = serde_wasm_bindgen::from_value(val).map_err(|e| {
+                    NookError::IndexedDb(format!("Deserialization error: {e:?}"))
+                })?;
+                if let Ok(event_id) = EventId::parse(&raw_id) {
+                    local.put_event(event_id, bytes.into_bytes());
                 }
             }
         }
@@ -246,12 +246,12 @@ pub(crate) async fn load_outbox(provider_id: &str) -> Result<Vec<(String, Vec<u8
             .get(js_key)
             .await
             .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?
+            && !val.is_undefined()
+            && !val.is_null()
         {
-            if !val.is_undefined() && !val.is_null() {
-                let text: String = serde_wasm_bindgen::from_value(val)
-                    .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
-                out.push((event_id, text.into_bytes()));
-            }
+            let text: String = serde_wasm_bindgen::from_value(val)
+                .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
+            out.push((event_id, text.into_bytes()));
         }
     }
     transaction

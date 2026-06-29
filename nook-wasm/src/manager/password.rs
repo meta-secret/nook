@@ -94,7 +94,19 @@ impl NookVaultManager {
 
         self.password_entries.push(entry);
         self.unlock = nook_core::VaultUnlock::Keys;
-        self.save_current_db().await?;
+        let entry_id = self.password_entries.last().map(|e| e.id.clone()).unwrap_or_default();
+        let envelope_ciphertext = self
+            .password_entries
+            .last()
+            .map(|e| serde_json::to_string(&e.envelope))
+            .transpose()
+            .map_err(|e| NookError::Serialization(e.to_string()))?
+            .unwrap_or_default();
+        self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
+            entry_id,
+            envelope_ciphertext,
+        }])
+        .await?;
         Ok(())
     }
 
@@ -127,21 +139,45 @@ impl NookVaultManager {
             .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
         target.envelope =
             nook_core::attach_password_envelope(&keys, &password).map_err(NookError::Encryption)?;
-        self.save_current_db().await?;
+        let envelope_ciphertext = serde_json::to_string(&target.envelope)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
+                entry_id: entry_id.clone(),
+                envelope_ciphertext,
+            })
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         Ok(())
     }
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
         self.password_entries.retain(|entry| entry.id != entry_id);
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+                entry_id: entry_id.clone(),
+            })
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         Ok(())
     }
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
         self.password_entries.clear();
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+                entry_id: String::new(),
+            })
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         Ok(())
     }
 

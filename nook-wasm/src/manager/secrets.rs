@@ -176,9 +176,18 @@ impl NookVaultManager {
         Ok(())
     }
 
-    #[wasm_bindgen(getter, js_name = eventLogMode)]
+    #[wasm_bindgen(js_name = eventLogMode)]
     pub fn event_log_mode(&self) -> bool {
         self.event_log_mode
+    }
+
+    #[wasm_bindgen(js_name = listProjectionConflicts)]
+    pub async fn list_projection_conflicts(
+        &self,
+    ) -> Result<Vec<crate::NookReplacementConflict>, JsError> {
+        let projection = self.load_projection_conflicts().await?;
+        crate::types::replacement_conflicts_to_vec(projection.replacement_conflicts)
+            .map_err(Into::into)
     }
 
     // Delete a secret

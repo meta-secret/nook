@@ -140,6 +140,10 @@ export class VaultState {
   syncingProviderId = $state<string | null>(null)
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false)
+  /** Concurrent secret replacement conflicts from the event log projection. */
+  replacementConflicts = $state<
+    Array<{ oldSecretId: string; candidatesJson: string }>
+  >([])
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | null>(null)
 
@@ -1546,11 +1550,12 @@ export class VaultState {
       if (this.manager.eventLogMode) {
         await this.manager.syncEventLogForProvider(mode, pat, repo)
         await this.reloadSessionFromLocal()
-        await this.updateProviderSyncMetadata(providerId, {
-          storeId: this.manager.vaultStoreId,
-          lastSyncedVersion: 0,
-          lastSyncRevision: null,
-        })
+        await this.refreshReplacementConflicts()
+        await this.updateProviderSyncMetadata(
+          providerId,
+          await readLocalVaultBlob(),
+          null,
+        )
         return
       }
       const localYaml = await readLocalVaultBlob()
@@ -1759,6 +1764,18 @@ export class VaultState {
     )
     await this.persistProviders()
     this.lastSyncedAt = new SvelteDate()
+  }
+
+  async refreshReplacementConflicts(): Promise<void> {
+    if (!this.manager?.eventLogMode) {
+      this.replacementConflicts = []
+      return
+    }
+    const conflicts = await this.manager.listProjectionConflicts()
+    this.replacementConflicts = conflicts.map((conflict) => ({
+      oldSecretId: conflict.oldSecretId,
+      candidatesJson: conflict.candidatesJson,
+    }))
   }
 
   private async stageVaultSyncConflict(

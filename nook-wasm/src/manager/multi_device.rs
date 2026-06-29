@@ -74,7 +74,15 @@ impl NookVaultManager {
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
-        self.save_current_db().await?;
+        let signing = self.ensure_signing_identity().await?;
+        let signing_pk = hex::encode(signing.verifying_key().as_bytes());
+        self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
+            device_id: identity.device_id().to_owned(),
+            encryption_public_key: identity.public_key(),
+            signing_public_key: signing_pk,
+            label: String::new(),
+        }])
+        .await?;
         Ok(())
     }
 
@@ -118,7 +126,7 @@ impl NookVaultManager {
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
-        self.save_current_db().await?;
+        self.persist_vault_change(Vec::new()).await?;
 
         let updated =
             nook_core::serialize_stored(&records, format).map_err(NookError::Encryption)?;
@@ -142,7 +150,15 @@ impl NookVaultManager {
         let record = nook_core::create_join_request_record(&identity, &requested_at)
             .map_err(NookError::Database)?;
         self.stored_armored.insert(record.key.clone(), record.value);
-        self.save_current_db().await?;
+        let signing = self.ensure_signing_identity().await?;
+        let signing_pk = hex::encode(signing.verifying_key().as_bytes());
+        self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
+            device_id: identity.device_id().to_owned(),
+            encryption_public_key: identity.public_key(),
+            signing_public_key: signing_pk,
+            label: String::new(),
+        }])
+        .await?;
         Ok(())
     }
 
@@ -168,9 +184,19 @@ impl NookVaultManager {
         .map_err(NookError::Encryption)?;
         self.stored_armored.remove(&join_key);
         self.stored_armored
-            .insert(auth_record.key.clone(), auth_record.value);
+            .insert(auth_record.key.clone(), auth_record.value.clone());
         apply_member_records(&mut self.stored_armored, &member_records);
-        self.save_current_db().await?;
+        let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(&auth_record.value)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
+            device_id: join.device_id.clone(),
+            encryption_public_key: join.public_key.clone(),
+            signing_public_key: String::new(),
+            label: String::new(),
+            secrets_key_ciphertext: envelopes.secrets_key,
+            members_key_ciphertext: envelopes.members_key,
+        }])
+        .await?;
         Ok(self.get_records()?)
     }
 
@@ -188,7 +214,10 @@ impl NookVaultManager {
         let updated = nook_core::deny_join_request(&records, &join_device_id);
         self.stored_armored = records_to_armored(&updated);
         self.secret_types = records_to_secret_types(&updated);
-        self.save_current_db().await?;
+        self.persist_vault_change(vec![nook_core::VaultOperation::JoinDenied {
+            device_id: join_device_id,
+        }])
+        .await?;
         Ok(self.get_records()?)
     }
 
@@ -202,7 +231,18 @@ impl NookVaultManager {
             nook_core::rename_vault_member(&records, &self.members_key, &auth_id, &label)
                 .map_err(NookError::Database)?;
         apply_member_records(&mut self.stored_armored, &member_records);
-        self.save_current_db().await?;
+        let roster = nook_core::resolve_member_roster(&records, &self.members_key)
+            .map_err(NookError::Database)?;
+        let device_id = roster
+            .iter()
+            .find(|member| member.auth_id == auth_id)
+            .map(|member| member.device_id.clone())
+            .unwrap_or_default();
+        self.persist_vault_change(vec![nook_core::VaultOperation::MemberRenamed {
+            device_id,
+            label,
+        }])
+        .await?;
         Ok(())
     }
 
@@ -213,18 +253,34 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let is_self = auth_id == identity.auth_id();
         let records = self.stored_records_snapshot();
+        let device_id = nook_core::resolve_member_roster(&records, &self.members_key)
+            .ok()
+            .and_then(|roster| {
+                roster
+                    .iter()
+                    .find(|member| member.auth_id == auth_id)
+                    .map(|member| member.device_id.clone())
+            })
+            .unwrap_or_default();
         let updated = nook_core::revoke_vault_member(&records, &self.members_key, &auth_id)
             .map_err(NookError::Database)?;
         self.stored_armored = records_to_armored(&updated);
         self.secret_types = records_to_secret_types(&updated);
-        self.save_current_db().await?;
 
         if is_self {
+            self.persist_vault_change(Vec::new()).await?;
             self.secrets_key.clear();
             self.members_key.clear();
             self.crypto = None;
             self.decrypted_jsonl.clear();
             return Ok(Vec::new());
+        }
+
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked { device_id })
+                .await?;
+        } else {
+            self.save_current_db().await?;
         }
 
         Ok(self.get_records()?)
@@ -249,7 +305,7 @@ impl NookVaultManager {
         for member in members {
             self.stored_armored.insert(member.key.clone(), member.value);
         }
-        self.save_current_db().await?;
+        self.persist_vault_change(Vec::new()).await?;
         Ok(self.get_records()?)
     }
 

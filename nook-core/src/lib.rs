@@ -17,6 +17,7 @@ mod session;
 mod validation;
 mod vault_crypto;
 mod vault_epoch;
+mod vault_epoch_crypto;
 mod vault_event;
 mod vault_event_builder;
 mod vault_event_graph;
@@ -79,6 +80,7 @@ pub use vault_epoch::{
     EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
     operation_starts_epoch,
 };
+pub use vault_epoch_crypto::{reencrypt_user_secrets_for_epoch, rotate_vault_keys_with_secrets};
 pub use vault_event::{
     EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
     build_genesis_import_event,

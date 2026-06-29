@@ -509,6 +509,16 @@
     />
   {/if}
 
+  {#if vault.replacementConflicts.length > 0}
+    <div class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl rounded-lg border border-amber-500/40 bg-amber-950/90 p-4 text-sm text-amber-50 shadow-lg">
+      <p class="font-medium">Secret sync conflicts need resolution</p>
+      <p class="mt-1 text-amber-100/80">
+        {vault.replacementConflicts.length} secret(s) were replaced concurrently on different devices.
+        Review candidates in Settings after syncing.
+      </p>
+    </div>
+  {/if}
+
   <!-- CloudKit JS mounts Sign in with Apple controls here (icloud-oauth.ts). -->
   <div id="apple-sign-in-button" class="sr-only" aria-hidden="true"></div>
   <div id="apple-sign-out-button" class="sr-only" aria-hidden="true"></div>

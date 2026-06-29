@@ -390,3 +390,47 @@ pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVa
         .map(NookVaultMember::from_core)
         .collect()
 }
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookReplacementConflict {
+    old_secret_id: String,
+    candidates_json: String,
+}
+
+#[wasm_bindgen]
+impl NookReplacementConflict {
+    #[wasm_bindgen(getter, js_name = oldSecretId)]
+    pub fn old_secret_id(&self) -> String {
+        self.old_secret_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = candidatesJson)]
+    pub fn candidates_json(&self) -> String {
+        self.candidates_json.clone()
+    }
+}
+
+pub(crate) fn replacement_conflicts_to_vec(
+    conflicts: std::collections::BTreeMap<String, nook_core::SecretReplacementConflict>,
+) -> Result<Vec<NookReplacementConflict>, NookError> {
+    conflicts
+        .into_values()
+        .map(|conflict| {
+            let candidates_json = serde_json::to_string(
+                &conflict
+                    .candidates
+                    .iter()
+                    .map(|(event_id, secret_id)| {
+                        (event_id.as_str().to_owned(), secret_id.clone())
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+            Ok(NookReplacementConflict {
+                old_secret_id: conflict.old_secret_id,
+                candidates_json,
+            })
+        })
+        .collect()
+}

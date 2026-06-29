@@ -62,7 +62,10 @@ async fn list_github_event_dir(
         let subpath = format!("{path}/{name}");
         if entry_type == "dir" {
             stack.push(subpath);
-        } else if name.ends_with(".event") {
+        } else if std::path::Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("event"))
+        {
             let digest = name.trim_end_matches(".event");
             if digest.len() == 64 {
                 out.push(format!("sha256:{digest}"));
