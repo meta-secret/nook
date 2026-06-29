@@ -1,4 +1,5 @@
 dist
+dist-prod
 node_modules
 src/lib/nook-wasm
 test-results

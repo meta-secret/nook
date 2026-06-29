@@ -1547,7 +1547,7 @@ export class VaultState {
     }
     try {
       const [mode, pat, repo] = this.providerWasmArgs(provider)
-      if (this.manager.eventLogMode) {
+      if (this.manager.eventLogMode()) {
         await this.manager.syncEventLogForProvider(mode, pat, repo)
         await this.reloadSessionFromLocal()
         await this.refreshReplacementConflicts()
@@ -1767,7 +1767,7 @@ export class VaultState {
   }
 
   async refreshReplacementConflicts(): Promise<void> {
-    if (!this.manager?.eventLogMode) {
+    if (!this.manager?.eventLogMode()) {
       this.replacementConflicts = []
       return
     }
