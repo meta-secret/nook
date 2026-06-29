@@ -79,6 +79,25 @@ test("formatToolCompleted reports shell exit codes without empty output blocks",
   assert.deepEqual(formatToolCompleted(success), ["shell exit 0"]);
 });
 
+test("formatToolCompleted can omit shell output blocks", () => {
+  const toolCall = {
+    type: "shell",
+    args: { command: "task ci:main:parallel" },
+    result: {
+      status: "success",
+      value: {
+        exitCode: 1,
+        signal: "",
+        stdout: "task: ci:verify:parallel",
+        stderr: "",
+        executionTime: 42,
+      },
+    },
+  } satisfies ToolCall;
+
+  assert.deepEqual(formatToolCompleted(toolCall, { includeShellOutput: false }), ["shell exit 1"]);
+});
+
 test("formatToolCompleted skips noisy read completions", () => {
   const toolCall = {
     type: "read",

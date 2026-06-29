@@ -1,7 +1,7 @@
 import { Agent, CursorAgentError } from "@cursor/sdk";
 
 import type { CiAgentConfig } from "./config.js";
-import { logInteractionUpdate } from "./log.js";
+import { finishInteractionLog, logInteractionUpdate } from "./log.js";
 
 export async function runFixAgent(config: CiAgentConfig, prompt: string): Promise<void> {
   console.log(
@@ -41,4 +41,5 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
   }
 
   console.log(`\n==> Agent finished (${result.status})`);
+  finishInteractionLog();
 }

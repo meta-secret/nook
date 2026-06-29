@@ -48,7 +48,11 @@ export function formatToolStarted(toolCall: ToolCall): string {
   }
 }
 
-export function formatToolCompleted(toolCall: ToolCall): string[] | null {
+export function formatToolCompleted(
+  toolCall: ToolCall,
+  options: { includeShellOutput?: boolean } = {},
+): string[] | null {
+  const includeShellOutput = options.includeShellOutput ?? true;
   const result = toolCall.result;
   if (!result) {
     return null;
@@ -62,7 +66,9 @@ export function formatToolCompleted(toolCall: ToolCall): string[] | null {
   switch (toolCall.type) {
     case "shell": {
       const lines: string[] = [];
-      lines.push(...formatShellOutputBlocks(result.value));
+      if (includeShellOutput) {
+        lines.push(...formatShellOutputBlocks(result.value));
+      }
       const exitCode = shellExitCode(result.value);
       lines.push(exitCode === 0 ? "shell exit 0" : `shell exit ${exitCode}`);
       return lines;
