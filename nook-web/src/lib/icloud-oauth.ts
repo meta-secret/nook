@@ -35,6 +35,7 @@ type CloudKitContainer = {
     grabAuthToken?: boolean
     persist?: boolean
   }) => Promise<CloudKitUserIdentity | null>
+  whenUserSignsIn: () => Promise<CloudKitUserIdentity>
 }
 
 type CloudKitAuthTokenStore = {
@@ -94,6 +95,11 @@ declare global {
 }
 
 let initPromise: Promise<void> | null = null
+
+/** @internal Clears module singletons between unit tests. */
+export function resetICloudAuthStateForTests(): void {
+  initPromise = null
+}
 
 export function isICloudOAuthConfigured(): boolean {
   return Boolean(
@@ -218,6 +224,30 @@ export async function initICloudAuth(): Promise<void> {
   return initPromise
 }
 
+function clickCloudKitSignInButton(): void {
+  const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID)
+  const control =
+    mount?.querySelector<HTMLElement>(
+      'button, [role="button"], iframe, a',
+    ) ?? mount
+  if (!control) {
+    throw new Error('Apple sign-in control is not ready. Reload and try again.')
+  }
+  control.click()
+}
+
+async function waitForCloudKitSignIn(
+  container: CloudKitContainer,
+): Promise<void> {
+  const signInPromise = container.whenUserSignsIn()
+  clickCloudKitSignInButton()
+  try {
+    await signInPromise
+  } catch (error) {
+    throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
+  }
+}
+
 export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
@@ -230,9 +260,11 @@ export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
+
   if (!userIdentity) {
-    throw new Error('Apple sign-in was cancelled or did not complete.')
+    await waitForCloudKitSignIn(container)
   }
+
   const token = readStoredWebAuthToken()
   if (!token) {
     throw new Error('iCloud sign-in did not return a web auth token.')
