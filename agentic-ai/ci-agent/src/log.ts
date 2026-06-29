@@ -1,10 +1,8 @@
 /** Human-readable CI log lines from Cursor SDK interaction updates. */
 
-type InteractionUpdate = {
-  type: string;
-  text?: string;
-  toolCall?: { type?: string; [key: string]: unknown };
-};
+import type { InteractionUpdate } from "@cursor/sdk";
+
+import { formatToolCompleted, formatToolStarted } from "./tool-summary.js";
 
 export function logInteractionUpdate(update: InteractionUpdate): void {
   switch (update.type) {
@@ -16,11 +14,15 @@ export function logInteractionUpdate(update: InteractionUpdate): void {
     case "thinking-delta":
       break;
     case "tool-call-started":
-      console.log(`\n==> tool started: ${summarizeToolCall(update.toolCall)}`);
+      console.log(`\n==> ${formatToolStarted(update.toolCall)}`);
       break;
-    case "tool-call-completed":
-      console.log(`==> tool completed: ${summarizeToolCall(update.toolCall)}`);
+    case "tool-call-completed": {
+      const summary = formatToolCompleted(update.toolCall);
+      if (summary) {
+        console.log(`==> ${summary}`);
+      }
       break;
+    }
     case "step-started":
       console.log("\n==> step started");
       break;
@@ -33,16 +35,4 @@ export function logInteractionUpdate(update: InteractionUpdate): void {
     default:
       break;
   }
-}
-
-function summarizeToolCall(toolCall: InteractionUpdate["toolCall"]): string {
-  if (!toolCall) {
-    return "unknown";
-  }
-  const type = toolCall.type ?? "tool";
-  const raw = JSON.stringify(toolCall);
-  if (raw.length <= 160) {
-    return `${type} ${raw}`;
-  }
-  return `${type} ${raw.slice(0, 157)}...`;
 }
