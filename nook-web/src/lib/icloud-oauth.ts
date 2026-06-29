@@ -227,9 +227,8 @@ export async function initICloudAuth(): Promise<void> {
 function clickCloudKitSignInButton(): void {
   const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID)
   const control =
-    mount?.querySelector<HTMLElement>(
-      'button, [role="button"], iframe, a',
-    ) ?? mount
+    mount?.querySelector<HTMLElement>('button, [role="button"], iframe, a') ??
+    mount
   if (!control) {
     throw new Error('Apple sign-in control is not ready. Reload and try again.')
   }
