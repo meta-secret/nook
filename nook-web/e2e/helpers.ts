@@ -156,6 +156,7 @@ export async function connectLocalVaultLegacy(page: Page) {
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
 
   if (await page.getByTestId('vault-panel').isVisible()) {
+    await disableVaultIdleLock(page)
     return
   }
 
@@ -165,6 +166,7 @@ export async function connectLocalVaultLegacy(page: Page) {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await disableVaultIdleLock(page)
     return
   }
 
@@ -175,6 +177,7 @@ export async function connectLocalVaultLegacy(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await disableVaultIdleLock(page)
 }
 
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
@@ -482,6 +485,21 @@ export async function createIsolatedContext(
   return browser.newContext()
 }
 
+/**
+ * Serial multi-device specs leave one browser idle while another acts; the e2e
+ * idle timeout (2.5s) would auto-lock the waiting device and break sync flows.
+ */
+export async function disableVaultIdleLock(page: Page) {
+  await page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: { stopIdleSessionTracking?: () => void }
+      }
+    ).__nookVault
+    vault?.stopIdleSessionTracking?.()
+  })
+}
+
 export function uniqueSecretKey(prefix: string) {
   return `${prefix}-${Date.now()}`
 }
@@ -500,6 +518,7 @@ async function assertGithubConnected(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await disableVaultIdleLock(page)
 }
 
 async function setupGithubProvider(page: Page, pat: string, repoName: string) {
@@ -707,6 +726,7 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
     .not.toBe('waiting')
 
   if (await vaultPanel.isVisible()) {
+    await disableVaultIdleLock(page)
     return
   }
 
@@ -731,6 +751,7 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
   await expect(vaultPanel).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await disableVaultIdleLock(page)
 }
 
 /** Expand the login enrollment accordion on the login gate. */
@@ -1443,6 +1464,7 @@ export async function reloadUnlockLocalVaultWithGithubSync(page: Page) {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await waitForLoadedSyncProviders(page)
+  await disableVaultIdleLock(page)
 }
 
 /** Connect a joiner browser to a stubbed GitHub repo (keys-mode join dialog). */
