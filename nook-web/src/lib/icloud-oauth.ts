@@ -175,7 +175,7 @@ export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
   try {
     await container.setUpAuth({ grabAuthToken: true, persist: true })
   } catch (error) {
-    throw new Error(cloudKitAuthErrorMessage(error))
+    throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
   const token = readWebAuthTokenFromCookie()
   if (!token) {
