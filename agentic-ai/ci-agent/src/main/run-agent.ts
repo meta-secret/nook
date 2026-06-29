@@ -1,11 +1,13 @@
 import { Agent, CursorAgentError } from "@cursor/sdk";
 
+import { formatDuration, loadAgentWaitOptions, waitWithHeartbeat } from "./agent-wait.js";
 import type { CiAgentConfig } from "./config.js";
 import { finishInteractionLog, logInteractionUpdate } from "./log.js";
 
 export async function runFixAgent(config: CiAgentConfig, prompt: string): Promise<void> {
+  const waitOptions = loadAgentWaitOptions();
   console.log(
-    `==> Running Cursor SDK agent (run ${config.githubRunId}, branch ${config.fixBranch})`,
+    `==> Running Cursor SDK agent (run ${config.githubRunId}, branch ${config.fixBranch}, timeout ${formatDuration(waitOptions.timeoutMs)})`,
   );
 
   await using agent = await Agent.create({
@@ -32,7 +34,7 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
     throw err;
   }
 
-  const result = await run.wait();
+  const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
   if (result.status === "error") {
     throw new Error(`Cursor agent run failed (run id ${result.id})`);
   }

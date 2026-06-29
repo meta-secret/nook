@@ -1,6 +1,4 @@
-import { execFile } from "node:child_process";
 import { chdir } from "node:process";
-import { promisify } from "node:util";
 
 import { loadConfig } from "./config.js";
 import {
@@ -12,10 +10,9 @@ import {
   squashMergePr,
   waitForPrChecks,
 } from "./github.js";
+import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
-
-const execFileAsync = promisify(execFile);
 
 const DEFAULT_POLL_MS = 15_000;
 
@@ -36,7 +33,7 @@ export async function runCiFix(): Promise<void> {
   const pollMs = Number(process.env.CI_FIX_POLL_MS ?? DEFAULT_POLL_MS);
 
   chdir(repoRoot);
-  await configureGitForAgent(repoRoot);
+  await configureGitForCi(repoRoot);
 
   const octokit = createOctokit();
   const repoRef = parseRepository(repository);
@@ -62,9 +59,15 @@ export async function runCiFix(): Promise<void> {
     const prompt = await loadPrompt(config);
     await runFixAgent(config, prompt);
 
-    if (!(await branchExistsOnOrigin(octokit, repoRef, fixBranch))) {
-      console.log(`::warning::Fix branch ${fixBranch} was not pushed — skipping PR creation.`);
+    if (!(await hasWorkingTreeChanges(repoRoot))) {
+      console.log("::warning::Agent finished but working tree is clean — nothing to push.");
       return;
+    }
+
+    await pushFixBranch(repoRoot, fixBranch, runId);
+
+    if (!(await branchExistsOnOrigin(octokit, repoRef, fixBranch))) {
+      throw new Error(`Fix branch ${fixBranch} was not found on origin after push`);
     }
 
     prNumber = await findOpenPr(octokit, repoRef, fixBranch);
@@ -77,15 +80,4 @@ export async function runCiFix(): Promise<void> {
   await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
   await squashMergePr(octokit, repoRef, prNumber, fixBranch);
   console.log(`==> Done — merged PR #${prNumber} (fix for main run ${runId})`);
-}
-
-async function configureGitForAgent(repoRoot: string): Promise<void> {
-  await execFileAsync(
-    "git",
-    ["config", "--local", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
-    { cwd: repoRoot },
-  );
-  await execFileAsync("git", ["config", "--local", "user.name", "github-actions[bot]"], {
-    cwd: repoRoot,
-  });
 }
