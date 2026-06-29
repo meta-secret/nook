@@ -86,53 +86,13 @@ tasks:
       - task: docker:push:ci
 
   ci:fix:agent:
-    desc: Fix failed main CI — agent opens PR, Task waits for checks and squash-merges.
+    desc: Fix failed main CI — agent opens PR, wait for checks, squash-merge.
+    env:
+      REPO_ROOT: '{{.ROOT_DIR}}'
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
-      - task: _ci:fix:orchestrate
-
-  _ci:fix:orchestrate:
-    internal: true
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        ROOT="{{.ROOT_DIR}}";
-        cd "$ROOT";
-        if [ -z "${CURSOR_API_KEY:-}" ]; then
-          echo "::warning::CURSOR_API_KEY is not set — skipping AI CI fix job.";
-          echo "Add repository secret CURSOR_API_KEY (Cursor Dashboard → Integrations → User API Keys).";
-          exit 0;
-        fi;
-        : "${GH_TOKEN:?GH_TOKEN is required for gh/git push and PR merge}";
-        : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}";
-        : "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}";
-        FIX_BRANCH="${FIX_BRANCH:-fix/ci-${GITHUB_RUN_ID}}";
-        export FIX_BRANCH GITHUB_RUN_ID GITHUB_REPOSITORY;
-
-        echo "==> Configuring gh and git (GH_TOKEN from environment)";
-        git config --global --add safe.directory "$ROOT";
-        git config --global credential.helper "!gh auth git-credential";
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com";
-        git config --global user.name "github-actions[bot]";
-
-        PR_NUM="$(gh pr list --head "$FIX_BRANCH" --state open --json number -q ".[0].number" 2>/dev/null || true)";
-        if [ -n "$PR_NUM" ]; then
-          echo "==> Open PR already exists for $FIX_BRANCH (#$PR_NUM) — waiting for checks";
-        else
-          task ci-agent:run VITE_BASE="{{.VITE_BASE}}" VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}";
-          PR_NUM="$(gh pr list --head "$FIX_BRANCH" --state open --json number -q ".[0].number" || true)";
-          if [ -z "$PR_NUM" ]; then
-            echo "::error::ci-agent did not open a PR for branch ${FIX_BRANCH}." >&2;
-            exit 1;
-          fi;
-          echo "==> Agent opened PR #${PR_NUM}";
-        fi;
-
-        echo "==> Waiting for PR #${PR_NUM} checks";
-        gh pr checks "$PR_NUM" --watch --fail-fast;
-        echo "==> Squash merging PR #${PR_NUM}";
-        gh pr merge "$PR_NUM" --squash --delete-branch;
-        echo "==> Done — merged PR #${PR_NUM} (fix for main run ${GITHUB_RUN_ID})";
-        '
+      - bash scripts/ci-fix.sh
 
   ci:pr:deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
