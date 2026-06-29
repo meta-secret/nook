@@ -175,11 +175,6 @@ function readStoredWebAuthToken(): string | undefined {
   )
 }
 
-function writeWebAuthTokenCookie(token: string): void {
-  document.cookie = `ckWebAuthToken=${encodeURIComponent(token)}; path=/`
-  cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, token)
-}
-
 function cloudKitAuthErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
