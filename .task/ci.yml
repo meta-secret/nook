@@ -85,15 +85,6 @@ tasks:
       - task: ci:main
       - task: docker:push:ci
 
-  ci:fix:agent:
-    desc: Fix failed main CI — agent opens PR, wait for checks, squash-merge.
-    env:
-      REPO_ROOT: '{{.ROOT_DIR}}'
-      VITE_BASE: '{{.VITE_BASE}}'
-      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
-    cmds:
-      - bash scripts/ci-fix.sh
-
   ci:pr:deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
     cmds:
