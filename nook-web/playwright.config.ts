@@ -30,6 +30,7 @@ const PR_SPECS = [
   'bip39-seed-phrase.spec.ts',
   'sync-provider-connect.spec.ts',
   'sync-conflict-resolution.spec.ts',
+  'event-log-sync.spec.ts',
   'legal-pages.spec.ts',
 ] as const
 

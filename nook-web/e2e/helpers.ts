@@ -436,6 +436,35 @@ async function assertNoVaultErrors(
   throw new Error(`Vault error: ${summarizeVaultError(text)}`)
 }
 
+const KNOWN_VAULT_FAILURE_PATTERNS = [
+  /vault crypto not initialized/i,
+  /failed to save secret/i,
+  /encryption failed/i,
+] as const
+
+/** Fail when the vault error banner shows a known save/sync failure. */
+export async function assertNoVaultError(page: Page) {
+  const vaultError = page.getByTestId('vault-error')
+  if (!(await vaultError.isVisible())) {
+    return
+  }
+  const text = ((await vaultError.textContent()) ?? '').trim()
+  if (
+    KNOWN_VAULT_FAILURE_PATTERNS.some((pattern) => pattern.test(text)) ||
+    text.length > 0
+  ) {
+    throw new Error(`Vault error: ${summarizeVaultError(text)}`)
+  }
+}
+
+/** Click the vault sync refresh control when available. */
+export async function triggerVaultSyncRefresh(page: Page) {
+  const refresh = page.getByTestId('vault-sync-refresh-btn')
+  await expect(refresh).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(refresh).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+  await refresh.click()
+}
+
 /** Wait until sync target has the expected vault state (stub or live GitHub). */
 export async function waitForGithubVaultState(
   target: GithubE2eTarget,
@@ -1604,6 +1633,7 @@ export async function addSecret(
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()
+  await assertNoVaultError(page)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
   if (github) {

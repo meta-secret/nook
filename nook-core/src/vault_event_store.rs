@@ -121,18 +121,18 @@ pub fn union_remote_events(
 mod tests {
     use super::*;
     use crate::vault_event::build_genesis_import_event;
+    use crate::vault_event_graph::EventInsertStatus;
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
     #[test]
-    fn union_imports_missing_events() {
+    fn union_imports_missing_events() -> Result<(), String> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let store = "store_testtoken1";
         let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         let epoch = EventId::parse(
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        )?;
         let genesis = build_genesis_import_event(
             store,
             actor,
@@ -141,13 +141,78 @@ mod tests {
             vec![],
             "2026-06-28T00:00:00Z",
             &signing_key,
-        )
-        .unwrap();
-        let id = genesis.id().unwrap();
-        let bytes = serde_json::to_vec(&genesis).unwrap();
+        )?;
+        let id = genesis.id()?;
+        let bytes = serde_json::to_vec(&genesis).map_err(|error| error.to_string())?;
 
         let mut local = LocalEventStore::new();
-        union_remote_events(&mut local, &[(id.clone(), bytes)], store).unwrap();
+        union_remote_events(&mut local, &[(id.clone(), bytes)], store)?;
         assert!(local.get_bytes(&id).is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn append_event_reports_applied_for_genesis() -> Result<(), String> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?;
+        let genesis = build_genesis_import_event(
+            store,
+            actor,
+            &epoch,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &signing_key,
+        )?;
+
+        let mut local = LocalEventStore::new();
+        let (id, status) = local.append_event(&genesis, store)?;
+        assert!(local.get_bytes(&id).is_some());
+        assert_eq!(status, EventInsertStatus::Applied);
+        Ok(())
+    }
+
+    #[test]
+    fn outbox_queue_and_dequeue() -> Result<(), String> {
+        let mut local = LocalEventStore::new();
+        let id = EventId::parse(
+            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        )?;
+        let bytes = b"event-bytes".to_vec();
+        local.queue_outbox("github", id.clone(), bytes.clone());
+        assert_eq!(local.pending_outbox("github").len(), 1);
+        let dequeued = local
+            .dequeue_outbox("github", &id)
+            .ok_or_else(|| "outbox entry missing".to_owned())?;
+        assert_eq!(dequeued, bytes);
+        assert!(local.pending_outbox("github").is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn append_event_duplicate_is_idempotent() -> Result<(), String> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let store = "store_testtoken1";
+        let genesis = build_genesis_import_event(
+            store,
+            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &EventId::parse(
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )?,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &signing_key,
+        )?;
+        let mut local = LocalEventStore::new();
+        let (_, first) = local.append_event(&genesis, store)?;
+        let (_, second) = local.append_event(&genesis, store)?;
+        assert_eq!(first, EventInsertStatus::Applied);
+        assert_eq!(second, EventInsertStatus::Duplicate);
+        Ok(())
     }
 }

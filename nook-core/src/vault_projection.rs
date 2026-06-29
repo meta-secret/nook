@@ -170,6 +170,7 @@ fn apply_operation(
                     entry.deleted_by = Some(event_id.clone());
                 }
             }
+            replacements_by_old.remove(old_id);
             projection.replacement_conflicts.remove(old_id);
             if let Some(chosen) = projection.secrets.get(chosen_secret_id) {
                 let _ = chosen;
@@ -439,5 +440,98 @@ mod tests {
             )
             .unwrap();
         assert_projection_permutation_invariant(&graph, STORE).unwrap();
+    }
+
+    #[test]
+    fn secret_conflict_resolved_picks_winner() -> Result<(), String> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+        let base = secret_created(vec![genesis_id.clone()], "secret_original1", &signing_key);
+        let base_id = base.id()?;
+        graph.insert(base, STORE)?;
+
+        let signed_replace = |new_id: &str| -> Result<VaultEvent, String> {
+            let body = VaultEventBody {
+                schema_version: VAULT_EVENT_SCHEMA_VERSION,
+                store_id: STORE.to_owned(),
+                actor_id: ACTOR.to_owned(),
+                parents: vec![base_id.as_str().to_owned()],
+                created_at: "2026-06-28T00:00:00Z".to_owned(),
+                key_epoch: EPOCH.to_owned(),
+                operations: vec![VaultOperation::SecretReplaced {
+                    old_id: "secret_original1".to_owned(),
+                    new_secret: EncryptedSecretPayload {
+                        id: new_id.to_owned(),
+                        secret_type: SecretType::ApiKey,
+                        ciphertext: format!("cipher-{new_id}"),
+                    },
+                }],
+            };
+            VaultEvent::sign(body, &signing_key)
+        };
+
+        let r1 = signed_replace("secret_newaaaaaaa")?;
+        let r2 = signed_replace("secret_newbbbbbbb")?;
+        graph.insert(r1, STORE)?;
+        graph.insert(r2, STORE)?;
+
+        let resolve_body = VaultEventBody {
+            schema_version: VAULT_EVENT_SCHEMA_VERSION,
+            store_id: STORE.to_owned(),
+            actor_id: ACTOR.to_owned(),
+            parents: graph
+                .heads()
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
+            created_at: "2026-06-28T00:00:01Z".to_owned(),
+            key_epoch: EPOCH.to_owned(),
+            operations: vec![VaultOperation::SecretConflictResolved {
+                old_id: "secret_original1".to_owned(),
+                chosen_secret_id: "secret_newaaaaaaa".to_owned(),
+                rejected_secret_ids: vec!["secret_newbbbbbbb".to_owned()],
+            }],
+        };
+        let resolved = VaultEvent::sign(resolve_body, &signing_key)?;
+        graph.insert(resolved, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(!projection.has_blocking_conflicts());
+        let live = projection.live_secrets(&graph);
+        assert!(live.contains_key("secret_newaaaaaaa"));
+        assert!(!live.contains_key("secret_newbbbbbbb"));
+        Ok(())
+    }
+
+    #[test]
+    fn vault_cleared_empties_projection() -> Result<(), String> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+        graph.insert(
+            secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key),
+            STORE,
+        )?;
+        assert_eq!(project_vault(&graph, STORE)?.live_secrets(&graph).len(), 1);
+
+        let clear_body = VaultEventBody {
+            schema_version: VAULT_EVENT_SCHEMA_VERSION,
+            store_id: STORE.to_owned(),
+            actor_id: ACTOR.to_owned(),
+            parents: graph
+                .heads()
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
+            created_at: "2026-06-28T00:00:01Z".to_owned(),
+            key_epoch: EPOCH.to_owned(),
+            operations: vec![VaultOperation::VaultCleared],
+        };
+        let cleared = VaultEvent::sign(clear_body, &signing_key)?;
+        graph.insert(cleared, STORE)?;
+
+        assert!(project_vault(&graph, STORE)?.live_secrets(&graph).is_empty());
+        Ok(())
     }
 }

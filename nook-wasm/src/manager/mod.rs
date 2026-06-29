@@ -27,7 +27,7 @@ mod sync;
 
 use crate::NookError;
 use crate::conversion::{
-    apply_member_records, load_stored_vault, pending_joins_to_vec, vault_members_to_vec,
+    apply_member_records, pending_joins_to_vec, vault_members_to_vec,
 };
 use crate::storage::{
     drive::{
@@ -362,15 +362,19 @@ impl NookVaultManager {
         }
         let identity = self.ensure_device_identity().await?;
         if !self.last_synced_content.trim().is_empty() {
-            let loaded = load_stored_vault(&self.last_synced_content, &identity)?;
-            self.apply_vault_keys(&loaded.secrets_key, &loaded.members_key)?;
+            let (secrets_key, members_key) =
+                nook_core::hydrate_keys_from_projection_yaml(&self.last_synced_content, &identity)
+                    .map_err(NookError::Encryption)?;
+            self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
         if let Some(cache) = load_from_indexed_db().await?
             && !cache.trim().is_empty()
         {
-            let loaded = load_stored_vault(&cache, &identity)?;
-            self.apply_vault_keys(&loaded.secrets_key, &loaded.members_key)?;
+            let (secrets_key, members_key) =
+                nook_core::hydrate_keys_from_projection_yaml(&cache, &identity)
+                    .map_err(NookError::Encryption)?;
+            self.apply_vault_keys(&secrets_key, &members_key)?;
             self.last_synced_content = cache;
             return Ok(());
         }

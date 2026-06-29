@@ -15,19 +15,23 @@ mod secret_types;
 mod secret_view;
 mod session;
 mod validation;
+mod vault_connect;
 mod vault_crypto;
 mod vault_epoch;
 mod vault_epoch_crypto;
 mod vault_event;
 mod vault_event_builder;
 mod vault_event_graph;
+mod vault_event_session;
 mod vault_event_store;
 mod vault_format;
 mod vault_ids;
 mod vault_import;
 mod vault_projection;
+mod vault_session_cache;
 mod vault_signing;
 mod vault_sync;
+mod vault_sync_session;
 mod vault_sync_store;
 
 pub use bip39::validate_bip39_mnemonic;
@@ -75,6 +79,10 @@ pub use validation::{
     validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
     validate_storage_mode,
 };
+pub use vault_connect::{
+    LoadedVault, access_status_for_vault_content, apply_member_records,
+    capture_vault_unlock_from_content, content_requires_genesis, load_stored_vault,
+};
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch::{
     EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
@@ -89,6 +97,7 @@ pub use vault_event_builder::{
     AppendEventInput, build_signed_event, encrypted_secret_from_armored, parents_from_heads,
 };
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
+pub use vault_event_session::VaultEventSession;
 pub use vault_event_store::{LocalEventStore, union_remote_events};
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
@@ -109,8 +118,10 @@ pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,
 };
+pub use vault_session_cache::hydrate_keys_from_projection_yaml;
 pub use vault_signing::SigningIdentity;
 pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};
+pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_sync};
 pub use vault_sync_store::{
     MemoryVaultStore, fan_out_sync, reconcile_vault_stores, resolve_conflict_keep_local,
     resolve_conflict_keep_remote,

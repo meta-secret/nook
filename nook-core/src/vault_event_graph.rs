@@ -345,4 +345,74 @@ mod tests {
         assert!(graph.are_concurrent(&a_id, &b_id));
         assert_eq!(graph.heads().len(), 2);
     }
+
+    #[test]
+    fn pending_events_until_parent_arrives() -> Result<(), String> {
+        let key = signing_key();
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let genesis = build_genesis_import_event(
+            store,
+            actor,
+            &EventId::parse(epoch)?,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &key,
+        )?;
+        let genesis_id = genesis.id()?;
+
+        let child = signed_child(
+            vec![genesis_id.as_str()],
+            "secret_pending001",
+            &key,
+            store,
+            actor,
+            epoch,
+        );
+
+        let mut graph = EventGraph::new();
+        let status = graph.insert(child, store)?;
+        assert!(matches!(status, EventInsertStatus::Pending(_)));
+        assert_eq!(graph.pending_events().len(), 1);
+
+        graph.insert(genesis, store)?;
+        assert!(graph.pending_events().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn duplicate_insert_returns_duplicate_status() -> Result<(), String> {
+        let key = signing_key();
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let mut graph = EventGraph::new();
+        graph.insert(
+            build_genesis_import_event(
+                store,
+                actor,
+                &EventId::parse(epoch)?,
+                "hash",
+                vec![],
+                "2026-06-28T00:00:00Z",
+                &key,
+            )?,
+            store,
+        )?;
+        let head = graph.heads()[0].as_str().to_owned();
+        let child = signed_child(vec![&head], "secret_duplicate01", &key, store, actor, epoch);
+        assert_eq!(
+            graph.insert(child.clone(), store)?,
+            EventInsertStatus::Applied
+        );
+        assert_eq!(
+            graph.insert(child, store)?,
+            EventInsertStatus::Duplicate
+        );
+        Ok(())
+    }
 }

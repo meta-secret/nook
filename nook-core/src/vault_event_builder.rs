@@ -57,5 +57,47 @@ pub fn encrypted_secret_from_armored(
 pub fn parents_from_heads(heads: &[EventId]) -> Vec<String> {
     let mut parents: Vec<String> = heads.iter().map(|id| id.as_str().to_owned()).collect();
     parents.sort();
+    parents.dedup();
     parents
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event_canonical::EventId;
+    use crate::vault_signing::SigningIdentity;
+
+    #[test]
+    fn parents_from_heads_is_sorted_deduped() -> Result<(), String> {
+        let a = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?;
+        let b = EventId::parse(
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )?;
+        let parents = parents_from_heads(&[b.clone(), a.clone(), a]);
+        assert_eq!(parents.len(), 2);
+        assert!(parents[0] < parents[1]);
+        Ok(())
+    }
+
+    #[test]
+    fn build_signed_event_roundtrip() -> Result<(), String> {
+        let (signing, _) = SigningIdentity::generate()?;
+        let actor = signing.actor_id()?;
+        let epoch = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        let (event, bytes) = build_signed_event(AppendEventInput {
+            store_id: "store_testtoken1",
+            actor_id: &actor,
+            signing_identity: &signing,
+            parents: vec![],
+            key_epoch: epoch,
+            created_at: "2026-06-28T00:00:00Z",
+            operations: vec![VaultOperation::VaultCleared],
+        })?;
+        assert!(!bytes.is_empty());
+        assert_eq!(event.body.store_id, "store_testtoken1");
+        assert_eq!(event.body.actor_id, actor);
+        Ok(())
+    }
 }
