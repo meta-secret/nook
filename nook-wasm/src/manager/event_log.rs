@@ -45,14 +45,13 @@ impl NookVaultManager {
             if let Some(seed) = load_signing_seed().await? {
                 self.signing_seed = seed;
             } else {
-                let (identity, seed) =
-                    SigningIdentity::generate().map_err(NookError::Encryption)?;
+                let (identity, seed) = SigningIdentity::generate()?;
                 save_signing_seed(&seed).await?;
                 self.signing_seed = seed;
                 return Ok(identity);
             }
         }
-        SigningIdentity::from_seed_hex_stored(&self.signing_seed).map_err(NookError::Encryption)
+        Ok(SigningIdentity::from_seed_hex_stored(&self.signing_seed)?)
     }
 
     pub(in crate::manager) async fn load_event_heads(&mut self) -> Result<Vec<String>, NookError> {
@@ -87,16 +86,15 @@ impl NookVaultManager {
         }
         save_legacy_backup(&self.store_id, legacy_yaml).await?;
         let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id().map_err(NookError::Encryption)?;
+        let actor_id = signing.actor_id()?;
         let import = legacy_vault_to_import_event(
             legacy_yaml,
             &self.store_id,
             &actor_id,
             signing.signing_key(),
             &iso_timestamp(),
-        )
-        .map_err(NookError::Encryption)?;
-        let event_id = import.id().map_err(NookError::Encryption)?;
+        )?;
+        let event_id = import.id()?;
         let bytes =
             serde_json::to_vec(&import).map_err(|e| NookError::Serialization(e.to_string()))?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
@@ -128,7 +126,7 @@ impl NookVaultManager {
         }
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id().map_err(NookError::Encryption)?;
+        let actor_id = signing.actor_id()?;
         let parents = self.load_event_heads().await?;
         let key_epoch = self.ensure_key_epoch().await?;
         let (event, bytes) = build_signed_event(AppendEventInput {
@@ -139,9 +137,8 @@ impl NookVaultManager {
             key_epoch: &key_epoch,
             created_at: &iso_timestamp(),
             operations,
-        })
-        .map_err(NookError::Encryption)?;
-        let event_id = event.id().map_err(NookError::Encryption)?;
+        })?;
+        let event_id = event.id()?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
         self.event_heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.store_id, &self.event_heads).await?;
@@ -157,10 +154,8 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.ensure_vault_crypto_from_cache().await?;
         let store = load_local_event_store(&self.store_id).await?;
-        let graph = store
-            .load_graph(&self.store_id)
-            .map_err(NookError::Database)?;
-        let projection = project_vault(&graph, &self.store_id).map_err(NookError::Database)?;
+        let graph = store.load_graph(&self.store_id)?;
+        let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let crypto = self
             .crypto
@@ -227,7 +222,7 @@ impl NookVaultManager {
         let provider_id = self.local_cache_ref();
         let pending = load_outbox(&provider_id).await?;
         for (raw_id, bytes) in pending {
-            let event_id = EventId::parse(&raw_id).map_err(NookError::Database)?;
+            let event_id = EventId::parse(&raw_id)?;
             match self.storage_mode {
                 nook_core::StorageMode::Github => {
                     put_github_event_if_absent(
@@ -266,7 +261,7 @@ impl NookVaultManager {
 
         let mut remote_events = Vec::new();
         for raw_id in remote_ids {
-            let event_id = EventId::parse(&raw_id).map_err(NookError::Database)?;
+            let event_id = EventId::parse(&raw_id)?;
             let bytes = match self.storage_mode {
                 nook_core::StorageMode::Github => {
                     fetch_github_event(&self.github_pat, &self.github_repo, &event_id).await?
@@ -280,15 +275,12 @@ impl NookVaultManager {
         }
 
         let mut local = load_local_event_store(&self.store_id).await?;
-        union_remote_events(&mut local, &remote_events, &self.store_id)
-            .map_err(NookError::Database)?;
+        union_remote_events(&mut local, &remote_events, &self.store_id)?;
         for (event_id, bytes) in &remote_events {
             save_event_bytes(&self.store_id, event_id.as_str(), bytes).await?;
         }
 
-        let graph = local
-            .load_graph(&self.store_id)
-            .map_err(NookError::Database)?;
+        let graph = local.load_graph(&self.store_id)?;
         let heads: Vec<String> = graph
             .heads()
             .into_iter()
@@ -305,19 +297,18 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id().map_err(NookError::Encryption)?;
+        let actor_id = signing.actor_id()?;
         let key_epoch = self.ensure_key_epoch().await?;
         let import = nook_core::build_genesis_import_event(
             &self.store_id,
             &actor_id,
-            &EventId::parse(&key_epoch).map_err(NookError::Database)?,
+            &EventId::parse(&key_epoch)?,
             "genesis",
             vec![],
             &iso_timestamp(),
             signing.signing_key(),
-        )
-        .map_err(NookError::Encryption)?;
-        let event_id = import.id().map_err(NookError::Encryption)?;
+        )?;
+        let event_id = import.id()?;
         let bytes =
             serde_json::to_vec(&import).map_err(|e| NookError::Serialization(e.to_string()))?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
@@ -402,9 +393,7 @@ impl NookVaultManager {
             return Ok(nook_core::VaultProjection::default());
         }
         let store = load_local_event_store(&self.store_id).await?;
-        let graph = store
-            .load_graph(&self.store_id)
-            .map_err(NookError::Database)?;
-        project_vault(&graph, &self.store_id).map_err(NookError::Database)
+        let graph = store.load_graph(&self.store_id)?;
+        Ok(project_vault(&graph, &self.store_id)?)
     }
 }

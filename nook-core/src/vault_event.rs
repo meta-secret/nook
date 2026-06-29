@@ -1,5 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
+use crate::error::{VaultError, VaultResult};
 use crate::event_canonical::{
     EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes, sign_body,
     verify_body_signature,
@@ -119,9 +120,8 @@ pub struct VaultEventBody {
 }
 
 impl VaultEventBody {
-    pub fn to_canonical_value(&self) -> Result<Value, String> {
-        let mut value = serde_json::to_value(self)
-            .map_err(|error| format!("Failed to serialize event body: {error}"))?;
+    pub fn to_canonical_value(&self) -> VaultResult<Value> {
+        let mut value = serde_json::to_value(self).map_err(VaultError::EventBodySerialize)?;
         if let Value::Object(ref mut map) = value {
             let mut sorted_parents = self.parents.clone();
             sorted_parents.sort();
@@ -130,11 +130,11 @@ impl VaultEventBody {
         Ok(canonicalize_json(&value))
     }
 
-    pub fn to_canonical_bytes(&self) -> Result<Vec<u8>, String> {
+    pub fn to_canonical_bytes(&self) -> VaultResult<Vec<u8>> {
         canonical_json_bytes(&self.to_canonical_value()?)
     }
 
-    pub fn event_id(&self) -> Result<EventId, String> {
+    pub fn event_id(&self) -> VaultResult<EventId> {
         Ok(event_id_from_body_bytes(&self.to_canonical_bytes()?))
     }
 }
@@ -149,30 +149,32 @@ pub struct VaultEvent {
 }
 
 impl VaultEvent {
-    pub fn id(&self) -> Result<EventId, String> {
+    pub fn id(&self) -> VaultResult<EventId> {
         self.body.event_id()
     }
 
-    pub fn sign(body: VaultEventBody, signing_key: &SigningKey) -> Result<Self, String> {
+    pub fn sign(body: VaultEventBody, signing_key: &SigningKey) -> VaultResult<Self> {
         let body_bytes = body.to_canonical_bytes()?;
         let signature = sign_body(&body_bytes, signing_key);
         Ok(Self { body, signature })
     }
 
-    pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> Result<(), String> {
+    pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> VaultResult<()> {
         let body_bytes = self.body.to_canonical_bytes()?;
         verify_body_signature(&body_bytes, &self.signature, verifying_key)
     }
 
-    pub fn validate_envelope(&self, expected_store_id: &str) -> Result<EventId, String> {
+    pub fn validate_envelope(&self, expected_store_id: &str) -> VaultResult<EventId> {
         if self.body.schema_version > VAULT_EVENT_SCHEMA_VERSION {
-            return Err(format!(
-                "Unsupported event schema version {}",
-                self.body.schema_version
-            ));
+            return Err(VaultError::UnsupportedSchemaVersion {
+                version: self.body.schema_version,
+            });
         }
         if self.body.store_id != expected_store_id {
-            return Err("Event store_id does not match vault".to_owned());
+            return Err(VaultError::EventStoreIdMismatch {
+                expected: expected_store_id.to_owned(),
+                actual: self.body.store_id.clone(),
+            });
         }
         if self.body.parents.is_empty()
             && !matches!(
@@ -180,7 +182,7 @@ impl VaultEvent {
                 [VaultOperation::VaultImported { .. }]
             )
         {
-            return Err("Non-genesis events must declare parents".to_owned());
+            return Err(VaultError::MissingEventParents);
         }
         for parent in &self.body.parents {
             EventId::parse(parent)?;
@@ -199,7 +201,7 @@ pub fn build_genesis_import_event(
     secrets: Vec<EncryptedSecretPayload>,
     created_at: &str,
     signing_key: &SigningKey,
-) -> Result<VaultEvent, String> {
+) -> VaultResult<VaultEvent> {
     let body = VaultEventBody {
         schema_version: VAULT_EVENT_SCHEMA_VERSION,
         store_id: store_id.to_owned(),

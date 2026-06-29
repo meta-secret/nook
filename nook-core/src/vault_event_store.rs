@@ -1,5 +1,6 @@
 //! In-memory event store and set-union synchronization helpers.
 
+use crate::error::{VaultError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::VaultEvent;
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
@@ -59,11 +60,10 @@ impl LocalEventStore {
     }
 
     /// Build a causal graph from stored canonical bytes.
-    pub fn load_graph(&self, store_id: &str) -> Result<EventGraph, String> {
+    pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
         for bytes in self.events.values() {
-            let event: VaultEvent = serde_json::from_slice(bytes)
-                .map_err(|error| format!("Failed to parse stored event: {error}"))?;
+            let event: VaultEvent = serde_json::from_slice(bytes).map_err(VaultError::ParseStoredEvent)?;
             let _ = graph.insert(event, store_id)?;
         }
         Ok(graph)
@@ -74,10 +74,9 @@ impl LocalEventStore {
         &mut self,
         event: &VaultEvent,
         store_id: &str,
-    ) -> Result<(EventId, EventInsertStatus), String> {
+    ) -> VaultResult<(EventId, EventInsertStatus)> {
         let event_id = event.validate_envelope(store_id)?;
-        let bytes = serde_json::to_vec(&event)
-            .map_err(|error| format!("Failed to serialize event: {error}"))?;
+        let bytes = serde_json::to_vec(event).map_err(VaultError::EventSerialize)?;
         if self.events.contains_key(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
@@ -99,16 +98,17 @@ pub fn union_remote_events(
     local: &mut LocalEventStore,
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
-) -> Result<Vec<EventId>, String> {
+) -> VaultResult<Vec<EventId>> {
     let mut imported = Vec::new();
     for (event_id, bytes) in remote_events {
         if local.get_bytes(event_id).is_some() {
             continue;
         }
-        let event: VaultEvent = serde_json::from_slice(bytes)
-            .map_err(|error| format!("Failed to parse remote event: {error}"))?;
+        let event: VaultEvent = serde_json::from_slice(bytes).map_err(VaultError::ParseRemoteEvent)?;
         if event.id()? != *event_id {
-            return Err(format!("Remote event id mismatch at {}", event_id.as_str()));
+            return Err(VaultError::RemoteEventIdMismatch {
+                event_id: event_id.as_str().to_owned(),
+            });
         }
         local.put_event(event_id.clone(), bytes.clone());
         imported.push(event_id.clone());
@@ -120,13 +120,14 @@ pub fn union_remote_events(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::VaultResult;
     use crate::vault_event::build_genesis_import_event;
     use crate::vault_event_graph::EventInsertStatus;
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
     #[test]
-    fn union_imports_missing_events() -> Result<(), String> {
+    fn union_imports_missing_events() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let store = "store_testtoken1";
         let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -143,7 +144,7 @@ mod tests {
             &signing_key,
         )?;
         let id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(|error| error.to_string())?;
+        let bytes = serde_json::to_vec(&genesis)?;
 
         let mut local = LocalEventStore::new();
         union_remote_events(&mut local, &[(id.clone(), bytes)], store)?;
@@ -152,7 +153,7 @@ mod tests {
     }
 
     #[test]
-    fn append_event_reports_applied_for_genesis() -> Result<(), String> {
+    fn append_event_reports_applied_for_genesis() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let store = "store_testtoken1";
         let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -177,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn outbox_queue_and_dequeue() -> Result<(), String> {
+    fn outbox_queue_and_dequeue() -> VaultResult<()> {
         let mut local = LocalEventStore::new();
         let id = EventId::parse(
             "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -187,14 +188,14 @@ mod tests {
         assert_eq!(local.pending_outbox("github").len(), 1);
         let dequeued = local
             .dequeue_outbox("github", &id)
-            .ok_or_else(|| "outbox entry missing".to_owned())?;
+            .ok_or(VaultError::MissingOutboxEntry)?;
         assert_eq!(dequeued, bytes);
         assert!(local.pending_outbox("github").is_empty());
         Ok(())
     }
 
     #[test]
-    fn append_event_duplicate_is_idempotent() -> Result<(), String> {
+    fn append_event_duplicate_is_idempotent() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let store = "store_testtoken1";
         let genesis = build_genesis_import_event(

@@ -1,5 +1,6 @@
 //! Deterministic encrypted vault projection from the causal event log.
 
+use crate::error::{VaultError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_epoch::{
@@ -75,7 +76,7 @@ impl VaultProjection {
 
 /// Rebuild projection from the event graph. Result is independent of provider order
 /// and of the topological tie-break used internally.
-pub fn project_vault(graph: &EventGraph, store_id: &str) -> Result<VaultProjection, String> {
+pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultProjection> {
     let order = graph.topological_order()?;
     let mut projection = VaultProjection {
         store_id: store_id.to_owned(),
@@ -86,11 +87,11 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> Result<VaultProjecti
     let mut replacements_by_old: BTreeMap<String, Vec<(EventId, String)>> = BTreeMap::new();
 
     for event_id in order {
-        let event = graph
-            .get(&event_id)
-            .ok_or_else(|| format!("Missing event {}", event_id.as_str()))?;
+        let event = graph.get(&event_id).ok_or(VaultError::MissingEvent {
+            event_id: event_id.as_str().to_owned(),
+        })?;
         if event.body.store_id != store_id {
-            return Err("Event store_id mismatch during projection".to_owned());
+            return Err(VaultError::ProjectionStoreMismatch);
         }
         if event.body.schema_version > crate::vault_event::VAULT_EVENT_SCHEMA_VERSION {
             projection.unresolved_schema = true;
@@ -264,12 +265,12 @@ fn detect_security_conflicts(
 pub fn assert_projection_permutation_invariant(
     graph: &EventGraph,
     store_id: &str,
-) -> Result<(), String> {
+) -> VaultResult<()> {
     let baseline = project_vault(graph, store_id)?;
     for _ in 0..3 {
         let again = project_vault(graph, store_id)?;
         if again != baseline {
-            return Err("Projection changed across replays".to_owned());
+            return Err(VaultError::ProjectionReplayMismatch);
         }
     }
     Ok(())
@@ -277,6 +278,7 @@ pub fn assert_projection_permutation_invariant(
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultResult;
     use super::*;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
@@ -443,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn secret_conflict_resolved_picks_winner() -> Result<(), String> {
+    fn secret_conflict_resolved_picks_winner() -> VaultResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);
@@ -451,7 +453,7 @@ mod tests {
         let base_id = base.id()?;
         graph.insert(base, STORE)?;
 
-        let signed_replace = |new_id: &str| -> Result<VaultEvent, String> {
+        let signed_replace = |new_id: &str| -> VaultResult<VaultEvent> {
             let body = VaultEventBody {
                 schema_version: VAULT_EVENT_SCHEMA_VERSION,
                 store_id: STORE.to_owned(),
@@ -505,7 +507,7 @@ mod tests {
     }
 
     #[test]
-    fn vault_cleared_empties_projection() -> Result<(), String> {
+    fn vault_cleared_empties_projection() -> VaultResult<()> {
         let signing_key = key();
         let mut graph = EventGraph::new();
         let genesis_id = genesis(&mut graph, &signing_key);

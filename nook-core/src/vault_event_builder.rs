@@ -1,5 +1,6 @@
 //! Construct signed vault events from session state.
 
+use crate::error::VaultResult;
 use crate::event_canonical::EventId;
 use crate::vault_event::{
     EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
@@ -18,7 +19,7 @@ pub struct AppendEventInput<'a> {
 }
 
 /// Build and sign a vault event; returns the event and its canonical JSON bytes.
-pub fn build_signed_event(input: AppendEventInput<'_>) -> Result<(VaultEvent, Vec<u8>), String> {
+pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEvent, Vec<u8>)> {
     input.signing_identity.actor_id()?;
     let mut parents = input.parents;
     parents.sort();
@@ -34,8 +35,7 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> Result<(VaultEvent, Ve
         operations: input.operations,
     };
     let event = VaultEvent::sign(body, input.signing_identity.signing_key())?;
-    let bytes = serde_json::to_vec(&event)
-        .map_err(|error| format!("Failed to serialize event: {error}"))?;
+    let bytes = serde_json::to_vec(&event).map_err(crate::VaultError::EventSerialize)?;
     Ok((event, bytes))
 }
 
@@ -64,11 +64,12 @@ pub fn parents_from_heads(heads: &[EventId]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::VaultResult;
     use crate::event_canonical::EventId;
     use crate::vault_signing::SigningIdentity;
 
     #[test]
-    fn parents_from_heads_is_sorted_deduped() -> Result<(), String> {
+    fn parents_from_heads_is_sorted_deduped() -> VaultResult<()> {
         let a = EventId::parse(
             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )?;
@@ -82,7 +83,7 @@ mod tests {
     }
 
     #[test]
-    fn build_signed_event_roundtrip() -> Result<(), String> {
+    fn build_signed_event_roundtrip() -> VaultResult<()> {
         let (signing, _) = SigningIdentity::generate()?;
         let actor = signing.actor_id()?;
         let epoch = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";

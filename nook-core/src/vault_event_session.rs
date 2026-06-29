@@ -1,5 +1,6 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
+use crate::error::{VaultError, VaultResult};
 use crate::{
     AppendEventInput, Database, EventId, LocalEventStore, SigningIdentity, StoredSecretRecord,
     VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
@@ -33,11 +34,11 @@ impl VaultEventSession {
         }
     }
 
-    pub fn actor_id(&self) -> Result<String, String> {
+    pub fn actor_id(&self) -> VaultResult<String> {
         self.signing.actor_id()
     }
 
-    pub fn set_heads_from_graph(&mut self) -> Result<(), String> {
+    pub fn set_heads_from_graph(&mut self) -> VaultResult<()> {
         let graph = self.store.load_graph(&self.store_id)?;
         self.heads = graph
             .heads()
@@ -52,7 +53,7 @@ impl VaultEventSession {
         operations: Vec<VaultOperation>,
         created_at: &str,
         provider_id: Option<&str>,
-    ) -> Result<EventId, String> {
+    ) -> VaultResult<EventId> {
         let actor_id = self.actor_id()?;
         let (event, bytes) = build_signed_event(AppendEventInput {
             store_id: &self.store_id,
@@ -73,12 +74,12 @@ impl VaultEventSession {
         Ok(event_id)
     }
 
-    pub fn union_remote(&mut self, remote_events: &[(EventId, Vec<u8>)]) -> Result<(), String> {
+    pub fn union_remote(&mut self, remote_events: &[(EventId, Vec<u8>)]) -> VaultResult<()> {
         union_remote_events(&mut self.store, remote_events, &self.store_id)?;
         self.set_heads_from_graph()
     }
 
-    pub fn project(&self) -> Result<VaultProjection, String> {
+    pub fn project(&self) -> VaultResult<VaultProjection> {
         let graph = self.store.load_graph(&self.store_id)?;
         project_vault(&graph, &self.store_id)
     }
@@ -88,13 +89,16 @@ impl VaultEventSession {
         crypto: &VaultCrypto,
         armored: &mut HashMap<String, String>,
         secret_types: &mut HashMap<String, crate::SecretType>,
-    ) -> Result<String, String> {
+    ) -> VaultResult<String> {
         let graph = self.store.load_graph(&self.store_id)?;
         let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<StoredSecretRecord> = live.into_values().collect();
-        let db = Database::from_stored_records_with_crypto(&user_records, crypto)?;
-        let jsonl = db.to_jsonl()?;
+        let db = VaultError::from_database(Database::from_stored_records_with_crypto(
+            &user_records,
+            crypto,
+        ))?;
+        let jsonl = VaultError::from_database(db.to_jsonl())?;
         armored.retain(|key, value| {
             is_vault_meta_record(&StoredSecretRecord {
                 key: key.clone(),
@@ -115,11 +119,12 @@ impl VaultEventSession {
     pub fn members_checkpoint_hash(
         records: &[StoredSecretRecord],
         members_key: &str,
-    ) -> Result<String, String> {
-        let roster = resolve_member_roster(records, members_key)?;
-        let member_records = build_members_records(&roster, members_key)?;
-        let json = serde_json::to_string(&member_records)
-            .map_err(|error| format!("Failed to serialize member records: {error}"))?;
+    ) -> VaultResult<String> {
+        let roster =
+            VaultError::from_multi_device(resolve_member_roster(records, members_key))?;
+        let member_records =
+            VaultError::from_multi_device(build_members_records(&roster, members_key))?;
+        let json = serde_json::to_string(&member_records).map_err(VaultError::MemberRecordsSerialize)?;
         Ok(sha256_hex(json.as_bytes()))
     }
 
@@ -127,7 +132,7 @@ impl VaultEventSession {
         &mut self,
         provider_id: &str,
         remote: &mut LocalEventStore,
-    ) -> Result<(), String> {
+    ) -> VaultResult<()> {
         let pending = self.store.pending_outbox(provider_id);
         for (event_id, bytes) in pending {
             if remote.get_bytes(&event_id).is_none() {
@@ -146,11 +151,13 @@ impl VaultEventSession {
         members_records: &[StoredSecretRecord],
         created_at: &str,
         provider_id: Option<&str>,
-    ) -> Result<(String, String), String> {
+    ) -> VaultResult<(String, String)> {
         let trigger_id = self.append_operations(vec![trigger], created_at, provider_id)?;
         trigger_id.as_str().clone_into(&mut self.key_epoch);
-        let (new_keys, secrets) = rotate_vault_keys_with_secrets(user_records, old_secrets_key)?;
-        let members_checkpoint_hash = Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
+        let (new_keys, secrets) =
+            VaultError::from_epoch(rotate_vault_keys_with_secrets(user_records, old_secrets_key))?;
+        let members_checkpoint_hash =
+            Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
         self.append_operations(
             vec![VaultOperation::EpochCheckpoint {
                 secrets,

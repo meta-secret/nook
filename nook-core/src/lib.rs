@@ -6,6 +6,7 @@
 
 mod bip39;
 mod database;
+mod error;
 mod event_canonical;
 mod i18n;
 mod multi_device;
@@ -36,6 +37,7 @@ mod vault_sync_store;
 
 pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
+pub use error::{VaultError, VaultResult};
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,

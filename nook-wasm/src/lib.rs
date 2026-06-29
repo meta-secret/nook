@@ -59,6 +59,50 @@ pub enum NookError {
     Serialization(String),
 }
 
+impl From<nook_core::VaultError> for NookError {
+    fn from(err: nook_core::VaultError) -> Self {
+        use nook_core::VaultError;
+        match err {
+            VaultError::Database(_) | VaultError::Epoch(_) | VaultError::VaultIds(_)
+            | VaultError::GraphCycle
+            | VaultError::TopologicalSortStalled
+            | VaultError::MissingEvent { .. }
+            | VaultError::ProjectionStoreMismatch
+            | VaultError::ProjectionReplayMismatch
+            | VaultError::MissingOutboxEntry
+            | VaultError::MissingGenesisBytes
+            | VaultError::MissingProviderBucket
+            | VaultError::UnexpectedYamlSyncOutcome { .. }
+            | VaultError::MemberRecordsSerialize(_)
+            | VaultError::UnsupportedSchemaVersion { .. }
+            | VaultError::EventStoreIdMismatch { .. }
+            | VaultError::MissingEventParents
+            | VaultError::RemoteEventIdMismatch { .. }
+            | VaultError::EventIdMissingPrefix { .. }
+            | VaultError::EventIdInvalidDigest { .. }
+            | VaultError::JsonSerialize(_)
+            | VaultError::EventBodySerialize(_)
+            | VaultError::EventSerialize(_)
+            | VaultError::ParseStoredEvent(_)
+            | VaultError::ParseRemoteEvent(_) => NookError::Database(err.to_string()),
+
+            VaultError::VaultFormat(_) | VaultError::EmptyProjectionCache => {
+                NookError::Decryption(err.to_string())
+            }
+
+            VaultError::MultiDevice(_)
+            | VaultError::Crypto(_)
+            | VaultError::SigningSeedGeneration(_)
+            | VaultError::SigningSeedWrongLength
+            | VaultError::SignatureVerificationFailed
+            | VaultError::SignatureInvalidHex(_)
+            | VaultError::SignatureMissingPrefix { .. }
+            | VaultError::SignatureWrongLength
+            | VaultError::AuthKeyId(_) => NookError::Encryption(err.to_string()),
+        }
+    }
+}
+
 #[wasm_bindgen(js_name = translate)]
 #[must_use]
 pub fn translate_key(locale: &str, key: &str) -> String {

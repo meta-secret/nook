@@ -1,5 +1,6 @@
 //! YAML vault poll reconciliation for an active unlocked session.
 
+use crate::error::{VaultError, VaultResult};
 use crate::{
     DeviceIdentity, VaultUnlock, capture_vault_unlock_from_content, load_stored_vault,
     merge_remote_join_records,
@@ -38,7 +39,7 @@ pub fn reconcile_yaml_sync(
     identity: &DeviceIdentity,
     armored: &mut HashMap<String, String>,
     event_log_mode: bool,
-) -> Result<YamlSyncOutcome, String> {
+) -> VaultResult<YamlSyncOutcome> {
     if content.trim() == last_synced_content.trim() {
         if members_key.is_empty() {
             if event_log_mode && !content.trim().is_empty() {
@@ -69,8 +70,9 @@ pub fn reconcile_yaml_sync(
         return Ok(YamlSyncOutcome::AccessStatus(status));
     }
 
-    let format = crate::detect_stored_format(content)?;
-    let fresh_records = crate::deserialize_stored(content, format)?;
+    let format = VaultError::from_vault_format(crate::detect_stored_format(content))?;
+    let fresh_records =
+        VaultError::from_vault_format(crate::deserialize_stored(content, format))?;
     merge_remote_join_records(armored, &fresh_records);
     let loaded = load_stored_vault(content, identity)?;
     let (unlock, password_entries, store_id, version) =
@@ -92,37 +94,46 @@ pub fn reconcile_yaml_sync(
 mod tests {
     use super::*;
     use crate::{
-        VaultKeys, generate_store_id, generate_vault_keys, genesis_auth_record,
+        VaultKeys, VaultResult, generate_store_id, generate_vault_keys, genesis_auth_record,
         genesis_members_records, serialize_stored_yaml_with_unlock,
     };
 
-    fn genesis_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> Result<String, String> {
-        let mut records = vec![genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(identity, &keys.members_key, "2026-06-28T00:00:00Z")?);
-        serialize_stored_yaml_with_unlock(
+    fn genesis_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> VaultResult<String> {
+        let mut records = vec![VaultError::from_multi_device(genesis_auth_record(
+            identity,
+            &keys.secrets_key,
+            &keys.members_key,
+        ))?];
+        records.extend(VaultError::from_multi_device(genesis_members_records(
+            identity,
+            &keys.members_key,
+            "2026-06-28T00:00:00Z",
+        ))?);
+        VaultError::from_vault_format(serialize_stored_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(&generate_store_id()?),
+            Some(&VaultError::from_multi_device(generate_store_id())?),
             None,
-        )
+        ))
     }
 
     #[test]
-    fn unchanged_when_content_matches_and_keys_present() -> Result<(), String> {
-        let keys = generate_vault_keys()?;
-        let identity = DeviceIdentity::generate()?;
+    fn unchanged_when_content_matches_and_keys_present() -> VaultResult<()> {
+        let keys = VaultError::from_multi_device(generate_vault_keys())?;
+        let identity = VaultError::from_multi_device(DeviceIdentity::generate())?;
         let yaml = genesis_yaml(&keys, &identity)?;
         let mut armored = HashMap::new();
-        let outcome = reconcile_yaml_sync(&yaml, &yaml, &keys.members_key, &identity, &mut armored, false)?;
+        let outcome =
+            reconcile_yaml_sync(&yaml, &yaml, &keys.members_key, &identity, &mut armored, false)?;
         assert_eq!(outcome, YamlSyncOutcome::Unchanged);
         Ok(())
     }
 
     #[test]
-    fn event_log_mode_rehydrates_when_keys_missing_but_cache_present() -> Result<(), String> {
-        let keys = generate_vault_keys()?;
-        let identity = DeviceIdentity::generate()?;
+    fn event_log_mode_rehydrates_when_keys_missing_but_cache_present() -> VaultResult<()> {
+        let keys = VaultError::from_multi_device(generate_vault_keys())?;
+        let identity = VaultError::from_multi_device(DeviceIdentity::generate())?;
         let yaml = genesis_yaml(&keys, &identity)?;
         let mut armored = HashMap::new();
         let outcome = reconcile_yaml_sync(&yaml, &yaml, "", &identity, &mut armored, true)?;
@@ -132,7 +143,9 @@ mod tests {
                 assert_eq!(reloaded.members_key, keys.members_key);
             }
             other => {
-                return Err(format!("expected Reloaded, got {other:?}"));
+                return Err(VaultError::UnexpectedYamlSyncOutcome {
+                    outcome: format!("{other:?}"),
+                });
             }
         }
         Ok(())

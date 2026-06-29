@@ -4,6 +4,7 @@
 //! representation with lexicographically sorted object keys at every level.
 //! Array order is preserved (parent lists are sorted before hashing).
 
+use crate::error::{VaultError, VaultResult};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -13,15 +14,17 @@ use sha2::{Digest, Sha256};
 pub struct EventId(pub String);
 
 impl EventId {
-    pub fn parse(raw: &str) -> Result<Self, String> {
+    pub fn parse(raw: &str) -> VaultResult<Self> {
         let trimmed = raw.trim();
-        let hex = trimmed
-            .strip_prefix("sha256:")
-            .ok_or_else(|| format!("Event id must start with sha256: (got {trimmed:?})"))?;
+        let hex = trimmed.strip_prefix("sha256:").ok_or_else(|| {
+            VaultError::EventIdMissingPrefix {
+                raw: trimmed.to_owned(),
+            }
+        })?;
         if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(format!(
-                "Event id digest must be 64 hex chars (got {hex:?})"
-            ));
+            return Err(VaultError::EventIdInvalidDigest {
+                hex: hex.to_owned(),
+            });
         }
         Ok(Self(format!("sha256:{hex}")))
     }
@@ -78,21 +81,22 @@ pub fn canonicalize_json(value: &Value) -> Value {
 }
 
 /// Serialize a JSON value to canonical compact UTF-8 bytes.
-pub fn canonical_json_bytes(value: &Value) -> Result<Vec<u8>, String> {
+pub fn canonical_json_bytes(value: &Value) -> VaultResult<Vec<u8>> {
     let canonical = canonicalize_json(value);
-    serde_json::to_vec(&canonical)
-        .map_err(|error| format!("Failed to encode canonical JSON: {error}"))
+    serde_json::to_vec(&canonical).map_err(VaultError::from)
 }
 
 /// Parse an `ed25519:{hex}` signature string.
-pub fn parse_ed25519_signature(raw: &str) -> Result<Signature, String> {
-    let hex = raw
-        .strip_prefix("ed25519:")
-        .ok_or_else(|| format!("Signature must start with ed25519: (got {raw:?})"))?;
-    let bytes = hex::decode(hex).map_err(|error| format!("Invalid signature hex: {error}"))?;
+pub fn parse_ed25519_signature(raw: &str) -> VaultResult<Signature> {
+    let hex = raw.strip_prefix("ed25519:").ok_or_else(|| {
+        VaultError::SignatureMissingPrefix {
+            raw: raw.to_owned(),
+        }
+    })?;
+    let bytes = hex::decode(hex)?;
     let array: [u8; 64] = bytes
         .try_into()
-        .map_err(|_| "Ed25519 signature must be 64 bytes".to_owned())?;
+        .map_err(|_| VaultError::SignatureWrongLength)?;
     Ok(Signature::from_bytes(&array))
 }
 
@@ -113,11 +117,11 @@ pub fn verify_body_signature(
     body_bytes: &[u8],
     signature: &str,
     verifying_key: &VerifyingKey,
-) -> Result<(), String> {
+) -> VaultResult<()> {
     let parsed = parse_ed25519_signature(signature)?;
     verifying_key
         .verify(body_bytes, &parsed)
-        .map_err(|_| "Event signature verification failed".to_owned())
+        .map_err(|_| VaultError::SignatureVerificationFailed)
 }
 
 #[cfg(test)]

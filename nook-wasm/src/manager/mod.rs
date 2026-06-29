@@ -363,8 +363,7 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity().await?;
         if !self.last_synced_content.trim().is_empty() {
             let (secrets_key, members_key) =
-                nook_core::hydrate_keys_from_projection_yaml(&self.last_synced_content, &identity)
-                    .map_err(NookError::Encryption)?;
+                nook_core::hydrate_keys_from_projection_yaml(&self.last_synced_content, &identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
@@ -372,8 +371,7 @@ impl NookVaultManager {
             && !cache.trim().is_empty()
         {
             let (secrets_key, members_key) =
-                nook_core::hydrate_keys_from_projection_yaml(&cache, &identity)
-                    .map_err(NookError::Encryption)?;
+                nook_core::hydrate_keys_from_projection_yaml(&cache, &identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             self.last_synced_content = cache;
             return Ok(());

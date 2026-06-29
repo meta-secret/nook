@@ -8,14 +8,15 @@ use harness::{
     union_device_from_providers,
 };
 use nook_core::{
-    AppendEventInput, EncryptedSecretPayload, SecretType, VaultOperation, build_signed_event,
+    AppendEventInput, EncryptedSecretPayload, SecretType, VaultError, VaultOperation, VaultResult,
+    build_signed_event,
 };
 use std::collections::HashMap;
 
 const TS: &str = "2026-06-28T00:00:00Z";
 
 #[test]
-fn two_device_genesis_append_and_union() -> Result<(), String> {
+fn two_device_genesis_append_and_union() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     let mut b = EventLogDevice::replica_of(&a)?;
     a.append_secret("secret_deviceaaaa", "value-a")?;
@@ -29,7 +30,7 @@ fn two_device_genesis_append_and_union() -> Result<(), String> {
 }
 
 #[test]
-fn concurrent_adds_both_survive_after_union() -> Result<(), String> {
+fn concurrent_adds_both_survive_after_union() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     let mut b = EventLogDevice::replica_of(&a)?;
     b.union_from(&a)?;
@@ -48,7 +49,7 @@ fn concurrent_adds_both_survive_after_union() -> Result<(), String> {
 }
 
 #[test]
-fn concurrent_replace_creates_conflict() -> Result<(), String> {
+fn concurrent_replace_creates_conflict() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
     device.append_secret("secret_original1", "base")?;
     let head = device.session.heads[0].clone();
@@ -82,14 +83,14 @@ fn concurrent_replace_creates_conflict() -> Result<(), String> {
 }
 
 #[test]
-fn out_of_order_delivery_becomes_applicable() -> Result<(), String> {
+fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
     let device = EventLogDevice::genesis("main")?;
     let genesis_head = nook_core::EventId::parse(&device.session.heads[0])?;
     let genesis_bytes = device
         .session
         .store
         .get_bytes(&genesis_head)
-        .ok_or_else(|| "Genesis event bytes missing".to_owned())?
+        .ok_or(VaultError::MissingGenesisBytes)?
         .to_vec();
 
     let child_ops = vec![VaultOperation::SecretCreated {
@@ -123,7 +124,7 @@ fn out_of_order_delivery_becomes_applicable() -> Result<(), String> {
 }
 
 #[test]
-fn duplicate_union_is_idempotent() -> Result<(), String> {
+fn duplicate_union_is_idempotent() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     a.append_secret("secret_duplicate1", "v")?;
     let events = a.remote_events();
@@ -140,7 +141,7 @@ fn duplicate_union_is_idempotent() -> Result<(), String> {
 }
 
 #[test]
-fn join_merge_single_head() -> Result<(), String> {
+fn join_merge_single_head() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
     let genesis_head = device.session.heads[0].clone();
 
@@ -164,7 +165,7 @@ fn join_merge_single_head() -> Result<(), String> {
 }
 
 #[test]
-fn legacy_import_then_decrypt() -> Result<(), String> {
+fn legacy_import_then_decrypt() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
     let yaml = sample_legacy_yaml(&device.crypto)?;
     device.import_legacy_yaml(&yaml)?;
@@ -176,7 +177,7 @@ fn legacy_import_then_decrypt() -> Result<(), String> {
 }
 
 #[test]
-fn epoch_rotation_decrypts_under_new_key() -> Result<(), String> {
+fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
     device.append_secret("secret_epochrot1", "rotate-me")?;
     let graph = device.session.store.load_graph(device.store_id())?;
@@ -195,13 +196,13 @@ fn epoch_rotation_decrypts_under_new_key() -> Result<(), String> {
     )?;
     assert_ne!(new_secrets, device.secrets_key);
     device.secrets_key = new_secrets.clone();
-    device.crypto = nook_core::VaultCrypto::new(&new_secrets)?;
-    device.crypto.encrypt_value("post-epoch")?;
+    device.crypto = VaultError::from_crypto(nook_core::VaultCrypto::new(&new_secrets))?;
+    VaultError::from_crypto(device.crypto.encrypt_value("post-epoch"))?;
     Ok(())
 }
 
 #[test]
-fn provider_switch_outbox_flush_and_union() -> Result<(), String> {
+fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     let mut providers: ProviderBuckets =
         HashMap::from([("github".to_owned(), nook_core::LocalEventStore::new())]);
@@ -209,7 +210,7 @@ fn provider_switch_outbox_flush_and_union() -> Result<(), String> {
     for (id, bytes) in a.remote_events() {
         providers
             .get_mut("github")
-            .ok_or_else(|| "github provider bucket missing".to_owned())?
+            .ok_or(VaultError::MissingProviderBucket)?
             .put_event(id, bytes);
     }
 

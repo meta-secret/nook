@@ -33,14 +33,14 @@ pub(crate) fn content_requires_genesis(
     content: &str,
     force_genesis: bool,
 ) -> Result<bool, NookError> {
-    nook_core::content_requires_genesis(content, force_genesis).map_err(NookError::Decryption)
+    Ok(nook_core::content_requires_genesis(content, force_genesis)?)
 }
 
 pub(crate) fn access_status_for_vault_content(
     content: &str,
     identity: &nook_core::DeviceIdentity,
 ) -> Result<String, NookError> {
-    nook_core::access_status_for_vault_content(content, identity).map_err(NookError::Decryption)
+    Ok(nook_core::access_status_for_vault_content(content, identity)?)
 }
 
 pub(crate) fn sync_result_unchanged() -> Result<NookVaultSyncResult, JsError> {
@@ -81,7 +81,7 @@ pub(crate) fn load_stored_vault(
     content: &str,
     identity: &nook_core::DeviceIdentity,
 ) -> Result<LoadedVault, NookError> {
-    let loaded = nook_core::load_stored_vault(content, identity).map_err(NookError::Decryption)?;
+    let loaded = nook_core::load_stored_vault(content, identity)?;
     Ok(LoadedVault {
         jsonl: loaded.jsonl,
         armored: loaded.armored,
@@ -101,7 +101,10 @@ pub(crate) fn vault_member_records(
     records: &[nook_core::StoredSecretRecord],
     members_key: &str,
 ) -> Result<Vec<nook_core::VaultMember>, NookError> {
-    nook_core::resolve_member_roster(records, members_key).map_err(NookError::Decryption)
+    Ok(nook_core::VaultError::from_multi_device(nook_core::resolve_member_roster(
+        records,
+        members_key,
+    ))?)
 }
 
 pub(crate) fn pending_joins_to_vec(

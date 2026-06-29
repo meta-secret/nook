@@ -1,5 +1,6 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
+use crate::error::{VaultError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::VaultEvent;
 use std::collections::{BTreeMap, BTreeSet};
@@ -66,7 +67,7 @@ impl EventGraph {
         &mut self,
         event: VaultEvent,
         expected_store_id: &str,
-    ) -> Result<EventInsertStatus, String> {
+    ) -> VaultResult<EventInsertStatus> {
         let event_id = event.validate_envelope(expected_store_id)?;
         if self.events.contains_key(&event_id) {
             let existing = self.events.get(&event_id).expect("present");
@@ -177,7 +178,7 @@ impl EventGraph {
     }
 
     /// Deterministic topological order — ties broken by event id lexicographic order.
-    pub fn topological_order(&self) -> Result<Vec<EventId>, String> {
+    pub fn topological_order(&self) -> VaultResult<Vec<EventId>> {
         let applicable: Vec<EventId> = self
             .applicable_events()
             .into_iter()
@@ -201,7 +202,7 @@ impl EventGraph {
                 .cloned()
                 .collect();
             if ready.is_empty() {
-                return Err("Event graph contains a cycle".to_owned());
+                return Err(VaultError::GraphCycle);
             }
             for id in ready {
                 remaining.remove(&id);
@@ -209,7 +210,7 @@ impl EventGraph {
                 progress = true;
             }
             if !progress {
-                return Err("Failed to advance topological sort".to_owned());
+                return Err(VaultError::TopologicalSortStalled);
             }
         }
         Ok(ordered)
@@ -237,6 +238,7 @@ impl EventGraph {
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultResult;
     use super::*;
     use crate::vault_event::{
         VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
@@ -347,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_events_until_parent_arrives() -> Result<(), String> {
+    fn pending_events_until_parent_arrives() -> VaultResult<()> {
         let key = signing_key();
         let store = "store_testtoken1";
         let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -384,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_insert_returns_duplicate_status() -> Result<(), String> {
+    fn duplicate_insert_returns_duplicate_status() -> VaultResult<()> {
         let key = signing_key();
         let store = "store_testtoken1";
         let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
