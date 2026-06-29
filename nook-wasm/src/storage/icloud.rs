@@ -11,11 +11,11 @@ use serde_json::json;
 
 const ICLOUD_CONTAINER_ID: &str = match option_env!("NOOK_ICLOUD_CONTAINER_ID") {
     Some(value) => value,
-    None => "iCloud.dev.nook",
+    None => "iCloud.metasecret.project.com",
 };
 const ICLOUD_API_TOKEN: &str = match option_env!("NOOK_ICLOUD_API_TOKEN") {
     Some(value) => value,
-    None => "e2e-stub-token",
+    None => "3cb4e4323cddc52e7e91af453b3d4f80d90c12fa395647b1b47b3cd72b66bf5b",
 };
 const ICLOUD_ENVIRONMENT: &str = match option_env!("NOOK_ICLOUD_ENVIRONMENT") {
     Some(value) => value,
