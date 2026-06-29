@@ -86,7 +86,7 @@ tasks:
       - task: docker:push:ci
 
   ci:fix:agent:
-    desc: Run Cursor Agent in Docker to fix a failed main CI run, open a PR, and squash-merge when green.
+    desc: Run Cursor SDK ci-agent in Docker to fix a failed main CI run, open a PR, and squash-merge when green.
     deps:
       - setup
       - docker:cursor-agent:build

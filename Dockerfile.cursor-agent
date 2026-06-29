@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.4
-# Cursor Agent CLI + docker/gh/git on top of the Nook toolchain image.
+# Cursor SDK ci-agent + docker/gh/git on top of the Nook toolchain image.
 # Used by main CI auto-fix (mount /var/run/docker.sock for task/docker:* commands).
 # Base image is a named build context — see cursor-agent target in docker-bake.hcl.
+
+ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM toolchain
 
@@ -13,7 +15,6 @@ RUN apt-get update \
         curl \
         docker.io \
         git \
-        gettext-base \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
@@ -22,13 +23,18 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# https://cursor.com/docs/cli/overview
-ENV PATH="/root/.local/bin:/root/.cursor/bin:${PATH}"
-RUN curl https://cursor.com/install -fsS | bash \
-    && command -v agent >/dev/null
+# Cursor SDK requires Node.js 22.13+ (Bun is not supported for local agents).
+COPY --from=${NODE_IMAGE} /usr/local/bin/node /usr/local/bin/node
+COPY --from=${NODE_IMAGE} /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=${NODE_IMAGE} /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=${NODE_IMAGE} /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-COPY scripts/ci-fix-agent.sh /usr/local/bin/ci-fix-agent.sh
-RUN chmod +x /usr/local/bin/ci-fix-agent.sh
+COPY ci-agent/package.json ci-agent/package-lock.json /opt/ci-agent/
+RUN cd /opt/ci-agent && npm ci
+
+COPY ci-agent/tsconfig.json /opt/ci-agent/
+COPY ci-agent/src /opt/ci-agent/src
+RUN cd /opt/ci-agent && npm run build && npm prune --omit=dev
 
 WORKDIR /workspace
-ENTRYPOINT ["/usr/local/bin/ci-fix-agent.sh"]
+ENTRYPOINT ["node", "/opt/ci-agent/dist/main.js"]

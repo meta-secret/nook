@@ -6,6 +6,8 @@
 
 nook-web/node_modules/
 nook-web/dist/
+ci-agent/node_modules/
+ci-agent/dist/
 nook-web/test-results/
 nook-web/package-lock.json
 nook-web/src/lib/nook-wasm/

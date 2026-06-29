@@ -89,13 +89,13 @@ tasks:
         sh -c "cd nook-web && bun install && task _web:dev"
 
   docker:cursor-agent:build:
-    desc: Build nook-cursor-agent image (Cursor CLI + docker/gh/git on toolchain).
+    desc: Build nook-cursor-agent image (Cursor SDK ci-agent + docker/gh/git on toolchain).
     cmds:
       - >-
         {{.DOCKER}} buildx bake -f docker-bake.hcl cursor-agent
 
   docker:cursor-agent:run:
-    desc: Run ci-fix-agent entrypoint (mount docker.sock for nested task/docker commands).
+    desc: Run ci-agent entrypoint (mount docker.sock for nested task/docker commands).
     internal: true
     env:
       VITE_BASE: '{{.VITE_BASE}}'

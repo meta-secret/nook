@@ -88,7 +88,7 @@ target "toolchain-push" {
   cache-to = []
 }
 
-// Cursor Agent CLI + docker/gh/git — extends toolchain via a named build context.
+// Cursor SDK ci-agent + docker/gh/git — extends toolchain via a named build context.
 // CI: pull GHCR :latest (buildx container driver cannot use daemon-only tags).
 // Dev: bake builds toolchain target inside buildkit (target:toolchain).
 target "cursor-agent" {
