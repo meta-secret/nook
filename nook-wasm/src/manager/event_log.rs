@@ -3,7 +3,9 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
-use crate::storage::drive_events::{fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent};
+use crate::storage::drive_events::{
+    fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent,
+};
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
@@ -162,8 +164,7 @@ impl NookVaultManager {
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
-        let db = nook_core::Database::from_stored_records_with_crypto(&user_records, crypto)
-            ?;
+        let db = nook_core::Database::from_stored_records_with_crypto(&user_records, crypto)?;
         self.decrypted_jsonl = db.to_jsonl()?;
         self.stored_armored.retain(|key, value| {
             nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
@@ -194,8 +195,7 @@ impl NookVaultManager {
             &self.password_entries,
             Some(self.store_id.as_str()),
             None,
-        )
-        ?;
+        )?;
         save_to_indexed_db(&yaml).await?;
         self.last_synced_content = yaml;
         Ok(())
@@ -253,9 +253,7 @@ impl NookVaultManager {
             nook_core::StorageMode::Github => {
                 list_github_event_ids(&self.github_pat, &self.github_repo).await?
             }
-            nook_core::StorageMode::GoogleDrive => {
-                list_drive_event_ids(&self.github_pat).await?
-            }
+            nook_core::StorageMode::GoogleDrive => list_drive_event_ids(&self.github_pat).await?,
             _ => Vec::new(),
         };
 
@@ -338,10 +336,8 @@ impl NookVaultManager {
 
     fn members_checkpoint_hash(&self) -> Result<String, NookError> {
         let records = self.stored_records_snapshot();
-        let roster = nook_core::resolve_member_roster(&records, &self.members_key)
-            ?;
-        let member_records = nook_core::build_members_records(&roster, &self.members_key)
-            ?;
+        let roster = nook_core::resolve_member_roster(&records, &self.members_key)?;
+        let member_records = nook_core::build_members_records(&roster, &self.members_key)?;
         let json = serde_json::to_string(&member_records)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         Ok(nook_core::sha256_hex(json.as_bytes()))
@@ -367,9 +363,7 @@ impl NookVaultManager {
             .into_iter()
             .filter(|record| !nook_core::is_vault_meta_record(record))
             .collect();
-        let (new_keys, secrets) =
-            rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)
-                ?;
+        let (new_keys, secrets) = rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
         self.apply_vault_keys(&new_keys.secrets_key, &new_keys.members_key)?;
         for payload in &secrets {
             self.stored_armored

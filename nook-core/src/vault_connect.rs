@@ -64,10 +64,7 @@ fn records_to_secret_types(records: &[StoredSecretRecord]) -> HashMap<String, Se
 
 /// Decrypt and hydrate an in-memory session from stored vault YAML.
 #[allow(clippy::implicit_hasher)]
-pub fn load_stored_vault(
-    content: &str,
-    identity: &DeviceIdentity,
-) -> VaultResult<LoadedVault> {
+pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let stored_records = deserialize_stored(content, format)?;
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
@@ -105,7 +102,12 @@ pub fn apply_member_records(
 /// Read unlock metadata from vault YAML without decrypting secrets.
 pub fn capture_vault_unlock_from_content(
     content: &str,
-) -> VaultResult<(VaultUnlock, Vec<crate::PasswordUnlockEntry>, Option<String>, u64)> {
+) -> VaultResult<(
+    VaultUnlock,
+    Vec<crate::PasswordUnlockEntry>,
+    Option<String>,
+    u64,
+)> {
     let unlock = crate::read_vault_unlock(content).unwrap_or(VaultUnlock::Keys);
     let password_entries = crate::read_vault_password_entries(content).unwrap_or_default();
     let store_id = crate::read_vault_store_id(content).ok().flatten();

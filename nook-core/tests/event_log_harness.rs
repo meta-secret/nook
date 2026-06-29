@@ -6,8 +6,8 @@
 use nook_core::{
     Database, DeviceIdentity, EventId, LocalEventStore, SecretType, SigningIdentity, VaultCrypto,
     VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult, VaultUnlock,
-    encrypted_secret_from_armored, genesis_auth_record, genesis_members_records, generate_store_id,
-    generate_vault_keys, hydrate_keys_from_projection_yaml, legacy_vault_to_import_event,
+    encrypted_secret_from_armored, generate_store_id, generate_vault_keys, genesis_auth_record,
+    genesis_members_records, hydrate_keys_from_projection_yaml, legacy_vault_to_import_event,
     serialize_stored_yaml_with_unlock,
 };
 use std::collections::HashMap;
@@ -75,8 +75,7 @@ impl EventLogDevice {
     }
 
     pub fn append_signed(&mut self, ops: Vec<VaultOperation>) -> VaultResult<EventId> {
-        self.session
-            .append_operations(ops, TS, Some("github"))
+        self.session.append_operations(ops, TS, Some("github"))
     }
 
     pub fn union_from(&mut self, remote: &EventLogDevice) -> VaultResult<()> {
@@ -153,17 +152,17 @@ impl EventLogDevice {
     }
 }
 
-fn genesis_yaml(keys: &VaultKeys, identity: &DeviceIdentity, store_id: &str) -> VaultResult<String> {
+fn genesis_yaml(
+    keys: &VaultKeys,
+    identity: &DeviceIdentity,
+    store_id: &str,
+) -> VaultResult<String> {
     let mut records = vec![genesis_auth_record(
         identity,
         &keys.secrets_key,
         &keys.members_key,
     )?];
-    records.extend(genesis_members_records(
-        identity,
-        &keys.members_key,
-        TS,
-    )?);
+    records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
     Ok(serialize_stored_yaml_with_unlock(
         &records,
         &VaultUnlock::Keys,

@@ -74,8 +74,7 @@ pub fn reconcile_yaml_sync(
     let fresh_records = crate::deserialize_stored(content, format)?;
     merge_remote_join_records(armored, &fresh_records);
     let loaded = load_stored_vault(content, identity)?;
-    let (unlock, password_entries, store_id, version) =
-        capture_vault_unlock_from_content(content)?;
+    let (unlock, password_entries, store_id, version) = capture_vault_unlock_from_content(content)?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
         jsonl: loaded.jsonl,
         armored: loaded.armored,
@@ -123,8 +122,14 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let yaml = genesis_yaml(&keys, &identity)?;
         let mut armored = HashMap::new();
-        let outcome =
-            reconcile_yaml_sync(&yaml, &yaml, &keys.members_key, &identity, &mut armored, false)?;
+        let outcome = reconcile_yaml_sync(
+            &yaml,
+            &yaml,
+            &keys.members_key,
+            &identity,
+            &mut armored,
+            false,
+        )?;
         assert_eq!(outcome, YamlSyncOutcome::Unchanged);
         Ok(())
     }

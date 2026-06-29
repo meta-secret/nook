@@ -5,8 +5,8 @@
 //! equal version with different content is a conflict that requires explicit
 //! user choice (never auto-merged).
 
-use crate::read_vault_store_id;
 use crate::errors::VaultSyncError;
+use crate::read_vault_store_id;
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 

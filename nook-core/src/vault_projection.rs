@@ -278,8 +278,8 @@ pub fn assert_projection_permutation_invariant(
 
 #[cfg(test)]
 mod tests {
-    use crate::VaultResult;
     use super::*;
+    use crate::VaultResult;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
         VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
@@ -533,7 +533,11 @@ mod tests {
         let cleared = VaultEvent::sign(clear_body, &signing_key)?;
         graph.insert(cleared, STORE)?;
 
-        assert!(project_vault(&graph, STORE)?.live_secrets(&graph).is_empty());
+        assert!(
+            project_vault(&graph, STORE)?
+                .live_secrets(&graph)
+                .is_empty()
+        );
         Ok(())
     }
 }

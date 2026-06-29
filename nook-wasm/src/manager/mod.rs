@@ -26,9 +26,7 @@ mod secrets;
 mod sync;
 
 use crate::NookError;
-use crate::conversion::{
-    apply_member_records, pending_joins_to_vec, vault_members_to_vec,
-};
+use crate::conversion::{apply_member_records, pending_joins_to_vec, vault_members_to_vec};
 use crate::storage::{
     drive::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
@@ -204,8 +202,7 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        let db =
-            nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
+        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
         records_to_vec(db.list())
     }
 
@@ -239,8 +236,7 @@ impl NookVaultManager {
             &self.password_entries,
             Some(self.store_id.as_str()),
             Some(self.vault_version),
-        )
-        ?;
+        )?;
 
         match self.storage_mode {
             nook_core::StorageMode::Local => {
@@ -311,7 +307,9 @@ impl NookVaultManager {
     pub(in crate::manager) fn device_identity(
         &self,
     ) -> Result<nook_core::DeviceIdentity, NookError> {
-        Ok(nook_core::DeviceIdentity::from_secret_str(&self.device_identity_secret)?)
+        Ok(nook_core::DeviceIdentity::from_secret_str(
+            &self.device_identity_secret,
+        )?)
     }
 
     /// Pull the active unlock mode from a freshly-accepted vault YAML and
@@ -346,8 +344,7 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.secrets_key = secrets_key.to_owned();
         self.members_key = members_key.to_owned();
-        self.crypto =
-            Some(nook_core::VaultCrypto::new(secrets_key)?);
+        self.crypto = Some(nook_core::VaultCrypto::new(secrets_key)?);
         Ok(())
     }
 
@@ -387,8 +384,7 @@ impl NookVaultManager {
         let records = self.stored_records_snapshot();
         let members_key = self.members_key.clone();
         if let Some(member_records) =
-            nook_core::ensure_self_in_roster(&records, identity, &members_key)
-                ?
+            nook_core::ensure_self_in_roster(&records, identity, &members_key)?
         {
             apply_member_records(&mut self.stored_armored, &member_records);
             self.save_current_db().await?;
@@ -424,10 +420,8 @@ impl NookVaultManager {
                 self.github_pat = String::new();
             }
             nook_core::StorageMode::Github => {
-                self.github_pat =
-                    nook_core::validate_github_pat(github_pat)?;
-                let repo_name = nook_core::validate_github_repo_name(github_repo_name)
-                    ?;
+                self.github_pat = nook_core::validate_github_pat(github_pat)?;
+                let repo_name = nook_core::validate_github_repo_name(github_repo_name)?;
                 let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
                 let username = fetch_github_username(&self.github_pat).await?;
                 let new_repo = format!("{}/{}", username, repo_name);
@@ -440,12 +434,10 @@ impl NookVaultManager {
                 ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
             }
             nook_core::StorageMode::GoogleDrive => {
-                self.github_pat =
-                    nook_core::validate_oauth_access_token(github_pat)?;
+                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?;
                 let (known_file_id, raw_file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name);
-                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
-                    ?;
+                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
                 self.github_path = file_name.clone();
                 let _ = self.status_tx.send("DRIVE_VERIFY".to_owned());
                 verify_drive_access(&self.github_pat).await?;
@@ -454,12 +446,10 @@ impl NookVaultManager {
                 self.github_repo = file_id;
             }
             nook_core::StorageMode::ICloud => {
-                self.github_pat = nook_core::validate_oauth_access_token(github_pat)
-                    ?;
+                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?;
                 let (_known_revision, raw_file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name);
-                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
-                    ?;
+                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
                 self.github_path = file_name.clone();
                 let _ = self.status_tx.send("ICLOUD_VERIFY".to_owned());
                 verify_icloud_access(&self.github_pat).await?;

@@ -68,8 +68,7 @@ impl VaultEventSession {
         self.store.put_event(event_id.clone(), bytes.clone());
         self.heads = vec![event_id.as_str().to_owned()];
         if let Some(provider) = provider_id {
-            self.store
-                .queue_outbox(provider, event_id.clone(), bytes);
+            self.store.queue_outbox(provider, event_id.clone(), bytes);
         }
         Ok(event_id)
     }
@@ -119,7 +118,8 @@ impl VaultEventSession {
     ) -> VaultResult<String> {
         let roster = resolve_member_roster(records, members_key)?;
         let member_records = build_members_records(&roster, members_key)?;
-        let json = serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
+        let json =
+            serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
         Ok(sha256_hex(json.as_bytes()))
     }
 
@@ -149,8 +149,7 @@ impl VaultEventSession {
     ) -> VaultResult<(String, String)> {
         let trigger_id = self.append_operations(vec![trigger], created_at, provider_id)?;
         trigger_id.as_str().clone_into(&mut self.key_epoch);
-        let (new_keys, secrets) =
-            rotate_vault_keys_with_secrets(user_records, old_secrets_key)?;
+        let (new_keys, secrets) = rotate_vault_keys_with_secrets(user_records, old_secrets_key)?;
         let members_checkpoint_hash =
             Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
         self.append_operations(

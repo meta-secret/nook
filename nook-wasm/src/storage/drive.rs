@@ -164,8 +164,7 @@ pub(crate) async fn ensure_drive_vault_file(
     file_name: &str,
 ) -> Result<String, NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
-    let validated_name =
-        nook_core::validate_drive_vault_file_name(file_name)?;
+    let validated_name = nook_core::validate_drive_vault_file_name(file_name)?;
     let trimmed_id = known_file_id.trim();
     if !trimmed_id.is_empty() && fetch_file_metadata(&token, trimmed_id).await.is_ok() {
         return Ok(trimmed_id.to_owned());

@@ -11,8 +11,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
-        let db =
-            nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
+        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
         let filtered = nook_core::filter_secrets(&db.list(), query);
         records_to_vec(filtered).map_err(Into::into)
     }
@@ -67,12 +66,9 @@ impl NookVaultManager {
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
-        let secret_type =
-            nook_core::SecretType::parse(&secret_type)?;
-        let typed_value =
-            nook_core::SecretValue::from_yaml(secret_type, &data)?;
-        let mut db =
-            nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
+        let secret_type = nook_core::SecretType::parse(&secret_type)?;
+        let typed_value = nook_core::SecretValue::from_yaml(secret_type, &data)?;
+        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
         db.insert(id.clone(), typed_value);
         let new_jsonl = db.to_jsonl()?;
         self.decrypted_jsonl = new_jsonl;
@@ -81,8 +77,7 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
-            .encrypt_value(&data)
-            ?;
+            .encrypt_value(&data)?;
         self.stored_armored.insert(id.clone(), armored);
         self.secret_types.insert(id.clone(), secret_type);
 
@@ -109,14 +104,12 @@ impl NookVaultManager {
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("REPLACE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
-        let secret_type =
-            nook_core::SecretType::parse(&secret_type)?;
+        let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let crypto = self
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        let mut db =
-            nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
+        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
         nook_core::replace_secret(
             &mut db,
             &mut self.stored_armored,
@@ -128,15 +121,12 @@ impl NookVaultManager {
                 secret_type,
                 data_yaml: &data,
             },
-        )
-        ?;
+        )?;
         self.decrypted_jsonl = db.to_jsonl()?;
 
         if self.event_log_mode || self.ensure_event_log_mode().await? {
-            let validated_new =
-                nook_core::validate_secret_id(&new_id)?;
-            let validated_old =
-                nook_core::validate_secret_id(&old_id)?;
+            let validated_new = nook_core::validate_secret_id(&new_id)?;
+            let validated_old = nook_core::validate_secret_id(&old_id)?;
             let ciphertext = self
                 .stored_armored
                 .get(&validated_new)
@@ -191,8 +181,7 @@ impl NookVaultManager {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
-        let mut db =
-            nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
+        let mut db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
         db.remove(&id);
         let new_jsonl = db.to_jsonl()?;
         self.decrypted_jsonl = new_jsonl;

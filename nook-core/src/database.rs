@@ -5,8 +5,8 @@
 //! All wire formats (JSONL and YAML) are entered and left exclusively
 //! through this struct, so encryption boundaries stay localised.
 
-use crate::multi_device;
 use crate::errors::{DatabaseError, DatabaseResult};
+use crate::multi_device;
 use crate::secret_types::{SecretRecord, SecretType, SecretValue, StoredSecretRecord};
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_format::{self, VaultFormat, detect_stored_format};

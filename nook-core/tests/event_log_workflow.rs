@@ -75,9 +75,11 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
 
     let graph = device.session.store.load_graph(device.store_id())?;
     let projection = device.project()?;
-    assert!(projection
-        .replacement_conflicts
-        .contains_key("secret_original1"));
+    assert!(
+        projection
+            .replacement_conflicts
+            .contains_key("secret_original1")
+    );
     assert_eq!(projection.live_secrets(&graph).len(), 2);
     Ok(())
 }
@@ -181,7 +183,11 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
     device.append_secret("secret_epochrot1", "rotate-me")?;
     let graph = device.session.store.load_graph(device.store_id())?;
-    let user_records: Vec<_> = device.project()?.live_secrets(&graph).into_values().collect();
+    let user_records: Vec<_> = device
+        .project()?
+        .live_secrets(&graph)
+        .into_values()
+        .collect();
 
     let trigger = VaultOperation::DeviceRevoked {
         device_id: "device_revoked01".to_owned(),

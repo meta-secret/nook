@@ -53,8 +53,7 @@ impl NookVaultManager {
         self.capture_vault_unlock(&content);
 
         let format = nook_core::detect_stored_format(&content)?;
-        let mut records =
-            nook_core::deserialize_stored(&content, format)?;
+        let mut records = nook_core::deserialize_stored(&content, format)?;
 
         let auth_id = nook_core::dec_auth_id(&identity);
         if records.iter().any(|record| record.key == auth_id) {
@@ -66,10 +65,10 @@ impl NookVaultManager {
 
         let join_key = nook_core::join_record_key(identity.device_id());
         records.retain(|record| record.key != join_key);
-        records.push(
-            nook_core::create_join_request_record(&identity, &requested_at)
-                ?,
-        );
+        records.push(nook_core::create_join_request_record(
+            &identity,
+            &requested_at,
+        )?);
 
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
@@ -107,8 +106,7 @@ impl NookVaultManager {
         self.capture_vault_unlock(&content);
 
         let format = nook_core::detect_stored_format(&content)?;
-        let mut records =
-            nook_core::deserialize_stored(&content, format)?;
+        let mut records = nook_core::deserialize_stored(&content, format)?;
 
         let auth_id = nook_core::dec_auth_id(&identity);
         records.retain(|record| record.key != auth_id);
@@ -118,8 +116,7 @@ impl NookVaultManager {
             &members_key,
             &identity,
             &wasm_iso_timestamp(),
-        )
-        ?;
+        )?;
         records.push(auth);
         records.extend(members);
 
@@ -128,8 +125,7 @@ impl NookVaultManager {
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.persist_vault_change(Vec::new()).await?;
 
-        let updated =
-            nook_core::serialize_stored(&records, format)?;
+        let updated = nook_core::serialize_stored(&records, format)?;
         let LoadedVault {
             jsonl,
             armored,
@@ -147,8 +143,7 @@ impl NookVaultManager {
     /// Device B publishes a join request record with its public key.
     pub async fn create_join_request(&mut self, requested_at: String) -> Result<(), JsError> {
         let identity = self.device_identity()?;
-        let record = nook_core::create_join_request_record(&identity, &requested_at)
-            ?;
+        let record = nook_core::create_join_request_record(&identity, &requested_at)?;
         self.stored_armored.insert(record.key.clone(), record.value);
         let signing = self.ensure_signing_identity().await?;
         let signing_pk = hex::encode(signing.verifying_key().as_bytes());
@@ -180,8 +175,7 @@ impl NookVaultManager {
             &join,
             &identity,
             &records,
-        )
-        ?;
+        )?;
         self.stored_armored.remove(&join_key);
         self.stored_armored
             .insert(auth_record.key.clone(), auth_record.value.clone());
@@ -228,11 +222,9 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let records = self.stored_records_snapshot();
         let member_records =
-            nook_core::rename_vault_member(&records, &self.members_key, &auth_id, &label)
-                ?;
+            nook_core::rename_vault_member(&records, &self.members_key, &auth_id, &label)?;
         apply_member_records(&mut self.stored_armored, &member_records);
-        let roster = nook_core::resolve_member_roster(&records, &self.members_key)
-            ?;
+        let roster = nook_core::resolve_member_roster(&records, &self.members_key)?;
         let device_id = roster
             .iter()
             .find(|member| member.auth_id == auth_id)
@@ -262,8 +254,7 @@ impl NookVaultManager {
                     .map(|member| member.device_id.clone())
             })
             .unwrap_or_default();
-        let updated = nook_core::revoke_vault_member(&records, &self.members_key, &auth_id)
-            ?;
+        let updated = nook_core::revoke_vault_member(&records, &self.members_key, &auth_id)?;
         self.stored_armored = records_to_armored(&updated);
         self.secret_types = records_to_secret_types(&updated);
 
@@ -298,8 +289,7 @@ impl NookVaultManager {
             &members_key,
             &identity,
             &wasm_iso_timestamp(),
-        )
-        ?;
+        )?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.stored_armored.insert(auth.key.clone(), auth.value);
         for member in members {

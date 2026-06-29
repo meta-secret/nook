@@ -238,8 +238,8 @@ impl EventGraph {
 
 #[cfg(test)]
 mod tests {
-    use crate::VaultResult;
     use super::*;
+    use crate::VaultResult;
     use crate::vault_event::{
         VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
         build_genesis_import_event,
@@ -411,10 +411,7 @@ mod tests {
             graph.insert(child.clone(), store)?,
             EventInsertStatus::Applied
         );
-        assert_eq!(
-            graph.insert(child, store)?,
-            EventInsertStatus::Duplicate
-        );
+        assert_eq!(graph.insert(child, store)?, EventInsertStatus::Duplicate);
         Ok(())
     }
 }

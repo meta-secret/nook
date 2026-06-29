@@ -152,10 +152,8 @@ impl NookVaultManager {
                 self.sync_events_from_current_provider().await?;
                 self.apply_event_projection_to_session().await?;
             } else {
-                let format =
-                    nook_core::detect_stored_format(&content)?;
-                let records = nook_core::deserialize_stored(&content, format)
-                    ?;
+                let format = nook_core::detect_stored_format(&content)?;
+                let records = nook_core::deserialize_stored(&content, format)?;
                 if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
                     return Err(NookError::Database(message).into());
                 }
@@ -203,13 +201,10 @@ impl NookVaultManager {
         let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
         let genesis =
-            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)
-                ?;
+            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
         self.stored_armored
             .insert(genesis.key.clone(), genesis.value);
-        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")
-            ?
-        {
+        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.stored_armored.insert(member.key.clone(), member.value);
         }
         self.decrypted_jsonl = String::new();
@@ -234,13 +229,10 @@ impl NookVaultManager {
             let identity = self.device_identity()?;
             let secrets_key = self.secrets_key.clone();
             let members_key = self.members_key.clone();
-            let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)
-                ?;
+            let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
             self.stored_armored
                 .insert(genesis.key.clone(), genesis.value);
-            for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")
-                ?
-            {
+            for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
                 self.stored_armored.insert(member.key.clone(), member.value);
             }
         }

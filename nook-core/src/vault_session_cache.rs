@@ -1,7 +1,10 @@
 //! Restore vault encryption keys from the projection-cache YAML.
 
 use crate::errors::{EventError, VaultResult};
-use crate::{DeviceIdentity, deserialize_stored, detect_stored_format, resolve_members_key, resolve_secrets_key};
+use crate::{
+    DeviceIdentity, deserialize_stored, detect_stored_format, resolve_members_key,
+    resolve_secrets_key,
+};
 
 /// Resolve `secrets_key` and `members_key` from a stored vault YAML projection cache.
 pub fn hydrate_keys_from_projection_yaml(
@@ -22,16 +25,24 @@ pub fn hydrate_keys_from_projection_yaml(
 mod tests {
     use super::*;
     use crate::{
-        VaultResult, VaultUnlock, genesis_auth_record, genesis_members_records, generate_store_id,
-        generate_vault_keys, serialize_stored_yaml_with_unlock,
+        VaultResult, VaultUnlock, generate_store_id, generate_vault_keys, genesis_auth_record,
+        genesis_members_records, serialize_stored_yaml_with_unlock,
     };
 
     #[test]
     fn hydrate_keys_from_genesis_projection_yaml() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?];
-        records.extend(genesis_members_records(&identity, &keys.members_key, "2026-06-28T00:00:00Z")?);
+        let mut records = vec![genesis_auth_record(
+            &identity,
+            &keys.secrets_key,
+            &keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &identity,
+            &keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
         let yaml = serialize_stored_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,

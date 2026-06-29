@@ -1,7 +1,7 @@
 //! Key-epoch rotation: fresh `secrets_key` / `members_key` for append-only security events.
 
-use crate::multi_device::VaultKeys;
 use crate::errors::{VaultEpochError, VaultEpochResult};
+use crate::multi_device::VaultKeys;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
@@ -16,9 +16,11 @@ pub fn reencrypt_user_secrets_for_epoch(
     let new_crypto = VaultCrypto::new(new_secrets_key)?;
     let mut out = Vec::new();
     for record in records {
-        let secret_type = record.secret_type.ok_or(VaultEpochError::MissingSecretType {
-            key: record.key.clone(),
-        })?;
+        let secret_type = record
+            .secret_type
+            .ok_or(VaultEpochError::MissingSecretType {
+                key: record.key.clone(),
+            })?;
         let plaintext = old_crypto.decrypt_value(&record.value)?;
         let ciphertext = new_crypto.encrypt_value(&plaintext)?;
         out.push(EncryptedSecretPayload {
@@ -36,7 +38,8 @@ pub fn rotate_vault_keys_with_secrets(
     old_secrets_key: &str,
 ) -> VaultEpochResult<(VaultKeys, Vec<EncryptedSecretPayload>)> {
     let new_keys = crate::generate_vault_keys()?;
-    let secrets = reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
+    let secrets =
+        reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
     Ok((new_keys, secrets))
 }
 

@@ -1,7 +1,7 @@
 //! Display and search helpers for vault secrets — shared by WASM, mobile, and CLI.
 
-use crate::{SecretRecord, SecretType, SecretValue};
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
+use crate::{SecretRecord, SecretType, SecretValue};
 
 fn hostname_from_url(raw: &str) -> String {
     let mut host = raw.trim();

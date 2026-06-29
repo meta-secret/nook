@@ -247,7 +247,10 @@ pub fn device_auth_id_from_public(recipient: &Recipient) -> String {
     crate::format_auth_key_id(&hex::encode(hash)).expect("sha256 hex is valid auth digest")
 }
 
-pub fn encrypt_for_recipient(plaintext: &[u8], recipient_public: &str) -> MultiDeviceResult<String> {
+pub fn encrypt_for_recipient(
+    plaintext: &[u8],
+    recipient_public: &str,
+) -> MultiDeviceResult<String> {
     let recipient = recipient_public
         .parse::<Recipient>()
         .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?;

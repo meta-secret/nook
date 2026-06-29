@@ -421,9 +421,7 @@ pub(crate) fn replacement_conflicts_to_vec(
                 &conflict
                     .candidates
                     .iter()
-                    .map(|(event_id, secret_id)| {
-                        (event_id.as_str().to_owned(), secret_id.clone())
-                    })
+                    .map(|(event_id, secret_id)| (event_id.as_str().to_owned(), secret_id.clone()))
                     .collect::<Vec<_>>(),
             )
             .map_err(|e| NookError::Serialization(e.to_string()))?;

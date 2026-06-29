@@ -63,7 +63,8 @@ impl LocalEventStore {
     pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
         for bytes in self.events.values() {
-            let event: VaultEvent = serde_json::from_slice(bytes).map_err(EventError::ParseStoredEvent)?;
+            let event: VaultEvent =
+                serde_json::from_slice(bytes).map_err(EventError::ParseStoredEvent)?;
             let _ = graph.insert(event, store_id)?;
         }
         Ok(graph)
@@ -104,7 +105,8 @@ pub fn union_remote_events(
         if local.get_bytes(event_id).is_some() {
             continue;
         }
-        let event: VaultEvent = serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
+        let event: VaultEvent =
+            serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
         if event.id()? != *event_id {
             return Err(EventError::RemoteEventIdMismatch {
                 event_id: event_id.as_str().to_owned(),

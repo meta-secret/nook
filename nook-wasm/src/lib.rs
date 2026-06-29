@@ -20,8 +20,8 @@ mod types;
 
 pub use manager::NookVaultManager;
 pub use types::{
-    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult,
-    NookRemoteVaultFetch, NookReplacementConflict, NookResolveConflictKeepLocalResult,
+    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
+    NookReplacementConflict, NookResolveConflictKeepLocalResult,
     NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookVaultMember,
     NookVaultSyncResult,
 };
@@ -234,7 +234,10 @@ fn build_secret_yaml_inner(
     fields: &NookSecretFormFields,
 ) -> Result<String, NookError> {
     let parsed = nook_core::SecretType::parse(secret_type)?;
-    Ok(nook_core::build_secret_yaml(parsed, &fields.to_json_value())?)
+    Ok(nook_core::build_secret_yaml(
+        parsed,
+        &fields.to_json_value(),
+    )?)
 }
 
 #[wasm_bindgen(js_name = buildSecretYaml)]

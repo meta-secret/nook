@@ -163,9 +163,8 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
                 && !val.is_undefined()
                 && !val.is_null()
             {
-                let bytes: String = serde_wasm_bindgen::from_value(val).map_err(|e| {
-                    NookError::IndexedDb(format!("Deserialization error: {e:?}"))
-                })?;
+                let bytes: String = serde_wasm_bindgen::from_value(val)
+                    .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
                 if let Ok(event_id) = EventId::parse(&raw_id) {
                     local.put_event(event_id, bytes.into_bytes());
                 }

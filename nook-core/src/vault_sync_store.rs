@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
-use crate::vault_sync::{VaultSyncAction, compare_vault_sync};
 use crate::errors::VaultSyncError;
+use crate::vault_sync::{VaultSyncAction, compare_vault_sync};
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
@@ -92,9 +92,11 @@ pub fn fan_out_sync(
     ids.sort();
     let mut results = Vec::with_capacity(ids.len());
     for id in ids {
-        let remote = remotes.get_mut(&id).ok_or(VaultSyncError::ProviderDisappeared {
-            provider_id: id.clone(),
-        })?;
+        let remote = remotes
+            .get_mut(&id)
+            .ok_or(VaultSyncError::ProviderDisappeared {
+                provider_id: id.clone(),
+            })?;
         let action = reconcile_vault_stores(local, remote)?;
         results.push((id, action));
     }

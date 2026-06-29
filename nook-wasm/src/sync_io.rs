@@ -192,7 +192,8 @@ pub fn reconcile_vault_blobs(
 ) -> Result<NookReconcileVaultBlobsResult, JsError> {
     let mut local = MemoryVaultStore::with_blob(local_yaml);
     let mut remote = remote_memory_store(remote_yaml, remote_revision);
-    let action = reconcile_vault_stores(&mut local, &mut remote).map_err(|e| JsError::new(&e.to_string()))?;
+    let action = reconcile_vault_stores(&mut local, &mut remote)
+        .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(NookReconcileVaultBlobsResult::new(
         vault_sync_action_label(action).to_owned(),
         local.blob().to_owned(),

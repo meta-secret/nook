@@ -1,9 +1,9 @@
+use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
     AuthEnvelopes, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope, PasswordUnlockEntry,
     StoredSecretRecord, VaultUnlock, is_auth_stored_record, is_join_stored_record,
     is_members_stored_record,
 };
-use crate::errors::{VaultFormatError, VaultFormatResult};
 use serde::{Deserialize, Serialize};
 
 /// On-disk vault serialization format.
@@ -87,8 +87,7 @@ pub fn deserialize_stored(
 pub fn serialize_stored_jsonl(records: &[StoredSecretRecord]) -> VaultFormatResult<String> {
     let mut lines = Vec::with_capacity(records.len());
     for record in records {
-        let line =
-            serde_json::to_string(record).map_err(VaultFormatError::JsonlSerialize)?;
+        let line = serde_json::to_string(record).map_err(VaultFormatError::JsonlSerialize)?;
         lines.push(line);
     }
     Ok(lines.join("\n"))
@@ -350,8 +349,8 @@ pub fn deserialize_stored_yaml_with_unlock(
         return Ok((Vec::new(), VaultUnlock::Keys));
     }
 
-    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
-        .map_err(|_| VaultFormatError::YamlMissingSections)?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(|_| VaultFormatError::YamlMissingSections)?;
 
     let unlock = resolve_unlock_with_legacy(&vault);
 
@@ -540,7 +539,10 @@ not-json
 "#,
         )
         .unwrap_err();
-        assert!(err.to_string().contains("Failed to parse stored JSONL line"));
+        assert!(
+            err.to_string()
+                .contains("Failed to parse stored JSONL line")
+        );
     }
 
     #[test]

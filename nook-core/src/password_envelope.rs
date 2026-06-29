@@ -15,8 +15,8 @@
 //!
 //! See `.cortex/product-specs/password-envelope.md` for the full design.
 
-use crate::multi_device::VaultKeys;
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
+use crate::multi_device::VaultKeys;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -253,10 +253,10 @@ pub fn resolve_keys_from_password(
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let identity = age::scrypt::Identity::new(secret);
     let plaintext_bytes = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
-    let plaintext_str = String::from_utf8(plaintext_bytes)
-        .map_err(PasswordError::EnvelopePlaintextUtf8)?;
-    let parsed: EnvelopePlaintext = serde_json::from_str(&plaintext_str)
-        .map_err(PasswordError::EnvelopePlaintextJson)?;
+    let plaintext_str =
+        String::from_utf8(plaintext_bytes).map_err(PasswordError::EnvelopePlaintextUtf8)?;
+    let parsed: EnvelopePlaintext =
+        serde_json::from_str(&plaintext_str).map_err(PasswordError::EnvelopePlaintextJson)?;
 
     Ok(VaultKeys {
         secrets_key: parsed.secrets_key,

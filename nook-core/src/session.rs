@@ -1,9 +1,9 @@
 //! In-memory session mutations shared by WASM and integration tests.
 
+use crate::errors::{SessionError, SessionResult};
 use crate::{
     Database, SecretType, SecretValue, VaultCrypto, validate_secret_data, validate_secret_id,
 };
-use crate::errors::{SessionError, SessionResult};
 use std::collections::HashMap;
 
 /// Replacement payload for [`replace_secret`].

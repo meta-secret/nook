@@ -16,11 +16,12 @@ pub struct EventId(pub String);
 impl EventId {
     pub fn parse(raw: &str) -> VaultResult<Self> {
         let trimmed = raw.trim();
-        let hex = trimmed.strip_prefix("sha256:").ok_or_else(|| {
-            EventError::EventIdMissingPrefix {
-                raw: trimmed.to_owned(),
-            }
-        })?;
+        let hex =
+            trimmed
+                .strip_prefix("sha256:")
+                .ok_or_else(|| EventError::EventIdMissingPrefix {
+                    raw: trimmed.to_owned(),
+                })?;
         if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(EventError::EventIdInvalidDigest {
                 hex: hex.to_owned(),
@@ -89,11 +90,11 @@ pub fn canonical_json_bytes(value: &Value) -> VaultResult<Vec<u8>> {
 
 /// Parse an `ed25519:{hex}` signature string.
 pub fn parse_ed25519_signature(raw: &str) -> VaultResult<Signature> {
-    let hex = raw.strip_prefix("ed25519:").ok_or_else(|| {
-        EventError::SignatureMissingPrefix {
+    let hex = raw
+        .strip_prefix("ed25519:")
+        .ok_or_else(|| EventError::SignatureMissingPrefix {
             raw: raw.to_owned(),
-        }
-    })?;
+        })?;
     let bytes = hex::decode(hex).map_err(EventError::from)?;
     let array: [u8; 64] = bytes
         .try_into()

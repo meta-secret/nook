@@ -59,8 +59,7 @@ impl NookVaultManager {
 
         let identity = self.device_identity()?;
         let format = nook_core::detect_stored_format(&content)?;
-        let fresh_records =
-            nook_core::deserialize_stored(&content, format)?;
+        let fresh_records = nook_core::deserialize_stored(&content, format)?;
 
         nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
         let LoadedVault {
