@@ -1,0 +1,107 @@
+//! Cryptographic key epochs for password rotation and device revocation.
+
+use crate::event_canonical::EventId;
+use crate::vault_event::VaultOperation;
+
+/// Identifies the epoch protecting private event payloads.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct KeyEpoch(pub EventId);
+
+impl KeyEpoch {
+    #[must_use]
+    pub fn as_event_id(&self) -> &EventId {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+/// Why a new key epoch was started.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EpochRotationReason {
+    Genesis,
+    PasswordRotated,
+    PasswordRemoved,
+    DeviceRevoked,
+}
+
+impl EpochRotationReason {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Genesis => "genesis",
+            Self::PasswordRotated => "password-rotated",
+            Self::PasswordRemoved => "password-removed",
+            Self::DeviceRevoked => "device-revoked",
+        }
+    }
+}
+
+/// Record of an epoch transition in the projection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EpochRecord {
+    pub epoch: KeyEpoch,
+    pub started_by: EventId,
+    pub reason: EpochRotationReason,
+}
+
+/// Detect whether an operation starts a new key epoch.
+#[must_use]
+pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotationReason> {
+    match operation {
+        VaultOperation::VaultImported { .. } => Some(EpochRotationReason::Genesis),
+        VaultOperation::PasswordRotated { .. } => Some(EpochRotationReason::PasswordRotated),
+        VaultOperation::PasswordRemoved { .. } => Some(EpochRotationReason::PasswordRemoved),
+        VaultOperation::DeviceRevoked { .. } => Some(EpochRotationReason::DeviceRevoked),
+        VaultOperation::EpochCheckpoint { .. }
+        | VaultOperation::SecretCreated { .. }
+        | VaultOperation::SecretDeleted { .. }
+        | VaultOperation::SecretReplaced { .. }
+        | VaultOperation::SecretConflictResolved { .. }
+        | VaultOperation::JoinRequested { .. }
+        | VaultOperation::JoinApproved { .. }
+        | VaultOperation::JoinDenied { .. }
+        | VaultOperation::MemberRenamed { .. }
+        | VaultOperation::PasswordAdded { .. }
+        | VaultOperation::VaultCleared => None,
+    }
+}
+
+/// Whether two epoch-starting events are a security conflict when concurrent.
+#[must_use]
+pub fn concurrent_epoch_rotations_conflict(
+    left: EpochRotationReason,
+    right: EpochRotationReason,
+) -> bool {
+    matches!(
+        (left, right),
+        (
+            EpochRotationReason::PasswordRotated
+                | EpochRotationReason::PasswordRemoved
+                | EpochRotationReason::DeviceRevoked,
+            EpochRotationReason::PasswordRotated
+                | EpochRotationReason::PasswordRemoved
+                | EpochRotationReason::DeviceRevoked
+        )
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_and_revoke_rotations_conflict_when_concurrent() {
+        assert!(concurrent_epoch_rotations_conflict(
+            EpochRotationReason::PasswordRotated,
+            EpochRotationReason::DeviceRevoked
+        ));
+        assert!(!concurrent_epoch_rotations_conflict(
+            EpochRotationReason::Genesis,
+            EpochRotationReason::PasswordRotated
+        ));
+    }
+}

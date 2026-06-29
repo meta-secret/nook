@@ -6,6 +6,7 @@
 
 mod bip39;
 mod database;
+mod event_canonical;
 mod i18n;
 mod multi_device;
 mod password;
@@ -15,8 +16,13 @@ mod secret_view;
 mod session;
 mod validation;
 mod vault_crypto;
+mod vault_epoch;
+mod vault_event;
+mod vault_event_graph;
 mod vault_format;
 mod vault_ids;
+mod vault_import;
+mod vault_projection;
 mod vault_sync;
 mod vault_sync_store;
 
@@ -46,6 +52,11 @@ pub use multi_device::{
     user_stored_records, vault_has_multi_device_records,
 };
 
+pub use event_canonical::{
+    EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
+    format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,
+    verify_body_signature,
+};
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
@@ -61,6 +72,15 @@ pub use validation::{
     validate_storage_mode,
 };
 pub use vault_crypto::VaultCrypto;
+pub use vault_epoch::{
+    EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
+    operation_starts_epoch,
+};
+pub use vault_event::{
+    EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
+    build_genesis_import_event,
+};
+pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
     read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
@@ -71,6 +91,14 @@ pub use vault_ids::{
     format_secret_id, format_store_id, generate_secret_id, generate_store_id, is_auth_key_id,
     is_compact_token, normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id,
     validate_secret_id, validate_store_id,
+};
+pub use vault_import::{
+    KeyEpochId, legacy_encrypted_secrets, legacy_vault_content_hash, legacy_vault_to_import_event,
+    secrets_from_import_event,
+};
+pub use vault_projection::{
+    ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
+    assert_projection_permutation_invariant, project_vault,
 };
 pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};
 pub use vault_sync_store::{
