@@ -3,21 +3,13 @@ import {
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
 } from './icloud-oauth'
-import {
-  ICLOUD_CONTAINER_ID,
-  ICLOUD_E2E_STUB_WEB_AUTH_TOKEN,
-  isICloudE2eStubMode,
-} from './icloud-oauth-config'
+import { ICLOUD_CONTAINER_ID, ICLOUD_ENVIRONMENT } from './icloud-oauth-config'
 
 describe('icloud-oauth', () => {
-  it('is configured with the committed container and api token', () => {
+  it('is configured for production CloudKit on nokey.sh', () => {
     expect(isICloudOAuthConfigured()).toBe(true)
     expect(ICLOUD_CONTAINER_ID).toBe('iCloud.metasecret.project.com')
-  })
-
-  it('uses real CloudKit web auth when a production api token is committed', () => {
-    expect(isICloudE2eStubMode()).toBe(false)
-    expect(ICLOUD_E2E_STUB_WEB_AUTH_TOKEN).toBe('ck-web-auth-e2e-stub-token')
+    expect(ICLOUD_ENVIRONMENT).toBe('production')
   })
 
   it('maps tokens to oauth-file icloud config', () => {

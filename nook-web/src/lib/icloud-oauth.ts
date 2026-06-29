@@ -10,8 +10,6 @@ import {
   ICLOUD_API_TOKEN,
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
-  ICLOUD_E2E_STUB_WEB_AUTH_TOKEN,
-  isICloudE2eStubMode,
 } from '$lib/icloud-oauth-config'
 
 const CLOUDKIT_SCRIPT_URL = 'https://cdn.apple-cloudkit.com/ck/2/cloudkit.js'
@@ -203,9 +201,6 @@ export async function initICloudAuth(): Promise<void> {
     return initPromise
   }
   initPromise = (async () => {
-    if (isICloudE2eStubMode()) {
-      return
-    }
     await loadCloudKitScript()
     window.CloudKit!.configure({
       containers: [
@@ -229,11 +224,6 @@ export async function initICloudAuth(): Promise<void> {
 }
 
 export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
-  if (isICloudE2eStubMode()) {
-    writeWebAuthTokenCookie(ICLOUD_E2E_STUB_WEB_AUTH_TOKEN)
-    return { accessToken: ICLOUD_E2E_STUB_WEB_AUTH_TOKEN }
-  }
-
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
   let userIdentity: CloudKitUserIdentity | null

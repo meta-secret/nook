@@ -15,7 +15,7 @@ const ICLOUD_CONTAINER_ID: &str = match option_env!("NOOK_ICLOUD_CONTAINER_ID") 
 };
 const ICLOUD_API_TOKEN: &str = match option_env!("NOOK_ICLOUD_API_TOKEN") {
     Some(value) => value,
-    None => "3cb4e4323cddc52e7e91af453b3d4f80d90c12fa395647b1b47b3cd72b66bf5b",
+    None => "c31649c685f5f589c1c66f867ab2c013b6765d01e6bda454ec28d246ca4dc7d0",
 };
 const ICLOUD_ENVIRONMENT: &str = match option_env!("NOOK_ICLOUD_ENVIRONMENT") {
     Some(value) => value,
