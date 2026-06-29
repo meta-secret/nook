@@ -39,6 +39,11 @@ type CloudKitContainer = {
   }) => Promise<CloudKitUserIdentity | null>
 }
 
+type CloudKitAuthTokenStore = {
+  putToken: (containerIdentifier: string, authToken: unknown) => void
+  getToken: (containerIdentifier: string) => unknown
+}
+
 type CloudKitGlobal = {
   configure: (config: {
     containers: Array<{
@@ -51,8 +56,37 @@ type CloudKitGlobal = {
         signOutButton: { id: string }
       }
     }>
+    services?: {
+      authTokenStore?: CloudKitAuthTokenStore
+    }
   }) => void
   getDefaultContainer: () => CloudKitContainer
+}
+
+const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = 'nook.icloud.webAuthToken.'
+
+const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
+  putToken(containerIdentifier, authToken) {
+    const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`
+    if (authToken == null) {
+      sessionStorage.removeItem(key)
+      return
+    }
+    sessionStorage.setItem(key, JSON.stringify(authToken))
+  },
+  getToken(containerIdentifier) {
+    const raw = sessionStorage.getItem(
+      `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
+    )
+    if (!raw) {
+      return null
+    }
+    try {
+      return JSON.parse(raw) as unknown
+    } catch {
+      return null
+    }
+  },
 }
 
 declare global {
@@ -117,8 +151,35 @@ function readWebAuthTokenFromCookie(): string | undefined {
   return undefined
 }
 
+function normalizeWebAuthToken(stored: unknown): string | undefined {
+  if (typeof stored === 'string' && stored.trim()) {
+    return stored.trim()
+  }
+  if (typeof stored === 'object' && stored !== null) {
+    const record = stored as Record<string, unknown>
+    for (const key of ['token', 'ckWebAuthToken', 'value']) {
+      const candidate = record[key]
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate.trim()
+      }
+    }
+  }
+  return undefined
+}
+
+function readStoredWebAuthToken(): string | undefined {
+  const fromCookie = readWebAuthTokenFromCookie()
+  if (fromCookie) {
+    return fromCookie
+  }
+  return normalizeWebAuthToken(
+    cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID),
+  )
+}
+
 function writeWebAuthTokenCookie(token: string): void {
   document.cookie = `ckWebAuthToken=${encodeURIComponent(token)}; path=/`
+  cloudKitAuthTokenStore.putToken(ICLOUD_CONTAINER_ID, token)
 }
 
 function cloudKitAuthErrorMessage(error: unknown): string {
@@ -159,6 +220,9 @@ export async function initICloudAuth(): Promise<void> {
           },
         },
       ],
+      services: {
+        authTokenStore: cloudKitAuthTokenStore,
+      },
     })
   })()
   return initPromise
@@ -172,12 +236,19 @@ export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
 
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
+  let userIdentity: CloudKitUserIdentity | null
   try {
-    await container.setUpAuth({ grabAuthToken: true, persist: true })
+    userIdentity = await container.setUpAuth({
+      grabAuthToken: true,
+      persist: true,
+    })
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
-  const token = readWebAuthTokenFromCookie()
+  if (!userIdentity) {
+    throw new Error('Apple sign-in was cancelled or did not complete.')
+  }
+  const token = readStoredWebAuthToken()
   if (!token) {
     throw new Error('iCloud sign-in did not return a web auth token.')
   }
@@ -210,7 +281,7 @@ export async function ensureValidICloudOAuthFileConfig(
 }
 
 export async function fetchICloudAccountEmail(): Promise<string | undefined> {
-  const token = readWebAuthTokenFromCookie()
+  const token = readStoredWebAuthToken()
   if (!token) {
     return undefined
   }

@@ -19,7 +19,7 @@ const ICLOUD_API_TOKEN: &str = match option_env!("NOOK_ICLOUD_API_TOKEN") {
 };
 const ICLOUD_ENVIRONMENT: &str = match option_env!("NOOK_ICLOUD_ENVIRONMENT") {
     Some(value) => value,
-    None => "development",
+    None => "production",
 };
 const ICLOUD_RECORD_TYPE: &str = "NookVault";
 const ICLOUD_CONTENT_FIELD: &str = "content";
