@@ -97,7 +97,7 @@ COPY nook-wasm nook-wasm
 COPY .config .config
 RUN cargo clippy -p nook-core --all-targets -- -D warnings \
     && cargo nextest run --no-run -p nook-core --profile ci \
-    && cargo llvm-cov nextest --no-run --profile ci -p nook-core \
+    && cargo llvm-cov nextest --no-report --profile ci -p nook-core -- --no-run \
     && cargo build -p nook-core
 
 # --- Wasm release build + pkg (parallel with builder-debug after builder-deps) ---
