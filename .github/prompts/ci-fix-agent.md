@@ -18,24 +18,28 @@ The job runs `task setup` before you start. CI uses the GHCR toolchain image (`N
    ```bash
    gh run view ${GITHUB_RUN_ID} --log-failed
    ```
-2. Reproduce the **smallest** matching CI scope inside Docker (never kill the Docker daemon — only stop containers):
-   - **Prepare / format / wasm failure** (step "Prepare (format + wasm)"):
-     ```bash
-     task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-     ```
-   - **Verify or web build failure** (prepare already green):
+2. **Always run prepare first** before verify, build, or e2e (wasm must exist or `svelte-check` fails):
+   ```bash
+   task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+   ```
+3. Reproduce the **smallest** matching CI scope inside Docker (never kill the Docker daemon — only stop containers):
+   - **Verify or web build failure**:
      ```bash
      task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
      ```
-   - **E2e failure only**:
+   - **E2e failure** — identify the failing spec file(s) in the logs first. After prepare + parallel (dist must exist), prefer a **scoped** Playwright run over the full 72-test suite:
      ```bash
      cp -a nook-web/dist nook-web/dist-prod
+     task web:test:e2e:file E2E_SPEC='e2e/multi-device-local.spec.ts'
+     task web:e2e:restore-prod-dist
+     ```
+     Set `E2E_SPEC` to the path(s) from the log (space-separated for multiple). Use full main e2e only when many unrelated specs fail:
+     ```bash
      task ci:main:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
      task web:e2e:restore-prod-dist
      ```
-     Always run `task web:e2e:restore-prod-dist` after e2e — it removes `nook-web/dist-prod`.
-3. Implement the minimal correct fix (match existing conventions).
-4. Re-run **only** the CI tasks that failed in step 2 — do not run full main CI unless multiple stages failed.
+4. Implement the minimal correct fix (match existing conventions). E2e sync flakes often need `triggerVaultSyncRefresh`, `dismissSyncConflictIfVisible`, or `waitForVaultSyncIdle` from `nook-web/e2e/helpers.ts` — see `password-envelope-sync.spec.ts`.
+5. Re-run **only** the CI tasks that failed in steps 2–3 — do not run full main CI unless multiple stages failed.
 
 ## Rules
 

@@ -1704,8 +1704,12 @@ export async function reloadUnlockLocalVaultWithGithubSync(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await waitForLoadedSyncProviders(page)
   await disableVaultIdleLock(page)
+  await dismissSyncConflictIfVisible(page)
+  await waitForVaultOperationsIdle(page)
+  await forceVaultQuiescentForE2e(page)
+  await waitForLoadedSyncProviders(page)
+  await waitForVaultSyncIdle(page)
 }
 
 /** Connect a joiner browser to a stubbed GitHub repo (keys-mode join dialog). */
@@ -1821,9 +1825,11 @@ export async function reloadUnlockWithGithubSync(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await disableVaultIdleLock(page)
+  await dismissSyncConflictIfVisible(page)
   await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
   await waitForLoadedSyncProviders(page)
+  await waitForVaultSyncIdle(page)
 }
 
 /** Wait until the status bar reflects loaded sync providers. */
