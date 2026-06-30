@@ -323,8 +323,10 @@ mod tests {
         .unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
-            &AuthKeyId::parse("key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-                .unwrap(),
+            &AuthKeyId::parse(
+                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            )
+            .unwrap(),
             &epoch,
             &Sha256Hex::from_trusted("deadbeef".repeat(8)),
             vec![],

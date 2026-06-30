@@ -609,8 +609,8 @@ mod tests {
     fn member_label_and_opaque_ciphertext_serde() {
         let label = MemberLabel::from_trusted("phone".to_owned());
         let opaque = OpaqueCiphertext::from_trusted("cipher".to_owned());
-        let label_back: MemberLabel = serde_json::from_str(&serde_json::to_string(&label).unwrap())
-            .unwrap();
+        let label_back: MemberLabel =
+            serde_json::from_str(&serde_json::to_string(&label).unwrap()).unwrap();
         let opaque_back: OpaqueCiphertext =
             serde_json::from_str(&serde_json::to_string(&opaque).unwrap()).unwrap();
         assert_eq!(label_back.as_str(), "phone");
