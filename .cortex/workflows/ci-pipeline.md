@@ -8,7 +8,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 |----------|---------|-----------|------------|
 | [`pr.yml`](../../.github/workflows/pr.yml) | PR open/sync | Format, verify, web build, Cloudflare preview | No |
 | [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Verify, build, **full stub e2e**, Pages deploy, push toolchain | No |
-| [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today) | Yes (`NOOK_GITHUB_PAT`) |
+| [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`) | Only for `sync-live` |
 
 ```mermaid
@@ -144,12 +144,17 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | `NOOK_GITHUB_E2E_REPO` | CI sets per run for live suites (one repo per container) |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy |
 | `GITHUB_TOKEN` | Toolchain GHCR, PR comments |
+| `CURSOR_API_KEY` | ci-fix agent (main.yml, e2e-nightly.yml) |
 
 Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
 ## CI agent (`ci-fix` job)
 
+Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait for checks → squash merge. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt.
+
 The `ci-fix` job runs **`task setup`** (pull GHCR toolchain or bake) **before** `task ci-agent:fix`. Without this, parallel Docker tasks such as `ci:main:e2e` would default to `nook-build:local`, which does not exist on CI runners. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` writes the resolved ref to `.nook/docker-image`.
+
+Optional env: `CI_AGENT_PROMPT_FILE` (agent instructions), `CI_FIX_LABEL` (PR title/body label).
 
 ### Logging
 
