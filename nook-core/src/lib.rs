@@ -113,8 +113,9 @@ pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
 pub use vault_event_store::{LocalEventStore, union_remote_events, union_remote_events_and_heads};
 pub use vault_format::{
-    VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
-    read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
+    VaultFormat, current_vault_schema_version, deserialize_stored,
+    deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_password_entries,
+    read_vault_schema_version, read_vault_store_id, read_vault_unlock, read_vault_version,
     serialize_stored, serialize_stored_yaml_with_unlock,
 };
 pub use vault_ids::{
@@ -126,6 +127,7 @@ pub use vault_ids::{
 };
 pub use vault_import::{
     KeyEpochId, VaultHashContext, secrets_from_import_event, stored_vault_to_import_event,
+    verify_stored_vault_import,
 };
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,

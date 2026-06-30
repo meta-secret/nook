@@ -9,7 +9,8 @@ use crate::storage::drive_events::{
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
+    save_heads, save_key_epoch, save_legacy_backup_if_absent, save_signing_seed,
+    set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -19,7 +20,7 @@ use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultOperation,
     apply_user_records_to_armored_session, build_signed_event, members_checkpoint_hash_from_roster,
     project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
-    union_remote_events_and_heads,
+    union_remote_events_and_heads, verify_stored_vault_import,
 };
 
 fn iso_timestamp() -> String {
@@ -119,6 +120,8 @@ impl NookVaultManager {
         if self.store_id.is_empty() {
             self.store_id = nook_core::generate_store_id()?.to_string();
         }
+        let _ = self.status_tx.send("MIGRATION_START".to_owned());
+        save_legacy_backup_if_absent(&self.store_id, stored_vault).await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
         let ctx = nook_core::VaultHashContext::from(stored_vault);
@@ -129,6 +132,7 @@ impl NookVaultManager {
             signing.signing_key(),
             &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
         )?;
+        verify_stored_vault_import(&ctx, &import)?;
         let event_id = import.id()?;
         let bytes =
             serde_json::to_vec(&import).map_err(|e| NookError::Serialization(e.to_string()))?;
@@ -141,6 +145,7 @@ impl NookVaultManager {
         self.apply_event_projection_to_session().await?;
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
+        let _ = self.status_tx.send("MIGRATION_SUCCESS".to_owned());
         Ok(())
     }
 

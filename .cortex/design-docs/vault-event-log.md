@@ -102,11 +102,13 @@ No `update_event` or `delete_event` in v1.
 
 ## Migration
 
-1. Deterministic `vault-imported` genesis event from stored vault bytes via `VaultHashContext` (`nook-core/src/vault_import.rs`).
-2. Local append before remote upload.
-3. Set-union fan-out to all providers.
+1. Byte-for-byte backup of legacy projection YAML → `legacy_backup:{store_id}` in IndexedDB (first import only).
+2. `verify_stored_vault_import` — secret id parity before append.
+3. Deterministic `vault-imported` genesis event from `VaultHashContext` (`nook-core/src/vault_import.rs`).
+4. Local append before remote upload (`MIGRATION_START` / `MIGRATION_SUCCESS` status events).
+5. Set-union fan-out to all providers.
 
-See [#52](https://github.com/meta-secret/nook/issues/52) for schema migration coordination.
+See [vault-schema-versioning.md](vault-schema-versioning.md) for #52 goal mapping.
 
 ## Rollout phases
 

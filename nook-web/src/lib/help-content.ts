@@ -64,11 +64,11 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'conflicts',
     title: 'Sync conflicts',
     summary:
-      'When two copies diverge at the same vault version, Nook asks you which copy to keep.',
+      'Event-log vaults merge by appending immutable events. Legacy scalar conflicts can still appear for old copies.',
     bullets: [
-      'Each vault carries a vault_version that increments on every save.',
-      'If local and remote differ at the same version, editing is blocked until you resolve.',
-      'Choose Keep local or Keep remote in the conflict dialog or status banner.',
+      'New vaults use an append-only event log — concurrent edits on different devices usually merge automatically.',
+      'The local YAML file is a projection cache only; providers sync event files under nook-log/v1/events/.',
+      'If you still see a version conflict dialog, two whole-vault YAML copies diverged at the same vault_version — pick Keep local or Keep remote.',
       'After resolution, sync continues normally to all providers.',
     ],
   },

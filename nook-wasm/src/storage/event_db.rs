@@ -23,6 +23,10 @@ fn outbox_key(provider_id: &str, event_id: &str) -> String {
     format!("outbox:{provider_id}:{event_id}")
 }
 
+fn legacy_backup_key(store_id: &str) -> String {
+    format!("legacy_backup:{store_id}")
+}
+
 async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
     let rexie = rexie::Rexie::builder("nook_db")
         .version(1)
@@ -137,6 +141,19 @@ pub(crate) async fn load_key_epoch(store_id: &str) -> Result<Option<String>, Noo
 
 pub(crate) async fn save_key_epoch(store_id: &str, epoch: &str) -> Result<(), NookError> {
     vault_put(&epoch_key(store_id), epoch).await
+}
+
+/// Preserve the pre-migration vault blob byte-for-byte (first write wins).
+pub(crate) async fn save_legacy_backup_if_absent(
+    store_id: &str,
+    content: &str,
+) -> Result<bool, NookError> {
+    let key = legacy_backup_key(store_id);
+    if vault_get(&key).await?.is_some() {
+        return Ok(false);
+    }
+    vault_put(&key, content).await?;
+    Ok(true)
 }
 
 pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventStore, NookError> {

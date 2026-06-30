@@ -96,6 +96,37 @@ impl KeyEpochId {
     }
 }
 
+/// Verify that a genesis import event matches the source stored vault blob.
+pub fn verify_stored_vault_import(ctx: &VaultHashContext, import: &VaultEvent) -> VaultResult<()> {
+    let crate::vault_event::VaultOperation::VaultImported {
+        secrets,
+        source_content_hash,
+    } = import
+        .body
+        .operations
+        .first()
+        .ok_or(crate::errors::EventError::ExpectedImportOperation)?
+    else {
+        return Err(crate::errors::EventError::ExpectedImportOperation.into());
+    };
+
+    if source_content_hash != ctx.content_hash() {
+        return Err(crate::errors::EventError::ImportContentHashMismatch.into());
+    }
+
+    let source_ids: std::collections::BTreeSet<String> = ctx
+        .encrypted_secrets()?
+        .into_iter()
+        .map(|secret| secret.id.to_string())
+        .collect();
+    let import_ids: std::collections::BTreeSet<String> =
+        secrets.iter().map(|secret| secret.id.to_string()).collect();
+    if source_ids != import_ids {
+        return Err(crate::errors::EventError::ImportSecretSetMismatch.into());
+    }
+    Ok(())
+}
+
 /// Rebuild stored secret records from a genesis import event's encrypted payloads.
 #[must_use]
 pub fn secrets_from_import_event(secrets: &[EncryptedSecretPayload]) -> Vec<StoredSecretRecord> {
@@ -154,6 +185,7 @@ mod tests {
         } else {
             return Err(crate::errors::EventError::ExpectedImportOperation.into());
         }
+        verify_stored_vault_import(&ctx, &first)?;
         Ok(())
     }
 
