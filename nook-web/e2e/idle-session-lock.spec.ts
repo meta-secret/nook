@@ -51,6 +51,9 @@ test.describe('idle session auto-lock', () => {
   })
 
   test('user activity resets the idle timer', async ({ page }) => {
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await unlockVaultOnLogin(page)
     await expect(page.getByTestId('authenticated-shell')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
