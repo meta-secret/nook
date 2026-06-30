@@ -22,9 +22,9 @@ Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting. Follow the 
 | 1 | `git fetch origin main` |
 | 2 | `git checkout -b <branch> origin/main` |
 | 3 | Implement |
-| 4 | `task check` / `task ci:pr`; e2e if complex |
-| 5 | `git push -u origin HEAD` |
-| 6 | `gh pr create` + `gh pr checks --watch` + `gh pr merge --squash` |
+| 4 | Minimum local checks (`task check` or scoped subset) |
+| 5 | Commit → **push + open PR immediately** (parallel with optional e2e / `ci:pr`) |
+| 6 | `gh pr checks --watch` + `gh pr merge --squash` |
 | 7–9 | Fix loop until merged |
 
 Full commands, e2e criteria, and non-negotiables: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).

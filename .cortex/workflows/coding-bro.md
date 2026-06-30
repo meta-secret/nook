@@ -10,9 +10,9 @@ Use this pipeline for **every coding request** unless the user explicitly wants 
 1. **Fetch repository** — Sync with remote before branching.
 2. **Branch from `origin/main`** — Never commit on `main`. Create a feature branch for the work.
 3. **Implement** — Make the requested change. Follow [rules.md](../rules.md) and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md).
-4. **Local checks** — Run code checks and unit tests before pushing. Run e2e locally when the change is complex (vault sync, login/unlock, multi-step web flows).
-5. **Push** — Push the branch to origin.
-6. **Open PR and monitor** — Create the PR, then watch CI until every required check finishes. When all checks pass and merge is requested, **squash merge** (`gh pr merge <n> --squash`).
+4. **Local checks** — Run fast checks before push (see below). Start **long** checks (e2e, full `task ci:pr`) in parallel with push when the diff is already committed.
+5. **Push early** — Commit and `git push -u origin HEAD` as soon as minimum local checks pass. Do **not** wait for e2e or full `task ci:pr` to finish if those runs can overlap with remote CI.
+6. **Open PR and monitor** — Create the PR immediately after push, then watch CI until every required check finishes. When all checks pass and merge is requested, **squash merge** (`gh pr merge <n> --squash`).
 7. **Fix on failure** — If CI fails, read logs, fix root cause, run e2e locally if needed, commit, push.
 8. **Push fixes** — Push updated commits to the same PR branch.
 9. **Repeat** — Return to step 6 until every check is green and the PR is squash-merged.
@@ -22,12 +22,14 @@ flowchart TD
   P[0 Prompt] --> F[1 Fetch origin/main]
   F --> B[2 Branch from origin/main]
   B --> I[3 Implement]
-  I --> L[4 Local checks + e2e if complex]
-  L --> PU[5 Push]
-  PU --> PR[6 Open PR + monitor CI]
-  PR --> G{All checks green?}
+  I --> L[4 Minimum local checks]
+  L --> PU[5 Push + open PR]
+  PU --> CI[6 Monitor remote CI]
+  PU -.->|parallel| LOC[Local e2e / ci:pr optional]
+  LOC -.-> CI
+  CI --> G{All checks green?}
   G -->|no| FIX[7–8 Fix + push]
-  FIX --> PR
+  FIX --> CI
   G -->|yes| M[Squash merge]
   M --> D[Duration report]
 ```
@@ -50,7 +52,7 @@ Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
 ### 4 — Local checks
 
-**Minimum before every push:**
+**Minimum before every push** (must finish before push):
 
 ```bash
 task format:check    # or task format after edits
@@ -64,13 +66,22 @@ task web:check && task web:test    # web-only
 task rust:test                     # nook-core only
 ```
 
-**Before opening the PR** (mirrors PR CI):
+**Push in parallel with long checks.** After minimum checks pass and changes are committed, push and open the PR **immediately**. Start e2e or full PR CI locally in the same turn if useful — do not block push on them. Remote CI (~3–4 min) and local e2e overlap; waiting for local e2e before push adds wall time with no benefit when PR CI will run the same gates anyway.
+
+```text
+commit → push → gh pr create     (as soon as task check / scoped subset is green)
+     ‖
+task web:test:e2e:pr             (optional, same turn, non-blocking)
+task ci:pr                       (optional before push only after a prior CI failure)
+```
+
+**Before opening the PR** when you want extra confidence (optional, non-blocking for push):
 
 ```bash
 task ci:pr
 ```
 
-**E2e when the change is big or complex:**
+**E2e when the change is big or complex** (run in parallel with push, not before it):
 
 ```bash
 task web:test:e2e:pr
@@ -80,11 +91,13 @@ task web:test:e2e:pr:parallel
 
 Skip e2e for isolated Rust-only or docs-only changes.
 
-**After any remote CI failure** — run `task ci:pr` before pushing again.
+**After any remote CI failure** — run `task ci:pr` before pushing again (this one should finish before the fix push).
 
 See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 5–6 — Push, open PR, monitor
+
+Push as soon as minimum local checks pass — do not wait for e2e or full `task ci:pr` unless recovering from a prior CI failure.
 
 ```bash
 git push -u origin HEAD
