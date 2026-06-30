@@ -1,6 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { createLogger } from "./logger.js";
+
+const log = createLogger("git");
 const execFileAsync = promisify(execFile);
 
 export async function configureGitForCi(repoRoot: string): Promise<void> {
@@ -33,7 +36,7 @@ export async function pushFixBranch(
   fixBranch: string,
   runId: string,
 ): Promise<void> {
-  console.log(`==> Pushing fix branch ${fixBranch}`);
+  log.info(`Pushing fix branch ${fixBranch}`);
   await execFileAsync("git", ["checkout", "-B", fixBranch], { cwd: repoRoot });
   await execFileAsync("git", ["add", "-A"], { cwd: repoRoot });
 
@@ -48,7 +51,7 @@ export async function pushFixBranch(
     { cwd: repoRoot },
   );
   await execFileAsync("git", ["push", "-u", "origin", "HEAD"], { cwd: repoRoot });
-  console.log(`==> Pushed ${fixBranch}`);
+  log.info(`Pushed ${fixBranch}`);
 }
 
 async function hasStagedChanges(repoRoot: string): Promise<boolean> {

@@ -147,6 +147,26 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
+## CI agent logging (`ci-fix` job)
+
+The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** lines so GitHub Actions logs are easy to scan:
+
+```
+2026-06-29 20:14:32,879 INFO  [ci-agent/agent-wait] Agent still running (20m 0s)
+2026-06-29 20:14:32,879 INFO  [ci-agent/run-agent] Running Cursor SDK agent (run 123, …)
+2026-06-29 20:14:33,102 DEBUG [ci-agent/cursor] shell grep waitForPendingJoin
+2026-06-29 20:14:33,450 INFO  [ci-agent/cursor/agent] agent output
+    The agent's streamed reply is indented under the header.
+```
+
+| Field | Meaning |
+|-------|---------|
+| Timestamp | UTC, `yyyy-MM-dd HH:mm:ss,SSS` |
+| Level | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` |
+| Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
+
+Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include tool-call and step traces. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m).
+
 ## Agent checklist when touching CI or e2e
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
