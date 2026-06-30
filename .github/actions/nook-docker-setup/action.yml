@@ -1,5 +1,5 @@
 name: Nook Docker setup
-description: Task, Buildx, and GHCR login (toolchain build runs inside task check / ci:pr / web:dev via setup).
+description: Task, Buildx, and GHCR login (toolchain resolve/pull/bake runs via task setup).
 
 inputs:
   github-token:

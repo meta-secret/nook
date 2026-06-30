@@ -228,7 +228,13 @@ tasks:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
     cmds:
       - echo "==> Playwright e2e-pr project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
-      - cd nook-web && bun run test:e2e:pr
+      - >-
+        sh -c 'cd nook-web;
+        if [ -n "${CI:-}" ]; then
+          bun run test:e2e:pr -- --workers=4;
+        else
+          bun run test:e2e:pr;
+        fi'
 
   _web:test:e2e:pr:
     desc: Fast Playwright e2e-pr with production build.

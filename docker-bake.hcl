@@ -7,6 +7,11 @@ variable "TOOLCHAIN_REGISTRY" {
   default = ""
 }
 
+// Set by toolchain-setup.sh; stored on :latest after green CI for pull-skip on web-only PRs.
+variable "TOOLCHAIN_INPUTS_HASH" {
+  default = ""
+}
+
 group "default" {
   targets = ["toolchain"]
 }
@@ -58,29 +63,49 @@ target "builder-wasm" {
   ] : []
 }
 
-target "toolchain" {
+target "_toolchain-common" {
   context    = "."
   dockerfile = "Dockerfile"
   target     = "toolchain"
   platforms  = ["linux/amd64"]
+  labels = TOOLCHAIN_INPUTS_HASH != "" ? {
+    "nook.toolchain.inputs-hash" = TOOLCHAIN_INPUTS_HASH
+  } : {}
+  cache-from = TOOLCHAIN_REGISTRY != "" ? [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
+  ] : []
+}
+
+// Local dev: load into the Docker daemon as nook-build:local.
+target "toolchain" {
+  inherits = ["_toolchain-common"]
   tags = TOOLCHAIN_REGISTRY != "" ? [
     DOCKER_IMAGE,
     "${TOOLCHAIN_REGISTRY}:latest",
   ] : [DOCKER_IMAGE]
   output = ["type=docker"]
-  cache-from = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
-  ] : []
   cache-to = TOOLCHAIN_REGISTRY != "" ? [
     "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
   ] : []
 }
 
-// Push :latest via buildx (reuses buildcache blobs — seconds when layers unchanged).
+// CI pre-verify build: push to :ci (registry only — no --load export).
+target "toolchain-ci" {
+  inherits = ["_toolchain-common"]
+  tags = TOOLCHAIN_REGISTRY != "" ? [
+    "${TOOLCHAIN_REGISTRY}:ci",
+  ] : []
+  output = ["type=registry"]
+  cache-to = TOOLCHAIN_REGISTRY != "" ? [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
+  ] : []
+}
+
+// After green CI: promote verified image to :latest (reuses buildcache blobs — seconds).
 // Do not use `docker push` after `--load`; the daemon re-uploads layers buildkit already has in GHCR.
 target "toolchain-push" {
-  inherits = ["toolchain"]
+  inherits = ["_toolchain-common"]
   tags = TOOLCHAIN_REGISTRY != "" ? [
     "${TOOLCHAIN_REGISTRY}:latest",
   ] : []

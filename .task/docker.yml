@@ -13,7 +13,9 @@ tasks:
     cmds:
       - >-
         sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain-push'
+        HASH="$(bash .github/scripts/toolchain-inputs-hash.sh "{{.ROOT_DIR}}")";
+        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" TOOLCHAIN_INPUTS_HASH="$HASH"
+        {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain-push'
 
   docker:task:
     internal: true

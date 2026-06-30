@@ -2,13 +2,17 @@ import { expect, test } from '@playwright/test'
 import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   assertNoVaultError,
+  assertVaultReady,
   createLocalVaultOnLogin,
   reloadUnlockWithGithubSync,
   triggerVaultSyncRefresh,
   uniqueSecretKey,
+  waitForVaultOperationsIdle,
 } from './helpers'
 
 test.describe('event-log sync then add', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test('sync-then-add secure note after github provider connect', async ({
     page,
   }) => {
@@ -22,6 +26,8 @@ test.describe('event-log sync then add', () => {
 
     await triggerVaultSyncRefresh(page)
     await assertNoVaultError(page)
+    await assertVaultReady(page)
+    await waitForVaultOperationsIdle(page)
 
     const title = uniqueSecretKey('e2e-event-log-note')
     const noteBody = '# Post-sync note\n\nSaved after provider sync.'
