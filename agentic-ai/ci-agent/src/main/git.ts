@@ -1,15 +1,39 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import type { Octokit } from "@octokit/rest";
+
 import { createLogger } from "./logger.js";
 
 const log = createLogger("git");
 const execFileAsync = promisify(execFile);
 
-export async function configureGitForCi(repoRoot: string): Promise<void> {
+const ACTIONS_BOT = {
+  email: "41898282+github-actions[bot]@users.noreply.github.com",
+  name: "github-actions[bot]",
+} as const;
+
+export async function configureGitForCi(
+  repoRoot: string,
+  octokit?: Octokit,
+): Promise<void> {
+  let userEmail: string = ACTIONS_BOT.email;
+  let userName: string = ACTIONS_BOT.name;
+
+  if (octokit) {
+    try {
+      const { data } = await octokit.rest.users.getAuthenticated();
+      userName = data.name?.trim() || data.login;
+      userEmail =
+        data.email?.trim() || `${data.id}+${data.login}@users.noreply.github.com`;
+    } catch {
+      // Fall back to github-actions[bot] when the token cannot resolve a user.
+    }
+  }
+
   const localConfig: Array<[string, string]> = [
-    ["user.email", "41898282+github-actions[bot]@users.noreply.github.com"],
-    ["user.name", "github-actions[bot]"],
+    ["user.email", userEmail],
+    ["user.name", userName],
     ["core.untrackedCache", "true"],
   ];
 

@@ -136,6 +136,10 @@ gh pr merge <number> --squash
 
 Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow).
 
+## CI auto-fix (main / nightly failures)
+
+When [`main.yml`](../../.github/workflows/main.yml) or [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) fails, the **`ci-fix`** job runs the Cursor SDK agent, opens a fix PR, waits for checks, and squash-merges. That path uses the repository secret **`NOOK_GITHUB_PAT`** (your GitHub PAT), not the default `GITHUB_TOKEN`, so the PR is opened as you — `pr.yml` triggers and you are not stuck approving a `github-actions[bot]` PR. See [ci-pipeline.md § CI agent](ci-pipeline.md#ci-agent-ci-fix-job).
+
 ## Non-negotiables
 
 - **Never push directly to `main`.** Branch → PR → squash merge.
