@@ -2,7 +2,7 @@
 
 Use this workflow for feature work that touches more than one package.
 
-0. Branch from `main`, never push to `main` — open a pull request for all changes (see [rules.md](../rules.md) §6).
+0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [rules.md](../rules.md) §6).
 0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [rules.md](../rules.md) §6.
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic in `nook-core`; keep wasm-specific conversion in `nook-wasm`.
