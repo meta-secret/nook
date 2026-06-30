@@ -101,11 +101,9 @@ No `update_event` or `delete_event` in v1.
 
 ## Migration
 
-1. Byte-for-byte backup of legacy `nook-vault.yaml`.
-2. Deterministic `vault-imported` genesis event (`nook-core/src/vault_import.rs`).
-3. Local append before remote upload.
-4. Set-union fan-out to all providers.
-5. Block legacy dual-writes after cutover.
+1. Deterministic `vault-imported` genesis event from stored vault bytes via `VaultHashContext` (`nook-core/src/vault_import.rs`).
+2. Local append before remote upload.
+3. Set-union fan-out to all providers.
 
 See [#52](https://github.com/meta-secret/nook/issues/52) for schema migration coordination.
 

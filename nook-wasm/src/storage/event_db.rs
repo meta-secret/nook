@@ -23,10 +23,6 @@ fn outbox_key(provider_id: &str, event_id: &str) -> String {
     format!("outbox:{provider_id}:{event_id}")
 }
 
-fn legacy_backup_key(store_id: &str) -> String {
-    format!("legacy_backup:{store_id}")
-}
-
 async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
     let rexie = rexie::Rexie::builder("nook_db")
         .version(1)
@@ -119,10 +115,6 @@ pub(crate) async fn load_signing_seed() -> Result<Option<String>, NookError> {
 
 pub(crate) async fn save_signing_seed(seed: &str) -> Result<(), NookError> {
     vault_put(SIGNING_SEED_KEY, seed).await
-}
-
-pub(crate) async fn save_legacy_backup(store_id: &str, yaml: &str) -> Result<(), NookError> {
-    vault_put(&legacy_backup_key(store_id), yaml).await
 }
 
 pub(crate) async fn load_heads(store_id: &str) -> Result<Vec<String>, NookError> {

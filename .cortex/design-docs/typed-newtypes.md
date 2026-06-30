@@ -35,6 +35,7 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 | `MemberLabel` | `vault_wire` | human device / member label |
 | `PasswordEntryId` | `vault_wire` | password-unlock slot id |
 | `VaultEventSchemaVersion` | `vault_event` | event body `schema_version` |
+| `VaultHashContext` | `vault_import` | stored vault bytes → `Sha256Hex` + encrypted secrets for genesis import |
 | `ObservedHeads` | `vault_event_builder` | validated causal head set |
 | `GithubPat`, `GithubRepoName`, … | `validation` | sync-provider credentials |
 
@@ -89,6 +90,15 @@ enum VersionedVaultEventBody {
 ### Trusted construction
 
 `from_trusted` / `from_vault_record` for values already validated or emitted by this process. Do not use for external input.
+
+### Stored vault import (`vault_import.rs`)
+
+```rust
+let ctx = VaultHashContext::from(stored_yaml);
+stored_vault_to_import_event(&ctx, &store_id, &actor_id, &signing_key, &created_at)?;
+```
+
+Use `VaultHashContext` so content hash and encrypted-secret extraction stay aligned for genesis `vault-imported` events.
 
 ## Migration checklist (remaining)
 

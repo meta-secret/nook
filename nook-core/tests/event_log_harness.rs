@@ -5,10 +5,11 @@
 
 use nook_core::{
     Database, DeviceIdentity, EventId, LocalEventStore, SecretId, SecretType, SigningIdentity,
-    VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
-    VaultUnlock, encrypted_secret_from_armored, generate_store_id, generate_vault_keys,
-    genesis_auth_record, genesis_members_records, hydrate_keys_from_projection_yaml,
-    legacy_vault_to_import_event, serialize_stored_yaml_with_unlock,
+    VaultCrypto, VaultEventSession, VaultHashContext, VaultKeys, VaultOperation, VaultProjection,
+    VaultResult, VaultUnlock, encrypted_secret_from_armored, generate_store_id,
+    generate_vault_keys, genesis_auth_record, genesis_members_records,
+    hydrate_keys_from_projection_yaml, serialize_stored_yaml_with_unlock,
+    stored_vault_to_import_event,
 };
 use std::collections::HashMap;
 
@@ -41,7 +42,7 @@ impl EventLogDevice {
             projection_cache_yaml,
             crypto,
         };
-        device.import_legacy_yaml(&genesis_yaml(&keys, &device.identity, device.store_id())?)?;
+        device.import_stored_vault(&genesis_yaml(&keys, &device.identity, device.store_id())?)?;
         let _ = label;
         Ok(device)
     }
@@ -146,13 +147,14 @@ impl EventLogDevice {
         Ok(())
     }
 
-    pub fn import_legacy_yaml(&mut self, yaml: &str) -> VaultResult<EventId> {
-        let event = legacy_vault_to_import_event(
-            yaml,
-            self.store_id(),
-            &self.actor_id()?,
+    pub fn import_stored_vault(&mut self, yaml: &str) -> VaultResult<EventId> {
+        let ctx = VaultHashContext::from(yaml);
+        let event = stored_vault_to_import_event(
+            &ctx,
+            &nook_core::StoreId::parse(self.store_id())?,
+            &nook_core::AuthKeyId::parse(&self.actor_id()?)?,
             self.session.signing.signing_key(),
-            TS,
+            &nook_core::IsoTimestamp::from_trusted(TS.to_owned()),
         )?;
         let id = event.id()?;
         let bytes = serde_json::to_vec(&event).map_err(nook_core::EventError::from)?;
@@ -210,13 +212,13 @@ pub fn union_device_from_providers(
     device.session.union_remote(&remote)
 }
 
-pub fn sample_legacy_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
+pub fn sample_stored_vault_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
     let mut db = Database::new();
     db.insert(
-        SecretId::from_vault_record("legacy-secret"),
+        SecretId::from_vault_record("import-secret"),
         nook_core::SecretValue::ApiKey(nook_core::ApiKeySecret {
             website_url: "https://example.com".to_owned(),
-            key: "legacy-value".to_owned(),
+            key: "import-value".to_owned(),
             expires_at: String::new(),
         }),
     );

@@ -172,7 +172,7 @@ impl NookVaultManager {
                 self.maybe_sync_self_into_roster(&identity).await?;
                 let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
                 self.last_synced_content = content.clone();
-                self.migrate_legacy_yaml_to_event_log(&content).await?;
+                self.import_stored_vault_to_event_log(&content).await?;
                 self.flush_event_outbox().await?;
             }
         }

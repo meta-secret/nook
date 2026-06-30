@@ -333,7 +333,7 @@ mod tests {
         SecretId::from_vault_record(value)
     }
 
-    fn legacy_hash() -> Sha256Hex {
+    fn genesis_source_hash() -> Sha256Hex {
         Sha256Hex::from_trusted("deadbeef".repeat(8))
     }
 
@@ -344,7 +344,7 @@ mod tests {
             &store(),
             &actor(),
             &epoch(),
-            &legacy_hash(),
+            &genesis_source_hash(),
             vec![],
             &ts("2026-06-28T00:00:00Z"),
             signing_key,

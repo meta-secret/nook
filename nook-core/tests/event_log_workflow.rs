@@ -4,7 +4,7 @@
 mod harness;
 
 use harness::{
-    EventLogDevice, ProviderBuckets, push_device_outbox, sample_legacy_yaml,
+    EventLogDevice, ProviderBuckets, push_device_outbox, sample_stored_vault_yaml,
     union_device_from_providers,
 };
 use nook_core::{
@@ -172,14 +172,14 @@ fn join_merge_single_head() -> VaultResult<()> {
 }
 
 #[test]
-fn legacy_import_then_decrypt() -> VaultResult<()> {
+fn stored_vault_import_then_decrypt() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
-    let yaml = sample_legacy_yaml(&device.crypto)?;
-    device.import_legacy_yaml(&yaml)?;
+    let yaml = sample_stored_vault_yaml(&device.crypto)?;
+    device.import_stored_vault(&yaml)?;
 
     let graph = device.session.store.load_graph(device.store_id())?;
     let live = device.project()?.live_secrets(&graph);
-    assert!(live.contains_key("legacy-secret"));
+    assert!(live.contains_key("import-secret"));
     Ok(())
 }
 

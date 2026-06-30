@@ -9,7 +9,7 @@ use crate::storage::drive_events::{
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_legacy_backup, save_signing_seed, set_event_log_mode,
+    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -17,8 +17,8 @@ use crate::storage::github_events::{
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultOperation,
-    apply_user_records_to_armored_session, build_signed_event, legacy_vault_to_import_event,
-    members_checkpoint_hash_from_roster, project_vault, rewrap_vault_meta_for_epoch,
+    apply_user_records_to_armored_session, build_signed_event, members_checkpoint_hash_from_roster,
+    project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
     union_remote_events_and_heads,
 };
 
@@ -80,22 +80,22 @@ impl NookVaultManager {
         Ok(self.key_epoch.clone())
     }
 
-    pub(in crate::manager) async fn migrate_legacy_yaml_to_event_log(
+    pub(in crate::manager) async fn import_stored_vault_to_event_log(
         &mut self,
-        legacy_yaml: &str,
+        stored_vault: &str,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
             self.store_id = nook_core::generate_store_id()?.to_string();
         }
-        save_legacy_backup(&self.store_id, legacy_yaml).await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
-        let import = legacy_vault_to_import_event(
-            legacy_yaml,
-            &self.store_id,
-            &actor_id,
+        let ctx = nook_core::VaultHashContext::from(stored_vault);
+        let import = stored_vault_to_import_event(
+            &ctx,
+            &nook_core::StoreId::parse(&self.store_id)?,
+            &nook_core::AuthKeyId::parse(&actor_id)?,
             signing.signing_key(),
-            &iso_timestamp(),
+            &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
         )?;
         let event_id = import.id()?;
         let bytes =

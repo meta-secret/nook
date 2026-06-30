@@ -125,8 +125,7 @@ pub use vault_ids::{
     validate_store_id,
 };
 pub use vault_import::{
-    KeyEpochId, legacy_encrypted_secrets, legacy_vault_content_hash, legacy_vault_to_import_event,
-    secrets_from_import_event,
+    KeyEpochId, VaultHashContext, secrets_from_import_event, stored_vault_to_import_event,
 };
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
