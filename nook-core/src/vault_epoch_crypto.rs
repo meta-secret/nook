@@ -7,7 +7,8 @@ use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
 use crate::{
-    build_members_records, genesis_auth_record, is_auth_stored_record, resolve_member_roster,
+    SecretId, build_members_records, genesis_auth_record, is_auth_stored_record,
+    resolve_member_roster,
 };
 use std::collections::HashMap;
 
@@ -24,12 +25,12 @@ pub fn reencrypt_user_secrets_for_epoch(
         let secret_type = record
             .secret_type
             .ok_or(VaultEpochError::MissingSecretType {
-                key: record.key.clone(),
+                key: record.key.to_string(),
             })?;
         let plaintext = old_crypto.decrypt_value(&record.value)?;
         let ciphertext = new_crypto.encrypt_value(&plaintext)?;
         out.push(EncryptedSecretPayload {
-            id: record.key.clone(),
+            id: record.key.to_string(),
             secret_type,
             ciphertext,
         });
@@ -73,12 +74,12 @@ pub fn rewrap_vault_meta_for_epoch(
     let auth = genesis_auth_record(identity, &new_keys.secrets_key, &new_keys.members_key)?;
     armored.retain(|key, value| {
         !is_auth_stored_record(&StoredSecretRecord {
-            key: key.clone(),
+            key: SecretId::from_vault_record(key),
             secret_type: None,
             value: value.clone(),
         })
     });
-    armored.insert(auth.key, auth.value);
+    armored.insert(auth.key.to_string(), auth.value);
     let roster = resolve_member_roster(records_snapshot, old_members_key)?;
     let member_records = build_members_records(&roster, &new_keys.members_key)?;
     apply_member_records(armored, &member_records);
@@ -88,15 +89,16 @@ pub fn rewrap_vault_meta_for_epoch(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ApiKeySecret;
-    use crate::SecretValue;
-    use crate::{DeviceIdentity, VaultResult, generate_vault_keys, genesis_members_records};
+    use crate::{
+        ApiKeySecret, DeviceIdentity, SecretId, SecretValue, VaultResult, generate_vault_keys,
+        genesis_members_records,
+    };
 
     #[test]
     fn reencrypt_produces_decryptable_new_epoch_secrets() {
         let old_key = "deadbeefdeadbeefdeadbeefdeadbeef";
         let record = StoredSecretRecord {
-            key: "secret_testtoken1".to_owned(),
+            key: SecretId::from_vault_record("secret_testtoken1"),
             secret_type: Some(crate::SecretType::ApiKey),
             value: VaultCrypto::new(old_key)
                 .unwrap()
@@ -158,10 +160,10 @@ mod tests {
             &old_keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let auth_key = records[0].key.clone();
-        let mut armored: HashMap<_, _> = records
+        let auth_key = records[0].key.to_string();
+        let mut armored: HashMap<String, String> = records
             .iter()
-            .map(|record| (record.key.clone(), record.value.clone()))
+            .map(|record| (record.key.to_string(), record.value.clone()))
             .collect();
         let old_auth_value = armored[&auth_key].clone();
 

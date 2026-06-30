@@ -7,12 +7,62 @@ use wasm_bindgen::JsError;
 
 pub(crate) use crate::types::records_to_vec;
 
+pub(crate) fn secret_id_from_str(key: &str) -> nook_core::SecretId {
+    nook_core::SecretId::from_vault_record(key)
+}
+
+pub(crate) fn string_armored_to_secret_id(
+    armored: &HashMap<String, String>,
+) -> HashMap<nook_core::SecretId, String> {
+    armored
+        .iter()
+        .map(|(key, value)| (secret_id_from_str(key), value.clone()))
+        .collect()
+}
+
+pub(crate) fn string_secret_types_to_secret_id(
+    secret_types: &HashMap<String, nook_core::SecretType>,
+) -> HashMap<nook_core::SecretId, nook_core::SecretType> {
+    secret_types
+        .iter()
+        .map(|(key, secret_type)| (secret_id_from_str(key), *secret_type))
+        .collect()
+}
+
+pub(crate) fn secret_id_armored_to_string(
+    armored: &HashMap<nook_core::SecretId, String>,
+) -> HashMap<String, String> {
+    armored
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.clone()))
+        .collect()
+}
+
+pub(crate) fn secret_id_types_to_string(
+    secret_types: &HashMap<nook_core::SecretId, nook_core::SecretType>,
+) -> HashMap<String, nook_core::SecretType> {
+    secret_types
+        .iter()
+        .map(|(key, secret_type)| (key.to_string(), *secret_type))
+        .collect()
+}
+
+pub(crate) fn stored_records_from_string_armored(
+    armored: &HashMap<String, String>,
+    secret_types: &HashMap<String, nook_core::SecretType>,
+) -> Vec<nook_core::StoredSecretRecord> {
+    nook_core::Database::stored_records_from_armored(
+        &string_armored_to_secret_id(armored),
+        &string_secret_types_to_secret_id(secret_types),
+    )
+}
+
 pub(crate) fn records_to_armored(
     records: &[nook_core::StoredSecretRecord],
 ) -> HashMap<String, String> {
     records
         .iter()
-        .map(|record| (record.key.clone(), record.value.clone()))
+        .map(|record| (record.key.to_string(), record.value.clone()))
         .collect()
 }
 
@@ -24,7 +74,7 @@ pub(crate) fn records_to_secret_types(
         .filter_map(|record| {
             record
                 .secret_type
-                .map(|secret_type| (record.key.clone(), secret_type))
+                .map(|secret_type| (record.key.to_string(), secret_type))
         })
         .collect()
 }

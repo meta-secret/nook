@@ -2,7 +2,8 @@
 
 use crate::errors::{SessionError, SessionResult};
 use crate::{
-    Database, SecretType, SecretValue, VaultCrypto, validate_secret_data, validate_secret_id,
+    Database, SecretId, SecretType, SecretValue, VaultCrypto, validate_secret_data,
+    validate_secret_id,
 };
 use std::collections::HashMap;
 
@@ -21,8 +22,8 @@ pub struct ReplaceSecretInput<'a> {
 #[allow(clippy::implicit_hasher)]
 pub fn replace_secret(
     db: &mut Database,
-    armored: &mut HashMap<String, String>,
-    secret_types: &mut HashMap<String, SecretType>,
+    armored: &mut HashMap<SecretId, String>,
+    secret_types: &mut HashMap<SecretId, SecretType>,
     crypto: &VaultCrypto,
     input: &ReplaceSecretInput<'_>,
 ) -> SessionResult<()> {

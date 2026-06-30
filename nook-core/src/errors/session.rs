@@ -13,10 +13,10 @@ pub enum SessionError {
     ReplacementIdUnchanged,
 
     #[error("Secret {id} not found.")]
-    SecretNotFound { id: String },
+    SecretNotFound { id: crate::SecretId },
 
     #[error("Secret {id} already exists.")]
-    SecretAlreadyExists { id: String },
+    SecretAlreadyExists { id: crate::SecretId },
 
     #[error(transparent)]
     Validation(#[from] ValidationError),

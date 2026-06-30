@@ -2,7 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::conversion::wasm_iso_timestamp;
+use crate::conversion::{stored_records_from_string_armored, wasm_iso_timestamp};
 use crate::storage::drive_events::{
     fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent,
 };
@@ -85,7 +85,7 @@ impl NookVaultManager {
         legacy_yaml: &str,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id()?;
+            self.store_id = nook_core::generate_store_id()?.to_string();
         }
         save_legacy_backup(&self.store_id, legacy_yaml).await?;
         let signing = self.ensure_signing_identity().await?;
@@ -125,7 +125,7 @@ impl NookVaultManager {
         operations: Vec<VaultOperation>,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id()?;
+            self.store_id = nook_core::generate_store_id()?.to_string();
         }
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
@@ -175,10 +175,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
-        let records = nook_core::Database::stored_records_from_armored(
-            &self.stored_armored,
-            &self.secret_types,
-        );
+        let records = stored_records_from_string_armored(&self.stored_armored, &self.secret_types);
         let yaml = nook_core::serialize_stored_yaml_with_unlock(
             &records,
             &self.unlock,

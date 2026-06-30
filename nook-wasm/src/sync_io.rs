@@ -59,33 +59,35 @@ async fn fetch_remote_vault_yaml_inner(
         nook_core::StorageMode::Github => {
             let pat = nook_core::validate_github_pat(&github_pat)?;
             let repo_name = nook_core::validate_github_repo_name(&github_repo)?;
-            let username = fetch_github_username(&pat).await?;
+            let username = fetch_github_username(pat.as_ref()).await?;
             let repo = format!("{username}/{repo_name}");
-            ensure_github_repo_exists(&pat, &repo).await?;
+            ensure_github_repo_exists(pat.as_ref(), &repo).await?;
             let path = "nook-vault.yaml".to_owned();
-            match fetch_github_vault(&pat, &repo, &path, Some(&mut github_root_empty)).await? {
+            match fetch_github_vault(pat.as_ref(), &repo, &path, Some(&mut github_root_empty))
+                .await?
+            {
                 Some(file) => (file.content, Some(file.sha), false),
                 None => (String::new(), None, true),
             }
         }
         nook_core::StorageMode::GoogleDrive => {
             let token = nook_core::validate_oauth_access_token(&github_pat)?;
-            verify_drive_access(&token).await?;
-            let (known_file_id, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
-            let file_id = ensure_drive_vault_file(&token, &known_file_id, &file_name).await?;
-            match fetch_drive_vault(&token, &file_id, &file_name).await? {
+            verify_drive_access(token.as_ref()).await?;
+            let (known_file_id, file_name) = nook_core::parse_drive_storage_ref(&github_repo)?;
+            let file_id =
+                ensure_drive_vault_file(token.as_ref(), &known_file_id, file_name.as_ref()).await?;
+            match fetch_drive_vault(token.as_ref(), &file_id, file_name.as_ref()).await? {
                 Some(file) => (file.content, Some(file.revision), false),
                 None => (String::new(), None, true),
             }
         }
         nook_core::StorageMode::ICloud => {
             let token = nook_core::validate_oauth_access_token(&github_pat)?;
-            verify_icloud_access(&token).await?;
-            let (_known_revision, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
-            let _ = ensure_icloud_vault_record(&token, &record_name).await?;
-            match fetch_icloud_vault(&token, &record_name).await? {
+            verify_icloud_access(token.as_ref()).await?;
+            let (_known_revision, file_name) = nook_core::parse_drive_storage_ref(&github_repo)?;
+            let record_name =
+                ensure_icloud_vault_record(token.as_ref(), file_name.as_ref()).await?;
+            match fetch_icloud_vault(token.as_ref(), &record_name).await? {
                 Some(file) => (file.content, Some(file.revision), false),
                 None => (String::new(), None, true),
             }
@@ -123,33 +125,41 @@ async fn write_remote_vault_yaml_inner(
         nook_core::StorageMode::Github => {
             let pat = nook_core::validate_github_pat(&github_pat)?;
             let repo_name = nook_core::validate_github_repo_name(&github_repo)?;
-            let username = fetch_github_username(&pat).await?;
+            let username = fetch_github_username(pat.as_ref()).await?;
             let repo = format!("{username}/{repo_name}");
-            ensure_github_repo_exists(&pat, &repo).await?;
+            ensure_github_repo_exists(pat.as_ref(), &repo).await?;
             let path = "nook-vault.yaml".to_owned();
             let sha =
-                write_github_text_file_with_retry(&pat, &repo, &path, &content, revision).await?;
+                write_github_text_file_with_retry(pat.as_ref(), &repo, &path, &content, revision)
+                    .await?;
             Ok(sha)
         }
         nook_core::StorageMode::GoogleDrive => {
             let token = nook_core::validate_oauth_access_token(&github_pat)?;
-            verify_drive_access(&token).await?;
-            let (known_file_id, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
-            let file_id = ensure_drive_vault_file(&token, &known_file_id, &file_name).await?;
-            let (new_file_id, new_revision) =
-                write_drive_vault_with_retry(&token, &file_id, &file_name, &content, revision)
-                    .await?;
+            verify_drive_access(token.as_ref()).await?;
+            let (known_file_id, file_name) = nook_core::parse_drive_storage_ref(&github_repo)?;
+            let file_id =
+                ensure_drive_vault_file(token.as_ref(), &known_file_id, file_name.as_ref()).await?;
+            let (new_file_id, new_revision) = write_drive_vault_with_retry(
+                token.as_ref(),
+                &file_id,
+                file_name.as_ref(),
+                &content,
+                revision,
+            )
+            .await?;
             let _ = new_file_id;
             Ok(new_revision)
         }
         nook_core::StorageMode::ICloud => {
             let token = nook_core::validate_oauth_access_token(&github_pat)?;
-            verify_icloud_access(&token).await?;
-            let (_known_revision, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
+            verify_icloud_access(token.as_ref()).await?;
+            let (_known_revision, file_name) = nook_core::parse_drive_storage_ref(&github_repo)?;
+            let record_name =
+                ensure_icloud_vault_record(token.as_ref(), file_name.as_ref()).await?;
             let (_resolved_name, new_revision) =
-                write_icloud_vault_with_retry(&token, &record_name, &content, revision).await?;
+                write_icloud_vault_with_retry(token.as_ref(), &record_name, &content, revision)
+                    .await?;
             Ok(new_revision)
         }
     }

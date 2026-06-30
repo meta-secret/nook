@@ -75,22 +75,150 @@ pub const DEFAULT_DRIVE_VAULT_FILE_NAME: &str = "nook-vault.yaml";
 /// wasm connect `github_repo` argument for `google-drive` mode.
 pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
+/// Validated GitHub personal access token.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GithubPat(String);
+
+impl GithubPat {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        validate_github_pat(raw)
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for GithubPat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for GithubPat {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated GitHub repository name (not `owner/name`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GithubRepoName(String);
+
+impl GithubRepoName {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        validate_github_repo_name(raw)
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for GithubRepoName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for GithubRepoName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated Google Drive app-data vault file name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DriveVaultFileName(String);
+
+impl DriveVaultFileName {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        validate_drive_vault_file_name(raw)
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for DriveVaultFileName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for DriveVaultFileName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Validated OAuth access token (Drive / iCloud connect boundary).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OauthAccessToken(String);
+
+impl OauthAccessToken {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        validate_oauth_access_token(raw)
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl std::fmt::Display for OauthAccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for OauthAccessToken {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Boundary helper: confirms a raw string is a known storage mode. Prefer
 /// `StorageMode::parse` when you also want the parsed value.
 pub fn validate_storage_mode(mode: &str) -> ValidationResult<()> {
     StorageMode::parse(mode).map(|_| ())
 }
 
-pub fn validate_github_pat(pat: &str) -> ValidationResult<String> {
+pub fn validate_github_pat(pat: &str) -> ValidationResult<GithubPat> {
     let trimmed = pat.trim();
     if trimmed.is_empty() {
         return Err(ValidationError::GithubPatEmpty);
     }
-    Ok(trimmed.to_owned())
+    Ok(GithubPat(trimmed.to_owned()))
 }
 
 /// Validates a GitHub repository name (not `owner/name`). Empty uses [`DEFAULT_GITHUB_REPO_NAME`].
-pub fn validate_github_repo_name(name: &str) -> ValidationResult<String> {
+pub fn validate_github_repo_name(name: &str) -> ValidationResult<GithubRepoName> {
     let repo = if name.trim().is_empty() {
         DEFAULT_GITHUB_REPO_NAME.to_owned()
     } else {
@@ -108,12 +236,12 @@ pub fn validate_github_repo_name(name: &str) -> ValidationResult<String> {
     {
         return Err(ValidationError::GithubRepoChars);
     }
-    Ok(repo)
+    Ok(GithubRepoName(repo))
 }
 
 /// Validates a Google Drive app-data vault file name. Empty uses
 /// [`DEFAULT_DRIVE_VAULT_FILE_NAME`].
-pub fn validate_drive_vault_file_name(name: &str) -> ValidationResult<String> {
+pub fn validate_drive_vault_file_name(name: &str) -> ValidationResult<DriveVaultFileName> {
     let file_name = if name.trim().is_empty() {
         DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
     } else {
@@ -131,24 +259,26 @@ pub fn validate_drive_vault_file_name(name: &str) -> ValidationResult<String> {
     {
         return Err(ValidationError::DriveFileNameChars);
     }
-    Ok(file_name)
+    Ok(DriveVaultFileName(file_name))
 }
 
 /// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
 /// or `fileName` alone when no cached file id exists yet.
-#[must_use]
-pub fn parse_drive_storage_ref(value: &str) -> (String, String) {
+pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveVaultFileName)> {
     if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
-        (file_id.trim().to_owned(), file_name.trim().to_owned())
+        Ok((
+            file_id.trim().to_owned(),
+            validate_drive_vault_file_name(file_name)?,
+        ))
     } else {
-        (String::new(), value.trim().to_owned())
+        Ok((String::new(), validate_drive_vault_file_name(value)?))
     }
 }
 
 #[must_use]
-pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
+pub fn format_drive_storage_ref(file_id: &str, file_name: &DriveVaultFileName) -> String {
     let id = file_id.trim();
-    let name = file_name.trim();
+    let name = file_name.as_str();
     if id.is_empty() {
         name.to_owned()
     } else {
@@ -156,12 +286,12 @@ pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
     }
 }
 
-pub fn validate_oauth_access_token(token: &str) -> ValidationResult<String> {
+pub fn validate_oauth_access_token(token: &str) -> ValidationResult<OauthAccessToken> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
         return Err(ValidationError::OauthAccessTokenEmpty);
     }
-    Ok(trimmed.to_owned())
+    Ok(OauthAccessToken(trimmed.to_owned()))
 }
 
 /// Validates connect inputs. Returns trimmed GitHub PAT when mode is `Github`.
@@ -171,7 +301,7 @@ pub fn validate_oauth_access_token(token: &str) -> ValidationResult<String> {
 pub fn validate_connect(
     storage_mode: &str,
     github_pat: &str,
-) -> Result<Option<String>, ValidationError> {
+) -> Result<Option<GithubPat>, ValidationError> {
     let mode = StorageMode::parse(storage_mode)?;
     match mode {
         StorageMode::Github => Ok(Some(validate_github_pat(github_pat)?)),
@@ -194,7 +324,7 @@ pub fn is_compact_id(key: &str) -> bool {
 pub fn filter_secrets(records: &[crate::SecretRecord], query: &str) -> Vec<crate::SecretRecord> {
     let user_records: Vec<crate::SecretRecord> = records
         .iter()
-        .filter(|record| !is_device_id(&record.id) && !is_auth_key_id(&record.id))
+        .filter(|record| !is_device_id(record.id.as_str()) && !is_auth_key_id(record.id.as_str()))
         .cloned()
         .collect();
     let needle = query.trim().to_lowercase();
@@ -204,7 +334,7 @@ pub fn filter_secrets(records: &[crate::SecretRecord], query: &str) -> Vec<crate
 
     user_records
         .into_iter()
-        .filter(|record| record.id.to_lowercase().contains(&needle))
+        .filter(|record| record.id.as_str().to_lowercase().contains(&needle))
         .collect()
 }
 
@@ -233,12 +363,12 @@ mod tests {
     fn sample_records() -> Vec<SecretRecord> {
         vec![
             SecretRecord {
-                id: "github.com".to_owned(),
+                id: validate_secret_id("github.com").unwrap(),
                 secret_type: SecretType::ApiKey,
                 data: value("a"),
             },
             SecretRecord {
-                id: "work-vpn".to_owned(),
+                id: validate_secret_id("work-vpn").unwrap(),
                 secret_type: SecretType::ApiKey,
                 data: value("b"),
             },
@@ -248,11 +378,11 @@ mod tests {
     #[test]
     fn validate_github_repo_name_defaults_and_rejects_invalid() {
         assert_eq!(
-            validate_github_repo_name("  ").unwrap(),
+            validate_github_repo_name("  ").unwrap().as_str(),
             DEFAULT_GITHUB_REPO_NAME
         );
         assert_eq!(
-            validate_github_repo_name("work-vault").unwrap(),
+            validate_github_repo_name("work-vault").unwrap().as_str(),
             "work-vault"
         );
         assert!(validate_github_repo_name(".").is_err());
@@ -263,8 +393,11 @@ mod tests {
     fn validate_connect_github_requires_pat() {
         assert!(validate_connect(STORAGE_MODE_GITHUB, "  ").is_err());
         assert_eq!(
-            validate_connect(STORAGE_MODE_GITHUB, " ghp_test ").unwrap(),
-            Some("ghp_test".to_owned())
+            validate_connect(STORAGE_MODE_GITHUB, " ghp_test ")
+                .unwrap()
+                .unwrap()
+                .as_str(),
+            "ghp_test"
         );
     }
 
@@ -276,22 +409,22 @@ mod tests {
     #[test]
     fn validate_secret_fields() {
         assert!(validate_secret_id("  ").is_err());
-        assert_eq!(validate_secret_id(" github ").unwrap(), "github");
+        assert_eq!(validate_secret_id(" github ").unwrap().as_str(), "github");
         assert!(validate_secret_data("").is_err());
         assert!(validate_secret_data("x").is_ok());
         assert!(validate_secret_id("abc123def4567890").is_err());
         assert!(validate_secret_id(&"a".repeat(64)).is_err());
         assert_eq!(
-            validate_store_id("store_SMypl8K0w9Y").unwrap(),
+            validate_store_id("store_SMypl8K0w9Y").unwrap().as_str(),
             "store_SMypl8K0w9Y"
         );
         assert_eq!(
-            validate_store_id("SMypl8K0w9Y").unwrap(),
+            validate_store_id("SMypl8K0w9Y").unwrap().as_str(),
             "store_SMypl8K0w9Y"
         );
         assert!(validate_store_id("short").is_err());
         assert_eq!(
-            validate_secret_id("secret_SMypl8K0w9Y").unwrap(),
+            validate_secret_id("secret_SMypl8K0w9Y").unwrap().as_str(),
             "secret_SMypl8K0w9Y"
         );
     }
@@ -300,7 +433,7 @@ mod tests {
     fn filter_secrets_case_insensitive() {
         let filtered = filter_secrets(&sample_records(), "GIT");
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].id, "github.com");
+        assert_eq!(filtered[0].id.as_str(), "github.com");
     }
 
     #[test]
@@ -354,11 +487,13 @@ mod tests {
     #[test]
     fn validate_drive_vault_file_name_defaults_and_rejects_invalid() {
         assert_eq!(
-            validate_drive_vault_file_name("  ").unwrap(),
+            validate_drive_vault_file_name("  ").unwrap().as_str(),
             DEFAULT_DRIVE_VAULT_FILE_NAME
         );
         assert_eq!(
-            validate_drive_vault_file_name("work-vault.yaml").unwrap(),
+            validate_drive_vault_file_name("work-vault.yaml")
+                .unwrap()
+                .as_str(),
             "work-vault.yaml"
         );
         assert!(validate_drive_vault_file_name(".").is_err());
@@ -368,23 +503,32 @@ mod tests {
     #[test]
     fn parse_drive_storage_ref_splits_file_id_and_name() {
         assert_eq!(
-            parse_drive_storage_ref("abc123\twork-vault.yaml"),
-            ("abc123".to_owned(), "work-vault.yaml".to_owned())
+            parse_drive_storage_ref("abc123\twork-vault.yaml").unwrap(),
+            (
+                "abc123".to_owned(),
+                validate_drive_vault_file_name("work-vault.yaml").unwrap()
+            )
         );
         assert_eq!(
-            parse_drive_storage_ref("nook-vault.yaml"),
-            (String::new(), "nook-vault.yaml".to_owned())
+            parse_drive_storage_ref("nook-vault.yaml").unwrap(),
+            (
+                String::new(),
+                validate_drive_vault_file_name("nook-vault.yaml").unwrap()
+            )
         );
     }
 
     #[test]
     fn format_drive_storage_ref_omits_empty_file_id() {
         assert_eq!(
-            format_drive_storage_ref("", "nook-vault.yaml"),
+            format_drive_storage_ref(
+                "",
+                &validate_drive_vault_file_name("nook-vault.yaml").unwrap()
+            ),
             "nook-vault.yaml"
         );
         assert_eq!(
-            format_drive_storage_ref("abc", "work.yaml"),
+            format_drive_storage_ref("abc", &validate_drive_vault_file_name("work.yaml").unwrap()),
             "abc\twork.yaml"
         );
     }
@@ -392,7 +536,10 @@ mod tests {
     #[test]
     fn validate_oauth_access_token_rejects_empty() {
         assert!(validate_oauth_access_token(" ").is_err());
-        assert_eq!(validate_oauth_access_token(" token ").unwrap(), "token");
+        assert_eq!(
+            validate_oauth_access_token(" token ").unwrap().as_str(),
+            "token"
+        );
     }
 
     #[test]
@@ -404,7 +551,7 @@ mod tests {
     fn filter_secrets_matches_substring_in_label() {
         let filtered = filter_secrets(&sample_records(), ".com");
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].id, "github.com");
+        assert_eq!(filtered[0].id.as_str(), "github.com");
     }
 
     #[test]
@@ -415,7 +562,7 @@ mod tests {
     #[test]
     fn filter_secrets_does_not_search_values() {
         let records = vec![SecretRecord {
-            id: "label".to_owned(),
+            id: validate_secret_id("label").unwrap(),
             secret_type: SecretType::ApiKey,
             data: value("find-me"),
         }];

@@ -1,7 +1,9 @@
 //! Plaintext session hydration from projected or stored user records.
 
 use crate::errors::VaultResult;
-use crate::{Database, SecretType, StoredSecretRecord, VaultCrypto, is_vault_meta_record};
+use crate::{
+    Database, SecretId, SecretType, StoredSecretRecord, VaultCrypto, is_vault_meta_record,
+};
 use std::collections::HashMap;
 
 /// Merge live user secrets into an armored session cache and return decrypted JSONL.
@@ -19,16 +21,16 @@ pub fn apply_user_records_to_armored_session(
     let jsonl = db.to_jsonl()?;
     armored.retain(|key, value| {
         is_vault_meta_record(&StoredSecretRecord {
-            key: key.clone(),
+            key: SecretId::from_vault_record(key),
             secret_type: None,
             value: value.clone(),
         })
     });
     secret_types.retain(|key, _| armored.contains_key(key));
     for record in user_records {
-        armored.insert(record.key.clone(), record.value);
+        armored.insert(record.key.to_string(), record.value);
         if let Some(secret_type) = record.secret_type {
-            secret_types.insert(record.key, secret_type);
+            secret_types.insert(record.key.to_string(), secret_type);
         }
     }
     Ok(jsonl)
@@ -55,14 +57,14 @@ mod tests {
         )?;
 
         let mut armored = HashMap::from([
-            (auth.key.clone(), auth.value),
+            (auth.key.to_string(), auth.value),
             ("secret_old0000001".to_owned(), "stale".to_owned()),
         ]);
         let mut secret_types =
             HashMap::from([("secret_old0000001".to_owned(), crate::SecretType::ApiKey)]);
 
         let user_records = vec![StoredSecretRecord {
-            key: "secret_new0000001".to_owned(),
+            key: SecretId::from_vault_record("secret_new0000001"),
             secret_type: Some(crate::SecretType::ApiKey),
             value: ciphertext,
         }];
@@ -77,7 +79,7 @@ mod tests {
         assert!(jsonl.contains("secret_new0000001"));
         assert!(!armored.contains_key("secret_old0000001"));
         assert!(armored.contains_key("secret_new0000001"));
-        assert!(armored.contains_key(&auth.key));
+        assert!(armored.contains_key(&auth.key.to_string()));
         assert_eq!(secret_types.len(), 1);
         Ok(())
     }

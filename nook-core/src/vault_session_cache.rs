@@ -43,11 +43,12 @@ mod tests {
             &keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
+        let store_id = generate_store_id()?;
         let yaml = serialize_stored_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(&generate_store_id()?),
+            Some(store_id.as_str()),
             None,
         )?;
         let (secrets_key, members_key) = hydrate_keys_from_projection_yaml(&yaml, &identity)?;

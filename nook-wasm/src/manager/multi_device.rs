@@ -55,7 +55,7 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(&content)?;
         let mut records = nook_core::deserialize_stored(&content, format)?;
 
-        let auth_id = nook_core::dec_auth_id(&identity);
+        let auth_id = nook_core::SecretId::from_vault_record(&nook_core::dec_auth_id(&identity));
         if records.iter().any(|record| record.key == auth_id) {
             return Err(NookError::Database(
                 "This device is already enrolled. Use Connect vault.".to_owned(),
@@ -63,7 +63,9 @@ impl NookVaultManager {
             .into());
         }
 
-        let join_key = nook_core::join_record_key(identity.device_id());
+        let join_key = nook_core::SecretId::from_vault_record(&nook_core::join_record_key(
+            identity.device_id(),
+        ));
         records.retain(|record| record.key != join_key);
         records.push(nook_core::create_join_request_record(
             &identity,
@@ -108,7 +110,7 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(&content)?;
         let mut records = nook_core::deserialize_stored(&content, format)?;
 
-        let auth_id = nook_core::dec_auth_id(&identity);
+        let auth_id = nook_core::SecretId::from_vault_record(&nook_core::dec_auth_id(&identity));
         records.retain(|record| record.key != auth_id);
         records.retain(|record| !nook_core::is_members_stored_record(record));
         let (auth, members) = nook_core::enroll_device_with_keys(
@@ -144,7 +146,8 @@ impl NookVaultManager {
     pub async fn create_join_request(&mut self, requested_at: String) -> Result<(), JsError> {
         let identity = self.device_identity()?;
         let record = nook_core::create_join_request_record(&identity, &requested_at)?;
-        self.stored_armored.insert(record.key.clone(), record.value);
+        self.stored_armored
+            .insert(record.key.to_string(), record.value);
         let signing = self.ensure_signing_identity().await?;
         let signing_pk = hex::encode(signing.verifying_key().as_bytes());
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
@@ -178,7 +181,7 @@ impl NookVaultManager {
         )?;
         self.stored_armored.remove(&join_key);
         self.stored_armored
-            .insert(auth_record.key.clone(), auth_record.value.clone());
+            .insert(auth_record.key.to_string(), auth_record.value.clone());
         apply_member_records(&mut self.stored_armored, &member_records);
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(&auth_record.value)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
@@ -291,9 +294,10 @@ impl NookVaultManager {
             &wasm_iso_timestamp(),
         )?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
-        self.stored_armored.insert(auth.key.clone(), auth.value);
+        self.stored_armored.insert(auth.key.to_string(), auth.value);
         for member in members {
-            self.stored_armored.insert(member.key.clone(), member.value);
+            self.stored_armored
+                .insert(member.key.to_string(), member.value);
         }
         self.persist_vault_change(Vec::new()).await?;
         Ok(self.get_records()?)

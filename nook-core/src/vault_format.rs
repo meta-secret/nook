@@ -1,6 +1,6 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
-    AuthEnvelopes, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope, PasswordUnlockEntry,
+    AuthEnvelopes, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope, PasswordUnlockEntry, SecretId,
     StoredSecretRecord, VaultUnlock, is_auth_stored_record, is_join_stored_record,
     is_members_stored_record,
 };
@@ -158,16 +158,19 @@ fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
     let envelopes = crate::parse_auth_envelopes(&record.value)
         .expect("auth record must parse before YAML serialization");
     AuthYamlRecord {
-        pk_id: crate::normalize_auth_key_id(&record.key).unwrap_or_else(|_| record.key.clone()),
+        pk_id: crate::normalize_auth_key_id(record.key.as_str())
+            .map_or_else(|_| record.key.to_string(), |id| id.to_string()),
         secrets_key: envelopes.secrets_key,
         members_key: envelopes.members_key,
     }
 }
 
 fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
-    let pk_id = crate::normalize_auth_key_id(&record.pk_id).unwrap_or(record.pk_id);
+    let pk_id = crate::normalize_auth_key_id(&record.pk_id)
+        .map(|id| id.to_string())
+        .unwrap_or(record.pk_id);
     StoredSecretRecord {
-        key: pk_id.clone(),
+        key: SecretId::from_vault_record(&pk_id),
         secret_type: None,
         value: serde_json::to_string(&AuthEnvelopes {
             secrets_key: record.secrets_key,
@@ -178,9 +181,11 @@ fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
 }
 
 fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
-    let pk_id = crate::normalize_auth_key_id(&record.pk_id).unwrap_or(record.pk_id);
+    let pk_id = crate::normalize_auth_key_id(&record.pk_id)
+        .map(|id| id.to_string())
+        .unwrap_or(record.pk_id);
     StoredSecretRecord {
-        key: crate::member_stored_key(&pk_id),
+        key: SecretId::from_vault_record(&crate::member_stored_key(&pk_id)),
         secret_type: None,
         value: record.ciphertext,
     }
@@ -192,19 +197,21 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
         if is_join_stored_record(record) {
             vault.joins.push(record.clone());
         } else if is_members_stored_record(record) {
+            let key_str = record.key.as_str();
             let pk_id = crate::normalize_auth_key_id(
-                record
-                    .key
+                key_str
                     .strip_prefix(crate::MEMBER_RECORD_PREFIX)
-                    .unwrap_or(&record.key),
+                    .unwrap_or(key_str),
             )
-            .unwrap_or_else(|_| {
-                record
-                    .key
-                    .strip_prefix(crate::MEMBER_RECORD_PREFIX)
-                    .unwrap_or(&record.key)
-                    .to_owned()
-            });
+            .map_or_else(
+                |_| {
+                    key_str
+                        .strip_prefix(crate::MEMBER_RECORD_PREFIX)
+                        .unwrap_or(key_str)
+                        .to_owned()
+                },
+                |id| id.to_string(),
+            );
             vault.members.push(MembersYamlRecord {
                 pk_id,
                 ciphertext: record.value.clone(),
@@ -216,7 +223,7 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
         }
     }
     for secret in &mut vault.secrets {
-        if let Ok(id) = crate::normalize_secret_id_for_write(&secret.key) {
+        if let Ok(id) = crate::normalize_secret_id_for_write(secret.key.as_str()) {
             secret.key = id;
         }
     }
@@ -234,7 +241,7 @@ pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResul
 
 fn resolve_store_id_for_write(store_id: Option<&str>) -> VaultFormatResult<Option<String>> {
     match store_id.map(str::trim).filter(|id| !id.is_empty()) {
-        Some(id) => Ok(Some(crate::normalize_store_id(id)?)),
+        Some(id) => Ok(Some(crate::normalize_store_id(id)?.to_string())),
         None => Ok(None),
     }
 }
@@ -326,7 +333,7 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
     match vault.store_id {
-        Some(id) => Ok(Some(crate::validate_store_id(&id)?)),
+        Some(id) => Ok(Some(crate::validate_store_id(&id)?.to_string())),
         None => Ok(None),
     }
 }
@@ -404,17 +411,22 @@ fn resolve_unlock_with_legacy(vault: &StoredVaultYaml) -> VaultUnlock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SecretId;
+
+    fn sid(label: &str) -> SecretId {
+        SecretId::from_vault_record(label)
+    }
 
     fn sample_records() -> Vec<StoredSecretRecord> {
         vec![
             StoredSecretRecord {
-                key: "github.com".to_owned(),
+                key: sid("github.com"),
                 secret_type: Some(crate::SecretType::Login),
                 value: "-----BEGIN AGE ENCRYPTED FILE-----\nline1\nline2\n-----END AGE ENCRYPTED FILE-----"
                     .to_owned(),
             },
             StoredSecretRecord {
-                key: "work-vpn".to_owned(),
+                key: sid("work-vpn"),
                 secret_type: Some(crate::SecretType::ApiKey),
                 value: "-----BEGIN AGE ENCRYPTED FILE-----\nsecret\n-----END AGE ENCRYPTED FILE-----"
                     .to_owned(),
@@ -612,7 +624,7 @@ not-json
         let join_id = "fedcba9876543210";
         let records = vec![
             StoredSecretRecord {
-                key: "github.com".to_owned(),
+                key: sid("github.com"),
                 secret_type: Some(crate::SecretType::Login),
                 value: "encrypted-user-secret".to_owned(),
             },
@@ -626,7 +638,7 @@ not-json
                         .to_owned(),
             }),
             StoredSecretRecord {
-                key: join_id.to_owned(),
+                key: sid(join_id),
                 secret_type: None,
                 value: format!(
                     r#"{{"device_id":"{join_id}","public_key":"age1test","requested_at":"2026-01-01T00:00:00Z"}}"#
@@ -653,7 +665,7 @@ not-json
     fn yaml_members_section_uses_pk_id_and_ciphertext() {
         let auth_id = "c".repeat(64);
         let records = vec![StoredSecretRecord {
-            key: format!("member:{auth_id}"),
+            key: sid(&format!("member:{auth_id}")),
             secret_type: None,
             value: "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
                 .to_owned(),
@@ -668,7 +680,7 @@ not-json
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key, format!("member:key_{auth_id}"));
+        assert_eq!(parsed[0].key.as_str(), format!("member:key_{auth_id}"));
     }
 
     #[test]
@@ -814,7 +826,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
 
         let parsed = deserialize_stored_yaml(&yaml).unwrap();
         assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].key, format!("key_{auth_id}"));
+        assert_eq!(parsed[0].key.as_str(), format!("key_{auth_id}"));
 
         let env = crate::parse_auth_envelopes(&parsed[0].value).unwrap();
         assert!(env.secrets_key.contains("BEGIN AGE ENCRYPTED FILE"));

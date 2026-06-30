@@ -58,7 +58,7 @@ pub use multi_device::{
     enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
     explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
     generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
-    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_device_id, is_join_stored_record,
+    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
     is_members_stored_record, is_reserved_device_label, is_vault_meta_record, join_record_key,
     list_join_requests, member_from_identity, member_from_join, member_stored_key,
     merge_remote_join_records, parse_auth_envelopes, parse_join_request, pending_join_for_device,
@@ -81,7 +81,8 @@ pub use password_envelope::{
 pub use session::{ReplaceSecretInput, replace_secret};
 pub use validation::{
     DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
-    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
+    DriveVaultFileName, GithubPat, GithubRepoName, OauthAccessToken, STORAGE_MODE_GITHUB,
+    STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
     format_sync_provider_cache_ref, parse_drive_storage_ref, validate_connect,
     validate_drive_vault_file_name, validate_github_pat, validate_github_repo_name,
     validate_oauth_access_token, validate_secret_data, validate_storage_mode,
@@ -116,10 +117,11 @@ pub use vault_format::{
     serialize_stored, serialize_stored_yaml_with_unlock,
 };
 pub use vault_ids::{
-    AUTH_KEY_ID_PREFIX, SECRET_ID_PREFIX, STORE_ID_PREFIX, auth_key_digest, format_auth_key_id,
-    format_secret_id, format_store_id, generate_secret_id, generate_store_id, is_auth_key_id,
-    is_compact_token, normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id,
-    validate_secret_id, validate_store_id,
+    AUTH_KEY_ID_PREFIX, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX, STORE_ID_PREFIX,
+    SecretId, StoreId, auth_key_digest, format_auth_key_id, format_secret_id, format_store_id,
+    generate_secret_id, generate_store_id, is_auth_key_id, is_compact_token, is_device_id,
+    normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
+    validate_store_id,
 };
 pub use vault_import::{
     KeyEpochId, legacy_encrypted_secrets, legacy_vault_content_hash, legacy_vault_to_import_event,

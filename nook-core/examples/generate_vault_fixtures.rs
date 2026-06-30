@@ -2,7 +2,7 @@
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 
-use nook_core::{ApiKeySecret, Database, SecretValue, VaultFormat};
+use nook_core::{ApiKeySecret, Database, SecretId, SecretValue, VaultFormat};
 use std::fs;
 use std::path::PathBuf;
 
@@ -22,15 +22,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut db = Database::new();
     db.insert(
-        "github.com".to_owned(),
+        SecretId::from_vault_record("github.com"),
         api_key("https://github.com", "hunter2"),
     );
     db.insert(
-        "work-vpn".to_owned(),
+        SecretId::from_vault_record("work-vpn"),
         api_key("https://vpn.example.com", "token-abc"),
     );
     db.insert(
-        "notes".to_owned(),
+        SecretId::from_vault_record("notes"),
         api_key("https://notes.example.com", "multiline\nsecret\nwith\ttabs"),
     );
 

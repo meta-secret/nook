@@ -110,7 +110,7 @@ impl SecretRecord {
             return true;
         }
 
-        let mut fields = vec![self.group_key(), self.summary(), self.id.clone()];
+        let mut fields = vec![self.group_key(), self.summary(), self.id.to_string()];
         match &self.data {
             SecretValue::Login(value) => {
                 fields.push(value.website_url.clone());
@@ -149,11 +149,11 @@ pub fn build_secret_yaml(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::LoginSecret;
+    use crate::{LoginSecret, SecretId};
 
     fn login_record() -> SecretRecord {
         SecretRecord {
-            id: "secret_test".to_owned(),
+            id: SecretId::from_vault_record("secret_test"),
             secret_type: SecretType::Login,
             data: SecretValue::Login(LoginSecret {
                 website_url: "https://www.github.com/login".to_owned(),

@@ -250,12 +250,13 @@ impl NookVaultManager {
 
         records.retain(|record| !nook_core::is_join_stored_record(record));
 
-        let auth_id = nook_core::dec_auth_id(&identity);
+        let auth_id = nook_core::SecretId::from_vault_record(&nook_core::dec_auth_id(&identity));
         let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
         records.retain(|record| !nook_core::is_auth_stored_record(record) || record.key != auth_id);
         records.push(auth);
 
-        let self_member_key = nook_core::member_stored_key(&auth_id);
+        let self_member_key =
+            nook_core::SecretId::from_vault_record(&nook_core::member_stored_key(auth_id.as_str()));
         records.retain(|record| {
             !nook_core::is_members_stored_record(record) || record.key != self_member_key
         });

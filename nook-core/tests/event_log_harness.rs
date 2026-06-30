@@ -4,11 +4,11 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_core::{
-    Database, DeviceIdentity, EventId, LocalEventStore, SecretType, SigningIdentity, VaultCrypto,
-    VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult, VaultUnlock,
-    encrypted_secret_from_armored, generate_store_id, generate_vault_keys, genesis_auth_record,
-    genesis_members_records, hydrate_keys_from_projection_yaml, legacy_vault_to_import_event,
-    serialize_stored_yaml_with_unlock,
+    Database, DeviceIdentity, EventId, LocalEventStore, SecretId, SecretType, SigningIdentity,
+    VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
+    VaultUnlock, encrypted_secret_from_armored, generate_store_id, generate_vault_keys,
+    genesis_auth_record, genesis_members_records, hydrate_keys_from_projection_yaml,
+    legacy_vault_to_import_event, serialize_stored_yaml_with_unlock,
 };
 use std::collections::HashMap;
 
@@ -30,8 +30,8 @@ impl EventLogDevice {
         let identity = DeviceIdentity::generate()?;
         let store_id = generate_store_id()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
-        let session = VaultEventSession::new(store_id.clone(), signing, signing_seed);
-        let projection_cache_yaml = genesis_yaml(&keys, &identity, &store_id)?;
+        let session = VaultEventSession::new(store_id.to_string(), signing, signing_seed);
+        let projection_cache_yaml = genesis_yaml(&keys, &identity, store_id.as_str())?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut device = Self {
             session,
@@ -203,7 +203,7 @@ pub fn union_device_from_providers(
 pub fn sample_legacy_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
     let mut db = Database::new();
     db.insert(
-        "legacy-secret".to_owned(),
+        SecretId::from_vault_record("legacy-secret"),
         nook_core::SecretValue::ApiKey(nook_core::ApiKeySecret {
             website_url: "https://example.com".to_owned(),
             key: "legacy-value".to_owned(),
