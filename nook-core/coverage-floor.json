@@ -1,0 +1,7 @@
+{
+  "lines_percent": 91.15,
+  "package": "nook-core",
+  "tool": "cargo llvm-cov nextest --profile ci",
+  "updated": "2026-06-29",
+  "note": "Minimum line coverage for nook-core. Agents must not decrease this value. After raising coverage, run: task rust:coverage:update"
+}

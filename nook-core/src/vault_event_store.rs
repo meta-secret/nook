@@ -261,4 +261,120 @@ mod tests {
         assert_eq!(heads[0], id.as_str());
         Ok(())
     }
+
+    #[test]
+    fn union_commutative_on_event_sets() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?;
+        let genesis = build_genesis_import_event(
+            store,
+            actor,
+            &epoch,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &signing_key,
+        )?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+
+        let mut local_a = LocalEventStore::new();
+        local_a.put_event(genesis_id.clone(), genesis_bytes.clone());
+        let mut local_b = LocalEventStore::new();
+
+        union_remote_events(&mut local_a, &[], store)?;
+        union_remote_events(
+            &mut local_b,
+            &[(genesis_id.clone(), genesis_bytes.clone())],
+            store,
+        )?;
+        union_remote_events(&mut local_a, &[(genesis_id, genesis_bytes)], store)?;
+
+        assert_eq!(local_a.event_ids().len(), local_b.event_ids().len());
+        Ok(())
+    }
+
+    #[test]
+    fn union_rejects_event_id_mismatch() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let store = "store_testtoken1";
+        let genesis = build_genesis_import_event(
+            store,
+            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &EventId::parse(
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )?,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &signing_key,
+        )?;
+        let real_id = genesis.id()?;
+        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let wrong_id = EventId::parse(
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        )?;
+
+        let mut local = LocalEventStore::new();
+        let err = union_remote_events(&mut local, &[(wrong_id, bytes)], store).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::RemoteEventIdMismatch { .. })
+        ));
+        assert!(local.get_bytes(&real_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn bidirectional_union_converges() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?;
+        let genesis = build_genesis_import_event(
+            store,
+            actor,
+            &epoch,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &signing_key,
+        )?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+
+        let mut device_a = LocalEventStore::new();
+        device_a.put_event(genesis_id.clone(), genesis_bytes.clone());
+
+        let mut device_b = LocalEventStore::new();
+        device_b.put_event(genesis_id.clone(), genesis_bytes.clone());
+
+        union_remote_events(
+            &mut device_a,
+            &device_b
+                .event_ids()
+                .iter()
+                .filter_map(|id| device_b.get_bytes(id).map(|b| (id.clone(), b.to_vec())))
+                .collect::<Vec<_>>(),
+            store,
+        )?;
+        union_remote_events(
+            &mut device_b,
+            &device_a
+                .event_ids()
+                .iter()
+                .filter_map(|id| device_a.get_bytes(id).map(|b| (id.clone(), b.to_vec())))
+                .collect::<Vec<_>>(),
+            store,
+        )?;
+
+        assert_eq!(device_a.event_ids(), device_b.event_ids());
+        Ok(())
+    }
 }

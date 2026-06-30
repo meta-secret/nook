@@ -231,3 +231,96 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     assert!(!b.project()?.live_secrets(&graph).is_empty());
     Ok(())
 }
+
+#[test]
+fn three_device_decentralized_convergence() -> VaultResult<()> {
+    let mut a = EventLogDevice::genesis("a")?;
+    let mut b = EventLogDevice::replica_of(&a)?;
+    let mut c = EventLogDevice::replica_of(&a)?;
+
+    // All devices start from the same genesis.
+    b.union_from(&a)?;
+    c.union_from(&a)?;
+
+    // Each device appends concurrently from the shared genesis head.
+    let shared_head = a.session.heads[0].clone();
+    a.session.heads = vec![shared_head.clone()];
+    a.append_secret("secret_deviceaaaa", "from-a")?;
+    b.session.heads = vec![shared_head.clone()];
+    b.append_secret("secret_devicebbbb", "from-b")?;
+    c.session.heads = vec![shared_head];
+    c.append_secret("secret_devicecccc", "from-c")?;
+
+    // Pairwise decentralized sync (no central coordinator).
+    a.union_from(&b)?;
+    a.union_from(&c)?;
+    b.union_from(&a)?;
+    b.union_from(&c)?;
+    c.union_from(&a)?;
+    c.union_from(&b)?;
+
+    let graph_a = a.session.store.load_graph(a.store_id())?;
+    let graph_b = b.session.store.load_graph(b.store_id())?;
+    let graph_c = c.session.store.load_graph(c.store_id())?;
+
+    assert_eq!(a.session.store.event_ids().len(), 4); // genesis + 3 concurrent
+    assert_eq!(b.session.store.event_ids().len(), 4);
+    assert_eq!(c.session.store.event_ids().len(), 4);
+    assert_eq!(a.project()?.live_secrets(&graph_a).len(), 3);
+    assert_eq!(b.project()?.live_secrets(&graph_b).len(), 3);
+    assert_eq!(c.project()?.live_secrets(&graph_c).len(), 3);
+    assert_eq!(graph_a.heads().len(), 3);
+    Ok(())
+}
+
+#[test]
+fn partial_sync_then_completion() -> VaultResult<()> {
+    let mut a = EventLogDevice::genesis("a")?;
+    let mut b = EventLogDevice::replica_of(&a)?;
+    b.union_from(&a)?;
+
+    let head = a.session.heads[0].clone();
+    a.session.heads = vec![head.clone()];
+    a.append_secret("secret_partial0001", "first")?;
+    b.union_from(&a)?;
+
+    a.session.heads = vec![head];
+    a.append_secret("secret_partial0002", "second")?;
+    // B has not synced the second append yet.
+    let graph_a = a.session.store.load_graph(a.store_id())?;
+    let graph_b = b.session.store.load_graph(b.store_id())?;
+    assert_eq!(a.project()?.live_secrets(&graph_a).len(), 2);
+    assert_eq!(b.project()?.live_secrets(&graph_b).len(), 1);
+
+    b.union_from(&a)?;
+    let graph_b = b.session.store.load_graph(b.store_id())?;
+    assert_eq!(b.project()?.live_secrets(&graph_b).len(), 2);
+    Ok(())
+}
+
+#[test]
+fn union_order_does_not_change_projection() -> VaultResult<()> {
+    let mut a = EventLogDevice::genesis("a")?;
+    let head = a.session.heads[0].clone();
+    a.session.heads = vec![head.clone()];
+    a.append_secret("secret_order00001", "x")?;
+    a.session.heads = vec![head];
+    a.append_secret("secret_order00002", "y")?;
+
+    let events = a.remote_events();
+    let mut forward = EventLogDevice::replica_of(&a)?;
+    let mut reverse = EventLogDevice::replica_of(&a)?;
+
+    forward.session.union_remote(&events)?;
+    for event in events.iter().rev() {
+        reverse.session.union_remote(std::slice::from_ref(event))?;
+    }
+
+    let graph_f = forward.session.store.load_graph(forward.store_id())?;
+    let graph_r = reverse.session.store.load_graph(reverse.store_id())?;
+    assert_eq!(
+        forward.project()?.live_secrets(&graph_f),
+        reverse.project()?.live_secrets(&graph_r)
+    );
+    Ok(())
+}

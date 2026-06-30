@@ -44,4 +44,14 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, **agent pipeline** (local checks → `task ci:pr` → PR → monitor → fix loop → squash merge → **duration report**), and PR checklist.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
-* [workflows/quality.md](workflows/quality.md) — Quality gates and release.
+* [workflows/quality.md](workflows/quality.md) — Quality gates, **testing pyramid** (Rust ~99% domain coverage), and release.
+
+## 7. Agent duties beyond code
+
+### Testing pyramid
+* **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §8](design-docs/core-beliefs.md#8-unit-tests-own-domain-correctness-e2e-is-smoke-only).
+* **Line coverage floor:** `task rust:coverage:check` enforces `nook-core/coverage-floor.json`. Agents must not let measured coverage fall below the floor; run `task rust:coverage:update` when coverage rises.
+
+### Grow `.cortex` dynamically
+* When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
+* Follow [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.

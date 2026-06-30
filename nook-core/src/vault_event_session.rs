@@ -2,9 +2,10 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::{
-    AppendEventInput, EventId, LocalEventStore, SigningIdentity, StoredSecretRecord, VaultCrypto,
-    VaultOperation, VaultProjection, build_members_records, build_signed_event, project_vault,
-    resolve_member_roster, rotate_vault_keys_with_secrets, sha256_hex, union_remote_events,
+    AppendEventInput, EventId, LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord,
+    VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
+    project_vault, resolve_member_roster, rotate_vault_keys_with_secrets, sha256_hex,
+    union_remote_events,
 };
 use std::collections::HashMap;
 
@@ -54,11 +55,12 @@ impl VaultEventSession {
         provider_id: Option<&str>,
     ) -> VaultResult<EventId> {
         let actor_id = self.actor_id()?;
+        let parents = ObservedHeads::parse(&self.heads)?.as_parent_strings();
         let (event, bytes) = build_signed_event(AppendEventInput {
             store_id: &self.store_id,
             actor_id: &actor_id,
             signing_identity: &self.signing,
-            parents: self.heads.clone(),
+            parents,
             key_epoch: &self.key_epoch,
             created_at,
             operations,

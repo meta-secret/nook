@@ -540,4 +540,101 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn concurrent_deletes_tombstone_secret() -> VaultResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+        let created = secret_created(vec![genesis_id.clone()], "secret_aaaaaaaaaaa", &signing_key);
+        let created_id = created.id()?;
+        graph.insert(created, STORE)?;
+
+        let delete_body = |parents: Vec<EventId>| VaultEventBody {
+            schema_version: VAULT_EVENT_SCHEMA_VERSION,
+            store_id: STORE.to_owned(),
+            actor_id: ACTOR.to_owned(),
+            parents: parents
+                .into_iter()
+                .map(|id| id.as_str().to_owned())
+                .collect(),
+            created_at: "2026-06-28T00:00:00Z".to_owned(),
+            key_epoch: EPOCH.to_owned(),
+            operations: vec![VaultOperation::SecretDeleted {
+                secret_id: "secret_aaaaaaaaaaa".to_owned(),
+            }],
+        };
+
+        let d1 = VaultEvent::sign(delete_body(vec![created_id.clone()]), &signing_key)?;
+        let d2 = VaultEvent::sign(delete_body(vec![created_id]), &signing_key)?;
+        graph.insert(d1, STORE)?;
+        graph.insert(d2, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(projection.live_secrets(&graph).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn concurrent_security_rotations_surface_conflict() -> VaultResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+
+        let signed_op = |parents: Vec<EventId>, op: VaultOperation| -> VaultResult<VaultEvent> {
+            let body = VaultEventBody {
+                schema_version: VAULT_EVENT_SCHEMA_VERSION,
+                store_id: STORE.to_owned(),
+                actor_id: ACTOR.to_owned(),
+                parents: parents
+                    .into_iter()
+                    .map(|id| id.as_str().to_owned())
+                    .collect(),
+                created_at: "2026-06-28T00:00:00Z".to_owned(),
+                key_epoch: EPOCH.to_owned(),
+                operations: vec![op],
+            };
+            VaultEvent::sign(body, &signing_key)
+        };
+
+        let revoke = signed_op(
+            vec![genesis_id.clone()],
+            VaultOperation::DeviceRevoked {
+                device_id: "device_revoked01".to_owned(),
+            },
+        )?;
+        let rotate = signed_op(
+            vec![genesis_id],
+            VaultOperation::PasswordRotated {
+                entry_id: "password_entry01".to_owned(),
+                envelope_ciphertext: "cipher-rotated".to_owned(),
+            },
+        )?;
+        graph.insert(revoke, STORE)?;
+        graph.insert(rotate, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert!(!projection.security_conflicts.is_empty());
+        assert!(projection.has_blocking_conflicts());
+        Ok(())
+    }
+
+    #[test]
+    fn three_way_fork_projection_is_replay_invariant() -> VaultResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+
+        let a = secret_created(vec![genesis_id.clone()], "secret_forkaaaaaa", &signing_key);
+        let b = secret_created(vec![genesis_id.clone()], "secret_forkbbbbbb", &signing_key);
+        let c = secret_created(vec![genesis_id], "secret_forkcccccc", &signing_key);
+        graph.insert(a, STORE)?;
+        graph.insert(b, STORE)?;
+        graph.insert(c, STORE)?;
+
+        assert_projection_permutation_invariant(&graph, STORE)?;
+        let projection = project_vault(&graph, STORE)?;
+        assert_eq!(projection.live_secrets(&graph).len(), 3);
+        Ok(())
+    }
 }

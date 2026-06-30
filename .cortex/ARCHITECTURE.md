@@ -141,11 +141,11 @@ members:  members_key-encrypted catalog entries
 
 | Package | Tests |
 |---------|-------|
-| `nook-core` | `task rust:test` — unit + integration (`tests/vault_workflow.rs`) |
+| `nook-core` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-core/coverage-floor.json`); fast path `task rust:test` |
 | `nook-web` | Playwright e2e: `task web:test:e2e:pr` (PR), `task web:test:e2e` (main stub suite), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
 
-Domain logic changes **must** add or update Rust tests before merge.
+Domain logic changes **must** add or update Rust tests before merge. **Coverage must not decrease** — run `task rust:coverage:update` when it rises.
 
 ---
 
@@ -173,4 +173,4 @@ Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when de
 
 - **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
 - **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (wasm-pack in the image; chef-cached `/opt/nook/target`).
-- **Verify:** `task check` (fmt, clippy, `cargo nextest run -p nook-core --profile ci`, svelte-check, eslint, vitest, vite build).
+- **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build).

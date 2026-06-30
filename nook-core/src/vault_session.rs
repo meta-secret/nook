@@ -37,9 +37,7 @@ pub fn apply_user_records_to_armored_session(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        ApiKeySecret, SecretValue, VaultResult, generate_vault_keys, genesis_auth_record,
-    };
+    use crate::{ApiKeySecret, SecretValue, VaultResult, generate_vault_keys, genesis_auth_record};
 
     #[test]
     fn apply_user_records_preserves_meta_and_replaces_secrets() -> VaultResult<()> {

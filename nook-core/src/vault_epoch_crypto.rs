@@ -90,6 +90,7 @@ mod tests {
     use super::*;
     use crate::ApiKeySecret;
     use crate::SecretValue;
+    use crate::{DeviceIdentity, VaultResult, generate_vault_keys, genesis_members_records};
 
     #[test]
     fn reencrypt_produces_decryptable_new_epoch_secrets() {
@@ -115,5 +116,65 @@ mod tests {
         let new_crypto = VaultCrypto::new(new_key).unwrap();
         let plaintext = new_crypto.decrypt_value(&payloads[0].ciphertext).unwrap();
         assert!(plaintext.contains("hunter2"));
+    }
+
+    #[test]
+    fn members_checkpoint_hash_produces_hex_digest() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let new_keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let mut records = vec![genesis_auth_record(
+            &identity,
+            &keys.secrets_key,
+            &keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &identity,
+            &keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
+        let hash = members_checkpoint_hash_from_roster(
+            &records,
+            &keys.members_key,
+            &new_keys.members_key,
+        )?;
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        Ok(())
+    }
+
+    #[test]
+    fn rewrap_vault_meta_updates_auth_and_member_rows() -> VaultResult<()> {
+        let old_keys = generate_vault_keys()?;
+        let new_keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let mut records = vec![genesis_auth_record(
+            &identity,
+            &old_keys.secrets_key,
+            &old_keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &identity,
+            &old_keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
+        let auth_key = records[0].key.clone();
+        let mut armored: HashMap<_, _> = records
+            .iter()
+            .map(|record| (record.key.clone(), record.value.clone()))
+            .collect();
+        let old_auth_value = armored[&auth_key].clone();
+
+        rewrap_vault_meta_for_epoch(
+            &mut armored,
+            &identity,
+            &records,
+            &old_keys.members_key,
+            &new_keys,
+        )?;
+
+        assert_ne!(armored[&auth_key], old_auth_value);
+        assert!(armored.keys().any(|key| key.starts_with("member:")));
+        Ok(())
     }
 }

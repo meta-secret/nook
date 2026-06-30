@@ -104,7 +104,8 @@ pub use vault_event::{
     build_genesis_import_event,
 };
 pub use vault_event_builder::{
-    AppendEventInput, build_signed_event, encrypted_secret_from_armored, parents_from_heads,
+    AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,
+    parents_from_heads,
 };
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;

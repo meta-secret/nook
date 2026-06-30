@@ -414,4 +414,130 @@ mod tests {
         assert_eq!(graph.insert(child, store)?, EventInsertStatus::Duplicate);
         Ok(())
     }
+
+    #[test]
+    fn is_ancestor_is_transitive() -> VaultResult<()> {
+        let key = signing_key();
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let mut graph = EventGraph::new();
+        graph.insert(
+            build_genesis_import_event(
+                store,
+                actor,
+                &EventId::parse(epoch)?,
+                "hash",
+                vec![],
+                "2026-06-28T00:00:00Z",
+                &key,
+            )?,
+            store,
+        )?;
+        let head = graph.heads()[0].clone();
+        let child = signed_child(
+            vec![head.as_str()],
+            "secret_child00001",
+            &key,
+            store,
+            actor,
+            epoch,
+        );
+        let child_id = child.id()?;
+        graph.insert(child, store)?;
+
+        let grandchild = signed_child(
+            vec![child_id.as_str()],
+            "secret_grandchild1",
+            &key,
+            store,
+            actor,
+            epoch,
+        );
+        let grandchild_id = grandchild.id()?;
+        graph.insert(grandchild, store)?;
+
+        assert!(graph.is_ancestor(&head, &grandchild_id));
+        assert!(!graph.is_ancestor(&grandchild_id, &head));
+        Ok(())
+    }
+
+    #[test]
+    fn join_event_collapses_multiple_heads() -> VaultResult<()> {
+        let key = signing_key();
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let mut graph = EventGraph::new();
+        graph.insert(
+            build_genesis_import_event(
+                store,
+                actor,
+                &EventId::parse(epoch)?,
+                "hash",
+                vec![],
+                "2026-06-28T00:00:00Z",
+                &key,
+            )?,
+            store,
+        )?;
+        let head = graph.heads()[0].as_str().to_owned();
+        let a = signed_child(vec![&head], "secret_concurrenta", &key, store, actor, epoch);
+        let b = signed_child(vec![&head], "secret_concurrentb", &key, store, actor, epoch);
+        let a_id = a.id()?;
+        let b_id = b.id()?;
+        graph.insert(a, store)?;
+        graph.insert(b, store)?;
+        assert_eq!(graph.heads().len(), 2);
+
+        let join = signed_child(
+            vec![a_id.as_str(), b_id.as_str()],
+            "secret_joinmerge1",
+            &key,
+            store,
+            actor,
+            epoch,
+        );
+        graph.insert(join, store)?;
+        assert_eq!(graph.heads().len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn topological_order_is_deterministic_under_concurrency() -> VaultResult<()> {
+        let key = signing_key();
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let mut graph = EventGraph::new();
+        graph.insert(
+            build_genesis_import_event(
+                store,
+                actor,
+                &EventId::parse(epoch)?,
+                "hash",
+                vec![],
+                "2026-06-28T00:00:00Z",
+                &key,
+            )?,
+            store,
+        )?;
+        let head = graph.heads()[0].as_str().to_owned();
+        graph.insert(
+            signed_child(vec![&head], "secret_concurrenta", &key, store, actor, epoch),
+            store,
+        )?;
+        graph.insert(
+            signed_child(vec![&head], "secret_concurrentb", &key, store, actor, epoch),
+            store,
+        )?;
+
+        let first = graph.topological_order()?;
+        let second = graph.topological_order()?;
+        assert_eq!(first, second);
+        Ok(())
+    }
 }
