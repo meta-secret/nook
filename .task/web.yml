@@ -55,6 +55,8 @@ tasks:
 
   web:test:e2e:parallel:
     desc: Full stub Playwright e2e in Docker when wasm/dist already built (ci:main).
+    deps:
+      - setup
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:parallel }
@@ -126,6 +128,8 @@ tasks:
 
   web:e2e:restore-prod-dist:
     desc: Restore production dist after e2e (Docker-owned files cannot be rm'd on the host).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _web:e2e:restore-prod-dist }
