@@ -145,7 +145,7 @@ members:  members_key-encrypted catalog entries
 | `nook-web` | Playwright e2e: `task web:test:e2e:pr` (PR), `task web:test:e2e` (main stub suite), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
 
-Domain logic changes **must** add or update Rust tests before merge. **Coverage must not decrease** — run `task rust:coverage:update` when it rises.
+Domain logic changes **must** add or update Rust tests before merge. **Line coverage must stay at or above 90%** (`task rust:coverage:check`).
 
 ---
 

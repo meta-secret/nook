@@ -2,8 +2,8 @@
 # Measure nook-core line coverage (cargo llvm-cov + nextest) and enforce coverage-floor.json.
 #
 # Usage:
-#   rust-coverage-check.sh              # fail if below floor
-#   rust-coverage-check.sh --update-floor  # bump floor when coverage improved
+#   rust-coverage-check.sh                 # fail if below floor (default 90%)
+#   rust-coverage-check.sh --update-floor  # optional: rewrite floor to measured % (user-approved only)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -79,8 +79,8 @@ printf '==> measured line coverage: %s%% (floor: %s%%)\n' "$ACTUAL" "$FLOOR"
 if awk -v actual="$ACTUAL" -v floor="$FLOOR" 'BEGIN { exit (actual + 0 >= floor + 0) ? 0 : 1 }'; then
   echo "==> coverage OK"
 else
-  echo "error: nook-core line coverage ${ACTUAL}% is below floor ${FLOOR}%" >&2
-  echo "hint: add Rust tests for new/changed code, then run task rust:coverage:update if the floor should rise" >&2
+  echo "error: nook-core line coverage ${ACTUAL}% is below ${FLOOR}% threshold" >&2
+  echo "hint: add Rust unit/integration tests for new or uncovered code until coverage is at least ${FLOOR}%" >&2
   exit 1
 fi
 
@@ -94,7 +94,7 @@ if [[ "$UPDATE_FLOOR" -eq 1 ]]; then
   "package": "nook-core",
   "tool": "cargo llvm-cov nextest --profile ci",
   "updated": "${TODAY}",
-  "note": "Minimum line coverage for nook-core. Agents must not decrease this value. After raising coverage, run: task rust:coverage:update"
+  "note": "Minimum line coverage for nook-core. CI fails below this threshold. When under 90%, agents should add Rust tests in the same task."
 }
 EOF
     echo "==> updated $FLOOR_FILE to ${ROUNDED}%"

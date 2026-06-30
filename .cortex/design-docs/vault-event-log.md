@@ -140,7 +140,7 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 
-**Coverage:** `task rust:coverage:check` enforces `nook-core/coverage-floor.json`. Event-log modules (`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority for test additions when changing sync semantics.
+**Coverage:** `task rust:coverage:check` enforces a **90%** line floor (`nook-core/coverage-floor.json`). Event-log modules (`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority for test additions when changing sync semantics or when coverage drops below 90%.
 
 ## Related
 

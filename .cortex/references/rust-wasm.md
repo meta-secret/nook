@@ -63,6 +63,6 @@
 
 ## 6. Testing
 - Test vault formats, crypto, validation, and passwords in `nook-core`.
-- **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, floor in `nook-core/coverage-floor.json`). Part of `task check` / CI. **Never decrease line coverage.**
+- **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
 - **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.

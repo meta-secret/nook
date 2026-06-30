@@ -50,7 +50,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
 ### Testing pyramid
 * **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §8](design-docs/core-beliefs.md#8-unit-tests-own-domain-correctness-e2e-is-smoke-only).
-* **Line coverage floor:** `task rust:coverage:check` enforces `nook-core/coverage-floor.json`. Agents must not let measured coverage fall below the floor; run `task rust:coverage:update` when coverage rises.
+* **Line coverage threshold (90%):** `task rust:coverage:check` fails below `nook-core/coverage-floor.json` (90% lines). When coverage is under 90%, add Rust tests in the same task. Above 90%, do not chase marginal coverage.
 
 ### Grow `.cortex` dynamically
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.

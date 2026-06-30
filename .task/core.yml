@@ -74,7 +74,7 @@ tasks:
         vars: { TASK: _rust:coverage }
 
   rust:coverage:check:
-    desc: Enforce nook-core line coverage floor (must not decrease).
+    desc: Enforce nook-core 90% line coverage threshold.
     deps:
       - setup
     cmds:
@@ -82,7 +82,7 @@ tasks:
         vars: { TASK: _rust:coverage:check }
 
   rust:coverage:update:
-    desc: Raise nook-core/coverage-floor.json when measured coverage improved.
+    desc: Rewrite coverage-floor.json to measured % (user approval only).
     deps:
       - setup
     cmds:
@@ -166,12 +166,12 @@ tasks:
       - cargo llvm-cov nextest --profile ci -p nook-core --summary-only
 
   _rust:coverage:check:
-    desc: Run nook-core tests and enforce line coverage floor.
+    desc: Run nook-core tests and enforce 90% line coverage threshold.
     cmds:
       - bash .github/scripts/rust-coverage-check.sh
 
   _rust:coverage:update:
-    desc: Bump coverage-floor.json when measured line coverage increased.
+    desc: Rewrite coverage-floor.json to measured line coverage (optional).
     cmds:
       - bash .github/scripts/rust-coverage-check.sh --update-floor
 

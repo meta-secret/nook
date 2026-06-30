@@ -62,24 +62,24 @@ This document defines the strict development standards, architectural boundaries
 
 When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
 
-### Line coverage floor (enforced)
+### Line coverage threshold (90%)
 
-`nook-core` line coverage is measured with **`cargo llvm-cov nextest`** and enforced against a committed floor:
+`nook-core` line coverage is measured with **`cargo llvm-cov nextest`** and checked against a committed **90%** floor:
 
 | Artifact | Purpose |
 |----------|---------|
-| `nook-core/coverage-floor.json` | Minimum **line** coverage % — **must never decrease** |
+| `nook-core/coverage-floor.json` | Minimum **line** coverage % (currently **90**) |
 | `.github/scripts/rust-coverage-check.sh` | Runs tests + compares measured vs floor |
 | `task rust:coverage:check` | CI/local gate (part of `task check`, `task ci:pr`) |
-| `task rust:coverage` | Report only (no floor check) |
-| `task rust:coverage:update` | Bump floor after coverage **increases** |
+| `task rust:coverage` | Report only (no threshold check) |
+| `task rust:coverage:update` | Optional — rewrite floor file to measured % (user approval only) |
 
 **Agent rules:**
 
-1. Run `task rust:coverage:check` (or `task check`) before every push — a coverage drop **fails the build**.
-2. When adding code, add tests in the same change so coverage stays at or above the floor.
-3. When coverage **rises**, run `task rust:coverage:update` and commit the updated `coverage-floor.json` in the same PR.
-4. **Never** lower `lines_percent` in `coverage-floor.json` without explicit user approval.
+1. Run `task rust:coverage:check` (or `task check`) before push — coverage **below 90% fails the build**.
+2. When measured coverage is **under 90%**, **add Rust tests** in the same task before finishing (prioritize new/changed domain code).
+3. At or above 90%, do **not** chase marginal line coverage — focus tests on behavior and invariants instead.
+4. Change `lines_percent` in `coverage-floor.json` only with explicit user approval.
 
 Fast iteration without coverage instrumentation: `task rust:test` (nextest only).
 
