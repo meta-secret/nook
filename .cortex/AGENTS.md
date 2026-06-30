@@ -41,7 +41,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local checks → PR → monitor → merge). Follow for every implementation task.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → minimum local checks → PR → monitor → full local loop on failure → merge). Follow for every implementation task.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).

@@ -128,11 +128,11 @@ PR GitHub Actions runs `task ci:pr:publish` (toolchain build, verify, web build,
 
 **Agent efficiency rule:**
 
-1. **Before every push** — at least `task check` (format check, lint, unit tests, build).
-2. **Before opening a PR** — `task ci:pr` (matches PR gates including e2e-pr).
-3. **After any remote CI failure** — `task ci:pr` before the next push; do not retry remote CI hoping for a different result.
+1. **Before first push / opening a PR** — `task check` (format check, lint, unit tests, build). Do not block on `task ci:pr`; remote CI is the first full gate.
+2. **After any remote CI failure** — run `task ci:pr` locally, fix, and re-run until green before the next push. Do not retry remote CI hoping for a different result.
+3. **Optional before first push** — `task ci:pr` for high-risk web changes (vault sync, login/unlock, multi-step flows).
 
-Local `task ci:pr` completes in roughly **3–4 minutes** on a warm toolchain image and avoids repeated remote failures for the same trivial issue. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push).
+Local `task ci:pr` completes in roughly **3–4 minutes** on a warm toolchain image — faster than a failed 5+ minute remote cycle. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [coding-bro.md](coding-bro.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
