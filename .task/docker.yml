@@ -24,7 +24,10 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - >-
-        {{.DOCKER}} run --rm
+        sh -c 'IMG="${DOCKER_IMAGE:-}";
+        if [ -z "$IMG" ] && [ -f .nook/docker-image ]; then IMG="$(tr -d "\n" < .nook/docker-image)"; fi;
+        if [ -z "$IMG" ]; then IMG="nook-build:local"; fi;
+        exec {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
@@ -45,8 +48,8 @@ tasks:
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace
-        {{.DOCKER_IMAGE}}
-        task {{.TASK}}
+        "$IMG"
+        task {{.TASK}}'
 
   docker:e2e:run:
     desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
@@ -56,7 +59,10 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - >-
-        {{.DOCKER}} run --rm
+        sh -c 'IMG="${DOCKER_IMAGE:-}";
+        if [ -z "$IMG" ] && [ -f .nook/docker-image ]; then IMG="$(tr -d "\n" < .nook/docker-image)"; fi;
+        if [ -z "$IMG" ]; then IMG="nook-build:local"; fi;
+        exec {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
@@ -73,19 +79,22 @@ tasks:
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace
-        {{.DOCKER_IMAGE}}
-        task {{.TASK}}
+        "$IMG"
+        task {{.TASK}}'
 
   docker:web:dev:
     internal: true
     cmds:
       - >-
-        {{.DOCKER}} run --rm
+        sh -c 'IMG="${DOCKER_IMAGE:-}";
+        if [ -z "$IMG" ] && [ -f .nook/docker-image ]; then IMG="$(tr -d "\n" < .nook/docker-image)"; fi;
+        if [ -z "$IMG" ]; then IMG="nook-build:local"; fi;
+        exec {{.DOCKER}} run --rm
         --platform linux/amd64
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace
-        {{.DOCKER_IMAGE}}
-        sh -c "cd nook-web && bun install && task _web:dev"
+        "$IMG"
+        sh -c "cd nook-web && bun install && task _web:dev"'
