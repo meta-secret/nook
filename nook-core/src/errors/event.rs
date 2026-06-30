@@ -93,4 +93,10 @@ pub enum EventError {
 
     #[error("expected import operation")]
     ExpectedImportOperation,
+
+    #[error("import event content hash does not match source vault")]
+    ImportContentHashMismatch,
+
+    #[error("import event secret ids do not match source vault")]
+    ImportSecretSetMismatch,
 }

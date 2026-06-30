@@ -50,6 +50,7 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
         || first_line.starts_with("%YAML")
         || first_line.starts_with("secrets:")
         || first_line.starts_with("store_id:")
+        || first_line.starts_with("schema_version:")
         || first_line.starts_with("vault_version:")
         || first_line.starts_with("auth:")
         || first_line.starts_with("joins:")
@@ -126,6 +127,9 @@ struct MembersYamlRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct StoredVaultYaml {
+    /// Explicit projection-cache schema — missing on load is treated as `1`.
+    #[serde(default = "default_vault_schema_version")]
+    schema_version: u32,
     /// Monotonic revision counter — incremented on every save.
     #[serde(default, skip_serializing_if = "vault_version_is_zero")]
     vault_version: u64,
@@ -242,6 +246,43 @@ fn vault_version_is_zero(version: &u64) -> bool {
     *version == 0
 }
 
+/// Maximum projection YAML schema this build reads and writes.
+pub const CURRENT_VAULT_SCHEMA_VERSION: u32 = 1;
+
+fn default_vault_schema_version() -> u32 {
+    1
+}
+
+fn ensure_supported_vault_schema(version: u32) -> VaultFormatResult<()> {
+    if version > CURRENT_VAULT_SCHEMA_VERSION {
+        return Err(VaultFormatError::UnsupportedSchemaVersion {
+            found: version,
+            max_supported: CURRENT_VAULT_SCHEMA_VERSION,
+        });
+    }
+    Ok(())
+}
+
+/// Schema version written on new projection caches.
+#[must_use]
+pub fn current_vault_schema_version() -> u32 {
+    CURRENT_VAULT_SCHEMA_VERSION
+}
+
+/// Cheap parse of top-level `schema_version` (missing → `1`).
+pub fn read_vault_schema_version(stored: &str) -> VaultFormatResult<u32> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(1);
+    }
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Ok(1);
+    }
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
+    Ok(vault.schema_version)
+}
+
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResult<VaultYamlBlob> {
     serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None, None)
 }
@@ -264,6 +305,7 @@ pub fn serialize_stored_yaml_with_unlock(
     vault_version: Option<u64>,
 ) -> VaultFormatResult<VaultYamlBlob> {
     let mut vault = partition_yaml_records(records);
+    vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
     vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.unlock = normalize_unlock_for_write(unlock);
@@ -367,6 +409,8 @@ pub fn deserialize_stored_yaml_with_unlock(
 
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(|_| VaultFormatError::YamlMissingSections)?;
+
+    ensure_supported_vault_schema(vault.schema_version)?;
 
     let unlock = resolve_unlock_with_legacy(&vault);
 
@@ -806,7 +850,9 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         )
         .unwrap();
         assert!(yaml.as_str().contains("store_id: store_SMypl8K0w9Y"));
+        assert!(yaml.as_str().contains("schema_version: 1"));
         assert!(yaml.as_str().contains("vault_version: 1"));
+        assert_eq!(read_vault_schema_version(yaml.as_str()).unwrap(), 1);
         assert_eq!(read_vault_version(yaml.as_str()).unwrap(), 1);
         assert_eq!(
             read_vault_store_id(yaml.as_str()).unwrap(),
@@ -827,6 +873,26 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             read_vault_store_id(backfilled.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
+    }
+
+    #[test]
+    fn legacy_yaml_without_schema_version_reads_as_one() {
+        let legacy = "unlock:\n  type: keys\nsecrets: []\n";
+        assert_eq!(read_vault_schema_version(legacy).unwrap(), 1);
+        deserialize_stored_yaml(legacy).unwrap();
+    }
+
+    #[test]
+    fn unsupported_schema_version_is_rejected() {
+        let future = "schema_version: 99\nunlock:\n  type: keys\nsecrets: []\n";
+        let err = deserialize_stored_yaml(future).unwrap_err();
+        assert!(matches!(
+            err,
+            VaultFormatError::UnsupportedSchemaVersion {
+                found: 99,
+                max_supported: 1
+            }
+        ));
     }
 
     #[test]
