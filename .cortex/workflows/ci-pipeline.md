@@ -147,7 +147,11 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
-## CI agent logging (`ci-fix` job)
+## CI agent (`ci-fix` job)
+
+The `ci-fix` job runs **`task setup`** (pull GHCR toolchain or bake) **before** `task ci-agent:fix`. Without this, parallel Docker tasks such as `ci:main:e2e` would default to `nook-build:local`, which does not exist on CI runners. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` writes the resolved ref to `.nook/docker-image`.
+
+### Logging
 
 The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** lines so GitHub Actions logs are easy to scan:
 

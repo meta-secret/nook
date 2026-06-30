@@ -46,6 +46,7 @@ tasks:
     desc: Full CI fix loop — agent, GitHub REST API (PR, checks, squash merge).
     deps:
       - ci-agent:prepare
+      - setup
     env:
       REPO_ROOT: '{{.ROOT_DIR}}'
       VITE_BASE: '{{.VITE_BASE}}'

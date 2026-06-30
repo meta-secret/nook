@@ -8,6 +8,10 @@ You are fixing a failed **main** branch CI run for the Nook monorepo.
 
 Read `.cortex/AGENTS.md` before making changes.
 
+## CI toolchain (Docker)
+
+The job runs `task setup` before you start. CI uses the GHCR toolchain image (`NOOK_ENV=ci`); image ref is in `.nook/docker-image` — **not** `nook-build:local`. All `task` Docker commands read that ref automatically.
+
 ## Steps
 
 1. Inspect the failure:

@@ -103,6 +103,11 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Resolve toolchain image
+        run: task setup
+        env:
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
       - name: Run ci-fix
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
