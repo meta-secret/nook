@@ -313,4 +313,26 @@ mod tests {
         let id_b = body.event_id().unwrap();
         assert_ne!(id_a, id_b);
     }
+
+    #[test]
+    fn validate_envelope_rejects_wrong_store() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
+        let event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11").unwrap(),
+            &AuthKeyId::parse("key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                .unwrap(),
+            &epoch,
+            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
+            vec![],
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            &signing_key,
+        )
+        .unwrap();
+        let wrong_store = StoreId::parse("store_otherid0001").unwrap();
+        assert!(event.validate_envelope(&wrong_store).is_err());
+    }
 }

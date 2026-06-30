@@ -261,4 +261,22 @@ mod tests {
         let sig = sign_body(body, &signing_key);
         verify_body_signature(body, &sig, &verifying_key).unwrap();
     }
+
+    #[test]
+    fn event_id_and_signature_serde_roundtrip() {
+        let id = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
+        let roundtripped: EventId =
+            serde_json::from_str(&serde_json::to_string(&id).unwrap()).unwrap();
+        assert_eq!(roundtripped, id);
+
+        let signing_key = ed25519_dalek::SigningKey::generate(&mut rand_core::OsRng);
+        let sig = sign_body(b"body", &signing_key);
+        let sig_back: Ed25519Signature =
+            serde_json::from_str(&serde_json::to_string(&sig).unwrap()).unwrap();
+        assert_eq!(sig_back, sig);
+        assert!(Ed25519Signature::parse("bad-signature").is_err());
+    }
 }

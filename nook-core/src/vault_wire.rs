@@ -561,4 +561,59 @@ mod tests {
         let session: SessionJsonl = serde_json::from_str("\"{}\"").unwrap();
         assert_eq!(session.as_str(), "{}");
     }
+
+    #[test]
+    fn sha256_hex_parse_and_serde() {
+        let hex = Sha256Hex::from_trusted("deadbeef".repeat(8));
+        assert_eq!(Sha256Hex::parse(hex.as_str()).unwrap(), hex);
+        assert!(Sha256Hex::parse("short").is_err());
+        let roundtripped: Sha256Hex =
+            serde_json::from_str(&serde_json::to_string(&hex).unwrap()).unwrap();
+        assert_eq!(roundtripped, hex);
+    }
+
+    #[test]
+    fn device_signing_public_key_allows_empty_or_hex() {
+        assert!(DeviceSigningPublicKey::parse("").unwrap().is_empty());
+        let pk = DeviceSigningPublicKey::from_trusted("ab".repeat(32));
+        assert_eq!(DeviceSigningPublicKey::parse(pk.as_str()).unwrap(), pk);
+        assert!(DeviceSigningPublicKey::parse("not-hex").is_err());
+        let roundtripped: DeviceSigningPublicKey =
+            serde_json::from_str(&serde_json::to_string(&pk).unwrap()).unwrap();
+        assert_eq!(roundtripped, pk);
+    }
+
+    #[test]
+    fn iso_timestamp_parse_and_serde() {
+        let ts = IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned());
+        assert_eq!(IsoTimestamp::parse(ts.as_str()).unwrap(), ts);
+        assert!(IsoTimestamp::parse("").is_err());
+        assert!(IsoTimestamp::parse("not-a-timestamp").is_err());
+        let roundtripped: IsoTimestamp =
+            serde_json::from_str(&serde_json::to_string(&ts).unwrap()).unwrap();
+        assert_eq!(roundtripped, ts);
+    }
+
+    #[test]
+    fn password_entry_id_requires_compact_token() {
+        let id = PasswordEntryId::parse("pwdentry001").unwrap();
+        assert_eq!(PasswordEntryId::parse(id.as_str()).unwrap(), id);
+        assert!(PasswordEntryId::parse("").is_err());
+        assert!(PasswordEntryId::parse("too-long-token-value").is_err());
+        let roundtripped: PasswordEntryId =
+            serde_json::from_str(&serde_json::to_string(&id).unwrap()).unwrap();
+        assert_eq!(roundtripped, id);
+    }
+
+    #[test]
+    fn member_label_and_opaque_ciphertext_serde() {
+        let label = MemberLabel::from_trusted("phone".to_owned());
+        let opaque = OpaqueCiphertext::from_trusted("cipher".to_owned());
+        let label_back: MemberLabel = serde_json::from_str(&serde_json::to_string(&label).unwrap())
+            .unwrap();
+        let opaque_back: OpaqueCiphertext =
+            serde_json::from_str(&serde_json::to_string(&opaque).unwrap()).unwrap();
+        assert_eq!(label_back.as_str(), "phone");
+        assert_eq!(opaque_back.as_str(), "cipher");
+    }
 }
