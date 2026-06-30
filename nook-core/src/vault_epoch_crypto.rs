@@ -1,10 +1,15 @@
 //! Key-epoch rotation: fresh `secrets_key` / `members_key` for append-only security events.
 
-use crate::errors::{VaultEpochError, VaultEpochResult};
-use crate::multi_device::VaultKeys;
+use crate::errors::{EventError, VaultEpochError, VaultEpochResult, VaultResult};
+use crate::multi_device::{DeviceIdentity, VaultKeys};
 use crate::secret_types::StoredSecretRecord;
+use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
+use crate::{
+    build_members_records, genesis_auth_record, is_auth_stored_record, resolve_member_roster,
+};
+use std::collections::HashMap;
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub fn reencrypt_user_secrets_for_epoch(
@@ -41,6 +46,43 @@ pub fn rotate_vault_keys_with_secrets(
     let secrets =
         reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
     Ok((new_keys, secrets))
+}
+
+/// Hash of member roster records after re-encrypting under a new `members_key`.
+pub fn members_checkpoint_hash_from_roster(
+    records: &[StoredSecretRecord],
+    old_members_key: &str,
+    new_members_key: &str,
+) -> VaultResult<String> {
+    let roster = resolve_member_roster(records, old_members_key)?;
+    let member_records = build_members_records(&roster, new_members_key)?;
+    let json =
+        serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
+    Ok(crate::sha256_hex(json.as_bytes()))
+}
+
+/// Replace auth + member meta rows in an armored cache after epoch rotation.
+#[allow(clippy::implicit_hasher)]
+pub fn rewrap_vault_meta_for_epoch(
+    armored: &mut HashMap<String, String>,
+    identity: &DeviceIdentity,
+    records_snapshot: &[StoredSecretRecord],
+    old_members_key: &str,
+    new_keys: &VaultKeys,
+) -> VaultResult<()> {
+    let auth = genesis_auth_record(identity, &new_keys.secrets_key, &new_keys.members_key)?;
+    armored.retain(|key, value| {
+        !is_auth_stored_record(&StoredSecretRecord {
+            key: key.clone(),
+            secret_type: None,
+            value: value.clone(),
+        })
+    });
+    armored.insert(auth.key, auth.value);
+    let roster = resolve_member_roster(records_snapshot, old_members_key)?;
+    let member_records = build_members_records(&roster, &new_keys.members_key)?;
+    apply_member_records(armored, &member_records);
+    Ok(())
 }
 
 #[cfg(test)]

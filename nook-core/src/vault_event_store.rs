@@ -120,6 +120,21 @@ pub fn union_remote_events(
     Ok(imported)
 }
 
+/// Set-union remote events and return updated causal head ids.
+pub fn union_remote_events_and_heads(
+    local: &mut LocalEventStore,
+    remote_events: &[(EventId, Vec<u8>)],
+    store_id: &str,
+) -> VaultResult<Vec<String>> {
+    union_remote_events(local, remote_events, store_id)?;
+    let graph = local.load_graph(store_id)?;
+    Ok(graph
+        .heads()
+        .into_iter()
+        .map(|id| id.as_str().to_owned())
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +232,33 @@ mod tests {
         let (_, second) = local.append_event(&genesis, store)?;
         assert_eq!(first, EventInsertStatus::Applied);
         assert_eq!(second, EventInsertStatus::Duplicate);
+        Ok(())
+    }
+
+    #[test]
+    fn union_remote_events_and_heads_returns_causal_heads() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let store = "store_testtoken1";
+        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?;
+        let genesis = build_genesis_import_event(
+            store,
+            actor,
+            &epoch,
+            "hash",
+            vec![],
+            "2026-06-28T00:00:00Z",
+            &signing_key,
+        )?;
+        let id = genesis.id()?;
+        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+
+        let mut local = LocalEventStore::new();
+        let heads = union_remote_events_and_heads(&mut local, &[(id.clone(), bytes)], store)?;
+        assert_eq!(heads.len(), 1);
+        assert_eq!(heads[0], id.as_str());
         Ok(())
     }
 }

@@ -29,6 +29,7 @@ mod vault_format;
 mod vault_ids;
 mod vault_import;
 mod vault_projection;
+mod vault_session;
 mod vault_session_cache;
 mod vault_signing;
 mod vault_sync;
@@ -81,9 +82,9 @@ pub use session::{ReplaceSecretInput, replace_secret};
 pub use validation::{
     DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
-    parse_drive_storage_ref, validate_connect, validate_drive_vault_file_name, validate_github_pat,
-    validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
-    validate_storage_mode,
+    format_sync_provider_cache_ref, parse_drive_storage_ref, validate_connect,
+    validate_drive_vault_file_name, validate_github_pat, validate_github_repo_name,
+    validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };
 pub use vault_connect::{
     LoadedVault, access_status_for_vault_content, apply_member_records,
@@ -94,7 +95,10 @@ pub use vault_epoch::{
     EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
     operation_starts_epoch,
 };
-pub use vault_epoch_crypto::{reencrypt_user_secrets_for_epoch, rotate_vault_keys_with_secrets};
+pub use vault_epoch_crypto::{
+    members_checkpoint_hash_from_roster, reencrypt_user_secrets_for_epoch,
+    rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
+};
 pub use vault_event::{
     EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
     build_genesis_import_event,
@@ -104,7 +108,7 @@ pub use vault_event_builder::{
 };
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
-pub use vault_event_store::{LocalEventStore, union_remote_events};
+pub use vault_event_store::{LocalEventStore, union_remote_events, union_remote_events_and_heads};
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
     read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
@@ -124,6 +128,7 @@ pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,
 };
+pub use vault_session::apply_user_records_to_armored_session;
 pub use vault_session_cache::hydrate_keys_from_projection_yaml;
 pub use vault_signing::SigningIdentity;
 pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};

@@ -52,6 +52,17 @@ impl std::fmt::Display for StorageMode {
     }
 }
 
+/// Stable provider-scoped key for local vault caches and event-log outboxes.
+#[must_use]
+pub fn format_sync_provider_cache_ref(mode: StorageMode, remote_ref: &str, path: &str) -> String {
+    match mode {
+        StorageMode::Local => "local".to_owned(),
+        StorageMode::Github => format!("github:{remote_ref}:{path}"),
+        StorageMode::GoogleDrive => format!("drive:{remote_ref}"),
+        StorageMode::ICloud => format!("icloud:{remote_ref}"),
+    }
+}
+
 /// String tags retained for places where a `&'static str` is more
 /// convenient than the enum (test fixtures, JSON keys). New code should
 /// prefer `StorageMode::Local.as_str()` / `StorageMode::Github.as_str()`.
@@ -409,5 +420,21 @@ mod tests {
             data: value("find-me"),
         }];
         assert!(filter_secrets(&records, "find-me").is_empty());
+    }
+
+    #[test]
+    fn sync_provider_cache_ref_is_stable() {
+        assert_eq!(
+            format_sync_provider_cache_ref(StorageMode::Local, "", ""),
+            "local"
+        );
+        assert_eq!(
+            format_sync_provider_cache_ref(StorageMode::Github, "user/repo", "nook-vault.yaml"),
+            "github:user/repo:nook-vault.yaml"
+        );
+        assert_eq!(
+            format_sync_provider_cache_ref(StorageMode::GoogleDrive, "file-id", ""),
+            "drive:file-id"
+        );
     }
 }

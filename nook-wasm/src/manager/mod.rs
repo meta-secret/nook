@@ -294,14 +294,11 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn local_cache_ref(&self) -> String {
-        match self.storage_mode {
-            nook_core::StorageMode::Local => "local".to_owned(),
-            nook_core::StorageMode::Github => {
-                format!("github:{}:{}", self.github_repo, self.github_path)
-            }
-            nook_core::StorageMode::GoogleDrive => format!("drive:{}", self.github_repo),
-            nook_core::StorageMode::ICloud => format!("icloud:{}", self.github_repo),
-        }
+        nook_core::format_sync_provider_cache_ref(
+            self.storage_mode,
+            &self.github_repo,
+            &self.github_path,
+        )
     }
 
     pub(in crate::manager) fn device_identity(
@@ -323,16 +320,14 @@ impl NookVaultManager {
     /// race with our own write and return the pre-write YAML, which
     /// would clobber a freshly-set password envelope back to keys mode.
     pub(in crate::manager) fn capture_vault_unlock(&mut self, content: &str) {
-        if let Ok(unlock) = nook_core::read_vault_unlock(content) {
+        if let Ok((unlock, password_entries, store_id, version)) =
+            nook_core::capture_vault_unlock_from_content(content)
+        {
             self.unlock = unlock;
-        }
-        if let Ok(entries) = nook_core::read_vault_password_entries(content) {
-            self.password_entries = entries;
-        }
-        if let Ok(Some(store_id)) = nook_core::read_vault_store_id(content) {
-            self.store_id = store_id;
-        }
-        if let Ok(version) = nook_core::read_vault_version(content) {
+            self.password_entries = password_entries;
+            if let Some(id) = store_id {
+                self.store_id = id;
+            }
             self.vault_version = version;
         }
     }
