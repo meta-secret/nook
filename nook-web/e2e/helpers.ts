@@ -124,6 +124,7 @@ export async function createLocalVaultOnLogin(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await disableVaultIdleLock(page)
 }
 
 export async function connectLocalVault(page: Page) {
@@ -459,10 +460,34 @@ export async function assertNoVaultError(page: Page) {
 
 /** Click the vault sync refresh control when available. */
 export async function triggerVaultSyncRefresh(page: Page) {
+  await waitForVaultOperationsIdle(page)
   const refresh = page.getByTestId('vault-sync-refresh-btn')
   await expect(refresh).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect(refresh).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+  await expect
+    .poll(
+      async () => {
+        if (!(await refresh.isVisible())) return false
+        return refresh.isEnabled()
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
   await refresh.click()
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const vault = (
+            window as Window & {
+              __nookVault?: { isSyncing?: boolean }
+            }
+          ).__nookVault
+          return vault ? Boolean(vault.isSyncing) : false
+        }),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await waitForVaultOperationsIdle(page)
 }
 
 /** Wait until sync target has the expected vault state (stub or live GitHub). */
@@ -527,6 +552,151 @@ export async function disableVaultIdleLock(page: Page) {
     ).__nookVault
     vault?.stopIdleSessionTracking?.()
   })
+}
+
+/** Stop periodic background sync so e2e can wait for in-flight work to finish. */
+export async function pauseVaultBackgroundSync(page: Page) {
+  await page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: { stopVaultSync?: () => void }
+      }
+    ).__nookVault
+    vault?.stopVaultSync?.()
+  })
+}
+
+/** Stop background sync timers and clear stuck sync flags (keeps idle lock active). */
+export async function forceVaultSyncQuiescentForE2e(page: Page) {
+  await page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          stopVaultSync?: () => void
+          isSyncing?: boolean
+          isFanOutSyncing?: boolean
+          syncingProviderId?: string | null
+          isPasswordBusy?: boolean
+        }
+      }
+    ).__nookVault
+    if (!vault) return
+    vault.stopVaultSync?.()
+    vault.isSyncing = false
+    vault.isFanOutSyncing = false
+    vault.syncingProviderId = null
+    vault.isPasswordBusy = false
+  })
+}
+
+/** Stop timers and clear stuck sync flags so wasm storage ops can proceed in e2e. */
+export async function forceVaultQuiescentForE2e(page: Page) {
+  await page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          stopVaultSync?: () => void
+          stopIdleSessionTracking?: () => void
+          isSyncing?: boolean
+          isFanOutSyncing?: boolean
+          syncingProviderId?: string | null
+          isPasswordBusy?: boolean
+        }
+      }
+    ).__nookVault
+    if (!vault) return
+    vault.stopVaultSync?.()
+    vault.stopIdleSessionTracking?.()
+    vault.isSyncing = false
+    vault.isFanOutSyncing = false
+    vault.syncingProviderId = null
+    vault.isPasswordBusy = false
+  })
+}
+
+/** Wait for the wasm storage queue to drain; reset if it stalls (e2e dev build). */
+export async function waitForStorageChainIdle(
+  page: Page,
+  timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
+) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const drained = await page.evaluate(async () => {
+      const vault = (
+        window as Window & {
+          __nookVault?: {
+            waitForStorageChain?: () => Promise<void>
+          }
+        }
+      ).__nookVault
+      if (!vault?.waitForStorageChain) return true
+      return Promise.race([
+        vault.waitForStorageChain().then(() => true),
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(false), 500)
+        }),
+      ])
+    })
+    if (drained) return
+  }
+  await page.evaluate(() => {
+    ;(
+      window as Window & {
+        __nookVault?: { resetStorageChain?: () => void }
+      }
+    ).__nookVault?.resetStorageChain?.()
+  })
+}
+
+/** Wait until unlock/save/password wasm work has finished (e2e dev build). */
+export async function waitForVaultOperationsIdle(
+  page: Page,
+  timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
+) {
+  await pauseVaultBackgroundSync(page)
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                isVerifying?: boolean
+                isSaving?: boolean
+                isPasswordBusy?: boolean
+              }
+            }
+          ).__nookVault
+          if (!vault) return true
+          return !vault.isVerifying && !vault.isSaving && !vault.isPasswordBusy
+        }),
+      { timeout: timeoutMs },
+    )
+    .toBe(true)
+  await waitForStorageChainIdle(page, timeoutMs)
+  await forceVaultSyncQuiescentForE2e(page)
+}
+
+/** Wait until background vault sync / fan-out is idle (e2e dev build only). */
+export async function waitForVaultSyncIdle(
+  page: Page,
+  timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
+) {
+  await pauseVaultBackgroundSync(page)
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const vault = (
+            window as Window & {
+              __nookVault?: { isSyncActivityVisible?: boolean }
+            }
+          ).__nookVault
+          return vault ? !vault.isSyncActivityVisible : true
+        }),
+      { timeout: timeoutMs },
+    )
+    .toBe(true)
 }
 
 export function uniqueSecretKey(prefix: string) {
@@ -936,6 +1106,9 @@ export async function submitOnboardEnrollmentCode(
   page: Page,
   password: string,
 ) {
+  await assertVaultReady(page)
+  await waitForVaultOperationsIdle(page)
+  await forceVaultQuiescentForE2e(page)
   await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -958,13 +1131,26 @@ export async function submitOnboardEnrollmentCode(
   return codeArea
 }
 
+/** Open the onboard-device settings view with sync timers paused for e2e. */
+export async function openOnboardDevicePanel(page: Page) {
+  await assertVaultReady(page)
+  await waitForVaultOperationsIdle(page)
+  await forceVaultQuiescentForE2e(page)
+  await page.getByTestId('vault-onboard-tab').click()
+  await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectGithubVault(page: Page) {
   await unlockGithubVault(page)
 }
 
 export async function assertVaultReady(page: Page) {
-  await expect(page.getByTestId('vault-panel')).toBeVisible()
+  await expect(page.getByTestId('authenticated-shell')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 /** Start a GitHub connect from the login gate (saved provider or fresh setup). */
@@ -1474,6 +1660,32 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           })
           return
         }
+        if (url.includes(`/repos/${fullRepo}/contents/nook-log/`)) {
+          if (method === 'PUT') {
+            sha = `e2e-stub-sha-${Date.now()}`
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({ content: { sha } }),
+            })
+            return
+          }
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          })
+          return
+        }
+        if (method === 'PUT' && url.includes(`/repos/${fullRepo}/contents/`)) {
+          sha = `e2e-stub-sha-${Date.now()}`
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({ content: { sha } }),
+          })
+          return
+        }
         await route.fulfill({ status: 404, body: '{}' })
       })
     },
@@ -1572,11 +1784,30 @@ export async function reloadUnlockWithGithubSync(
     }>
   },
 ) {
-  await seedExtraGithubProviders(
-    page,
-    opts?.providers ?? [E2E_GITHUB_ONBOARD_PROVIDER],
-  )
+  const providers = opts?.providers ?? [E2E_GITHUB_ONBOARD_PROVIDER]
+  await seedExtraGithubProviders(page, providers)
+
+  const vaultYaml = await readLocalVaultYamlFromIdb(page)
+  if (vaultYaml.trim()) {
+    for (const provider of providers) {
+      await stubGithubVaultForLocalE2e(page, {
+        repoName: provider.githubRepo,
+        vaultYaml,
+      })
+    }
+  }
+
   await page.reload()
+
+  if (vaultYaml.trim()) {
+    for (const provider of providers) {
+      await stubGithubVaultForLocalE2e(page, {
+        repoName: provider.githubRepo,
+        vaultYaml,
+      })
+    }
+  }
+
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -1589,6 +1820,9 @@ export async function reloadUnlockWithGithubSync(
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await disableVaultIdleLock(page)
+  await waitForVaultOperationsIdle(page)
+  await forceVaultQuiescentForE2e(page)
   await waitForLoadedSyncProviders(page)
 }
 

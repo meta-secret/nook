@@ -3,8 +3,10 @@ import {
   clearBrowserVault,
   connectLocalVaultLegacy,
   disableLoginAutoUnlock,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
+  waitForVaultOperationsIdle,
 } from './helpers'
 
 /** Matches playwright.config.ts — fast idle lock for e2e only. */
@@ -26,10 +28,11 @@ test.describe('idle session auto-lock', () => {
     })
     await unlockVaultOnLogin(page)
     await expect(page.getByTestId('authenticated-shell')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await waitForVaultOperationsIdle(page)
 
-    await page.waitForTimeout(IDLE_LOCK_MS + 500)
+    await page.waitForTimeout(IDLE_LOCK_MS + 1500)
 
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -37,9 +40,12 @@ test.describe('idle session auto-lock', () => {
     await expect(page.getByTestId('login-session-expired')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
 
+    await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('authenticated-shell')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('login-session-expired')).not.toBeVisible()
   })

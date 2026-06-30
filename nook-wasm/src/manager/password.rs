@@ -134,20 +134,41 @@ impl NookVaultManager {
             secrets_key: self.secrets_key.clone(),
             members_key: self.members_key.clone(),
         };
-        let target = self
+        {
+            let target = self
+                .password_entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id)
+                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+            target.envelope = nook_core::attach_password_envelope(&keys, &password)?;
+        }
+        let envelope_ciphertext = self
             .password_entries
-            .iter_mut()
+            .iter()
             .find(|entry| entry.id == entry_id)
-            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-        target.envelope = nook_core::attach_password_envelope(&keys, &password)?;
-        let envelope_ciphertext = serde_json::to_string(&target.envelope)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
+            .map(|entry| {
+                serde_json::to_string(&entry.envelope)
+                    .map_err(|e| NookError::Serialization(e.to_string()))
+            })
+            .transpose()?
+            .unwrap_or_default();
         if self.event_log_mode || self.ensure_event_log_mode().await? {
             self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
                 entry_id: entry_id.clone(),
                 envelope_ciphertext,
             })
             .await?;
+            let rotated_keys = nook_core::VaultKeys {
+                secrets_key: self.secrets_key.clone(),
+                members_key: self.members_key.clone(),
+            };
+            let target = self
+                .password_entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id)
+                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+            target.envelope = nook_core::attach_password_envelope(&rotated_keys, &password)?;
+            self.persist_vault_change(vec![]).await?;
         } else {
             self.save_current_db().await?;
         }

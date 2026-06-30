@@ -59,6 +59,22 @@ async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
     }
 }
 
+async fn store_get_string(store: &rexie::Store, key: &str) -> Result<Option<String>, NookError> {
+    let js_key = serde_wasm_bindgen::to_value(key)
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+    let value = store
+        .get(js_key)
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?;
+    match value {
+        None => Ok(None),
+        Some(val) if val.is_undefined() || val.is_null() => Ok(None),
+        Some(val) => serde_wasm_bindgen::from_value(val)
+            .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))
+            .map(Some),
+    }
+}
+
 async fn vault_put(key: &str, value: &str) -> Result<(), NookError> {
     let rexie = rexie::Rexie::builder("nook_db")
         .version(1)
@@ -148,8 +164,8 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
     let prefix = format!("event:{store_id}:");
     let mut local = LocalEventStore::new();
 
-    // Rexie doesn't support prefix scan cleanly — iterate all keys via get on known ids from heads + stored list key
-    if let Some(list_json) = vault_get(&format!("event_index:{store_id}")).await? {
+    // Rexie doesn't support prefix scan cleanly — iterate known ids from the index key.
+    if let Some(list_json) = store_get_string(&store, &format!("event_index:{store_id}")).await? {
         let ids: Vec<String> = serde_json::from_str(&list_json)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         for raw_id in ids {
@@ -231,7 +247,7 @@ pub(crate) async fn load_outbox(provider_id: &str) -> Result<Vec<(String, Vec<u8
 
     let prefix = format!("outbox:{provider_id}:");
     let index_key = format!("outbox_index:{provider_id}");
-    let entries = match vault_get(&index_key).await? {
+    let entries = match store_get_string(&store, &index_key).await? {
         None => Vec::new(),
         Some(json) => serde_json::from_str::<Vec<String>>(&json)
             .map_err(|e| NookError::Serialization(e.to_string()))?,

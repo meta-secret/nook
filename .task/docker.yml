@@ -28,7 +28,7 @@ tasks:
         -e VITE_BASE="{{.VITE_BASE}}"
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
         -e NOOK_GITHUB_PAT
-        -e CI
+        -e CI=1
         -e NOOK_GITHUB_E2E_REPO
         -e NOOK_GITHUB_POLL_MS
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS
@@ -60,7 +60,7 @@ tasks:
         -e VITE_BASE="{{.VITE_BASE}}"
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
         -e NOOK_GITHUB_PAT
-        -e CI
+        -e CI=1
         -e NOOK_GITHUB_E2E_REPO
         -e NOOK_GITHUB_POLL_MS
         -e NOOK_GITHUB_SYNC_TIMEOUT_MS

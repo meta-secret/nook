@@ -17,8 +17,7 @@ use crate::storage::github_events::{
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultOperation, build_signed_event,
-    legacy_vault_to_import_event, project_vault, rotate_vault_keys_with_secrets,
-    union_remote_events,
+    legacy_vault_to_import_event, project_vault, union_remote_events,
 };
 
 fn iso_timestamp() -> String {
@@ -334,13 +333,31 @@ impl NookVaultManager {
         Ok(())
     }
 
-    fn members_checkpoint_hash(&self) -> Result<String, NookError> {
-        let records = self.stored_records_snapshot();
-        let roster = nook_core::resolve_member_roster(&records, &self.members_key)?;
-        let member_records = nook_core::build_members_records(&roster, &self.members_key)?;
-        let json = serde_json::to_string(&member_records)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        Ok(nook_core::sha256_hex(json.as_bytes()))
+    fn rewrap_device_meta_for_epoch(
+        &mut self,
+        records_snapshot: &[nook_core::StoredSecretRecord],
+        old_members_key: &str,
+        new_keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
+        let identity = self.device_identity()?;
+        let auth = nook_core::genesis_auth_record(
+            &identity,
+            &new_keys.secrets_key,
+            &new_keys.members_key,
+        )?;
+        self.stored_armored.retain(|key, value| {
+            !nook_core::is_auth_stored_record(&nook_core::StoredSecretRecord {
+                key: key.clone(),
+                secret_type: None,
+                value: value.clone(),
+            })
+        });
+        self.stored_armored.insert(auth.key.clone(), auth.value);
+
+        let roster = nook_core::resolve_member_roster(records_snapshot, old_members_key)?;
+        let member_records = nook_core::build_members_records(&roster, &new_keys.members_key)?;
+        crate::conversion::apply_member_records(&mut self.stored_armored, &member_records);
+        Ok(())
     }
 
     pub(in crate::manager) async fn rotate_security_epoch(
@@ -358,20 +375,30 @@ impl NookVaultManager {
         save_key_epoch(&self.store_id, &self.key_epoch).await?;
 
         let old_secrets_key = self.secrets_key.clone();
-        let user_records: Vec<nook_core::StoredSecretRecord> = self
-            .stored_records_snapshot()
-            .into_iter()
+        let old_members_key = self.members_key.clone();
+        let records_snapshot = self.stored_records_snapshot();
+        let user_records: Vec<nook_core::StoredSecretRecord> = records_snapshot
+            .iter()
             .filter(|record| !nook_core::is_vault_meta_record(record))
+            .cloned()
             .collect();
-        let (new_keys, secrets) = rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
+        let (new_keys, secrets) =
+            nook_core::rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
+        let members_checkpoint_hash = {
+            let roster = nook_core::resolve_member_roster(&records_snapshot, &old_members_key)?;
+            let member_records = nook_core::build_members_records(&roster, &new_keys.members_key)?;
+            let json = serde_json::to_string(&member_records)
+                .map_err(|e| NookError::Serialization(e.to_string()))?;
+            nook_core::sha256_hex(json.as_bytes())
+        };
         self.apply_vault_keys(&new_keys.secrets_key, &new_keys.members_key)?;
+        self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
         for payload in &secrets {
             self.stored_armored
                 .insert(payload.id.clone(), payload.ciphertext.clone());
             self.secret_types
                 .insert(payload.id.clone(), payload.secret_type);
         }
-        let members_checkpoint_hash = self.members_checkpoint_hash()?;
         self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
             secrets,
             members_checkpoint_hash,
