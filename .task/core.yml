@@ -163,7 +163,7 @@ tasks:
   _rust:coverage:
     desc: Print nook-core line coverage summary (no floor enforcement).
     cmds:
-      - cargo llvm-cov nextest --profile ci -p nook-core --summary-only
+      - cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only
 
   _rust:coverage:check:
     desc: Run nook-core tests and enforce 90% line coverage threshold.
