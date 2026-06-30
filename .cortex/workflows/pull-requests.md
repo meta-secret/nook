@@ -1,6 +1,6 @@
 # Pull Request Workflow
 
-Use this checklist for every change that lands on `main`. **AI agents must follow the full [agent pipeline](#agent-pipeline) below** — do not stop at push.
+Use this checklist for every change that lands on `main`. **AI agents must follow [coding-bro.md](coding-bro.md)** — the default implement-to-merge pipeline — and the detailed [agent pipeline](#agent-pipeline) below. Do not stop at push.
 
 ## ⛔ SQUASH MERGE ONLY
 
@@ -19,11 +19,12 @@ If you merge a PR for the user, **confirm squash** before completing the merge. 
 
 ## Agent pipeline
 
-End-to-end flow for autonomous agents working on a task:
+Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for autonomous agents working on a task:
 
 ```mermaid
 flowchart TD
-  A[Implement on branch] --> B[Local basic checks]
+  Z[0 Fetch origin/main] --> A[1 Branch + implement]
+  A --> B[2 Local basic checks]
   B --> C{Big / complex web change?}
   C -->|yes| D[Local e2e optional]
   C -->|no| E[Push + open PR]
@@ -37,9 +38,18 @@ flowchart TD
   J --> K[Done]
 ```
 
-### 1. Implement
+### 0. Fetch and branch
 
-Branch from `main` (never commit directly on `main`). Make the requested change.
+Fetch before branching so the feature branch starts from current `origin/main`:
+
+```bash
+git fetch origin main
+git checkout -b <branch-name> origin/main
+```
+
+Never commit directly on `main`.
+
+### 1. Implement
 
 ### 2. Local checks (before every push)
 
@@ -157,7 +167,9 @@ Rules:
 
 ## Standard flow (summary)
 
-1. Branch from `main`.
+See [coding-bro.md](coding-bro.md) for the numbered 0–9 checklist.
+
+1. Fetch `origin/main`; branch from it.
 2. Implement; run `task check` (or scoped subset) before every push.
 3. Run `task ci:pr` before opening the PR; run it again after any remote CI failure.
 4. Push; open PR with summary and test plan.

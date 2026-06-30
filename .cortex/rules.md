@@ -101,6 +101,7 @@ This document defines the strict development standards, architectural boundaries
 > Linear `main` history is a project requirement, not a preference.
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, local checks, push, open PR, monitor CI, fix loop, squash merge.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open a pull request.** After pushing a branch, create a PR with a summary and test plan; do not merge or push to `main` yourself unless the user explicitly asks.
 - **Squash merge when closing a PR.** When merging (yourself or via `gh`), use **Squash and merge** only:
