@@ -1,5 +1,6 @@
 import { chdir } from "node:process";
 
+import { exitCiAgent } from "./exit.js";
 import { runCiFix } from "./fix.js";
 import { loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
@@ -32,8 +33,12 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`::error::${message}`);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    exitCiAgent(0);
+  })
+  .catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`::error::${message}`);
+    exitCiAgent(1);
+  });
