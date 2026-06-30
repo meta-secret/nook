@@ -8,9 +8,14 @@
 use crate::SecretId;
 use crate::errors::{DatabaseError, DatabaseResult};
 use crate::multi_device;
-use crate::secret_types::{SecretRecord, SecretType, SecretValue, StoredSecretRecord};
+use crate::secret_types::{
+    SecretRecord, SecretType, SecretValue, StoredRecordPayload, StoredSecretRecord,
+};
 use crate::vault_crypto::VaultCrypto;
-use crate::vault_format::{self, VaultFormat, detect_stored_format};
+use crate::vault_format::{self, VaultFormat};
+use crate::vault_wire::{
+    SessionJsonl, StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml, SymmetricKey,
+};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -26,9 +31,9 @@ impl Database {
         }
     }
 
-    pub fn from_jsonl(jsonl: &str) -> DatabaseResult<Self> {
+    pub fn from_jsonl(jsonl: &SessionJsonl) -> DatabaseResult<Self> {
         let mut records = HashMap::new();
-        for line in jsonl.lines() {
+        for line in jsonl.as_str().lines() {
             let line = line.trim();
             if line.is_empty() {
                 continue;
@@ -40,29 +45,30 @@ impl Database {
         Ok(Self { records })
     }
 
-    pub fn from_stored(
-        stored: &str,
-        passphrase: &str,
-        format: VaultFormat,
-    ) -> DatabaseResult<Self> {
-        let stored_records = vault_format::deserialize_stored(stored, format)?;
+    pub fn from_stored(stored: &StoredVaultBlob, passphrase: &str) -> DatabaseResult<Self> {
+        let stored_records = vault_format::deserialize_stored(stored.as_str(), stored.format())?;
         Self::from_stored_records(&stored_records, passphrase)
     }
 
     pub fn from_stored_auto(stored: &str, passphrase: &str) -> DatabaseResult<Self> {
-        let format = detect_stored_format(stored)?;
-        Self::from_stored(stored, passphrase, format)
+        Self::from_stored(&StoredVaultBlob::parse_auto(stored)?, passphrase)
     }
 
-    pub fn from_stored_jsonl(stored_jsonl: &str, passphrase: &str) -> DatabaseResult<Self> {
-        Self::from_stored(stored_jsonl, passphrase, VaultFormat::Jsonl)
+    pub fn from_stored_jsonl(
+        stored_jsonl: &StoredVaultJsonl,
+        passphrase: &str,
+    ) -> DatabaseResult<Self> {
+        Self::from_stored(&StoredVaultBlob::Jsonl(stored_jsonl.clone()), passphrase)
     }
 
-    pub fn from_stored_yaml(stored_yaml: &str, passphrase: &str) -> DatabaseResult<Self> {
-        Self::from_stored(stored_yaml, passphrase, VaultFormat::Yaml)
+    pub fn from_stored_yaml(
+        stored_yaml: &StoredVaultYaml,
+        passphrase: &str,
+    ) -> DatabaseResult<Self> {
+        Self::from_stored(&StoredVaultBlob::Yaml(stored_yaml.clone()), passphrase)
     }
 
-    pub fn to_jsonl(&self) -> DatabaseResult<String> {
+    pub fn to_jsonl(&self) -> DatabaseResult<SessionJsonl> {
         let mut lines = Vec::new();
         let mut keys: Vec<&SecretId> = self.records.keys().collect();
         keys.sort();
@@ -71,20 +77,37 @@ impl Database {
             let line = serde_json::to_string(&record).map_err(DatabaseError::JsonlSerialize)?;
             lines.push(line);
         }
-        Ok(lines.join("\n"))
+        Ok(SessionJsonl::from_trusted(lines.join("\n")))
     }
 
-    pub fn to_stored(&self, passphrase: &str, format: VaultFormat) -> DatabaseResult<String> {
+    pub fn to_stored(
+        &self,
+        passphrase: &str,
+        format: VaultFormat,
+    ) -> DatabaseResult<StoredVaultBlob> {
         let stored_records = self.to_stored_records(passphrase)?;
-        Ok(vault_format::serialize_stored(&stored_records, format)?)
+        Ok(match format {
+            VaultFormat::Jsonl => StoredVaultBlob::Jsonl(StoredVaultJsonl::from_trusted(
+                vault_format::serialize_stored(&stored_records, format)?,
+            )),
+            VaultFormat::Yaml => StoredVaultBlob::Yaml(StoredVaultYaml::from_trusted(
+                vault_format::serialize_stored(&stored_records, format)?,
+            )),
+        })
     }
 
-    pub fn to_stored_jsonl(&self, passphrase: &str) -> DatabaseResult<String> {
-        self.to_stored(passphrase, VaultFormat::Jsonl)
+    pub fn to_stored_jsonl(&self, passphrase: &str) -> DatabaseResult<StoredVaultJsonl> {
+        match self.to_stored(passphrase, VaultFormat::Jsonl)? {
+            StoredVaultBlob::Jsonl(blob) => Ok(blob),
+            StoredVaultBlob::Yaml(_) => unreachable!(),
+        }
     }
 
-    pub fn to_stored_yaml(&self, passphrase: &str) -> DatabaseResult<String> {
-        self.to_stored(passphrase, VaultFormat::Yaml)
+    pub fn to_stored_yaml(&self, passphrase: &str) -> DatabaseResult<StoredVaultYaml> {
+        match self.to_stored(passphrase, VaultFormat::Yaml)? {
+            StoredVaultBlob::Yaml(blob) => Ok(blob),
+            StoredVaultBlob::Jsonl(_) => unreachable!(),
+        }
     }
 
     pub fn insert(&mut self, id: SecretId, data: SecretValue) {
@@ -109,9 +132,16 @@ impl Database {
         records
     }
 
-    fn from_stored_records(
+    pub fn from_stored_records(
         stored_records: &[StoredSecretRecord],
         passphrase: &str,
+    ) -> DatabaseResult<Self> {
+        Self::from_stored_records_with_key(stored_records, &SymmetricKey::parse(passphrase)?)
+    }
+
+    pub fn from_stored_records_with_key(
+        stored_records: &[StoredSecretRecord],
+        passphrase: &SymmetricKey,
     ) -> DatabaseResult<Self> {
         let crypto = VaultCrypto::new(passphrase)?;
         Self::from_stored_records_with_crypto(stored_records, &crypto)
@@ -127,8 +157,9 @@ impl Database {
             let secret_type = stored.secret_type.ok_or(DatabaseError::MissingSecretType {
                 key: stored.key.clone(),
             })?;
-            let decrypted = crypto.decrypt_value(&stored.value)?;
-            let value = SecretValue::from_yaml(secret_type, &decrypted)?;
+            let decrypted = crypto
+                .decrypt_value(&crate::AgeArmoredCiphertext::parse(stored.value.as_str())?)?;
+            let value = SecretValue::from_yaml_str(secret_type, &decrypted)?;
             records.insert(
                 stored.key.clone(),
                 SecretRecord {
@@ -142,7 +173,7 @@ impl Database {
     }
 
     fn to_stored_records(&self, passphrase: &str) -> DatabaseResult<Vec<StoredSecretRecord>> {
-        let crypto = VaultCrypto::new(passphrase)?;
+        let crypto = VaultCrypto::new(&SymmetricKey::parse(passphrase)?)?;
         self.to_stored_records_with_crypto(&crypto)
     }
 
@@ -155,11 +186,11 @@ impl Database {
         let mut stored_records = Vec::with_capacity(keys.len());
         for key in keys {
             let record = self.records.get(key).unwrap();
-            let value = record.data.to_yaml()?;
+            let yaml = record.data.to_yaml()?;
             stored_records.push(StoredSecretRecord {
                 key: key.clone(),
                 secret_type: Some(record.secret_type),
-                value: crypto.encrypt_value(&value)?,
+                value: StoredRecordPayload::from_age_armored(crypto.encrypt_value(&yaml)?),
             });
         }
         Ok(stored_records)
@@ -177,7 +208,9 @@ impl Database {
             .map(|key| StoredSecretRecord {
                 key: key.clone(),
                 secret_type: secret_types.get(key).copied(),
-                value: armored.get(key).cloned().unwrap_or_default(),
+                value: StoredRecordPayload::from_trusted(
+                    armored.get(key).cloned().unwrap_or_default(),
+                ),
             })
             .collect()
     }
@@ -191,6 +224,8 @@ impl Default for Database {
 #[cfg(test)]
 mod tests {
     use super::Database;
+    use crate::secret_types::StoredRecordPayload;
+    use crate::vault_wire::{SessionJsonl, StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml};
     use crate::{
         ApiKeySecret, SecretId, SecretRecord, SecretType, SecretValue, StoredSecretRecord,
         VaultFormat,
@@ -200,7 +235,17 @@ mod tests {
         SecretId::from_vault_record(label)
     }
 
-    const TEST_PASSPHRASE: &str = "deadbeefdeadbeefdeadbeefdeadbeef";
+    const TEST_PASSPHRASE: &str =
+        "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+
+    fn test_key() -> crate::SymmetricKey {
+        crate::SymmetricKey::parse(TEST_PASSPHRASE).unwrap()
+    }
+
+    fn session_jsonl(raw: &str) -> crate::SessionJsonl {
+        crate::SessionJsonl::parse(raw)
+            .unwrap_or_else(|_| crate::SessionJsonl::from_trusted(raw.to_owned()))
+    }
 
     fn api_key(value: &str) -> SecretValue {
         SecretValue::ApiKey(ApiKeySecret {
@@ -231,17 +276,18 @@ mod tests {
     #[test]
     fn stored_jsonl_encrypts_values_only() {
         let plaintext = sample_db().to_jsonl().unwrap();
-        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+        let passphrase = TEST_PASSPHRASE;
 
         let db = Database::from_jsonl(&plaintext).unwrap();
         let stored = db.to_stored_jsonl(passphrase).unwrap();
 
-        assert!(stored.contains("\"id\":\"github.com\""));
-        assert!(stored.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert!(!stored.contains("hunter2"));
-        assert!(!stored.contains("token-abc"));
+        assert!(stored.as_str().contains("\"id\":\"github.com\""));
+        assert!(stored.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
+        assert!(!stored.as_str().contains("hunter2"));
+        assert!(!stored.as_str().contains("token-abc"));
 
         let lines: Vec<StoredSecretRecord> = stored
+            .as_str()
             .lines()
             .map(|line| serde_json::from_str(line).unwrap())
             .collect();
@@ -258,17 +304,17 @@ mod tests {
     #[test]
     fn stored_yaml_encrypts_values_only() {
         let plaintext = sample_db().to_jsonl().unwrap();
-        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+        let passphrase = TEST_PASSPHRASE;
 
         let db = Database::from_jsonl(&plaintext).unwrap();
         let stored = db.to_stored_yaml(passphrase).unwrap();
 
-        assert!(stored.contains("github.com"));
-        assert!(stored.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert!(stored.contains('|'));
-        assert!(!stored.contains("hunter2"));
-        assert!(!stored.contains("token-abc"));
-        assert!(!stored.contains("\\n"));
+        assert!(stored.as_str().contains("github.com"));
+        assert!(stored.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
+        assert!(stored.as_str().contains('|'));
+        assert!(!stored.as_str().contains("hunter2"));
+        assert!(!stored.as_str().contains("token-abc"));
+        assert!(!stored.as_str().contains("\\n"));
 
         let restored = Database::from_stored_yaml(&stored, passphrase)
             .unwrap()
@@ -284,21 +330,21 @@ mod tests {
             db.insert(sid("x"), api_key("y"));
             db.to_jsonl().unwrap()
         };
-        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+        let passphrase = TEST_PASSPHRASE;
         let db = Database::from_jsonl(&plaintext).unwrap();
 
         let jsonl = db.to_stored_jsonl(passphrase).unwrap();
         let yaml = db.to_stored_yaml(passphrase).unwrap();
 
         assert_eq!(
-            Database::from_stored_auto(&jsonl, passphrase)
+            Database::from_stored_auto(jsonl.as_str(), passphrase)
                 .unwrap()
                 .to_jsonl()
                 .unwrap(),
             plaintext
         );
         assert_eq!(
-            Database::from_stored_auto(&yaml, passphrase)
+            Database::from_stored_auto(yaml.as_str(), passphrase)
                 .unwrap()
                 .to_jsonl()
                 .unwrap(),
@@ -310,19 +356,19 @@ mod tests {
     fn to_stored_respects_format() {
         let mut db = Database::new();
         db.insert(sid("a"), api_key("1"));
-        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+        let passphrase = TEST_PASSPHRASE;
 
         let jsonl = db.to_stored(passphrase, VaultFormat::Jsonl).unwrap();
-        assert!(jsonl.trim_start().starts_with('{'));
+        assert!(jsonl.as_str().trim_start().starts_with('{'));
 
         let yaml = db.to_stored(passphrase, VaultFormat::Yaml).unwrap();
-        assert!(yaml.contains("secrets:"));
+        assert!(yaml.as_str().contains("secrets:"));
     }
 
     #[test]
     fn example_fixtures_roundtrip() {
         let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
-        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+        let passphrase = TEST_PASSPHRASE;
 
         let session = std::fs::read_to_string(fixtures.join("session.example.jsonl"))
             .expect("missing fixtures/session.example.jsonl — run: cargo run --example generate_vault_fixtures -p nook-core");
@@ -331,35 +377,41 @@ mod tests {
         let jsonl = std::fs::read_to_string(fixtures.join("nook-vault.example.jsonl"))
             .expect("missing fixtures/nook-vault.example.jsonl");
 
-        assert!(yaml.contains("secrets:"));
-        assert!(yaml.contains('|'));
+        assert!(yaml.as_str().contains("secrets:"));
+        assert!(yaml.as_str().contains('|'));
         assert!(
             jsonl
                 .lines()
                 .all(|line| line.trim().is_empty() || line.trim_start().starts_with('{'))
         );
 
-        let from_yaml = Database::from_stored_yaml(&yaml, passphrase).unwrap();
-        let from_jsonl = Database::from_stored_jsonl(&jsonl, passphrase).unwrap();
-        assert_eq!(from_yaml.to_jsonl().unwrap(), session);
-        assert_eq!(from_jsonl.to_jsonl().unwrap(), session);
+        let from_yaml =
+            Database::from_stored_yaml(&StoredVaultYaml::from_trusted(yaml.clone()), passphrase)
+                .unwrap();
+        let from_jsonl =
+            Database::from_stored_jsonl(&StoredVaultJsonl::from_trusted(jsonl.clone()), passphrase)
+                .unwrap();
+        assert_eq!(from_yaml.to_jsonl().unwrap(), session_jsonl(&session));
+        assert_eq!(from_jsonl.to_jsonl().unwrap(), session_jsonl(&session));
     }
 
     #[test]
     fn wrong_passphrase_fails() {
+        const WRONG_PASSPHRASE: &str =
+            "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
         let db = sample_db();
-        let stored = db.to_stored_jsonl("correct-key").unwrap();
-        assert!(Database::from_stored_jsonl(&stored, "wrong-key").is_err());
+        let stored = db.to_stored_jsonl(TEST_PASSPHRASE).unwrap();
+        assert!(Database::from_stored_jsonl(&stored, WRONG_PASSPHRASE).is_err());
 
-        let stored_yaml = db.to_stored_yaml("correct-key").unwrap();
-        assert!(Database::from_stored_yaml(&stored_yaml, "wrong-key").is_err());
-        assert!(Database::from_stored_auto(&stored_yaml, "wrong-key").is_err());
+        let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
+        assert!(Database::from_stored_yaml(&stored_yaml, WRONG_PASSPHRASE).is_err());
+        assert!(Database::from_stored_auto(stored_yaml.as_str(), WRONG_PASSPHRASE).is_err());
     }
 
     #[test]
     fn empty_vault_roundtrip_all_formats() {
         let db = Database::new();
-        assert!(db.to_jsonl().unwrap().is_empty());
+        assert!(db.to_jsonl().unwrap().as_str().is_empty());
         assert!(db.list().is_empty());
 
         let stored_yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
@@ -378,7 +430,7 @@ mod tests {
                 .is_empty()
         );
         assert!(
-            Database::from_stored_auto(&stored_yaml, TEST_PASSPHRASE)
+            Database::from_stored_auto(stored_yaml.as_str(), TEST_PASSPHRASE)
                 .unwrap()
                 .list()
                 .is_empty()
@@ -430,19 +482,20 @@ mod tests {
             serde_json::to_string(&first).unwrap(),
             serde_json::to_string(&second).unwrap()
         );
-        let db = Database::from_jsonl(&jsonl).unwrap();
+        let db = Database::from_jsonl(&session_jsonl(&jsonl)).unwrap();
         assert_eq!(db.list().len(), 1);
         assert_eq!(db.list()[0].data, api_key("second"));
     }
 
     #[test]
     fn from_jsonl_rejects_invalid_json() {
-        let err = Database::from_jsonl(
-            r#"{"key":"x","type":"api-key","value":{}}
-{broken"#,
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("Failed to parse JSONL line"));
+        assert!(
+            SessionJsonl::parse(
+                r#"{"key":"x","type":"api-key","value":{}}
+{broken"#
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -514,10 +567,10 @@ mod tests {
         restored.insert(sid("another"), api_key("value"));
 
         let final_jsonl = restored.to_jsonl().unwrap();
-        assert!(final_jsonl.contains("github.com"));
-        assert!(final_jsonl.contains("new-entry"));
-        assert!(final_jsonl.contains("another"));
-        assert!(!final_jsonl.contains("work-vpn"));
+        assert!(final_jsonl.as_str().contains("github.com"));
+        assert!(final_jsonl.as_str().contains("new-entry"));
+        assert!(final_jsonl.as_str().contains("another"));
+        assert!(!final_jsonl.as_str().contains("work-vpn"));
     }
 
     #[test]
@@ -526,8 +579,12 @@ mod tests {
         let yaml = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
         let jsonl = db.to_stored_jsonl(TEST_PASSPHRASE).unwrap();
 
-        assert!(Database::from_stored(&yaml, TEST_PASSPHRASE, VaultFormat::Jsonl).is_err());
-        assert!(Database::from_stored(&jsonl, TEST_PASSPHRASE, VaultFormat::Yaml).is_err());
+        let wrong_jsonl =
+            StoredVaultBlob::Jsonl(StoredVaultJsonl::from_trusted(yaml.as_str().to_owned()));
+        let wrong_yaml =
+            StoredVaultBlob::Yaml(StoredVaultYaml::from_trusted(jsonl.as_str().to_owned()));
+        assert!(Database::from_stored(&wrong_jsonl, TEST_PASSPHRASE).is_err());
+        assert!(Database::from_stored(&wrong_yaml, TEST_PASSPHRASE).is_err());
     }
 
     #[test]
@@ -536,8 +593,8 @@ mod tests {
         db.insert(sid("notes"), api_key("line-one\nline-two\nline-three"));
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        assert!(stored.contains('|'));
-        assert!(!stored.contains("\\n"));
+        assert!(stored.as_str().contains('|'));
+        assert!(!stored.as_str().contains("\\n"));
 
         let restored = Database::from_stored_yaml(&stored, TEST_PASSPHRASE).unwrap();
         assert_eq!(
@@ -551,6 +608,7 @@ mod tests {
         let db = sample_db();
         let stored = db.to_stored_jsonl(TEST_PASSPHRASE).unwrap();
         let lines: Vec<StoredSecretRecord> = stored
+            .as_str()
             .lines()
             .map(|line| serde_json::from_str(line).unwrap())
             .collect();
@@ -558,7 +616,7 @@ mod tests {
         assert_eq!(lines[0].key.as_str(), "github.com");
         assert_eq!(lines[1].key.as_str(), "work-vpn");
         for line in &lines {
-            assert!(line.value.contains("BEGIN AGE ENCRYPTED FILE"));
+            assert!(line.value.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
         }
     }
 
@@ -567,10 +625,16 @@ mod tests {
         use crate::VaultCrypto;
         use std::collections::HashMap;
 
-        let crypto = VaultCrypto::new(TEST_PASSPHRASE).unwrap();
+        let crypto = VaultCrypto::new(&test_key()).unwrap();
         let mut armored = HashMap::new();
-        armored.insert(sid("z-last"), crypto.encrypt_value("z").unwrap());
-        armored.insert(sid("a-first"), crypto.encrypt_value("a").unwrap());
+        armored.insert(
+            sid("z-last"),
+            crypto.encrypt_value("z").unwrap().as_str().to_owned(),
+        );
+        armored.insert(
+            sid("a-first"),
+            crypto.encrypt_value("a").unwrap().as_str().to_owned(),
+        );
 
         let secret_types = HashMap::from([
             (sid("z-last"), SecretType::ApiKey),
@@ -580,7 +644,7 @@ mod tests {
         assert_eq!(records.len(), 2);
         assert_eq!(records[0].key.as_str(), "a-first");
         assert_eq!(records[1].key.as_str(), "z-last");
-        assert_ne!(records[0].value, records[1].value);
+        assert_ne!(records[0].value.as_str(), records[1].value.as_str());
     }
 
     #[test]
@@ -594,7 +658,7 @@ mod tests {
     fn stored_records_with_crypto_roundtrip() {
         use crate::VaultCrypto;
 
-        let crypto = VaultCrypto::new(TEST_PASSPHRASE).unwrap();
+        let crypto = VaultCrypto::new(&test_key()).unwrap();
         let db = sample_db();
         let stored = db.to_stored_records_with_crypto(&crypto).unwrap();
         let restored = Database::from_stored_records_with_crypto(&stored, &crypto).unwrap();
@@ -615,8 +679,8 @@ mod tests {
         );
 
         let stored = db.to_stored_yaml(TEST_PASSPHRASE).unwrap();
-        assert!(stored.contains("type: login"));
-        assert!(!stored.contains("private-password"));
+        assert!(stored.as_str().contains("type: login"));
+        assert!(!stored.as_str().contains("private-password"));
         assert_eq!(
             Database::from_stored_yaml(&stored, TEST_PASSPHRASE)
                 .unwrap()
@@ -635,8 +699,8 @@ mod tests {
         });
 
         let yaml = value.to_yaml().unwrap();
-        assert!(yaml.contains("notes: |-"));
-        assert!(yaml.contains("  second line"));
+        assert!(yaml.as_str().contains("notes: |-"));
+        assert!(yaml.as_str().contains("  second line"));
         assert_eq!(
             SecretValue::from_yaml(SecretType::Login, &yaml).unwrap(),
             value
@@ -645,7 +709,7 @@ mod tests {
 
     #[test]
     fn missing_or_mismatched_type_metadata_is_rejected() {
-        let crypto = crate::VaultCrypto::new(TEST_PASSPHRASE).unwrap();
+        let crypto = crate::VaultCrypto::new(&test_key()).unwrap();
         let login_yaml = crate::SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
@@ -654,19 +718,19 @@ mod tests {
         })
         .to_yaml()
         .unwrap();
-        let ciphertext = crypto.encrypt_value(&login_yaml).unwrap();
+        let ciphertext = crypto.encrypt_value(login_yaml.as_str()).unwrap();
 
         let missing = StoredSecretRecord {
             key: sid("missing"),
             secret_type: None,
-            value: ciphertext.clone(),
+            value: StoredRecordPayload::from_age_armored(ciphertext.clone()),
         };
         assert!(Database::from_stored_records_with_crypto(&[missing], &crypto).is_err());
 
         let mismatched = StoredSecretRecord {
             key: sid("mismatched"),
             secret_type: Some(SecretType::SeedPhrase),
-            value: ciphertext,
+            value: StoredRecordPayload::from_age_armored(ciphertext),
         };
         assert!(Database::from_stored_records_with_crypto(&[mismatched], &crypto).is_err());
     }

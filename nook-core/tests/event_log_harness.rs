@@ -36,8 +36,8 @@ impl EventLogDevice {
         let mut device = Self {
             session,
             identity,
-            secrets_key: keys.secrets_key.clone(),
-            members_key: keys.members_key.clone(),
+            secrets_key: keys.secrets_key.as_str().to_owned(),
+            members_key: keys.members_key.as_str().to_owned(),
             projection_cache_yaml,
             crypto,
         };
@@ -55,7 +55,10 @@ impl EventLogDevice {
             secrets_key: peer.secrets_key.clone(),
             members_key: peer.members_key.clone(),
             projection_cache_yaml: peer.projection_cache_yaml.clone(),
-            crypto: VaultCrypto::new(&peer.secrets_key)?,
+            crypto: VaultCrypto::new(
+                &nook_core::SymmetricKey::parse(&peer.secrets_key)
+                    .map_err(nook_core::VaultError::Validation)?,
+            )?,
         })
     }
 
@@ -70,7 +73,11 @@ impl EventLogDevice {
     pub fn append_secret(&mut self, secret_id: &str, plaintext: &str) -> VaultResult<EventId> {
         let ciphertext = self.crypto.encrypt_value(plaintext)?;
         self.append_signed(vec![VaultOperation::SecretCreated {
-            secret: encrypted_secret_from_armored(secret_id, SecretType::ApiKey, &ciphertext),
+            secret: encrypted_secret_from_armored(
+                secret_id,
+                SecretType::ApiKey,
+                ciphertext.as_str(),
+            ),
         }])
     }
 
@@ -131,8 +138,11 @@ impl EventLogDevice {
         let (secrets_key, members_key) =
             hydrate_keys_from_projection_yaml(&self.projection_cache_yaml, &self.identity)?;
         self.secrets_key.clone_from(&secrets_key);
-        self.members_key = members_key;
-        self.crypto = VaultCrypto::new(&secrets_key)?;
+        self.members_key.clone_from(&members_key);
+        self.crypto = VaultCrypto::new(
+            &nook_core::SymmetricKey::parse(&secrets_key)
+                .map_err(nook_core::VaultError::Validation)?,
+        )?;
         Ok(())
     }
 

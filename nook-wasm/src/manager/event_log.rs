@@ -318,7 +318,7 @@ impl NookVaultManager {
     fn rewrap_device_meta_for_epoch(
         &mut self,
         records_snapshot: &[nook_core::StoredSecretRecord],
-        old_members_key: &str,
+        old_members_key: &nook_core::SymmetricKey,
         new_keys: &nook_core::VaultKeys,
     ) -> Result<(), NookError> {
         let identity = self.device_identity()?;
@@ -346,8 +346,8 @@ impl NookVaultManager {
         self.key_epoch = new_epoch.clone();
         save_key_epoch(&self.store_id, &self.key_epoch).await?;
 
-        let old_secrets_key = self.secrets_key.clone();
-        let old_members_key = self.members_key.clone();
+        let old_secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
+        let old_members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
         let records_snapshot = self.stored_records_snapshot();
         let user_records: Vec<nook_core::StoredSecretRecord> = records_snapshot
             .iter()
@@ -361,7 +361,7 @@ impl NookVaultManager {
             &old_members_key,
             &new_keys.members_key,
         )?;
-        self.apply_vault_keys(&new_keys.secrets_key, &new_keys.members_key)?;
+        self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
         self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
         for payload in &secrets {
             self.stored_armored

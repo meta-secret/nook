@@ -1,6 +1,7 @@
 //! In-memory vault database errors.
 
 use super::secret_payload::SecretPayloadError;
+use super::validation::ValidationError;
 use super::vault_crypto::VaultCryptoError;
 use super::vault_format::VaultFormatError;
 use thiserror::Error;
@@ -26,4 +27,7 @@ pub enum DatabaseError {
 
     #[error(transparent)]
     SecretPayload(#[from] SecretPayloadError),
+
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
 }

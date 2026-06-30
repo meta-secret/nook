@@ -192,17 +192,18 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
     let trigger = VaultOperation::DeviceRevoked {
         device_id: "device_revoked01".to_owned(),
     };
+    let old_secrets = nook_core::SymmetricKey::parse(&device.secrets_key)?;
     let (new_secrets, _new_members) = device.session.rotate_security_epoch(
         trigger,
         &user_records,
-        &device.secrets_key,
+        &old_secrets,
         &[],
         TS,
         Some("github"),
     )?;
     assert_ne!(new_secrets, device.secrets_key);
     device.secrets_key = new_secrets.clone();
-    device.crypto = nook_core::VaultCrypto::new(&new_secrets)?;
+    device.crypto = nook_core::VaultCrypto::new(&nook_core::SymmetricKey::parse(&new_secrets)?)?;
     device.crypto.encrypt_value("post-epoch")?;
     Ok(())
 }

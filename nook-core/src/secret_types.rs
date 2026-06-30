@@ -13,7 +13,9 @@
 
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
+use crate::vault_wire::SecretPayloadYaml;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -89,7 +91,14 @@ pub enum SecretValue {
 }
 
 impl SecretValue {
-    pub fn from_yaml(secret_type: SecretType, yaml: &str) -> SecretPayloadResult<Self> {
+    pub fn from_yaml(
+        secret_type: SecretType,
+        yaml: &SecretPayloadYaml,
+    ) -> SecretPayloadResult<Self> {
+        Self::from_yaml_str(secret_type, yaml.as_str())
+    }
+
+    pub fn from_yaml_str(secret_type: SecretType, yaml: &str) -> SecretPayloadResult<Self> {
         match secret_type {
             SecretType::Login => serde_yaml::from_str(yaml)
                 .map(Self::Login)
@@ -109,14 +118,15 @@ impl SecretValue {
         }
     }
 
-    pub fn to_yaml(&self) -> SecretPayloadResult<String> {
-        match self {
+    pub fn to_yaml(&self) -> SecretPayloadResult<SecretPayloadYaml> {
+        let yaml = match self {
             Self::Login(value) => serde_yaml::to_string(value),
             Self::ApiKey(value) => serde_yaml::to_string(value),
             Self::SeedPhrase(value) => serde_yaml::to_string(value),
             Self::SecureNote(value) => serde_yaml::to_string(value),
         }
-        .map_err(SecretPayloadError::Serialize)
+        .map_err(SecretPayloadError::Serialize)?;
+        Ok(SecretPayloadYaml::from_trusted(yaml))
     }
 
     #[must_use]
@@ -139,7 +149,46 @@ pub struct SecretRecord {
     pub data: SecretValue,
 }
 
-/// One record on disk — label is plaintext, `value` is armored age ciphertext.
+/// Opaque on-disk payload — user secrets are age-armored YAML; auth/join/member rows use JSON or nested armor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct StoredRecordPayload(String);
+
+impl StoredRecordPayload {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub fn from_age_armored(value: crate::AgeArmoredCiphertext) -> Self {
+        Self(value.into_inner())
+    }
+}
+
+impl fmt::Display for StoredRecordPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for StoredRecordPayload {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+/// One record on disk — label is plaintext, `value` is an opaque encrypted or JSON payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StoredSecretRecord {
     #[serde(rename = "id")]
@@ -147,5 +196,5 @@ pub struct StoredSecretRecord {
     #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
     pub secret_type: Option<SecretType>,
     #[serde(rename = "data")]
-    pub value: String,
+    pub value: StoredRecordPayload,
 }

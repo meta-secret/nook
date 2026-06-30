@@ -99,7 +99,7 @@ impl VaultEventSession {
 
     pub fn members_checkpoint_hash(
         records: &[StoredSecretRecord],
-        members_key: &str,
+        members_key: &crate::SymmetricKey,
     ) -> VaultResult<String> {
         let roster = resolve_member_roster(records, members_key)?;
         let member_records = build_members_records(&roster, members_key)?;
@@ -127,7 +127,7 @@ impl VaultEventSession {
         &mut self,
         trigger: VaultOperation,
         user_records: &[StoredSecretRecord],
-        old_secrets_key: &str,
+        old_secrets_key: &crate::SymmetricKey,
         members_records: &[StoredSecretRecord],
         created_at: &str,
         provider_id: Option<&str>,
@@ -145,6 +145,9 @@ impl VaultEventSession {
             created_at,
             provider_id,
         )?;
-        Ok((new_keys.secrets_key, new_keys.members_key))
+        Ok((
+            new_keys.secrets_key.into_inner(),
+            new_keys.members_key.into_inner(),
+        ))
     }
 }

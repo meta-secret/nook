@@ -1,6 +1,7 @@
 //! Password generation and envelope unlock errors.
 
 use super::age_crypto::AgeCryptoError;
+use super::validation::ValidationError;
 use thiserror::Error;
 
 pub type PasswordResult<T> = Result<T, PasswordError>;
@@ -39,4 +40,7 @@ pub enum PasswordError {
 
     #[error(transparent)]
     Age(#[from] AgeCryptoError),
+
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
 }

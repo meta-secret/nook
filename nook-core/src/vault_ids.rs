@@ -267,7 +267,7 @@ pub fn normalize_store_id(id: &str) -> ValidationResult<StoreId> {
 }
 
 pub fn generate_store_id() -> MultiDeviceResult<StoreId> {
-    Ok(format_store_id(&generate_id()?)?)
+    Ok(format_store_id(generate_id()?.as_str())?)
 }
 
 pub fn format_secret_id(token: &str) -> ValidationResult<SecretId> {
@@ -276,7 +276,7 @@ pub fn format_secret_id(token: &str) -> ValidationResult<SecretId> {
 }
 
 pub fn generate_secret_id() -> MultiDeviceResult<SecretId> {
-    Ok(format_secret_id(&generate_id()?)?)
+    Ok(format_secret_id(generate_id()?.as_str())?)
 }
 
 /// Accept prefixed compact ids and legacy human labels (e.g. `github.com`).

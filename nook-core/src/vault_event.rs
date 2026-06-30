@@ -6,7 +6,7 @@ use crate::event_canonical::{
     EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes, sign_body,
     verify_body_signature,
 };
-use crate::secret_types::{SecretType, StoredSecretRecord};
+use crate::secret_types::{SecretType, StoredRecordPayload, StoredSecretRecord};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -28,7 +28,7 @@ impl EncryptedSecretPayload {
         Self {
             id: record.key.to_string(),
             secret_type: record.secret_type.unwrap_or(SecretType::ApiKey),
-            ciphertext: record.value.clone(),
+            ciphertext: record.value.as_str().to_owned(),
         }
     }
 
@@ -37,7 +37,7 @@ impl EncryptedSecretPayload {
         StoredSecretRecord {
             key: SecretId::from_vault_record(&self.id),
             secret_type: Some(self.secret_type),
-            value: self.ciphertext.clone(),
+            value: StoredRecordPayload::from_trusted(self.ciphertext.clone()),
         }
     }
 }

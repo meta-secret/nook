@@ -1,6 +1,7 @@
 //! Display and search helpers for vault secrets — shared by WASM, mobile, and CLI.
 
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
+use crate::vault_wire::SecretPayloadYaml;
 use crate::{SecretRecord, SecretType, SecretValue};
 
 fn hostname_from_url(raw: &str) -> String {
@@ -140,10 +141,9 @@ impl SecretRecord {
 pub fn build_secret_yaml(
     secret_type: SecretType,
     fields: &serde_json::Value,
-) -> SecretPayloadResult<String> {
+) -> SecretPayloadResult<SecretPayloadYaml> {
     let yaml = serde_yaml::to_string(fields).map_err(SecretPayloadError::Serialize)?;
-    let value = SecretValue::from_yaml(secret_type, &yaml)?;
-    value.to_yaml()
+    SecretPayloadYaml::parse(secret_type, &yaml)
 }
 
 #[cfg(test)]

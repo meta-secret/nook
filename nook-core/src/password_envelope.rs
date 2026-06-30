@@ -17,6 +17,7 @@
 
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
 use crate::multi_device::VaultKeys;
+use crate::vault_wire::SymmetricKey;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -215,8 +216,8 @@ pub fn attach_password_envelope(
     }
 
     let plaintext = serde_json::to_string(&EnvelopePlaintext {
-        secrets_key: keys.secrets_key.clone(),
-        members_key: keys.members_key.clone(),
+        secrets_key: keys.secrets_key.as_str().to_owned(),
+        members_key: keys.members_key.as_str().to_owned(),
     })
     .map_err(PasswordError::EnvelopePlaintextSerialize)?;
 
@@ -259,8 +260,8 @@ pub fn resolve_keys_from_password(
         serde_json::from_str(&plaintext_str).map_err(PasswordError::EnvelopePlaintextJson)?;
 
     Ok(VaultKeys {
-        secrets_key: parsed.secrets_key,
-        members_key: parsed.members_key,
+        secrets_key: SymmetricKey::parse(&parsed.secrets_key)?,
+        members_key: SymmetricKey::parse(&parsed.members_key)?,
     })
 }
 
@@ -321,8 +322,10 @@ mod tests {
 
     fn sample_keys() -> VaultKeys {
         VaultKeys {
-            secrets_key: "deadbeefdeadbeefdeadbeefdeadbeef".repeat(2),
-            members_key: "abadcafeabadcafeabadcafeabadcafe".repeat(2),
+            secrets_key: SymmetricKey::parse(&"deadbeefdeadbeefdeadbeefdeadbeef".repeat(2))
+                .unwrap(),
+            members_key: SymmetricKey::parse(&"abadcafeabadcafeabadcafeabadcafe".repeat(2))
+                .unwrap(),
         }
     }
 
@@ -332,7 +335,12 @@ mod tests {
         let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
         assert_eq!(envelope.version, 1);
         assert_eq!(envelope.kdf, "scrypt");
-        assert!(envelope.ciphertext.contains("BEGIN AGE ENCRYPTED FILE"));
+        assert!(
+            envelope
+                .ciphertext
+                .as_str()
+                .contains("BEGIN AGE ENCRYPTED FILE")
+        );
 
         let resolved =
             resolve_keys_from_password(&envelope, "correct horse battery staple").unwrap();
@@ -382,8 +390,8 @@ mod tests {
     #[test]
     fn vault_unlock_keys_variant_serialises_with_type_tag() {
         let yaml = serde_yaml::to_string(&VaultUnlock::Keys).unwrap();
-        assert!(yaml.contains("type: keys"));
-        assert!(!yaml.contains("envelope:"));
+        assert!(yaml.as_str().contains("type: keys"));
+        assert!(!yaml.as_str().contains("envelope:"));
 
         let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(parsed, VaultUnlock::Keys);
@@ -404,9 +412,9 @@ mod tests {
             }],
         };
         let yaml = serde_yaml::to_string(&value).unwrap();
-        assert!(yaml.contains("type: password"));
-        assert!(yaml.contains("entries:"));
-        assert!(yaml.contains("john's password"));
+        assert!(yaml.as_str().contains("type: password"));
+        assert!(yaml.as_str().contains("entries:"));
+        assert!(yaml.as_str().contains("john's password"));
 
         let parsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
         assert!(parsed.is_password());

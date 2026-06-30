@@ -80,12 +80,12 @@ impl NookVaultManager {
             .into());
         }
         let keys = nook_core::VaultKeys {
-            secrets_key: self.secrets_key.clone(),
-            members_key: self.members_key.clone(),
+            secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
+            members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
         };
         let entry = nook_core::create_password_entry(
             &keys,
-            &nook_core::generate_id()?,
+            nook_core::generate_id()?.as_str(),
             &label,
             &wasm_iso_timestamp(),
             &password,
@@ -133,8 +133,8 @@ impl NookVaultManager {
             .into());
         }
         let keys = nook_core::VaultKeys {
-            secrets_key: self.secrets_key.clone(),
-            members_key: self.members_key.clone(),
+            secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
+            members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
         };
         {
             let target = self
@@ -161,8 +161,8 @@ impl NookVaultManager {
             })
             .await?;
             let rotated_keys = nook_core::VaultKeys {
-                secrets_key: self.secrets_key.clone(),
-                members_key: self.members_key.clone(),
+                secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
+                members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
             };
             let target = self
                 .password_entries
@@ -252,13 +252,15 @@ impl NookVaultManager {
 
         records.retain(|record| !nook_core::is_join_stored_record(record));
 
-        let auth_id = nook_core::SecretId::from_vault_record(&nook_core::dec_auth_id(&identity));
+        let auth_id =
+            nook_core::SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
         let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
         records.retain(|record| !nook_core::is_auth_stored_record(record) || record.key != auth_id);
         records.push(auth);
 
+        let auth_key_id = identity.auth_id();
         let self_member_key =
-            nook_core::SecretId::from_vault_record(&nook_core::member_stored_key(auth_id.as_str()));
+            nook_core::SecretId::from_vault_record(&nook_core::member_stored_key(&auth_key_id));
         records.retain(|record| {
             !nook_core::is_members_stored_record(record) || record.key != self_member_key
         });
@@ -276,7 +278,7 @@ impl NookVaultManager {
 
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
-        self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
+        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.unlock = nook_core::VaultUnlock::Keys;
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
@@ -286,7 +288,7 @@ impl NookVaultManager {
         let user_records = nook_core::user_stored_records(&stored_records);
         let database =
             nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)?;
-        self.decrypted_jsonl = database.to_jsonl()?;
+        self.decrypted_jsonl = database.to_jsonl()?.into_inner();
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

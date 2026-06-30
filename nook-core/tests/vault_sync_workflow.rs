@@ -4,8 +4,8 @@
 //! sync providers — no browser or network required.
 
 use nook_core::{
-    MemoryVaultStore, SecretId, StoredSecretRecord, VaultSyncAction, VaultUnlock,
-    compare_vault_sync, fan_out_sync, read_vault_store_id, read_vault_version,
+    MemoryVaultStore, SecretId, StoredRecordPayload, StoredSecretRecord, VaultSyncAction,
+    VaultUnlock, compare_vault_sync, fan_out_sync, read_vault_store_id, read_vault_version,
     reconcile_vault_stores, resolve_conflict_keep_local, resolve_conflict_keep_remote,
     serialize_stored_yaml_with_unlock,
 };
@@ -18,9 +18,9 @@ fn sample_yaml(version: u64, armor_line: &str) -> String {
         &[StoredSecretRecord {
             key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
             secret_type: None,
-            value: format!(
+            value: StoredRecordPayload::from_trusted(format!(
                 "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
-            ),
+            )),
         }],
         &VaultUnlock::Keys,
         &[],

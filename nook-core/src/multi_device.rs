@@ -1,5 +1,11 @@
 use crate::errors::{AgeCryptoError, MultiDeviceError, MultiDeviceResult};
-use crate::{SecretId, StoredSecretRecord, VaultCrypto};
+use crate::vault_wire::{
+    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, SymmetricKey,
+};
+use crate::{
+    AuthKeyId, CompactToken, DeviceId, SecretId, StoredRecordPayload, StoredSecretRecord,
+    VaultCrypto,
+};
 use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Serialize};
@@ -9,30 +15,28 @@ use std::hash::BuildHasher;
 use std::io::{Read, Write};
 
 /// Symmetric vault key (32-byte random hex).
-pub fn generate_symmetric_key() -> MultiDeviceResult<String> {
-    let mut bytes = [0u8; 32];
-    getrandom::getrandom(&mut bytes).map_err(|e| MultiDeviceError::GenerateKey(e.to_string()))?;
-    Ok(hex::encode(bytes))
+pub fn generate_symmetric_key() -> MultiDeviceResult<SymmetricKey> {
+    SymmetricKey::generate().map_err(MultiDeviceError::Validation)
 }
 
 /// Compact, URL-safe random ID (64-bit, base64url, no padding — 11 chars).
-pub fn generate_id() -> MultiDeviceResult<String> {
+pub fn generate_id() -> MultiDeviceResult<CompactToken> {
     use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     let mut bytes = [0u8; 8];
     getrandom::getrandom(&mut bytes).map_err(|e| MultiDeviceError::GenerateId(e.to_string()))?;
-    Ok(URL_SAFE_NO_PAD.encode(bytes))
+    CompactToken::parse(&URL_SAFE_NO_PAD.encode(bytes)).map_err(MultiDeviceError::Validation)
 }
 
 /// Back-compat alias for secret encryption key generation.
-pub fn generate_dec() -> MultiDeviceResult<String> {
+pub fn generate_dec() -> MultiDeviceResult<SymmetricKey> {
     generate_symmetric_key()
 }
 
 /// `secrets_key` encrypts user secrets; `members_key` encrypts member catalog entries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultKeys {
-    pub secrets_key: String,
-    pub members_key: String,
+    pub secrets_key: SymmetricKey,
+    pub members_key: SymmetricKey,
 }
 
 pub fn generate_vault_keys() -> MultiDeviceResult<VaultKeys> {
@@ -54,49 +58,44 @@ pub fn is_reserved_device_label(key: &str) -> bool {
 }
 
 #[must_use]
-pub fn dec_auth_id(identity: &DeviceIdentity) -> String {
+pub fn dec_auth_id(identity: &DeviceIdentity) -> AuthKeyId {
     device_auth_id_from_public(&identity.identity.to_public())
 }
 
-pub fn dec_auth_id_from_public_key(public_key: &str) -> MultiDeviceResult<String> {
-    let recipient = public_key
-        .parse::<Recipient>()
-        .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?;
-    Ok(device_auth_id_from_public(&recipient))
+pub fn dec_auth_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AuthKeyId> {
+    Ok(device_auth_id_from_public(
+        &public_key
+            .as_str()
+            .parse::<Recipient>()
+            .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?,
+    ))
 }
 
 #[must_use]
-pub fn join_record_key(device_id: &str) -> String {
-    device_id.to_owned()
+pub fn join_record_key(device_id: &DeviceId) -> String {
+    device_id.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuthEnvelopes {
-    pub secrets_key: String,
-    pub members_key: String,
+    pub secrets_key: AgeArmoredCiphertext,
+    pub members_key: AgeArmoredCiphertext,
 }
 
 pub fn parse_auth_envelopes(value: &str) -> MultiDeviceResult<AuthEnvelopes> {
-    let envelopes: AuthEnvelopes =
-        serde_json::from_str(value).map_err(MultiDeviceError::AuthEnvelopeJson)?;
-    if !envelopes.secrets_key.contains("BEGIN AGE ENCRYPTED FILE")
-        || !envelopes.members_key.contains("BEGIN AGE ENCRYPTED FILE")
-    {
-        return Err(MultiDeviceError::AuthEnvelopeMissingKeys);
-    }
-    Ok(envelopes)
+    serde_json::from_str(value).map_err(MultiDeviceError::AuthEnvelopeJson)
 }
 
 #[must_use]
 pub fn is_join_stored_record(record: &StoredSecretRecord) -> bool {
-    parse_join_request(&record.value).is_ok()
+    parse_join_request(record.value.as_str()).is_ok()
 }
 
 #[must_use]
 pub fn is_auth_stored_record(record: &StoredSecretRecord) -> bool {
     !is_join_stored_record(record)
         && is_auth_id(record.key.as_str())
-        && parse_auth_envelopes(&record.value).is_ok()
+        && parse_auth_envelopes(record.value.as_str()).is_ok()
 }
 
 /// Back-compat alias.
@@ -110,8 +109,8 @@ pub const MEMBER_RECORD_PREFIX: &str = "member:";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemberEntry {
-    pub pk_id: String,
-    pub pk: String,
+    pub pk_id: AuthKeyId,
+    pub pk: DevicePublicKey,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -120,27 +119,27 @@ pub struct MemberEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultMember {
-    pub auth_id: String,
-    pub device_id: String,
-    pub public_key: String,
+    pub auth_id: AuthKeyId,
+    pub device_id: DeviceId,
+    pub public_key: DevicePublicKey,
     pub enrolled_at: String,
     pub label: Option<String>,
 }
 
 #[must_use]
-pub fn member_stored_key(pk_id: &str) -> String {
+pub fn member_stored_key(pk_id: &AuthKeyId) -> String {
     format!("{MEMBER_RECORD_PREFIX}{pk_id}")
 }
 
 /// Whether a flat-record key matches the `pk_id` inside the decrypted member entry.
 /// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
 /// store the bare 64-hex digest — accept both forms.
-fn member_record_key_matches(stored_key: &str, entry_pk_id: &str) -> bool {
+fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool {
     if stored_key == member_stored_key(entry_pk_id) {
         return true;
     }
-    if let Ok(normalized) = crate::normalize_auth_key_id(entry_pk_id) {
-        return stored_key == member_stored_key(normalized.as_str());
+    if let Ok(normalized) = crate::normalize_auth_key_id(entry_pk_id.as_str()) {
+        return stored_key == member_stored_key(&normalized);
     }
     false
 }
@@ -148,7 +147,7 @@ fn member_record_key_matches(stored_key: &str, entry_pk_id: &str) -> bool {
 #[must_use]
 pub fn is_members_stored_record(record: &StoredSecretRecord) -> bool {
     record.key.as_str().starts_with(MEMBER_RECORD_PREFIX)
-        && record.value.contains("BEGIN AGE ENCRYPTED FILE")
+        && record.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
 }
 
 #[must_use]
@@ -160,8 +159,8 @@ pub fn is_vault_meta_record(record: &StoredSecretRecord) -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct JoinRequest {
-    pub device_id: String,
-    pub public_key: String,
+    pub device_id: DeviceId,
+    pub public_key: DevicePublicKey,
     pub requested_at: String,
 }
 
@@ -169,7 +168,7 @@ pub struct JoinRequest {
 #[derive(Clone)]
 pub struct DeviceIdentity {
     identity: Identity,
-    device_id: String,
+    device_id: DeviceId,
 }
 
 impl DeviceIdentity {
@@ -182,8 +181,9 @@ impl DeviceIdentity {
         })
     }
 
-    pub fn from_secret_str(secret: &str) -> MultiDeviceResult<Self> {
+    pub fn from_secret_str(secret: &DeviceIdentitySecret) -> MultiDeviceResult<Self> {
         let identity = secret
+            .as_str()
             .parse::<Identity>()
             .map_err(|e| MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
         let device_id = device_id_from_public(&identity.to_public());
@@ -194,60 +194,70 @@ impl DeviceIdentity {
     }
 
     #[must_use]
-    pub fn device_id(&self) -> &str {
+    pub fn device_id(&self) -> &DeviceId {
         &self.device_id
     }
 
     #[must_use]
-    pub fn public_key(&self) -> String {
-        self.identity.to_public().to_string()
+    pub fn public_key(&self) -> DevicePublicKey {
+        DevicePublicKey::parse(&self.identity.to_public().to_string())
+            .expect("generated public key is valid")
     }
 
     #[must_use]
-    pub fn secret_string(&self) -> String {
-        self.identity.to_string().expose_secret().to_owned()
+    pub fn secret_string(&self) -> DeviceIdentitySecret {
+        DeviceIdentitySecret::parse(self.identity.to_string().expose_secret())
+            .expect("generated identity secret is valid")
     }
 
     #[must_use]
-    pub fn auth_id(&self) -> String {
+    pub fn auth_id(&self) -> AuthKeyId {
         device_auth_id_from_public(&self.identity.to_public())
     }
 
-    pub fn decrypt_envelope(&self, envelope: &str) -> MultiDeviceResult<String> {
-        decrypt_with_identity(envelope, &self.identity)
+    pub fn decrypt_envelope(
+        &self,
+        envelope: &AgeArmoredCiphertext,
+    ) -> MultiDeviceResult<SymmetricKey> {
+        let plaintext = decrypt_with_identity(envelope, &self.identity)?;
+        SymmetricKey::parse(&plaintext).map_err(MultiDeviceError::Validation)
     }
 
     /// Back-compat alias.
-    pub fn decrypt_dec_envelope(&self, envelope: &str) -> MultiDeviceResult<String> {
+    pub fn decrypt_dec_envelope(
+        &self,
+        envelope: &AgeArmoredCiphertext,
+    ) -> MultiDeviceResult<SymmetricKey> {
         self.decrypt_envelope(envelope)
     }
 }
 
-pub fn device_id_from_public(recipient: &Recipient) -> String {
+pub fn device_id_from_public(recipient: &Recipient) -> DeviceId {
     let hash = Sha256::digest(recipient.to_string().as_bytes());
-    hex::encode(&hash[..8])
+    DeviceId::parse(&hex::encode(&hash[..8])).expect("sha256 prefix is valid device id")
 }
 
-pub fn device_id_from_public_key(public_key: &str) -> MultiDeviceResult<String> {
-    let recipient = public_key
-        .parse::<Recipient>()
-        .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?;
-    Ok(device_id_from_public(&recipient))
+pub fn device_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<DeviceId> {
+    Ok(device_id_from_public(
+        &public_key
+            .as_str()
+            .parse::<Recipient>()
+            .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?,
+    ))
 }
 
 #[must_use]
-pub fn device_auth_id_from_public(recipient: &Recipient) -> String {
+pub fn device_auth_id_from_public(recipient: &Recipient) -> AuthKeyId {
     let hash = Sha256::digest(recipient.to_string().as_bytes());
-    crate::format_auth_key_id(&hex::encode(hash))
-        .expect("sha256 hex is valid auth digest")
-        .to_string()
+    crate::format_auth_key_id(&hex::encode(hash)).expect("sha256 hex is valid auth digest")
 }
 
 pub fn encrypt_for_recipient(
     plaintext: &[u8],
-    recipient_public: &str,
-) -> MultiDeviceResult<String> {
+    recipient_public: &DevicePublicKey,
+) -> MultiDeviceResult<AgeArmoredCiphertext> {
     let recipient = recipient_public
+        .as_str()
         .parse::<Recipient>()
         .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?;
     encrypt_with_recipient(plaintext, &recipient)
@@ -261,7 +271,7 @@ pub fn parse_join_request(value: &str) -> MultiDeviceResult<JoinRequest> {
 pub fn list_join_requests(records: &[StoredSecretRecord]) -> Vec<JoinRequest> {
     records
         .iter()
-        .filter_map(|record| parse_join_request(&record.value).ok())
+        .filter_map(|record| parse_join_request(record.value.as_str()).ok())
         .collect()
 }
 
@@ -274,12 +284,12 @@ pub fn merge_remote_join_records<S: BuildHasher>(
         !is_join_stored_record(&StoredSecretRecord {
             key: SecretId::from_vault_record(""),
             secret_type: None,
-            value: value.clone(),
+            value: StoredRecordPayload::from_trusted(value.clone()),
         })
     });
     for record in fresh_records {
         if is_join_stored_record(record) {
-            armored.insert(record.key.to_string(), record.value.clone());
+            armored.insert(record.key.to_string(), record.value.as_str().to_owned());
         }
     }
 }
@@ -338,19 +348,25 @@ fn entry_to_member(entry: &MemberEntry) -> MultiDeviceResult<VaultMember> {
     })
 }
 
-pub fn encrypt_member_entry(entry: &MemberEntry, members_key: &str) -> MultiDeviceResult<String> {
+pub fn encrypt_member_entry(
+    entry: &MemberEntry,
+    members_key: &SymmetricKey,
+) -> MultiDeviceResult<AgeArmoredCiphertext> {
     let json = serde_json::to_string(entry).map_err(MultiDeviceError::MemberEntrySerialize)?;
     Ok(VaultCrypto::new(members_key)?.encrypt_value(&json)?)
 }
 
-pub fn decrypt_member_entry(ciphertext: &str, members_key: &str) -> MultiDeviceResult<MemberEntry> {
+pub fn decrypt_member_entry(
+    ciphertext: &AgeArmoredCiphertext,
+    members_key: &SymmetricKey,
+) -> MultiDeviceResult<MemberEntry> {
     let json = VaultCrypto::new(members_key)?.decrypt_value(ciphertext)?;
     serde_json::from_str(&json).map_err(MultiDeviceError::MemberEntryJson)
 }
 
 pub fn build_members_records(
     roster: &[VaultMember],
-    members_key: &str,
+    members_key: &SymmetricKey,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
     let mut records = Vec::with_capacity(roster.len());
     for member in roster {
@@ -358,7 +374,10 @@ pub fn build_members_records(
         records.push(StoredSecretRecord {
             key: SecretId::from_vault_record(&member_stored_key(&entry.pk_id)),
             secret_type: None,
-            value: encrypt_member_entry(&entry, members_key)?,
+            value: StoredRecordPayload::from_age_armored(encrypt_member_entry(
+                &entry,
+                members_key,
+            )?),
         });
     }
     Ok(records)
@@ -366,15 +385,19 @@ pub fn build_members_records(
 
 pub fn resolve_member_roster(
     records: &[StoredSecretRecord],
-    members_key: &str,
+    members_key: &SymmetricKey,
 ) -> MultiDeviceResult<Vec<VaultMember>> {
     let mut roster = Vec::new();
     for record in records.iter().filter(|r| is_members_stored_record(r)) {
-        let entry = decrypt_member_entry(&record.value, members_key)?;
+        let entry = decrypt_member_entry(
+            &AgeArmoredCiphertext::parse(record.value.as_str())?,
+            members_key,
+        )?;
         if !member_record_key_matches(record.key.as_str(), &entry.pk_id) {
-            let pk_id = crate::normalize_auth_key_id(&entry.pk_id)
-                .map_or_else(|_| entry.pk_id.clone(), |id| id.to_string());
-            let expected_key = member_stored_key(&pk_id);
+            let pk_id = crate::normalize_auth_key_id(entry.pk_id.as_str())
+                .map_or_else(|_| entry.pk_id.to_string(), |id| id.to_string());
+            let expected_key =
+                member_stored_key(&AuthKeyId::parse(&pk_id).unwrap_or(entry.pk_id.clone()));
             return Err(MultiDeviceError::MemberRecordKeyMismatch {
                 expected_key,
                 actual_key: record.key.to_string(),
@@ -396,7 +419,7 @@ pub fn roster_add_member(mut roster: Vec<VaultMember>, member: VaultMember) -> V
 
 pub fn genesis_members_records(
     identity: &DeviceIdentity,
-    members_key: &str,
+    members_key: &SymmetricKey,
     enrolled_at: &str,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
     build_members_records(&[member_from_identity(identity, enrolled_at)], members_key)
@@ -412,11 +435,11 @@ pub fn replace_member_records(
 
 pub fn rename_vault_member(
     records: &[StoredSecretRecord],
-    members_key: &str,
-    auth_id: &str,
+    members_key: &SymmetricKey,
+    auth_id: &AuthKeyId,
     label: &str,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    if !is_auth_id(auth_id) {
+    if !is_auth_id(auth_id.as_str()) {
         return Err(MultiDeviceError::InvalidMemberId);
     }
     let trimmed = label.trim();
@@ -426,7 +449,7 @@ pub fn rename_vault_member(
     let mut roster = resolve_member_roster(records, members_key)?;
     let member = roster
         .iter_mut()
-        .find(|member| member.auth_id == auth_id)
+        .find(|member| member.auth_id == *auth_id)
         .ok_or(MultiDeviceError::DeviceNotFound)?;
     member.label = if trimmed.is_empty() {
         None
@@ -438,30 +461,31 @@ pub fn rename_vault_member(
 
 pub fn revoke_vault_member(
     records: &[StoredSecretRecord],
-    members_key: &str,
-    auth_id: &str,
+    members_key: &SymmetricKey,
+    auth_id: &AuthKeyId,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    if !is_auth_id(auth_id) {
+    if !is_auth_id(auth_id.as_str()) {
         return Err(MultiDeviceError::InvalidMemberId);
     }
     let roster = resolve_member_roster(records, members_key)?;
     if roster.len() <= 1 {
         return Err(MultiDeviceError::CannotRemoveLastAccess);
     }
-    if !roster.iter().any(|member| member.auth_id == auth_id) {
+    if !roster.iter().any(|member| member.auth_id == *auth_id) {
         return Err(MultiDeviceError::DeviceNotFound);
     }
 
     let mut updated: Vec<StoredSecretRecord> = records
         .iter()
         .filter(|record| {
-            record.key.as_str() != auth_id && record.key.as_str() != member_stored_key(auth_id)
+            record.key.as_str() != auth_id.as_str()
+                && record.key.as_str() != member_stored_key(auth_id)
         })
         .cloned()
         .collect();
     let remaining_roster: Vec<VaultMember> = roster
         .into_iter()
-        .filter(|member| member.auth_id != auth_id)
+        .filter(|member| member.auth_id != *auth_id)
         .collect();
     replace_member_records(
         &mut updated,
@@ -473,7 +497,7 @@ pub fn revoke_vault_member(
 #[must_use]
 pub fn deny_join_request(
     records: &[StoredSecretRecord],
-    join_device_id: &str,
+    join_device_id: &DeviceId,
 ) -> Vec<StoredSecretRecord> {
     let join_key = join_record_key(join_device_id);
     records
@@ -484,26 +508,34 @@ pub fn deny_join_request(
 }
 
 pub fn auth_record(
-    pk_id: &str,
-    secrets_key: &str,
-    members_key: &str,
-    recipient_public: &str,
+    pk_id: &AuthKeyId,
+    secrets_key: &SymmetricKey,
+    members_key: &SymmetricKey,
+    recipient_public: &DevicePublicKey,
 ) -> MultiDeviceResult<StoredSecretRecord> {
     Ok(StoredSecretRecord {
-        key: SecretId::from_vault_record(pk_id),
+        key: SecretId::from_vault_record(pk_id.as_str()),
         secret_type: None,
-        value: serde_json::to_string(&AuthEnvelopes {
-            secrets_key: encrypt_for_recipient(secrets_key.as_bytes(), recipient_public)?,
-            members_key: encrypt_for_recipient(members_key.as_bytes(), recipient_public)?,
-        })
-        .map_err(MultiDeviceError::AuthEnvelopesSerialize)?,
+        value: StoredRecordPayload::from_trusted(
+            serde_json::to_string(&AuthEnvelopes {
+                secrets_key: encrypt_for_recipient(
+                    secrets_key.as_str().as_bytes(),
+                    recipient_public,
+                )?,
+                members_key: encrypt_for_recipient(
+                    members_key.as_str().as_bytes(),
+                    recipient_public,
+                )?,
+            })
+            .map_err(MultiDeviceError::AuthEnvelopesSerialize)?,
+        ),
     })
 }
 
 pub fn genesis_auth_record(
     identity: &DeviceIdentity,
-    secrets_key: &str,
-    members_key: &str,
+    secrets_key: &SymmetricKey,
+    members_key: &SymmetricKey,
 ) -> MultiDeviceResult<StoredSecretRecord> {
     auth_record(
         &dec_auth_id(identity),
@@ -518,7 +550,8 @@ pub fn genesis_dec_record(
     identity: &DeviceIdentity,
     dec: &str,
 ) -> MultiDeviceResult<StoredSecretRecord> {
-    genesis_auth_record(identity, dec, dec)
+    let key = SymmetricKey::parse(dec).map_err(MultiDeviceError::Validation)?;
+    genesis_auth_record(identity, &key, &key)
 }
 
 pub fn create_join_request_record(
@@ -533,13 +566,15 @@ pub fn create_join_request_record(
     Ok(StoredSecretRecord {
         key: SecretId::from_vault_record(&join_record_key(identity.device_id())),
         secret_type: None,
-        value: serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
+        value: StoredRecordPayload::from_trusted(
+            serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
+        ),
     })
 }
 
 pub fn approve_join_request(
-    secrets_key: &str,
-    members_key: &str,
+    secrets_key: &SymmetricKey,
+    members_key: &SymmetricKey,
     join: &JoinRequest,
     approver: &DeviceIdentity,
     records: &[StoredSecretRecord],
@@ -563,8 +598,8 @@ pub fn approve_join_request(
 }
 
 pub fn enroll_device_with_keys(
-    secrets_key: &str,
-    members_key: &str,
+    secrets_key: &SymmetricKey,
+    members_key: &SymmetricKey,
     identity: &DeviceIdentity,
     enrolled_at: &str,
 ) -> MultiDeviceResult<(StoredSecretRecord, Vec<StoredSecretRecord>)> {
@@ -579,7 +614,8 @@ pub fn enroll_device_with_dec(
     identity: &DeviceIdentity,
     enrolled_at: &str,
 ) -> MultiDeviceResult<(StoredSecretRecord, StoredSecretRecord)> {
-    let (auth, members) = enroll_device_with_keys(dec, dec, identity, enrolled_at)?;
+    let key = SymmetricKey::parse(dec).map_err(MultiDeviceError::Validation)?;
+    let (auth, members) = enroll_device_with_keys(&key, &key, identity, enrolled_at)?;
     let members = members
         .into_iter()
         .next()
@@ -591,7 +627,7 @@ pub fn enroll_device_with_dec(
 pub fn ensure_self_in_roster(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-    members_key: &str,
+    members_key: &SymmetricKey,
 ) -> MultiDeviceResult<Option<Vec<StoredSecretRecord>>> {
     let roster = resolve_member_roster(records, members_key)?;
     if roster.iter().any(|m| m.auth_id == identity.auth_id()) {
@@ -627,17 +663,17 @@ pub fn device_is_enrolled(records: &[StoredSecretRecord], identity: &DeviceIdent
     let pk_id = identity.auth_id();
     records
         .iter()
-        .any(|record| record.key.as_str() == pk_id && is_auth_stored_record(record))
+        .any(|record| record.key.as_str() == pk_id.as_str() && is_auth_stored_record(record))
 }
 
 #[must_use]
 pub fn pending_join_for_device(
     records: &[StoredSecretRecord],
-    device_id: &str,
+    device_id: &DeviceId,
 ) -> Option<JoinRequest> {
     list_join_requests(records)
         .into_iter()
-        .find(|join| join.device_id == device_id)
+        .find(|join| join.device_id == *device_id)
 }
 
 /// User-facing hint when `connect` cannot decrypt because this device has no auth row yet.
@@ -664,19 +700,19 @@ fn resolve_auth_envelopes(
     let pk_id = identity.auth_id();
     let record = records
         .iter()
-        .find(|entry| entry.key.as_str() == pk_id)
+        .find(|entry| entry.key.as_str() == pk_id.as_str())
         .ok_or_else(|| MultiDeviceError::AuthEnvelopeNotFound {
-            device_id: identity.device_id().to_owned(),
-            pk_id: pk_id.clone(),
+            device_id: identity.device_id().to_string(),
+            pk_id: pk_id.to_string(),
         })?;
-    parse_auth_envelopes(&record.value)
+    parse_auth_envelopes(record.value.as_str())
 }
 
 /// Resolve the `secrets_key` for this device from stored vault records.
 pub fn resolve_secrets_key(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-) -> MultiDeviceResult<String> {
+) -> MultiDeviceResult<SymmetricKey> {
     let envelopes = resolve_auth_envelopes(records, identity)?;
     identity.decrypt_envelope(&envelopes.secrets_key)
 }
@@ -685,7 +721,7 @@ pub fn resolve_secrets_key(
 pub fn resolve_dek(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-) -> MultiDeviceResult<String> {
+) -> MultiDeviceResult<SymmetricKey> {
     resolve_secrets_key(records, identity)
 }
 
@@ -693,7 +729,7 @@ pub fn resolve_dek(
 pub fn resolve_dec(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-) -> MultiDeviceResult<String> {
+) -> MultiDeviceResult<SymmetricKey> {
     resolve_secrets_key(records, identity)
 }
 
@@ -701,12 +737,15 @@ pub fn resolve_dec(
 pub fn resolve_members_key(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-) -> MultiDeviceResult<String> {
+) -> MultiDeviceResult<SymmetricKey> {
     let envelopes = resolve_auth_envelopes(records, identity)?;
     identity.decrypt_envelope(&envelopes.members_key)
 }
 
-fn encrypt_with_recipient(plaintext: &[u8], recipient: &Recipient) -> MultiDeviceResult<String> {
+fn encrypt_with_recipient(
+    plaintext: &[u8],
+    recipient: &Recipient,
+) -> MultiDeviceResult<AgeArmoredCiphertext> {
     use age::armor::{ArmoredWriter, Format};
 
     let encryptor =
@@ -728,13 +767,18 @@ fn encrypt_with_recipient(plaintext: &[u8], recipient: &Recipient) -> MultiDevic
         .finish()
         .map_err(|e| AgeCryptoError::ArmorFinish(e.to_string()))?;
 
-    Ok(String::from_utf8(armored).map_err(|e| AgeCryptoError::InvalidUtf8Armor(e.to_string()))?)
+    let armored =
+        String::from_utf8(armored).map_err(|e| AgeCryptoError::InvalidUtf8Armor(e.to_string()))?;
+    Ok(AgeArmoredCiphertext::from_trusted_armored(armored))
 }
 
-fn decrypt_with_identity(envelope: &str, identity: &Identity) -> MultiDeviceResult<String> {
+fn decrypt_with_identity(
+    envelope: &AgeArmoredCiphertext,
+    identity: &Identity,
+) -> MultiDeviceResult<String> {
     use age::armor::ArmoredReader;
 
-    let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(envelope.as_bytes()))
+    let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(envelope.as_str().as_bytes()))
         .map_err(|e| AgeCryptoError::DecryptSetup(e.to_string()))?;
     let mut reader = decryptor
         .decrypt(std::iter::once(identity as &dyn age::Identity))
@@ -808,7 +852,7 @@ mod tests {
 
         let roster = resolve_member_roster(&records, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 2);
-        assert!(roster.iter().any(|m| m.device_id == joiner.device_id()));
+        assert!(roster.iter().any(|m| m.device_id == *joiner.device_id()));
     }
 
     #[test]
@@ -902,7 +946,7 @@ mod tests {
         records.push(StoredSecretRecord {
             key: SecretId::from_vault_record("site"),
             secret_type: Some(crate::SecretType::ApiKey),
-            value: "cipher".to_owned(),
+            value: StoredRecordPayload::from_trusted("cipher".to_owned()),
         });
         let users = user_stored_records(&records);
         assert_eq!(users.len(), 1);
@@ -913,10 +957,15 @@ mod tests {
     #[test]
     fn auth_id_is_full_sha256_of_public_key() {
         let device = DeviceIdentity::generate().unwrap();
-        assert_eq!(device.auth_id().len(), 68);
-        assert!(device.auth_id().starts_with(crate::AUTH_KEY_ID_PREFIX));
-        assert!(is_auth_id(&device.auth_id()));
-        assert_ne!(device.auth_id(), device.device_id());
+        assert_eq!(device.auth_id().as_str().len(), 68);
+        assert!(
+            device
+                .auth_id()
+                .as_str()
+                .starts_with(crate::AUTH_KEY_ID_PREFIX)
+        );
+        assert!(is_auth_id(device.auth_id().as_str()));
+        assert_ne!(device.auth_id().as_str(), device.device_id().as_str());
     }
 
     #[test]
@@ -924,19 +973,27 @@ mod tests {
         let keys = generate_vault_keys().unwrap();
         let device = DeviceIdentity::generate().unwrap();
         let record = genesis_auth_record(&device, &keys.secrets_key, &keys.members_key).unwrap();
-        assert_eq!(record.key.as_str(), device.auth_id());
+        assert_eq!(record.key.as_str(), device.auth_id().as_str());
         assert!(!record.key.as_str().contains("age1"));
-        let env = parse_auth_envelopes(&record.value).unwrap();
-        assert!(env.secrets_key.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert!(env.members_key.contains("BEGIN AGE ENCRYPTED FILE"));
+        let env = parse_auth_envelopes(record.value.as_str()).unwrap();
+        assert!(
+            env.secrets_key
+                .as_str()
+                .contains("BEGIN AGE ENCRYPTED FILE")
+        );
+        assert!(
+            env.members_key
+                .as_str()
+                .contains("BEGIN AGE ENCRYPTED FILE")
+        );
     }
 
     #[test]
     fn generate_vault_keys_produces_distinct_secrets_and_members_keys() {
         let keys = generate_vault_keys().unwrap();
         assert_ne!(keys.secrets_key, keys.members_key);
-        assert_eq!(keys.secrets_key.len(), 64);
-        assert_eq!(keys.members_key.len(), 64);
+        assert_eq!(keys.secrets_key.as_str().len(), 64);
+        assert_eq!(keys.members_key.as_str().len(), 64);
     }
 
     #[test]
@@ -1133,7 +1190,7 @@ mod tests {
         merge_remote_join_records(&mut armored, std::slice::from_ref(&join2));
         let pending_joins = list_join_requests(&records_from_armored(&armored));
         assert_eq!(pending_joins.len(), 1);
-        assert_eq!(pending_joins[0].device_id, joiner2.device_id());
+        assert_eq!(pending_joins[0].device_id, *joiner2.device_id());
         let _ = genesis;
     }
 
@@ -1142,7 +1199,7 @@ mod tests {
     ) -> std::collections::HashMap<String, String> {
         records
             .iter()
-            .map(|record| (record.key.to_string(), record.value.clone()))
+            .map(|record| (record.key.to_string(), record.value.as_str().to_owned()))
             .collect()
     }
 
@@ -1154,7 +1211,7 @@ mod tests {
             .map(|(key, value)| StoredSecretRecord {
                 key: SecretId::from_vault_record(key),
                 secret_type: None,
-                value: value.clone(),
+                value: StoredRecordPayload::from_trusted(value.clone()),
             })
             .collect()
     }
