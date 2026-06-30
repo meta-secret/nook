@@ -38,7 +38,7 @@ echo "==> nook-core coverage (floor: ${FLOOR}% lines)"
 
 SUMMARY_FILE="$(mktemp)"
 trap 'rm -f "$SUMMARY_FILE"' EXIT
-cargo llvm-cov nextest --profile ci -p nook-core --summary-only 2>&1 | tee "$SUMMARY_FILE"
+cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only 2>&1 | tee "$SUMMARY_FILE"
 
 TOTAL_LINE=""
 while IFS= read -r line; do
