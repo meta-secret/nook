@@ -261,7 +261,9 @@ describe('syncProviderTargetKey', () => {
       },
       createdAt: '2026-06-24T00:00:00.000Z',
     }
-    expect(syncProviderTargetKey(personal)).not.toBe(syncProviderTargetKey(work))
+    expect(syncProviderTargetKey(personal)).not.toBe(
+      syncProviderTargetKey(work),
+    )
   })
 })
 
@@ -277,9 +279,9 @@ describe('findDuplicateSyncProvider', () => {
       githubRepo: 'nook-crdt-test-1',
       githubPat: 'github_pat_11AAAAAAAAAA',
     })
-    expect(
-      findDuplicateSyncProvider([existing], candidate)?.id,
-    ).toBe('gh-existing')
+    expect(findDuplicateSyncProvider([existing], candidate)?.id).toBe(
+      'gh-existing',
+    )
   })
 
   test('ignores the excluded provider id', () => {

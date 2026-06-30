@@ -24,12 +24,16 @@ export const DEFAULT_DRIVE_VAULT_FILE = 'nook-vault.yaml'
 const DRIVE_STORAGE_REF_SEP = '\t'
 
 /** Canonical identity for a sync target — two providers with the same key are duplicates. */
-export function syncProviderTargetKey(provider: StorageProvider): string | null {
+export function syncProviderTargetKey(
+  provider: StorageProvider,
+): string | null {
   if (provider.type === 'local') {
     return 'local'
   }
   if (provider.type === 'github') {
-    const repo = (provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO).toLowerCase()
+    const repo = (
+      provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
+    ).toLowerCase()
     const pat = provider.githubPat?.trim() ?? ''
     return `github:${repo}:${pat}`
   }
