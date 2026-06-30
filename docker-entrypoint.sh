@@ -12,7 +12,17 @@ if [ -z "${CI:-}" ] && [ ! -f "$wasm_pkg/nook_wasm_bg.wasm" ] && [ -d /opt/nook/
 fi
 
 if [ -f /workspace/nook-web/package.json ]; then
-  (cd /workspace/nook-web && bun install --frozen-lockfile)
+  lock=/workspace/nook-web/bun.lock
+  stamp=/workspace/nook-web/node_modules/.bun-lock-stamp
+  if [ -f "$lock" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$(sha256sum "$lock" | awk '{print $1}')" ]; then
+    : # node_modules volume matches bun.lock — skip reinstall
+  else
+    (cd /workspace/nook-web && bun install --frozen-lockfile)
+    if [ -f "$lock" ]; then
+      mkdir -p /workspace/nook-web/node_modules
+      sha256sum "$lock" | awk '{print $1}' > "$stamp"
+    fi
+  fi
 fi
 
 exec "$@"

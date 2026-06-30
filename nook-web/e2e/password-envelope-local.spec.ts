@@ -14,9 +14,12 @@ import {
   revealSecretInRow,
   selectLoginUnlockMethod,
   stubGithubVaultForLocalE2e,
+  submitOnboardEnrollmentCode,
   uniqueSecretKey,
+  openOnboardDevicePanel,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
+  waitForStorageChainIdle,
   waitForVaultUnlocked,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
@@ -177,11 +180,13 @@ test.describe('vault password envelope (local)', () => {
       entryLabel: 'Enrollment test',
     })
 
-    await page.getByTestId('vault-onboard-tab').click()
+    await openOnboardDevicePanel(page)
+    await waitForStorageChainIdle(page)
     await page.getByTestId('onboard-password-input').fill('wrong-typo-99')
     await page.getByTestId('onboard-device-submit').click()
     await expect(page.getByTestId('onboard-error')).toContainText(
       'does not match',
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     await expect(page.getByTestId('onboard-code')).toHaveCount(0)
 
@@ -206,11 +211,11 @@ test.describe('vault password envelope (local)', () => {
       entryLabel: 'Enrollment test',
     })
 
-    await page.getByTestId('vault-onboard-tab').click()
-    await page.getByTestId('onboard-password-input').fill('hunter2-secure')
-    await page.getByTestId('onboard-device-submit').click()
-    const codeText = page.getByTestId('onboard-code')
-    await expect(codeText).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await openOnboardDevicePanel(page)
+    const codeText = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
+    await expect(codeText).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     const code = (await codeText.inputValue()).trim()
     expect(code.length).toBeGreaterThan(40)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
@@ -296,13 +301,12 @@ test.describe('enrollment link deep link (local)', () => {
       password: 'link-pass',
       entryLabel: 'Link test',
     })
-    await pageA.getByTestId('vault-onboard-tab').click()
-    await pageA.getByTestId('onboard-password-input').fill('link-pass')
-    await pageA.getByTestId('onboard-device-submit').click()
+    const vaultYaml = await readLocalVaultYamlFromIdb(pageA)
+    await openOnboardDevicePanel(pageA)
+    await submitOnboardEnrollmentCode(pageA, 'link-pass')
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
-    const vaultYaml = await readLocalVaultYamlFromIdb(pageA)
     await stubGithubVaultForLocalE2e(pageA, {
       repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
       vaultYaml,

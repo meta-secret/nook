@@ -22,6 +22,7 @@ import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_VAULT_FILE,
   DEFAULT_GITHUB_REPO,
+  findDuplicateSyncProvider,
   formatDriveStorageRef,
   loadAuthProviders,
   loadAuthProvidersWithVaultMigration,
@@ -140,6 +141,10 @@ export class VaultState {
   syncingProviderId = $state<string | null>(null)
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false)
+  /** Concurrent secret replacement conflicts from the event log projection. */
+  replacementConflicts = $state<
+    Array<{ oldSecretId: string; candidatesJson: string }>
+  >([])
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | null>(null)
 
@@ -212,6 +217,34 @@ export class VaultState {
       () => undefined,
     )
     return next
+  }
+
+  /** E2E/dev: wait for the serialized wasm storage queue to finish. */
+  waitForStorageChain(): Promise<void> {
+    return this.storageChain.then(() => undefined)
+  }
+
+  /** E2E/dev: reset a stuck storage queue (abandons in-flight wasm work). */
+  resetStorageChain(): void {
+    this.storageChain = Promise.resolve()
+  }
+
+  private static storageOpTimeoutMs = 20_000
+
+  private raceStorageTimeout<T>(
+    promise: Promise<T>,
+    label: string,
+  ): Promise<T> {
+    const timeoutMs = VaultState.storageOpTimeoutMs
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        setTimeout(
+          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        )
+      }),
+    ])
   }
 
   private wasmStorageArgs(): [string, string, string] {
@@ -1232,7 +1265,7 @@ export class VaultState {
     this.showSuccess(this.t('toasts.removed_device', { label: target.label }))
   }
 
-  async ensureProviderSaved() {
+  async ensureProviderSaved(): Promise<boolean> {
     const pat = this.githubPat.trim()
     const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
     const driveFile = this.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
@@ -1254,6 +1287,10 @@ export class VaultState {
           }
         : undefined
 
+    const isExplicitAdd =
+      this.addProviderOpen ||
+      (this.isAuthenticated && this.loginSetupType !== null)
+
     if (isNewSetup && type !== 'local') {
       const provider: StorageProvider = {
         id: generateId(),
@@ -1273,7 +1310,14 @@ export class VaultState {
         storeId: vaultStoreId,
         createdAt: isoTimestamp(),
       }
-      this.providers = [...this.providers, provider]
+      if (findDuplicateSyncProvider(this.providers, provider)) {
+        if (isExplicitAdd) {
+          this.errorMsg = this.t('auth_storage.duplicate_sync_provider')
+          return false
+        }
+      } else {
+        this.providers = [...this.providers, provider]
+      }
     } else if (isNewSetup && type === 'local' && !this.localProvider) {
       const provider: StorageProvider = {
         id: generateId(),
@@ -1335,6 +1379,7 @@ export class VaultState {
     this.addProviderOpen = false
     this.applyActiveProviderCredentials()
     await this.persistProviders()
+    return true
   }
 
   startVaultSync() {
@@ -1505,6 +1550,8 @@ export class VaultState {
   async manualSync() {
     if (!this.manager) return
     if (this.syncBlocked) return
+    if (this.isSyncing) return
+    this.isSyncing = true
     try {
       await this.initDeviceIdentity()
       if (this.syncProviders.length === 0) {
@@ -1523,6 +1570,8 @@ export class VaultState {
       }
     } catch {
       // Manual refresh should not interrupt the UI.
+    } finally {
+      this.isSyncing = false
     }
   }
 
@@ -1542,8 +1591,24 @@ export class VaultState {
       this.errorMsg = ''
     }
     try {
-      const localYaml = await readLocalVaultBlob()
       const [mode, pat, repo] = this.providerWasmArgs(provider)
+      if (this.manager.eventLogMode()) {
+        await this.enqueueStorage(() =>
+          this.raceStorageTimeout(
+            this.manager!.syncEventLogForProvider(mode, pat, repo),
+            'Event log sync',
+          ),
+        )
+        await this.reloadSessionFromLocal()
+        await this.refreshReplacementConflicts()
+        await this.updateProviderSyncMetadata(
+          providerId,
+          await readLocalVaultBlob(),
+          null,
+        )
+        return
+      }
+      const localYaml = await readLocalVaultBlob()
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)
       const attempt = attemptReconcileVaultSyncBlobs(
         localYaml,
@@ -1751,6 +1816,18 @@ export class VaultState {
     this.lastSyncedAt = new SvelteDate()
   }
 
+  async refreshReplacementConflicts(): Promise<void> {
+    if (!this.manager?.eventLogMode()) {
+      this.replacementConflicts = []
+      return
+    }
+    const conflicts = await this.manager.listProjectionConflicts()
+    this.replacementConflicts = conflicts.map((conflict) => ({
+      oldSecretId: conflict.oldSecretId,
+      candidatesJson: conflict.candidatesJson,
+    }))
+  }
+
   private async stageVaultSyncConflict(
     conflict: Omit<
       PendingSyncConflict,
@@ -1875,7 +1952,10 @@ export class VaultState {
     ) {
       return conflict.providerId
     }
-    await this.ensureProviderSaved()
+    const saved = await this.ensureProviderSaved()
+    if (!saved) {
+      throw new Error(this.t('auth_storage.duplicate_sync_provider'))
+    }
     const provider =
       this.syncProviders[this.syncProviders.length - 1] ??
       this.providers[this.providers.length - 1]
@@ -1906,7 +1986,10 @@ export class VaultState {
         return
       }
 
-      await this.ensureProviderSaved()
+      const saved = await this.ensureProviderSaved()
+      if (!saved) {
+        return
+      }
       const provider =
         this.syncProviders[this.syncProviders.length - 1] ??
         this.providers[this.providers.length - 1]
@@ -2296,7 +2379,6 @@ export class VaultState {
       await this.loadProviders()
       await this.promoteSessionVaultToLocalIfNeeded()
       await this.hydrateMultiDeviceState()
-      await this.syncFromStorage({ force: true })
       if (this.storageMode === 'local') {
         this.showSuccess(this.t('toasts.local_loaded'))
       } else if (this.storageMode === 'oauth-file') {
@@ -2304,13 +2386,21 @@ export class VaultState {
       } else {
         this.showSuccess(this.t('toasts.github_connected'))
       }
-      this.startVaultSync()
     } catch (e: unknown) {
       this.isAuthenticated = false
       const message = e instanceof Error ? e.message : String(e)
       this.errorMsg = this.resolveErrorMessage(message)
     } finally {
       this.isVerifying = false
+    }
+
+    if (this.isAuthenticated) {
+      try {
+        await this.syncFromStorage({ force: true })
+      } catch {
+        // Post-unlock sync should not block the login gate.
+      }
+      this.startVaultSync()
     }
   }
 
@@ -2449,7 +2539,19 @@ export class VaultState {
     // before we issue sync `&self` calls. Without this, scrypt verify
     // races a background `sync_vault_from_storage` and trips the
     // aliasing detector.
-    await this.storageChain
+    try {
+      await Promise.race([
+        this.storageChain,
+        new Promise<void>((_, reject) => {
+          setTimeout(
+            () => reject(new Error('Vault storage is busy. Try again.')),
+            VaultState.storageOpTimeoutMs,
+          )
+        }),
+      ])
+    } catch {
+      this.resetStorageChain()
+    }
     await new Promise((resolve) => setTimeout(resolve, 0))
     try {
       // Background sync can refresh wasm password metadata from remote storage

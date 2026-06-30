@@ -6,12 +6,12 @@
 //! and just reuses the session keys to refresh the armored cache.
 
 use super::NookVaultManager;
-use crate::NookError;
 use crate::NookVaultSyncResult;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
     sync_result_session, sync_result_unchanged,
 };
+use crate::storage::event_db::is_event_log_mode;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -30,6 +30,12 @@ impl NookVaultManager {
 
         if content.trim() == self.last_synced_content.trim() {
             if self.members_key.is_empty() {
+                if self.event_log_mode || is_event_log_mode().await? {
+                    self.ensure_vault_crypto_from_cache().await?;
+                    if self.crypto.is_some() {
+                        return sync_result_session(self, false);
+                    }
+                }
                 return sync_result_unchanged();
             }
             return sync_result_session(self, false);
@@ -52,9 +58,8 @@ impl NookVaultManager {
         }
 
         let identity = self.device_identity()?;
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-        let fresh_records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content)?;
+        let fresh_records = nook_core::deserialize_stored(&content, format)?;
 
         nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
         let LoadedVault {

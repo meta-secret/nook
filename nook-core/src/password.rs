@@ -1,5 +1,7 @@
 use getrandom::getrandom;
 
+use crate::errors::{PasswordError, PasswordResult};
+
 const LOWERCASE: &str = "abcdefghijklmnopqrstuvwxyz";
 const UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
@@ -19,14 +21,15 @@ pub struct PasswordOptions {
 }
 
 impl PasswordOptions {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> PasswordResult<()> {
         if self.length < MIN_PASSWORD_LENGTH || self.length > MAX_PASSWORD_LENGTH {
-            return Err(format!(
-                "Password length must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH}."
-            ));
+            return Err(PasswordError::LengthOutOfRange {
+                min: MIN_PASSWORD_LENGTH,
+                max: MAX_PASSWORD_LENGTH,
+            });
         }
         if !self.lowercase && !self.uppercase && !self.numbers && !self.symbols {
-            return Err("Select at least one character set.".to_owned());
+            return Err(PasswordError::NoCharacterSet);
         }
         Ok(())
     }
@@ -49,12 +52,12 @@ impl PasswordOptions {
     }
 }
 
-pub fn generate_password(options: &PasswordOptions) -> Result<String, String> {
+pub fn generate_password(options: &PasswordOptions) -> PasswordResult<String> {
     options.validate()?;
     let charset = options.charset();
     let charset_bytes = charset.as_bytes();
     let mut random = vec![0u8; options.length * 4];
-    getrandom(&mut random).map_err(|e| format!("Failed to generate random bytes: {e}"))?;
+    getrandom(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
     let mut password = String::with_capacity(options.length);
     for chunk in random.chunks(4) {
@@ -97,7 +100,7 @@ mod tests {
             symbols: false,
         })
         .unwrap_err();
-        assert!(err.contains("at least one character set"));
+        assert!(err.to_string().contains("at least one character set"));
     }
 
     #[test]
@@ -110,7 +113,7 @@ mod tests {
             symbols: false,
         })
         .unwrap_err();
-        assert!(err.contains("between 8 and 128"));
+        assert!(err.to_string().contains("between 8 and 128"));
     }
 
     #[test]
@@ -163,7 +166,7 @@ mod tests {
             symbols: false,
         })
         .unwrap_err();
-        assert!(err.contains("between 8 and 128"));
+        assert!(err.to_string().contains("between 8 and 128"));
     }
 
     #[test]

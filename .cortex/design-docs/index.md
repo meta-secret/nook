@@ -9,3 +9,4 @@ This directory contains design specifications, architecture rationales, and core
 | [vault-session-and-lock.md](vault-session-and-lock.md) | Lock session, vault vs sync providers, multi-vault model | Verified |
 | [auth-providers.md](auth-providers.md) | Login gate, sync provider persistence | Verified (migrating copy) |
 | [secret-store-identity.md](secret-store-identity.md) | `store_id` logical vault identity, replication, `pk_id` rationale | Verified |
+| [vault-event-log.md](vault-event-log.md) | Immutable event log, causal DAG, projection (replaces scalar sync) | Implemented |

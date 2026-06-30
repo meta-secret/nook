@@ -6,6 +6,8 @@
 
 mod bip39;
 mod database;
+mod errors;
+mod event_canonical;
 mod i18n;
 mod multi_device;
 mod password;
@@ -14,14 +16,32 @@ mod secret_types;
 mod secret_view;
 mod session;
 mod validation;
+mod vault_connect;
 mod vault_crypto;
+mod vault_epoch;
+mod vault_epoch_crypto;
+mod vault_event;
+mod vault_event_builder;
+mod vault_event_graph;
+mod vault_event_session;
+mod vault_event_store;
 mod vault_format;
 mod vault_ids;
+mod vault_import;
+mod vault_projection;
+mod vault_session_cache;
+mod vault_signing;
 mod vault_sync;
+mod vault_sync_session;
 mod vault_sync_store;
 
 pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
+pub use errors::{
+    DatabaseError, EventError, MultiDeviceError, PasswordError, SecretPayloadError, SessionError,
+    ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError, VaultResult,
+    VaultSyncError,
+};
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
@@ -46,6 +66,11 @@ pub use multi_device::{
     user_stored_records, vault_has_multi_device_records,
 };
 
+pub use event_canonical::{
+    EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
+    format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,
+    verify_body_signature,
+};
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
@@ -60,7 +85,26 @@ pub use validation::{
     validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
     validate_storage_mode,
 };
+pub use vault_connect::{
+    LoadedVault, access_status_for_vault_content, apply_member_records,
+    capture_vault_unlock_from_content, content_requires_genesis, load_stored_vault,
+};
 pub use vault_crypto::VaultCrypto;
+pub use vault_epoch::{
+    EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
+    operation_starts_epoch,
+};
+pub use vault_epoch_crypto::{reencrypt_user_secrets_for_epoch, rotate_vault_keys_with_secrets};
+pub use vault_event::{
+    EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
+    build_genesis_import_event,
+};
+pub use vault_event_builder::{
+    AppendEventInput, build_signed_event, encrypted_secret_from_armored, parents_from_heads,
+};
+pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
+pub use vault_event_session::VaultEventSession;
+pub use vault_event_store::{LocalEventStore, union_remote_events};
 pub use vault_format::{
     VaultFormat, deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
     read_vault_password_entries, read_vault_store_id, read_vault_unlock, read_vault_version,
@@ -72,7 +116,18 @@ pub use vault_ids::{
     is_compact_token, normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id,
     validate_secret_id, validate_store_id,
 };
+pub use vault_import::{
+    KeyEpochId, legacy_encrypted_secrets, legacy_vault_content_hash, legacy_vault_to_import_event,
+    secrets_from_import_event,
+};
+pub use vault_projection::{
+    ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
+    assert_projection_permutation_invariant, project_vault,
+};
+pub use vault_session_cache::hydrate_keys_from_projection_yaml;
+pub use vault_signing::SigningIdentity;
 pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};
+pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_sync};
 pub use vault_sync_store::{
     MemoryVaultStore, fan_out_sync, reconcile_vault_stores, resolve_conflict_keep_local,
     resolve_conflict_keep_remote,

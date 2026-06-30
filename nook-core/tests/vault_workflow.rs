@@ -170,7 +170,7 @@ fn incremental_replace_secret_rejects_missing_old_id() {
         },
     )
     .unwrap_err();
-    assert!(err.contains("not found"));
+    assert!(err.to_string().contains("not found"));
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn incremental_replace_secret_rejects_duplicate_new_id() {
         },
     )
     .unwrap_err();
-    assert!(err.contains("already exists"));
+    assert!(err.to_string().contains("already exists"));
 }
 
 #[test]

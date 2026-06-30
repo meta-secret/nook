@@ -355,6 +355,7 @@
     "sync_conflict_store_id_banner": "Different vault on {provider} — choose which copy to keep.",
     "sync_blocked_edits": "Resolve the sync conflict before changing secrets.",
     "sync_failed": "Sync failed for this provider.",
+    "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",
     "no_token_saved": "No token saved",
     "google_signed_in": "Signed in with Google",
     "google_not_signed_in": "Not signed in with Google",

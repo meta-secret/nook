@@ -104,8 +104,7 @@ fn record_content(record: &ICloudRecord) -> Option<String> {
 }
 
 pub(crate) async fn verify_icloud_access(web_auth_token: &str) -> Result<(), NookError> {
-    let token =
-        nook_core::validate_oauth_access_token(web_auth_token).map_err(NookError::ICloud)?;
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let client = reqwest::Client::new();
     let mut request = client.get(icloud_user_url("users/current"));
     for (name, value) in icloud_auth_query(&token) {
@@ -160,10 +159,8 @@ pub(crate) async fn ensure_icloud_vault_record(
     web_auth_token: &str,
     record_name: &str,
 ) -> Result<String, NookError> {
-    let token =
-        nook_core::validate_oauth_access_token(web_auth_token).map_err(NookError::ICloud)?;
-    let validated_name =
-        nook_core::validate_drive_vault_file_name(record_name).map_err(NookError::ICloud)?;
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+    let validated_name = nook_core::validate_drive_vault_file_name(record_name)?;
     if lookup_vault_record(&token, &validated_name)
         .await?
         .is_some()
@@ -214,8 +211,7 @@ pub(crate) async fn fetch_icloud_vault(
     web_auth_token: &str,
     record_name: &str,
 ) -> Result<Option<ICloudVaultFile>, NookError> {
-    let token =
-        nook_core::validate_oauth_access_token(web_auth_token).map_err(NookError::ICloud)?;
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let resolved_name = ensure_icloud_vault_record(&token, record_name).await?;
     let record = lookup_vault_record(&token, &resolved_name)
         .await?
@@ -245,8 +241,7 @@ pub(crate) async fn write_icloud_vault_with_retry(
     content: &str,
     revision: Option<String>,
 ) -> Result<(String, String), NookError> {
-    let token =
-        nook_core::validate_oauth_access_token(web_auth_token).map_err(NookError::ICloud)?;
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let resolved_name = ensure_icloud_vault_record(&token, record_name).await?;
     let mut current_revision = revision;
 

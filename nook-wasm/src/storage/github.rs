@@ -262,7 +262,7 @@ pub(crate) async fn fetch_github_vault(
     }))
 }
 
-async fn write_github_text_file(
+pub(crate) async fn write_github_text_file(
     pat: &str,
     repo: &str,
     path: &str,

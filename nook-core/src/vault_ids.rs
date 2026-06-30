@@ -1,5 +1,6 @@
 //! Prefixed vault identifiers (`store_`, `secret_`, `key_`) for typed on-disk ids.
 
+use crate::errors::{MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{generate_id, is_device_id};
 
 pub const STORE_ID_PREFIX: &str = "store_";
@@ -35,14 +36,14 @@ pub fn auth_key_digest(id: &str) -> Option<&str> {
     is_auth_digest(id).then_some(id)
 }
 
-pub fn format_auth_key_id(digest_hex: &str) -> Result<String, String> {
+pub fn format_auth_key_id(digest_hex: &str) -> ValidationResult<String> {
     if !is_auth_digest(digest_hex) {
-        return Err("errors.validation.auth_key_id_invalid".to_owned());
+        return Err(ValidationError::AuthKeyIdInvalid);
     }
     Ok(format!("{AUTH_KEY_ID_PREFIX}{digest_hex}"))
 }
 
-pub fn normalize_auth_key_id(id: &str) -> Result<String, String> {
+pub fn normalize_auth_key_id(id: &str) -> ValidationResult<String> {
     let trimmed = id.trim();
     if let Some(digest) = trimmed.strip_prefix(AUTH_KEY_ID_PREFIX) {
         return format_auth_key_id(digest);
@@ -50,17 +51,17 @@ pub fn normalize_auth_key_id(id: &str) -> Result<String, String> {
     format_auth_key_id(trimmed)
 }
 
-pub fn format_store_id(token: &str) -> Result<String, String> {
+pub fn format_store_id(token: &str) -> ValidationResult<String> {
     if !is_compact_token(token) {
-        return Err("errors.validation.store_id_invalid".to_owned());
+        return Err(ValidationError::StoreIdInvalid);
     }
     if is_device_id(token) {
-        return Err("errors.validation.store_id_reserved".to_owned());
+        return Err(ValidationError::StoreIdReserved);
     }
     Ok(format!("{STORE_ID_PREFIX}{token}"))
 }
 
-pub fn normalize_store_id(id: &str) -> Result<String, String> {
+pub fn normalize_store_id(id: &str) -> ValidationResult<String> {
     let trimmed = id.trim();
     if let Some(token) = trimmed.strip_prefix(STORE_ID_PREFIX) {
         return format_store_id(token);
@@ -68,33 +69,33 @@ pub fn normalize_store_id(id: &str) -> Result<String, String> {
     format_store_id(trimmed)
 }
 
-pub fn generate_store_id() -> Result<String, String> {
-    format_store_id(&generate_id()?)
+pub fn generate_store_id() -> MultiDeviceResult<String> {
+    Ok(format_store_id(&generate_id()?)?)
 }
 
-pub fn format_secret_id(token: &str) -> Result<String, String> {
+pub fn format_secret_id(token: &str) -> ValidationResult<String> {
     if !is_compact_token(token) {
-        return Err("errors.validation.secret_id_invalid".to_owned());
+        return Err(ValidationError::SecretIdInvalid);
     }
     Ok(format!("{SECRET_ID_PREFIX}{token}"))
 }
 
-pub fn generate_secret_id() -> Result<String, String> {
-    format_secret_id(&generate_id()?)
+pub fn generate_secret_id() -> MultiDeviceResult<String> {
+    Ok(format_secret_id(&generate_id()?)?)
 }
 
 /// Accept prefixed compact ids and legacy human labels (e.g. `github.com`).
-pub fn validate_secret_id(id: &str) -> Result<String, String> {
+pub fn validate_secret_id(id: &str) -> ValidationResult<String> {
     let trimmed = id.trim();
     if trimmed.is_empty() {
-        return Err("errors.validation.secret_id_required".to_owned());
+        return Err(ValidationError::SecretIdRequired);
     }
     if let Some(token) = trimmed.strip_prefix(SECRET_ID_PREFIX) {
         if !is_compact_token(token) {
-            return Err("errors.validation.secret_id_invalid".to_owned());
+            return Err(ValidationError::SecretIdInvalid);
         }
         if is_device_id(token) || is_auth_key_id(trimmed) {
-            return Err("errors.validation.secret_id_reserved".to_owned());
+            return Err(ValidationError::SecretIdReserved);
         }
         return Ok(format!("{SECRET_ID_PREFIX}{token}"));
     }
@@ -105,13 +106,13 @@ pub fn validate_secret_id(id: &str) -> Result<String, String> {
         return format_secret_id(token);
     }
     if is_device_id(trimmed) || is_auth_key_id(trimmed) || trimmed.starts_with(STORE_ID_PREFIX) {
-        return Err("errors.validation.secret_id_reserved".to_owned());
+        return Err(ValidationError::SecretIdReserved);
     }
     Ok(trimmed.to_owned())
 }
 
 /// On write: legacy labels stay as-is; bare compact tokens gain `secret_`.
-pub fn normalize_secret_id_for_write(id: &str) -> Result<String, String> {
+pub fn normalize_secret_id_for_write(id: &str) -> ValidationResult<String> {
     let trimmed = id.trim();
     if trimmed.starts_with(SECRET_ID_PREFIX) {
         return validate_secret_id(trimmed);
@@ -122,6 +123,6 @@ pub fn normalize_secret_id_for_write(id: &str) -> Result<String, String> {
     validate_secret_id(trimmed)
 }
 
-pub fn validate_store_id(id: &str) -> Result<String, String> {
+pub fn validate_store_id(id: &str) -> ValidationResult<String> {
     normalize_store_id(id)
 }

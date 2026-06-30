@@ -175,8 +175,13 @@ test.describe('vault connect flow', () => {
     const githubProvider = page.getByTestId('settings-provider-github')
     await expect(githubProvider).toBeVisible()
 
+    const removeBtn = page.getByTestId('remove-provider-e2e-sync-github')
+    await expect(removeBtn).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
     page.once('dialog', (dialog) => dialog.accept())
-    await page.getByTestId('remove-provider-e2e-sync-github').click()
+    await removeBtn.click()
 
     await expect(page.getByTestId('login-gate')).not.toBeVisible({
       timeout: UI_TIMEOUT_MS,

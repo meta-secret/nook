@@ -43,13 +43,12 @@ pub async fn write_local_vault_yaml(content: String) -> Result<(), JsError> {
         .map_err(|e| JsError::new(&e.to_string()))
 }
 
-#[wasm_bindgen(js_name = fetchRemoteVaultYaml)]
-pub async fn fetch_remote_vault_yaml(
+async fn fetch_remote_vault_yaml_inner(
     storage_mode: String,
     github_pat: String,
     github_repo: String,
-) -> Result<NookRemoteVaultFetch, JsError> {
-    let mode = nook_core::StorageMode::parse(&storage_mode).map_err(NookError::Database)?;
+) -> Result<NookRemoteVaultFetch, NookError> {
+    let mode = nook_core::StorageMode::parse(&storage_mode)?;
     let mut github_root_empty = false;
 
     let (content, revision, missing) = match mode {
@@ -58,9 +57,8 @@ pub async fn fetch_remote_vault_yaml(
             (local, None, false)
         }
         nook_core::StorageMode::Github => {
-            let pat = nook_core::validate_github_pat(&github_pat).map_err(NookError::GitHub)?;
-            let repo_name =
-                nook_core::validate_github_repo_name(&github_repo).map_err(NookError::Database)?;
+            let pat = nook_core::validate_github_pat(&github_pat)?;
+            let repo_name = nook_core::validate_github_repo_name(&github_repo)?;
             let username = fetch_github_username(&pat).await?;
             let repo = format!("{username}/{repo_name}");
             ensure_github_repo_exists(&pat, &repo).await?;
@@ -71,12 +69,10 @@ pub async fn fetch_remote_vault_yaml(
             }
         }
         nook_core::StorageMode::GoogleDrive => {
-            let token =
-                nook_core::validate_oauth_access_token(&github_pat).map_err(NookError::Drive)?;
+            let token = nook_core::validate_oauth_access_token(&github_pat)?;
             verify_drive_access(&token).await?;
             let (known_file_id, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
-                .map_err(NookError::Database)?;
+            let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
             let file_id = ensure_drive_vault_file(&token, &known_file_id, &file_name).await?;
             match fetch_drive_vault(&token, &file_id, &file_name).await? {
                 Some(file) => (file.content, Some(file.revision), false),
@@ -84,12 +80,10 @@ pub async fn fetch_remote_vault_yaml(
             }
         }
         nook_core::StorageMode::ICloud => {
-            let token =
-                nook_core::validate_oauth_access_token(&github_pat).map_err(NookError::ICloud)?;
+            let token = nook_core::validate_oauth_access_token(&github_pat)?;
             verify_icloud_access(&token).await?;
             let (_known_revision, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
-                .map_err(NookError::Database)?;
+            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
             let _ = ensure_icloud_vault_record(&token, &record_name).await?;
             match fetch_icloud_vault(&token, &record_name).await? {
                 Some(file) => (file.content, Some(file.revision), false),
@@ -101,15 +95,25 @@ pub async fn fetch_remote_vault_yaml(
     Ok(NookRemoteVaultFetch::new(content, revision, missing))
 }
 
-#[wasm_bindgen(js_name = writeRemoteVaultYaml)]
-pub async fn write_remote_vault_yaml(
+#[wasm_bindgen(js_name = fetchRemoteVaultYaml)]
+pub async fn fetch_remote_vault_yaml(
+    storage_mode: String,
+    github_pat: String,
+    github_repo: String,
+) -> Result<NookRemoteVaultFetch, JsError> {
+    fetch_remote_vault_yaml_inner(storage_mode, github_pat, github_repo)
+        .await
+        .map_err(Into::into)
+}
+
+async fn write_remote_vault_yaml_inner(
     storage_mode: String,
     github_pat: String,
     github_repo: String,
     content: String,
     revision: Option<String>,
-) -> Result<String, JsError> {
-    let mode = nook_core::StorageMode::parse(&storage_mode).map_err(NookError::Database)?;
+) -> Result<String, NookError> {
+    let mode = nook_core::StorageMode::parse(&storage_mode)?;
 
     match mode {
         nook_core::StorageMode::Local => {
@@ -117,9 +121,8 @@ pub async fn write_remote_vault_yaml(
             Ok(String::new())
         }
         nook_core::StorageMode::Github => {
-            let pat = nook_core::validate_github_pat(&github_pat).map_err(NookError::GitHub)?;
-            let repo_name =
-                nook_core::validate_github_repo_name(&github_repo).map_err(NookError::Database)?;
+            let pat = nook_core::validate_github_pat(&github_pat)?;
+            let repo_name = nook_core::validate_github_repo_name(&github_repo)?;
             let username = fetch_github_username(&pat).await?;
             let repo = format!("{username}/{repo_name}");
             ensure_github_repo_exists(&pat, &repo).await?;
@@ -129,12 +132,10 @@ pub async fn write_remote_vault_yaml(
             Ok(sha)
         }
         nook_core::StorageMode::GoogleDrive => {
-            let token =
-                nook_core::validate_oauth_access_token(&github_pat).map_err(NookError::Drive)?;
+            let token = nook_core::validate_oauth_access_token(&github_pat)?;
             verify_drive_access(&token).await?;
             let (known_file_id, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
-                .map_err(NookError::Database)?;
+            let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
             let file_id = ensure_drive_vault_file(&token, &known_file_id, &file_name).await?;
             let (new_file_id, new_revision) =
                 write_drive_vault_with_retry(&token, &file_id, &file_name, &content, revision)
@@ -143,18 +144,28 @@ pub async fn write_remote_vault_yaml(
             Ok(new_revision)
         }
         nook_core::StorageMode::ICloud => {
-            let token =
-                nook_core::validate_oauth_access_token(&github_pat).map_err(NookError::ICloud)?;
+            let token = nook_core::validate_oauth_access_token(&github_pat)?;
             verify_icloud_access(&token).await?;
             let (_known_revision, raw_file_name) = nook_core::parse_drive_storage_ref(&github_repo);
-            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)
-                .map_err(NookError::Database)?;
+            let record_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
             let (_resolved_name, new_revision) =
                 write_icloud_vault_with_retry(&token, &record_name, &content, revision).await?;
             Ok(new_revision)
         }
     }
-    .map_err(|e: NookError| JsError::new(&e.to_string()))
+}
+
+#[wasm_bindgen(js_name = writeRemoteVaultYaml)]
+pub async fn write_remote_vault_yaml(
+    storage_mode: String,
+    github_pat: String,
+    github_repo: String,
+    content: String,
+    revision: Option<String>,
+) -> Result<String, JsError> {
+    write_remote_vault_yaml_inner(storage_mode, github_pat, github_repo, content, revision)
+        .await
+        .map_err(Into::into)
 }
 
 fn vault_sync_action_label(action: nook_core::VaultSyncAction) -> &'static str {
@@ -181,7 +192,8 @@ pub fn reconcile_vault_blobs(
 ) -> Result<NookReconcileVaultBlobsResult, JsError> {
     let mut local = MemoryVaultStore::with_blob(local_yaml);
     let mut remote = remote_memory_store(remote_yaml, remote_revision);
-    let action = reconcile_vault_stores(&mut local, &mut remote).map_err(|e| JsError::new(&e))?;
+    let action = reconcile_vault_stores(&mut local, &mut remote)
+        .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(NookReconcileVaultBlobsResult::new(
         vault_sync_action_label(action).to_owned(),
         local.blob().to_owned(),

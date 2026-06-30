@@ -16,6 +16,9 @@ nook-web/src/lib/nook-wasm/
 
 .task/checksum/
 
+# Resolved toolchain image ref (written by task setup).
+.nook/
+
 # Local env files with secrets (never commit)
 .env
 .env.local

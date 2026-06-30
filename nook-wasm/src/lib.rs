@@ -12,6 +12,7 @@
 )]
 
 mod conversion;
+mod error_mapping;
 mod manager;
 mod storage;
 mod sync_io;
@@ -20,8 +21,9 @@ mod types;
 pub use manager::NookVaultManager;
 pub use types::{
     NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
-    NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult, NookSecretFormFields,
-    NookVaultMember, NookVaultSyncResult,
+    NookReplacementConflict, NookResolveConflictKeepLocalResult,
+    NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookVaultMember,
+    NookVaultSyncResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -87,7 +89,7 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
             nook_core::VaultSyncAction::PushLocal => "push_local".to_owned(),
             nook_core::VaultSyncAction::Conflict => "conflict".to_owned(),
         }),
-        Err(message) => Err(wasm_bindgen::JsError::new(&message)),
+        Err(e) => Err(wasm_bindgen::JsError::new(&e.to_string())),
     }
 }
 
@@ -227,13 +229,21 @@ impl NookSecretRecord {
 }
 
 /// Serialize validated form fields into the YAML payload expected by `add_secret`.
+fn build_secret_yaml_inner(
+    secret_type: &str,
+    fields: &NookSecretFormFields,
+) -> Result<String, NookError> {
+    let parsed = nook_core::SecretType::parse(secret_type)?;
+    Ok(nook_core::build_secret_yaml(
+        parsed,
+        &fields.to_json_value(),
+    )?)
+}
+
 #[wasm_bindgen(js_name = buildSecretYaml)]
 pub fn build_secret_yaml(
     secret_type: &str,
     fields: &NookSecretFormFields,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let parsed = nook_core::SecretType::parse(secret_type).map_err(NookError::Database)?;
-    nook_core::build_secret_yaml(parsed, &fields.to_json_value())
-        .map_err(NookError::Database)
-        .map_err(Into::into)
+    build_secret_yaml_inner(secret_type, fields).map_err(Into::into)
 }

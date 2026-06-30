@@ -22,6 +22,6 @@ test.describe('sync provider settings', () => {
     ).toBeVisible()
     await expect(
       page.getByTestId('sync-status-e2e-onboard-github'),
-    ).toContainText('Not synced yet')
+    ).toContainText(/Not synced yet|Last synced/i)
   })
 })

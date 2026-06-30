@@ -1,5 +1,7 @@
 use std::io::{Read, Write};
 
+use crate::errors::{VaultCryptoError, VaultCryptoResult};
+
 /// Session-scoped age encryptor/decryptor.
 ///
 /// Derives scrypt identity and recipient once. The browser vault key is high-entropy
@@ -14,7 +16,7 @@ pub struct VaultCrypto {
 const PROGRAMMATIC_SCRYPT_LOG_N: u8 = 15;
 
 impl VaultCrypto {
-    pub fn new(passphrase: &str) -> Result<Self, String> {
+    pub fn new(passphrase: &str) -> VaultCryptoResult<Self> {
         let secret = age::secrecy::SecretString::from(passphrase.to_owned());
         let mut recipient = age::scrypt::Recipient::new(secret.clone());
         recipient.set_work_factor(PROGRAMMATIC_SCRYPT_LOG_N);
@@ -25,46 +27,46 @@ impl VaultCrypto {
         })
     }
 
-    pub fn encrypt_value(&self, plaintext: &str) -> Result<String, String> {
+    pub fn encrypt_value(&self, plaintext: &str) -> VaultCryptoResult<String> {
         use age::armor::{ArmoredWriter, Format};
 
         let encryptor = age::Encryptor::with_recipients(std::iter::once(
             &self.recipient as &dyn age::Recipient,
         ))
-        .map_err(|e| format!("Encryption setup error: {}", e))?;
+        .map_err(|e| VaultCryptoError::EncryptSetup(e.to_string()))?;
 
         let mut armored = Vec::new();
         let armor_writer = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
-            .map_err(|e| format!("Armor wrap error: {}", e))?;
+            .map_err(|e| VaultCryptoError::ArmorWrap(e.to_string()))?;
         let mut writer = encryptor
             .wrap_output(armor_writer)
-            .map_err(|e| format!("Encryption error: {}", e))?;
+            .map_err(|e| VaultCryptoError::Encrypt(e.to_string()))?;
         writer
             .write_all(plaintext.as_bytes())
-            .map_err(|e| format!("Write error: {}", e))?;
+            .map_err(|e| VaultCryptoError::Write(e.to_string()))?;
         writer
             .finish()
-            .map_err(|e| format!("Finish error: {}", e))?
+            .map_err(|e| VaultCryptoError::Finish(e.to_string()))?
             .finish()
-            .map_err(|e| format!("Armor finish error: {}", e))?;
+            .map_err(|e| VaultCryptoError::ArmorFinish(e.to_string()))?;
 
-        String::from_utf8(armored).map_err(|e| format!("Invalid UTF-8 armor: {}", e))
+        String::from_utf8(armored).map_err(|e| VaultCryptoError::InvalidUtf8Armor(e.to_string()))
     }
 
-    pub fn decrypt_value(&self, armored: &str) -> Result<String, String> {
+    pub fn decrypt_value(&self, armored: &str) -> VaultCryptoResult<String> {
         use age::armor::ArmoredReader;
 
         let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored.as_bytes()))
-            .map_err(|e| format!("Decryption setup error: {}", e))?;
+            .map_err(|e| VaultCryptoError::DecryptSetup(e.to_string()))?;
 
         let mut reader = decryptor
             .decrypt(std::iter::once(&self.identity as &dyn age::Identity))
-            .map_err(|e| format!("Decryption error: {}", e))?;
+            .map_err(|e| VaultCryptoError::Decrypt(e.to_string()))?;
 
         let mut decrypted = String::new();
         reader
             .read_to_string(&mut decrypted)
-            .map_err(|e| format!("Read error: {}", e))?;
+            .map_err(|e| VaultCryptoError::Read(e.to_string()))?;
         Ok(decrypted)
     }
 }

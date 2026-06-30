@@ -2,9 +2,17 @@ version: '3'
 
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
-  DOCKER_IMAGE: '{{default "nook-build:local" .DOCKER_IMAGE}}'
+  DOCKER_IMAGE:
+    sh: |
+      if [ -n "${DOCKER_IMAGE:-}" ]; then
+        printf '%s' "${DOCKER_IMAGE}"
+      elif [ -f .nook/docker-image ]; then
+        cat .nook/docker-image
+      else
+        printf '%s' "nook-build:local"
+      fi
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
-  # dev (default): skip setup when nook-build:local exists. ci: always build (set in CI via GITHUB_ENV).
+  # dev (default): skip setup when nook-build:local exists. ci: pull :latest or registry bake (see toolchain-setup.sh).
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
   VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
@@ -36,16 +44,9 @@ tasks:
       - task: build
 
   setup:
-    desc: Build linux/amd64 toolchain (dev skips when image exists; ci always builds with GHCR cache).
+    desc: Build or pull linux/amd64 toolchain (dev loads local; ci pulls :latest or registry bake).
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       NOOK_ENV: '{{.NOOK_ENV}}'
     cmds:
-      - >-
-        sh -c 'IMAGE="{{.DOCKER_IMAGE}}"; REG="{{.TOOLCHAIN_REGISTRY}}"; ENV="{{.NOOK_ENV}}";
-        if [ "$ENV" = "dev" ] && {{.DOCKER}} image inspect "$IMAGE" >/dev/null 2>&1; then
-          echo "==> Toolchain image present; skipping setup (NOOK_ENV=dev).";
-          exit 0;
-        fi;
-        echo "==> Building toolchain (NOOK_ENV=$ENV) ...";
-        TOOLCHAIN_REGISTRY="$REG" {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain'
+      - bash .github/scripts/toolchain-setup.sh {{.ROOT_DIR}}

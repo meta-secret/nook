@@ -1,3 +1,4 @@
+use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
     AuthEnvelopes, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope, PasswordUnlockEntry,
     StoredSecretRecord, VaultUnlock, is_auth_stored_record, is_join_stored_record,
@@ -27,7 +28,7 @@ impl VaultFormat {
 }
 
 /// Detect stored vault format from file contents.
-pub fn detect_stored_format(stored: &str) -> Result<VaultFormat, String> {
+pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(VaultFormat::Yaml);
@@ -58,16 +59,15 @@ pub fn detect_stored_format(stored: &str) -> Result<VaultFormat, String> {
         return Ok(VaultFormat::Yaml);
     }
 
-    Err(format!(
-        "Unrecognized vault format (first non-empty line: {:?})",
-        first_line
-    ))
+    Err(VaultFormatError::UnrecognizedFormat {
+        first_line: first_line.to_owned(),
+    })
 }
 
 pub fn serialize_stored(
     records: &[StoredSecretRecord],
     format: VaultFormat,
-) -> Result<String, String> {
+) -> VaultFormatResult<String> {
     match format {
         VaultFormat::Jsonl => serialize_stored_jsonl(records),
         VaultFormat::Yaml => serialize_stored_yaml(records),
@@ -77,32 +77,31 @@ pub fn serialize_stored(
 pub fn deserialize_stored(
     stored: &str,
     format: VaultFormat,
-) -> Result<Vec<StoredSecretRecord>, String> {
+) -> VaultFormatResult<Vec<StoredSecretRecord>> {
     match format {
         VaultFormat::Jsonl => deserialize_stored_jsonl(stored),
         VaultFormat::Yaml => deserialize_stored_yaml(stored),
     }
 }
 
-pub fn serialize_stored_jsonl(records: &[StoredSecretRecord]) -> Result<String, String> {
+pub fn serialize_stored_jsonl(records: &[StoredSecretRecord]) -> VaultFormatResult<String> {
     let mut lines = Vec::with_capacity(records.len());
     for record in records {
-        let line = serde_json::to_string(record)
-            .map_err(|e| format!("Failed to serialize stored JSONL record: {}", e))?;
+        let line = serde_json::to_string(record).map_err(VaultFormatError::JsonlSerialize)?;
         lines.push(line);
     }
     Ok(lines.join("\n"))
 }
 
-pub fn deserialize_stored_jsonl(stored: &str) -> Result<Vec<StoredSecretRecord>, String> {
+pub fn deserialize_stored_jsonl(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
     let mut records = Vec::new();
     for line in stored.lines() {
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        let record: StoredSecretRecord = serde_json::from_str(line)
-            .map_err(|e| format!("Failed to parse stored JSONL line: {}", e))?;
+        let record: StoredSecretRecord =
+            serde_json::from_str(line).map_err(VaultFormatError::JsonlParse)?;
         records.push(record);
     }
     Ok(records)
@@ -229,11 +228,11 @@ fn vault_version_is_zero(version: &u64) -> bool {
     *version == 0
 }
 
-pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> Result<String, String> {
+pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResult<String> {
     serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None, None)
 }
 
-fn resolve_store_id_for_write(store_id: Option<&str>) -> Result<Option<String>, String> {
+fn resolve_store_id_for_write(store_id: Option<&str>) -> VaultFormatResult<Option<String>> {
     match store_id.map(str::trim).filter(|id| !id.is_empty()) {
         Some(id) => Ok(Some(crate::normalize_store_id(id)?)),
         None => Ok(None),
@@ -249,18 +248,18 @@ pub fn serialize_stored_yaml_with_unlock(
     password_entries: &[PasswordUnlockEntry],
     store_id: Option<&str>,
     vault_version: Option<u64>,
-) -> Result<String, String> {
+) -> VaultFormatResult<String> {
     let mut vault = partition_yaml_records(records);
     vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
-    serde_yaml::to_string(&vault).map_err(|e| format!("Failed to serialize stored YAML: {}", e))
+    serde_yaml::to_string(&vault).map_err(VaultFormatError::YamlSerialize)
 }
 
 /// Read the monotonic revision counter from on-disk YAML (0 for legacy vaults).
-pub fn read_vault_version(stored: &str) -> Result<u64, String> {
+pub fn read_vault_version(stored: &str) -> VaultFormatResult<u64> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(0);
@@ -268,8 +267,8 @@ pub fn read_vault_version(stored: &str) -> Result<u64, String> {
     if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
         return Ok(0);
     }
-    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
-        .map_err(|e| format!("Failed to parse stored YAML for vault version: {}", e))?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
     Ok(vault.vault_version)
 }
 
@@ -302,7 +301,7 @@ fn extract_password_entries(vault: &StoredVaultYaml) -> Vec<PasswordUnlockEntry>
 }
 
 /// Read labelled backup passwords without unwinding the full record list.
-pub fn read_vault_password_entries(stored: &str) -> Result<Vec<PasswordUnlockEntry>, String> {
+pub fn read_vault_password_entries(stored: &str) -> VaultFormatResult<Vec<PasswordUnlockEntry>> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(Vec::new());
@@ -310,13 +309,13 @@ pub fn read_vault_password_entries(stored: &str) -> Result<Vec<PasswordUnlockEnt
     if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
         return Ok(Vec::new());
     }
-    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
-        .map_err(|e| format!("Failed to parse stored YAML for password entries: {}", e))?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParsePasswordEntries)?;
     Ok(extract_password_entries(&vault))
 }
 
 /// Read the logical secret-store id from on-disk YAML (absent on legacy vaults).
-pub fn read_vault_store_id(stored: &str) -> Result<Option<String>, String> {
+pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(None);
@@ -324,15 +323,15 @@ pub fn read_vault_store_id(stored: &str) -> Result<Option<String>, String> {
     if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
         return Ok(None);
     }
-    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
-        .map_err(|e| format!("Failed to parse stored YAML for store id: {}", e))?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
     match vault.store_id {
         Some(id) => Ok(Some(crate::validate_store_id(&id)?)),
         None => Ok(None),
     }
 }
 
-pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, String> {
+pub fn deserialize_stored_yaml(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
     Ok(deserialize_stored_yaml_with_unlock(stored)?.0)
 }
 
@@ -344,15 +343,14 @@ pub fn deserialize_stored_yaml(stored: &str) -> Result<Vec<StoredSecretRecord>, 
 /// subsequent writes use the new schema.
 pub fn deserialize_stored_yaml_with_unlock(
     stored: &str,
-) -> Result<(Vec<StoredSecretRecord>, VaultUnlock), String> {
+) -> VaultFormatResult<(Vec<StoredSecretRecord>, VaultUnlock)> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok((Vec::new(), VaultUnlock::Keys));
     }
 
-    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed).map_err(|_| {
-        "Failed to parse stored YAML: expected secrets/auth/joins/members sections".to_string()
-    })?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(|_| VaultFormatError::YamlMissingSections)?;
 
     let unlock = resolve_unlock_with_legacy(&vault);
 
@@ -367,7 +365,7 @@ pub fn deserialize_stored_yaml_with_unlock(
 }
 
 /// Read just the active unlock mode without unwinding the full record list.
-pub fn read_vault_unlock(stored: &str) -> Result<VaultUnlock, String> {
+pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(VaultUnlock::Keys);
@@ -376,8 +374,8 @@ pub fn read_vault_unlock(stored: &str) -> Result<VaultUnlock, String> {
         // JSONL is the legacy single-user format — always keys mode.
         return Ok(VaultUnlock::Keys);
     }
-    let vault: StoredVaultYaml = serde_yaml::from_str(trimmed)
-        .map_err(|e| format!("Failed to parse stored YAML for unlock mode: {}", e))?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseUnlock)?;
     Ok(resolve_unlock_with_legacy(&vault))
 }
 
@@ -541,7 +539,10 @@ not-json
 "#,
         )
         .unwrap_err();
-        assert!(err.contains("Failed to parse stored JSONL line"));
+        assert!(
+            err.to_string()
+                .contains("Failed to parse stored JSONL line")
+        );
     }
 
     #[test]

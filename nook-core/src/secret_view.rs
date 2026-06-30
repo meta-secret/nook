@@ -1,5 +1,6 @@
 //! Display and search helpers for vault secrets — shared by WASM, mobile, and CLI.
 
+use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::{SecretRecord, SecretType, SecretValue};
 
 fn hostname_from_url(raw: &str) -> String {
@@ -139,30 +140,9 @@ impl SecretRecord {
 pub fn build_secret_yaml(
     secret_type: SecretType,
     fields: &serde_json::Value,
-) -> Result<String, String> {
-    let value = match secret_type {
-        SecretType::Login => {
-            let payload: crate::LoginSecret = serde_json::from_value(fields.clone())
-                .map_err(|error| format!("Invalid login payload: {error}"))?;
-            SecretValue::Login(payload)
-        }
-        SecretType::ApiKey => {
-            let payload: crate::ApiKeySecret = serde_json::from_value(fields.clone())
-                .map_err(|error| format!("Invalid API key payload: {error}"))?;
-            SecretValue::ApiKey(payload)
-        }
-        SecretType::SeedPhrase => {
-            let payload: crate::SeedPhraseSecret = serde_json::from_value(fields.clone())
-                .map_err(|error| format!("Invalid seed phrase payload: {error}"))?;
-            crate::validate_bip39_mnemonic(&payload.seed)?;
-            SecretValue::SeedPhrase(payload)
-        }
-        SecretType::SecureNote => {
-            let payload: crate::SecureNoteSecret = serde_json::from_value(fields.clone())
-                .map_err(|error| format!("Invalid secure note payload: {error}"))?;
-            SecretValue::SecureNote(payload)
-        }
-    };
+) -> SecretPayloadResult<String> {
+    let yaml = serde_yaml::to_string(fields).map_err(SecretPayloadError::Serialize)?;
+    let value = SecretValue::from_yaml(secret_type, &yaml)?;
     value.to_yaml()
 }
 

@@ -126,37 +126,65 @@ impl NookVaultManager {
 
         if use_genesis {
             self.initialize_genesis_vault(&identity)?;
-        } else {
-            let format =
-                nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-            let records =
-                nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
-            if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
-                return Err(NookError::Database(message).into());
+            if self.store_id.is_empty() {
+                self.store_id = nook_core::generate_store_id()?;
             }
-            let _ = self.status_tx.send("DECRYPT_START".to_owned());
-            let LoadedVault {
-                jsonl,
-                armored,
-                secret_types,
-                secrets_key,
-                members_key,
-            } = load_stored_vault(&content, &identity)?;
-            self.apply_vault_keys(&secrets_key, &members_key)?;
-            self.decrypted_jsonl = jsonl;
-            self.stored_armored = armored;
-            self.secret_types = secret_types;
-            self.maybe_sync_self_into_roster(&identity).await?;
-            let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
-            self.last_synced_content = content.clone();
+            self.bootstrap_event_log_genesis().await?;
+            self.persist_projection_cache().await?;
+        } else if !content.trim().is_empty() {
+            if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
+                self.event_log_mode = true;
+                let cache = crate::storage::indexed_db::load_from_indexed_db()
+                    .await?
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| content.clone());
+                let LoadedVault {
+                    armored,
+                    secret_types,
+                    secrets_key,
+                    members_key,
+                    ..
+                } = load_stored_vault(&cache, &identity)?;
+                self.apply_vault_keys(&secrets_key, &members_key)?;
+                self.stored_armored = armored;
+                self.secret_types = secret_types;
+                self.capture_vault_unlock(&cache);
+                self.sync_events_from_current_provider().await?;
+                self.apply_event_projection_to_session().await?;
+            } else {
+                let format = nook_core::detect_stored_format(&content)?;
+                let records = nook_core::deserialize_stored(&content, format)?;
+                if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
+                    return Err(NookError::Database(message).into());
+                }
+                let _ = self.status_tx.send("DECRYPT_START".to_owned());
+                let LoadedVault {
+                    jsonl,
+                    armored,
+                    secret_types,
+                    secrets_key,
+                    members_key,
+                } = load_stored_vault(&content, &identity)?;
+                self.apply_vault_keys(&secrets_key, &members_key)?;
+                self.decrypted_jsonl = jsonl;
+                self.stored_armored = armored;
+                self.secret_types = secret_types;
+                self.maybe_sync_self_into_roster(&identity).await?;
+                let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
+                self.last_synced_content = content.clone();
+                self.migrate_legacy_yaml_to_event_log(&content).await?;
+                self.flush_event_outbox().await?;
+            }
         }
 
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
-        if use_genesis || vault_file_missing {
+        if (use_genesis || vault_file_missing) && !self.event_log_mode {
             let _ = self.status_tx.send("GITHUB_INIT_START".to_owned());
             self.save_current_db().await?;
             let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
+        } else if use_genesis || vault_file_missing {
+            self.flush_event_outbox().await?;
         }
 
         let _ = self.status_tx.send("READY".to_owned());
@@ -170,16 +198,13 @@ impl NookVaultManager {
         self.password_entries.clear();
         self.unlock = nook_core::VaultUnlock::Keys;
         self.stored_armored.clear();
-        let keys = nook_core::generate_vault_keys().map_err(NookError::Encryption)?;
+        let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
         let genesis =
-            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)
-                .map_err(NookError::Encryption)?;
+            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
         self.stored_armored
             .insert(genesis.key.clone(), genesis.value);
-        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")
-            .map_err(NookError::Encryption)?
-        {
+        for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.stored_armored.insert(member.key.clone(), member.value);
         }
         self.decrypted_jsonl = String::new();
@@ -204,13 +229,10 @@ impl NookVaultManager {
             let identity = self.device_identity()?;
             let secrets_key = self.secrets_key.clone();
             let members_key = self.members_key.clone();
-            let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)
-                .map_err(NookError::Encryption)?;
+            let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
             self.stored_armored
                 .insert(genesis.key.clone(), genesis.value);
-            for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")
-                .map_err(NookError::Encryption)?
-            {
+            for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
                 self.stored_armored.insert(member.key.clone(), member.value);
             }
         }

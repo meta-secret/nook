@@ -49,8 +49,7 @@ impl NookVaultManager {
                 return Ok(Vec::new());
             }
         }
-        let entries =
-            nook_core::read_vault_password_entries(&content).map_err(NookError::Decryption)?;
+        let entries = nook_core::read_vault_password_entries(&content)?;
         self.password_entries = entries.clone();
         Ok(password_entries_to_vec(&entries))
     }
@@ -85,16 +84,31 @@ impl NookVaultManager {
         };
         let entry = nook_core::create_password_entry(
             &keys,
-            &nook_core::generate_id().map_err(NookError::Database)?,
+            &nook_core::generate_id()?,
             &label,
             &wasm_iso_timestamp(),
             &password,
-        )
-        .map_err(NookError::Encryption)?;
+        )?;
 
         self.password_entries.push(entry);
         self.unlock = nook_core::VaultUnlock::Keys;
-        self.save_current_db().await?;
+        let entry_id = self
+            .password_entries
+            .last()
+            .map(|e| e.id.clone())
+            .unwrap_or_default();
+        let envelope_ciphertext = self
+            .password_entries
+            .last()
+            .map(|e| serde_json::to_string(&e.envelope))
+            .transpose()
+            .map_err(|e| NookError::Serialization(e.to_string()))?
+            .unwrap_or_default();
+        self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
+            entry_id,
+            envelope_ciphertext,
+        }])
+        .await?;
         Ok(())
     }
 
@@ -120,28 +134,72 @@ impl NookVaultManager {
             secrets_key: self.secrets_key.clone(),
             members_key: self.members_key.clone(),
         };
-        let target = self
+        {
+            let target = self
+                .password_entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id)
+                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+            target.envelope = nook_core::attach_password_envelope(&keys, &password)?;
+        }
+        let envelope_ciphertext = self
             .password_entries
-            .iter_mut()
+            .iter()
             .find(|entry| entry.id == entry_id)
-            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-        target.envelope =
-            nook_core::attach_password_envelope(&keys, &password).map_err(NookError::Encryption)?;
-        self.save_current_db().await?;
+            .map(|entry| {
+                serde_json::to_string(&entry.envelope)
+                    .map_err(|e| NookError::Serialization(e.to_string()))
+            })
+            .transpose()?
+            .unwrap_or_default();
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
+                entry_id: entry_id.clone(),
+                envelope_ciphertext,
+            })
+            .await?;
+            let rotated_keys = nook_core::VaultKeys {
+                secrets_key: self.secrets_key.clone(),
+                members_key: self.members_key.clone(),
+            };
+            let target = self
+                .password_entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id)
+                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+            target.envelope = nook_core::attach_password_envelope(&rotated_keys, &password)?;
+            self.persist_vault_change(vec![]).await?;
+        } else {
+            self.save_current_db().await?;
+        }
         Ok(())
     }
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
         self.password_entries.retain(|entry| entry.id != entry_id);
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+                entry_id: entry_id.clone(),
+            })
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         Ok(())
     }
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
         self.password_entries.clear();
-        self.save_current_db().await?;
+        if self.event_log_mode || self.ensure_event_log_mode().await? {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+                entry_id: String::new(),
+            })
+            .await?;
+        } else {
+            self.save_current_db().await?;
+        }
         Ok(())
     }
 
@@ -185,18 +243,15 @@ impl NookVaultManager {
                 NookError::Decryption("No backup password found on this vault.".to_owned())
             })?
             .clone();
-        let keys =
-            nook_core::resolve_keys_from_entry(&entry, &password).map_err(NookError::Decryption)?;
+        let keys = nook_core::resolve_keys_from_entry(&entry, &password)?;
 
-        let format = nook_core::detect_stored_format(&content).map_err(NookError::Decryption)?;
-        let mut records =
-            nook_core::deserialize_stored(&content, format).map_err(NookError::Decryption)?;
+        let format = nook_core::detect_stored_format(&content)?;
+        let mut records = nook_core::deserialize_stored(&content, format)?;
 
         records.retain(|record| !nook_core::is_join_stored_record(record));
 
         let auth_id = nook_core::dec_auth_id(&identity);
-        let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)
-            .map_err(NookError::Encryption)?;
+        let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
         records.retain(|record| !nook_core::is_auth_stored_record(record) || record.key != auth_id);
         records.push(auth);
 
@@ -211,10 +266,10 @@ impl NookVaultManager {
             nook_core::member_from_identity(&identity, &wasm_iso_timestamp()),
         );
         records.retain(|record| !nook_core::is_members_stored_record(record));
-        records.extend(
-            nook_core::build_members_records(&updated_roster, &keys.members_key)
-                .map_err(NookError::Encryption)?,
-        );
+        records.extend(nook_core::build_members_records(
+            &updated_roster,
+            &keys.members_key,
+        )?);
 
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
@@ -223,13 +278,12 @@ impl NookVaultManager {
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.save_current_db().await?;
 
-        let crypto =
-            nook_core::VaultCrypto::new(&keys.secrets_key).map_err(NookError::Encryption)?;
+        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let stored_records = self.stored_records_snapshot();
         let user_records = nook_core::user_stored_records(&stored_records);
-        let database = nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)
-            .map_err(NookError::Decryption)?;
-        self.decrypted_jsonl = database.to_jsonl().map_err(NookError::Database)?;
+        let database =
+            nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)?;
+        self.decrypted_jsonl = database.to_jsonl()?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

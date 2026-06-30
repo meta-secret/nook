@@ -1,17 +1,18 @@
 //! BIP-39 mnemonic validation (word membership + checksum).
 
+use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
 
 /// Validates a normalized English BIP-39 mnemonic (12 or 24 words).
-pub fn validate_bip39_mnemonic(mnemonic: &str) -> Result<(), String> {
+pub fn validate_bip39_mnemonic(mnemonic: &str) -> ValidationResult<()> {
     let normalized = mnemonic.trim();
     if normalized.is_empty() {
-        return Err("errors.validation.bip39_empty".to_owned());
+        return Err(ValidationError::Bip39Empty);
     }
 
     Mnemonic::parse_in_normalized(Language::English, normalized)
         .map(|_| ())
-        .map_err(|_| "errors.validation.bip39_invalid".to_owned())
+        .map_err(|_| ValidationError::Bip39Invalid)
 }
 
 #[cfg(test)]
