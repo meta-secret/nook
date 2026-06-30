@@ -2,7 +2,8 @@
 
 use crate::errors::VaultResult;
 use crate::{
-    Database, SecretId, SecretType, StoredSecretRecord, VaultCrypto, is_vault_meta_record,
+    Database, SecretId, SecretType, StoredRecordPayload, StoredSecretRecord, VaultCrypto,
+    is_vault_meta_record,
 };
 use std::collections::HashMap;
 
@@ -23,17 +24,17 @@ pub fn apply_user_records_to_armored_session(
         is_vault_meta_record(&StoredSecretRecord {
             key: SecretId::from_vault_record(key),
             secret_type: None,
-            value: value.clone(),
+            value: StoredRecordPayload::from_trusted(value.clone()),
         })
     });
     secret_types.retain(|key, _| armored.contains_key(key));
     for record in user_records {
-        armored.insert(record.key.to_string(), record.value);
+        armored.insert(record.key.to_string(), record.value.as_str().to_owned());
         if let Some(secret_type) = record.secret_type {
             secret_types.insert(record.key.to_string(), secret_type);
         }
     }
-    Ok(jsonl)
+    Ok(jsonl.into_inner())
 }
 
 #[cfg(test)]
@@ -57,7 +58,7 @@ mod tests {
         )?;
 
         let mut armored = HashMap::from([
-            (auth.key.to_string(), auth.value),
+            (auth.key.to_string(), auth.value.as_str().to_owned()),
             ("secret_old0000001".to_owned(), "stale".to_owned()),
         ]);
         let mut secret_types =
@@ -66,7 +67,7 @@ mod tests {
         let user_records = vec![StoredSecretRecord {
             key: SecretId::from_vault_record("secret_new0000001"),
             secret_type: Some(crate::SecretType::ApiKey),
-            value: ciphertext,
+            value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 
         let jsonl = apply_user_records_to_armored_session(

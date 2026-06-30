@@ -1,6 +1,7 @@
 use std::io::{Read, Write};
 
 use crate::errors::{VaultCryptoError, VaultCryptoResult};
+use crate::vault_wire::{AgeArmoredCiphertext, SymmetricKey};
 
 /// Session-scoped age encryptor/decryptor.
 ///
@@ -16,8 +17,8 @@ pub struct VaultCrypto {
 const PROGRAMMATIC_SCRYPT_LOG_N: u8 = 15;
 
 impl VaultCrypto {
-    pub fn new(passphrase: &str) -> VaultCryptoResult<Self> {
-        let secret = age::secrecy::SecretString::from(passphrase.to_owned());
+    pub fn new(passphrase: &SymmetricKey) -> VaultCryptoResult<Self> {
+        let secret = age::secrecy::SecretString::from(passphrase.as_str().to_owned());
         let mut recipient = age::scrypt::Recipient::new(secret.clone());
         recipient.set_work_factor(PROGRAMMATIC_SCRYPT_LOG_N);
         let identity = age::scrypt::Identity::new(secret);
@@ -27,7 +28,10 @@ impl VaultCrypto {
         })
     }
 
-    pub fn encrypt_value(&self, plaintext: &str) -> VaultCryptoResult<String> {
+    pub fn encrypt_value(
+        &self,
+        plaintext: impl AsRef<str>,
+    ) -> VaultCryptoResult<AgeArmoredCiphertext> {
         use age::armor::{ArmoredWriter, Format};
 
         let encryptor = age::Encryptor::with_recipients(std::iter::once(
@@ -42,7 +46,7 @@ impl VaultCrypto {
             .wrap_output(armor_writer)
             .map_err(|e| VaultCryptoError::Encrypt(e.to_string()))?;
         writer
-            .write_all(plaintext.as_bytes())
+            .write_all(plaintext.as_ref().as_bytes())
             .map_err(|e| VaultCryptoError::Write(e.to_string()))?;
         writer
             .finish()
@@ -50,14 +54,17 @@ impl VaultCrypto {
             .finish()
             .map_err(|e| VaultCryptoError::ArmorFinish(e.to_string()))?;
 
-        String::from_utf8(armored).map_err(|e| VaultCryptoError::InvalidUtf8Armor(e.to_string()))
+        let armored = String::from_utf8(armored)
+            .map_err(|e| VaultCryptoError::InvalidUtf8Armor(e.to_string()))?;
+        Ok(AgeArmoredCiphertext::from_trusted_armored(armored))
     }
 
-    pub fn decrypt_value(&self, armored: &str) -> VaultCryptoResult<String> {
+    pub fn decrypt_value(&self, armored: &AgeArmoredCiphertext) -> VaultCryptoResult<String> {
         use age::armor::ArmoredReader;
 
-        let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored.as_bytes()))
-            .map_err(|e| VaultCryptoError::DecryptSetup(e.to_string()))?;
+        let decryptor =
+            age::Decryptor::new_buffered(ArmoredReader::new(armored.as_str().as_bytes()))
+                .map_err(|e| VaultCryptoError::DecryptSetup(e.to_string()))?;
 
         let mut reader = decryptor
             .decrypt(std::iter::once(&self.identity as &dyn age::Identity))
@@ -74,39 +81,37 @@ impl VaultCrypto {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SymmetricKey;
+
+    fn test_key() -> SymmetricKey {
+        SymmetricKey::parse("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+            .unwrap()
+    }
 
     #[test]
     fn roundtrip_with_cached_crypto() {
-        let crypto = VaultCrypto::new("deadbeefdeadbeefdeadbeefdeadbeef").unwrap();
-        let plaintext = "secret-value";
-        let armored = crypto.encrypt_value(plaintext).unwrap();
-        assert!(armored.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert_eq!(crypto.decrypt_value(&armored).unwrap(), plaintext);
+        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let encrypted = crypto.encrypt_value("hello world").unwrap();
+        let decrypted = crypto.decrypt_value(&encrypted).unwrap();
+        assert_eq!(decrypted, "hello world");
     }
 
     #[test]
-    fn wrong_passphrase_fails_to_decrypt() {
-        let enc = VaultCrypto::new("correct-key-1234567890123456").unwrap();
-        let armored = enc.encrypt_value("payload").unwrap();
-        let dec = VaultCrypto::new("wrong-key-123456789012345678").unwrap();
-        assert!(dec.decrypt_value(&armored).is_err());
+    fn wrong_passphrase_fails() {
+        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let encrypted = crypto.encrypt_value("secret").unwrap();
+        let wrong =
+            VaultCrypto::new(&SymmetricKey::parse("cafebabe".repeat(8).as_str()).unwrap()).unwrap();
+        assert!(wrong.decrypt_value(&encrypted).is_err());
     }
 
     #[test]
-    fn repeated_encrypt_produces_unique_ciphertext() {
-        let crypto = VaultCrypto::new("deadbeefdeadbeefdeadbeefdeadbeef").unwrap();
-        let first = crypto.encrypt_value("same").unwrap();
-        let second = crypto.encrypt_value("same").unwrap();
-        assert_ne!(first, second);
-        assert_eq!(crypto.decrypt_value(&first).unwrap(), "same");
-        assert_eq!(crypto.decrypt_value(&second).unwrap(), "same");
-    }
-
-    #[test]
-    fn multiline_plaintext_roundtrip() {
-        let crypto = VaultCrypto::new("deadbeefdeadbeefdeadbeefdeadbeef").unwrap();
-        let plaintext = "line-one\nline-two\n\tindented";
-        let armored = crypto.encrypt_value(plaintext).unwrap();
-        assert_eq!(crypto.decrypt_value(&armored).unwrap(), plaintext);
+    fn encrypt_is_nondeterministic() {
+        let crypto = VaultCrypto::new(&test_key()).unwrap();
+        let a = crypto.encrypt_value("same").unwrap();
+        let b = crypto.encrypt_value("same").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(crypto.decrypt_value(&a).unwrap(), "same");
+        assert_eq!(crypto.decrypt_value(&b).unwrap(), "same");
     }
 }

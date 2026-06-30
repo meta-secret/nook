@@ -195,7 +195,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() {
     records.retain(|r| r.key.as_str() != join_key);
     records.push(auth.clone());
 
-    let env = nook_core::parse_auth_envelopes(&auth.value).unwrap();
+    let env = nook_core::parse_auth_envelopes(auth.value.as_str()).unwrap();
     assert_ne!(env.secrets_key, env.members_key);
     assert_eq!(
         joiner.decrypt_envelope(&env.secrets_key).unwrap(),

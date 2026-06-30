@@ -29,8 +29,8 @@ pub(crate) async fn load_or_create_device_identity() -> Result<DeviceIdentityRec
     }
     let identity = nook_core::DeviceIdentity::generate()?;
     Ok(DeviceIdentityRecord {
-        device_id: identity.device_id().to_owned(),
-        secret: identity.secret_string(),
+        device_id: identity.device_id().to_string(),
+        secret: identity.secret_string().into_inner(),
     })
 }
 

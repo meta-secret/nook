@@ -2,7 +2,7 @@
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 
-use nook_core::{ApiKeySecret, Database, SecretId, SecretValue, VaultFormat};
+use nook_core::{ApiKeySecret, Database, SecretId, SecretValue};
 use std::fs;
 use std::path::PathBuf;
 
@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixtures_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures");
     fs::create_dir_all(&fixtures_dir).map_err(|e| format!("create fixtures dir: {e}"))?;
 
-    let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+    let passphrase = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
     let mut db = Database::new();
     db.insert(
@@ -35,15 +35,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let session_jsonl = db.to_jsonl()?;
-    let stored_yaml = db.to_stored(passphrase, VaultFormat::Yaml)?;
-    let stored_jsonl = db.to_stored(passphrase, VaultFormat::Jsonl)?;
+    let stored_yaml = db.to_stored_yaml(passphrase)?;
+    let stored_jsonl = db.to_stored_jsonl(passphrase)?;
 
-    fs::write(fixtures_dir.join("session.example.jsonl"), &session_jsonl)
-        .map_err(|e| format!("write session.example.jsonl: {e}"))?;
-    fs::write(fixtures_dir.join("nook-vault.example.yaml"), &stored_yaml)
-        .map_err(|e| format!("write nook-vault.example.yaml: {e}"))?;
-    fs::write(fixtures_dir.join("nook-vault.example.jsonl"), &stored_jsonl)
-        .map_err(|e| format!("write nook-vault.example.jsonl: {e}"))?;
+    fs::write(
+        fixtures_dir.join("session.example.jsonl"),
+        session_jsonl.as_str(),
+    )
+    .map_err(|e| format!("write session.example.jsonl: {e}"))?;
+    fs::write(
+        fixtures_dir.join("nook-vault.example.yaml"),
+        stored_yaml.as_str(),
+    )
+    .map_err(|e| format!("write nook-vault.example.yaml: {e}"))?;
+    fs::write(
+        fixtures_dir.join("nook-vault.example.jsonl"),
+        stored_jsonl.as_str(),
+    )
+    .map_err(|e| format!("write nook-vault.example.jsonl: {e}"))?;
 
     println!("Wrote fixtures to {}", fixtures_dir.display());
     println!("  session.example.jsonl     — plaintext in-memory format (WASM session only)");

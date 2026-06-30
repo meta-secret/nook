@@ -160,8 +160,10 @@ impl NookVaultManager {
         if self.device_identity_secret.is_empty() {
             return String::new();
         }
-        nook_core::DeviceIdentity::from_secret_str(&self.device_identity_secret)
-            .map(|identity| identity.public_key())
+        nook_core::DeviceIdentitySecret::parse(&self.device_identity_secret)
+            .ok()
+            .and_then(|secret| nook_core::DeviceIdentity::from_secret_str(&secret).ok())
+            .map(|identity| identity.public_key().as_str().to_owned())
             .unwrap_or_default()
     }
 
@@ -205,7 +207,8 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        let db = nook_core::Database::from_jsonl(&self.decrypted_jsonl)?;
+        let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
+        let db = nook_core::Database::from_jsonl(&jsonl)?;
         records_to_vec(db.list())
     }
 
@@ -305,7 +308,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::DeviceIdentity, NookError> {
         Ok(nook_core::DeviceIdentity::from_secret_str(
-            &self.device_identity_secret,
+            &nook_core::DeviceIdentitySecret::parse(&self.device_identity_secret)?,
         )?)
     }
 
@@ -339,7 +342,8 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.secrets_key = secrets_key.to_owned();
         self.members_key = members_key.to_owned();
-        self.crypto = Some(nook_core::VaultCrypto::new(secrets_key)?);
+        let parsed_secrets = nook_core::SymmetricKey::parse(secrets_key)?;
+        self.crypto = Some(nook_core::VaultCrypto::new(&parsed_secrets)?);
         Ok(())
     }
 
@@ -378,9 +382,11 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
         let members_key = self.members_key.clone();
-        if let Some(member_records) =
-            nook_core::ensure_self_in_roster(&records, identity, &members_key)?
-        {
+        if let Some(member_records) = nook_core::ensure_self_in_roster(
+            &records,
+            identity,
+            &nook_core::SymmetricKey::parse(&members_key)?,
+        )? {
             apply_member_records(&mut self.stored_armored, &member_records);
             self.save_current_db().await?;
         }

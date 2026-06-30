@@ -40,7 +40,7 @@ pub fn replace_secret(
         return Err(SessionError::SecretAlreadyExists { id: new_id });
     }
 
-    let typed_value = SecretValue::from_yaml(input.secret_type, input.data_yaml)?;
+    let typed_value = SecretValue::from_yaml_str(input.secret_type, input.data_yaml)?;
     db.remove(&old_id);
     db.insert(new_id.clone(), typed_value);
 
@@ -48,7 +48,7 @@ pub fn replace_secret(
     secret_types.remove(&old_id);
 
     let encrypted = crypto.encrypt_value(input.data_yaml)?;
-    armored.insert(new_id.clone(), encrypted);
+    armored.insert(new_id.clone(), encrypted.as_str().to_owned());
     secret_types.insert(new_id, input.secret_type);
     Ok(())
 }

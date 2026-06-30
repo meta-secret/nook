@@ -45,10 +45,10 @@ fn session_survives_provider_switch_simulation() -> VaultResult<()> {
 
     // Re-hydrate keys from projection cache (ensure_vault_crypto_from_cache path).
     let (restored_secrets, restored_members) = hydrate_keys_from_projection_yaml(&yaml, &identity)?;
-    assert_eq!(restored_secrets, keys.secrets_key);
-    assert_eq!(restored_members, keys.members_key);
+    assert_eq!(restored_secrets.as_str(), keys.secrets_key.as_str());
+    assert_eq!(restored_members.as_str(), keys.members_key.as_str());
 
-    let restored_crypto = VaultCrypto::new(&restored_secrets)?;
+    let restored_crypto = VaultCrypto::new(&nook_core::SymmetricKey::parse(&restored_secrets)?)?;
     restored_crypto.encrypt_value("after-sync")?;
     Ok(())
 }

@@ -96,18 +96,18 @@ mod tests {
                 expires_at: String::new(),
             }),
         );
-        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeef";
+        let passphrase = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
         let yaml = db.to_stored_yaml(passphrase)?;
 
         let first = legacy_vault_to_import_event(
-            &yaml,
+            yaml.as_str(),
             store_id.as_str(),
             actor,
             &signing_key,
             "2026-06-28T00:00:00Z",
         )?;
         let second = legacy_vault_to_import_event(
-            &yaml,
+            yaml.as_str(),
             store_id.as_str(),
             actor,
             &signing_key,
@@ -122,7 +122,10 @@ mod tests {
         {
             assert_eq!(secrets.len(), 1);
             assert_eq!(secrets[0].secret_type, SecretType::ApiKey);
-            assert_eq!(source_content_hash, &legacy_vault_content_hash(&yaml));
+            assert_eq!(
+                source_content_hash,
+                &legacy_vault_content_hash(yaml.as_str())
+            );
         } else {
             return Err(crate::errors::EventError::ExpectedImportOperation.into());
         }

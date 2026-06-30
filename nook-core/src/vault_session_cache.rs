@@ -18,7 +18,7 @@ pub fn hydrate_keys_from_projection_yaml(
     let records = deserialize_stored(yaml, format)?;
     let secrets_key = resolve_secrets_key(&records, identity)?;
     let members_key = resolve_members_key(&records, identity)?;
-    Ok((secrets_key, members_key))
+    Ok((secrets_key.into_inner(), members_key.into_inner()))
 }
 
 #[cfg(test)]
@@ -52,8 +52,8 @@ mod tests {
             None,
         )?;
         let (secrets_key, members_key) = hydrate_keys_from_projection_yaml(&yaml, &identity)?;
-        assert_eq!(secrets_key, keys.secrets_key);
-        assert_eq!(members_key, keys.members_key);
+        assert_eq!(secrets_key, keys.secrets_key.as_str());
+        assert_eq!(members_key, keys.members_key.as_str());
         Ok(())
     }
 

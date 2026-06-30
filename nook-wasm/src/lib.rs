@@ -234,10 +234,11 @@ fn build_secret_yaml_inner(
     fields: &NookSecretFormFields,
 ) -> Result<String, NookError> {
     let parsed = nook_core::SecretType::parse(secret_type)?;
-    Ok(nook_core::build_secret_yaml(
-        parsed,
-        &fields.to_json_value(),
-    )?)
+    Ok(
+        nook_core::build_secret_yaml(parsed, &fields.to_json_value())?
+            .as_str()
+            .to_owned(),
+    )
 }
 
 #[wasm_bindgen(js_name = buildSecretYaml)]

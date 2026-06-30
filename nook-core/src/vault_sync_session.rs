@@ -126,7 +126,7 @@ mod tests {
         let outcome = reconcile_yaml_sync(
             &yaml,
             &yaml,
-            &keys.members_key,
+            keys.members_key.as_str(),
             &identity,
             &mut armored,
             false,
@@ -144,8 +144,8 @@ mod tests {
         let outcome = reconcile_yaml_sync(&yaml, &yaml, "", &identity, &mut armored, true)?;
         match outcome {
             YamlSyncOutcome::Reloaded(reloaded) => {
-                assert_eq!(reloaded.secrets_key, keys.secrets_key);
-                assert_eq!(reloaded.members_key, keys.members_key);
+                assert_eq!(reloaded.secrets_key.as_str(), keys.secrets_key.as_str());
+                assert_eq!(reloaded.members_key.as_str(), keys.members_key.as_str());
             }
             other => {
                 return Err(crate::errors::EventError::UnexpectedYamlSyncOutcome {

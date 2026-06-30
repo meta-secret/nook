@@ -123,16 +123,16 @@ fn content_hash(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SecretId, VaultUnlock, serialize_stored_yaml_with_unlock};
+    use crate::{SecretId, StoredRecordPayload, VaultUnlock, serialize_stored_yaml_with_unlock};
 
     fn sample_yaml(version: u64, store_id: &str, armor_line: &str) -> String {
         serialize_stored_yaml_with_unlock(
             &[crate::StoredSecretRecord {
                 key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
                 secret_type: None,
-                value: format!(
+                value: StoredRecordPayload::from_trusted(format!(
                     "-----BEGIN AGE ENCRYPTED FILE-----\n{armor_line}\n-----END AGE ENCRYPTED FILE-----"
-                ),
+                )),
             }],
             &VaultUnlock::Keys,
             &[],

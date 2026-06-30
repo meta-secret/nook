@@ -35,6 +35,7 @@ mod vault_signing;
 mod vault_sync;
 mod vault_sync_session;
 mod vault_sync_store;
+mod vault_wire;
 
 pub use bip39::validate_bip39_mnemonic;
 pub use database::Database;
@@ -46,7 +47,7 @@ pub use errors::{
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
-    SeedPhraseSecret, StoredSecretRecord,
+    SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::build_secret_yaml;
 
@@ -139,4 +140,8 @@ pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_s
 pub use vault_sync_store::{
     MemoryVaultStore, fan_out_sync, reconcile_vault_stores, resolve_conflict_keep_local,
     resolve_conflict_keep_remote,
+};
+pub use vault_wire::{
+    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, SecretPayloadYaml, SessionJsonl,
+    StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml, SymmetricKey, Url64EncodedString,
 };

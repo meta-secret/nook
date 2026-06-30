@@ -1,8 +1,8 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
-    AuthEnvelopes, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope, PasswordUnlockEntry, SecretId,
-    StoredSecretRecord, VaultUnlock, is_auth_stored_record, is_join_stored_record,
-    is_members_stored_record,
+    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
+    PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultUnlock,
+    is_auth_stored_record, is_join_stored_record, is_members_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -155,13 +155,13 @@ struct StoredVaultYaml {
 }
 
 fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
-    let envelopes = crate::parse_auth_envelopes(&record.value)
+    let envelopes = crate::parse_auth_envelopes(record.value.as_str())
         .expect("auth record must parse before YAML serialization");
     AuthYamlRecord {
         pk_id: crate::normalize_auth_key_id(record.key.as_str())
             .map_or_else(|_| record.key.to_string(), |id| id.to_string()),
-        secrets_key: envelopes.secrets_key,
-        members_key: envelopes.members_key,
+        secrets_key: envelopes.secrets_key.as_str().to_owned(),
+        members_key: envelopes.members_key.as_str().to_owned(),
     }
 }
 
@@ -172,11 +172,13 @@ fn auth_to_stored_record(record: AuthYamlRecord) -> StoredSecretRecord {
     StoredSecretRecord {
         key: SecretId::from_vault_record(&pk_id),
         secret_type: None,
-        value: serde_json::to_string(&AuthEnvelopes {
-            secrets_key: record.secrets_key,
-            members_key: record.members_key,
-        })
-        .expect("auth envelopes must serialize"),
+        value: StoredRecordPayload::from_trusted(
+            serde_json::to_string(&AuthEnvelopes {
+                secrets_key: AgeArmoredCiphertext::from_trusted_armored(record.secrets_key),
+                members_key: AgeArmoredCiphertext::from_trusted_armored(record.members_key),
+            })
+            .expect("auth envelopes must serialize"),
+        ),
     }
 }
 
@@ -185,9 +187,11 @@ fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
         .map(|id| id.to_string())
         .unwrap_or(record.pk_id);
     StoredSecretRecord {
-        key: SecretId::from_vault_record(&crate::member_stored_key(&pk_id)),
+        key: SecretId::from_vault_record(&crate::member_stored_key(
+            &AuthKeyId::parse(&pk_id).expect("member pk_id must parse"),
+        )),
         secret_type: None,
-        value: record.ciphertext,
+        value: StoredRecordPayload::from_trusted(record.ciphertext),
     }
 }
 
@@ -214,7 +218,7 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
             );
             vault.members.push(MembersYamlRecord {
                 pk_id,
-                ciphertext: record.value.clone(),
+                ciphertext: record.value.as_str().to_owned(),
             });
         } else if is_auth_stored_record(record) {
             vault.auth.push(stored_record_to_auth(record));
@@ -422,14 +426,18 @@ mod tests {
             StoredSecretRecord {
                 key: sid("github.com"),
                 secret_type: Some(crate::SecretType::Login),
-                value: "-----BEGIN AGE ENCRYPTED FILE-----\nline1\nline2\n-----END AGE ENCRYPTED FILE-----"
-                    .to_owned(),
+                value: StoredRecordPayload::from_trusted(
+                    "-----BEGIN AGE ENCRYPTED FILE-----\nline1\nline2\n-----END AGE ENCRYPTED FILE-----"
+                        .to_owned(),
+                ),
             },
             StoredSecretRecord {
                 key: sid("work-vpn"),
                 secret_type: Some(crate::SecretType::ApiKey),
-                value: "-----BEGIN AGE ENCRYPTED FILE-----\nsecret\n-----END AGE ENCRYPTED FILE-----"
-                    .to_owned(),
+                value: StoredRecordPayload::from_trusted(
+                    "-----BEGIN AGE ENCRYPTED FILE-----\nsecret\n-----END AGE ENCRYPTED FILE-----"
+                        .to_owned(),
+                ),
             },
         ]
     }
@@ -438,7 +446,7 @@ mod tests {
     fn jsonl_roundtrip_stored_records() {
         let records = sample_records();
         let stored = serialize_stored_jsonl(&records).unwrap();
-        assert!(stored.contains("\"id\":\"github.com\""));
+        assert!(stored.as_str().contains("\"id\":\"github.com\""));
         assert!(stored.lines().count() == 2);
 
         let parsed = deserialize_stored_jsonl(&stored).unwrap();
@@ -449,9 +457,9 @@ mod tests {
     fn yaml_roundtrip_stored_records() {
         let records = sample_records();
         let stored = serialize_stored_yaml(&records).unwrap();
-        assert!(stored.contains("github.com"));
-        assert!(stored.contains('|'));
-        assert!(!stored.contains("\\n"));
+        assert!(stored.as_str().contains("github.com"));
+        assert!(stored.as_str().contains('|'));
+        assert!(!stored.as_str().contains("\\n"));
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed, records);
@@ -553,6 +561,7 @@ not-json
         .unwrap_err();
         assert!(
             err.to_string()
+                .as_str()
                 .contains("Failed to parse stored JSONL line")
         );
     }
@@ -597,7 +606,7 @@ not-json
         let parsed = deserialize_stored_yaml(&stored).unwrap();
 
         assert_eq!(parsed[0].value, records[0].value);
-        assert!(parsed[0].value.contains('\n'));
+        assert!(parsed[0].value.as_str().contains('\n'));
     }
 
     #[test]
@@ -612,21 +621,29 @@ not-json
     #[test]
     fn serialize_empty_yaml_has_secrets_key() {
         let stored = serialize_stored_yaml(&[]).unwrap();
-        assert!(stored.contains("secrets:"));
-        assert!(!stored.contains("auth:"));
+        assert!(stored.as_str().contains("secrets:"));
+        assert!(!stored.as_str().contains("auth:"));
         assert!(deserialize_stored_yaml(&stored).unwrap().is_empty());
     }
 
     #[test]
     fn yaml_auth_section_uses_pk_id_secrets_key_and_members_key() {
+        use crate::multi_device::{DeviceIdentity, JoinRequest};
+
         let device_id = "abc123def4567890";
         let auth_id = "a".repeat(64);
-        let join_id = "fedcba9876543210";
+        let joiner = DeviceIdentity::generate().unwrap();
+        let join_request = JoinRequest {
+            device_id: joiner.device_id().clone(),
+            public_key: joiner.public_key(),
+            requested_at: "2026-01-01T00:00:00Z".to_owned(),
+        };
+        let join_id = join_request.device_id.as_str();
         let records = vec![
             StoredSecretRecord {
                 key: sid("github.com"),
                 secret_type: Some(crate::SecretType::Login),
-                value: "encrypted-user-secret".to_owned(),
+                value: StoredRecordPayload::from_trusted("encrypted-user-secret".to_owned()),
             },
             auth_to_stored_record(AuthYamlRecord {
                 pk_id: auth_id.clone(),
@@ -640,22 +657,22 @@ not-json
             StoredSecretRecord {
                 key: sid(join_id),
                 secret_type: None,
-                value: format!(
-                    r#"{{"device_id":"{join_id}","public_key":"age1test","requested_at":"2026-01-01T00:00:00Z"}}"#
+                value: StoredRecordPayload::from_trusted(
+                    serde_json::to_string(&join_request).expect("join request must serialize"),
                 ),
             },
         ];
 
         let stored = serialize_stored_yaml(&records).unwrap();
-        assert!(stored.contains("secrets:"));
-        assert!(stored.contains("auth:"));
-        assert!(stored.contains("joins:"));
-        assert!(stored.contains("pk_id: "));
-        assert!(stored.contains("secrets_key: "));
-        assert!(stored.contains("members_key: "));
-        assert!(!stored.contains("dec: "));
-        assert!(!stored.contains("auth:\n- key:"));
-        assert!(!stored.contains(device_id));
+        assert!(stored.as_str().contains("secrets:"));
+        assert!(stored.as_str().contains("auth:"));
+        assert!(stored.as_str().contains("joins:"));
+        assert!(stored.as_str().contains("pk_id: "));
+        assert!(stored.as_str().contains("secrets_key: "));
+        assert!(stored.as_str().contains("members_key: "));
+        assert!(!stored.as_str().contains("dec: "));
+        assert!(!stored.as_str().contains("auth:\n- key:"));
+        assert!(!stored.as_str().contains(device_id));
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 3);
@@ -667,16 +684,18 @@ not-json
         let records = vec![StoredSecretRecord {
             key: sid(&format!("member:{auth_id}")),
             secret_type: None,
-            value: "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
-                .to_owned(),
+            value: StoredRecordPayload::from_trusted(
+                "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
+                    .to_owned(),
+            ),
         }];
 
         let stored = serialize_stored_yaml(&records).unwrap();
-        assert!(stored.contains("members:"));
-        assert!(stored.contains("pk_id:"));
-        assert!(stored.contains("ciphertext:"));
-        assert!(stored.contains(&auth_id));
-        assert!(!stored.contains("member:"));
+        assert!(stored.as_str().contains("members:"));
+        assert!(stored.as_str().contains("pk_id:"));
+        assert!(stored.as_str().contains("ciphertext:"));
+        assert!(stored.as_str().contains(&auth_id));
+        assert!(!stored.as_str().contains("member:"));
 
         let parsed = deserialize_stored_yaml(&stored).unwrap();
         assert_eq!(parsed.len(), 1);
@@ -690,8 +709,8 @@ not-json
         };
 
         let keys = VaultKeys {
-            secrets_key: "d".repeat(64),
-            members_key: "e".repeat(64),
+            secrets_key: crate::SymmetricKey::parse(&"d".repeat(64)).unwrap(),
+            members_key: crate::SymmetricKey::parse(&"e".repeat(64)).unwrap(),
         };
         let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
         let entry = PasswordUnlockEntry {
@@ -709,8 +728,8 @@ not-json
             Some(1),
         )
         .unwrap();
-        assert!(!yaml.contains("unlock:"));
-        assert!(yaml.contains("password_entries:"));
+        assert!(!yaml.as_str().contains("unlock:"));
+        assert!(yaml.as_str().contains("password_entries:"));
         assert!(!yaml.starts_with("password_envelope:"));
 
         let parsed_entries = read_vault_password_entries(&yaml).unwrap();
@@ -731,8 +750,8 @@ not-json
     fn yaml_keys_unlock_is_default() {
         let records = sample_records();
         let yaml = serialize_stored_yaml(&records).unwrap();
-        assert!(!yaml.contains("unlock:"));
-        assert!(!yaml.contains("envelope:"));
+        assert!(!yaml.as_str().contains("unlock:"));
+        assert!(!yaml.as_str().contains("envelope:"));
 
         let (parsed_records, unlock) = deserialize_stored_yaml_with_unlock(&yaml).unwrap();
         assert_eq!(parsed_records, records);
@@ -777,8 +796,8 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             Some(1),
         )
         .unwrap();
-        assert!(yaml.contains("store_id: store_SMypl8K0w9Y"));
-        assert!(yaml.contains("vault_version: 1"));
+        assert!(yaml.as_str().contains("store_id: store_SMypl8K0w9Y"));
+        assert!(yaml.as_str().contains("vault_version: 1"));
         assert_eq!(read_vault_version(&yaml).unwrap(), 1);
         assert_eq!(
             read_vault_store_id(&yaml).unwrap(),
@@ -819,17 +838,25 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         });
 
         let yaml = serialize_stored_yaml(std::slice::from_ref(&record)).unwrap();
-        assert!(yaml.contains("secrets_key:"));
-        assert!(yaml.contains("members_key:"));
-        assert!(!yaml.contains("dek:"));
-        assert!(!yaml.contains("mek:"));
+        assert!(yaml.as_str().contains("secrets_key:"));
+        assert!(yaml.as_str().contains("members_key:"));
+        assert!(!yaml.as_str().contains("dek:"));
+        assert!(!yaml.as_str().contains("mek:"));
 
         let parsed = deserialize_stored_yaml(&yaml).unwrap();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), format!("key_{auth_id}"));
 
-        let env = crate::parse_auth_envelopes(&parsed[0].value).unwrap();
-        assert!(env.secrets_key.contains("BEGIN AGE ENCRYPTED FILE"));
-        assert!(env.members_key.contains("BEGIN AGE ENCRYPTED FILE"));
+        let env = crate::parse_auth_envelopes(parsed[0].value.as_str()).unwrap();
+        assert!(
+            env.secrets_key
+                .as_str()
+                .contains("BEGIN AGE ENCRYPTED FILE")
+        );
+        assert!(
+            env.members_key
+                .as_str()
+                .contains("BEGIN AGE ENCRYPTED FILE")
+        );
     }
 }

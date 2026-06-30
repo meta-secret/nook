@@ -199,14 +199,14 @@ impl NookVaultManager {
         self.unlock = nook_core::VaultUnlock::Keys;
         self.stored_armored.clear();
         let keys = nook_core::generate_vault_keys()?;
-        self.apply_vault_keys(&keys.secrets_key, &keys.members_key)?;
+        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         let genesis =
             nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
         self.stored_armored
-            .insert(genesis.key.to_string(), genesis.value);
+            .insert(genesis.key.to_string(), genesis.value.as_str().to_owned());
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.stored_armored
-                .insert(member.key.to_string(), member.value);
+                .insert(member.key.to_string(), member.value.as_str().to_owned());
         }
         self.decrypted_jsonl = String::new();
         self.secret_types.clear();
@@ -222,20 +222,20 @@ impl NookVaultManager {
             nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
                 key: nook_core::SecretId::from_vault_record(key),
                 secret_type: None,
-                value: value.clone(),
+                value: nook_core::StoredRecordPayload::from_trusted(value.clone()),
             })
         });
         self.secret_types.clear();
         if self.needs_genesis_persist() {
             let identity = self.device_identity()?;
-            let secrets_key = self.secrets_key.clone();
-            let members_key = self.members_key.clone();
+            let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
+            let members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
             let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
             self.stored_armored
-                .insert(genesis.key.to_string(), genesis.value);
+                .insert(genesis.key.to_string(), genesis.value.as_str().to_owned());
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
                 self.stored_armored
-                    .insert(member.key.to_string(), member.value);
+                    .insert(member.key.to_string(), member.value.as_str().to_owned());
             }
         }
         self.save_current_db().await?;

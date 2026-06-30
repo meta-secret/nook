@@ -61,7 +61,13 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AuthKeyIdInvalid
             | ValidationError::DeviceIdInvalid
             | ValidationError::Bip39Empty
-            | ValidationError::Bip39Invalid => NookError::Database(err.to_string()),
+            | ValidationError::Bip39Invalid
+            | ValidationError::SymmetricKeyInvalid
+            | ValidationError::AgeArmoredInvalid
+            | ValidationError::DevicePublicKeyInvalid
+            | ValidationError::DeviceIdentitySecretInvalid
+            | ValidationError::SessionJsonlInvalid
+            | ValidationError::StoredVaultJsonlInvalid => NookError::Database(err.to_string()),
         }
     }
 }

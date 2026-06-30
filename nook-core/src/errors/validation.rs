@@ -62,4 +62,22 @@ pub enum ValidationError {
 
     #[error("errors.validation.bip39_invalid")]
     Bip39Invalid,
+
+    #[error("errors.validation.symmetric_key_invalid")]
+    SymmetricKeyInvalid,
+
+    #[error("errors.validation.age_armored_invalid")]
+    AgeArmoredInvalid,
+
+    #[error("errors.validation.device_public_key_invalid")]
+    DevicePublicKeyInvalid,
+
+    #[error("errors.validation.device_identity_secret_invalid")]
+    DeviceIdentitySecretInvalid,
+
+    #[error("errors.validation.session_jsonl_invalid")]
+    SessionJsonlInvalid,
+
+    #[error("errors.validation.stored_vault_jsonl_invalid")]
+    StoredVaultJsonlInvalid,
 }

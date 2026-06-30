@@ -17,8 +17,8 @@ pub struct NookJoinRequest {
 impl NookJoinRequest {
     pub(crate) fn from_core(join: nook_core::JoinRequest) -> Self {
         Self {
-            device_id: join.device_id,
-            public_key: join.public_key,
+            device_id: join.device_id.to_string(),
+            public_key: join.public_key.as_str().to_owned(),
             requested_at: join.requested_at,
         }
     }
@@ -53,9 +53,9 @@ pub struct NookVaultMember {
 impl NookVaultMember {
     pub(crate) fn from_core(member: nook_core::VaultMember) -> Self {
         Self {
-            auth_id: member.auth_id,
-            device_id: member.device_id,
-            public_key: member.public_key,
+            auth_id: member.auth_id.to_string(),
+            device_id: member.device_id.to_string(),
+            public_key: member.public_key.as_str().to_owned(),
             enrolled_at: member.enrolled_at,
             label: member.label.unwrap_or_default(),
         }

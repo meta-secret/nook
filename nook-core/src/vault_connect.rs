@@ -72,18 +72,18 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
     let crypto = VaultCrypto::new(&secrets_key)?;
     let mut armored = HashMap::with_capacity(stored_records.len());
     for record in &stored_records {
-        armored.insert(record.key.to_string(), record.value.clone());
+        armored.insert(record.key.to_string(), record.value.as_str().to_owned());
     }
     let user_records = user_stored_records(&stored_records);
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
     let jsonl = db.to_jsonl()?;
     let secret_types = records_to_secret_types(&stored_records);
     Ok(LoadedVault {
-        jsonl,
+        jsonl: jsonl.into_inner(),
         armored,
         secret_types,
-        secrets_key,
-        members_key,
+        secrets_key: secrets_key.into_inner(),
+        members_key: members_key.into_inner(),
     })
 }
 
@@ -95,7 +95,7 @@ pub fn apply_member_records(
 ) {
     armored.retain(|key, _| !key.starts_with(crate::MEMBER_RECORD_PREFIX));
     for record in member_records {
-        armored.insert(record.key.to_string(), record.value.clone());
+        armored.insert(record.key.to_string(), record.value.as_str().to_owned());
     }
 }
 
@@ -155,7 +155,7 @@ mod tests {
         assert!(!content_requires_genesis(&yaml, false)?);
         assert_eq!(access_status_for_vault_content(&yaml, &identity)?, "ready");
         let loaded = load_stored_vault(&yaml, &identity)?;
-        assert_eq!(loaded.secrets_key, keys.secrets_key);
+        assert_eq!(loaded.secrets_key, keys.secrets_key.as_str());
         assert!(loaded.jsonl.is_empty() || loaded.armored.len() >= 2);
         Ok(())
     }
