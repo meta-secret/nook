@@ -20,11 +20,6 @@ const log = createLogger("fix");
 const DEFAULT_POLL_MS = 15_000;
 
 export async function runCiFix(): Promise<void> {
-  const token = process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim();
-  if (!token) {
-    throw new Error("GITHUB_TOKEN or GH_TOKEN is required");
-  }
-
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   const runId = process.env.GITHUB_RUN_ID?.trim();
   if (!repository || !runId) {
@@ -36,9 +31,9 @@ export async function runCiFix(): Promise<void> {
   const pollMs = Number(process.env.CI_FIX_POLL_MS ?? DEFAULT_POLL_MS);
 
   chdir(repoRoot);
-  await configureGitForCi(repoRoot);
 
   const octokit = createOctokit();
+  await configureGitForCi(repoRoot, octokit);
   const repoRef = parseRepository(repository);
 
   let prNumber = await findOpenPr(octokit, repoRef, fixBranch);

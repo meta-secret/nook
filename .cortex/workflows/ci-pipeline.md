@@ -140,7 +140,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 | Secret / env | Used by |
 |--------------|---------|
-| `NOOK_GITHUB_PAT` | sync-live only (repo scope + delete_repo for cleanup) |
+| `NOOK_GITHUB_PAT` | sync-live e2e **and** ci-fix PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
 | `NOOK_GITHUB_E2E_REPO` | CI sets per run for live suites (one repo per container) |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy |
 | `GITHUB_TOKEN` | Toolchain GHCR, PR comments |
@@ -151,6 +151,10 @@ Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` wi
 ## CI agent (`ci-fix` job)
 
 Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait for checks → squash merge. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt.
+
+**Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). Those PRs also sit behind branch protection as bot-authored and need a manual approval you cannot self-grant. The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner, `pr.yml` runs, and squash merge can proceed without a manual approve step (assuming the PAT owner can merge per branch rules).
+
+Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT with `repo` scope, or fine-grained with contents + pull requests write on this repo).
 
 The `ci-fix` job runs **`task setup`** (pull GHCR toolchain or bake) **before** `task ci-agent:fix`. Without this, parallel Docker tasks such as `ci:main:e2e` would default to `nook-build:local`, which does not exist on CI runners. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` writes the resolved ref to `.nook/docker-image`.
 

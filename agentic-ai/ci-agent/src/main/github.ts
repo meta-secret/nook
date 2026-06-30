@@ -14,12 +14,20 @@ export function parseRepository(fullName: string): RepoRef {
   return { owner, repo };
 }
 
-export function createOctokit(): Octokit {
-  const token = process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim();
+/** PAT preferred — PRs from GITHUB_TOKEN do not trigger pull_request workflows. */
+export function resolveGitHubToken(): string {
+  const token =
+    process.env.NOOK_GITHUB_PAT?.trim() ||
+    process.env.GITHUB_TOKEN?.trim() ||
+    process.env.GH_TOKEN?.trim();
   if (!token) {
-    throw new Error("GITHUB_TOKEN or GH_TOKEN is required");
+    throw new Error("NOOK_GITHUB_PAT, GITHUB_TOKEN, or GH_TOKEN is required");
   }
-  return new Octokit({ auth: token });
+  return token;
+}
+
+export function createOctokit(): Octokit {
+  return new Octokit({ auth: resolveGitHubToken() });
 }
 
 export async function findOpenPr(

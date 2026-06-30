@@ -5,7 +5,7 @@
 # setting NOOK_E2E_SYNC_PROVIDER on each matrix job.
 #
 # On failure: task ci-agent:fix (Cursor SDK + GitHub REST API) fixes, opens PR,
-# squash-merges — same agent as main.yml. Requires CURSOR_API_KEY.
+# squash-merges — same agent as main.yml. Requires CURSOR_API_KEY and NOOK_GITHUB_PAT.
 
 name: E2E (nightly)
 
@@ -64,7 +64,6 @@ jobs:
       checks: read
       packages: write
     env:
-      GITHUB_TOKEN: ${{ github.token }}
       FIX_BRANCH: fix/nightly-e2e-${{ github.run_id }}
       GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_RUN_ID: ${{ github.run_id }}
@@ -75,6 +74,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
@@ -94,10 +94,10 @@ jobs:
       - name: Run ci-fix
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ github.workspace }}
           VITE_BASE: /
           VITE_VAULT_SYNC_INTERVAL_MS: "1000"
-          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-nightly-${{ github.run_id }}-fix
           NOOK_GITHUB_POLL_MS: "3000"
           NOOK_GITHUB_SYNC_TIMEOUT_MS: "15000"
