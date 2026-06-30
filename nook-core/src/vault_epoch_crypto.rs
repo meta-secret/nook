@@ -160,10 +160,10 @@ mod tests {
             &old_keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let auth_key = records[0].key.clone();
-        let mut armored: HashMap<_, _> = records
+        let auth_key = records[0].key.to_string();
+        let mut armored: HashMap<String, String> = records
             .iter()
-            .map(|record| (record.key.clone(), record.value.clone()))
+            .map(|record| (record.key.to_string(), record.value.clone()))
             .collect();
         let old_auth_value = armored[&auth_key].clone();
 
