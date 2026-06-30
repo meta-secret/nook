@@ -1,7 +1,9 @@
 //! Plaintext session hydration from projected or stored user records.
 
 use crate::errors::VaultResult;
-use crate::{Database, SecretId, SecretType, StoredSecretRecord, VaultCrypto, is_vault_meta_record};
+use crate::{
+    Database, SecretId, SecretType, StoredSecretRecord, VaultCrypto, is_vault_meta_record,
+};
 use std::collections::HashMap;
 
 /// Merge live user secrets into an armored session cache and return decrypted JSONL.
