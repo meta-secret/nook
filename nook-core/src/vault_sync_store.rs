@@ -162,6 +162,7 @@ mod tests {
             Some(version),
         )
         .unwrap()
+        .into_inner()
     }
 
     #[test]

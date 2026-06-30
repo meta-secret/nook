@@ -5,6 +5,7 @@
 //! Array order is preserved (parent lists are sorted before hashing).
 
 use crate::errors::{EventError, VaultResult};
+use crate::vault_wire::Sha256Hex;
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -141,14 +142,14 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
 
 /// SHA-256 hex digest of arbitrary bytes.
 #[must_use]
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    hex::encode(Sha256::digest(bytes))
+pub fn sha256_hex(bytes: &[u8]) -> Sha256Hex {
+    Sha256Hex::from_trusted(hex::encode(Sha256::digest(bytes)))
 }
 
 /// Compute the content-addressed [`EventId`] for canonical event body bytes.
 #[must_use]
 pub fn event_id_from_body_bytes(body_bytes: &[u8]) -> EventId {
-    EventId(format!("sha256:{}", sha256_hex(body_bytes)))
+    EventId(format!("sha256:{}", sha256_hex(body_bytes).as_str()))
 }
 
 /// Recursively sort object keys for canonical JSON encoding.

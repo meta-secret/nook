@@ -2,11 +2,49 @@
 
 use crate::errors::VaultResult;
 use crate::{
-    Database, DeviceIdentity, SecretType, StoredSecretRecord, VaultCrypto, VaultUnlock,
-    assess_connect_access, deserialize_stored, detect_stored_format, resolve_members_key,
-    resolve_secrets_key, user_stored_records, vault_has_multi_device_records,
+    ConnectAccessStatus, Database, DeviceIdentity, SecretType, StoredSecretRecord, VaultCrypto,
+    VaultUnlock, assess_connect_access, deserialize_stored, detect_stored_format,
+    resolve_members_key, resolve_secrets_key, user_stored_records, vault_has_multi_device_records,
 };
 use std::collections::HashMap;
+use std::fmt;
+
+/// Connect pre-flight status for the web layer (`new_vault` or enrolled-device access).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultAccessStatus {
+    NewVault,
+    Ready,
+    NeedsEnrollment,
+    JoinPending,
+}
+
+impl VaultAccessStatus {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NewVault => "new_vault",
+            Self::Ready => "ready",
+            Self::NeedsEnrollment => "needs_enrollment",
+            Self::JoinPending => "join_pending",
+        }
+    }
+}
+
+impl fmt::Display for VaultAccessStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<ConnectAccessStatus> for VaultAccessStatus {
+    fn from(status: ConnectAccessStatus) -> Self {
+        match status {
+            ConnectAccessStatus::Ready => Self::Ready,
+            ConnectAccessStatus::NeedsEnrollment => Self::NeedsEnrollment,
+            ConnectAccessStatus::JoinPending => Self::JoinPending,
+        }
+    }
+}
 
 /// Decrypted session material loaded from a stored vault blob.
 pub struct LoadedVault {
@@ -34,21 +72,16 @@ pub fn content_requires_genesis(content: &str, force_genesis: bool) -> VaultResu
 pub fn access_status_for_vault_content(
     content: &str,
     identity: &DeviceIdentity,
-) -> VaultResult<String> {
+) -> VaultResult<VaultAccessStatus> {
     if content.trim().is_empty() {
-        return Ok("new_vault".to_owned());
+        return Ok(VaultAccessStatus::NewVault);
     }
     let format = detect_stored_format(content)?;
     let records = deserialize_stored(content, format)?;
     if !vault_has_multi_device_records(&records) {
-        return Ok("new_vault".to_owned());
+        return Ok(VaultAccessStatus::NewVault);
     }
-    Ok(match assess_connect_access(&records, identity) {
-        crate::ConnectAccessStatus::Ready => "ready",
-        crate::ConnectAccessStatus::NeedsEnrollment => "needs_enrollment",
-        crate::ConnectAccessStatus::JoinPending => "join_pending",
-    }
-    .to_owned())
+    Ok(assess_connect_access(&records, identity).into())
 }
 
 fn records_to_secret_types(records: &[StoredSecretRecord]) -> HashMap<String, SecretType> {
@@ -152,9 +185,12 @@ mod tests {
             Some(store_id.as_str()),
             None,
         )?;
-        assert!(!content_requires_genesis(&yaml, false)?);
-        assert_eq!(access_status_for_vault_content(&yaml, &identity)?, "ready");
-        let loaded = load_stored_vault(&yaml, &identity)?;
+        assert!(!content_requires_genesis(yaml.as_str(), false)?);
+        assert_eq!(
+            access_status_for_vault_content(yaml.as_str(), &identity)?,
+            VaultAccessStatus::Ready
+        );
+        let loaded = load_stored_vault(yaml.as_str(), &identity)?;
         assert_eq!(loaded.secrets_key, keys.secrets_key.as_str());
         assert!(loaded.jsonl.is_empty() || loaded.armored.len() >= 2);
         Ok(())

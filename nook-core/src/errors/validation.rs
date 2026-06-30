@@ -92,4 +92,7 @@ pub enum ValidationError {
 
     #[error("errors.validation.password_entry_id_invalid")]
     PasswordEntryIdInvalid,
+
+    #[error("errors.validation.signing_seed_invalid")]
+    SigningSeedInvalid,
 }

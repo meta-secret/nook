@@ -241,10 +241,11 @@ impl NookVaultManager {
             Some(self.vault_version),
         )?;
 
+        let stored_str = stored.as_str();
         match self.storage_mode {
             nook_core::StorageMode::Local => {
                 let _ = self.status_tx.send("IDB_SAVE_START".to_owned());
-                save_to_indexed_db(&stored).await?;
+                save_to_indexed_db(stored_str).await?;
                 let _ = self.status_tx.send("IDB_SAVE_SUCCESS".to_owned());
             }
             nook_core::StorageMode::Github => {
@@ -253,7 +254,7 @@ impl NookVaultManager {
                     &self.github_pat,
                     &self.github_repo,
                     &self.github_path,
-                    &stored,
+                    stored_str,
                     self.file_sha.clone(),
                 )
                 .await?;
@@ -267,7 +268,7 @@ impl NookVaultManager {
                     &self.github_pat,
                     &self.github_repo,
                     &self.github_path,
-                    &stored,
+                    stored_str,
                     self.file_sha.clone(),
                 )
                 .await?;
@@ -280,7 +281,7 @@ impl NookVaultManager {
                 let (record_name, new_revision) = write_icloud_vault_with_retry(
                     &self.github_pat,
                     &self.github_repo,
-                    &stored,
+                    stored_str,
                     self.file_sha.clone(),
                 )
                 .await?;
@@ -289,9 +290,9 @@ impl NookVaultManager {
                 let _ = self.status_tx.send("ICLOUD_SAVE_SUCCESS".to_owned());
             }
         }
-        self.last_synced_content = stored.clone();
+        self.last_synced_content = stored.as_str().to_owned();
         if self.storage_mode != nook_core::StorageMode::Local {
-            save_vault_local_cache(&self.local_cache_ref(), &stored).await?;
+            save_vault_local_cache(&self.local_cache_ref(), stored_str).await?;
         }
         Ok(())
     }

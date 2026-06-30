@@ -138,7 +138,7 @@ impl NookVaultManager {
             secret_types,
             secrets_key: resolved_secrets_key,
             members_key: resolved_members_key,
-        } = load_stored_vault(&updated, &identity)?;
+        } = load_stored_vault(updated.as_str(), &identity)?;
         self.apply_vault_keys(&resolved_secrets_key, &resolved_members_key)?;
         self.decrypted_jsonl = jsonl;
         self.stored_armored = armored;

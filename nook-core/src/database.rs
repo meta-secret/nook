@@ -86,14 +86,7 @@ impl Database {
         format: VaultFormat,
     ) -> DatabaseResult<StoredVaultBlob> {
         let stored_records = self.to_stored_records(passphrase)?;
-        Ok(match format {
-            VaultFormat::Jsonl => StoredVaultBlob::Jsonl(StoredVaultJsonl::from_trusted(
-                vault_format::serialize_stored(&stored_records, format)?,
-            )),
-            VaultFormat::Yaml => StoredVaultBlob::Yaml(StoredVaultYaml::from_trusted(
-                vault_format::serialize_stored(&stored_records, format)?,
-            )),
-        })
+        vault_format::serialize_stored(&stored_records, format).map_err(Into::into)
     }
 
     pub fn to_stored_jsonl(&self, passphrase: &str) -> DatabaseResult<StoredVaultJsonl> {
@@ -159,7 +152,7 @@ impl Database {
             })?;
             let decrypted = crypto
                 .decrypt_value(&crate::AgeArmoredCiphertext::parse(stored.value.as_str())?)?;
-            let value = SecretValue::from_yaml_str(secret_type, &decrypted)?;
+            let value = SecretValue::from_yaml_str(secret_type, decrypted.as_str())?;
             records.insert(
                 stored.key.clone(),
                 SecretRecord {

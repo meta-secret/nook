@@ -58,7 +58,10 @@ fn save_armored_cache(armored: &HashMap<SecretId, String>) -> String {
         .map(|key| (key.clone(), SecretType::ApiKey))
         .collect();
     let records = Database::stored_records_from_armored(armored, &secret_types);
-    serialize_stored(&records, VaultFormat::Yaml).unwrap()
+    serialize_stored(&records, VaultFormat::Yaml)
+        .unwrap()
+        .as_str()
+        .to_owned()
 }
 
 fn load_vault(yaml: &str, crypto: &VaultCrypto) -> (Database, HashMap<SecretId, String>) {
@@ -157,7 +160,7 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
             armored.get(&sid(new_id)).unwrap().clone(),
         ))
         .unwrap();
-    assert_eq!(decrypted, new_yaml);
+    assert_eq!(decrypted.as_str(), new_yaml);
 }
 
 #[test]

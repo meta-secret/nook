@@ -28,6 +28,7 @@ fn sample_yaml(version: u64, armor_line: &str) -> String {
         Some(version),
     )
     .unwrap()
+    .into_inner()
 }
 
 #[test]

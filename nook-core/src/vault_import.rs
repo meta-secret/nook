@@ -25,7 +25,7 @@ impl VaultHashContext {
     pub fn from_stored(stored: &str) -> Self {
         Self {
             stored: stored.to_owned(),
-            content_hash: Sha256Hex::from_trusted(sha256_hex(stored.trim().as_bytes())),
+            content_hash: sha256_hex(stored.trim().as_bytes()),
         }
     }
 

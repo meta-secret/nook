@@ -49,8 +49,8 @@ impl NookVaultManager {
                 self.signing_seed = seed;
             } else {
                 let (identity, seed) = SigningIdentity::generate()?;
-                save_signing_seed(&seed).await?;
-                self.signing_seed = seed;
+                save_signing_seed(seed.as_str()).await?;
+                self.signing_seed = seed.into_inner();
                 return Ok(identity);
             }
         }
@@ -72,7 +72,10 @@ impl NookVaultManager {
             self.key_epoch = epoch;
             return Ok(self.key_epoch.clone());
         }
-        let epoch = format!("sha256:{}", nook_core::sha256_hex(self.store_id.as_bytes()));
+        let epoch = format!(
+            "sha256:{}",
+            nook_core::sha256_hex(self.store_id.as_bytes()).as_str()
+        );
         self.key_epoch = epoch;
         if !self.store_id.is_empty() {
             save_key_epoch(&self.store_id, &self.key_epoch).await?;
@@ -93,7 +96,7 @@ impl NookVaultManager {
         let import = stored_vault_to_import_event(
             &ctx,
             &nook_core::StoreId::parse(&self.store_id)?,
-            &nook_core::AuthKeyId::parse(&actor_id)?,
+            &actor_id,
             signing.signing_key(),
             &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
         )?;
@@ -133,7 +136,6 @@ impl NookVaultManager {
         let parents = self.load_event_heads().await?;
         let key_epoch = self.ensure_key_epoch().await?;
         let store_id = nook_core::StoreId::parse(&self.store_id)?;
-        let actor_id = nook_core::AuthKeyId::parse(&actor_id)?;
         let key_epoch = nook_core::EventId::parse(&key_epoch)?;
         let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
         let parents: Vec<EventId> = parents
@@ -178,7 +180,8 @@ impl NookVaultManager {
             crypto,
             &mut self.stored_armored,
             &mut self.secret_types,
-        )?;
+        )?
+        .into_inner();
         Ok(())
     }
 
@@ -191,8 +194,8 @@ impl NookVaultManager {
             Some(self.store_id.as_str()),
             None,
         )?;
-        save_to_indexed_db(&yaml).await?;
-        self.last_synced_content = yaml;
+        save_to_indexed_db(yaml.as_str()).await?;
+        self.last_synced_content = yaml.into_inner();
         Ok(())
     }
 
@@ -288,7 +291,7 @@ impl NookVaultManager {
         let key_epoch = self.ensure_key_epoch().await?;
         let import = nook_core::build_genesis_import_event(
             &nook_core::StoreId::parse(&self.store_id)?,
-            &nook_core::AuthKeyId::parse(&actor_id)?,
+            &actor_id,
             &EventId::parse(&key_epoch)?,
             &nook_core::Sha256Hex::from_trusted("0".repeat(64)),
             vec![],
@@ -381,7 +384,7 @@ impl NookVaultManager {
         }
         self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
             secrets,
-            members_checkpoint_hash: nook_core::Sha256Hex::from_trusted(members_checkpoint_hash),
+            members_checkpoint_hash,
         }])
         .await?;
         Ok(())

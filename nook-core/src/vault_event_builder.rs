@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn build_signed_event_roundtrip() -> VaultResult<()> {
         let (signing, _) = SigningIdentity::generate()?;
-        let actor = AuthKeyId::parse(&signing.actor_id()?)?;
+        let actor = signing.actor_id()?;
         let store_id = StoreId::parse("store_testtoken11")?;
         let epoch = EventId::parse(
             "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
