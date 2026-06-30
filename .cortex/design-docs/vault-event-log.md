@@ -122,6 +122,26 @@ See [#52](https://github.com/meta-secret/nook/issues/52) for schema migration co
 | 6 | User migration |
 | 7 | Feature flag rollout, legacy write removal |
 
+## Testing requirements
+
+Nook uses a **causal DAG** (parent head sets), not scalar vector clocks. Concurrency is `are_concurrent(a, b)` — neither event is an ancestor of the other. Sync is **set union** of immutable events.
+
+These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2e does not substitute.
+
+| Scenario | Test location |
+|----------|---------------|
+| Concurrent append, both secrets live | `vault_event_graph.rs`, `vault_projection.rs`, `event_log_workflow.rs` |
+| Out-of-order delivery → pending → applied | `vault_event_graph.rs`, `vault_event_store.rs`, `event_log_workflow.rs` |
+| Join event collapses multiple heads | `vault_event_graph.rs`, `event_log_workflow.rs` |
+| Replacement / security conflicts | `vault_projection.rs`, `vault_epoch.rs` |
+| Multi-device decentralized union | `event_log_workflow.rs` (harness) |
+| Projection replay invariance | `vault_projection.rs` (`assert_projection_permutation_invariant`) |
+| Provider outbox + union | `event_log_workflow.rs`, `vault_event_store.rs` |
+
+When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
+
+**Coverage:** `task rust:coverage:check` enforces a **90%** line floor (`nook-core/coverage-floor.json`). Event-log modules (`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority for test additions when changing sync semantics or when coverage drops below 90%.
+
 ## Related
 
 - [#112](https://github.com/meta-secret/nook/issues/112) — full specification

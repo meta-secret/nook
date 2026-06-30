@@ -34,3 +34,16 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Every implementation task** follows [workflows/coding-bro.md](../workflows/coding-bro.md): fetch → branch from `origin/main` → implement → local checks → push → PR → monitor CI → fix until green → squash merge.
 * **Do not stop at push.** The agent owns the PR through merge (when requested) or explicit handoff.
 * **Question-only turns** (no code changes) skip the pipeline.
+
+## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
+* **~99% of functional coverage belongs in Rust unit and integration tests** (`nook-core`). Event sourcing, decentralized set-union sync, causal DAG merge, projection replay, epoch conflicts, and crypto must be proven there — not inferred from Playwright.
+* **E2e validates thin UI paths** (unlock, save, stub sync, conflict screens). Treat e2e failures as integration regressions; treat missing Rust tests for new domain behavior as a coverage gap to fix immediately.
+* **Line coverage threshold:** `task rust:coverage:check` enforces a **90%** line floor (`nook-core/coverage-floor.json`). Below 90%, agents add Rust tests in the same task. Above 90%, prioritize behavioral tests over chasing every line.
+* **Prefer type-safe domain APIs** (newtypes, type-state markers at boundaries) when they prevent invalid states without obscuring the code. Simplicity wins over pattern theatrics.
+
+## 10. Grow Cortex Dynamically
+* **`.cortex` is a living knowledge base**, not a frozen snapshot. Agents must **update it when durable knowledge is gained** — from user prompts, design dialogues, test discoveries, CI/PR postmortems, or code archaeology.
+* **What to capture:** testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons. Write concise, actionable prose; link to source files.
+* **Where to put it:** extend the relevant existing doc (`rules.md`, `design-docs/`, `workflows/`, `references/`). Add a new file only when the topic is substantial and has no natural home. Update [design-docs/index.md](index.md) or [AGENTS.md](../AGENTS.md) links when adding docs.
+* **What not to capture:** chat fluff, one-off task status, or secrets. Do not duplicate large code blocks — point to modules and tests instead.
+* **When:** as part of the same PR that learns the fact, or in a immediate follow-up before the task is marked done. If you fixed a bug because tests revealed a missing invariant, document that invariant in `.cortex`.

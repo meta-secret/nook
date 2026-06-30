@@ -65,6 +65,30 @@ tasks:
       - task: docker:task
         vars: { TASK: _rust:test }
 
+  rust:coverage:
+    desc: Report nook-core line coverage (cargo llvm-cov + nextest).
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:coverage }
+
+  rust:coverage:check:
+    desc: Enforce nook-core 90% line coverage threshold.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:coverage:check }
+
+  rust:coverage:update:
+    desc: Rewrite coverage-floor.json to measured % (user approval only).
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _rust:coverage:update }
+
   rust:lint:
     desc: Lint the Rust workspace in Docker.
     deps:
@@ -82,7 +106,7 @@ tasks:
   _test:
     desc: Run all test suites.
     cmds:
-      - task: _rust:test
+      - task: _rust:coverage:check
       - task: _web:check
       - task: _web:test
 
@@ -121,7 +145,7 @@ tasks:
   _test:parallel:
     desc: Rust and web tests when wasm is already built (ci:pr parallel track).
     cmds:
-      - task: _rust:test:parallel
+      - task: _rust:coverage:check
       - task: _web:check:parallel
       - task: _web:test:parallel
 
@@ -132,9 +156,24 @@ tasks:
 
   _rust:test:run:
     internal: true
-    desc: Run nook-core tests via cargo-nextest (ci profile).
+    desc: Run nook-core tests via cargo-nextest (ci profile, no coverage gate).
     cmds:
       - cargo nextest run -p nook-core --profile ci
+
+  _rust:coverage:
+    desc: Print nook-core line coverage summary (no floor enforcement).
+    cmds:
+      - cargo llvm-cov nextest --profile ci -p nook-core --summary-only
+
+  _rust:coverage:check:
+    desc: Run nook-core tests and enforce 90% line coverage threshold.
+    cmds:
+      - bash .github/scripts/rust-coverage-check.sh
+
+  _rust:coverage:update:
+    desc: Rewrite coverage-floor.json to measured line coverage (optional).
+    cmds:
+      - bash .github/scripts/rust-coverage-check.sh --update-floor
 
   _format:
     desc: Format all projects.

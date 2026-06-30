@@ -62,5 +62,7 @@
 6. **Playwright** — e2e for the new form if user-visible.
 
 ## 6. Testing
-- Test vault formats, crypto, validation, and passwords in `nook-core` (`cargo nextest run -p nook-core --profile ci`, or `task rust:test`).
+- Test vault formats, crypto, validation, and passwords in `nook-core`.
+- **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
+- **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.

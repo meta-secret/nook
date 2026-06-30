@@ -50,7 +50,42 @@ This document defines the strict development standards, architectural boundaries
 
 ## 4. Testing Requirements
 
-- **Vault domain logic:** Add or update tests in `nook-core` (`task rust:test` / `cargo nextest run -p nook-core --profile ci`). Prefer module unit tests; use `tests/vault_workflow.rs` for end-to-end vault save paths.
+### Unit tests carry ~99% of functional coverage
+
+**E2e tests are smoke tests, not a substitute for domain coverage.** Playwright flows exercise a thin slice of user paths (happy paths, a few conflict screens). They do **not** prove correctness of event sourcing, causal DAG merge, projection replay, epoch rotation, crypto, or multi-device sync.
+
+| Layer | Target | Where |
+|-------|--------|-------|
+| **Unit / property tests** | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-core/src/**` `#[cfg(test)]`, `nook-core/tests/*.rs` |
+| **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration | `nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
+| **E2e (Playwright)** | Critical UI smoke only — unlock, save, sync stub, conflict UX | `nook-web/e2e/` |
+
+When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
+
+### Line coverage threshold (90%)
+
+`nook-core` line coverage is measured with **`cargo llvm-cov nextest`** and checked against a committed **90%** floor:
+
+| Artifact | Purpose |
+|----------|---------|
+| `nook-core/coverage-floor.json` | Minimum **line** coverage % (currently **90**) |
+| `.github/scripts/rust-coverage-check.sh` | Runs tests + compares measured vs floor |
+| `task rust:coverage:check` | CI/local gate (part of `task check`, `task ci:pr`) |
+| `task rust:coverage` | Report only (no threshold check) |
+| `task rust:coverage:update` | Optional — rewrite floor file to measured % (user approval only) |
+
+**Agent rules:**
+
+1. Run `task rust:coverage:check` (or `task check`) before push — coverage **below 90% fails the build**.
+2. When measured coverage is **under 90%**, **add Rust tests** in the same task before finishing (prioritize new/changed domain code).
+3. At or above 90%, do **not** chase marginal line coverage — focus tests on behavior and invariants instead.
+4. Change `lines_percent` in `coverage-floor.json` only with explicit user approval.
+
+Fast iteration without coverage instrumentation: `task rust:test` (nextest only).
+
+- **Vault domain logic:** Add or update tests in `nook-core` (`task rust:test` / `cargo nextest run -p nook-core --profile ci`). Prefer colocated module unit tests for pure functions; use `tests/event_log_workflow.rs` and siblings for multi-device / provider scenarios.
+- **Complex sync cases:** Event-sourcing merge (causal DAG, not scalar vector clocks), concurrent append, out-of-order delivery, join heads, replacement/security conflicts — must have dedicated Rust tests. See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
+- **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `ObservedHeads`) and type-state markers at API boundaries where they prevent invalid states without adding ceremony. Keep implementations simple — no type-state for its own sake.
 - **UI / integration:** Playwright e2e in `nook-web/e2e/` — `task web:test:e2e:pr` on PR CI, `task web:test:e2e` on main (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
 - **Do not** re-implement vault rules in TypeScript for testing — if TS needs behavior, expose it from WASM/core first.
 
