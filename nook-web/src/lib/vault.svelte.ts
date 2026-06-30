@@ -22,6 +22,7 @@ import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_VAULT_FILE,
   DEFAULT_GITHUB_REPO,
+  findDuplicateSyncProvider,
   formatDriveStorageRef,
   loadAuthProviders,
   loadAuthProvidersWithVaultMigration,
@@ -1264,7 +1265,7 @@ export class VaultState {
     this.showSuccess(this.t('toasts.removed_device', { label: target.label }))
   }
 
-  async ensureProviderSaved() {
+  async ensureProviderSaved(): Promise<boolean> {
     const pat = this.githubPat.trim()
     const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
     const driveFile = this.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
@@ -1286,6 +1287,10 @@ export class VaultState {
           }
         : undefined
 
+    const isExplicitAdd =
+      this.addProviderOpen ||
+      (this.isAuthenticated && this.loginSetupType !== null)
+
     if (isNewSetup && type !== 'local') {
       const provider: StorageProvider = {
         id: generateId(),
@@ -1305,7 +1310,14 @@ export class VaultState {
         storeId: vaultStoreId,
         createdAt: isoTimestamp(),
       }
-      this.providers = [...this.providers, provider]
+      if (findDuplicateSyncProvider(this.providers, provider)) {
+        if (isExplicitAdd) {
+          this.errorMsg = this.t('auth_storage.duplicate_sync_provider')
+          return false
+        }
+      } else {
+        this.providers = [...this.providers, provider]
+      }
     } else if (isNewSetup && type === 'local' && !this.localProvider) {
       const provider: StorageProvider = {
         id: generateId(),
@@ -1367,6 +1379,7 @@ export class VaultState {
     this.addProviderOpen = false
     this.applyActiveProviderCredentials()
     await this.persistProviders()
+    return true
   }
 
   startVaultSync() {
@@ -1939,7 +1952,10 @@ export class VaultState {
     ) {
       return conflict.providerId
     }
-    await this.ensureProviderSaved()
+    const saved = await this.ensureProviderSaved()
+    if (!saved) {
+      throw new Error(this.t('auth_storage.duplicate_sync_provider'))
+    }
     const provider =
       this.syncProviders[this.syncProviders.length - 1] ??
       this.providers[this.providers.length - 1]
@@ -1970,7 +1986,10 @@ export class VaultState {
         return
       }
 
-      await this.ensureProviderSaved()
+      const saved = await this.ensureProviderSaved()
+      if (!saved) {
+        return
+      }
       const provider =
         this.syncProviders[this.syncProviders.length - 1] ??
         this.providers[this.providers.length - 1]

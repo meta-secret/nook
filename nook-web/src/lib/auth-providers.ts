@@ -23,6 +23,45 @@ export const DEFAULT_GITHUB_REPO = 'nook'
 export const DEFAULT_DRIVE_VAULT_FILE = 'nook-vault.yaml'
 const DRIVE_STORAGE_REF_SEP = '\t'
 
+/** Canonical identity for a sync target — two providers with the same key are duplicates. */
+export function syncProviderTargetKey(provider: StorageProvider): string | null {
+  if (provider.type === 'local') {
+    return 'local'
+  }
+  if (provider.type === 'github') {
+    const repo = (provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO).toLowerCase()
+    const pat = provider.githubPat?.trim() ?? ''
+    return `github:${repo}:${pat}`
+  }
+  const oauth = provider.oauthFile
+  if (!oauth) {
+    return null
+  }
+  const preset = oauth.preset
+  const fileKey =
+    oauth.fileId?.trim() || oauth.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+  const accountKey =
+    oauth.accountEmail?.trim() || oauth.accessToken?.trim() || ''
+  return `oauth-file:${preset}:${fileKey}:${accountKey}`
+}
+
+export function findDuplicateSyncProvider(
+  providers: StorageProvider[],
+  candidate: StorageProvider,
+  options?: { excludeId?: string },
+): StorageProvider | undefined {
+  const candidateKey = syncProviderTargetKey(candidate)
+  if (!candidateKey) {
+    return undefined
+  }
+  return providers.find((provider) => {
+    if (options?.excludeId && provider.id === options.excludeId) {
+      return false
+    }
+    return syncProviderTargetKey(provider) === candidateKey
+  })
+}
+
 export function formatDriveStorageRef(
   fileId: string | undefined,
   fileName: string,
