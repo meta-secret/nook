@@ -24,7 +24,7 @@ tasks:
         vars: { TASK: _web:build:parallel }
 
   web:build:parallel:e2e:
-    desc: E2e-optimized web build in Docker (PR CI — one vite build for test + preview).
+    desc: E2e-optimized web build in Docker (local e2e only — PR preview uses production dist).
     cmds:
       - task: docker:task
         vars: { TASK: _web:build:parallel:e2e }
@@ -180,7 +180,7 @@ tasks:
       - cd nook-web && bun run build
 
   _web:build:parallel:e2e:
-    desc: Build dist with fast vault sync for PR CI (test + Cloudflare preview share one build).
+    desc: Build dist with fast vault sync for local e2e (PR CI rebuilds this only for Playwright).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_E2E_EXPOSE_VAULT: 'true'

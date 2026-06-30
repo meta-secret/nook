@@ -1,3 +1,5 @@
+import { formatLogLine } from "./logger.js";
+
 export type LogWriter = {
   log: (line?: string) => void;
   write?: (chunk: string) => void;
@@ -38,8 +40,7 @@ export class AgentTextLog {
   }
 
   private openBlock(): void {
-    this.writer.log();
-    this.writer.log("==> agent");
+    this.writer.log(formatLogLine("INFO", "ci-agent/cursor/agent", "agent output"));
     this.open = true;
     this.atLineStart = true;
   }
@@ -94,7 +95,7 @@ export class ShellStreamLog {
     }
 
     if (!this.streamed) {
-      this.writer.log("--- output ---");
+      this.writer.log(formatLogLine("INFO", "ci-agent/cursor/shell", "output"));
       this.streamed = true;
     }
 
@@ -147,3 +148,4 @@ function consoleWriter(): LogWriter {
     },
   };
 }
+

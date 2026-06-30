@@ -2,17 +2,20 @@ version: '3'
 
 tasks:
   ci:pr:
-    desc: PR CI — prepare, verify ‖ e2e web build, then Playwright e2e-pr.
+    desc: PR CI — prepare, verify ‖ e2e web build, Playwright e2e-pr, then production dist for preview.
     deps:
       - setup
     cmds:
       - task: ci:pr:prepare
       - task: ci:pr:parallel
       - task: ci:pr:e2e
+      - task: web:e2e:restore-prod-dist
 
   ci:pr:e2e:
-    desc: Fast Playwright e2e-pr for PR CI (dist already built with e2e env in ci:pr:parallel).
+    desc: Fast Playwright e2e-pr for PR CI (saves prod dist, rebuilds e2e dist, runs tests).
     cmds:
+      - cp -a nook-web/dist nook-web/dist-prod
+      - task: web:e2e:build-dist
       - task: web:test:e2e:pr:parallel
 
   ci:pr:e2e:local:
@@ -107,10 +110,10 @@ tasks:
         vars: { TASK: _ci:pr:prepare }
 
   ci:pr:parallel:
-    desc: Lint, test, and e2e-optimized web build in parallel after ci:pr:prepare.
+    desc: Lint, test, and production web build in parallel after ci:pr:prepare (e2e dist rebuilt before Playwright).
     deps:
       - ci:verify:parallel
-      - web:build:parallel:e2e
+      - web:build:parallel
 
   ci:verify:parallel:
     desc: Lint and test in Docker without rebuilding wasm.

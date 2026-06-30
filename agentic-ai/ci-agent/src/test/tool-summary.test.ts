@@ -98,6 +98,29 @@ test("formatToolCompleted can omit shell output blocks", () => {
   assert.deepEqual(formatToolCompleted(toolCall, { includeShellOutput: false }), ["shell exit 1"]);
 });
 
+test("formatToolCompleted includes task result suffix", () => {
+  const toolCall = {
+    type: "task",
+    args: { description: "run e2e", prompt: "run the failed test" },
+    result: {
+      status: "success",
+      value: {
+        isBackground: false,
+        backgroundReason: "unspecified",
+        durationMs: 42_000,
+        resultSuffix: "E2E failed: timeout waiting for sync",
+      },
+    },
+  } satisfies ToolCall;
+
+  assert.deepEqual(formatToolCompleted(toolCall), [
+    "task done",
+    "task duration 42000ms",
+    "--- task result ---",
+    "    E2E failed: timeout waiting for sync",
+  ]);
+});
+
 test("formatToolCompleted skips noisy read completions", () => {
   const toolCall = {
     type: "read",
