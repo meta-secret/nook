@@ -94,7 +94,20 @@ export function extractShellOutputChunk(event: Record<string, unknown> | undefin
 
   const nested = event.value;
   if (nested && typeof nested === "object") {
-    return readShellText(nested as Record<string, unknown>);
+    const fromNested = readShellText(nested as Record<string, unknown>);
+    if (fromNested) {
+      return fromNested;
+    }
+  }
+
+  const protobufCase = typeof event.case === "string" ? event.case : "";
+  if (protobufCase.includes("stdout") || protobufCase.includes("stderr")) {
+    if (typeof event.value === "string") {
+      return event.value;
+    }
+    if (nested && typeof nested === "object") {
+      return readShellText(nested as Record<string, unknown>);
+    }
   }
 
   return "";
@@ -135,7 +148,16 @@ function capShellOutput(text: string): string {
 }
 
 function readShellText(value: Record<string, unknown>): string {
-  for (const key of ["text", "content", "data", "stdout", "stderr", "chunk"]) {
+  for (const key of [
+    "text",
+    "content",
+    "data",
+    "output",
+    "stdout",
+    "stderr",
+    "chunk",
+    "bytes",
+  ]) {
     const candidate = value[key];
     if (typeof candidate === "string" && candidate.length > 0) {
       return candidate;

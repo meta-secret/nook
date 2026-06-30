@@ -1,12 +1,13 @@
 export type LogWriter = {
   log: (line?: string) => void;
+  write?: (chunk: string) => void;
 };
 
 const AGENT_PREFIX = "    ";
 
 export class AgentTextLog {
-  private buffer = "";
   private open = false;
+  private atLineStart = true;
 
   constructor(private readonly writer: LogWriter = consoleWriter()) {}
 
@@ -19,8 +20,8 @@ export class AgentTextLog {
       this.openBlock();
     }
 
-    this.buffer += delta.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    this.flushCompleteLines(false);
+    const text = delta.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    this.streamText(text);
   }
 
   closeBlock(): void {
@@ -28,7 +29,11 @@ export class AgentTextLog {
       return;
     }
 
-    this.flushCompleteLines(true);
+    if (!this.atLineStart) {
+      this.emit("\n");
+      this.atLineStart = true;
+    }
+
     this.open = false;
   }
 
@@ -36,38 +41,39 @@ export class AgentTextLog {
     this.writer.log();
     this.writer.log("==> agent");
     this.open = true;
+    this.atLineStart = true;
   }
 
-  private flushCompleteLines(includePartial: boolean): void {
-    while (true) {
-      const newline = this.buffer.indexOf("\n");
-      if (newline === -1) {
-        break;
+  private streamText(text: string): void {
+    for (const ch of text) {
+      if (ch === "\n") {
+        this.emit("\n");
+        this.atLineStart = true;
+        continue;
       }
 
-      this.writeLine(this.buffer.slice(0, newline));
-      this.buffer = this.buffer.slice(newline + 1);
-    }
+      if (this.atLineStart) {
+        this.emit(AGENT_PREFIX);
+        this.atLineStart = false;
+      }
 
-    if (includePartial && this.buffer.length > 0) {
-      this.writeLine(this.buffer);
-      this.buffer = "";
+      this.emit(ch);
     }
   }
 
-  private writeLine(line: string): void {
-    if (line.length === 0) {
-      this.writer.log();
+  private emit(chunk: string): void {
+    if (this.writer.write) {
+      this.writer.write(chunk);
       return;
     }
-    this.writer.log(`${AGENT_PREFIX}${line}`);
+    this.writer.log(chunk);
   }
 }
 
 export class ShellStreamLog {
-  private buffer = "";
   private open = false;
   private streamed = false;
+  private atLineStart = true;
 
   constructor(private readonly writer: LogWriter = consoleWriter()) {}
 
@@ -79,7 +85,7 @@ export class ShellStreamLog {
     this.closeBlock();
     this.open = true;
     this.streamed = false;
-    this.buffer = "";
+    this.atLineStart = true;
   }
 
   write(chunk: string): void {
@@ -89,19 +95,23 @@ export class ShellStreamLog {
 
     if (!this.streamed) {
       this.writer.log("--- output ---");
+      this.streamed = true;
     }
 
-    this.streamed = true;
-    this.buffer += chunk.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-    while (true) {
-      const newline = this.buffer.indexOf("\n");
-      if (newline === -1) {
-        break;
+    const text = chunk.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for (const ch of text) {
+      if (ch === "\n") {
+        this.emit("\n");
+        this.atLineStart = true;
+        continue;
       }
 
-      this.writeLine(this.buffer.slice(0, newline));
-      this.buffer = this.buffer.slice(newline + 1);
+      if (this.atLineStart) {
+        this.emit(`${AGENT_PREFIX}| `);
+        this.atLineStart = false;
+      }
+
+      this.emit(ch);
     }
   }
 
@@ -110,16 +120,20 @@ export class ShellStreamLog {
       return;
     }
 
-    if (this.buffer.length > 0) {
-      this.writeLine(this.buffer);
-      this.buffer = "";
+    if (!this.atLineStart) {
+      this.emit("\n");
+      this.atLineStart = true;
     }
 
     this.open = false;
   }
 
-  private writeLine(line: string): void {
-    this.writer.log(`${AGENT_PREFIX}| ${line}`);
+  private emit(chunk: string): void {
+    if (this.writer.write) {
+      this.writer.write(chunk);
+      return;
+    }
+    this.writer.log(chunk);
   }
 }
 
@@ -127,6 +141,9 @@ function consoleWriter(): LogWriter {
   return {
     log: (line = "") => {
       console.log(line);
+    },
+    write: (chunk) => {
+      process.stdout.write(chunk);
     },
   };
 }
