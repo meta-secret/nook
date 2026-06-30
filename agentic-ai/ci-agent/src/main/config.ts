@@ -4,6 +4,7 @@ export type CiAgentConfig = {
   githubRepository: string;
   githubRunId: string;
   fixBranch: string;
+  fixLabel: string;
   promptFile: string;
   modelId: string;
 };
@@ -24,7 +25,9 @@ export function loadConfig(): CiAgentConfig | null {
     githubRepository: process.env.GITHUB_REPOSITORY?.trim() ?? "",
     githubRunId,
     fixBranch,
-    promptFile: ".github/prompts/ci-fix-agent.md",
+    fixLabel: process.env.CI_FIX_LABEL?.trim() || "main CI",
+    promptFile:
+      process.env.CI_AGENT_PROMPT_FILE?.trim() || ".github/prompts/ci-fix-agent.md",
     modelId: process.env.CURSOR_AGENT_MODEL?.trim() || "composer-2.5",
   };
 }

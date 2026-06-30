@@ -58,12 +58,13 @@ export async function createFixPr(
   repoRef: RepoRef,
   headBranch: string,
   runId: string,
+  fixLabel = "main CI",
 ): Promise<number> {
   const { owner, repo } = repoRef;
-  const title = `Fix main CI (run ${runId})`;
+  const title = `Fix ${fixLabel} (run ${runId})`;
   const body = [
     "## Summary",
-    `Auto-fix for failed main CI run ${runId}.`,
+    `Auto-fix for failed ${fixLabel} run ${runId}.`,
     "",
     "## Test plan",
     "- [ ] CI green on this PR",

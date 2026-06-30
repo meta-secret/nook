@@ -75,12 +75,19 @@ export async function runCiFix(): Promise<void> {
 
     prNumber = await findOpenPr(octokit, repoRef, fixBranch);
     if (!prNumber) {
-      prNumber = await createFixPr(octokit, repoRef, fixBranch, runId);
+      prNumber = await createFixPr(
+        octokit,
+        repoRef,
+        fixBranch,
+        runId,
+        config.fixLabel,
+      );
     }
     log.info(`Opened fix PR #${prNumber}`);
   }
 
+  const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
   await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
   await squashMergePr(octokit, repoRef, prNumber, fixBranch);
-  log.info(`Done — merged PR #${prNumber} (fix for main run ${runId})`);
+  log.info(`Done — merged PR #${prNumber} (fix for ${fixLabel} run ${runId})`);
 }
