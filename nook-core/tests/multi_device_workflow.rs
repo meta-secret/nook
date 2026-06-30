@@ -1,12 +1,17 @@
 //! Multi-device vault keys workflow integration tests.
 
 use nook_core::{
-    ApiKeySecret, Database, DeviceIdentity, SecretValue, VaultCrypto, VaultFormat, VaultKeys,
-    approve_join_request, create_join_request_record, deserialize_stored, enroll_device_with_keys,
-    generate_vault_keys, genesis_auth_record, genesis_members_records, list_join_requests,
-    rename_vault_member, replace_member_records, resolve_member_roster, resolve_members_key,
-    resolve_secrets_key, revoke_vault_member, serialize_stored, user_stored_records,
+    ApiKeySecret, Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultFormat,
+    VaultKeys, approve_join_request, create_join_request_record, deserialize_stored,
+    enroll_device_with_keys, generate_vault_keys, genesis_auth_record, genesis_members_records,
+    list_join_requests, rename_vault_member, replace_member_records, resolve_member_roster,
+    resolve_members_key, resolve_secrets_key, revoke_vault_member, serialize_stored,
+    user_stored_records,
 };
+
+fn sid(label: &str) -> SecretId {
+    SecretId::from_vault_record(label)
+}
 
 fn api_key(value: &str) -> SecretValue {
     SecretValue::ApiKey(ApiKeySecret {
@@ -38,7 +43,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
     let (genesis, mut records) = genesis_vault(&keys);
 
     let mut db = Database::new();
-    db.insert("github.com".to_owned(), api_key("hunter2"));
+    db.insert(sid("github.com"), api_key("hunter2"));
     records.extend(encrypt_user_secrets(&db, &crypto));
 
     let device_two = DeviceIdentity::generate().unwrap();
@@ -52,7 +57,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
         &records,
     )
     .unwrap();
-    records.retain(|record| record.key != join_key);
+    records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_two);
     replace_member_records(&mut records, member_records);
 
@@ -67,7 +72,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
         &records,
     )
     .unwrap();
-    records.retain(|record| record.key != join_key);
+    records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_three);
     replace_member_records(&mut records, member_records);
 
@@ -101,7 +106,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
 fn vault_without_auth_envelope_fails_to_resolve_secrets_key() {
     let crypto = VaultCrypto::new(&generate_vault_keys().unwrap().secrets_key).unwrap();
     let mut db = Database::new();
-    db.insert("site".to_owned(), api_key("secret"));
+    db.insert(sid("site"), api_key("secret"));
     let records = encrypt_user_secrets(&db, &crypto);
 
     let device = DeviceIdentity::generate().unwrap();
@@ -187,7 +192,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() {
         &records,
     )
     .unwrap();
-    records.retain(|r| r.key != join_key);
+    records.retain(|r| r.key.as_str() != join_key);
     records.push(auth.clone());
 
     let env = nook_core::parse_auth_envelopes(&auth.value).unwrap();
@@ -239,7 +244,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() {
         &records,
     )
     .unwrap();
-    records.retain(|r| r.key != join_key);
+    records.retain(|r| r.key.as_str() != join_key);
     records.push(auth);
     replace_member_records(&mut records, member_records);
 

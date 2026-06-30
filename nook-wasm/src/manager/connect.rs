@@ -127,7 +127,7 @@ impl NookVaultManager {
         if use_genesis {
             self.initialize_genesis_vault(&identity)?;
             if self.store_id.is_empty() {
-                self.store_id = nook_core::generate_store_id()?;
+                self.store_id = nook_core::generate_store_id()?.to_string();
             }
             self.bootstrap_event_log_genesis().await?;
             self.persist_projection_cache().await?;
@@ -203,9 +203,10 @@ impl NookVaultManager {
         let genesis =
             nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
         self.stored_armored
-            .insert(genesis.key.clone(), genesis.value);
+            .insert(genesis.key.to_string(), genesis.value);
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
-            self.stored_armored.insert(member.key.clone(), member.value);
+            self.stored_armored
+                .insert(member.key.to_string(), member.value);
         }
         self.decrypted_jsonl = String::new();
         self.secret_types.clear();
@@ -219,7 +220,7 @@ impl NookVaultManager {
         self.decrypted_jsonl = String::new();
         self.stored_armored.retain(|key, value| {
             nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
-                key: key.clone(),
+                key: nook_core::SecretId::from_vault_record(key),
                 secret_type: None,
                 value: value.clone(),
             })
@@ -231,9 +232,10 @@ impl NookVaultManager {
             let members_key = self.members_key.clone();
             let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
             self.stored_armored
-                .insert(genesis.key.clone(), genesis.value);
+                .insert(genesis.key.to_string(), genesis.value);
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
-                self.stored_armored.insert(member.key.clone(), member.value);
+                self.stored_armored
+                    .insert(member.key.to_string(), member.value);
             }
         }
         self.save_current_db().await?;

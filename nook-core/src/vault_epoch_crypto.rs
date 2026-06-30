@@ -19,12 +19,12 @@ pub fn reencrypt_user_secrets_for_epoch(
         let secret_type = record
             .secret_type
             .ok_or(VaultEpochError::MissingSecretType {
-                key: record.key.clone(),
+                key: record.key.to_string(),
             })?;
         let plaintext = old_crypto.decrypt_value(&record.value)?;
         let ciphertext = new_crypto.encrypt_value(&plaintext)?;
         out.push(EncryptedSecretPayload {
-            id: record.key.clone(),
+            id: record.key.to_string(),
             secret_type,
             ciphertext,
         });
@@ -46,14 +46,13 @@ pub fn rotate_vault_keys_with_secrets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ApiKeySecret;
-    use crate::SecretValue;
+    use crate::{ApiKeySecret, SecretId, SecretValue};
 
     #[test]
     fn reencrypt_produces_decryptable_new_epoch_secrets() {
         let old_key = "deadbeefdeadbeefdeadbeefdeadbeef";
         let record = StoredSecretRecord {
-            key: "secret_testtoken1".to_owned(),
+            key: SecretId::from_vault_record("secret_testtoken1"),
             secret_type: Some(crate::SecretType::ApiKey),
             value: VaultCrypto::new(old_key)
                 .unwrap()

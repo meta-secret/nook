@@ -59,6 +59,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::StoreIdInvalid
             | ValidationError::StoreIdReserved
             | ValidationError::AuthKeyIdInvalid
+            | ValidationError::DeviceIdInvalid
             | ValidationError::Bip39Empty
             | ValidationError::Bip39Invalid => NookError::Database(err.to_string()),
         }

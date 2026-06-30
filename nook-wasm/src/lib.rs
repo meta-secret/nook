@@ -113,7 +113,7 @@ impl NookSecretRecord {
 
     #[wasm_bindgen(getter)]
     pub fn id(&self) -> String {
-        self.record.id.clone()
+        self.record.id.to_string()
     }
 
     #[wasm_bindgen(getter, js_name = "type")]

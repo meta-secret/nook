@@ -2,10 +2,10 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::{
-    AppendEventInput, Database, EventId, LocalEventStore, SigningIdentity, StoredSecretRecord,
-    VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
-    is_vault_meta_record, project_vault, resolve_member_roster, rotate_vault_keys_with_secrets,
-    sha256_hex, union_remote_events,
+    AppendEventInput, Database, EventId, LocalEventStore, SecretId, SigningIdentity,
+    StoredSecretRecord, VaultCrypto, VaultOperation, VaultProjection, build_members_records,
+    build_signed_event, is_vault_meta_record, project_vault, resolve_member_roster,
+    rotate_vault_keys_with_secrets, sha256_hex, union_remote_events,
 };
 use std::collections::HashMap;
 
@@ -97,16 +97,16 @@ impl VaultEventSession {
         let jsonl = db.to_jsonl()?;
         armored.retain(|key, value| {
             is_vault_meta_record(&StoredSecretRecord {
-                key: key.clone(),
+                key: SecretId::from_vault_record(key),
                 secret_type: None,
                 value: value.clone(),
             })
         });
         secret_types.retain(|key, _| armored.contains_key(key));
         for record in user_records {
-            armored.insert(record.key.clone(), record.value);
+            armored.insert(record.key.to_string(), record.value);
             if let Some(secret_type) = record.secret_type {
-                secret_types.insert(record.key, secret_type);
+                secret_types.insert(record.key.to_string(), secret_type);
             }
         }
         Ok(jsonl)

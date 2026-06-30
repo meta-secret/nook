@@ -57,7 +57,7 @@ fn records_to_secret_types(records: &[StoredSecretRecord]) -> HashMap<String, Se
         .filter_map(|record| {
             record
                 .secret_type
-                .map(|secret_type| (record.key.clone(), secret_type))
+                .map(|secret_type| (record.key.to_string(), secret_type))
         })
         .collect()
 }
@@ -72,7 +72,7 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
     let crypto = VaultCrypto::new(&secrets_key)?;
     let mut armored = HashMap::with_capacity(stored_records.len());
     for record in &stored_records {
-        armored.insert(record.key.clone(), record.value.clone());
+        armored.insert(record.key.to_string(), record.value.clone());
     }
     let user_records = user_stored_records(&stored_records);
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
@@ -95,7 +95,7 @@ pub fn apply_member_records(
 ) {
     armored.retain(|key, _| !key.starts_with(crate::MEMBER_RECORD_PREFIX));
     for record in member_records {
-        armored.insert(record.key.clone(), record.value.clone());
+        armored.insert(record.key.to_string(), record.value.clone());
     }
 }
 
@@ -144,11 +144,12 @@ mod tests {
             &keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
+        let store_id = generate_store_id()?;
         let yaml = serialize_stored_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,
             &[],
-            Some(&generate_store_id()?),
+            Some(store_id.as_str()),
             None,
         )?;
         assert!(!content_requires_genesis(&yaml, false)?);

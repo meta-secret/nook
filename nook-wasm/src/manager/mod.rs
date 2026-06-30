@@ -26,7 +26,10 @@ mod secrets;
 mod sync;
 
 use crate::NookError;
-use crate::conversion::{apply_member_records, pending_joins_to_vec, vault_members_to_vec};
+use crate::conversion::{
+    apply_member_records, pending_joins_to_vec, stored_records_from_string_armored,
+    vault_members_to_vec,
+};
 use crate::storage::{
     drive::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
@@ -223,13 +226,10 @@ impl NookVaultManager {
         }
         let _ = self.status_tx.send("SAVE_START".to_owned());
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id()?;
+            self.store_id = nook_core::generate_store_id()?.to_string();
         }
         self.vault_version = self.vault_version.saturating_add(1);
-        let records = nook_core::Database::stored_records_from_armored(
-            &self.stored_armored,
-            &self.secret_types,
-        );
+        let records = stored_records_from_string_armored(&self.stored_armored, &self.secret_types);
         let stored = nook_core::serialize_stored_yaml_with_unlock(
             &records,
             &self.unlock,
@@ -393,7 +393,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn stored_records_snapshot(&self) -> Vec<nook_core::StoredSecretRecord> {
-        nook_core::Database::stored_records_from_armored(&self.stored_armored, &self.secret_types)
+        stored_records_from_string_armored(&self.stored_armored, &self.secret_types)
     }
 
     pub(in crate::manager) fn needs_genesis_persist(&self) -> bool {
@@ -420,7 +420,7 @@ impl NookVaultManager {
                 self.github_pat = String::new();
             }
             nook_core::StorageMode::Github => {
-                self.github_pat = nook_core::validate_github_pat(github_pat)?;
+                self.github_pat = nook_core::validate_github_pat(github_pat)?.to_string();
                 let repo_name = nook_core::validate_github_repo_name(github_repo_name)?;
                 let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
                 let username = fetch_github_username(&self.github_pat).await?;
@@ -434,26 +434,26 @@ impl NookVaultManager {
                 ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
             }
             nook_core::StorageMode::GoogleDrive => {
-                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?;
-                let (known_file_id, raw_file_name) =
-                    nook_core::parse_drive_storage_ref(github_repo_name);
-                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
-                self.github_path = file_name.clone();
+                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?.to_string();
+                let (known_file_id, file_name) =
+                    nook_core::parse_drive_storage_ref(github_repo_name)?;
+                self.github_path = file_name.to_string();
                 let _ = self.status_tx.send("DRIVE_VERIFY".to_owned());
                 verify_drive_access(&self.github_pat).await?;
                 let file_id =
-                    ensure_drive_vault_file(&self.github_pat, &known_file_id, &file_name).await?;
+                    ensure_drive_vault_file(&self.github_pat, &known_file_id, file_name.as_ref())
+                        .await?;
                 self.github_repo = file_id;
             }
             nook_core::StorageMode::ICloud => {
-                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?;
-                let (_known_revision, raw_file_name) =
-                    nook_core::parse_drive_storage_ref(github_repo_name);
-                let file_name = nook_core::validate_drive_vault_file_name(&raw_file_name)?;
-                self.github_path = file_name.clone();
+                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?.to_string();
+                let (_known_revision, file_name) =
+                    nook_core::parse_drive_storage_ref(github_repo_name)?;
+                self.github_path = file_name.to_string();
                 let _ = self.status_tx.send("ICLOUD_VERIFY".to_owned());
                 verify_icloud_access(&self.github_pat).await?;
-                let record_name = ensure_icloud_vault_record(&self.github_pat, &file_name).await?;
+                let record_name =
+                    ensure_icloud_vault_record(&self.github_pat, file_name.as_ref()).await?;
                 self.github_repo = record_name;
             }
         }

@@ -48,7 +48,7 @@ impl SigningIdentity {
     /// `key_{sha256_hex}` actor id derived from the Ed25519 public key.
     pub fn actor_id(&self) -> VaultResult<String> {
         let digest = hex::encode(Sha256::digest(self.verifying_key().as_bytes()));
-        Ok(format_auth_key_id(&digest)?)
+        Ok(format_auth_key_id(&digest)?.to_string())
     }
 
     #[must_use]

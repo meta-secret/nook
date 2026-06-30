@@ -1,5 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
+use crate::SecretId;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::{
     EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes, sign_body,
@@ -25,7 +26,7 @@ impl EncryptedSecretPayload {
     #[must_use]
     pub fn from_stored(record: &StoredSecretRecord) -> Self {
         Self {
-            id: record.key.clone(),
+            id: record.key.to_string(),
             secret_type: record.secret_type.unwrap_or(SecretType::ApiKey),
             ciphertext: record.value.clone(),
         }
@@ -34,7 +35,7 @@ impl EncryptedSecretPayload {
     #[must_use]
     pub fn to_stored(&self) -> StoredSecretRecord {
         StoredSecretRecord {
-            key: self.id.clone(),
+            key: SecretId::from_vault_record(&self.id),
             secret_type: Some(self.secret_type),
             value: self.ciphertext.clone(),
         }

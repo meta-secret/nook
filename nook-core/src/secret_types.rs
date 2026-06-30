@@ -11,6 +11,7 @@
 //! - `StoredSecretRecord` — the on-disk shape: same triple but `value` is an
 //!   age-encrypted ciphertext string. Sorted, written to YAML/JSONL.
 
+use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use serde::{Deserialize, Serialize};
 
@@ -132,7 +133,7 @@ impl SecretValue {
 /// Typed plaintext secret (in memory only).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRecord {
-    pub id: String,
+    pub id: SecretId,
     #[serde(rename = "type")]
     pub secret_type: SecretType,
     pub data: SecretValue,
@@ -142,7 +143,7 @@ pub struct SecretRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StoredSecretRecord {
     #[serde(rename = "id")]
-    pub key: String,
+    pub key: SecretId,
     #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
     pub secret_type: Option<SecretType>,
     #[serde(rename = "data")]

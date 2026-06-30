@@ -2,7 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::conversion::wasm_iso_timestamp;
+use crate::conversion::{stored_records_from_string_armored, wasm_iso_timestamp};
 use crate::storage::drive_events::{
     fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent,
 };
@@ -83,7 +83,7 @@ impl NookVaultManager {
         legacy_yaml: &str,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id()?;
+            self.store_id = nook_core::generate_store_id()?.to_string();
         }
         save_legacy_backup(&self.store_id, legacy_yaml).await?;
         let signing = self.ensure_signing_identity().await?;
@@ -123,7 +123,7 @@ impl NookVaultManager {
         operations: Vec<VaultOperation>,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
-            self.store_id = nook_core::generate_store_id()?;
+            self.store_id = nook_core::generate_store_id()?.to_string();
         }
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
@@ -167,7 +167,7 @@ impl NookVaultManager {
         self.decrypted_jsonl = db.to_jsonl()?;
         self.stored_armored.retain(|key, value| {
             nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
-                key: key.clone(),
+                key: nook_core::SecretId::from_vault_record(key),
                 secret_type: None,
                 value: value.clone(),
             })
@@ -175,19 +175,18 @@ impl NookVaultManager {
         self.secret_types
             .retain(|key, _| self.stored_armored.contains_key(key));
         for record in user_records {
-            self.stored_armored.insert(record.key.clone(), record.value);
+            self.stored_armored
+                .insert(record.key.to_string(), record.value);
             if let Some(secret_type) = record.secret_type {
-                self.secret_types.insert(record.key, secret_type);
+                self.secret_types
+                    .insert(record.key.to_string(), secret_type);
             }
         }
         Ok(())
     }
 
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
-        let records = nook_core::Database::stored_records_from_armored(
-            &self.stored_armored,
-            &self.secret_types,
-        );
+        let records = stored_records_from_string_armored(&self.stored_armored, &self.secret_types);
         let yaml = nook_core::serialize_stored_yaml_with_unlock(
             &records,
             &self.unlock,
@@ -347,12 +346,12 @@ impl NookVaultManager {
         )?;
         self.stored_armored.retain(|key, value| {
             !nook_core::is_auth_stored_record(&nook_core::StoredSecretRecord {
-                key: key.clone(),
+                key: nook_core::SecretId::from_vault_record(key),
                 secret_type: None,
                 value: value.clone(),
             })
         });
-        self.stored_armored.insert(auth.key.clone(), auth.value);
+        self.stored_armored.insert(auth.key.to_string(), auth.value);
 
         let roster = nook_core::resolve_member_roster(records_snapshot, old_members_key)?;
         let member_records = nook_core::build_members_records(&roster, &new_keys.members_key)?;

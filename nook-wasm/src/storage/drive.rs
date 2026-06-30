@@ -68,7 +68,7 @@ pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookEr
     let mut request = client
         .get("https://www.googleapis.com/drive/v3/about")
         .query(&[("fields", "user")]);
-    for (name, value) in drive_headers(&token) {
+    for (name, value) in drive_headers(token.as_ref()) {
         request = request.header(name, value);
     }
     let response = request.send().await?;
@@ -166,13 +166,17 @@ pub(crate) async fn ensure_drive_vault_file(
     let token = nook_core::validate_oauth_access_token(access_token)?;
     let validated_name = nook_core::validate_drive_vault_file_name(file_name)?;
     let trimmed_id = known_file_id.trim();
-    if !trimmed_id.is_empty() && fetch_file_metadata(&token, trimmed_id).await.is_ok() {
+    if !trimmed_id.is_empty()
+        && fetch_file_metadata(token.as_ref(), trimmed_id)
+            .await
+            .is_ok()
+    {
         return Ok(trimmed_id.to_owned());
     }
-    if let Some(meta) = list_vault_file_meta(&token, &validated_name).await? {
+    if let Some(meta) = list_vault_file_meta(token.as_ref(), validated_name.as_ref()).await? {
         return Ok(meta.id);
     }
-    create_drive_vault_file(&token, &validated_name).await
+    create_drive_vault_file(token.as_ref(), validated_name.as_ref()).await
 }
 
 async fn create_drive_vault_file(access_token: &str, file_name: &str) -> Result<String, NookError> {
@@ -213,9 +217,9 @@ pub(crate) async fn fetch_drive_vault(
     file_name: &str,
 ) -> Result<Option<DriveVaultFile>, NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
-    let resolved_id = ensure_drive_vault_file(&token, file_id, file_name).await?;
-    let meta = fetch_file_metadata(&token, &resolved_id).await?;
-    let content = read_file_content(&token, &resolved_id).await?;
+    let resolved_id = ensure_drive_vault_file(access_token, file_id, file_name).await?;
+    let meta = fetch_file_metadata(token.as_ref(), &resolved_id).await?;
+    let content = read_file_content(token.as_ref(), &resolved_id).await?;
     if content.is_empty() {
         return Ok(None);
     }
@@ -238,18 +242,24 @@ pub(crate) async fn write_drive_vault_with_retry(
     revision: Option<String>,
 ) -> Result<(String, String), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
-    let resolved_id = ensure_drive_vault_file(&token, file_id, file_name).await?;
+    let resolved_id = ensure_drive_vault_file(access_token, file_id, file_name).await?;
     let mut current_revision = revision;
 
     for attempt in 0..3 {
-        match write_drive_vault_once(&token, &resolved_id, content, current_revision.clone()).await
+        match write_drive_vault_once(
+            token.as_ref(),
+            &resolved_id,
+            content,
+            current_revision.clone(),
+        )
+        .await
         {
             Ok(new_revision) => return Ok((resolved_id, new_revision)),
             Err(NookError::Drive(msg)) if msg.contains("412") || msg.contains("Precondition") => {
                 if attempt == 2 {
                     return Err(NookError::Drive(msg));
                 }
-                let meta = fetch_file_metadata(&token, &resolved_id).await?;
+                let meta = fetch_file_metadata(token.as_ref(), &resolved_id).await?;
                 current_revision = meta.md5_checksum.or(Some(meta.id));
             }
             Err(err) => return Err(err),

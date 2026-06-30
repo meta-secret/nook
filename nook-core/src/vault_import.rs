@@ -77,7 +77,7 @@ mod tests {
     use crate::VaultResult;
     use crate::database::Database;
     use crate::secret_types::SecretType;
-    use crate::{ApiKeySecret, SecretValue, generate_store_id};
+    use crate::{ApiKeySecret, SecretId, SecretValue, generate_store_id};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -89,7 +89,7 @@ mod tests {
 
         let mut db = Database::new();
         db.insert(
-            "secret_testtoken1".to_owned(),
+            SecretId::from_vault_record("secret_testtoken1"),
             SecretValue::ApiKey(ApiKeySecret {
                 website_url: "https://example.com".to_owned(),
                 key: "hunter2".to_owned(),
@@ -101,14 +101,14 @@ mod tests {
 
         let first = legacy_vault_to_import_event(
             &yaml,
-            &store_id,
+            store_id.as_str(),
             actor,
             &signing_key,
             "2026-06-28T00:00:00Z",
         )?;
         let second = legacy_vault_to_import_event(
             &yaml,
-            &store_id,
+            store_id.as_str(),
             actor,
             &signing_key,
             "2026-06-28T00:00:00Z",

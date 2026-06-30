@@ -54,6 +54,9 @@ pub enum ValidationError {
     #[error("errors.validation.auth_key_id_invalid")]
     AuthKeyIdInvalid,
 
+    #[error("errors.validation.device_id_invalid")]
+    DeviceIdInvalid,
+
     #[error("errors.validation.bip39_empty")]
     Bip39Empty,
 

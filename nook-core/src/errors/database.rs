@@ -16,7 +16,7 @@ pub enum DatabaseError {
     JsonlSerialize(#[source] serde_json::Error),
 
     #[error("Secret {key} is missing required type metadata.")]
-    MissingSecretType { key: String },
+    MissingSecretType { key: crate::SecretId },
 
     #[error(transparent)]
     VaultFormat(#[from] VaultFormatError),
