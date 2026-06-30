@@ -3,18 +3,20 @@
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::{
-    EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
+    EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
 };
+use crate::vault_ids::{AuthKeyId, SecretId, StoreId};
 use crate::vault_signing::SigningIdentity;
+use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext};
 
 /// Inputs required to append a new event.
 pub struct AppendEventInput<'a> {
-    pub store_id: &'a str,
-    pub actor_id: &'a str,
+    pub store_id: &'a StoreId,
+    pub actor_id: &'a AuthKeyId,
     pub signing_identity: &'a SigningIdentity,
-    pub parents: Vec<String>,
-    pub key_epoch: &'a str,
-    pub created_at: &'a str,
+    pub parents: Vec<EventId>,
+    pub key_epoch: &'a EventId,
+    pub created_at: &'a IsoTimestamp,
     pub operations: Vec<VaultOperation>,
 }
 
@@ -26,12 +28,12 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEven
     parents.dedup();
 
     let body = VaultEventBody {
-        schema_version: VAULT_EVENT_SCHEMA_VERSION,
-        store_id: input.store_id.to_owned(),
-        actor_id: input.actor_id.to_owned(),
+        schema_version: VaultEventSchemaVersion::CURRENT,
+        store_id: input.store_id.clone(),
+        actor_id: input.actor_id.clone(),
         parents,
-        created_at: input.created_at.to_owned(),
-        key_epoch: input.key_epoch.to_owned(),
+        created_at: input.created_at.clone(),
+        key_epoch: input.key_epoch.clone(),
         operations: input.operations,
     };
     let event = VaultEvent::sign(body, input.signing_identity.signing_key())?;
@@ -41,21 +43,21 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEven
 
 #[must_use]
 pub fn encrypted_secret_from_armored(
-    id: &str,
+    id: &SecretId,
     secret_type: crate::SecretType,
     ciphertext: &str,
 ) -> EncryptedSecretPayload {
     EncryptedSecretPayload {
-        id: id.to_owned(),
+        id: id.clone(),
         secret_type,
-        ciphertext: ciphertext.to_owned(),
+        ciphertext: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
     }
 }
 
 /// Parent list from current causal heads.
 #[must_use]
-pub fn parents_from_heads(heads: &[EventId]) -> Vec<String> {
-    let mut parents: Vec<String> = heads.iter().map(|id| id.as_str().to_owned()).collect();
+pub fn parents_from_heads(heads: &[EventId]) -> Vec<EventId> {
+    let mut parents = heads.to_vec();
     parents.sort();
     parents.dedup();
     parents
@@ -85,7 +87,7 @@ impl ObservedHeads {
     }
 
     #[must_use]
-    pub fn as_parent_strings(&self) -> Vec<String> {
+    pub fn as_parents(&self) -> Vec<EventId> {
         parents_from_heads(&self.0)
     }
 
@@ -119,19 +121,23 @@ mod tests {
     #[test]
     fn build_signed_event_roundtrip() -> VaultResult<()> {
         let (signing, _) = SigningIdentity::generate()?;
-        let actor = signing.actor_id()?;
-        let epoch = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+        let actor = AuthKeyId::parse(&signing.actor_id()?)?;
+        let store_id = StoreId::parse("store_testtoken11")?;
+        let epoch = EventId::parse(
+            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        )?;
+        let created_at = IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned());
         let (event, bytes) = build_signed_event(AppendEventInput {
-            store_id: "store_testtoken1",
+            store_id: &store_id,
             actor_id: &actor,
             signing_identity: &signing,
             parents: vec![],
-            key_epoch: epoch,
-            created_at: "2026-06-28T00:00:00Z",
+            key_epoch: &epoch,
+            created_at: &created_at,
             operations: vec![VaultOperation::VaultCleared],
         })?;
         assert!(!bytes.is_empty());
-        assert_eq!(event.body.store_id, "store_testtoken1");
+        assert_eq!(event.body.store_id, store_id);
         assert_eq!(event.body.actor_id, actor);
         Ok(())
     }
@@ -159,10 +165,7 @@ mod tests {
             a.as_str().to_owned(),
         ])?;
         assert_eq!(heads.as_event_ids().len(), 2);
-        assert_eq!(
-            heads.as_parent_strings(),
-            parents_from_heads(heads.as_event_ids())
-        );
+        assert_eq!(heads.as_parents(), parents_from_heads(heads.as_event_ids()));
         Ok(())
     }
 }

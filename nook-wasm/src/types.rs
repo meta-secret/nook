@@ -412,7 +412,10 @@ impl NookReplacementConflict {
 }
 
 pub(crate) fn replacement_conflicts_to_vec(
-    conflicts: std::collections::BTreeMap<String, nook_core::SecretReplacementConflict>,
+    conflicts: std::collections::BTreeMap<
+        nook_core::SecretId,
+        nook_core::SecretReplacementConflict,
+    >,
 ) -> Result<Vec<NookReplacementConflict>, NookError> {
     conflicts
         .into_values()
@@ -421,12 +424,14 @@ pub(crate) fn replacement_conflicts_to_vec(
                 &conflict
                     .candidates
                     .iter()
-                    .map(|(event_id, secret_id)| (event_id.as_str().to_owned(), secret_id.clone()))
+                    .map(|(event_id, secret_id)| {
+                        (event_id.as_str().to_owned(), secret_id.as_str().to_owned())
+                    })
                     .collect::<Vec<_>>(),
             )
             .map_err(|e| NookError::Serialization(e.to_string()))?;
             Ok(NookReplacementConflict {
-                old_secret_id: conflict.old_secret_id,
+                old_secret_id: conflict.old_secret_id.as_str().to_owned(),
                 candidates_json,
             })
         })

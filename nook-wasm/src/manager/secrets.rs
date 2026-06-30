@@ -95,11 +95,7 @@ impl NookVaultManager {
                 .cloned()
                 .unwrap_or_default();
             self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
-                secret: nook_core::encrypted_secret_from_armored(
-                    id.as_str(),
-                    secret_type,
-                    &ciphertext,
-                ),
+                secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
             }])
             .await?;
         } else {
@@ -154,9 +150,9 @@ impl NookVaultManager {
                 .cloned()
                 .unwrap_or_default();
             self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
-                old_id: validated_old.to_string(),
+                old_id: validated_old,
                 new_secret: nook_core::encrypted_secret_from_armored(
-                    validated_new.as_str(),
+                    &validated_new,
                     secret_type,
                     &ciphertext,
                 ),
@@ -212,7 +208,7 @@ impl NookVaultManager {
         self.secret_types.remove(&id_str);
         if self.event_log_mode || self.ensure_event_log_mode().await? {
             self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
-                secret_id: id_str,
+                secret_id: id,
             }])
             .await?;
         } else {

@@ -67,7 +67,11 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::DevicePublicKeyInvalid
             | ValidationError::DeviceIdentitySecretInvalid
             | ValidationError::SessionJsonlInvalid
-            | ValidationError::StoredVaultJsonlInvalid => NookError::Database(err.to_string()),
+            | ValidationError::StoredVaultJsonlInvalid
+            | ValidationError::Sha256HexInvalid
+            | ValidationError::DeviceSigningPublicKeyInvalid
+            | ValidationError::IsoTimestampInvalid
+            | ValidationError::PasswordEntryIdInvalid => NookError::Database(err.to_string()),
         }
     }
 }

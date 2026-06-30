@@ -69,7 +69,7 @@ pub use multi_device::{
 };
 
 pub use event_canonical::{
-    EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
+    Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
     format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,
     verify_body_signature,
 };
@@ -102,7 +102,7 @@ pub use vault_epoch_crypto::{
     rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
 };
 pub use vault_event::{
-    EncryptedSecretPayload, VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
+    EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
     build_genesis_import_event,
 };
 pub use vault_event_builder::{
@@ -125,8 +125,7 @@ pub use vault_ids::{
     validate_store_id,
 };
 pub use vault_import::{
-    KeyEpochId, legacy_encrypted_secrets, legacy_vault_content_hash, legacy_vault_to_import_event,
-    secrets_from_import_event,
+    KeyEpochId, VaultHashContext, secrets_from_import_event, stored_vault_to_import_event,
 };
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
@@ -142,6 +141,8 @@ pub use vault_sync_store::{
     resolve_conflict_keep_remote,
 };
 pub use vault_wire::{
-    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, SecretPayloadYaml, SessionJsonl,
-    StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml, SymmetricKey, Url64EncodedString,
+    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretPayloadYaml, SessionJsonl,
+    Sha256Hex, StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml, SymmetricKey,
+    Url64EncodedString,
 };

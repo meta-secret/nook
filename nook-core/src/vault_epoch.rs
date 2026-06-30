@@ -125,17 +125,17 @@ mod tests {
     fn operation_starts_epoch_maps_security_ops() {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::PasswordRotated {
-                entry_id: "e".to_owned(),
-                envelope_ciphertext: "c".to_owned(),
+                entry_id: crate::PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+                envelope_ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
             }),
             Some(EpochRotationReason::PasswordRotated)
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SecretCreated {
                 secret: crate::vault_event::EncryptedSecretPayload {
-                    id: "s".to_owned(),
+                    id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
-                    ciphertext: "c".to_owned(),
+                    ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
                 },
             }),
             None

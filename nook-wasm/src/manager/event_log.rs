@@ -9,7 +9,7 @@ use crate::storage::drive_events::{
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_legacy_backup, save_signing_seed, set_event_log_mode,
+    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -17,8 +17,8 @@ use crate::storage::github_events::{
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultOperation,
-    apply_user_records_to_armored_session, build_signed_event, legacy_vault_to_import_event,
-    members_checkpoint_hash_from_roster, project_vault, rewrap_vault_meta_for_epoch,
+    apply_user_records_to_armored_session, build_signed_event, members_checkpoint_hash_from_roster,
+    project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
     union_remote_events_and_heads,
 };
 
@@ -80,29 +80,29 @@ impl NookVaultManager {
         Ok(self.key_epoch.clone())
     }
 
-    pub(in crate::manager) async fn migrate_legacy_yaml_to_event_log(
+    pub(in crate::manager) async fn import_stored_vault_to_event_log(
         &mut self,
-        legacy_yaml: &str,
+        stored_vault: &str,
     ) -> Result<(), NookError> {
         if self.store_id.is_empty() {
             self.store_id = nook_core::generate_store_id()?.to_string();
         }
-        save_legacy_backup(&self.store_id, legacy_yaml).await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
-        let import = legacy_vault_to_import_event(
-            legacy_yaml,
-            &self.store_id,
-            &actor_id,
+        let ctx = nook_core::VaultHashContext::from(stored_vault);
+        let import = stored_vault_to_import_event(
+            &ctx,
+            &nook_core::StoreId::parse(&self.store_id)?,
+            &nook_core::AuthKeyId::parse(&actor_id)?,
             signing.signing_key(),
-            &iso_timestamp(),
+            &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
         )?;
         let event_id = import.id()?;
         let bytes =
             serde_json::to_vec(&import).map_err(|e| NookError::Serialization(e.to_string()))?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
         self.event_heads = vec![event_id.as_str().to_owned()];
-        self.key_epoch = import.body.key_epoch.clone();
+        self.key_epoch = import.body.key_epoch.as_str().to_owned();
         save_heads(&self.store_id, &self.event_heads).await?;
         save_key_epoch(&self.store_id, &self.key_epoch).await?;
         self.activate_event_log_mode().await?;
@@ -132,13 +132,21 @@ impl NookVaultManager {
         let actor_id = signing.actor_id()?;
         let parents = self.load_event_heads().await?;
         let key_epoch = self.ensure_key_epoch().await?;
+        let store_id = nook_core::StoreId::parse(&self.store_id)?;
+        let actor_id = nook_core::AuthKeyId::parse(&actor_id)?;
+        let key_epoch = nook_core::EventId::parse(&key_epoch)?;
+        let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
+        let parents: Vec<EventId> = parents
+            .iter()
+            .map(|parent| EventId::parse(parent).map_err(NookError::from))
+            .collect::<Result<_, _>>()?;
         let (event, bytes) = build_signed_event(AppendEventInput {
-            store_id: &self.store_id,
+            store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &signing,
             parents,
             key_epoch: &key_epoch,
-            created_at: &iso_timestamp(),
+            created_at: &created_at,
             operations,
         })?;
         let event_id = event.id()?;
@@ -279,12 +287,12 @@ impl NookVaultManager {
         let actor_id = signing.actor_id()?;
         let key_epoch = self.ensure_key_epoch().await?;
         let import = nook_core::build_genesis_import_event(
-            &self.store_id,
-            &actor_id,
+            &nook_core::StoreId::parse(&self.store_id)?,
+            &nook_core::AuthKeyId::parse(&actor_id)?,
             &EventId::parse(&key_epoch)?,
-            "genesis",
+            &nook_core::Sha256Hex::from_trusted("0".repeat(64)),
             vec![],
-            &iso_timestamp(),
+            &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
             signing.signing_key(),
         )?;
         let event_id = import.id()?;
@@ -364,14 +372,16 @@ impl NookVaultManager {
         self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
         self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
         for payload in &secrets {
-            self.stored_armored
-                .insert(payload.id.clone(), payload.ciphertext.clone());
+            self.stored_armored.insert(
+                payload.id.to_string(),
+                payload.ciphertext.as_str().to_owned(),
+            );
             self.secret_types
-                .insert(payload.id.clone(), payload.secret_type);
+                .insert(payload.id.to_string(), payload.secret_type);
         }
         self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
             secrets,
-            members_checkpoint_hash,
+            members_checkpoint_hash: nook_core::Sha256Hex::from_trusted(members_checkpoint_hash),
         }])
         .await?;
         Ok(())

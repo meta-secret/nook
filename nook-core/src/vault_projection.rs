@@ -7,8 +7,9 @@ use crate::vault_epoch::{
     EpochRecord, EpochRotationReason, KeyEpoch, concurrent_epoch_rotations_conflict,
     operation_starts_epoch,
 };
-use crate::vault_event::{EncryptedSecretPayload, VaultOperation};
+use crate::vault_event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
 use crate::vault_event_graph::EventGraph;
+use crate::vault_ids::{SecretId, StoreId};
 use std::collections::BTreeMap;
 
 /// One live or tombstoned secret in the encrypted projection.
@@ -17,7 +18,7 @@ pub struct ProjectedSecret {
     pub record: StoredSecretRecord,
     pub created_by: EventId,
     pub deleted_by: Option<EventId>,
-    pub replaced_from: Option<String>,
+    pub replaced_from: Option<SecretId>,
 }
 
 impl ProjectedSecret {
@@ -33,9 +34,9 @@ impl ProjectedSecret {
 /// Concurrent replacement candidates for one old secret id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretReplacementConflict {
-    pub old_secret_id: String,
+    pub old_secret_id: SecretId,
     /// event id → new secret id
-    pub candidates: BTreeMap<EventId, String>,
+    pub candidates: BTreeMap<EventId, SecretId>,
 }
 
 /// Concurrent security-sensitive epoch transitions.
@@ -46,16 +47,31 @@ pub struct SecurityConflict {
 }
 
 /// Materialized encrypted vault state derived from events.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultProjection {
-    pub store_id: String,
+    pub store_id: StoreId,
     pub current_epoch: Option<KeyEpoch>,
     pub epoch_history: Vec<EpochRecord>,
-    pub secrets: BTreeMap<String, ProjectedSecret>,
-    pub replacement_conflicts: BTreeMap<String, SecretReplacementConflict>,
+    pub secrets: BTreeMap<SecretId, ProjectedSecret>,
+    pub replacement_conflicts: BTreeMap<SecretId, SecretReplacementConflict>,
     pub security_conflicts: Vec<SecurityConflict>,
     pub unresolved_schema: bool,
     pub cleared: bool,
+}
+
+impl Default for VaultProjection {
+    fn default() -> Self {
+        Self {
+            store_id: StoreId::parse("store_abcdefghijk").expect("valid default store id"),
+            current_epoch: None,
+            epoch_history: Vec::new(),
+            secrets: BTreeMap::new(),
+            replacement_conflicts: BTreeMap::new(),
+            security_conflicts: Vec::new(),
+            unresolved_schema: false,
+            cleared: false,
+        }
+    }
 }
 
 impl VaultProjection {
@@ -64,7 +80,7 @@ impl VaultProjection {
         self.secrets
             .iter()
             .filter(|(_, secret)| secret.is_live(graph))
-            .map(|(id, secret)| (id.clone(), secret.record.clone()))
+            .map(|(id, secret)| (id.as_str().to_owned(), secret.record.clone()))
             .collect()
     }
 
@@ -77,23 +93,24 @@ impl VaultProjection {
 /// Rebuild projection from the event graph. Result is independent of provider order
 /// and of the topological tie-break used internally.
 pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultProjection> {
+    let expected_store = StoreId::parse(store_id)?;
     let order = graph.topological_order()?;
     let mut projection = VaultProjection {
-        store_id: store_id.to_owned(),
+        store_id: expected_store.clone(),
         ..VaultProjection::default()
     };
 
     let mut epoch_events: BTreeMap<EventId, EpochRotationReason> = BTreeMap::new();
-    let mut replacements_by_old: BTreeMap<String, Vec<(EventId, String)>> = BTreeMap::new();
+    let mut replacements_by_old: BTreeMap<SecretId, Vec<(EventId, SecretId)>> = BTreeMap::new();
 
     for event_id in order {
         let event = graph.get(&event_id).ok_or(EventError::MissingEvent {
             event_id: event_id.as_str().to_owned(),
         })?;
-        if event.body.store_id != store_id {
+        if event.body.store_id != expected_store {
             return Err(EventError::ProjectionStoreMismatch.into());
         }
-        if event.body.schema_version > crate::vault_event::VAULT_EVENT_SCHEMA_VERSION {
+        if event.body.schema_version > VaultEventSchemaVersion::CURRENT {
             projection.unresolved_schema = true;
             continue;
         }
@@ -110,7 +127,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultPro
             );
         }
 
-        if let Ok(epoch_id) = EventId::parse(&event.body.key_epoch) {
+        if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
             let epoch = KeyEpoch(epoch_id);
             if projection.current_epoch.as_ref() != Some(&epoch) {
                 if let Some(reason) = epoch_events.get(&event_id).copied() {
@@ -134,7 +151,7 @@ fn apply_operation(
     projection: &mut VaultProjection,
     event_id: &EventId,
     operation: &VaultOperation,
-    replacements_by_old: &mut BTreeMap<String, Vec<(EventId, String)>>,
+    replacements_by_old: &mut BTreeMap<SecretId, Vec<(EventId, SecretId)>>,
 ) {
     match operation {
         VaultOperation::VaultImported { secrets, .. }
@@ -196,7 +213,7 @@ fn insert_secret(
     projection: &mut VaultProjection,
     event_id: &EventId,
     secret: &EncryptedSecretPayload,
-    replaced_from: Option<String>,
+    replaced_from: Option<SecretId>,
 ) {
     projection.secrets.insert(
         secret.id.clone(),
@@ -211,8 +228,8 @@ fn insert_secret(
 
 fn detect_replacement_conflicts(
     graph: &EventGraph,
-    replacements_by_old: &BTreeMap<String, Vec<(EventId, String)>>,
-) -> BTreeMap<String, SecretReplacementConflict> {
+    replacements_by_old: &BTreeMap<SecretId, Vec<(EventId, SecretId)>>,
+) -> BTreeMap<SecretId, SecretReplacementConflict> {
     let mut conflicts = BTreeMap::new();
     for (old_id, entries) in replacements_by_old {
         let unique_events: Vec<&EventId> = entries.iter().map(|(event_id, _)| event_id).collect();
@@ -282,9 +299,11 @@ mod tests {
     use crate::VaultResult;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
-        VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
+        VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
+    use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
+    use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -292,18 +311,42 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
-    const STORE: &str = "store_testtoken1";
-    const ACTOR: &str = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    const EPOCH: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    fn store() -> StoreId {
+        StoreId::parse("store_testtoken11").unwrap()
+    }
+
+    fn actor() -> AuthKeyId {
+        AuthKeyId::parse("key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            .unwrap()
+    }
+
+    fn epoch() -> EventId {
+        EventId::parse("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .unwrap()
+    }
+
+    fn ts(value: &str) -> IsoTimestamp {
+        IsoTimestamp::from_trusted(value.to_owned())
+    }
+
+    fn sid(value: &str) -> SecretId {
+        SecretId::from_vault_record(value)
+    }
+
+    fn genesis_source_hash() -> Sha256Hex {
+        Sha256Hex::from_trusted("deadbeef".repeat(8))
+    }
+
+    const STORE: &str = "store_testtoken11";
 
     fn genesis(graph: &mut EventGraph, signing_key: &SigningKey) -> EventId {
         let event = build_genesis_import_event(
-            STORE,
-            ACTOR,
-            &EventId::parse(EPOCH).unwrap(),
-            "legacy-hash",
+            &store(),
+            &actor(),
+            &epoch(),
+            &genesis_source_hash(),
             vec![],
-            "2026-06-28T00:00:00Z",
+            &ts("2026-06-28T00:00:00Z"),
             signing_key,
         )
         .unwrap();
@@ -318,20 +361,17 @@ mod tests {
         signing_key: &SigningKey,
     ) -> VaultEvent {
         let body = VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: STORE.to_owned(),
-            actor_id: ACTOR.to_owned(),
-            parents: parents
-                .into_iter()
-                .map(|id| id.as_str().to_owned())
-                .collect(),
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            key_epoch: EPOCH.to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(),
+            parents,
+            created_at: ts("2026-06-28T00:00:00Z"),
+            key_epoch: epoch(),
             operations: vec![VaultOperation::SecretCreated {
                 secret: EncryptedSecretPayload {
-                    id: secret_id.to_owned(),
+                    id: sid(secret_id),
                     secret_type: SecretType::ApiKey,
-                    ciphertext: format!("cipher-{secret_id}"),
+                    ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
                 },
             }],
         };
@@ -364,14 +404,14 @@ mod tests {
         graph.insert(created, STORE).unwrap();
 
         let delete_body = VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: STORE.to_owned(),
-            actor_id: ACTOR.to_owned(),
-            parents: vec![created_id.as_str().to_owned()],
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            key_epoch: EPOCH.to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(),
+            parents: vec![created_id],
+            created_at: ts("2026-06-28T00:00:00Z"),
+            key_epoch: epoch(),
             operations: vec![VaultOperation::SecretDeleted {
-                secret_id: "secret_aaaaaaaaaaa".to_owned(),
+                secret_id: sid("secret_aaaaaaaaaaa"),
             }],
         };
         let deleted = VaultEvent::sign(delete_body, &signing_key).unwrap();
@@ -392,18 +432,18 @@ mod tests {
 
         let replace = |new_id: &str| {
             let body = VaultEventBody {
-                schema_version: VAULT_EVENT_SCHEMA_VERSION,
-                store_id: STORE.to_owned(),
-                actor_id: ACTOR.to_owned(),
-                parents: vec![base_id.as_str().to_owned()],
-                created_at: "2026-06-28T00:00:00Z".to_owned(),
-                key_epoch: EPOCH.to_owned(),
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store(),
+                actor_id: actor(),
+                parents: vec![base_id.clone()],
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch(),
                 operations: vec![VaultOperation::SecretReplaced {
-                    old_id: "secret_original1".to_owned(),
+                    old_id: sid("secret_original1"),
                     new_secret: EncryptedSecretPayload {
-                        id: new_id.to_owned(),
+                        id: sid(new_id),
                         secret_type: SecretType::ApiKey,
-                        ciphertext: format!("cipher-{new_id}"),
+                        ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
                     },
                 }],
             };
@@ -420,7 +460,7 @@ mod tests {
         assert!(
             projection
                 .replacement_conflicts
-                .contains_key("secret_original1")
+                .contains_key(&sid("secret_original1"))
         );
     }
 
@@ -455,18 +495,18 @@ mod tests {
 
         let signed_replace = |new_id: &str| -> VaultResult<VaultEvent> {
             let body = VaultEventBody {
-                schema_version: VAULT_EVENT_SCHEMA_VERSION,
-                store_id: STORE.to_owned(),
-                actor_id: ACTOR.to_owned(),
-                parents: vec![base_id.as_str().to_owned()],
-                created_at: "2026-06-28T00:00:00Z".to_owned(),
-                key_epoch: EPOCH.to_owned(),
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store(),
+                actor_id: actor(),
+                parents: vec![base_id.clone()],
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch(),
                 operations: vec![VaultOperation::SecretReplaced {
-                    old_id: "secret_original1".to_owned(),
+                    old_id: sid("secret_original1"),
                     new_secret: EncryptedSecretPayload {
-                        id: new_id.to_owned(),
+                        id: sid(new_id),
                         secret_type: SecretType::ApiKey,
-                        ciphertext: format!("cipher-{new_id}"),
+                        ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{new_id}")),
                     },
                 }],
             };
@@ -479,20 +519,16 @@ mod tests {
         graph.insert(r2, STORE)?;
 
         let resolve_body = VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: STORE.to_owned(),
-            actor_id: ACTOR.to_owned(),
-            parents: graph
-                .heads()
-                .iter()
-                .map(|id| id.as_str().to_owned())
-                .collect(),
-            created_at: "2026-06-28T00:00:01Z".to_owned(),
-            key_epoch: EPOCH.to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(),
+            parents: graph.heads(),
+            created_at: ts("2026-06-28T00:00:01Z"),
+            key_epoch: epoch(),
             operations: vec![VaultOperation::SecretConflictResolved {
-                old_id: "secret_original1".to_owned(),
-                chosen_secret_id: "secret_newaaaaaaa".to_owned(),
-                rejected_secret_ids: vec!["secret_newbbbbbbb".to_owned()],
+                old_id: sid("secret_original1"),
+                chosen_secret_id: sid("secret_newaaaaaaa"),
+                rejected_secret_ids: vec![sid("secret_newbbbbbbb")],
             }],
         };
         let resolved = VaultEvent::sign(resolve_body, &signing_key)?;
@@ -518,16 +554,12 @@ mod tests {
         assert_eq!(project_vault(&graph, STORE)?.live_secrets(&graph).len(), 1);
 
         let clear_body = VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: STORE.to_owned(),
-            actor_id: ACTOR.to_owned(),
-            parents: graph
-                .heads()
-                .iter()
-                .map(|id| id.as_str().to_owned())
-                .collect(),
-            created_at: "2026-06-28T00:00:01Z".to_owned(),
-            key_epoch: EPOCH.to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(),
+            parents: graph.heads(),
+            created_at: ts("2026-06-28T00:00:01Z"),
+            key_epoch: epoch(),
             operations: vec![VaultOperation::VaultCleared],
         };
         let cleared = VaultEvent::sign(clear_body, &signing_key)?;
@@ -551,17 +583,14 @@ mod tests {
         graph.insert(created, STORE)?;
 
         let delete_body = |parents: Vec<EventId>| VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: STORE.to_owned(),
-            actor_id: ACTOR.to_owned(),
-            parents: parents
-                .into_iter()
-                .map(|id| id.as_str().to_owned())
-                .collect(),
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            key_epoch: EPOCH.to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(),
+            parents,
+            created_at: ts("2026-06-28T00:00:00Z"),
+            key_epoch: epoch(),
             operations: vec![VaultOperation::SecretDeleted {
-                secret_id: "secret_aaaaaaaaaaa".to_owned(),
+                secret_id: sid("secret_aaaaaaaaaaa"),
             }],
         };
 
@@ -583,15 +612,12 @@ mod tests {
 
         let signed_op = |parents: Vec<EventId>, op: VaultOperation| -> VaultResult<VaultEvent> {
             let body = VaultEventBody {
-                schema_version: VAULT_EVENT_SCHEMA_VERSION,
-                store_id: STORE.to_owned(),
-                actor_id: ACTOR.to_owned(),
-                parents: parents
-                    .into_iter()
-                    .map(|id| id.as_str().to_owned())
-                    .collect(),
-                created_at: "2026-06-28T00:00:00Z".to_owned(),
-                key_epoch: EPOCH.to_owned(),
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store(),
+                actor_id: actor(),
+                parents,
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch(),
                 operations: vec![op],
             };
             VaultEvent::sign(body, &signing_key)
@@ -600,14 +626,16 @@ mod tests {
         let revoke = signed_op(
             vec![genesis_id.clone()],
             VaultOperation::DeviceRevoked {
-                device_id: "device_revoked01".to_owned(),
+                device_id: DeviceId::parse("abcd1234ef567890").unwrap(),
             },
         )?;
         let rotate = signed_op(
             vec![genesis_id],
             VaultOperation::PasswordRotated {
-                entry_id: "password_entry01".to_owned(),
-                envelope_ciphertext: "cipher-rotated".to_owned(),
+                entry_id: PasswordEntryId::parse("pwdentry001").unwrap(),
+                envelope_ciphertext: OpaqueCiphertext::from_trusted(
+                    r#"{"version":1,"kdf":"scrypt","work_factor":18,"ciphertext":"x"}"#.to_owned(),
+                ),
             },
         )?;
         graph.insert(revoke, STORE)?;

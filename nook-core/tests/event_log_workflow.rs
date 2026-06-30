@@ -4,11 +4,12 @@
 mod harness;
 
 use harness::{
-    EventLogDevice, ProviderBuckets, push_device_outbox, sample_legacy_yaml,
+    EventLogDevice, ProviderBuckets, push_device_outbox, sample_stored_vault_yaml,
     union_device_from_providers,
 };
 use nook_core::{
-    AppendEventInput, EncryptedSecretPayload, EventError, SecretType, VaultOperation, VaultResult,
+    AppendEventInput, AuthKeyId, EncryptedSecretPayload, EventError, EventId, IsoTimestamp,
+    OpaqueCiphertext, SecretId, SecretType, StoreId, VaultOperation, VaultResult,
     build_signed_event,
 };
 use std::collections::HashMap;
@@ -56,20 +57,20 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
 
     device.session.heads = vec![head.clone()];
     device.append_signed(vec![VaultOperation::SecretReplaced {
-        old_id: "secret_original1".to_owned(),
+        old_id: SecretId::from_vault_record("secret_original1"),
         new_secret: EncryptedSecretPayload {
-            id: "secret_newaaaaaaa".to_owned(),
+            id: SecretId::from_vault_record("secret_newaaaaaaa"),
             secret_type: SecretType::ApiKey,
-            ciphertext: "cipher-secret_newaaaaaaa".to_owned(),
+            ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newaaaaaaa".to_owned()),
         },
     }])?;
     device.session.heads = vec![head];
     device.append_signed(vec![VaultOperation::SecretReplaced {
-        old_id: "secret_original1".to_owned(),
+        old_id: SecretId::from_vault_record("secret_original1"),
         new_secret: EncryptedSecretPayload {
-            id: "secret_newbbbbbbb".to_owned(),
+            id: SecretId::from_vault_record("secret_newbbbbbbb"),
             secret_type: SecretType::ApiKey,
-            ciphertext: "cipher-secret_newbbbbbbb".to_owned(),
+            ciphertext: OpaqueCiphertext::from_trusted("cipher-secret_newbbbbbbb".to_owned()),
         },
     }])?;
 
@@ -78,7 +79,7 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
     assert!(
         projection
             .replacement_conflicts
-            .contains_key("secret_original1")
+            .contains_key(&SecretId::from_vault_record("secret_original1"))
     );
     assert_eq!(projection.live_secrets(&graph).len(), 2);
     Ok(())
@@ -97,18 +98,22 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
 
     let child_ops = vec![VaultOperation::SecretCreated {
         secret: EncryptedSecretPayload {
-            id: "secret_outoforder1".to_owned(),
+            id: SecretId::from_vault_record("secret_outoforder1"),
             secret_type: SecretType::ApiKey,
-            ciphertext: "cipher-child".to_owned(),
+            ciphertext: OpaqueCiphertext::from_trusted("cipher-child".to_owned()),
         },
     }];
+    let store_id = StoreId::parse(device.store_id())?;
+    let actor_id = AuthKeyId::parse(&device.actor_id()?)?;
+    let key_epoch = EventId::parse(&device.session.key_epoch)?;
+    let created_at = IsoTimestamp::from_trusted(TS.to_owned());
     let (event, child_bytes) = build_signed_event(AppendEventInput {
-        store_id: device.store_id(),
-        actor_id: &device.actor_id()?,
+        store_id: &store_id,
+        actor_id: &actor_id,
         signing_identity: &device.session.signing,
-        parents: vec![genesis_head.as_str().to_owned()],
-        key_epoch: &device.session.key_epoch,
-        created_at: TS,
+        parents: vec![genesis_head.clone()],
+        key_epoch: &key_epoch,
+        created_at: &created_at,
         operations: child_ops,
     })?;
     let child_id = event.id()?;
@@ -155,9 +160,9 @@ fn join_merge_single_head() -> VaultResult<()> {
     device.session.heads = vec![a_id.as_str().to_owned(), b_id.as_str().to_owned()];
     device.append_signed(vec![VaultOperation::SecretCreated {
         secret: EncryptedSecretPayload {
-            id: "secret_joinmerge1".to_owned(),
+            id: SecretId::from_vault_record("secret_joinmerge1"),
             secret_type: SecretType::ApiKey,
-            ciphertext: "cipher-join".to_owned(),
+            ciphertext: OpaqueCiphertext::from_trusted("cipher-join".to_owned()),
         },
     }])?;
 
@@ -167,14 +172,14 @@ fn join_merge_single_head() -> VaultResult<()> {
 }
 
 #[test]
-fn legacy_import_then_decrypt() -> VaultResult<()> {
+fn stored_vault_import_then_decrypt() -> VaultResult<()> {
     let mut device = EventLogDevice::genesis("main")?;
-    let yaml = sample_legacy_yaml(&device.crypto)?;
-    device.import_legacy_yaml(&yaml)?;
+    let yaml = sample_stored_vault_yaml(&device.crypto)?;
+    device.import_stored_vault(&yaml)?;
 
     let graph = device.session.store.load_graph(device.store_id())?;
     let live = device.project()?.live_secrets(&graph);
-    assert!(live.contains_key("legacy-secret"));
+    assert!(live.contains_key("import-secret"));
     Ok(())
 }
 
@@ -190,7 +195,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
         .collect();
 
     let trigger = VaultOperation::DeviceRevoked {
-        device_id: "device_revoked01".to_owned(),
+        device_id: nook_core::DeviceId::parse("abcd1234ef567890")?,
     };
     let old_secrets = nook_core::SymmetricKey::parse(&device.secrets_key)?;
     let (new_secrets, _new_members) = device.session.rotate_security_epoch(
