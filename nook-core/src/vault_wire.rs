@@ -316,7 +316,12 @@ mod tests {
     #[test]
     fn stored_vault_jsonl_and_yaml_parse() {
         assert!(StoredVaultJsonl::parse("").unwrap().as_str().is_empty());
-        assert!(StoredVaultJsonl::parse("{}\n").unwrap().as_str().contains('{'));
+        assert!(
+            StoredVaultJsonl::parse("{}\n")
+                .unwrap()
+                .as_str()
+                .contains('{')
+        );
         assert!(StoredVaultJsonl::parse("not-json").is_err());
         let yaml = StoredVaultYaml::parse("secrets:\n").unwrap();
         assert!(yaml.as_str().starts_with("secrets:"));
@@ -342,7 +347,8 @@ mod tests {
     #[test]
     fn serde_deserializes_typed_wire_strings() {
         let key = SymmetricKey::generate().unwrap();
-        let roundtripped: SymmetricKey = serde_json::from_str(&serde_json::to_string(&key).unwrap()).unwrap();
+        let roundtripped: SymmetricKey =
+            serde_json::from_str(&serde_json::to_string(&key).unwrap()).unwrap();
         assert_eq!(roundtripped, key);
 
         let session: SessionJsonl = serde_json::from_str("\"{}\"").unwrap();
