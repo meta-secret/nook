@@ -106,8 +106,8 @@ impl NookVaultManager {
             .map_err(|e| NookError::Serialization(e.to_string()))?
             .unwrap_or_default();
         self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
-            entry_id,
-            envelope_ciphertext,
+            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
         }])
         .await?;
         Ok(())
@@ -156,8 +156,8 @@ impl NookVaultManager {
             .unwrap_or_default();
         if self.event_log_mode || self.ensure_event_log_mode().await? {
             self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
-                entry_id: entry_id.clone(),
-                envelope_ciphertext,
+                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+                envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
             })
             .await?;
             let rotated_keys = nook_core::VaultKeys {
@@ -182,7 +182,7 @@ impl NookVaultManager {
         self.password_entries.retain(|entry| entry.id != entry_id);
         if self.event_log_mode || self.ensure_event_log_mode().await? {
             self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-                entry_id: entry_id.clone(),
+                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
             })
             .await?;
         } else {
@@ -196,7 +196,7 @@ impl NookVaultManager {
         self.password_entries.clear();
         if self.event_log_mode || self.ensure_event_log_mode().await? {
             self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-                entry_id: String::new(),
+                entry_id: nook_core::PasswordEntryId::from_trusted(String::new()),
             })
             .await?;
         } else {

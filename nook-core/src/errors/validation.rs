@@ -80,4 +80,16 @@ pub enum ValidationError {
 
     #[error("errors.validation.stored_vault_jsonl_invalid")]
     StoredVaultJsonlInvalid,
+
+    #[error("errors.validation.sha256_hex_invalid")]
+    Sha256HexInvalid,
+
+    #[error("errors.validation.device_signing_public_key_invalid")]
+    DeviceSigningPublicKeyInvalid,
+
+    #[error("errors.validation.iso_timestamp_invalid")]
+    IsoTimestampInvalid,
+
+    #[error("errors.validation.password_entry_id_invalid")]
+    PasswordEntryIdInvalid,
 }

@@ -1,6 +1,8 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
 use crate::errors::{EventError, VaultResult};
+use crate::vault_ids::{AuthKeyId, StoreId};
+use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
     AppendEventInput, EventId, LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord,
     VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
@@ -54,15 +56,18 @@ impl VaultEventSession {
         created_at: &str,
         provider_id: Option<&str>,
     ) -> VaultResult<EventId> {
-        let actor_id = self.actor_id()?;
-        let parents = ObservedHeads::parse(&self.heads)?.as_parent_strings();
+        let store_id = StoreId::parse(&self.store_id)?;
+        let actor_id = AuthKeyId::parse(&self.actor_id()?)?;
+        let key_epoch = EventId::parse(&self.key_epoch)?;
+        let created_at = IsoTimestamp::parse(created_at)?;
+        let parents = ObservedHeads::parse(&self.heads)?.as_parents();
         let (event, bytes) = build_signed_event(AppendEventInput {
-            store_id: &self.store_id,
+            store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &self.signing,
             parents,
-            key_epoch: &self.key_epoch,
-            created_at,
+            key_epoch: &key_epoch,
+            created_at: &created_at,
             operations,
         })?;
         let event_id = event.id()?;
@@ -140,7 +145,7 @@ impl VaultEventSession {
         self.append_operations(
             vec![VaultOperation::EpochCheckpoint {
                 secrets,
-                members_checkpoint_hash,
+                members_checkpoint_hash: Sha256Hex::from_trusted(members_checkpoint_hash),
             }],
             created_at,
             provider_id,

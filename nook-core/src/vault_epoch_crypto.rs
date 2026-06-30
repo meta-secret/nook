@@ -6,7 +6,7 @@ use crate::secret_types::{StoredRecordPayload, StoredSecretRecord};
 use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
-use crate::vault_wire::{AgeArmoredCiphertext, SymmetricKey};
+use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, SymmetricKey};
 use crate::{
     SecretId, build_members_records, genesis_auth_record, is_auth_stored_record,
     resolve_member_roster,
@@ -32,9 +32,9 @@ pub fn reencrypt_user_secrets_for_epoch(
         let plaintext = old_crypto.decrypt_value(&armored)?;
         let ciphertext = new_crypto.encrypt_value(&plaintext)?;
         out.push(EncryptedSecretPayload {
-            id: record.key.to_string(),
+            id: record.key.clone(),
             secret_type,
-            ciphertext: ciphertext.as_str().to_owned(),
+            ciphertext: OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
         });
     }
     Ok(out)
@@ -126,7 +126,7 @@ mod tests {
         let new_crypto = VaultCrypto::new(&new_key).unwrap();
         let plaintext = new_crypto
             .decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
-                payloads[0].ciphertext.clone(),
+                payloads[0].ciphertext.as_str().to_owned(),
             ))
             .unwrap();
         assert!(plaintext.contains("hunter2"));

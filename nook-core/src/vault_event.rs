@@ -1,43 +1,60 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
-use crate::SecretId;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::{
-    EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes, sign_body,
-    verify_body_signature,
+    Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
+    sign_body, verify_body_signature,
 };
 use crate::secret_types::{SecretType, StoredRecordPayload, StoredSecretRecord};
+use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
+use crate::vault_wire::{
+    AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
+    OpaqueCiphertext, PasswordEntryId, Sha256Hex,
+};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const VAULT_EVENT_SCHEMA_VERSION: u32 = 1;
+/// Supported `schema_version` values on the event wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VaultEventSchemaVersion(u32);
+
+impl VaultEventSchemaVersion {
+    pub const V1: Self = Self(1);
+    pub const CURRENT: Self = Self::V1;
+
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
 
 /// Encrypted secret payload embedded in an event operation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EncryptedSecretPayload {
-    pub id: String,
+    pub id: SecretId,
     #[serde(rename = "type")]
     pub secret_type: SecretType,
-    pub ciphertext: String,
+    pub ciphertext: OpaqueCiphertext,
 }
 
 impl EncryptedSecretPayload {
     #[must_use]
     pub fn from_stored(record: &StoredSecretRecord) -> Self {
         Self {
-            id: record.key.to_string(),
+            id: record.key.clone(),
             secret_type: record.secret_type.unwrap_or(SecretType::ApiKey),
-            ciphertext: record.value.as_str().to_owned(),
+            ciphertext: OpaqueCiphertext::from_trusted(record.value.as_str().to_owned()),
         }
     }
 
     #[must_use]
     pub fn to_stored(&self) -> StoredSecretRecord {
         StoredSecretRecord {
-            key: SecretId::from_vault_record(&self.id),
+            key: self.id.clone(),
             secret_type: Some(self.secret_type),
-            value: StoredRecordPayload::from_trusted(self.ciphertext.clone()),
+            value: StoredRecordPayload::from_trusted(self.ciphertext.as_str().to_owned()),
         }
     }
 }
@@ -47,63 +64,63 @@ impl EncryptedSecretPayload {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum VaultOperation {
     VaultImported {
-        source_content_hash: String,
+        source_content_hash: Sha256Hex,
         secrets: Vec<EncryptedSecretPayload>,
     },
     SecretCreated {
         secret: EncryptedSecretPayload,
     },
     SecretDeleted {
-        secret_id: String,
+        secret_id: SecretId,
     },
     SecretReplaced {
-        old_id: String,
+        old_id: SecretId,
         new_secret: EncryptedSecretPayload,
     },
     SecretConflictResolved {
-        old_id: String,
-        chosen_secret_id: String,
-        rejected_secret_ids: Vec<String>,
+        old_id: SecretId,
+        chosen_secret_id: SecretId,
+        rejected_secret_ids: Vec<SecretId>,
     },
     JoinRequested {
-        device_id: String,
-        encryption_public_key: String,
-        signing_public_key: String,
-        label: String,
+        device_id: DeviceId,
+        encryption_public_key: DevicePublicKey,
+        signing_public_key: DeviceSigningPublicKey,
+        label: MemberLabel,
     },
     JoinApproved {
-        device_id: String,
-        encryption_public_key: String,
-        signing_public_key: String,
-        label: String,
-        secrets_key_ciphertext: String,
-        members_key_ciphertext: String,
+        device_id: DeviceId,
+        encryption_public_key: DevicePublicKey,
+        signing_public_key: DeviceSigningPublicKey,
+        label: MemberLabel,
+        secrets_key_ciphertext: AgeArmoredCiphertext,
+        members_key_ciphertext: AgeArmoredCiphertext,
     },
     JoinDenied {
-        device_id: String,
+        device_id: DeviceId,
     },
     MemberRenamed {
-        device_id: String,
-        label: String,
+        device_id: DeviceId,
+        label: MemberLabel,
     },
     DeviceRevoked {
-        device_id: String,
+        device_id: DeviceId,
     },
     PasswordAdded {
-        entry_id: String,
-        envelope_ciphertext: String,
+        entry_id: PasswordEntryId,
+        envelope_ciphertext: OpaqueCiphertext,
     },
     PasswordRotated {
-        entry_id: String,
-        envelope_ciphertext: String,
+        entry_id: PasswordEntryId,
+        envelope_ciphertext: OpaqueCiphertext,
     },
     PasswordRemoved {
-        entry_id: String,
+        entry_id: PasswordEntryId,
     },
     VaultCleared,
     EpochCheckpoint {
         secrets: Vec<EncryptedSecretPayload>,
-        members_checkpoint_hash: String,
+        members_checkpoint_hash: Sha256Hex,
     },
 }
 
@@ -111,12 +128,12 @@ pub enum VaultOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct VaultEventBody {
-    pub schema_version: u32,
-    pub store_id: String,
-    pub actor_id: String,
-    pub parents: Vec<String>,
-    pub created_at: String,
-    pub key_epoch: String,
+    pub schema_version: VaultEventSchemaVersion,
+    pub store_id: StoreId,
+    pub actor_id: AuthKeyId,
+    pub parents: Vec<EventId>,
+    pub created_at: IsoTimestamp,
+    pub key_epoch: EventId,
     pub operations: Vec<VaultOperation>,
 }
 
@@ -124,7 +141,11 @@ impl VaultEventBody {
     pub fn to_canonical_value(&self) -> VaultResult<Value> {
         let mut value = serde_json::to_value(self).map_err(EventError::EventBodySerialize)?;
         if let Value::Object(ref mut map) = value {
-            let mut sorted_parents = self.parents.clone();
+            let mut sorted_parents: Vec<String> = self
+                .parents
+                .iter()
+                .map(|id| id.as_str().to_owned())
+                .collect();
             sorted_parents.sort();
             map.insert("parents".to_owned(), json!(sorted_parents));
         }
@@ -146,7 +167,7 @@ impl VaultEventBody {
 pub struct VaultEvent {
     #[serde(flatten)]
     pub body: VaultEventBody,
-    pub signature: String,
+    pub signature: Ed25519Signature,
 }
 
 impl VaultEvent {
@@ -162,20 +183,20 @@ impl VaultEvent {
 
     pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> VaultResult<()> {
         let body_bytes = self.body.to_canonical_bytes()?;
-        verify_body_signature(&body_bytes, &self.signature, verifying_key)
+        verify_body_signature(&body_bytes, self.signature.as_str(), verifying_key)
     }
 
-    pub fn validate_envelope(&self, expected_store_id: &str) -> VaultResult<EventId> {
-        if self.body.schema_version > VAULT_EVENT_SCHEMA_VERSION {
+    pub fn validate_envelope(&self, expected_store_id: &StoreId) -> VaultResult<EventId> {
+        if self.body.schema_version > VaultEventSchemaVersion::CURRENT {
             return Err(EventError::UnsupportedSchemaVersion {
-                version: self.body.schema_version,
+                version: self.body.schema_version.get(),
             }
             .into());
         }
-        if self.body.store_id != expected_store_id {
+        if &self.body.store_id != expected_store_id {
             return Err(EventError::EventStoreIdMismatch {
-                expected: expected_store_id.to_owned(),
-                actual: self.body.store_id.clone(),
+                expected: expected_store_id.as_str().to_owned(),
+                actual: self.body.store_id.as_str().to_owned(),
             }
             .into());
         }
@@ -188,32 +209,32 @@ impl VaultEvent {
             return Err(EventError::MissingEventParents.into());
         }
         for parent in &self.body.parents {
-            EventId::parse(parent)?;
+            EventId::parse(parent.as_str())?;
         }
-        EventId::parse(&self.body.key_epoch)?;
+        EventId::parse(self.body.key_epoch.as_str())?;
         self.id()
     }
 }
 
 /// Build a genesis import event from encrypted snapshot data.
 pub fn build_genesis_import_event(
-    store_id: &str,
-    actor_id: &str,
+    store_id: &StoreId,
+    actor_id: &AuthKeyId,
     key_epoch: &EventId,
-    source_content_hash: &str,
+    source_content_hash: &Sha256Hex,
     secrets: Vec<EncryptedSecretPayload>,
-    created_at: &str,
+    created_at: &IsoTimestamp,
     signing_key: &SigningKey,
 ) -> VaultResult<VaultEvent> {
     let body = VaultEventBody {
-        schema_version: VAULT_EVENT_SCHEMA_VERSION,
-        store_id: store_id.to_owned(),
-        actor_id: actor_id.to_owned(),
+        schema_version: VaultEventSchemaVersion::CURRENT,
+        store_id: store_id.clone(),
+        actor_id: actor_id.clone(),
         parents: Vec::new(),
-        created_at: created_at.to_owned(),
-        key_epoch: key_epoch.as_str().to_owned(),
+        created_at: created_at.clone(),
+        key_epoch: key_epoch.clone(),
         operations: vec![VaultOperation::VaultImported {
-            source_content_hash: source_content_hash.to_owned(),
+            source_content_hash: source_content_hash.clone(),
             secrets,
         }],
     };
@@ -238,12 +259,15 @@ mod tests {
         )
         .unwrap();
         let event = build_genesis_import_event(
-            "store_testtoken1",
-            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            &StoreId::parse("store_testtoken11").unwrap(),
+            &AuthKeyId::parse(
+                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            )
+            .unwrap(),
             &epoch,
-            "deadbeef",
+            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
             vec![],
-            "2026-06-28T00:00:00Z",
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )
         .unwrap();
@@ -261,18 +285,20 @@ mod tests {
         )
         .unwrap();
         let mut body = VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: "store_testtoken1".to_owned(),
-            actor_id: "key_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-                .to_owned(),
-            parents: vec![epoch.as_str().to_owned()],
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            key_epoch: epoch.as_str().to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: StoreId::parse("store_testtoken11").unwrap(),
+            actor_id: AuthKeyId::parse(
+                "key_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            )
+            .unwrap(),
+            parents: vec![epoch.clone()],
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: epoch.clone(),
             operations: vec![VaultOperation::SecretCreated {
                 secret: EncryptedSecretPayload {
-                    id: "secret_abc12345678".to_owned(),
+                    id: SecretId::from_vault_record("secret_abc12345678"),
                     secret_type: SecretType::Login,
-                    ciphertext: "cipher".to_owned(),
+                    ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
                 },
             }],
         };
@@ -281,9 +307,7 @@ mod tests {
             EventId::parse(
                 "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
             )
-            .unwrap()
-            .as_str()
-            .to_owned(),
+            .unwrap(),
         );
         body.parents.sort();
         let id_b = body.event_id().unwrap();

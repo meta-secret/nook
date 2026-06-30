@@ -38,7 +38,9 @@
 
 **Canonical schema:** `nook-core/src/secret_types.rs` (`SecretType`, payload structs, `SecretValue`, `SecretRecord`).
 
-**Typed wire/crypto strings:** `nook-core/src/vault_wire.rs` — serde-transparent newtypes validated at parse/deserialize (`SymmetricKey`, `AgeArmoredCiphertext`, `DevicePublicKey`, `SessionJsonl`, `StoredVaultBlob`, `SecretPayloadYaml`, …). Prefer these over raw `String` in domain APIs; WASM boundary may still use `.as_str()` / `.into_inner()`.
+**Typed domain strings:** Prefer newtypes over raw `String` / `u32` in `nook-core`. Primary modules: `vault_wire.rs` (crypto/wire blobs), `vault_ids.rs` (prefixed ids), `event_canonical.rs` (`EventId`, `Ed25519Signature`), `vault_event.rs` (event envelope + `VaultEventSchemaVersion`). Inventory and versioning rules: [design-docs/typed-newtypes.md](../design-docs/typed-newtypes.md).
+
+WASM boundary getters may still return `String`; parse with `Foo::parse` / `Deserialize` before calling core. Use `.as_str()` / `.into_inner()` only at the JS edge.
 
 **Do not duplicate in TypeScript.** The web UI consumes `NookSecretRecord` wasm objects with typed getters (`websiteUrl`, `username`, `password`, …) and view helpers (`groupKey`, `summary`, `matchesSearch`, `primaryCredential`).
 

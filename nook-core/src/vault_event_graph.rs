@@ -68,7 +68,7 @@ impl EventGraph {
         event: VaultEvent,
         expected_store_id: &str,
     ) -> VaultResult<EventInsertStatus> {
-        let event_id = event.validate_envelope(expected_store_id)?;
+        let event_id = event.validate_envelope(&crate::StoreId::parse(expected_store_id)?)?;
         if self.events.contains_key(&event_id) {
             let existing = self.events.get(&event_id).expect("present");
             if existing.body.to_canonical_bytes()? == event.body.to_canonical_bytes()? {
@@ -87,10 +87,8 @@ impl EventGraph {
             .body
             .parents
             .iter()
-            .map(|raw| EventId::parse(raw))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
             .filter(|parent| !self.events.contains_key(parent))
+            .cloned()
             .collect::<Vec<_>>();
 
         if !missing_parents.is_empty() {
@@ -110,11 +108,11 @@ impl EventGraph {
         self.events
             .values()
             .filter(|event| {
-                event.body.parents.iter().all(|raw| {
-                    EventId::parse(raw)
-                        .ok()
-                        .is_some_and(|parent| self.events.contains_key(&parent))
-                })
+                event
+                    .body
+                    .parents
+                    .iter()
+                    .all(|parent| self.events.contains_key(parent))
             })
             .collect()
     }
@@ -125,11 +123,11 @@ impl EventGraph {
             .iter()
             .filter(|(id, event)| {
                 !event.body.parents.is_empty()
-                    && event.body.parents.iter().any(|raw| {
-                        EventId::parse(raw)
-                            .ok()
-                            .is_some_and(|parent| !self.events.contains_key(&parent))
-                    })
+                    && event
+                        .body
+                        .parents
+                        .iter()
+                        .any(|parent| !self.events.contains_key(parent))
                     && !self.quarantined.contains_key(*id)
             })
             .collect()
@@ -141,9 +139,7 @@ impl EventGraph {
         let mut referenced = BTreeSet::new();
         for event in self.events.values() {
             for parent in &event.body.parents {
-                if let Ok(id) = EventId::parse(parent) {
-                    referenced.insert(id);
-                }
+                referenced.insert(parent.clone());
             }
         }
         self.events
@@ -161,11 +157,11 @@ impl EventGraph {
         let Some(event) = self.events.get(descendant) else {
             return false;
         };
-        event.body.parents.iter().any(|raw| {
-            EventId::parse(raw)
-                .ok()
-                .is_some_and(|parent| self.is_ancestor(ancestor, &parent))
-        })
+        event
+            .body
+            .parents
+            .iter()
+            .any(|parent| self.is_ancestor(ancestor, parent))
     }
 
     #[must_use]
@@ -194,10 +190,11 @@ impl EventGraph {
                 .iter()
                 .filter(|id| {
                     let event = self.events.get(*id).expect("in remaining");
-                    event.body.parents.iter().all(|raw| {
-                        let parent = EventId::parse(raw).expect("validated on insert");
-                        ordered.contains(&parent) || !remaining.contains(&parent)
-                    })
+                    event
+                        .body
+                        .parents
+                        .iter()
+                        .all(|parent| ordered.contains(parent) || !remaining.contains(parent))
                 })
                 .cloned()
                 .collect();
@@ -241,9 +238,11 @@ mod tests {
     use super::*;
     use crate::VaultResult;
     use crate::vault_event::{
-        VAULT_EVENT_SCHEMA_VERSION, VaultEvent, VaultEventBody, VaultOperation,
+        VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
+    use crate::vault_ids::{AuthKeyId, SecretId, StoreId};
+    use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -251,64 +250,77 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
+    const STORE_STR: &str = "store_testtoken11";
+
+    fn store() -> StoreId {
+        StoreId::parse("store_testtoken11").unwrap()
+    }
+
+    fn actor() -> AuthKeyId {
+        AuthKeyId::parse("key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            .unwrap()
+    }
+
+    fn epoch() -> EventId {
+        EventId::parse("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .unwrap()
+    }
+
+    fn legacy_hash() -> Sha256Hex {
+        Sha256Hex::from_trusted("deadbeef".repeat(8))
+    }
+
     fn signed_child(
-        parents: Vec<&str>,
+        parents: Vec<EventId>,
         secret_id: &str,
         signing_key: &SigningKey,
-        store_id: &str,
-        actor_id: &str,
-        epoch: &str,
     ) -> VaultEvent {
         let body = VaultEventBody {
-            schema_version: VAULT_EVENT_SCHEMA_VERSION,
-            store_id: store_id.to_owned(),
-            actor_id: actor_id.to_owned(),
-            parents: parents.into_iter().map(str::to_owned).collect(),
-            created_at: "2026-06-28T00:00:00Z".to_owned(),
-            key_epoch: epoch.to_owned(),
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(),
+            parents,
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: epoch(),
             operations: vec![VaultOperation::SecretCreated {
                 secret: crate::vault_event::EncryptedSecretPayload {
-                    id: secret_id.to_owned(),
+                    id: SecretId::from_vault_record(secret_id),
                     secret_type: crate::SecretType::ApiKey,
-                    ciphertext: format!("cipher-{secret_id}"),
+                    ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
                 },
             }],
         };
         VaultEvent::sign(body, signing_key).unwrap()
     }
 
+    fn genesis_event(signing_key: &SigningKey) -> VaultEvent {
+        build_genesis_import_event(
+            &store(),
+            &actor(),
+            &epoch(),
+            &legacy_hash(),
+            vec![],
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key,
+        )
+        .unwrap()
+    }
+
     #[test]
     fn union_is_commutative_on_ids() {
         let key = signing_key();
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let genesis = build_genesis_import_event(
-            "store_testtoken1",
-            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            &EventId::parse(epoch).unwrap(),
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &key,
-        )
-        .unwrap();
-        let child = signed_child(
-            vec![genesis.id().unwrap().as_str()],
-            "secret_child00001",
-            &key,
-            "store_testtoken1",
-            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            epoch,
-        );
+        let genesis = genesis_event(&key);
+        let child = signed_child(vec![genesis.id().unwrap()], "secret_child00001", &key);
 
         let mut left = EventGraph::new();
-        left.insert(genesis.clone(), "store_testtoken1").unwrap();
+        left.insert(genesis.clone(), STORE_STR).unwrap();
         let mut right = EventGraph::new();
-        right.insert(child.clone(), "store_testtoken1").unwrap();
-        right.insert(genesis.clone(), "store_testtoken1").unwrap();
+        right.insert(child.clone(), STORE_STR).unwrap();
+        right.insert(genesis.clone(), STORE_STR).unwrap();
 
         let mut only_left = EventGraph::new();
-        only_left.insert(genesis, "store_testtoken1").unwrap();
-        only_left.insert(child, "store_testtoken1").unwrap();
+        only_left.insert(genesis, STORE_STR).unwrap();
+        only_left.insert(child, STORE_STR).unwrap();
 
         assert_eq!(left.union(&right).len(), only_left.len());
         assert_eq!(right.union(&only_left).len(), only_left.len());
@@ -317,33 +329,17 @@ mod tests {
     #[test]
     fn concurrent_events_are_detected() {
         let key = signing_key();
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph
-            .insert(
-                build_genesis_import_event(
-                    store,
-                    actor,
-                    &EventId::parse(epoch).unwrap(),
-                    "hash",
-                    vec![],
-                    "2026-06-28T00:00:00Z",
-                    &key,
-                )
-                .unwrap(),
-                store,
-            )
-            .unwrap();
-        let head = graph.heads()[0].as_str().to_owned();
-        let a = signed_child(vec![&head], "secret_concurrenta", &key, store, actor, epoch);
-        let b = signed_child(vec![&head], "secret_concurrentb", &key, store, actor, epoch);
+        graph.insert(genesis_event(&key), store_str).unwrap();
+        let head = graph.heads()[0].clone();
+        let a = signed_child(vec![head.clone()], "secret_concurrenta", &key);
+        let b = signed_child(vec![head], "secret_concurrentb", &key);
         let a_id = a.id().unwrap();
         let b_id = b.id().unwrap();
-        graph.insert(a, store).unwrap();
-        graph.insert(b, store).unwrap();
+        graph.insert(a, store_str).unwrap();
+        graph.insert(b, store_str).unwrap();
         assert!(graph.are_concurrent(&a_id, &b_id));
         assert_eq!(graph.heads().len(), 2);
     }
@@ -351,36 +347,19 @@ mod tests {
     #[test]
     fn pending_events_until_parent_arrives() -> VaultResult<()> {
         let key = signing_key();
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let store_str = STORE_STR;
 
-        let genesis = build_genesis_import_event(
-            store,
-            actor,
-            &EventId::parse(epoch)?,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &key,
-        )?;
+        let genesis = genesis_event(&key);
         let genesis_id = genesis.id()?;
 
-        let child = signed_child(
-            vec![genesis_id.as_str()],
-            "secret_pending001",
-            &key,
-            store,
-            actor,
-            epoch,
-        );
+        let child = signed_child(vec![genesis_id.clone()], "secret_pending001", &key);
 
         let mut graph = EventGraph::new();
-        let status = graph.insert(child, store)?;
+        let status = graph.insert(child, store_str)?;
         assert!(matches!(status, EventInsertStatus::Pending(_)));
         assert_eq!(graph.pending_events().len(), 1);
 
-        graph.insert(genesis, store)?;
+        graph.insert(genesis, store_str)?;
         assert!(graph.pending_events().is_empty());
         Ok(())
     }
@@ -388,75 +367,38 @@ mod tests {
     #[test]
     fn duplicate_insert_returns_duplicate_status() -> VaultResult<()> {
         let key = signing_key();
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(
-            build_genesis_import_event(
-                store,
-                actor,
-                &EventId::parse(epoch)?,
-                "hash",
-                vec![],
-                "2026-06-28T00:00:00Z",
-                &key,
-            )?,
-            store,
-        )?;
-        let head = graph.heads()[0].as_str().to_owned();
-        let child = signed_child(vec![&head], "secret_duplicate01", &key, store, actor, epoch);
+        graph.insert(genesis_event(&key), store_str)?;
+        let head = graph.heads()[0].clone();
+        let child = signed_child(vec![head], "secret_duplicate01", &key);
         assert_eq!(
-            graph.insert(child.clone(), store)?,
+            graph.insert(child.clone(), store_str)?,
             EventInsertStatus::Applied
         );
-        assert_eq!(graph.insert(child, store)?, EventInsertStatus::Duplicate);
+        assert_eq!(
+            graph.insert(child, store_str)?,
+            EventInsertStatus::Duplicate
+        );
         Ok(())
     }
 
     #[test]
     fn is_ancestor_is_transitive() -> VaultResult<()> {
         let key = signing_key();
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(
-            build_genesis_import_event(
-                store,
-                actor,
-                &EventId::parse(epoch)?,
-                "hash",
-                vec![],
-                "2026-06-28T00:00:00Z",
-                &key,
-            )?,
-            store,
-        )?;
+        graph.insert(genesis_event(&key), store_str)?;
         let head = graph.heads()[0].clone();
-        let child = signed_child(
-            vec![head.as_str()],
-            "secret_child00001",
-            &key,
-            store,
-            actor,
-            epoch,
-        );
+        let child = signed_child(vec![head.clone()], "secret_child00001", &key);
         let child_id = child.id()?;
-        graph.insert(child, store)?;
+        graph.insert(child, store_str)?;
 
-        let grandchild = signed_child(
-            vec![child_id.as_str()],
-            "secret_grandchild1",
-            &key,
-            store,
-            actor,
-            epoch,
-        );
+        let grandchild = signed_child(vec![child_id.clone()], "secret_grandchild1", &key);
         let grandchild_id = grandchild.id()?;
-        graph.insert(grandchild, store)?;
+        graph.insert(grandchild, store_str)?;
 
         assert!(graph.is_ancestor(&head, &grandchild_id));
         assert!(!graph.is_ancestor(&grandchild_id, &head));
@@ -466,41 +408,21 @@ mod tests {
     #[test]
     fn join_event_collapses_multiple_heads() -> VaultResult<()> {
         let key = signing_key();
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
-        graph.insert(
-            build_genesis_import_event(
-                store,
-                actor,
-                &EventId::parse(epoch)?,
-                "hash",
-                vec![],
-                "2026-06-28T00:00:00Z",
-                &key,
-            )?,
-            store,
-        )?;
-        let head = graph.heads()[0].as_str().to_owned();
-        let a = signed_child(vec![&head], "secret_concurrenta", &key, store, actor, epoch);
-        let b = signed_child(vec![&head], "secret_concurrentb", &key, store, actor, epoch);
+        graph.insert(genesis_event(&key), store_str)?;
+        let head = graph.heads()[0].clone();
+        let a = signed_child(vec![head.clone()], "secret_concurrenta", &key);
+        let b = signed_child(vec![head], "secret_concurrentb", &key);
         let a_id = a.id()?;
         let b_id = b.id()?;
-        graph.insert(a, store)?;
-        graph.insert(b, store)?;
+        graph.insert(a, store_str)?;
+        graph.insert(b, store_str)?;
         assert_eq!(graph.heads().len(), 2);
 
-        let join = signed_child(
-            vec![a_id.as_str(), b_id.as_str()],
-            "secret_joinmerge1",
-            &key,
-            store,
-            actor,
-            epoch,
-        );
-        graph.insert(join, store)?;
+        let join = signed_child(vec![a_id, b_id], "secret_joinmerge1", &key);
+        graph.insert(join, store_str)?;
         assert_eq!(graph.heads().len(), 1);
         Ok(())
     }
@@ -508,31 +430,18 @@ mod tests {
     #[test]
     fn topological_order_is_deterministic_under_concurrency() -> VaultResult<()> {
         let key = signing_key();
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let store_str = STORE_STR;
 
         let mut graph = EventGraph::new();
+        graph.insert(genesis_event(&key), store_str)?;
+        let head = graph.heads()[0].clone();
         graph.insert(
-            build_genesis_import_event(
-                store,
-                actor,
-                &EventId::parse(epoch)?,
-                "hash",
-                vec![],
-                "2026-06-28T00:00:00Z",
-                &key,
-            )?,
-            store,
-        )?;
-        let head = graph.heads()[0].as_str().to_owned();
-        graph.insert(
-            signed_child(vec![&head], "secret_concurrenta", &key, store, actor, epoch),
-            store,
+            signed_child(vec![head.clone()], "secret_concurrenta", &key),
+            store_str,
         )?;
         graph.insert(
-            signed_child(vec![&head], "secret_concurrentb", &key, store, actor, epoch),
-            store,
+            signed_child(vec![head], "secret_concurrentb", &key),
+            store_str,
         )?;
 
         let first = graph.topological_order()?;

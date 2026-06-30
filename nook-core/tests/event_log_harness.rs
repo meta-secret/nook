@@ -74,7 +74,7 @@ impl EventLogDevice {
         let ciphertext = self.crypto.encrypt_value(plaintext)?;
         self.append_signed(vec![VaultOperation::SecretCreated {
             secret: encrypted_secret_from_armored(
-                secret_id,
+                &SecretId::from_vault_record(secret_id),
                 SecretType::ApiKey,
                 ciphertext.as_str(),
             ),

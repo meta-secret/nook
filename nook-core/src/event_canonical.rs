@@ -6,12 +6,14 @@
 
 use crate::errors::{EventError, VaultResult};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
+use std::fmt;
 
 /// Content-addressed event identifier (`sha256:{hex}`).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct EventId(pub String);
+pub struct EventId(String);
 
 impl EventId {
     pub fn parse(raw: &str) -> VaultResult<Self> {
@@ -37,6 +39,16 @@ impl EventId {
     }
 
     #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
     pub fn hex_digest(&self) -> &str {
         self.0.strip_prefix("sha256:").unwrap_or(&self.0)
     }
@@ -47,6 +59,83 @@ impl EventId {
         let hex = self.hex_digest();
         let shard = &hex[..2];
         format!("nook-log/v1/events/{shard}/{hex}.event")
+    }
+}
+
+impl fmt::Display for EventId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for EventId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for EventId {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for EventId {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Ed25519 signature string (`ed25519:{hex}`).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Ed25519Signature(String);
+
+impl Ed25519Signature {
+    pub fn parse(raw: &str) -> VaultResult<Self> {
+        parse_ed25519_signature(raw)?;
+        let trimmed = raw.trim();
+        Ok(Self(trimmed.to_owned()))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl fmt::Display for Ed25519Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for Ed25519Signature {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for Ed25519Signature {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Ed25519Signature {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
     }
 }
 
@@ -110,17 +199,17 @@ pub fn format_ed25519_signature(signature: &Signature) -> String {
 
 /// Sign canonical body bytes with an Ed25519 key.
 #[must_use]
-pub fn sign_body(body_bytes: &[u8], signing_key: &SigningKey) -> String {
-    format_ed25519_signature(&signing_key.sign(body_bytes))
+pub fn sign_body(body_bytes: &[u8], signing_key: &SigningKey) -> Ed25519Signature {
+    Ed25519Signature::from_trusted(format_ed25519_signature(&signing_key.sign(body_bytes)))
 }
 
 /// Verify an Ed25519 signature over canonical body bytes.
 pub fn verify_body_signature(
     body_bytes: &[u8],
-    signature: &str,
+    signature: impl AsRef<str>,
     verifying_key: &VerifyingKey,
 ) -> VaultResult<()> {
-    let parsed = parse_ed25519_signature(signature)?;
+    let parsed = parse_ed25519_signature(signature.as_ref())?;
     verifying_key
         .verify(body_bytes, &parsed)
         .map_err(|_| EventError::SignatureVerificationFailed)?;

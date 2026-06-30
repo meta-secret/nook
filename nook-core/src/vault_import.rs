@@ -6,6 +6,8 @@ use crate::multi_device::user_stored_records;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_event::{EncryptedSecretPayload, VaultEvent, build_genesis_import_event};
 use crate::vault_format::deserialize_stored;
+use crate::vault_ids::{AuthKeyId, StoreId};
+use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use ed25519_dalek::SigningKey;
 
 /// Deterministic SHA-256 content hash for legacy vault bytes (trimmed UTF-8).
@@ -32,16 +34,16 @@ pub fn legacy_vault_to_import_event(
     signing_key: &SigningKey,
     created_at: &str,
 ) -> VaultResult<VaultEvent> {
-    let source_hash = legacy_vault_content_hash(stored);
+    let source_hash = Sha256Hex::from_trusted(legacy_vault_content_hash(stored));
     let secrets = legacy_encrypted_secrets(stored)?;
-    let epoch = KeyEpochId::from_source_hash(&source_hash);
+    let epoch = KeyEpochId::from_source_hash(source_hash.as_str());
     build_genesis_import_event(
-        store_id,
-        actor_id,
+        &StoreId::parse(store_id)?,
+        &AuthKeyId::parse(actor_id)?,
         epoch.as_event_id(),
         &source_hash,
         secrets,
-        created_at,
+        &IsoTimestamp::parse(created_at)?,
         signing_key,
     )
 }
@@ -53,7 +55,7 @@ pub struct KeyEpochId(EventId);
 impl KeyEpochId {
     #[must_use]
     pub fn from_source_hash(source_hash: &str) -> Self {
-        Self(EventId(format!("sha256:{source_hash}")))
+        Self(EventId::from_trusted(format!("sha256:{source_hash}")))
     }
 
     #[must_use]
@@ -123,7 +125,7 @@ mod tests {
             assert_eq!(secrets.len(), 1);
             assert_eq!(secrets[0].secret_type, SecretType::ApiKey);
             assert_eq!(
-                source_content_hash,
+                source_content_hash.as_str(),
                 &legacy_vault_content_hash(yaml.as_str())
             );
         } else {

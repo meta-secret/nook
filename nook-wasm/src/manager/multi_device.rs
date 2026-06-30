@@ -79,10 +79,10 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let signing_pk = hex::encode(signing.verifying_key().as_bytes());
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
-            device_id: identity.device_id().to_string(),
-            encryption_public_key: identity.public_key().as_str().to_owned(),
-            signing_public_key: signing_pk,
-            label: String::new(),
+            device_id: identity.device_id().clone(),
+            encryption_public_key: identity.public_key().clone(),
+            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
+            label: nook_core::MemberLabel::from_trusted(String::new()),
         }])
         .await?;
         Ok(())
@@ -155,10 +155,10 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let signing_pk = hex::encode(signing.verifying_key().as_bytes());
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
-            device_id: identity.device_id().to_string(),
-            encryption_public_key: identity.public_key().as_str().to_owned(),
-            signing_public_key: signing_pk,
-            label: String::new(),
+            device_id: identity.device_id().clone(),
+            encryption_public_key: identity.public_key().clone(),
+            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
+            label: nook_core::MemberLabel::from_trusted(String::new()),
         }])
         .await?;
         Ok(())
@@ -195,12 +195,12 @@ impl NookVaultManager {
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
-            device_id: join.device_id.to_string(),
-            encryption_public_key: join.public_key.as_str().to_owned(),
-            signing_public_key: String::new(),
-            label: String::new(),
-            secrets_key_ciphertext: envelopes.secrets_key.as_str().to_owned(),
-            members_key_ciphertext: envelopes.members_key.as_str().to_owned(),
+            device_id: join.device_id.clone(),
+            encryption_public_key: join.public_key.clone(),
+            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(String::new()),
+            label: nook_core::MemberLabel::from_trusted(String::new()),
+            secrets_key_ciphertext: envelopes.secrets_key.clone(),
+            members_key_ciphertext: envelopes.members_key.clone(),
         }])
         .await?;
         Ok(self.get_records()?)
@@ -222,7 +222,7 @@ impl NookVaultManager {
         self.stored_armored = records_to_armored(&updated);
         self.secret_types = records_to_secret_types(&updated);
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinDenied {
-            device_id: join_device_id,
+            device_id: join_device,
         }])
         .await?;
         Ok(self.get_records()?)
@@ -246,8 +246,8 @@ impl NookVaultManager {
             .map(|member| member.device_id.to_string())
             .unwrap_or_default();
         self.persist_vault_change(vec![nook_core::VaultOperation::MemberRenamed {
-            device_id,
-            label,
+            device_id: nook_core::DeviceId::parse(&device_id)?,
+            label: nook_core::MemberLabel::from_trusted(label),
         }])
         .await?;
         Ok(())
@@ -285,8 +285,10 @@ impl NookVaultManager {
         }
 
         if self.event_log_mode || self.ensure_event_log_mode().await? {
-            self.rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked { device_id })
-                .await?;
+            self.rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked {
+                device_id: nook_core::DeviceId::parse(&device_id)?,
+            })
+            .await?;
         } else {
             self.save_current_db().await?;
         }

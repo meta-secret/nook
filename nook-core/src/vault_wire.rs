@@ -24,8 +24,7 @@ macro_rules! transparent_str_newtype {
                 self.0
             }
 
-            #[allow(dead_code)]
-            pub(crate) fn from_trusted(value: String) -> Self {
+            pub fn from_trusted(value: String) -> Self {
                 Self(value)
             }
         }
@@ -57,6 +56,9 @@ transparent_str_newtype!(DeviceIdentitySecret);
 transparent_str_newtype!(SessionJsonl);
 transparent_str_newtype!(StoredVaultJsonl);
 transparent_str_newtype!(StoredVaultYaml);
+transparent_str_newtype!(MemberLabel);
+transparent_str_newtype!(PasswordEntryId);
+transparent_str_newtype!(OpaqueCiphertext);
 
 /// On-disk vault blob — JSONL or YAML wire, selected explicitly or via auto-detect.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,6 +217,211 @@ impl SecretPayloadYaml {
     ) -> crate::errors::SecretPayloadResult<Self> {
         crate::SecretValue::from_yaml_str(secret_type, raw)?;
         Ok(Self::from_trusted(raw.to_owned()))
+    }
+}
+
+/// Bare SHA-256 hex digest (64 chars) — content hashes, checkpoints, legacy import source hash.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Sha256Hex(String);
+
+impl Sha256Hex {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let hex = raw.trim();
+        if hex.len() != SYMMETRIC_KEY_HEX_LEN || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ValidationError::Sha256HexInvalid);
+        }
+        Ok(Self(hex.to_owned()))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl fmt::Display for Sha256Hex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for Sha256Hex {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for Sha256Hex {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Sha256Hex {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Ed25519 verifying key as 64-hex raw bytes (event join operations).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DeviceSigningPublicKey(String);
+
+impl DeviceSigningPublicKey {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let hex = raw.trim();
+        if hex.is_empty() {
+            return Ok(Self(String::new()));
+        }
+        if hex.len() != SYMMETRIC_KEY_HEX_LEN || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ValidationError::DeviceSigningPublicKeyInvalid);
+        }
+        Ok(Self(hex.to_owned()))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl fmt::Display for DeviceSigningPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for DeviceSigningPublicKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for DeviceSigningPublicKey {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for DeviceSigningPublicKey {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+/// RFC 3339 timestamp string (`created_at`, `enrolled_at`, `requested_at`, …).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct IsoTimestamp(String);
+
+impl IsoTimestamp {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let ts = raw.trim();
+        if ts.is_empty() {
+            return Err(ValidationError::IsoTimestampInvalid);
+        }
+        if !ts.contains('T') && !ts.chars().any(|ch| ch.is_ascii_digit()) {
+            return Err(ValidationError::IsoTimestampInvalid);
+        }
+        Ok(Self(ts.to_owned()))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl fmt::Display for IsoTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for IsoTimestamp {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for IsoTimestamp {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for IsoTimestamp {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl PasswordEntryId {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let id = raw.trim();
+        if id.is_empty() {
+            return Err(ValidationError::PasswordEntryIdInvalid);
+        }
+        crate::CompactToken::parse(id)?;
+        Ok(Self(id.to_owned()))
+    }
+}
+
+impl<'de> Deserialize<'de> for PasswordEntryId {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Self::parse(&raw).map_err(serde::de::Error::custom)
+    }
+}
+
+impl<'de> Deserialize<'de> for MemberLabel {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Ok(Self(raw))
+    }
+}
+
+impl<'de> Deserialize<'de> for OpaqueCiphertext {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(deserializer)?;
+        Ok(Self(raw))
     }
 }
 

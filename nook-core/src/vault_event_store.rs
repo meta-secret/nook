@@ -76,7 +76,7 @@ impl LocalEventStore {
         event: &VaultEvent,
         store_id: &str,
     ) -> VaultResult<(EventId, EventInsertStatus)> {
-        let event_id = event.validate_envelope(store_id)?;
+        let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
         let bytes = serde_json::to_vec(event).map_err(EventError::EventSerialize)?;
         if self.events.contains_key(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
@@ -141,31 +141,38 @@ mod tests {
     use crate::VaultResult;
     use crate::vault_event::build_genesis_import_event;
     use crate::vault_event_graph::EventInsertStatus;
+    use crate::vault_ids::{AuthKeyId, StoreId};
+    use crate::vault_wire::{IsoTimestamp, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
+
+    fn genesis(signing_key: &SigningKey) -> VaultResult<crate::vault_event::VaultEvent> {
+        build_genesis_import_event(
+            &StoreId::parse("store_testtoken11")?,
+            &AuthKeyId::parse(
+                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            )?,
+            &EventId::parse(
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )?,
+            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
+            vec![],
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            signing_key,
+        )
+    }
+
+    const STORE: &str = "store_testtoken11";
 
     #[test]
     fn union_imports_missing_events() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let genesis = build_genesis_import_event(
-            store,
-            actor,
-            &epoch,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
         let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
 
         let mut local = LocalEventStore::new();
-        union_remote_events(&mut local, &[(id.clone(), bytes)], store)?;
+        union_remote_events(&mut local, &[(id.clone(), bytes)], STORE)?;
         assert!(local.get_bytes(&id).is_some());
         Ok(())
     }
@@ -173,23 +180,10 @@ mod tests {
     #[test]
     fn append_event_reports_applied_for_genesis() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let genesis = build_genesis_import_event(
-            store,
-            actor,
-            &epoch,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
 
         let mut local = LocalEventStore::new();
-        let (id, status) = local.append_event(&genesis, store)?;
+        let (id, status) = local.append_event(&genesis, STORE)?;
         assert!(local.get_bytes(&id).is_some());
         assert_eq!(status, EventInsertStatus::Applied);
         Ok(())
@@ -215,21 +209,10 @@ mod tests {
     #[test]
     fn append_event_duplicate_is_idempotent() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let genesis = build_genesis_import_event(
-            store,
-            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            &EventId::parse(
-                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            )?,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
         let mut local = LocalEventStore::new();
-        let (_, first) = local.append_event(&genesis, store)?;
-        let (_, second) = local.append_event(&genesis, store)?;
+        let (_, first) = local.append_event(&genesis, STORE)?;
+        let (_, second) = local.append_event(&genesis, STORE)?;
         assert_eq!(first, EventInsertStatus::Applied);
         assert_eq!(second, EventInsertStatus::Duplicate);
         Ok(())
@@ -238,25 +221,12 @@ mod tests {
     #[test]
     fn union_remote_events_and_heads_returns_causal_heads() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let genesis = build_genesis_import_event(
-            store,
-            actor,
-            &epoch,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
         let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
 
         let mut local = LocalEventStore::new();
-        let heads = union_remote_events_and_heads(&mut local, &[(id.clone(), bytes)], store)?;
+        let heads = union_remote_events_and_heads(&mut local, &[(id.clone(), bytes)], STORE)?;
         assert_eq!(heads.len(), 1);
         assert_eq!(heads[0], id.as_str());
         Ok(())
@@ -265,20 +235,7 @@ mod tests {
     #[test]
     fn union_commutative_on_event_sets() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let genesis = build_genesis_import_event(
-            store,
-            actor,
-            &epoch,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
 
@@ -286,13 +243,13 @@ mod tests {
         local_a.put_event(genesis_id.clone(), genesis_bytes.clone());
         let mut local_b = LocalEventStore::new();
 
-        union_remote_events(&mut local_a, &[], store)?;
+        union_remote_events(&mut local_a, &[], STORE)?;
         union_remote_events(
             &mut local_b,
             &[(genesis_id.clone(), genesis_bytes.clone())],
-            store,
+            STORE,
         )?;
-        union_remote_events(&mut local_a, &[(genesis_id, genesis_bytes)], store)?;
+        union_remote_events(&mut local_a, &[(genesis_id, genesis_bytes)], STORE)?;
 
         assert_eq!(local_a.event_ids().len(), local_b.event_ids().len());
         Ok(())
@@ -301,18 +258,7 @@ mod tests {
     #[test]
     fn union_rejects_event_id_mismatch() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let genesis = build_genesis_import_event(
-            store,
-            "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            &EventId::parse(
-                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            )?,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
         let real_id = genesis.id()?;
         let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
         let wrong_id = EventId::parse(
@@ -320,7 +266,7 @@ mod tests {
         )?;
 
         let mut local = LocalEventStore::new();
-        let err = union_remote_events(&mut local, &[(wrong_id, bytes)], store).unwrap_err();
+        let err = union_remote_events(&mut local, &[(wrong_id, bytes)], STORE).unwrap_err();
         assert!(matches!(
             err,
             crate::VaultError::Event(crate::EventError::RemoteEventIdMismatch { .. })
@@ -332,20 +278,7 @@ mod tests {
     #[test]
     fn bidirectional_union_converges() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
-        let store = "store_testtoken1";
-        let actor = "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let genesis = build_genesis_import_event(
-            store,
-            actor,
-            &epoch,
-            "hash",
-            vec![],
-            "2026-06-28T00:00:00Z",
-            &signing_key,
-        )?;
+        let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
         let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
 
@@ -362,7 +295,7 @@ mod tests {
                 .iter()
                 .filter_map(|id| device_b.get_bytes(id).map(|b| (id.clone(), b.to_vec())))
                 .collect::<Vec<_>>(),
-            store,
+            STORE,
         )?;
         union_remote_events(
             &mut device_b,
@@ -371,7 +304,7 @@ mod tests {
                 .iter()
                 .filter_map(|id| device_a.get_bytes(id).map(|b| (id.clone(), b.to_vec())))
                 .collect::<Vec<_>>(),
-            store,
+            STORE,
         )?;
 
         assert_eq!(device_a.event_ids(), device_b.event_ids());
