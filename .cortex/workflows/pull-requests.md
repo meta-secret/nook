@@ -25,11 +25,10 @@ Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for auto
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + implement]
   A --> B[2 Local basic checks]
-  B --> C{Big / complex web change?}
-  C -->|yes| D[Local e2e optional]
-  C -->|no| E[Push + open PR]
-  D --> E
-  E --> F[Monitor PR CI]
+  B --> E[3 Push + open PR]
+  E --> F[4 Monitor PR CI]
+  E -.->|parallel| D[Local e2e / ci:pr optional]
+  D -.-> F
   F --> G{All checks green?}
   G -->|no| H[Read logs, fix, push]
   H --> F
@@ -80,9 +79,9 @@ This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and C
 
 | When | Command | Why |
 |------|---------|-----|
-| Every push | `task check` (or scoped subset) | Catches fmt, lint, unit tests, build cheaply |
-| Before opening PR | `task ci:pr` | Same gates as PR CI including e2e |
-| After **any** CI failure | `task ci:pr` | Avoid repeated 5+ min remote failures for the same trivial issue |
+| Every push | `task check` (or scoped subset) | Catches fmt, lint, unit tests, build cheaply — **must finish before push** |
+| Same turn as push | `task web:test:e2e:pr` / `task ci:pr` | Optional; run **in parallel** with push/PR — do not block push |
+| After **any** CI failure | `task ci:pr` | Reproduce locally; **must finish before the fix push** |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
@@ -104,7 +103,7 @@ Skip e2e-pr for small, isolated Rust-only or docs-only changes.
 
 ### 4. Push and open a PR
 
-Push the branch and create a PR with summary and test plan:
+Push as soon as minimum local checks pass. Open the PR in the same turn — do not wait for local e2e or full `task ci:pr` unless you are fixing a prior CI failure.
 
 ```bash
 git push -u origin HEAD

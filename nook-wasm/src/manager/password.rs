@@ -72,6 +72,7 @@ impl NookVaultManager {
         label: String,
         password: String,
     ) -> Result<(), JsError> {
+        self.ensure_vault_crypto_from_cache().await?;
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             return Err(NookError::Database(
                 "Vault must be unlocked before adding a password.".to_owned(),
@@ -124,6 +125,7 @@ impl NookVaultManager {
         entry_id: String,
         password: String,
     ) -> Result<(), JsError> {
+        self.ensure_vault_crypto_from_cache().await?;
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             return Err(NookError::Database(
                 "Vault must be unlocked before updating a password.".to_owned(),
