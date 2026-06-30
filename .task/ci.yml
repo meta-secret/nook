@@ -11,11 +11,9 @@ tasks:
       - task: ci:pr:e2e
 
   ci:pr:e2e:
-    desc: Fast Playwright e2e-pr for PR CI (IndexedDB specs; restores dist for Cloudflare preview).
+    desc: Fast Playwright e2e-pr for PR CI (dist already built with e2e env in ci:pr:parallel).
     cmds:
-      - cp -a nook-web/dist nook-web/dist-prod
       - task: web:test:e2e:pr:parallel
-      - task: web:e2e:restore-prod-dist
 
   ci:pr:e2e:local:
     desc: Alias for ci:pr:e2e.
@@ -109,10 +107,10 @@ tasks:
         vars: { TASK: _ci:pr:prepare }
 
   ci:pr:parallel:
-    desc: Lint, test, and production web build in parallel after ci:pr:prepare.
+    desc: Lint, test, and e2e-optimized web build in parallel after ci:pr:prepare.
     deps:
       - ci:verify:parallel
-      - web:build:parallel
+      - web:build:parallel:e2e
 
   ci:verify:parallel:
     desc: Lint and test in Docker without rebuilding wasm.

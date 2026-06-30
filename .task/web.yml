@@ -23,6 +23,12 @@ tasks:
       - task: docker:task
         vars: { TASK: _web:build:parallel }
 
+  web:build:parallel:e2e:
+    desc: E2e-optimized web build in Docker (PR CI — one vite build for test + preview).
+    cmds:
+      - task: docker:task
+        vars: { TASK: _web:build:parallel:e2e }
+
   web:check:
     desc: Run Svelte and TypeScript checks in Docker.
     deps:
@@ -49,8 +55,6 @@ tasks:
 
   web:test:e2e:parallel:
     desc: Full stub Playwright e2e in Docker when wasm/dist already built (ci:main).
-    deps:
-      - web:e2e:build-dist
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:parallel }
@@ -64,9 +68,7 @@ tasks:
         vars: { TASK: _web:test:e2e:pr }
 
   web:test:e2e:pr:parallel:
-    desc: Fast Playwright e2e-pr when wasm/dist already built (ci:pr).
-    deps:
-      - web:e2e:build-dist
+    desc: Fast Playwright e2e-pr when wasm and e2e dist already built (ci:pr).
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:pr:parallel }
@@ -177,6 +179,17 @@ tasks:
     cmds:
       - cd nook-web && bun run build
 
+  _web:build:parallel:e2e:
+    desc: Build dist with fast vault sync for PR CI (test + Cloudflare preview share one build).
+    env:
+      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
+    cmds:
+      - cd nook-web && bun run build
+
   _web:check:parallel:
     desc: Run Svelte and TypeScript checks when wasm is already built.
     cmds:
@@ -218,9 +231,20 @@ tasks:
     desc: Full stub Playwright e2e when wasm/dist already built (ci:main).
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
       - echo "==> Playwright e2e project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
-      - cd nook-web && bun run test:e2e
+      - cd nook-web && bun run build
+      - >-
+        sh -c 'cd nook-web;
+        if [ -n "${CI:-}" ]; then
+          bun run test:e2e -- --workers=4;
+        else
+          bun run test:e2e;
+        fi'
 
   _web:test:e2e:pr:parallel:
     desc: Fast Playwright e2e-pr when wasm/dist already built (ci:pr).
