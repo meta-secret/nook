@@ -41,7 +41,9 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
 
 ## 6. Workflows (`workflows/`)
-* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, **agent pipeline** (local checks → `task ci:pr` → PR → monitor → fix loop → squash merge → **duration report**), and PR checklist.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local checks → PR → monitor → merge). Follow for every implementation task.
+* [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
+* [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates, **testing pyramid** (Rust ~99% domain coverage), and release.
@@ -49,9 +51,9 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ## 7. Agent duties beyond code
 
 ### Testing pyramid
-* **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §8](design-docs/core-beliefs.md#8-unit-tests-own-domain-correctness-e2e-is-smoke-only).
+* **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-unit-tests-own-domain-correctness-e2e-is-smoke-only).
 * **Line coverage threshold (90%):** `task rust:coverage:check` fails below `nook-core/coverage-floor.json` (90% lines). When coverage is under 90%, add Rust tests in the same task. Above 90%, do not chase marginal coverage.
 
 ### Grow `.cortex` dynamically
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
-* Follow [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
+* Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
