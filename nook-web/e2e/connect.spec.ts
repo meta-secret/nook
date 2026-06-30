@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   createLocalVaultOnLogin,
+  dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   openLoginProviderSetup,
   reloadUnlockWithGithubSync,
@@ -171,6 +172,7 @@ test.describe('vault connect flow', () => {
       ],
     })
 
+    await dismissSyncConflictIfVisible(page)
     await page.getByTestId('vault-settings-tab').click()
     const githubProvider = page.getByTestId('settings-provider-github')
     await expect(githubProvider).toBeVisible()

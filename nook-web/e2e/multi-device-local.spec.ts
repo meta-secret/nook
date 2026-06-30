@@ -11,6 +11,7 @@ import {
   readLocalVaultYamlFromIdb,
   reloadUnlockLocalVaultWithGithubSync,
   sendJoinRequestLocalE2e,
+  triggerVaultSyncRefresh,
 } from './helpers'
 import { joinCountFromYaml, parseVaultYamlSnapshot } from './vault-yaml'
 
@@ -40,7 +41,7 @@ test.describe('multi-device local vault with sync provider', () => {
     await stub.install(deviceB, { repoName, vaultYaml: genesisYaml })
 
     await reloadUnlockLocalVaultWithGithubSync(deviceA)
-    await deviceA.getByTestId('vault-sync-refresh-btn').click()
+    await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
       /just now|s ago/,
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
@@ -67,7 +68,7 @@ test.describe('multi-device local vault with sync provider', () => {
   test('genesis device sees pending join after sync refresh', async () => {
     const join = parseJoinFromStub(stub)
 
-    await deviceA.getByTestId('vault-sync-refresh-btn').click()
+    await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

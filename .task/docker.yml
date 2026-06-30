@@ -57,6 +57,7 @@ tasks:
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      E2E_SPEC: '{{.E2E_SPEC}}'
     cmds:
       - >-
         sh -c 'IMG="${DOCKER_IMAGE:-}";
@@ -76,6 +77,7 @@ tasks:
         -e NOOK_E2E_SKIP_GITHUB_CLEANUP
         -e NOOK_E2E_SYNC_PROVIDER
         -e NOOK_GOOGLE_E2E_ACCESS_TOKEN
+        -e E2E_SPEC
         -v "{{.ROOT_DIR}}:/workspace"
         -v /workspace/nook-web/node_modules
         -w /workspace

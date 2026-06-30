@@ -61,6 +61,18 @@ tasks:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:parallel }
 
+  web:test:e2e:file:
+    desc: Run specific Playwright e2e spec file(s) in Docker (E2E_SPEC env var).
+    deps:
+      - setup
+    env:
+      E2E_SPEC: '{{.E2E_SPEC}}'
+    cmds:
+      - task: docker:e2e:run
+        vars:
+          TASK: _web:test:e2e:file
+          E2E_SPEC: '{{.E2E_SPEC}}'
+
   web:test:e2e:pr:
     desc: Fast Playwright e2e-pr in Docker (IndexedDB specs only).
     deps:
@@ -249,6 +261,29 @@ tasks:
         else
           bun run test:e2e;
         fi'
+
+  _web:test:e2e:file:
+    desc: Run one or more Playwright e2e spec files (E2E_SPEC space-separated paths under nook-web/).
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
+    cmds:
+      - test -n "${E2E_SPEC:-}" || (echo "E2E_SPEC is required (e.g. e2e/connect.spec.ts)" >&2; exit 1)
+      - echo "==> Playwright e2e scoped run (${E2E_SPEC})"
+      - cd nook-web && bun run build
+      - >-
+        sh -c 'cd nook-web;
+        workers=1;
+        if [ -n "${CI:-}" ] && [ "$(echo "${E2E_SPEC}" | wc -w | tr -d " ")" -eq 1 ]; then
+          workers=1;
+        elif [ -n "${CI:-}" ]; then
+          workers=2;
+        fi;
+        bun run test:e2e -- --project=e2e --workers="$workers" ${E2E_SPEC}'
+      - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:pr:parallel:
     desc: Fast Playwright e2e-pr when wasm/dist already built (ci:pr).
