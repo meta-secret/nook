@@ -284,14 +284,11 @@ impl NookVaultManager {
             return Ok(Vec::new());
         }
 
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            self.rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked {
-                device_id: nook_core::DeviceId::parse(&device_id)?,
-            })
-            .await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        self.ensure_event_log_ready().await?;
+        self.rotate_security_epoch(nook_core::VaultOperation::DeviceRevoked {
+            device_id: nook_core::DeviceId::parse(&device_id)?,
+        })
+        .await?;
 
         Ok(self.get_records()?)
     }
