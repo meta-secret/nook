@@ -1,7 +1,8 @@
 # Vault Event Log
 
 **Status:** Implemented (see [#112](https://github.com/meta-secret/nook/issues/112), PR #118+)  
-**Supersedes (eventually):** scalar `vault_version` whole-blob sync in [unified-vault.md](unified-vault.md)
+**Supersedes:** scalar `vault_version` whole-blob sync in [unified-vault.md](unified-vault.md)  
+**Migration coordination:** [#52](https://github.com/meta-secret/nook/issues/52) — safe legacy import via `vault-imported` genesis event (not YAML schema v2 cutover)
 
 ## Decision
 
@@ -118,7 +119,7 @@ See [#52](https://github.com/meta-secret/nook/issues/52) for schema migration co
 | 4 | GitHub / Drive event adapters |
 | 5 | WASM manager + UI |
 | 6 | User migration |
-| 7 | Feature flag rollout, legacy write removal |
+| 7 | Legacy write removal — **done** (event log is the only write path; YAML is projection cache only) |
 
 ## Testing requirements
 

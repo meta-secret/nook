@@ -2,8 +2,8 @@
 //!
 //! Returns a JS object shape (`{changed, access_status?, secrets?,
 //! pending_joins?, vault_members?}`) consumed by the web layer's sync timer.
-//! Mode-aware: in password mode it bypasses the per-device decryption path
-//! and just reuses the session keys to refresh the armored cache.
+//! Event-log vaults union remote events; legacy YAML polling is no longer used
+//! for persistence after cutover.
 
 use super::NookVaultManager;
 use crate::NookVaultSyncResult;
@@ -25,17 +25,30 @@ impl NookVaultManager {
     ) -> Result<NookVaultSyncResult, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
+
+        if self.event_log_mode || is_event_log_mode().await? {
+            self.event_log_mode = true;
+            if self.members_key.is_empty() {
+                let mut vault_file_missing = false;
+                let content = self.fetch_vault_content(&mut vault_file_missing).await?;
+                if content.trim().is_empty() {
+                    return sync_result_access_status("new_vault");
+                }
+                self.capture_vault_unlock(&content);
+                self.last_synced_content = content.clone();
+                let identity = self.ensure_device_identity().await?;
+                let status = access_status_for_vault_content(&content, &identity)?;
+                return sync_result_access_status(&status);
+            }
+            let changed = self.sync_event_log_from_storage().await?;
+            return sync_result_session(self, changed);
+        }
+
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
         if content.trim() == self.last_synced_content.trim() {
             if self.members_key.is_empty() {
-                if self.event_log_mode || is_event_log_mode().await? {
-                    self.ensure_vault_crypto_from_cache().await?;
-                    if self.crypto.is_some() {
-                        return sync_result_session(self, false);
-                    }
-                }
                 return sync_result_unchanged();
             }
             return sync_result_session(self, false);
@@ -47,9 +60,6 @@ impl NookVaultManager {
         }
 
         if self.members_key.is_empty() {
-            // No active session yet — this is the first remote read we're
-            // accepting, so adopt its unlock mode before deciding which
-            // pre-flight status to report.
             self.capture_vault_unlock(&content);
             self.last_synced_content = content.clone();
             let identity = self.ensure_device_identity().await?;
@@ -75,6 +85,9 @@ impl NookVaultManager {
         self.secret_types = secret_types;
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
+        let import_yaml = self.serialize_current_projection_yaml()?;
+        self.import_stored_vault_to_event_log(&import_yaml).await?;
+        self.flush_event_outbox().await?;
         sync_result_session(self, true)
     }
 }

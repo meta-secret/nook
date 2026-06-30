@@ -87,20 +87,16 @@ impl NookVaultManager {
             .insert(id.to_string(), armored.as_str().to_owned());
         self.secret_types.insert(id.to_string(), secret_type);
 
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            let id_str = id.to_string();
-            let ciphertext = self
-                .stored_armored
-                .get(&id_str)
-                .cloned()
-                .unwrap_or_default();
-            self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
-                secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
-            }])
-            .await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        let id_str = id.to_string();
+        let ciphertext = self
+            .stored_armored
+            .get(&id_str)
+            .cloned()
+            .unwrap_or_default();
+        self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
+            secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
+        }])
+        .await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }
@@ -140,27 +136,23 @@ impl NookVaultManager {
         self.secret_types = secret_id_types_to_string(&secret_types_sid);
         self.decrypted_jsonl = db.to_jsonl()?.into_inner();
 
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            let validated_new = nook_core::validate_secret_id(&new_id)?;
-            let validated_old = nook_core::validate_secret_id(&old_id)?;
-            let validated_new_str = validated_new.to_string();
-            let ciphertext = self
-                .stored_armored
-                .get(&validated_new_str)
-                .cloned()
-                .unwrap_or_default();
-            self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
-                old_id: validated_old,
-                new_secret: nook_core::encrypted_secret_from_armored(
-                    &validated_new,
-                    secret_type,
-                    &ciphertext,
-                ),
-            }])
-            .await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        let validated_new = nook_core::validate_secret_id(&new_id)?;
+        let validated_old = nook_core::validate_secret_id(&old_id)?;
+        let validated_new_str = validated_new.to_string();
+        let ciphertext = self
+            .stored_armored
+            .get(&validated_new_str)
+            .cloned()
+            .unwrap_or_default();
+        self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
+            old_id: validated_old,
+            new_secret: nook_core::encrypted_secret_from_armored(
+                &validated_new,
+                secret_type,
+                &ciphertext,
+            ),
+        }])
+        .await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }
@@ -206,14 +198,10 @@ impl NookVaultManager {
         let id_str = id.to_string();
         self.stored_armored.remove(&id_str);
         self.secret_types.remove(&id_str);
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
-                secret_id: id,
-            }])
-            .await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
+            secret_id: id,
+        }])
+        .await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

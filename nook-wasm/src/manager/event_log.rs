@@ -28,11 +28,40 @@ fn iso_timestamp() -> String {
 
 impl NookVaultManager {
     pub(in crate::manager) async fn ensure_event_log_mode(&mut self) -> Result<bool, NookError> {
-        if is_event_log_mode().await? {
+        if self.event_log_mode || is_event_log_mode().await? {
             self.event_log_mode = true;
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// Activate event-log persistence for this vault session.
+    ///
+    /// Idempotent when the log already exists. Otherwise imports the current
+    /// session projection or bootstraps a genesis event before any write.
+    pub(in crate::manager) async fn ensure_event_log_ready(&mut self) -> Result<(), NookError> {
+        if self.ensure_event_log_mode().await? {
+            return Ok(());
+        }
+        if self.event_log_has_events().await? {
+            self.activate_event_log_mode().await?;
+            return Ok(());
+        }
+        if !self.stored_armored.is_empty() {
+            let yaml = self.serialize_current_projection_yaml()?;
+            self.import_stored_vault_to_event_log(&yaml).await?;
+            return Ok(());
+        }
+        if !self.last_synced_content.trim().is_empty() {
+            let yaml = self.last_synced_content.clone();
+            self.import_stored_vault_to_event_log(&yaml).await?;
+            return Ok(());
+        }
+        if self.store_id.is_empty() {
+            self.store_id = nook_core::generate_store_id()?.to_string();
+        }
+        self.bootstrap_event_log_genesis().await?;
+        Ok(())
     }
 
     pub(in crate::manager) async fn activate_event_log_mode(&mut self) -> Result<(), NookError> {
@@ -313,17 +342,29 @@ impl NookVaultManager {
         &mut self,
         operations: Vec<VaultOperation>,
     ) -> Result<(), NookError> {
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            if operations.is_empty() {
-                self.persist_projection_cache().await?;
-                self.flush_event_outbox().await?;
-            } else {
-                self.append_vault_operations(operations).await?;
-            }
+        self.ensure_event_log_ready().await?;
+        if operations.is_empty() {
+            self.persist_projection_cache().await?;
+            self.flush_event_outbox().await?;
         } else {
-            self.save_current_db().await?;
+            self.append_vault_operations(operations).await?;
         }
         Ok(())
+    }
+
+    pub(in crate::manager) async fn sync_event_log_from_storage(
+        &mut self,
+    ) -> Result<bool, NookError> {
+        if !self.ensure_event_log_mode().await? {
+            return Ok(false);
+        }
+        let before = self.event_heads.clone();
+        self.sync_events_from_current_provider().await?;
+        let changed = self.event_heads != before;
+        if changed {
+            self.apply_event_projection_to_session().await?;
+        }
+        Ok(changed)
     }
 
     fn rewrap_device_meta_for_epoch(

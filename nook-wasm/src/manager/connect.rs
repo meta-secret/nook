@@ -130,6 +130,7 @@ impl NookVaultManager {
                 self.store_id = nook_core::generate_store_id()?.to_string();
             }
             self.bootstrap_event_log_genesis().await?;
+            self.event_log_mode = true;
             self.persist_projection_cache().await?;
         } else if !content.trim().is_empty() {
             if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
@@ -169,21 +170,19 @@ impl NookVaultManager {
                 self.decrypted_jsonl = jsonl;
                 self.stored_armored = armored;
                 self.secret_types = secret_types;
-                self.maybe_sync_self_into_roster(&identity).await?;
+                self.maybe_sync_self_into_roster(&identity)?;
                 let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
                 self.last_synced_content = content.clone();
-                self.import_stored_vault_to_event_log(&content).await?;
+                let import_yaml = self.serialize_current_projection_yaml()?;
+                self.import_stored_vault_to_event_log(&import_yaml).await?;
+                self.event_log_mode = true;
                 self.flush_event_outbox().await?;
             }
         }
 
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
-        if (use_genesis || vault_file_missing) && !self.event_log_mode {
-            let _ = self.status_tx.send("GITHUB_INIT_START".to_owned());
-            self.save_current_db().await?;
-            let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
-        } else if use_genesis || vault_file_missing {
+        if use_genesis || vault_file_missing {
             self.flush_event_outbox().await?;
         }
 
@@ -238,7 +237,11 @@ impl NookVaultManager {
                     .insert(member.key.to_string(), member.value.as_str().to_owned());
             }
         }
-        self.save_current_db().await?;
+        if self.store_id.is_empty() {
+            self.store_id = nook_core::generate_store_id()?.to_string();
+        }
+        self.ensure_event_log_ready().await?;
+        self.persist_projection_cache().await?;
         let _ = self.status_tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }

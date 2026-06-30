@@ -154,54 +154,45 @@ impl NookVaultManager {
             })
             .transpose()?
             .unwrap_or_default();
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
-                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
-                envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
-            })
-            .await?;
-            let rotated_keys = nook_core::VaultKeys {
-                secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
-                members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
-            };
-            let target = self
-                .password_entries
-                .iter_mut()
-                .find(|entry| entry.id == entry_id)
-                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-            target.envelope = nook_core::attach_password_envelope(&rotated_keys, &password)?;
-            self.persist_vault_change(vec![]).await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        self.ensure_event_log_ready().await?;
+        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
+            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
+        })
+        .await?;
+        let rotated_keys = nook_core::VaultKeys {
+            secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
+            members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
+        };
+        let target = self
+            .password_entries
+            .iter_mut()
+            .find(|entry| entry.id == entry_id)
+            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+        target.envelope = nook_core::attach_password_envelope(&rotated_keys, &password)?;
+        self.persist_vault_change(vec![]).await?;
         Ok(())
     }
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
         self.password_entries.retain(|entry| entry.id != entry_id);
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
-            })
-            .await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        self.ensure_event_log_ready().await?;
+        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+        })
+        .await?;
         Ok(())
     }
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
         self.password_entries.clear();
-        if self.event_log_mode || self.ensure_event_log_mode().await? {
-            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-                entry_id: nook_core::PasswordEntryId::from_trusted(String::new()),
-            })
-            .await?;
-        } else {
-            self.save_current_db().await?;
-        }
+        self.ensure_event_log_ready().await?;
+        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+            entry_id: nook_core::PasswordEntryId::from_trusted(String::new()),
+        })
+        .await?;
         Ok(())
     }
 
@@ -281,7 +272,19 @@ impl NookVaultManager {
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.unlock = nook_core::VaultUnlock::Keys;
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
-        self.save_current_db().await?;
+        let import_yaml = nook_core::serialize_stored_yaml_with_unlock(
+            &records,
+            &self.unlock,
+            &self.password_entries,
+            nook_core::read_vault_store_id(&content)
+                .ok()
+                .flatten()
+                .as_deref(),
+            None,
+        )?;
+        self.import_stored_vault_to_event_log(import_yaml.as_str())
+            .await?;
+        self.flush_event_outbox().await?;
 
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let stored_records = self.stored_records_snapshot();
