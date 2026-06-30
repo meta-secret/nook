@@ -252,6 +252,18 @@ pub type Url64EncodedString = crate::CompactToken;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SecretType;
+    use age::secrecy::ExposeSecret;
+    use age::x25519::Identity;
+
+    #[test]
+    fn symmetric_key_roundtrip_and_generate() {
+        let key = SymmetricKey::generate().unwrap();
+        assert_eq!(key.as_str().len(), 64);
+        assert_eq!(SymmetricKey::parse(key.as_str()).unwrap(), key);
+        assert_eq!(key.to_string(), key.as_str());
+        assert_eq!(key.into_inner().len(), 64);
+    }
 
     #[test]
     fn symmetric_key_rejects_invalid_hex() {
@@ -260,8 +272,28 @@ mod tests {
     }
 
     #[test]
+    fn age_armored_accepts_valid_armor() {
+        let armor = "-----BEGIN AGE ENCRYPTED FILE-----\nabc\n-----END AGE ENCRYPTED FILE-----";
+        let parsed = AgeArmoredCiphertext::parse(armor).unwrap();
+        assert_eq!(parsed.as_str(), armor);
+        let trusted = AgeArmoredCiphertext::from_trusted_armored(armor.to_owned());
+        assert_eq!(parsed, trusted);
+    }
+
+    #[test]
     fn age_armored_rejects_plaintext() {
         assert!(AgeArmoredCiphertext::parse("not-armored").is_err());
+    }
+
+    #[test]
+    fn device_keys_parse_from_generated_identity() {
+        let identity = Identity::generate();
+        let public = identity.to_public().to_string();
+        let secret = identity.to_string().expose_secret().to_owned();
+        let pk = DevicePublicKey::parse(&public).unwrap();
+        assert_eq!(pk.as_str(), public);
+        let sk = DeviceIdentitySecret::parse(&secret).unwrap();
+        assert_eq!(sk.as_str(), secret);
     }
 
     #[test]
@@ -270,8 +302,50 @@ mod tests {
     }
 
     #[test]
+    fn device_identity_secret_rejects_garbage() {
+        assert!(DeviceIdentitySecret::parse("not-a-secret").is_err());
+    }
+
+    #[test]
     fn session_jsonl_rejects_broken_lines() {
         assert!(SessionJsonl::parse("{}\n{broken").is_err());
         assert!(SessionJsonl::parse("{}\n{}").is_ok());
+        assert!(SessionJsonl::parse("").is_ok());
+    }
+
+    #[test]
+    fn stored_vault_jsonl_and_yaml_parse() {
+        assert!(StoredVaultJsonl::parse("").unwrap().as_str().is_empty());
+        assert!(StoredVaultJsonl::parse("{}\n").unwrap().as_str().contains('{'));
+        assert!(StoredVaultJsonl::parse("not-json").is_err());
+        let yaml = StoredVaultYaml::parse("secrets:\n").unwrap();
+        assert!(yaml.as_str().starts_with("secrets:"));
+    }
+
+    #[test]
+    fn stored_vault_blob_auto_detects_format() {
+        let jsonl = StoredVaultBlob::parse_auto("{}\n").unwrap();
+        assert!(matches!(jsonl, StoredVaultBlob::Jsonl(_)));
+        let yaml = StoredVaultBlob::parse_auto("secrets:\n").unwrap();
+        assert!(matches!(yaml, StoredVaultBlob::Yaml(_)));
+        assert_eq!(yaml.format(), crate::VaultFormat::Yaml);
+    }
+
+    #[test]
+    fn secret_payload_yaml_validates_type() {
+        let yaml = "websiteUrl: https://example.com\nkey: tok\nexpiresAt: ''\n";
+        let parsed = SecretPayloadYaml::parse(SecretType::ApiKey, yaml).unwrap();
+        assert_eq!(parsed.as_str(), yaml);
+        assert!(SecretPayloadYaml::parse(SecretType::Login, yaml).is_err());
+    }
+
+    #[test]
+    fn serde_deserializes_typed_wire_strings() {
+        let key = SymmetricKey::generate().unwrap();
+        let roundtripped: SymmetricKey = serde_json::from_str(&serde_json::to_string(&key).unwrap()).unwrap();
+        assert_eq!(roundtripped, key);
+
+        let session: SessionJsonl = serde_json::from_str("\"{}\"").unwrap();
+        assert_eq!(session.as_str(), "{}");
     }
 }
