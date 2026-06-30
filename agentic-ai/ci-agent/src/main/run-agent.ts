@@ -27,6 +27,7 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
         logInteractionUpdate(update);
       },
     });
+    console.log(`==> Agent run started (id ${run.id})`);
   } catch (err) {
     if (err instanceof CursorAgentError) {
       throw new Error(`Cursor agent startup failed: ${err.message}`);
