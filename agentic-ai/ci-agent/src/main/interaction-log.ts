@@ -95,7 +95,7 @@ export class ShellStreamLog {
     }
 
     if (!this.streamed) {
-      this.writer.log(formatLogLine("DEBUG", "ci-agent/cursor/shell", "output"));
+      this.writer.log(formatLogLine("INFO", "ci-agent/cursor/shell", "output"));
       this.streamed = true;
     }
 

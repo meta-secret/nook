@@ -55,7 +55,7 @@ test("ShellStreamLog prefixes live shell output", () => {
   log.write("task: ci:verify\nerror: failed");
   log.closeBlock();
 
-  assert.deepEqual(lines, [formatLogLine("DEBUG", "ci-agent/cursor/shell", "output")]);
+  assert.deepEqual(lines, [formatLogLine("INFO", "ci-agent/cursor/shell", "output")]);
   assert.equal(streamed.text, "    | task: ci:verify\n    | error: failed\n");
   assert.equal(log.hasStreamed(), true);
 });
@@ -69,6 +69,6 @@ test("ShellStreamLog streams partial shell output before newline", () => {
   log.write(" tests");
   log.closeBlock();
 
-  assert.deepEqual(lines, [formatLogLine("DEBUG", "ci-agent/cursor/shell", "output")]);
+  assert.deepEqual(lines, [formatLogLine("INFO", "ci-agent/cursor/shell", "output")]);
   assert.equal(streamed.text, "    | running tests\n");
 });

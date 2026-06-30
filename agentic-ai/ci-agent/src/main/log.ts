@@ -36,7 +36,7 @@ export class CiInteractionLogger {
       case "tool-call-started":
         this.agentText.closeBlock();
         this.shellStream.closeBlock();
-        log.debug(formatToolStarted(update.toolCall));
+        log.info(formatToolStarted(update.toolCall));
         if (update.toolCall.type === "shell") {
           this.shellStream.openBlock();
         }
@@ -74,7 +74,7 @@ export class CiInteractionLogger {
     });
     if (lines) {
       for (const line of lines) {
-        log.debug(line);
+        log.info(line);
       }
     }
   }
