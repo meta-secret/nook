@@ -1,15 +1,18 @@
 ---
 name: coding-bro
 description: >-
-  End-to-end autonomous coding workflow: fetch repo, branch from origin/main,
-  implement a prompt, run local checks and tests, push, open PR, monitor CI,
-  fix until green, squash merge. Use when the user invokes "coding-bro", asks
-  bro to ship a change, or wants a full implement-to-merge pipeline.
+  Default agent workflow for every coding task in this repository: fetch repo,
+  branch from origin/main, implement the request, run local checks and tests,
+  push, open PR, monitor CI, fix until green, squash merge. Always follow this
+  pipeline for implementation work unless the user explicitly asks for a
+  read-only or question-only answer.
 ---
 
 # Coding Bro
 
-Autonomous implement → verify → PR → monitor → merge pipeline. Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) and [`.cortex/workflows/pull-requests.md`](../../.cortex/workflows/pull-requests.md) before starting.
+**Default workflow for all implementation tasks.** Every coding request follows this implement → verify → PR → monitor → merge pipeline unless the user only wants an answer or review with no code changes.
+
+Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) and [`.cortex/workflows/pull-requests.md`](../../.cortex/workflows/pull-requests.md) before starting.
 
 ## How it works
 
