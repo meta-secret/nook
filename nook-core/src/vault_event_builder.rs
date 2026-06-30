@@ -61,6 +61,40 @@ pub fn parents_from_heads(heads: &[EventId]) -> Vec<String> {
     parents
 }
 
+/// Validated causal head set observed locally before appending a new event.
+///
+/// Construct via [`ObservedHeads::parse`] so parent ids are well-formed before signing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObservedHeads(Vec<EventId>);
+
+impl ObservedHeads {
+    /// Parse and deduplicate raw head strings from session state.
+    pub fn parse(raw: &[String]) -> VaultResult<Self> {
+        let mut ids: Vec<EventId> = raw
+            .iter()
+            .map(|s| EventId::parse(s))
+            .collect::<Result<_, _>>()?;
+        ids.sort();
+        ids.dedup();
+        Ok(Self(ids))
+    }
+
+    #[must_use]
+    pub fn as_event_ids(&self) -> &[EventId] {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn as_parent_strings(&self) -> Vec<String> {
+        parents_from_heads(&self.0)
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,6 +133,36 @@ mod tests {
         assert!(!bytes.is_empty());
         assert_eq!(event.body.store_id, "store_testtoken1");
         assert_eq!(event.body.actor_id, actor);
+        Ok(())
+    }
+
+    #[test]
+    fn observed_heads_rejects_invalid_parent_id() {
+        let err = ObservedHeads::parse(&["not-an-event-id".to_owned()]).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::EventIdMissingPrefix { .. })
+        ));
+    }
+
+    #[test]
+    fn observed_heads_deduplicates_sorted() -> VaultResult<()> {
+        let a = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )?;
+        let b = EventId::parse(
+            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        )?;
+        let heads = ObservedHeads::parse(&[
+            b.as_str().to_owned(),
+            a.as_str().to_owned(),
+            a.as_str().to_owned(),
+        ])?;
+        assert_eq!(heads.as_event_ids().len(), 2);
+        assert_eq!(
+            heads.as_parent_strings(),
+            parents_from_heads(heads.as_event_ids())
+        );
         Ok(())
     }
 }

@@ -1,0 +1,7 @@
+{
+  "lines_percent": 90.0,
+  "package": "nook-core",
+  "tool": "cargo llvm-cov nextest --profile ci",
+  "updated": "2026-06-30",
+  "note": "Minimum line coverage for nook-core (90%). CI fails below this threshold. When measured coverage is under 90%, agents should add Rust tests in the same task."
+}

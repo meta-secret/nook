@@ -104,4 +104,41 @@ mod tests {
             EpochRotationReason::PasswordRotated
         ));
     }
+
+    #[test]
+    fn password_removed_and_rotated_conflict_when_concurrent() {
+        assert!(concurrent_epoch_rotations_conflict(
+            EpochRotationReason::PasswordRemoved,
+            EpochRotationReason::PasswordRotated
+        ));
+    }
+
+    #[test]
+    fn concurrent_revokes_conflict() {
+        assert!(concurrent_epoch_rotations_conflict(
+            EpochRotationReason::DeviceRevoked,
+            EpochRotationReason::DeviceRevoked
+        ));
+    }
+
+    #[test]
+    fn operation_starts_epoch_maps_security_ops() {
+        assert_eq!(
+            operation_starts_epoch(&VaultOperation::PasswordRotated {
+                entry_id: "e".to_owned(),
+                envelope_ciphertext: "c".to_owned(),
+            }),
+            Some(EpochRotationReason::PasswordRotated)
+        );
+        assert_eq!(
+            operation_starts_epoch(&VaultOperation::SecretCreated {
+                secret: crate::vault_event::EncryptedSecretPayload {
+                    id: "s".to_owned(),
+                    secret_type: crate::SecretType::ApiKey,
+                    ciphertext: "c".to_owned(),
+                },
+            }),
+            None
+        );
+    }
 }

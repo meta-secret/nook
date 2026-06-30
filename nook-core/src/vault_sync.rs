@@ -23,6 +23,19 @@ pub enum VaultSyncAction {
     Conflict,
 }
 
+impl VaultSyncAction {
+    /// Stable tag returned to the web layer after blob reconciliation.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Unchanged => "unchanged",
+            Self::AdoptRemote => "adopt_remote",
+            Self::PushLocal => "push_local",
+            Self::Conflict => "conflict",
+        }
+    }
+}
+
 /// Parsed revision metadata from an on-disk vault blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultRevision {
@@ -191,5 +204,13 @@ mod tests {
         let local = sample_yaml(1, "store_AAAAAAAAAAA", "");
         let remote = sample_yaml(1, "store_BBBBBBBBBBB", "");
         assert!(compare_vault_sync(&local, &remote).is_err());
+    }
+
+    #[test]
+    fn labels_are_stable_for_web_layer() {
+        assert_eq!(VaultSyncAction::Unchanged.label(), "unchanged");
+        assert_eq!(VaultSyncAction::AdoptRemote.label(), "adopt_remote");
+        assert_eq!(VaultSyncAction::PushLocal.label(), "push_local");
+        assert_eq!(VaultSyncAction::Conflict.label(), "conflict");
     }
 }

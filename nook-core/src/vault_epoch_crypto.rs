@@ -1,10 +1,16 @@
 //! Key-epoch rotation: fresh `secrets_key` / `members_key` for append-only security events.
 
-use crate::errors::{VaultEpochError, VaultEpochResult};
-use crate::multi_device::VaultKeys;
+use crate::errors::{EventError, VaultEpochError, VaultEpochResult, VaultResult};
+use crate::multi_device::{DeviceIdentity, VaultKeys};
 use crate::secret_types::StoredSecretRecord;
+use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
+use crate::{
+    SecretId, build_members_records, genesis_auth_record, is_auth_stored_record,
+    resolve_member_roster,
+};
+use std::collections::HashMap;
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub fn reencrypt_user_secrets_for_epoch(
@@ -43,10 +49,50 @@ pub fn rotate_vault_keys_with_secrets(
     Ok((new_keys, secrets))
 }
 
+/// Hash of member roster records after re-encrypting under a new `members_key`.
+pub fn members_checkpoint_hash_from_roster(
+    records: &[StoredSecretRecord],
+    old_members_key: &str,
+    new_members_key: &str,
+) -> VaultResult<String> {
+    let roster = resolve_member_roster(records, old_members_key)?;
+    let member_records = build_members_records(&roster, new_members_key)?;
+    let json =
+        serde_json::to_string(&member_records).map_err(EventError::MemberRecordsSerialize)?;
+    Ok(crate::sha256_hex(json.as_bytes()))
+}
+
+/// Replace auth + member meta rows in an armored cache after epoch rotation.
+#[allow(clippy::implicit_hasher)]
+pub fn rewrap_vault_meta_for_epoch(
+    armored: &mut HashMap<String, String>,
+    identity: &DeviceIdentity,
+    records_snapshot: &[StoredSecretRecord],
+    old_members_key: &str,
+    new_keys: &VaultKeys,
+) -> VaultResult<()> {
+    let auth = genesis_auth_record(identity, &new_keys.secrets_key, &new_keys.members_key)?;
+    armored.retain(|key, value| {
+        !is_auth_stored_record(&StoredSecretRecord {
+            key: SecretId::from_vault_record(key),
+            secret_type: None,
+            value: value.clone(),
+        })
+    });
+    armored.insert(auth.key.to_string(), auth.value);
+    let roster = resolve_member_roster(records_snapshot, old_members_key)?;
+    let member_records = build_members_records(&roster, &new_keys.members_key)?;
+    apply_member_records(armored, &member_records);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ApiKeySecret, SecretId, SecretValue};
+    use crate::{
+        ApiKeySecret, DeviceIdentity, SecretId, SecretValue, VaultResult, generate_vault_keys,
+        genesis_members_records,
+    };
 
     #[test]
     fn reencrypt_produces_decryptable_new_epoch_secrets() {
@@ -72,5 +118,65 @@ mod tests {
         let new_crypto = VaultCrypto::new(new_key).unwrap();
         let plaintext = new_crypto.decrypt_value(&payloads[0].ciphertext).unwrap();
         assert!(plaintext.contains("hunter2"));
+    }
+
+    #[test]
+    fn members_checkpoint_hash_produces_hex_digest() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let new_keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let mut records = vec![genesis_auth_record(
+            &identity,
+            &keys.secrets_key,
+            &keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &identity,
+            &keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
+        let hash = members_checkpoint_hash_from_roster(
+            &records,
+            &keys.members_key,
+            &new_keys.members_key,
+        )?;
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        Ok(())
+    }
+
+    #[test]
+    fn rewrap_vault_meta_updates_auth_and_member_rows() -> VaultResult<()> {
+        let old_keys = generate_vault_keys()?;
+        let new_keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let mut records = vec![genesis_auth_record(
+            &identity,
+            &old_keys.secrets_key,
+            &old_keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &identity,
+            &old_keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
+        let auth_key = records[0].key.clone();
+        let mut armored: HashMap<_, _> = records
+            .iter()
+            .map(|record| (record.key.clone(), record.value.clone()))
+            .collect();
+        let old_auth_value = armored[&auth_key].clone();
+
+        rewrap_vault_meta_for_epoch(
+            &mut armored,
+            &identity,
+            &records,
+            &old_keys.members_key,
+            &new_keys,
+        )?;
+
+        assert_ne!(armored[&auth_key], old_auth_value);
+        assert!(armored.keys().any(|key| key.starts_with("member:")));
+        Ok(())
     }
 }

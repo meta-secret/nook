@@ -178,15 +178,6 @@ pub async fn write_remote_vault_yaml(
         .map_err(Into::into)
 }
 
-fn vault_sync_action_label(action: nook_core::VaultSyncAction) -> &'static str {
-    match action {
-        nook_core::VaultSyncAction::Unchanged => "unchanged",
-        nook_core::VaultSyncAction::AdoptRemote => "adopt_remote",
-        nook_core::VaultSyncAction::PushLocal => "push_local",
-        nook_core::VaultSyncAction::Conflict => "conflict",
-    }
-}
-
 fn remote_memory_store(yaml: String, revision: Option<String>) -> MemoryVaultStore {
     let mut store = MemoryVaultStore::with_blob(yaml);
     store.set_revision(revision);
@@ -205,7 +196,7 @@ pub fn reconcile_vault_blobs(
     let action = reconcile_vault_stores(&mut local, &mut remote)
         .map_err(|e| JsError::new(&e.to_string()))?;
     Ok(NookReconcileVaultBlobsResult::new(
-        vault_sync_action_label(action).to_owned(),
+        action.label().to_owned(),
         local.blob().to_owned(),
         remote.blob().to_owned(),
         remote.revision().map(str::to_owned),

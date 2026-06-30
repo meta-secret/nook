@@ -59,14 +59,15 @@ Agents **must** run local checks and unit tests before pushing. Do not open a PR
 
 ```bash
 task format:check    # or task format after edits
-task check           # format check, lint, unit tests, web build (Docker)
+task check           # format check, lint, coverage-gated tests, web build (Docker)
 ```
 
 For scoped changes, faster subsets are acceptable when the touch surface is narrow:
 
 ```bash
-task web:check && task web:test    # web-only
-task rust:test                     # nook-core only (still run fmt check)
+task web:check && task web:test           # web-only
+task rust:test                            # nook-core nextest only (no coverage gate)
+task rust:coverage:check                  # nook-core tests + line coverage floor
 ```
 
 **Full PR CI mirror** — run before opening a PR, and **mandatory before the next push after any remote CI failure**:

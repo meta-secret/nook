@@ -7,6 +7,7 @@ ARG RUST_VERSION=1.96
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1
 ARG WASM_PACK_VERSION=0.15.0
+ARG LLVM_COV_VERSION=0.8.7
 ARG NODE_IMAGE=node:22-bookworm-slim
 
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-bookworm AS cargo-chef
@@ -20,6 +21,7 @@ FROM rust:${RUST_VERSION}-bookworm AS nook-base
 ARG BUN_VERSION
 ARG TASK_VERSION
 ARG WASM_PACK_VERSION
+ARG LLVM_COV_VERSION
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV BUN_INSTALL_CACHE_DIR=/opt/nook/bun-install-cache
@@ -41,8 +43,11 @@ RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 COPY --from=playwright-node /usr/local/bin/node /usr/local/bin/node
 RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/bin "v${TASK_VERSION}"
 
-RUN rustup component add rustfmt clippy \
+RUN rustup component add rustfmt clippy llvm-tools-preview \
     && rustup target add wasm32-unknown-unknown
+
+RUN curl -fsSL "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v${LLVM_COV_VERSION}/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz" \
+    | tar xz -C /usr/local/cargo/bin
 
 RUN curl -fsSL https://wasm-bindgen.github.io/wasm-pack/installer/init.sh | VERSION="${WASM_PACK_VERSION}" sh
 

@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   ci:pr:
-    desc: PR CI — prepare, verify ‖ build, then fast Playwright e2e-pr (~1 min).
+    desc: PR CI — prepare, verify ‖ e2e web build, then Playwright e2e-pr.
     deps:
       - setup
     cmds:
