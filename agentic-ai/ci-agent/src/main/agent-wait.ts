@@ -1,3 +1,7 @@
+import { createLogger } from "./logger.js";
+
+const log = createLogger("agent-wait");
+
 const DEFAULT_TIMEOUT_MS = 90 * 60 * 1000;
 const DEFAULT_HEARTBEAT_MS = 60 * 1000;
 
@@ -33,7 +37,7 @@ export async function waitWithHeartbeat<T>(
 ): Promise<T> {
   const started = Date.now();
   const heartbeat = setInterval(() => {
-    console.log(`==> ${label} still running (${formatDuration(Date.now() - started)})`);
+    log.info(`${label} still running (${formatDuration(Date.now() - started)})`);
   }, options.heartbeatMs);
 
   try {

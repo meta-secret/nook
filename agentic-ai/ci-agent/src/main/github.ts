@@ -1,5 +1,9 @@
 import { Octokit } from "@octokit/rest";
 
+import { createLogger } from "./logger.js";
+
+const log = createLogger("github");
+
 export type RepoRef = { owner: string; repo: string };
 
 export function parseRepository(fullName: string): RepoRef {
@@ -90,7 +94,7 @@ export async function waitForPrChecks(
   prNumber: number,
   pollMs: number,
 ): Promise<void> {
-  console.log(`==> Waiting for PR #${prNumber} checks`);
+  log.info(`Waiting for PR #${prNumber} checks`);
   const { owner, repo } = repoRef;
 
   while (true) {
@@ -128,7 +132,7 @@ export async function waitForPrChecks(
 
     const hasChecks = runs.length > 0 || combined.statuses.length > 0;
     if (hasChecks && !pendingRun && !pendingStatus) {
-      console.log(`==> PR #${prNumber} checks passed`);
+      log.info(`PR #${prNumber} checks passed`);
       return;
     }
 
@@ -143,7 +147,7 @@ export async function squashMergePr(
   headBranch: string,
 ): Promise<void> {
   const { owner, repo } = repoRef;
-  console.log(`==> Squash merging PR #${prNumber}`);
+  log.info(`Squash merging PR #${prNumber}`);
   await octokit.rest.pulls.merge({
     owner,
     repo,

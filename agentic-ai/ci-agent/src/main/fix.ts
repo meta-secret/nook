@@ -11,8 +11,11 @@ import {
   waitForPrChecks,
 } from "./github.js";
 import { configureGitForCi, hasWorkingTreeChanges, pushFixBranch } from "./git.js";
+import { createLogger } from "./logger.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
+
+const log = createLogger("fix");
 
 const DEFAULT_POLL_MS = 15_000;
 
@@ -40,7 +43,7 @@ export async function runCiFix(): Promise<void> {
 
   let prNumber = await findOpenPr(octokit, repoRef, fixBranch);
   if (prNumber) {
-    console.log(`==> Open PR already exists for ${fixBranch} (#${prNumber})`);
+    log.info(`Open PR already exists for ${fixBranch} (#${prNumber})`);
   } else {
     const cursorApiKey = process.env.CURSOR_API_KEY?.trim();
     if (!cursorApiKey) {
@@ -74,10 +77,10 @@ export async function runCiFix(): Promise<void> {
     if (!prNumber) {
       prNumber = await createFixPr(octokit, repoRef, fixBranch, runId);
     }
-    console.log(`==> Opened fix PR #${prNumber}`);
+    log.info(`Opened fix PR #${prNumber}`);
   }
 
   await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
   await squashMergePr(octokit, repoRef, prNumber, fixBranch);
-  console.log(`==> Done — merged PR #${prNumber} (fix for main run ${runId})`);
+  log.info(`Done — merged PR #${prNumber} (fix for main run ${runId})`);
 }

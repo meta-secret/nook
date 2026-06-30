@@ -3,11 +3,14 @@
 import type { InteractionUpdate, ToolCall } from "@cursor/sdk";
 
 import { AgentTextLog, ShellStreamLog } from "./interaction-log.js";
+import { createLogger } from "./logger.js";
 import {
   extractShellOutputChunk,
   formatToolCompleted,
   formatToolStarted,
 } from "./tool-summary.js";
+
+const log = createLogger("cursor");
 
 export class CiInteractionLogger {
   private readonly agentText = new AgentTextLog();
@@ -33,7 +36,7 @@ export class CiInteractionLogger {
       case "tool-call-started":
         this.agentText.closeBlock();
         this.shellStream.closeBlock();
-        console.log(`\n==> ${formatToolStarted(update.toolCall)}`);
+        log.debug(formatToolStarted(update.toolCall));
         if (update.toolCall.type === "shell") {
           this.shellStream.openBlock();
         }
@@ -45,15 +48,15 @@ export class CiInteractionLogger {
       case "step-started":
         this.agentText.closeBlock();
         this.shellStream.closeBlock();
-        console.log("\n==> step started");
+        log.debug("step started");
         break;
       case "step-completed":
-        console.log("==> step completed");
+        log.debug("step completed");
         break;
       case "turn-ended":
         this.agentText.closeBlock();
         this.shellStream.closeBlock();
-        console.log("\n==> turn ended");
+        log.debug("turn ended");
         break;
       default:
         break;
@@ -71,7 +74,7 @@ export class CiInteractionLogger {
     });
     if (lines) {
       for (const line of lines) {
-        console.log(`==> ${line}`);
+        log.debug(line);
       }
     }
   }
