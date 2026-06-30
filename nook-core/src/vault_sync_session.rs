@@ -1,6 +1,7 @@
 //! YAML vault poll reconciliation for an active unlocked session.
 
 use crate::errors::VaultResult;
+use crate::vault_connect::VaultAccessStatus;
 use crate::{
     DeviceIdentity, VaultUnlock, capture_vault_unlock_from_content, load_stored_vault,
     merge_remote_join_records,
@@ -12,7 +13,7 @@ use std::collections::HashMap;
 pub enum YamlSyncOutcome {
     Unchanged,
     NewVault,
-    AccessStatus(String),
+    AccessStatus(VaultAccessStatus),
     Reloaded(Box<YamlSyncReloaded>),
 }
 
@@ -96,7 +97,10 @@ mod tests {
         genesis_members_records, serialize_stored_yaml_with_unlock,
     };
 
-    fn genesis_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> VaultResult<String> {
+    fn genesis_yaml(
+        keys: &VaultKeys,
+        identity: &DeviceIdentity,
+    ) -> VaultResult<crate::StoredVaultYaml> {
         let mut records = vec![genesis_auth_record(
             identity,
             &keys.secrets_key,
@@ -108,13 +112,14 @@ mod tests {
             "2026-06-28T00:00:00Z",
         )?);
         let store_id = generate_store_id()?;
-        Ok(serialize_stored_yaml_with_unlock(
+        serialize_stored_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,
             &[],
             Some(store_id.as_str()),
             None,
-        )?)
+        )
+        .map_err(Into::into)
     }
 
     #[test]
@@ -122,10 +127,11 @@ mod tests {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
         let yaml = genesis_yaml(&keys, &identity)?;
+        let yaml_str = yaml.as_str();
         let mut armored = HashMap::new();
         let outcome = reconcile_yaml_sync(
-            &yaml,
-            &yaml,
+            yaml_str,
+            yaml_str,
             keys.members_key.as_str(),
             &identity,
             &mut armored,
@@ -141,7 +147,14 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let yaml = genesis_yaml(&keys, &identity)?;
         let mut armored = HashMap::new();
-        let outcome = reconcile_yaml_sync(&yaml, &yaml, "", &identity, &mut armored, true)?;
+        let outcome = reconcile_yaml_sync(
+            yaml.as_str(),
+            yaml.as_str(),
+            "",
+            &identity,
+            &mut armored,
+            true,
+        )?;
         match outcome {
             YamlSyncOutcome::Reloaded(reloaded) => {
                 assert_eq!(reloaded.secrets_key.as_str(), keys.secrets_key.as_str());

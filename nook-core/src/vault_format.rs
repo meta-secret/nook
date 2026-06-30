@@ -1,4 +1,5 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
+use crate::vault_wire::{StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml as VaultYamlBlob};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
     PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultUnlock,
@@ -67,10 +68,10 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
 pub fn serialize_stored(
     records: &[StoredSecretRecord],
     format: VaultFormat,
-) -> VaultFormatResult<String> {
+) -> VaultFormatResult<StoredVaultBlob> {
     match format {
-        VaultFormat::Jsonl => serialize_stored_jsonl(records),
-        VaultFormat::Yaml => serialize_stored_yaml(records),
+        VaultFormat::Jsonl => serialize_stored_jsonl(records).map(StoredVaultBlob::Jsonl),
+        VaultFormat::Yaml => serialize_stored_yaml(records).map(StoredVaultBlob::Yaml),
     }
 }
 
@@ -84,13 +85,15 @@ pub fn deserialize_stored(
     }
 }
 
-pub fn serialize_stored_jsonl(records: &[StoredSecretRecord]) -> VaultFormatResult<String> {
+pub fn serialize_stored_jsonl(
+    records: &[StoredSecretRecord],
+) -> VaultFormatResult<StoredVaultJsonl> {
     let mut lines = Vec::with_capacity(records.len());
     for record in records {
         let line = serde_json::to_string(record).map_err(VaultFormatError::JsonlSerialize)?;
         lines.push(line);
     }
-    Ok(lines.join("\n"))
+    Ok(StoredVaultJsonl::from_trusted(lines.join("\n")))
 }
 
 pub fn deserialize_stored_jsonl(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
@@ -239,7 +242,7 @@ fn vault_version_is_zero(version: &u64) -> bool {
     *version == 0
 }
 
-pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResult<String> {
+pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResult<VaultYamlBlob> {
     serialize_stored_yaml_with_unlock(records, &VaultUnlock::Keys, &[], None, None)
 }
 
@@ -259,14 +262,16 @@ pub fn serialize_stored_yaml_with_unlock(
     password_entries: &[PasswordUnlockEntry],
     store_id: Option<&str>,
     vault_version: Option<u64>,
-) -> VaultFormatResult<String> {
+) -> VaultFormatResult<VaultYamlBlob> {
     let mut vault = partition_yaml_records(records);
     vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
-    serde_yaml::to_string(&vault).map_err(VaultFormatError::YamlSerialize)
+    serde_yaml::to_string(&vault)
+        .map(VaultYamlBlob::from_trusted)
+        .map_err(VaultFormatError::YamlSerialize)
 }
 
 /// Read the monotonic revision counter from on-disk YAML (0 for legacy vaults).
@@ -447,9 +452,9 @@ mod tests {
         let records = sample_records();
         let stored = serialize_stored_jsonl(&records).unwrap();
         assert!(stored.as_str().contains("\"id\":\"github.com\""));
-        assert!(stored.lines().count() == 2);
+        assert!(stored.as_str().lines().count() == 2);
 
-        let parsed = deserialize_stored_jsonl(&stored).unwrap();
+        let parsed = deserialize_stored_jsonl(stored.as_str()).unwrap();
         assert_eq!(parsed, records);
     }
 
@@ -461,7 +466,7 @@ mod tests {
         assert!(stored.as_str().contains('|'));
         assert!(!stored.as_str().contains("\\n"));
 
-        let parsed = deserialize_stored_yaml(&stored).unwrap();
+        let parsed = deserialize_stored_yaml(stored.as_str()).unwrap();
         assert_eq!(parsed, records);
     }
 
@@ -530,7 +535,7 @@ mod tests {
     fn empty_stored_records_roundtrip_both_formats() {
         for format in [VaultFormat::Jsonl, VaultFormat::Yaml] {
             let stored = serialize_stored(&[], format).unwrap();
-            let parsed = deserialize_stored(&stored, format).unwrap();
+            let parsed = deserialize_stored(stored.as_str(), format).unwrap();
             assert!(parsed.is_empty());
         }
         assert!(deserialize_stored_yaml("").unwrap().is_empty());
@@ -542,12 +547,12 @@ mod tests {
     #[test]
     fn jsonl_skips_blank_lines() {
         let records = sample_records();
-        let mut stored = serialize_stored_jsonl(&records).unwrap();
+        let mut stored = serialize_stored_jsonl(&records).unwrap().into_inner();
         stored.insert(0, '\n');
         stored.push('\n');
         stored.push('\n');
 
-        let parsed = deserialize_stored_jsonl(&stored).unwrap();
+        let parsed = deserialize_stored_jsonl(stored.as_str()).unwrap();
         assert_eq!(parsed, records);
     }
 
@@ -570,7 +575,7 @@ not-json
     fn yaml_requires_secrets_auth_joins_sections() {
         let records = sample_records();
         let wrapped = serialize_stored_yaml(&records).unwrap();
-        assert_eq!(deserialize_stored_yaml(&wrapped).unwrap(), records);
+        assert_eq!(deserialize_stored_yaml(wrapped.as_str()).unwrap(), records);
 
         let root = serde_yaml::to_string(&records).unwrap();
         assert!(deserialize_stored_yaml(&root).is_err());
@@ -582,20 +587,24 @@ not-json
         let jsonl = serialize_stored_jsonl(&records).unwrap();
         let yaml = serialize_stored_yaml(&records).unwrap();
 
-        assert!(deserialize_stored(&jsonl, VaultFormat::Yaml).is_err());
-        assert!(deserialize_stored(&yaml, VaultFormat::Jsonl).is_err());
+        assert!(deserialize_stored(jsonl.as_str(), VaultFormat::Yaml).is_err());
+        assert!(deserialize_stored(yaml.as_str(), VaultFormat::Jsonl).is_err());
     }
 
     #[test]
     fn serialize_stored_matches_format_specific_helpers() {
         let records = sample_records();
         assert_eq!(
-            serialize_stored(&records, VaultFormat::Jsonl).unwrap(),
-            serialize_stored_jsonl(&records).unwrap()
+            serialize_stored(&records, VaultFormat::Jsonl)
+                .unwrap()
+                .as_str(),
+            serialize_stored_jsonl(&records).unwrap().as_str()
         );
         assert_eq!(
-            serialize_stored(&records, VaultFormat::Yaml).unwrap(),
-            serialize_stored_yaml(&records).unwrap()
+            serialize_stored(&records, VaultFormat::Yaml)
+                .unwrap()
+                .as_str(),
+            serialize_stored_yaml(&records).unwrap().as_str()
         );
     }
 
@@ -603,7 +612,7 @@ not-json
     fn yaml_preserves_multiline_armored_value_exactly() {
         let records = sample_records();
         let stored = serialize_stored_yaml(&records).unwrap();
-        let parsed = deserialize_stored_yaml(&stored).unwrap();
+        let parsed = deserialize_stored_yaml(stored.as_str()).unwrap();
 
         assert_eq!(parsed[0].value, records[0].value);
         assert!(parsed[0].value.as_str().contains('\n'));
@@ -623,7 +632,7 @@ not-json
         let stored = serialize_stored_yaml(&[]).unwrap();
         assert!(stored.as_str().contains("secrets:"));
         assert!(!stored.as_str().contains("auth:"));
-        assert!(deserialize_stored_yaml(&stored).unwrap().is_empty());
+        assert!(deserialize_stored_yaml(stored.as_str()).unwrap().is_empty());
     }
 
     #[test]
@@ -674,7 +683,7 @@ not-json
         assert!(!stored.as_str().contains("auth:\n- key:"));
         assert!(!stored.as_str().contains(device_id));
 
-        let parsed = deserialize_stored_yaml(&stored).unwrap();
+        let parsed = deserialize_stored_yaml(stored.as_str()).unwrap();
         assert_eq!(parsed.len(), 3);
     }
 
@@ -697,7 +706,7 @@ not-json
         assert!(stored.as_str().contains(&auth_id));
         assert!(!stored.as_str().contains("member:"));
 
-        let parsed = deserialize_stored_yaml(&stored).unwrap();
+        let parsed = deserialize_stored_yaml(stored.as_str()).unwrap();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), format!("member:key_{auth_id}"));
     }
@@ -730,9 +739,9 @@ not-json
         .unwrap();
         assert!(!yaml.as_str().contains("unlock:"));
         assert!(yaml.as_str().contains("password_entries:"));
-        assert!(!yaml.starts_with("password_envelope:"));
+        assert!(!yaml.as_str().starts_with("password_envelope:"));
 
-        let parsed_entries = read_vault_password_entries(&yaml).unwrap();
+        let parsed_entries = read_vault_password_entries(yaml.as_str()).unwrap();
         assert_eq!(parsed_entries.len(), 1);
         let parsed_envelope = parsed_entries[0].envelope.clone();
         assert_eq!(parsed_envelope.version, envelope.version);
@@ -742,7 +751,7 @@ not-json
             keys
         );
 
-        let read = read_vault_unlock(&yaml).unwrap();
+        let read = read_vault_unlock(yaml.as_str()).unwrap();
         assert_eq!(read, VaultUnlock::Keys);
     }
 
@@ -753,10 +762,10 @@ not-json
         assert!(!yaml.as_str().contains("unlock:"));
         assert!(!yaml.as_str().contains("envelope:"));
 
-        let (parsed_records, unlock) = deserialize_stored_yaml_with_unlock(&yaml).unwrap();
+        let (parsed_records, unlock) = deserialize_stored_yaml_with_unlock(yaml.as_str()).unwrap();
         assert_eq!(parsed_records, records);
         assert_eq!(unlock, VaultUnlock::Keys);
-        assert_eq!(read_vault_unlock(&yaml).unwrap(), VaultUnlock::Keys);
+        assert_eq!(read_vault_unlock(yaml.as_str()).unwrap(), VaultUnlock::Keys);
     }
 
     #[test]
@@ -780,9 +789,9 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             None,
         )
         .unwrap();
-        assert!(!rewritten.contains("unlock:"));
-        assert!(rewritten.contains("password_entries:"));
-        assert!(!rewritten.starts_with("password_envelope:"));
+        assert!(!rewritten.as_str().contains("unlock:"));
+        assert!(rewritten.as_str().contains("password_entries:"));
+        assert!(!rewritten.as_str().starts_with("password_envelope:"));
     }
 
     #[test]
@@ -798,9 +807,9 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         .unwrap();
         assert!(yaml.as_str().contains("store_id: store_SMypl8K0w9Y"));
         assert!(yaml.as_str().contains("vault_version: 1"));
-        assert_eq!(read_vault_version(&yaml).unwrap(), 1);
+        assert_eq!(read_vault_version(yaml.as_str()).unwrap(), 1);
         assert_eq!(
-            read_vault_store_id(&yaml).unwrap(),
+            read_vault_store_id(yaml.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
 
@@ -815,7 +824,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         )
         .unwrap();
         assert_eq!(
-            read_vault_store_id(&backfilled).unwrap(),
+            read_vault_store_id(backfilled.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
     }
@@ -823,7 +832,10 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
     #[test]
     fn jsonl_format_reads_as_keys_unlock() {
         let jsonl = serialize_stored_jsonl(&sample_records()).unwrap();
-        assert_eq!(read_vault_unlock(&jsonl).unwrap(), VaultUnlock::Keys);
+        assert_eq!(
+            read_vault_unlock(jsonl.as_str()).unwrap(),
+            VaultUnlock::Keys
+        );
     }
 
     #[test]
@@ -843,7 +855,7 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         assert!(!yaml.as_str().contains("dek:"));
         assert!(!yaml.as_str().contains("mek:"));
 
-        let parsed = deserialize_stored_yaml(&yaml).unwrap();
+        let parsed = deserialize_stored_yaml(yaml.as_str()).unwrap();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), format!("key_{auth_id}"));
 

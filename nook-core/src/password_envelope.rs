@@ -17,7 +17,7 @@
 
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
 use crate::multi_device::VaultKeys;
-use crate::vault_wire::SymmetricKey;
+use crate::vault_wire::{AgeArmoredCiphertext, SymmetricKey};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -231,7 +231,7 @@ pub fn attach_password_envelope(
         version: ENVELOPE_VERSION,
         kdf: ENVELOPE_KDF.to_owned(),
         work_factor: PASSWORD_SCRYPT_LOG_N,
-        ciphertext,
+        ciphertext: ciphertext.as_str().to_owned(),
     })
 }
 
@@ -274,7 +274,7 @@ pub fn verify_password(envelope: &PasswordEnvelope, password: &str) -> bool {
 fn age_encrypt_scrypt(
     recipient: &age::scrypt::Recipient,
     plaintext: &[u8],
-) -> PasswordResult<String> {
+) -> PasswordResult<AgeArmoredCiphertext> {
     use age::armor::{ArmoredWriter, Format};
 
     let encryptor =
@@ -298,6 +298,7 @@ fn age_encrypt_scrypt(
 
     String::from_utf8(armored)
         .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(e.to_string())))
+        .map(AgeArmoredCiphertext::from_trusted_armored)
 }
 
 fn age_decrypt_scrypt(identity: &age::scrypt::Identity, armored: &[u8]) -> PasswordResult<Vec<u8>> {

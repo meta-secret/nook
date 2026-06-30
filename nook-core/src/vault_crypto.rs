@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use crate::errors::{VaultCryptoError, VaultCryptoResult};
-use crate::vault_wire::{AgeArmoredCiphertext, SymmetricKey};
+use crate::vault_wire::{AgeArmoredCiphertext, DecryptedPlaintext, SymmetricKey};
 
 /// Session-scoped age encryptor/decryptor.
 ///
@@ -59,7 +59,10 @@ impl VaultCrypto {
         Ok(AgeArmoredCiphertext::from_trusted_armored(armored))
     }
 
-    pub fn decrypt_value(&self, armored: &AgeArmoredCiphertext) -> VaultCryptoResult<String> {
+    pub fn decrypt_value(
+        &self,
+        armored: &AgeArmoredCiphertext,
+    ) -> VaultCryptoResult<DecryptedPlaintext> {
         use age::armor::ArmoredReader;
 
         let decryptor =
@@ -74,7 +77,7 @@ impl VaultCrypto {
         reader
             .read_to_string(&mut decrypted)
             .map_err(|e| VaultCryptoError::Read(e.to_string()))?;
-        Ok(decrypted)
+        Ok(DecryptedPlaintext::from_trusted(decrypted))
     }
 }
 
@@ -93,7 +96,7 @@ mod tests {
         let crypto = VaultCrypto::new(&test_key()).unwrap();
         let encrypted = crypto.encrypt_value("hello world").unwrap();
         let decrypted = crypto.decrypt_value(&encrypted).unwrap();
-        assert_eq!(decrypted, "hello world");
+        assert_eq!(decrypted.as_str(), "hello world");
     }
 
     #[test]
@@ -111,7 +114,7 @@ mod tests {
         let a = crypto.encrypt_value("same").unwrap();
         let b = crypto.encrypt_value("same").unwrap();
         assert_ne!(a, b);
-        assert_eq!(crypto.decrypt_value(&a).unwrap(), "same");
-        assert_eq!(crypto.decrypt_value(&b).unwrap(), "same");
+        assert_eq!(crypto.decrypt_value(&a).unwrap().as_str(), "same");
+        assert_eq!(crypto.decrypt_value(&b).unwrap().as_str(), "same");
     }
 }

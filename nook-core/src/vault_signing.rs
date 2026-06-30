@@ -3,6 +3,8 @@
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::format_ed25519_signature;
 use crate::format_auth_key_id;
+use crate::vault_ids::AuthKeyId;
+use crate::vault_wire::SigningSeedHex;
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 
@@ -15,20 +17,21 @@ pub struct SigningIdentity {
 }
 
 impl SigningIdentity {
-    pub fn generate() -> VaultResult<(Self, String)> {
+    pub fn generate() -> VaultResult<(Self, SigningSeedHex)> {
         let mut seed = [0u8; SIGNING_SEED_LEN];
         getrandom::getrandom(&mut seed)
             .map_err(|error| EventError::SigningSeedGeneration(error.to_string()))?;
         Self::from_seed_hex(&hex::encode(seed))
     }
 
-    pub fn from_seed_hex(seed_hex: &str) -> VaultResult<(Self, String)> {
-        let bytes = hex::decode(seed_hex.trim()).map_err(EventError::from)?;
-        let seed: [u8; SIGNING_SEED_LEN] = bytes
+    pub fn from_seed_hex(seed_hex: &str) -> VaultResult<(Self, SigningSeedHex)> {
+        let seed = SigningSeedHex::parse(seed_hex)?;
+        let bytes = hex::decode(seed.as_str()).map_err(EventError::from)?;
+        let seed_bytes: [u8; SIGNING_SEED_LEN] = bytes
             .try_into()
             .map_err(|_| EventError::SigningSeedWrongLength)?;
-        let signing_key = SigningKey::from_bytes(&seed);
-        Ok((Self { signing_key }, hex::encode(seed)))
+        let signing_key = SigningKey::from_bytes(&seed_bytes);
+        Ok((Self { signing_key }, seed))
     }
 
     pub fn from_seed_hex_stored(seed_hex: &str) -> VaultResult<Self> {
@@ -46,9 +49,9 @@ impl SigningIdentity {
     }
 
     /// `key_{sha256_hex}` actor id derived from the Ed25519 public key.
-    pub fn actor_id(&self) -> VaultResult<String> {
+    pub fn actor_id(&self) -> VaultResult<AuthKeyId> {
         let digest = hex::encode(Sha256::digest(self.verifying_key().as_bytes()));
-        Ok(format_auth_key_id(&digest)?.to_string())
+        format_auth_key_id(&digest).map_err(Into::into)
     }
 
     #[must_use]
@@ -72,7 +75,7 @@ mod tests {
     #[test]
     fn signing_identity_roundtrip() -> VaultResult<()> {
         let (identity, seed) = SigningIdentity::generate()?;
-        let restored = SigningIdentity::from_seed_hex_stored(&seed)?;
+        let restored = SigningIdentity::from_seed_hex_stored(seed.as_str())?;
         assert_eq!(identity.actor_id()?, restored.actor_id()?);
         let body = b"event-body";
         let sig = identity.sign_bytes(body);

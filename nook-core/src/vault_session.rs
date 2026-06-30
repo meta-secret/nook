@@ -1,6 +1,7 @@
 //! Plaintext session hydration from projected or stored user records.
 
 use crate::errors::VaultResult;
+use crate::vault_wire::SessionJsonl;
 use crate::{
     Database, SecretId, SecretType, StoredRecordPayload, StoredSecretRecord, VaultCrypto,
     is_vault_meta_record,
@@ -17,7 +18,7 @@ pub fn apply_user_records_to_armored_session(
     crypto: &VaultCrypto,
     armored: &mut HashMap<String, String>,
     secret_types: &mut HashMap<String, SecretType>,
-) -> VaultResult<String> {
+) -> VaultResult<SessionJsonl> {
     let db = Database::from_stored_records_with_crypto(&user_records, crypto)?;
     let jsonl = db.to_jsonl()?;
     armored.retain(|key, value| {
@@ -34,7 +35,7 @@ pub fn apply_user_records_to_armored_session(
             secret_types.insert(record.key.to_string(), secret_type);
         }
     }
-    Ok(jsonl.into_inner())
+    Ok(jsonl)
 }
 
 #[cfg(test)]
@@ -77,7 +78,7 @@ mod tests {
             &mut secret_types,
         )?;
 
-        assert!(jsonl.contains("secret_new0000001"));
+        assert!(jsonl.as_str().contains("secret_new0000001"));
         assert!(!armored.contains_key("secret_old0000001"));
         assert!(armored.contains_key("secret_new0000001"));
         assert!(armored.contains_key(&auth.key.to_string()));

@@ -59,6 +59,8 @@ transparent_str_newtype!(StoredVaultYaml);
 transparent_str_newtype!(MemberLabel);
 transparent_str_newtype!(PasswordEntryId);
 transparent_str_newtype!(OpaqueCiphertext);
+transparent_str_newtype!(DecryptedPlaintext);
+transparent_str_newtype!(SigningSeedHex);
 
 /// On-disk vault blob — JSONL or YAML wire, selected explicitly or via auto-detect.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +219,19 @@ impl SecretPayloadYaml {
     ) -> crate::errors::SecretPayloadResult<Self> {
         crate::SecretValue::from_yaml_str(secret_type, raw)?;
         Ok(Self::from_trusted(raw.to_owned()))
+    }
+}
+
+const SIGNING_SEED_HEX_LEN: usize = 64;
+
+impl SigningSeedHex {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let seed = raw.trim();
+        if seed.len() != SIGNING_SEED_HEX_LEN || !seed.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(ValidationError::SigningSeedInvalid);
+        }
+        Ok(Self(seed.to_owned()))
     }
 }
 

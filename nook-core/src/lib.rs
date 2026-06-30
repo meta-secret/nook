@@ -89,7 +89,7 @@ pub use validation::{
     validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };
 pub use vault_connect::{
-    LoadedVault, access_status_for_vault_content, apply_member_records,
+    LoadedVault, VaultAccessStatus, access_status_for_vault_content, apply_member_records,
     capture_vault_unlock_from_content, content_requires_genesis, load_stored_vault,
 };
 pub use vault_crypto::VaultCrypto;
@@ -141,8 +141,8 @@ pub use vault_sync_store::{
     resolve_conflict_keep_remote,
 };
 pub use vault_wire::{
-    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey,
-    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretPayloadYaml, SessionJsonl,
-    Sha256Hex, StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml, SymmetricKey,
-    Url64EncodedString,
+    AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
+    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
+    SecretPayloadYaml, SessionJsonl, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultJsonl,
+    StoredVaultYaml, SymmetricKey, Url64EncodedString,
 };

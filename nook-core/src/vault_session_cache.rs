@@ -51,7 +51,8 @@ mod tests {
             Some(store_id.as_str()),
             None,
         )?;
-        let (secrets_key, members_key) = hydrate_keys_from_projection_yaml(&yaml, &identity)?;
+        let (secrets_key, members_key) =
+            hydrate_keys_from_projection_yaml(yaml.as_str(), &identity)?;
         assert_eq!(secrets_key, keys.secrets_key.as_str());
         assert_eq!(members_key, keys.members_key.as_str());
         Ok(())

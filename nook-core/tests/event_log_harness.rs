@@ -4,9 +4,9 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_core::{
-    Database, DeviceIdentity, EventId, LocalEventStore, SecretId, SecretType, SigningIdentity,
-    VaultCrypto, VaultEventSession, VaultHashContext, VaultKeys, VaultOperation, VaultProjection,
-    VaultResult, VaultUnlock, encrypted_secret_from_armored, generate_store_id,
+    AuthKeyId, Database, DeviceIdentity, EventId, LocalEventStore, SecretId, SecretType,
+    SigningIdentity, VaultCrypto, VaultEventSession, VaultHashContext, VaultKeys, VaultOperation,
+    VaultProjection, VaultResult, VaultUnlock, encrypted_secret_from_armored, generate_store_id,
     generate_vault_keys, genesis_auth_record, genesis_members_records,
     hydrate_keys_from_projection_yaml, serialize_stored_yaml_with_unlock,
     stored_vault_to_import_event,
@@ -31,8 +31,9 @@ impl EventLogDevice {
         let identity = DeviceIdentity::generate()?;
         let store_id = generate_store_id()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
-        let session = VaultEventSession::new(store_id.to_string(), signing, signing_seed);
-        let projection_cache_yaml = genesis_yaml(&keys, &identity, store_id.as_str())?;
+        let session =
+            VaultEventSession::new(store_id.to_string(), signing, signing_seed.into_inner());
+        let projection_cache_yaml = genesis_yaml(&keys, &identity, store_id.as_str())?.into_inner();
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut device = Self {
             session,
@@ -42,7 +43,9 @@ impl EventLogDevice {
             projection_cache_yaml,
             crypto,
         };
-        device.import_stored_vault(&genesis_yaml(&keys, &device.identity, device.store_id())?)?;
+        device.import_stored_vault(
+            &genesis_yaml(&keys, &device.identity, device.store_id())?.into_inner(),
+        )?;
         let _ = label;
         Ok(device)
     }
@@ -51,7 +54,11 @@ impl EventLogDevice {
     pub fn replica_of(peer: &Self) -> VaultResult<Self> {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         Ok(Self {
-            session: VaultEventSession::new(peer.store_id().to_owned(), signing, signing_seed),
+            session: VaultEventSession::new(
+                peer.store_id().to_owned(),
+                signing,
+                signing_seed.into_inner(),
+            ),
             identity: DeviceIdentity::generate()?,
             secrets_key: peer.secrets_key.clone(),
             members_key: peer.members_key.clone(),
@@ -67,7 +74,7 @@ impl EventLogDevice {
         &self.session.store_id
     }
 
-    pub fn actor_id(&self) -> VaultResult<String> {
+    pub fn actor_id(&self) -> VaultResult<AuthKeyId> {
         self.session.actor_id()
     }
 
@@ -152,7 +159,7 @@ impl EventLogDevice {
         let event = stored_vault_to_import_event(
             &ctx,
             &nook_core::StoreId::parse(self.store_id())?,
-            &nook_core::AuthKeyId::parse(&self.actor_id()?)?,
+            &self.actor_id()?,
             self.session.signing.signing_key(),
             &nook_core::IsoTimestamp::from_trusted(TS.to_owned()),
         )?;
@@ -168,20 +175,15 @@ fn genesis_yaml(
     keys: &VaultKeys,
     identity: &DeviceIdentity,
     store_id: &str,
-) -> VaultResult<String> {
+) -> VaultResult<nook_core::StoredVaultYaml> {
     let mut records = vec![genesis_auth_record(
         identity,
         &keys.secrets_key,
         &keys.members_key,
     )?];
     records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
-    Ok(serialize_stored_yaml_with_unlock(
-        &records,
-        &VaultUnlock::Keys,
-        &[],
-        Some(store_id),
-        None,
-    )?)
+    serialize_stored_yaml_with_unlock(&records, &VaultUnlock::Keys, &[], Some(store_id), None)
+        .map_err(Into::into)
 }
 
 /// Remote provider bucket keyed by provider id.
@@ -223,8 +225,9 @@ pub fn sample_stored_vault_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
         }),
     );
     let records = db.to_stored_records_with_crypto(crypto)?;
-    Ok(nook_core::serialize_stored(
-        &records,
-        nook_core::VaultFormat::Yaml,
-    )?)
+    Ok(
+        nook_core::serialize_stored(&records, nook_core::VaultFormat::Yaml)?
+            .as_str()
+            .to_owned(),
+    )
 }

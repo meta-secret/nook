@@ -6,7 +6,7 @@ use crate::secret_types::{StoredRecordPayload, StoredSecretRecord};
 use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
-use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, SymmetricKey};
+use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
 use crate::{
     SecretId, build_members_records, genesis_auth_record, is_auth_stored_record,
     resolve_member_roster,
@@ -56,7 +56,7 @@ pub fn members_checkpoint_hash_from_roster(
     records: &[StoredSecretRecord],
     old_members_key: &SymmetricKey,
     new_members_key: &SymmetricKey,
-) -> VaultResult<String> {
+) -> VaultResult<Sha256Hex> {
     let roster = resolve_member_roster(records, old_members_key)?;
     let member_records = build_members_records(&roster, new_members_key)?;
     let json =
@@ -129,7 +129,7 @@ mod tests {
                 payloads[0].ciphertext.as_str().to_owned(),
             ))
             .unwrap();
-        assert!(plaintext.contains("hunter2"));
+        assert!(plaintext.as_str().contains("hunter2"));
     }
 
     #[test]
@@ -152,8 +152,8 @@ mod tests {
             &keys.members_key,
             &new_keys.members_key,
         )?;
-        assert_eq!(hash.len(), 64);
-        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(hash.as_str().len(), 64);
+        assert!(hash.as_str().chars().all(|c| c.is_ascii_hexdigit()));
         Ok(())
     }
 

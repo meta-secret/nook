@@ -71,7 +71,8 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::Sha256HexInvalid
             | ValidationError::DeviceSigningPublicKeyInvalid
             | ValidationError::IsoTimestampInvalid
-            | ValidationError::PasswordEntryIdInvalid => NookError::Database(err.to_string()),
+            | ValidationError::PasswordEntryIdInvalid
+            | ValidationError::SigningSeedInvalid => NookError::Database(err.to_string()),
         }
     }
 }

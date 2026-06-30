@@ -2,7 +2,7 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::vault_ids::{AuthKeyId, StoreId};
-use crate::vault_wire::{IsoTimestamp, Sha256Hex};
+use crate::vault_wire::{IsoTimestamp, SessionJsonl, Sha256Hex};
 use crate::{
     AppendEventInput, EventId, LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord,
     VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
@@ -25,7 +25,7 @@ pub struct VaultEventSession {
 impl VaultEventSession {
     #[must_use]
     pub fn new(store_id: String, signing: SigningIdentity, signing_seed: String) -> Self {
-        let key_epoch = format!("sha256:{}", sha256_hex(store_id.as_bytes()));
+        let key_epoch = format!("sha256:{}", sha256_hex(store_id.as_bytes()).as_str());
         Self {
             store: LocalEventStore::new(),
             store_id,
@@ -36,7 +36,7 @@ impl VaultEventSession {
         }
     }
 
-    pub fn actor_id(&self) -> VaultResult<String> {
+    pub fn actor_id(&self) -> VaultResult<AuthKeyId> {
         self.signing.actor_id()
     }
 
@@ -57,7 +57,7 @@ impl VaultEventSession {
         provider_id: Option<&str>,
     ) -> VaultResult<EventId> {
         let store_id = StoreId::parse(&self.store_id)?;
-        let actor_id = AuthKeyId::parse(&self.actor_id()?)?;
+        let actor_id = self.actor_id()?;
         let key_epoch = EventId::parse(&self.key_epoch)?;
         let created_at = IsoTimestamp::parse(created_at)?;
         let parents = ObservedHeads::parse(&self.heads)?.as_parents();
@@ -94,7 +94,7 @@ impl VaultEventSession {
         crypto: &VaultCrypto,
         armored: &mut HashMap<String, String>,
         secret_types: &mut HashMap<String, crate::SecretType>,
-    ) -> VaultResult<String> {
+    ) -> VaultResult<SessionJsonl> {
         let graph = self.store.load_graph(&self.store_id)?;
         let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
@@ -105,7 +105,7 @@ impl VaultEventSession {
     pub fn members_checkpoint_hash(
         records: &[StoredSecretRecord],
         members_key: &crate::SymmetricKey,
-    ) -> VaultResult<String> {
+    ) -> VaultResult<Sha256Hex> {
         let roster = resolve_member_roster(records, members_key)?;
         let member_records = build_members_records(&roster, members_key)?;
         let json =
@@ -145,7 +145,7 @@ impl VaultEventSession {
         self.append_operations(
             vec![VaultOperation::EpochCheckpoint {
                 secrets,
-                members_checkpoint_hash: Sha256Hex::from_trusted(members_checkpoint_hash),
+                members_checkpoint_hash,
             }],
             created_at,
             provider_id,

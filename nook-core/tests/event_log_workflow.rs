@@ -8,9 +8,8 @@ use harness::{
     union_device_from_providers,
 };
 use nook_core::{
-    AppendEventInput, AuthKeyId, EncryptedSecretPayload, EventError, EventId, IsoTimestamp,
-    OpaqueCiphertext, SecretId, SecretType, StoreId, VaultOperation, VaultResult,
-    build_signed_event,
+    AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
+    SecretId, SecretType, StoreId, VaultOperation, VaultResult, build_signed_event,
 };
 use std::collections::HashMap;
 
@@ -104,7 +103,7 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
         },
     }];
     let store_id = StoreId::parse(device.store_id())?;
-    let actor_id = AuthKeyId::parse(&device.actor_id()?)?;
+    let actor_id = device.actor_id()?;
     let key_epoch = EventId::parse(&device.session.key_epoch)?;
     let created_at = IsoTimestamp::from_trusted(TS.to_owned());
     let (event, child_bytes) = build_signed_event(AppendEventInput {

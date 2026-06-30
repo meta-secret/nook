@@ -77,16 +77,17 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() {
     replace_member_records(&mut records, member_records);
 
     let yaml = serialize_stored(&records, VaultFormat::Yaml).unwrap();
-    assert!(yaml.contains("auth:"));
-    assert!(yaml.contains("members:"));
-    assert!(yaml.contains("pk_id:"));
-    assert!(yaml.contains("secrets_key:"));
-    assert!(yaml.contains("members_key:"));
-    assert!(yaml.contains("ciphertext:"));
-    assert!(yaml.contains("secrets:"));
-    assert!(!yaml.contains("age1"));
+    let yaml_str = yaml.as_str();
+    assert!(yaml_str.contains("auth:"));
+    assert!(yaml_str.contains("members:"));
+    assert!(yaml_str.contains("pk_id:"));
+    assert!(yaml_str.contains("secrets_key:"));
+    assert!(yaml_str.contains("members_key:"));
+    assert!(yaml_str.contains("ciphertext:"));
+    assert!(yaml_str.contains("secrets:"));
+    assert!(!yaml_str.contains("age1"));
 
-    let loaded = deserialize_stored(&yaml, VaultFormat::Yaml).unwrap();
+    let loaded = deserialize_stored(yaml_str, VaultFormat::Yaml).unwrap();
 
     for device in [&genesis, &device_two, &device_three] {
         let resolved_secrets = resolve_secrets_key(&loaded, device).unwrap();
@@ -137,7 +138,7 @@ fn yaml_roundtrip_preserves_secrets_and_members_key_resolution() {
     let (genesis, records) = genesis_vault(&keys);
 
     let yaml = serialize_stored(&records, VaultFormat::Yaml).unwrap();
-    let loaded = deserialize_stored(&yaml, VaultFormat::Yaml).unwrap();
+    let loaded = deserialize_stored(yaml.as_str(), VaultFormat::Yaml).unwrap();
 
     assert_eq!(
         resolve_secrets_key(&loaded, &genesis).unwrap(),
@@ -221,8 +222,8 @@ fn rename_member_label_survives_yaml_roundtrip() {
     replace_member_records(&mut records, member_records);
 
     let yaml = serialize_stored(&records, VaultFormat::Yaml).unwrap();
-    assert!(!yaml.contains("Kitchen iPad"));
-    let loaded = deserialize_stored(&yaml, VaultFormat::Yaml).unwrap();
+    assert!(!yaml.as_str().contains("Kitchen iPad"));
+    let loaded = deserialize_stored(yaml.as_str(), VaultFormat::Yaml).unwrap();
     let roster = resolve_member_roster(&loaded, &keys.members_key).unwrap();
     assert_eq!(roster.len(), 1);
     assert_eq!(roster[0].label.as_deref(), Some("Kitchen iPad"));
@@ -250,7 +251,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() {
 
     let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id()).unwrap();
     let yaml = serialize_stored(&revoked, VaultFormat::Yaml).unwrap();
-    let loaded = deserialize_stored(&yaml, VaultFormat::Yaml).unwrap();
+    let loaded = deserialize_stored(yaml.as_str(), VaultFormat::Yaml).unwrap();
 
     assert!(resolve_secrets_key(&loaded, &joiner).is_err());
     assert_eq!(

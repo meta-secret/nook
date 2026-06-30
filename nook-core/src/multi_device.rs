@@ -361,7 +361,7 @@ pub fn decrypt_member_entry(
     members_key: &SymmetricKey,
 ) -> MultiDeviceResult<MemberEntry> {
     let json = VaultCrypto::new(members_key)?.decrypt_value(ciphertext)?;
-    serde_json::from_str(&json).map_err(MultiDeviceError::MemberEntryJson)
+    serde_json::from_str(json.as_str()).map_err(MultiDeviceError::MemberEntryJson)
 }
 
 pub fn build_members_records(
@@ -901,11 +901,12 @@ mod tests {
         replace_member_records(&mut records, member_records);
 
         let yaml = crate::serialize_stored(&records, crate::VaultFormat::Yaml).unwrap();
-        assert!(yaml.contains("members:"));
-        assert!(yaml.contains("ciphertext:"));
-        assert!(!yaml.contains("age1"));
+        let yaml_str = yaml.as_str();
+        assert!(yaml_str.contains("members:"));
+        assert!(yaml_str.contains("ciphertext:"));
+        assert!(!yaml_str.contains("age1"));
 
-        let roundtripped = crate::deserialize_stored(&yaml, crate::VaultFormat::Yaml).unwrap();
+        let roundtripped = crate::deserialize_stored(yaml_str, crate::VaultFormat::Yaml).unwrap();
         let roster = resolve_member_roster(&roundtripped, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 2);
     }
@@ -1123,11 +1124,12 @@ mod tests {
         let keys = generate_vault_keys().unwrap();
         let (genesis, records) = genesis_vault(&keys);
         let yaml = crate::serialize_stored(&records, crate::VaultFormat::Yaml).unwrap();
-        assert!(yaml.contains("secrets_key:"));
-        assert!(yaml.contains("members_key:"));
-        assert!(!yaml.contains("\ndek:"));
-        assert!(!yaml.contains("\nmek:"));
-        assert!(!yaml.contains("\ndec:"));
+        let yaml_str = yaml.as_str();
+        assert!(yaml_str.contains("secrets_key:"));
+        assert!(yaml_str.contains("members_key:"));
+        assert!(!yaml_str.contains("\ndek:"));
+        assert!(!yaml_str.contains("\nmek:"));
+        assert!(!yaml_str.contains("\ndec:"));
         let _ = genesis;
     }
 

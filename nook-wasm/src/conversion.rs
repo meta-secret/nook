@@ -90,9 +90,11 @@ pub(crate) fn access_status_for_vault_content(
     content: &str,
     identity: &nook_core::DeviceIdentity,
 ) -> Result<String, NookError> {
-    Ok(nook_core::access_status_for_vault_content(
-        content, identity,
-    )?)
+    Ok(
+        nook_core::access_status_for_vault_content(content, identity)?
+            .as_str()
+            .to_owned(),
+    )
 }
 
 pub(crate) fn sync_result_unchanged() -> Result<NookVaultSyncResult, JsError> {

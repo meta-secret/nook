@@ -37,7 +37,9 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 | `VaultEventSchemaVersion` | `vault_event` | event body `schema_version` |
 | `VaultHashContext` | `vault_import` | stored vault bytes → `Sha256Hex` + encrypted secrets for genesis import |
 | `ObservedHeads` | `vault_event_builder` | validated causal head set |
-| `GithubPat`, `GithubRepoName`, … | `validation` | sync-provider credentials |
+| `DecryptedPlaintext` | `vault_wire` | age-scrypt decrypt output (YAML or JSON) |
+| `SigningSeedHex` | `vault_wire` | 64-hex Ed25519 signing seed |
+| `VaultAccessStatus` | `vault_connect` | connect pre-flight tag (`new_vault`, `ready`, …) |
 
 ### WASM / JS boundary
 
@@ -104,10 +106,15 @@ Use `VaultHashContext` so content hash and encrypted-secret extraction stay alig
 
 - [ ] `VaultEventSession` — `store_id: StoreId`, `heads: Vec<EventId>`, `key_epoch: KeyEpoch`
 - [ ] `VaultProjection` maps — `BTreeMap<SecretId, …>` instead of `String` keys
-- [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext`
+- [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes
-- [ ] `SigningIdentity::actor_id()` → return `AuthKeyId` instead of `String`
+- [x] `SigningIdentity::actor_id()` → `AuthKeyId`
+- [x] `access_status_for_vault_content` → `VaultAccessStatus`
+- [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultJsonl` / `StoredVaultBlob`
+- [x] `sha256_hex()` → `Sha256Hex`; `VaultCrypto::decrypt_value` → `DecryptedPlaintext`
+- [x] `apply_user_records_to_armored_session` → `SessionJsonl`
+- [x] `SigningIdentity::generate` seed → `SigningSeedHex`
 
 ## Related
 
