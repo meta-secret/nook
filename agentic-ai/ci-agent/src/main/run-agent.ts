@@ -48,4 +48,7 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
 
   log.info(`Agent finished (${result.status})`);
   finishInteractionLog();
+
+  // Release local executor resources before git push / PR polling.
+  agent.close();
 }
