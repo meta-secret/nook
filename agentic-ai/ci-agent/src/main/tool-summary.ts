@@ -73,8 +73,11 @@ export function formatToolCompleted(
       lines.push(exitCode === 0 ? "shell exit 0" : `shell exit ${exitCode}`);
       return lines;
     }
-    case "task":
-      return ["task done"];
+    case "task": {
+      const lines = ["task done"];
+      lines.push(...formatTaskOutputBlocks(result.value));
+      return lines;
+    }
     case "mcp":
       return ["mcp done"];
     default:
@@ -111,6 +114,24 @@ export function extractShellOutputChunk(event: Record<string, unknown> | undefin
   }
 
   return "";
+}
+
+function formatTaskOutputBlocks(value: unknown): string[] {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  const record = value as { resultSuffix?: unknown; durationMs?: unknown };
+  const lines: string[] = [];
+
+  if (typeof record.durationMs === "number") {
+    lines.push(`task duration ${record.durationMs}ms`);
+  }
+  if (typeof record.resultSuffix === "string" && record.resultSuffix.trim().length > 0) {
+    lines.push(...formatOutputBlock("task result", record.resultSuffix));
+  }
+
+  return lines;
 }
 
 function formatShellOutputBlocks(value: unknown): string[] {

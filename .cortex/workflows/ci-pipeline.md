@@ -154,9 +154,14 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 ```
 2026-06-29 20:14:32,879 INFO  [ci-agent/agent-wait] Agent still running (20m 0s)
 2026-06-29 20:14:32,879 INFO  [ci-agent/run-agent] Running Cursor SDK agent (run 123, …)
-2026-06-29 20:14:33,102 DEBUG [ci-agent/cursor] shell grep waitForPendingJoin
+2026-06-29 20:14:33,102 INFO  [ci-agent/cursor] shell grep waitForPendingJoin
 2026-06-29 20:14:33,450 INFO  [ci-agent/cursor/agent] agent output
     The agent's streamed reply is indented under the header.
+2026-06-29 20:14:34,120 INFO  [ci-agent/cursor/shell] output
+    | task: ci:verify:parallel
+    | error: test failed
+2026-06-29 20:14:35,001 INFO  [ci-agent/cursor] --- stdout ---
+2026-06-29 20:14:35,001 INFO  [ci-agent/cursor] shell exit 1
 ```
 
 | Field | Meaning |
@@ -165,7 +170,7 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 | Level | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` |
 | Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
 
-Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include tool-call and step traces. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m).
+Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m).
 
 ## Agent checklist when touching CI or e2e
 
