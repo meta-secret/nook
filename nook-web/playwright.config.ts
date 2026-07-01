@@ -88,6 +88,7 @@ export default defineConfig({
     env: usePreviewServer
       ? {
           VITE_E2E_EXPOSE_VAULT: 'true',
+          VITE_VAULT_SYNC_INTERVAL_MS: process.env.VITE_VAULT_SYNC_INTERVAL_MS,
           VITE_VAULT_IDLE_TIMEOUT_MS: process.env.VITE_VAULT_IDLE_TIMEOUT_MS,
           VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
           NOOK_E2E_SYNC_PROVIDER:

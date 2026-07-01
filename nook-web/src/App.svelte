@@ -373,8 +373,7 @@
                     secretsAddOpen = open
                     secretsAddFormType = type
                   }}
-                  onAddSecret={(id, type, data) =>
-                    vault.handleAddSecret(id, type, data)}
+                  onAddSecret={(type, data) => vault.handleAddSecret(type, data)}
                   onReplaceSecret={(oldId, type, data) =>
                     vault.handleReplaceSecret(oldId, type, data)}
                   onDeleteSecret={(id) => vault.handleDeleteSecret(id)}

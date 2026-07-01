@@ -2182,13 +2182,16 @@ export async function addSecret(
 ) {
   const beforeCount = github ? await syncSecretCount(github) : 0
   await assertVaultReady(page)
+  await pauseVaultBackgroundSync(page)
   await waitForVaultOperationsIdle(page)
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
   await page.getByTestId('item-type-api-key').click()
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
-  await page.getByTestId('save-secret-btn').click()
+  const saveBtn = page.getByTestId('save-secret-btn')
+  await expect(saveBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+  await saveBtn.click()
   await waitForVaultOperationsIdle(page)
   await assertNoVaultError(page)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
