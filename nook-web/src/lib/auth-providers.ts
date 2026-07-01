@@ -3,6 +3,19 @@ import {
   migrateLegacyVaultToLocal,
   normalizeAuthSnapshot,
 } from '$lib/vault-migration'
+import {
+  default as initNookWasm,
+  defaultDriveVaultFile,
+  defaultGithubRepo,
+  formatDriveStorageRef as formatDriveStorageRefCore,
+  maskGithubPatHint as maskGithubPatHintCore,
+  NookSyncProviderTarget,
+  providerDefaultLabel as providerDefaultLabelCore,
+  syncProviderTargetKey as syncProviderTargetKeyCore,
+  wasmStorageModeForProvider as wasmStorageModeForProviderCore,
+} from './nook-wasm/nook_wasm'
+
+await initNookWasm()
 
 export type StorageProviderType = 'local' | 'github' | 'oauth-file'
 
@@ -19,34 +32,35 @@ export interface OAuthFileConfig {
   accountEmail?: string
 }
 
-export const DEFAULT_GITHUB_REPO = 'nook'
-export const DEFAULT_DRIVE_VAULT_FILE = 'nook-vault.yaml'
-const DRIVE_STORAGE_REF_SEP = '\t'
+export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
+export const DEFAULT_DRIVE_VAULT_FILE = defaultDriveVaultFile()
 
 /** Canonical identity for a sync target — two providers with the same key are duplicates. */
 export function syncProviderTargetKey(
   provider: StorageProvider,
 ): string | null {
-  if (provider.type === 'local') {
-    return 'local'
+  const target =
+    provider.type === 'local'
+      ? NookSyncProviderTarget.local()
+      : provider.type === 'github'
+        ? NookSyncProviderTarget.github(
+            provider.githubRepo ?? null,
+            provider.githubPat ?? null,
+          )
+        : provider.oauthFile
+          ? NookSyncProviderTarget.oauthFile(
+              provider.oauthFile.preset,
+              provider.oauthFile.fileId ?? null,
+              provider.oauthFile.fileName ?? null,
+              provider.oauthFile.accountEmail ?? null,
+              provider.oauthFile.accessToken ?? null,
+            )
+          : NookSyncProviderTarget.missingOauthFileConfig()
+  try {
+    return syncProviderTargetKeyCore(target) ?? null
+  } finally {
+    target.free()
   }
-  if (provider.type === 'github') {
-    const repo = (
-      provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-    ).toLowerCase()
-    const pat = provider.githubPat?.trim() ?? ''
-    return `github:${repo}:${pat}`
-  }
-  const oauth = provider.oauthFile
-  if (!oauth) {
-    return null
-  }
-  const preset = oauth.preset
-  const fileKey =
-    oauth.fileId?.trim() || oauth.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
-  const accountKey =
-    oauth.accountEmail?.trim() || oauth.accessToken?.trim() || ''
-  return `oauth-file:${preset}:${fileKey}:${accountKey}`
 }
 
 export function findDuplicateSyncProvider(
@@ -70,9 +84,7 @@ export function formatDriveStorageRef(
   fileId: string | undefined,
   fileName: string,
 ): string {
-  const id = fileId?.trim() ?? ''
-  const name = fileName.trim() || DEFAULT_DRIVE_VAULT_FILE
-  return id ? `${id}${DRIVE_STORAGE_REF_SEP}${name}` : name
+  return formatDriveStorageRefCore(fileId ?? null, fileName)
 }
 
 export interface StorageProvider {
@@ -281,13 +293,7 @@ export function wasmStorageModeForProvider(
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ): string {
-  if (type === 'oauth-file' && oauthPreset === 'google-drive') {
-    return 'google-drive'
-  }
-  if (type === 'oauth-file' && oauthPreset === 'icloud') {
-    return 'icloud'
-  }
-  return type
+  return wasmStorageModeForProviderCore(type, oauthPreset ?? null)
 }
 
 export function providerDefaultLabel(
@@ -295,20 +301,7 @@ export function providerDefaultLabel(
   detail?: string,
   oauthPreset: OAuthFilePreset = 'google-drive',
 ): string {
-  if (type === 'github') {
-    const repo = detail?.trim() || DEFAULT_GITHUB_REPO
-    return repo === DEFAULT_GITHUB_REPO ? 'GitHub' : `GitHub · ${repo}`
-  }
-  if (type === 'oauth-file') {
-    const file = detail?.trim() || DEFAULT_DRIVE_VAULT_FILE
-    if (oauthPreset === 'icloud') {
-      return file === DEFAULT_DRIVE_VAULT_FILE ? 'iCloud' : `iCloud · ${file}`
-    }
-    return file === DEFAULT_DRIVE_VAULT_FILE
-      ? 'Google Drive'
-      : `Google Drive · ${file}`
-  }
-  return 'This device'
+  return providerDefaultLabelCore(type, detail ?? null, oauthPreset)
 }
 
 export function localizeProviderLabel(
@@ -347,11 +340,11 @@ export function maskGithubPat(
   pat: string | undefined,
   t?: (key: string) => string,
 ): string {
-  const trimmed = pat?.trim() ?? ''
-  if (!trimmed) return t ? t('auth_storage.no_token_saved') : 'No token saved'
-  const prefixLen = trimmed.startsWith('github_pat_') ? 14 : 10
-  if (trimmed.length <= prefixLen) return '••••'
-  return `${trimmed.slice(0, prefixLen)}…`
+  const hint = maskGithubPatHintCore(pat ?? null)
+  if (hint == null) {
+    return t ? t('auth_storage.no_token_saved') : 'No token saved'
+  }
+  return hint
 }
 
 export function maskOAuthAccount(
