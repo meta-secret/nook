@@ -111,6 +111,9 @@ task ci:pr                          # prepare → verify ‖ build → e2e-pr
 task web:test:e2e:pr                # e2e-pr only (PR gate)
 task web:test:e2e                   # full stub e2e (main gate)
 
+# Single spec — preferred during fix/debug (E2E_SPEC paths relative to nook-web/)
+E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
+
 # Main CI equivalent
 task ci:main:e2e                    # one container, full e2e project
 
@@ -124,15 +127,25 @@ task web:test:e2e:github            # → sync-live
 
 ## Local vs remote CI
 
-PR GitHub Actions runs `task ci:pr:publish` (toolchain build, verify, web build, e2e, GHCR push, Cloudflare preview). A single run often takes **5+ minutes** plus queue time. Failing remotely on Prettier, `cargo fmt`, clippy, or a unit test burns that full cycle for a fix that local Docker would catch in seconds.
+**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs `task ci:pr:publish` (toolchain build, verify, web build, e2e-pr, GHCR push, Cloudflare preview). Expect **5+ minutes** per run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
 
-**Agent efficiency rule:**
+**Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Push only when local gates pass and the change is ready.
 
-1. **Before first push / opening a PR** — `task check` (format check, lint, unit tests, build). Do not block on `task ci:pr`; remote CI is the first full gate.
-2. **After any remote CI failure** — run `task ci:pr` locally, fix, and re-run until green before the next push. Do not retry remote CI hoping for a different result.
-3. **Optional before first push** — `task ci:pr` for high-risk web changes (vault sync, login/unlock, multi-step flows).
+**E2e debug — one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
 
-Local `task ci:pr` completes in roughly **3–4 minutes** on a warm toolchain image — faster than a failed 5+ minute remote cycle. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [coding-bro.md](coding-bro.md).
+```bash
+E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
+```
+
+After targeted fixes pass, run the relevant project or full PR mirror once before pushing.
+
+**Agent efficiency rules:**
+
+1. **Before push / opening a PR** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
+2. **Push when locally ready** — do not push hoping remote CI will catch issues that local Docker would find in seconds.
+3. **After any remote CI failure** — read logs, fix locally (prefer single-spec e2e while iterating), run `task ci:pr` until green, then push again.
+
+Local `task ci:pr` completes in roughly **3–4 minutes** on a warm cached toolchain image. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [coding-bro.md](coding-bro.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 

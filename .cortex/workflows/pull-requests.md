@@ -24,11 +24,9 @@ Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for auto
 ```mermaid
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + implement]
-  A --> B[2 Minimum local: task check]
-  B --> E[3 Push + open PR]
+  A --> B[2 Local validation: check / e2e / ci:pr]
+  B --> E[3 Push + open PR when ready]
   E --> F[4 Monitor PR CI]
-  E -.->|parallel optional| D[Local e2e / ci:pr]
-  D -.-> F
   F --> G{All checks green?}
   G -->|no| H[5 Read logs + fix]
   H --> FULL[6 task ci:pr locally until green]
@@ -54,9 +52,9 @@ Never commit directly on `main`.
 
 ### 2. Local checks
 
-Remote PR CI takes **5+ minutes** plus queue time; full local `task ci:pr` is ~3–4 minutes. Default strategy: **minimum checks before the first push**, **full local PR mirror only after a remote failure**.
+**Remote CI is cold and heavy** — fresh runners pull Docker images and run the full prepared test set from scratch (**5+ minutes** plus queue). **Local Docker uses cached images** and is strongly preferred for checking tests, fixing issues, and iterating. Push only when local gates pass; remote CI validates a clean environment for the PR.
 
-**Minimum before first push / opening a PR:**
+**Minimum before push / opening a PR:**
 
 ```bash
 task format:check    # or task format after edits
@@ -71,32 +69,44 @@ task rust:test                            # nook-core nextest only (no coverage 
 task rust:coverage:check                  # nook-core tests + line coverage floor
 ```
 
-Do **not** block the first push on `task ci:pr` — let remote CI be the first full gate.
-
-**Full PR CI mirror** — **mandatory after any remote CI failure**, before the next push:
+**E2e debug — one spec at a time.** During a fix/debug session, run individual specs instead of the full suite:
 
 ```bash
-task ci:pr    # prepare → verify ‖ web build → e2e-pr (~3–4 min)
+E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-Run `task ci:pr` in a loop: fix failures, re-run until green, then commit and push. This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and Cloudflare deploy). One remote failure is the signal to escalate locally instead of burning another 5+ minute remote cycle.
+**Full PR CI mirror** — run before push when web/vault flows change; **mandatory after any remote CI failure**, before the next push:
+
+```bash
+task ci:pr    # prepare → verify ‖ web build → e2e-pr (~3–4 min locally)
+```
+
+Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then commit and push. This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and Cloudflare deploy).
 
 | When | Command | Why |
 |------|---------|-----|
-| First push / open PR | `task check` (or scoped subset) | Fast fmt, lint, unit tests, build — **must finish before push** |
-| Same turn as push | `task web:test:e2e:pr` / `task ci:pr` | Optional; run **in parallel** with push/PR — do not block push |
+| While debugging e2e | `E2E_SPEC=… task web:test:e2e:file` | Fast feedback — one spec, not the full suite |
+| Before push / open PR | `task check` (+ scoped e2e when needed) | Cached local Docker; **must finish before push** |
+| Web/vault/sync changes | `task web:test:e2e:pr` or `task ci:pr` | Full e2e-pr or PR mirror locally before push |
 | After **any** remote CI failure | `task ci:pr` until green | Full PR gates locally; **must finish before the fix push** |
-| High-risk web change (optional) | `task ci:pr` before first push | Avoid remote failure on vault/sync/login flows |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
-### 3. Local e2e (debugging after failure or high-risk changes)
+### 3. Local e2e (debug and pre-push validation)
 
-PR CI runs **e2e-pr** (~1 min, IndexedDB specs). After a remote e2e failure, or optionally before the first push when the change touches:
+PR CI runs **e2e-pr** (~1 min locally, longer on cold GH runners). Use e2e when the change touches:
 
 - vault sync, join, or enrollment flows
 - login / unlock / password envelope UI
 - multi-step web flows or Playwright helpers
+
+**While debugging — one spec at a time** (do not wait for the full suite):
+
+```bash
+E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
+```
+
+**Before push — relevant project or subset:**
 
 ```bash
 task web:test:e2e:pr       # fast e2e-pr project in Docker
@@ -104,11 +114,11 @@ task web:test:e2e:pr       # fast e2e-pr project in Docker
 task web:test:e2e:pr:parallel
 ```
 
-Skip e2e-pr for small, isolated Rust-only or docs-only changes.
+Skip e2e for small, isolated Rust-only or docs-only changes.
 
 ### 4. Push and open a PR
 
-Push as soon as minimum local checks pass. Open the PR in the same turn — do not wait for local e2e or full `task ci:pr` unless you are fixing a prior CI failure.
+Push only after local checks pass and the change is ready — include scoped e2e or `task ci:pr` when the touch surface warrants it.
 
 ```bash
 git push -u origin HEAD
