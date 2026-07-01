@@ -2189,8 +2189,12 @@ export async function addSecret(
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()
+  await dismissSyncConflictIfVisible(page)
   await waitForVaultOperationsIdle(page)
   await assertNoVaultError(page)
+  if (github) {
+    await waitForVaultSyncIdle(page)
+  }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
   await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   if (github) {

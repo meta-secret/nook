@@ -18,6 +18,8 @@ import {
   waitForGithubVaultState,
   waitForLocalVaultState,
   waitForStableLocalVaultState,
+  waitForVaultOperationsIdle,
+  waitForVaultSyncIdle,
   waitForVaultUnlocked,
 } from './helpers'
 import {
@@ -52,6 +54,8 @@ test.describe('vault password envelope (stub sync)', () => {
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await waitForVaultOperationsIdle(deviceA)
+    await waitForVaultSyncIdle(deviceA)
     await addSecret(deviceA, sharedSecretKey, sharedSecretValue, target)
   })
 
