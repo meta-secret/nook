@@ -6,6 +6,7 @@
 
 mod bip39;
 mod database;
+mod enrollment;
 mod errors;
 mod event_canonical;
 mod i18n;
@@ -37,12 +38,20 @@ mod vault_sync_session;
 mod vault_sync_store;
 mod vault_wire;
 
-pub use bip39::validate_bip39_mnemonic;
+pub use bip39::{
+    bip39_english_wordlist, is_bip39_word_sequence_valid, is_known_bip39_word, suggest_bip39_words,
+    validate_bip39_mnemonic,
+};
 pub use database::Database;
+pub use enrollment::{
+    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
+    decrypt_enrollment_payload, encrypt_enrollment_payload, parse_enrollment_envelope,
+    peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
+};
 pub use errors::{
-    DatabaseError, EventError, MultiDeviceError, PasswordError, SecretPayloadError, SessionError,
-    ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError, VaultResult,
-    VaultSyncError,
+    DatabaseError, EnrollmentError, EventError, MultiDeviceError, PasswordError,
+    SecretPayloadError, SessionError, ValidationError, VaultCryptoError, VaultEpochError,
+    VaultError, VaultFormatError, VaultResult, VaultSyncError,
 };
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{

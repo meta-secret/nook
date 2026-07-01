@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 import {
   clearBip39WordlistCache,
   isMnemonicValid,
@@ -8,27 +8,23 @@ import {
   suggestBip39Words,
 } from '$lib/bip39-wordlist'
 
-const SAMPLE_WORDS = Array.from({ length: 2048 }, (_, index) => `word${index}`)
-
 afterEach(() => {
   clearBip39WordlistCache()
-  vi.unstubAllGlobals()
 })
 
 describe('bip39-wordlist', () => {
-  test('loads and caches the official wordlist from fetch', async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      text: async () => SAMPLE_WORDS.join('\n'),
-    }))
-    vi.stubGlobal('fetch', fetchMock)
-
+  test('loads and caches the bundled official English wordlist from wasm', async () => {
     const first = await loadBip39Wordlist()
     const second = await loadBip39Wordlist()
 
     expect(first.size).toBe(2048)
+    expect([...first].slice(0, 4)).toEqual([
+      'abandon',
+      'ability',
+      'able',
+      'about',
+    ])
     expect(second).toBe(first)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   test('normalizes mnemonic words', () => {
@@ -43,42 +39,24 @@ describe('bip39-wordlist', () => {
   })
 
   test('validates mnemonic length and membership', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        text: async () => SAMPLE_WORDS.join('\n'),
-      })),
-    )
-
     const wordlist = await loadBip39Wordlist()
-    const mnemonic = Array.from(
-      { length: 12 },
-      (_, index) => `word${index}`,
-    ).join(' ')
+    const mnemonic =
+      'abandon ability able about above absent absorb abstract absurd abuse access accident'
 
     expect(isMnemonicValid(mnemonic, wordlist, 12)).toBe(true)
-    expect(isMnemonicValid(`${mnemonic} word9999`, wordlist, 24)).toBe(false)
+    expect(isMnemonicValid(`${mnemonic} zoo`, wordlist, 24)).toBe(false)
     expect(isMnemonicValid('not-in-list', wordlist, 12)).toBe(false)
   })
 
   test('suggests prefix matches from the wordlist', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        text: async () => SAMPLE_WORDS.join('\n'),
-      })),
-    )
-
     const wordlist = await loadBip39Wordlist()
-    expect(suggestBip39Words('word1', wordlist, 4)).toEqual([
-      'word1',
-      'word10',
-      'word100',
-      'word1000',
+    expect(suggestBip39Words('ab', wordlist, 4)).toEqual([
+      'abandon',
+      'ability',
+      'able',
+      'about',
     ])
-    expect(suggestBip39Words('word999', wordlist)).toEqual(['word999'])
+    expect(suggestBip39Words('zoo', wordlist)).toEqual(['zoo'])
     expect(suggestBip39Words('missing', wordlist)).toEqual([])
   })
 })

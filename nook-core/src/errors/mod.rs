@@ -2,6 +2,7 @@
 
 mod age_crypto;
 mod database;
+mod enrollment;
 mod event;
 mod multi_device;
 mod password;
@@ -15,6 +16,7 @@ mod vault_sync;
 
 pub use age_crypto::AgeCryptoError;
 pub use database::{DatabaseError, DatabaseResult};
+pub use enrollment::{EnrollmentError, EnrollmentResult};
 pub use event::EventError;
 pub use multi_device::{MultiDeviceError, MultiDeviceResult};
 pub use password::{PasswordError, PasswordResult};
@@ -34,6 +36,9 @@ pub type VaultResult<T> = Result<T, VaultError>;
 pub enum VaultError {
     #[error(transparent)]
     Event(#[from] EventError),
+
+    #[error(transparent)]
+    Enrollment(#[from] EnrollmentError),
 
     #[error(transparent)]
     Validation(#[from] ValidationError),

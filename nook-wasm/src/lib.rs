@@ -20,6 +20,7 @@ mod types;
 
 pub use manager::NookVaultManager;
 pub use types::{
+    NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
     NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
     NookReplacementConflict, NookResolveConflictKeepLocalResult,
     NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookVaultMember,
@@ -76,6 +77,90 @@ pub fn get_translation_catalog(locale: &str) -> String {
 #[must_use]
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> bool {
     nook_core::validate_bip39_mnemonic(mnemonic).is_ok()
+}
+
+#[wasm_bindgen(js_name = getBip39EnglishWordlist)]
+pub fn get_bip39_english_wordlist() -> Vec<String> {
+    nook_core::bip39_english_wordlist()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[wasm_bindgen(js_name = isKnownBip39Word)]
+#[must_use]
+pub fn is_known_bip39_word(word: &str) -> bool {
+    nook_core::is_known_bip39_word(word)
+}
+
+#[wasm_bindgen(js_name = suggestBip39Words)]
+pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
+    nook_core::suggest_bip39_words(prefix, limit as usize)
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[wasm_bindgen(js_name = isBip39WordSequenceValid)]
+#[must_use]
+pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> bool {
+    nook_core::is_bip39_word_sequence_valid(text, expected_word_count as usize)
+}
+
+#[wasm_bindgen(js_name = generateId)]
+pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::generate_id()?.to_string())
+}
+
+#[wasm_bindgen(js_name = generateSecretId)]
+pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::generate_secret_id()?.to_string())
+}
+
+#[wasm_bindgen(js_name = encryptEnrollmentPayload)]
+pub fn encrypt_enrollment_payload(
+    input: &NookEnrollmentIssueInput,
+    password: &str,
+    entry_label: Option<String>,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::encrypt_enrollment_payload(
+        &input.to_core()?,
+        password,
+        entry_label.unwrap_or_default().as_str(),
+    )?)
+}
+
+#[wasm_bindgen(js_name = decryptEnrollmentPayload)]
+pub fn decrypt_enrollment_payload(
+    code: &str,
+    password: &str,
+) -> Result<NookDecryptedEnrollmentPayload, wasm_bindgen::JsError> {
+    Ok(NookDecryptedEnrollmentPayload::from_core(
+        nook_core::decrypt_enrollment_payload(code, password)?,
+    ))
+}
+
+#[wasm_bindgen(js_name = peekEnrollmentEntryId)]
+#[must_use]
+pub fn peek_enrollment_entry_id(code: &str) -> Option<String> {
+    nook_core::peek_enrollment_entry_id(code)
+}
+
+#[wasm_bindgen(js_name = peekEnrollmentEntryLabel)]
+#[must_use]
+pub fn peek_enrollment_entry_label(code: &str) -> Option<String> {
+    nook_core::peek_enrollment_entry_label(code)
+}
+
+#[wasm_bindgen(js_name = peekEnrollmentIssuedAt)]
+#[must_use]
+pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
+    nook_core::peek_enrollment_issued_at(code)
+}
+
+#[wasm_bindgen(js_name = hasLocalVault)]
+pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
+    Ok(crate::storage::indexed_db::has_local_vault().await?)
 }
 
 /// Compare local vs remote vault YAML and return a sync action label:

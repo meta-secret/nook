@@ -132,6 +132,149 @@ pub(crate) fn password_entries_to_vec(
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookEnrollmentProvider {
+    provider_type: String,
+    pat: String,
+    repo: String,
+}
+
+#[wasm_bindgen]
+impl NookEnrollmentProvider {
+    #[wasm_bindgen(constructor)]
+    pub fn new(provider_type: String, pat: Option<String>, repo: Option<String>) -> Self {
+        Self {
+            provider_type,
+            pat: pat.unwrap_or_default(),
+            repo: repo.unwrap_or_default(),
+        }
+    }
+
+    pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
+        match provider {
+            nook_core::EnrollmentProvider::Local => Self {
+                provider_type: "local".to_owned(),
+                pat: String::new(),
+                repo: String::new(),
+            },
+            nook_core::EnrollmentProvider::Github { pat, repo } => Self {
+                provider_type: "github".to_owned(),
+                pat,
+                repo,
+            },
+        }
+    }
+
+    pub(crate) fn to_core(
+        &self,
+    ) -> Result<nook_core::EnrollmentProvider, nook_core::EnrollmentError> {
+        match self.provider_type.as_str() {
+            "local" => Ok(nook_core::EnrollmentProvider::Local),
+            "github" => Ok(nook_core::EnrollmentProvider::Github {
+                pat: self.pat.clone(),
+                repo: self.repo.clone(),
+            }),
+            provider_type => Err(nook_core::EnrollmentError::UnsupportedProviderType {
+                provider_type: provider_type.to_owned(),
+            }),
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = "type")]
+    pub fn provider_type(&self) -> String {
+        self.provider_type.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn pat(&self) -> String {
+        self.pat.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn repo(&self) -> String {
+        self.repo.clone()
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookEnrollmentIssueInput {
+    provider: NookEnrollmentProvider,
+    entry_id: String,
+    issued_at: String,
+}
+
+#[wasm_bindgen]
+impl NookEnrollmentIssueInput {
+    #[wasm_bindgen(constructor)]
+    pub fn new(provider: NookEnrollmentProvider, entry_id: String, issued_at: String) -> Self {
+        Self {
+            provider,
+            entry_id,
+            issued_at,
+        }
+    }
+
+    pub(crate) fn to_core(
+        &self,
+    ) -> Result<nook_core::EnrollmentIssueInput, nook_core::EnrollmentError> {
+        Ok(nook_core::EnrollmentIssueInput {
+            provider: self.provider.to_core()?,
+            entry_id: self.entry_id.clone(),
+            issued_at: self.issued_at.clone(),
+        })
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn provider(&self) -> NookEnrollmentProvider {
+        self.provider.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = entryId)]
+    pub fn entry_id(&self) -> String {
+        self.entry_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = issuedAt)]
+    pub fn issued_at(&self) -> String {
+        self.issued_at.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookDecryptedEnrollmentPayload {
+    provider: NookEnrollmentProvider,
+    entry_id: String,
+    issued_at: String,
+}
+
+#[wasm_bindgen]
+impl NookDecryptedEnrollmentPayload {
+    pub(crate) fn from_core(payload: nook_core::DecryptedEnrollmentPayload) -> Self {
+        Self {
+            provider: NookEnrollmentProvider::from_core(payload.provider),
+            entry_id: payload.entry_id,
+            issued_at: payload.issued_at,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn provider(&self) -> NookEnrollmentProvider {
+        self.provider.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = entryId)]
+    pub fn entry_id(&self) -> String {
+        self.entry_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = issuedAt)]
+    pub fn issued_at(&self) -> String {
+        self.issued_at.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookVaultSyncResult {
     changed: bool,
     access_status: String,

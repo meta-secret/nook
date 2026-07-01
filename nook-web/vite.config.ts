@@ -54,5 +54,6 @@ export default defineConfig({
     include: ['tests/unit/**/*.{test,spec}.{js,ts}'],
     exclude: ['e2e/**', 'node_modules/**'],
     environment: 'happy-dom',
+    setupFiles: ['tests/unit/setup-wasm.ts'],
   },
 })

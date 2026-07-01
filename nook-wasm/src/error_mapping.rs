@@ -16,6 +16,7 @@ impl From<nook_core::VaultError> for NookError {
             VaultError::VaultEpoch(e) => NookError::Database(e.to_string()),
             VaultError::SecretPayload(e) => NookError::Database(e.to_string()),
             VaultError::Event(event) => event.into(),
+            VaultError::Enrollment(e) => NookError::Encryption(e.to_string()),
         }
     }
 }
