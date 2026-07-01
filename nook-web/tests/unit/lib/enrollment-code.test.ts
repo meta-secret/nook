@@ -8,7 +8,7 @@ import {
   peekEnrollmentEntryLabel,
   peekEnrollmentIssuedAt,
   type EnrollmentIssueInput,
-} from './enrollment-code'
+} from '$lib/enrollment-code'
 
 const samplePayload: EnrollmentIssueInput = {
   provider: { type: 'local' },

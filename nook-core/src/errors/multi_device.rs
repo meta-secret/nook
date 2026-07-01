@@ -66,6 +66,9 @@ pub enum MultiDeviceError {
     #[error("Failed to build member roster record.")]
     MemberRosterBuildFailed,
 
+    #[error("Secret {key} is missing required type metadata.")]
+    MissingSecretType { key: String },
+
     #[error(transparent)]
     Validation(#[from] ValidationError),
 

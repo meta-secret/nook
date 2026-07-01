@@ -26,10 +26,7 @@ mod secrets;
 mod sync;
 
 use crate::NookError;
-use crate::conversion::{
-    apply_member_records, pending_joins_to_vec, stored_records_from_string_armored,
-    vault_members_to_vec,
-};
+use crate::conversion::{pending_joins_to_vec, vault_members_to_vec};
 use crate::storage::{
     drive::{
         ensure_drive_vault_file, fetch_drive_vault, verify_drive_access,
@@ -47,7 +44,6 @@ use crate::storage::{
 };
 use crate::types::records_to_vec;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
-use std::collections::HashMap;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 // Session state of our secret vault
@@ -62,8 +58,7 @@ pub struct NookVaultManager {
     pub(in crate::manager) device_id: String,
     pub(in crate::manager) device_identity_secret: String,
     pub(in crate::manager) crypto: Option<nook_core::VaultCrypto>,
-    pub(in crate::manager) stored_armored: HashMap<String, String>,
-    pub(in crate::manager) secret_types: HashMap<String, nook_core::SecretType>,
+    pub(in crate::manager) meta: nook_core::VaultMetaState,
     pub(in crate::manager) decrypted_jsonl: String,
     pub(in crate::manager) file_sha: Option<String>,
     pub(in crate::manager) last_synced_content: String,
@@ -109,8 +104,7 @@ impl NookVaultManager {
             device_id: String::new(),
             device_identity_secret: String::new(),
             crypto: None,
-            stored_armored: HashMap::new(),
-            secret_types: HashMap::new(),
+            meta: nook_core::VaultMetaState::default(),
             unlock: nook_core::VaultUnlock::Keys,
             password_entries: Vec::new(),
             store_id: String::new(),
@@ -188,8 +182,7 @@ impl NookVaultManager {
         self.secrets_key.clear();
         self.members_key.clear();
         self.crypto = None;
-        self.stored_armored.clear();
-        self.secret_types.clear();
+        self.meta = nook_core::VaultMetaState::default();
         self.decrypted_jsonl.clear();
         self.password_entries.clear();
         self.file_sha = None;
@@ -240,7 +233,7 @@ impl NookVaultManager {
                 "Vault store id is not initialized.".to_owned(),
             ));
         }
-        let records = stored_records_from_string_armored(&self.stored_armored, &self.secret_types);
+        let records = self.meta.to_stored_records();
         Ok(nook_core::serialize_stored_yaml_with_unlock(
             &records,
             &self.unlock,
@@ -412,13 +405,13 @@ impl NookVaultManager {
             identity,
             &nook_core::SymmetricKey::parse(&members_key)?,
         )? {
-            apply_member_records(&mut self.stored_armored, &member_records);
+            nook_core::apply_member_records(&mut self.meta, &member_records);
         }
         Ok(())
     }
 
     pub(in crate::manager) fn stored_records_snapshot(&self) -> Vec<nook_core::StoredSecretRecord> {
-        stored_records_from_string_armored(&self.stored_armored, &self.secret_types)
+        self.meta.to_stored_records()
     }
 
     pub(in crate::manager) fn needs_genesis_persist(&self) -> bool {

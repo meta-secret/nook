@@ -2,10 +2,9 @@
 
 use crate::errors::{SessionError, SessionResult};
 use crate::{
-    Database, SecretId, SecretType, SecretValue, VaultCrypto, validate_secret_data,
-    validate_secret_id,
+    Database, SecretType, SecretValue, StoredRecordPayload, VaultCrypto, VaultMetaState,
+    validate_secret_data, validate_secret_id,
 };
-use std::collections::HashMap;
 
 /// Replacement payload for [`replace_secret`].
 pub struct ReplaceSecretInput<'a> {
@@ -17,13 +16,12 @@ pub struct ReplaceSecretInput<'a> {
 
 /// Atomically replace one vault item with another (new id + payload).
 ///
-/// Updates the plaintext session (`Database`), armored ciphertext cache, and type
-/// map. Callers must persist storage once after this returns.
-#[allow(clippy::implicit_hasher)]
+/// Updates the plaintext session (`Database`) and the typed `secrets` bucket
+/// of the session meta state. Callers must persist storage once after this
+/// returns.
 pub fn replace_secret(
     db: &mut Database,
-    armored: &mut HashMap<SecretId, String>,
-    secret_types: &mut HashMap<SecretId, SecretType>,
+    state: &mut VaultMetaState,
     crypto: &VaultCrypto,
     input: &ReplaceSecretInput<'_>,
 ) -> SessionResult<()> {
@@ -44,11 +42,15 @@ pub fn replace_secret(
     db.remove(&old_id);
     db.insert(new_id.clone(), typed_value);
 
-    armored.remove(&old_id);
-    secret_types.remove(&old_id);
+    state.secrets.remove(&old_id);
 
     let encrypted = crypto.encrypt_value(input.data_yaml)?;
-    armored.insert(new_id.clone(), encrypted.as_str().to_owned());
-    secret_types.insert(new_id, input.secret_type);
+    state.secrets.insert(
+        new_id,
+        (
+            input.secret_type,
+            StoredRecordPayload::from_age_armored(encrypted),
+        ),
+    );
     Ok(())
 }

@@ -3,7 +3,7 @@ import {
   isGoogleOAuthConfigured,
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
-} from './google-oauth'
+} from '$lib/google-oauth'
 
 describe('google-oauth', () => {
   it('is configured with the committed client id', () => {

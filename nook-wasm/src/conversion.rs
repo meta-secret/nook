@@ -2,82 +2,9 @@
 
 use crate::types::{NookVaultSyncResult, joins_to_vec, members_to_vec};
 use crate::{NookError, NookVaultManager};
-use std::collections::HashMap;
 use wasm_bindgen::JsError;
 
 pub(crate) use crate::types::records_to_vec;
-
-pub(crate) fn secret_id_from_str(key: &str) -> nook_core::SecretId {
-    nook_core::SecretId::from_vault_record(key)
-}
-
-pub(crate) fn string_armored_to_secret_id(
-    armored: &HashMap<String, String>,
-) -> HashMap<nook_core::SecretId, String> {
-    armored
-        .iter()
-        .map(|(key, value)| (secret_id_from_str(key), value.clone()))
-        .collect()
-}
-
-pub(crate) fn string_secret_types_to_secret_id(
-    secret_types: &HashMap<String, nook_core::SecretType>,
-) -> HashMap<nook_core::SecretId, nook_core::SecretType> {
-    secret_types
-        .iter()
-        .map(|(key, secret_type)| (secret_id_from_str(key), *secret_type))
-        .collect()
-}
-
-pub(crate) fn secret_id_armored_to_string(
-    armored: &HashMap<nook_core::SecretId, String>,
-) -> HashMap<String, String> {
-    armored
-        .iter()
-        .map(|(key, value)| (key.to_string(), value.clone()))
-        .collect()
-}
-
-pub(crate) fn secret_id_types_to_string(
-    secret_types: &HashMap<nook_core::SecretId, nook_core::SecretType>,
-) -> HashMap<String, nook_core::SecretType> {
-    secret_types
-        .iter()
-        .map(|(key, secret_type)| (key.to_string(), *secret_type))
-        .collect()
-}
-
-pub(crate) fn stored_records_from_string_armored(
-    armored: &HashMap<String, String>,
-    secret_types: &HashMap<String, nook_core::SecretType>,
-) -> Vec<nook_core::StoredSecretRecord> {
-    nook_core::Database::stored_records_from_armored(
-        &string_armored_to_secret_id(armored),
-        &string_secret_types_to_secret_id(secret_types),
-    )
-}
-
-pub(crate) fn records_to_armored(
-    records: &[nook_core::StoredSecretRecord],
-) -> HashMap<String, String> {
-    records
-        .iter()
-        .map(|record| (record.key.to_string(), record.value.as_str().to_owned()))
-        .collect()
-}
-
-pub(crate) fn records_to_secret_types(
-    records: &[nook_core::StoredSecretRecord],
-) -> HashMap<String, nook_core::SecretType> {
-    records
-        .iter()
-        .filter_map(|record| {
-            record
-                .secret_type
-                .map(|secret_type| (record.key.to_string(), secret_type))
-        })
-        .collect()
-}
 
 pub(crate) fn content_requires_genesis(
     content: &str,
@@ -113,10 +40,10 @@ pub(crate) fn sync_result_session(
 }
 
 pub(crate) fn apply_member_records(
-    armored: &mut HashMap<String, String>,
+    state: &mut nook_core::VaultMetaState,
     member_records: &[nook_core::StoredSecretRecord],
 ) {
-    nook_core::apply_member_records(armored, member_records);
+    nook_core::apply_member_records(state, member_records);
 }
 
 pub(crate) fn wasm_iso_timestamp() -> String {
@@ -125,8 +52,7 @@ pub(crate) fn wasm_iso_timestamp() -> String {
 
 pub(crate) struct LoadedVault {
     pub(crate) jsonl: String,
-    pub(crate) armored: HashMap<String, String>,
-    pub(crate) secret_types: HashMap<String, nook_core::SecretType>,
+    pub(crate) meta: nook_core::VaultMetaState,
     pub(crate) secrets_key: String,
     pub(crate) members_key: String,
 }
@@ -138,8 +64,7 @@ pub(crate) fn load_stored_vault(
     let loaded = nook_core::load_stored_vault(content, identity)?;
     Ok(LoadedVault {
         jsonl: loaded.jsonl,
-        armored: loaded.armored,
-        secret_types: loaded.secret_types,
+        meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,
     })

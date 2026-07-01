@@ -8,7 +8,7 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::NookPasswordEntrySummary;
 use crate::NookSecretRecord;
-use crate::conversion::{records_to_armored, records_to_secret_types, wasm_iso_timestamp};
+use crate::conversion::wasm_iso_timestamp;
 use crate::storage::indexed_db::{load_vault_local_cache, save_device_identity_to_indexed_db};
 use crate::types::password_entries_to_vec;
 use wasm_bindgen::JsError;
@@ -267,8 +267,7 @@ impl NookVaultManager {
             &keys.members_key,
         )?);
 
-        self.stored_armored = records_to_armored(&records);
-        self.secret_types = records_to_secret_types(&records);
+        self.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.unlock = nook_core::VaultUnlock::Keys;
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;

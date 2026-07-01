@@ -39,7 +39,7 @@ impl NookVaultManager {
                 if !self.store_id.is_empty() {
                     let format = nook_core::detect_stored_format(&content)?;
                     let fresh_records = nook_core::deserialize_stored(&content, format)?;
-                    nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
+                    nook_core::merge_remote_join_records(&mut self.meta, &fresh_records);
                     if !nook_core::list_join_requests(&self.stored_records_snapshot()).is_empty() {
                         self.last_synced_content = content.clone();
                         return sync_result_session(self, true);
@@ -93,18 +93,16 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(&content)?;
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
 
-        nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
+        nook_core::merge_remote_join_records(&mut self.meta, &fresh_records);
         let LoadedVault {
             jsonl,
-            armored,
-            secret_types,
+            meta,
             secrets_key,
             members_key,
         } = load_stored_vault(&content, &identity)?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.decrypted_jsonl = jsonl;
-        self.stored_armored = armored;
-        self.secret_types = secret_types;
+        self.meta = meta;
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
         let import_yaml = self.serialize_current_projection_yaml()?;
@@ -129,7 +127,7 @@ impl NookVaultManager {
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
         let has_remote_joins = fresh_records.iter().any(nook_core::is_join_stored_record);
         let before_joins = nook_core::list_join_requests(&self.stored_records_snapshot());
-        nook_core::merge_remote_join_records(&mut self.stored_armored, &fresh_records);
+        nook_core::merge_remote_join_records(&mut self.meta, &fresh_records);
         let after_joins = nook_core::list_join_requests(&self.stored_records_snapshot());
         let joins_changed = before_joins != after_joins;
         let content_changed = content.trim() != self.last_synced_content.trim();
@@ -154,11 +152,7 @@ impl NookVaultManager {
         }
         let format = nook_core::detect_stored_format(&content)?;
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
-        let changed = nook_core::merge_remote_yaml_user_secrets(
-            &mut self.stored_armored,
-            &mut self.secret_types,
-            &fresh_records,
-        );
+        let changed = nook_core::merge_remote_yaml_user_secrets(&mut self.meta, &fresh_records);
         if !changed {
             return Ok(false);
         }
@@ -171,8 +165,7 @@ impl NookVaultManager {
             self.decrypted_jsonl = nook_core::apply_user_records_to_armored_session(
                 user_records,
                 crypto,
-                &mut self.stored_armored,
-                &mut self.secret_types,
+                &mut self.meta,
             )?
             .into_inner();
         }

@@ -15,6 +15,48 @@ pub fn validate_bip39_mnemonic(mnemonic: &str) -> ValidationResult<()> {
         .map_err(|_| ValidationError::Bip39Invalid)
 }
 
+#[must_use]
+pub fn bip39_english_wordlist() -> Vec<&'static str> {
+    Language::English.word_list().to_vec()
+}
+
+#[must_use]
+pub fn is_known_bip39_word(word: &str) -> bool {
+    let normalized = word.trim().to_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+    Language::English.find_word(&normalized).is_some()
+}
+
+#[must_use]
+pub fn suggest_bip39_words(prefix: &str, limit: usize) -> Vec<&'static str> {
+    let needle = prefix.trim().to_lowercase();
+    if needle.is_empty() || limit == 0 {
+        return Vec::new();
+    }
+    Language::English
+        .words_by_prefix(&needle)
+        .iter()
+        .copied()
+        .take(limit)
+        .collect()
+}
+
+#[must_use]
+pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: usize) -> bool {
+    let words = parse_bip39_words(text);
+    words.len() == expected_word_count && words.iter().all(|word| is_known_bip39_word(word))
+}
+
+fn parse_bip39_words(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(str::trim)
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,5 +92,33 @@ mod tests {
     #[test]
     fn rejects_empty_mnemonic() {
         assert!(validate_bip39_mnemonic("   ").is_err());
+    }
+
+    #[test]
+    fn exposes_bundled_english_wordlist() {
+        let words = bip39_english_wordlist();
+        assert_eq!(words.len(), 2048);
+        assert_eq!(words.first().copied(), Some("abandon"));
+        assert_eq!(words.last().copied(), Some("zoo"));
+    }
+
+    #[test]
+    fn suggests_words_by_prefix() {
+        assert_eq!(
+            suggest_bip39_words("ab", 4),
+            vec!["abandon", "ability", "able", "about"]
+        );
+        assert_eq!(suggest_bip39_words("zoo", 8), vec!["zoo"]);
+        assert!(suggest_bip39_words("missing", 8).is_empty());
+    }
+
+    #[test]
+    fn validates_word_sequence_membership_without_checksum() {
+        assert!(is_bip39_word_sequence_valid(
+            "abandon ability able about above absent absorb abstract absurd abuse access accident",
+            12
+        ));
+        assert!(!is_bip39_word_sequence_valid("abandon notaword", 12));
+        assert!(!is_bip39_word_sequence_valid("abandon ability", 12));
     }
 }

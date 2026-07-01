@@ -3,7 +3,7 @@ import {
   createVaultIdleSessionTracker,
   resolveVaultIdleTimeoutMs,
   resolveVaultIdleWarningMs,
-} from './vault-idle-session'
+} from '$lib/vault-idle-session'
 
 describe('resolveVaultIdleTimeoutMs', () => {
   test('production build uses five minute default', () => {

@@ -2,7 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::conversion::{stored_records_from_string_armored, wasm_iso_timestamp};
+use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::{
     fetch_drive_event, list_drive_event_ids, put_drive_event_if_absent,
 };
@@ -65,7 +65,7 @@ impl NookVaultManager {
             self.activate_event_log_mode().await?;
             return Ok(());
         }
-        if !self.stored_armored.is_empty() {
+        if !self.meta.is_empty() {
             let yaml = self.serialize_current_projection_yaml()?;
             self.import_stored_vault_to_event_log(&yaml).await?;
             return Ok(());
@@ -213,7 +213,7 @@ impl NookVaultManager {
         } else {
             for operation in &operations {
                 nook_core::apply_vault_meta_operation(
-                    &mut self.stored_armored,
+                    &mut self.meta,
                     operation,
                     created_at.as_str(),
                 )?;
@@ -238,19 +238,15 @@ impl NookVaultManager {
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        self.decrypted_jsonl = apply_user_records_to_armored_session(
-            user_records,
-            crypto,
-            &mut self.stored_armored,
-            &mut self.secret_types,
-        )?
-        .into_inner();
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.stored_armored)?;
+        self.decrypted_jsonl =
+            apply_user_records_to_armored_session(user_records, crypto, &mut self.meta)?
+                .into_inner();
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.meta)?;
         Ok(())
     }
 
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
-        let records = stored_records_from_string_armored(&self.stored_armored, &self.secret_types);
+        let records = self.meta.to_stored_records();
         let yaml = nook_core::serialize_stored_yaml_with_unlock(
             &records,
             &self.unlock,
@@ -437,7 +433,7 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let identity = self.device_identity()?;
         rewrap_vault_meta_for_epoch(
-            &mut self.stored_armored,
+            &mut self.meta,
             &identity,
             records_snapshot,
             old_members_key,
@@ -478,12 +474,15 @@ impl NookVaultManager {
         self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
         self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
         for payload in &secrets {
-            self.stored_armored.insert(
-                payload.id.to_string(),
-                payload.ciphertext.as_str().to_owned(),
+            self.meta.secrets.insert(
+                payload.id.clone(),
+                (
+                    payload.secret_type,
+                    nook_core::StoredRecordPayload::from_trusted(
+                        payload.ciphertext.as_str().to_owned(),
+                    ),
+                ),
             );
-            self.secret_types
-                .insert(payload.id.to_string(), payload.secret_type);
         }
         self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
             secrets,

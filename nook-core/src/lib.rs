@@ -6,6 +6,7 @@
 
 mod bip39;
 mod database;
+mod enrollment;
 mod errors;
 mod event_canonical;
 mod i18n;
@@ -37,12 +38,20 @@ mod vault_sync_session;
 mod vault_sync_store;
 mod vault_wire;
 
-pub use bip39::validate_bip39_mnemonic;
+pub use bip39::{
+    bip39_english_wordlist, is_bip39_word_sequence_valid, is_known_bip39_word, suggest_bip39_words,
+    validate_bip39_mnemonic,
+};
 pub use database::Database;
+pub use enrollment::{
+    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
+    decrypt_enrollment_payload, encrypt_enrollment_payload, parse_enrollment_envelope,
+    peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
+};
 pub use errors::{
-    DatabaseError, EventError, MultiDeviceError, PasswordError, SecretPayloadError, SessionError,
-    ValidationError, VaultCryptoError, VaultEpochError, VaultError, VaultFormatError, VaultResult,
-    VaultSyncError,
+    DatabaseError, EnrollmentError, EventError, MultiDeviceError, PasswordError,
+    SecretPayloadError, SessionError, ValidationError, VaultCryptoError, VaultEpochError,
+    VaultError, VaultFormatError, VaultResult, VaultSyncError,
 };
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{
@@ -53,20 +62,21 @@ pub use secret_view::build_secret_yaml;
 
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, VaultKeys, VaultMember, apply_vault_meta_operation, approve_join_request,
-    assess_connect_access, auth_record, build_members_records, create_join_request_record,
-    dec_auth_id, dec_auth_id_from_public_key, deny_join_request, device_is_enrolled,
-    encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys,
-    ensure_self_in_roster, explain_connect_blocked, generate_dec, generate_id,
-    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
-    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record,
-    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
-    is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
-    member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
-    merge_remote_yaml_user_secrets, parse_auth_envelopes, parse_join_request,
-    pending_join_for_device, rename_vault_member, replace_member_records, resolve_dec, resolve_dek,
-    resolve_member_roster, resolve_members_key, resolve_secrets_key, revoke_vault_member,
-    roster_add_member, user_stored_records, vault_has_multi_device_records,
+    MemberEntry, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+    apply_vault_meta_operation, approve_join_request, assess_connect_access, auth_record,
+    build_members_records, create_join_request_record, dec_auth_id, dec_auth_id_from_public_key,
+    deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
+    enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
+    explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
+    generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
+    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
+    is_members_stored_record, is_reserved_device_label, is_vault_meta_record, join_record_key,
+    list_join_requests, materialize_vault_meta_from_graph, member_from_identity, member_from_join,
+    member_stored_key, merge_remote_join_records, merge_remote_yaml_user_secrets,
+    parse_auth_envelopes, parse_join_request, pending_join_for_device, rename_vault_member,
+    replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
+    resolve_secrets_key, revoke_vault_member, roster_add_member, user_stored_records,
+    vault_has_multi_device_records,
 };
 
 pub use event_canonical::{

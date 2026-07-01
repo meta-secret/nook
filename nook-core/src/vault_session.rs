@@ -2,37 +2,25 @@
 
 use crate::errors::VaultResult;
 use crate::vault_wire::SessionJsonl;
-use crate::{
-    Database, SecretId, SecretType, StoredRecordPayload, StoredSecretRecord, VaultCrypto,
-    is_vault_meta_record,
-};
-use std::collections::HashMap;
+use crate::{Database, StoredSecretRecord, VaultCrypto, VaultMetaState};
 
-/// Merge live user secrets into an armored session cache and return decrypted JSONL.
+/// Merge live user secrets into the typed session meta state and return decrypted JSONL.
 ///
-/// Vault meta rows (auth, members, join) in `armored` are preserved; user secret rows
-/// are replaced from `user_records`.
-#[allow(clippy::implicit_hasher)]
+/// Vault meta rows (auth, members, join) in `state` are preserved; the `secrets`
+/// bucket is fully replaced from `user_records`.
 pub fn apply_user_records_to_armored_session(
     user_records: Vec<StoredSecretRecord>,
     crypto: &VaultCrypto,
-    armored: &mut HashMap<String, String>,
-    secret_types: &mut HashMap<String, SecretType>,
+    state: &mut VaultMetaState,
 ) -> VaultResult<SessionJsonl> {
     let db = Database::from_stored_records_with_crypto(&user_records, crypto)?;
     let jsonl = db.to_jsonl()?;
-    armored.retain(|key, value| {
-        is_vault_meta_record(&StoredSecretRecord {
-            key: SecretId::from_vault_record(key),
-            secret_type: None,
-            value: StoredRecordPayload::from_trusted(value.clone()),
-        })
-    });
-    secret_types.retain(|key, _| armored.contains_key(key));
+    state.secrets.clear();
     for record in user_records {
-        armored.insert(record.key.to_string(), record.value.as_str().to_owned());
         if let Some(secret_type) = record.secret_type {
-            secret_types.insert(record.key.to_string(), secret_type);
+            state
+                .secrets
+                .insert(record.key, (secret_type, record.value));
         }
     }
     Ok(jsonl)
@@ -41,7 +29,10 @@ pub fn apply_user_records_to_armored_session(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ApiKeySecret, SecretValue, VaultResult, generate_vault_keys, genesis_auth_record};
+    use crate::{
+        ApiKeySecret, SecretId, SecretValue, StoredRecordPayload, VaultResult, generate_vault_keys,
+        genesis_auth_record,
+    };
 
     #[test]
     fn apply_user_records_preserves_meta_and_replaces_secrets() -> VaultResult<()> {
@@ -58,31 +49,30 @@ mod tests {
             .to_yaml()?,
         )?;
 
-        let mut armored = HashMap::from([
-            (auth.key.to_string(), auth.value.as_str().to_owned()),
-            ("secret_old0000001".to_owned(), "stale".to_owned()),
-        ]);
-        let mut secret_types =
-            HashMap::from([("secret_old0000001".to_owned(), crate::SecretType::ApiKey)]);
+        let old_id = SecretId::from_vault_record("secret_old0000001");
+        let mut state = VaultMetaState::from_stored_records(std::slice::from_ref(&auth));
+        state.secrets.insert(
+            old_id.clone(),
+            (
+                crate::SecretType::ApiKey,
+                StoredRecordPayload::from_trusted("stale".to_owned()),
+            ),
+        );
 
+        let new_id = SecretId::from_vault_record("secret_new0000001");
         let user_records = vec![StoredSecretRecord {
-            key: SecretId::from_vault_record("secret_new0000001"),
+            key: new_id.clone(),
             secret_type: Some(crate::SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 
-        let jsonl = apply_user_records_to_armored_session(
-            user_records,
-            &crypto,
-            &mut armored,
-            &mut secret_types,
-        )?;
+        let jsonl = apply_user_records_to_armored_session(user_records, &crypto, &mut state)?;
 
         assert!(jsonl.as_str().contains("secret_new0000001"));
-        assert!(!armored.contains_key("secret_old0000001"));
-        assert!(armored.contains_key("secret_new0000001"));
-        assert!(armored.contains_key(&auth.key.to_string()));
-        assert_eq!(secret_types.len(), 1);
+        assert!(!state.secrets.contains_key(&old_id));
+        assert!(state.secrets.contains_key(&new_id));
+        assert!(state.auth.contains_key(&identity.auth_id()));
+        assert_eq!(state.secrets.len(), 1);
         Ok(())
     }
 }

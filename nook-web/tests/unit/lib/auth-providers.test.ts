@@ -8,7 +8,7 @@ import {
   providerStorageDetail,
   syncProviderTargetKey,
   type StorageProvider,
-} from './auth-providers'
+} from '$lib/auth-providers'
 
 function githubProvider(
   overrides: Partial<StorageProvider> = {},

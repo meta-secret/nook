@@ -1,89 +1,25 @@
-export const BIP39_ENGLISH_URL =
-  'https://raw.githubusercontent.com/bitcoin/bips/master/bip-0039/english.txt'
+import {
+  default as initNookWasm,
+  getBip39EnglishWordlist,
+  isBip39WordSequenceValid,
+  isKnownBip39Word as isKnownBip39WordCore,
+  suggestBip39Words as suggestBip39WordsCore,
+} from './nook-wasm/nook_wasm'
 
-const SESSION_CACHE_KEY = 'nook_bip39_english_v1'
+await initNookWasm()
 
 export type MnemonicLength = 12 | 24
 
 let cachedWordlist: Set<string> | null = null
-let loadPromise: Promise<Set<string>> | null = null
-
-export function getBip39WordlistUrl(): string {
-  const override = import.meta.env.VITE_BIP39_WORDLIST_URL?.trim()
-  return override || BIP39_ENGLISH_URL
-}
-
-function parseWordlistBody(body: string): Set<string> {
-  const words = body
-    .trim()
-    .split('\n')
-    .map((word) => word.trim().toLowerCase())
-    .filter(Boolean)
-
-  if (words.length !== 2048) {
-    throw new Error(`Invalid BIP39 wordlist length: ${words.length}`)
-  }
-
-  return new Set(words)
-}
-
-function readSessionCache(): Set<string> | null {
-  if (typeof sessionStorage === 'undefined') return null
-  const raw = sessionStorage.getItem(SESSION_CACHE_KEY)
-  if (!raw) return null
-
-  try {
-    const words = JSON.parse(raw) as string[]
-    if (!Array.isArray(words) || words.length !== 2048) return null
-    return new Set(words)
-  } catch {
-    sessionStorage.removeItem(SESSION_CACHE_KEY)
-    return null
-  }
-}
-
-function writeSessionCache(words: Iterable<string>) {
-  if (typeof sessionStorage === 'undefined') return
-  sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify([...words]))
-}
 
 export function clearBip39WordlistCache() {
   cachedWordlist = null
-  loadPromise = null
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem(SESSION_CACHE_KEY)
-  }
 }
 
 export async function loadBip39Wordlist(force = false): Promise<Set<string>> {
   if (!force && cachedWordlist) return cachedWordlist
-  if (!force && loadPromise) return loadPromise
-
-  loadPromise = (async () => {
-    if (!force) {
-      const sessionCached = readSessionCache()
-      if (sessionCached) {
-        cachedWordlist = sessionCached
-        return sessionCached
-      }
-    }
-
-    const response = await fetch(getBip39WordlistUrl())
-    if (!response.ok) {
-      throw new Error(`Failed to load BIP39 wordlist: ${response.status}`)
-    }
-
-    const wordlist = parseWordlistBody(await response.text())
-    cachedWordlist = wordlist
-    writeSessionCache(wordlist)
-    return wordlist
-  })()
-
-  try {
-    return await loadPromise
-  } finally {
-    loadPromise = null
-  }
+  cachedWordlist = new Set(getBip39EnglishWordlist())
+  return cachedWordlist
 }
 
 export function parseMnemonicWords(text: string): string[] {
@@ -105,9 +41,8 @@ export function inferMnemonicLength(text: string): MnemonicLength | null {
 }
 
 export function isKnownBip39Word(word: string, wordlist: Set<string>): boolean {
-  const normalized = word.trim().toLowerCase()
-  if (!normalized) return false
-  return wordlist.has(normalized)
+  void wordlist
+  return isKnownBip39WordCore(word)
 }
 
 export function suggestBip39Words(
@@ -115,17 +50,8 @@ export function suggestBip39Words(
   wordlist: Set<string>,
   limit = 8,
 ): string[] {
-  const needle = prefix.trim().toLowerCase()
-  if (!needle) return []
-
-  const matches: string[] = []
-  for (const word of wordlist) {
-    if (word.startsWith(needle)) {
-      matches.push(word)
-    }
-  }
-
-  return matches.sort().slice(0, limit)
+  void wordlist
+  return suggestBip39WordsCore(prefix, limit)
 }
 
 export function isMnemonicValid(
@@ -133,7 +59,6 @@ export function isMnemonicValid(
   wordlist: Set<string>,
   expectedLength: MnemonicLength,
 ): boolean {
-  const words = parseMnemonicWords(text)
-  if (words.length !== expectedLength) return false
-  return words.every((word) => isKnownBip39Word(word, wordlist))
+  void wordlist
+  return isBip39WordSequenceValid(text, expectedLength)
 }

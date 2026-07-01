@@ -4,8 +4,11 @@ import {
   oauthTokensToICloudConfig,
   requestICloudWebAuthToken,
   resetICloudAuthStateForTests,
-} from './icloud-oauth'
-import { ICLOUD_CONTAINER_ID, ICLOUD_ENVIRONMENT } from './icloud-oauth-config'
+} from '$lib/icloud-oauth'
+import {
+  ICLOUD_CONTAINER_ID,
+  ICLOUD_ENVIRONMENT,
+} from '$lib/icloud-oauth-config'
 
 describe('icloud-oauth', () => {
   it('is configured for production CloudKit on nokey.sh', () => {

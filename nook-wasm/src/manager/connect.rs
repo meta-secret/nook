@@ -140,15 +140,13 @@ impl NookVaultManager {
                     .filter(|value| !value.trim().is_empty())
                     .unwrap_or_else(|| content.clone());
                 let LoadedVault {
-                    armored,
-                    secret_types,
+                    meta,
                     secrets_key,
                     members_key,
                     ..
                 } = load_stored_vault(&cache, &identity)?;
                 self.apply_vault_keys(&secrets_key, &members_key)?;
-                self.stored_armored = armored;
-                self.secret_types = secret_types;
+                self.meta = meta;
                 self.capture_vault_unlock(&cache);
                 self.sync_events_from_current_provider().await?;
                 self.apply_event_projection_to_session().await?;
@@ -161,15 +159,13 @@ impl NookVaultManager {
                 let _ = self.status_tx.send("DECRYPT_START".to_owned());
                 let LoadedVault {
                     jsonl,
-                    armored,
-                    secret_types,
+                    meta,
                     secrets_key,
                     members_key,
                 } = load_stored_vault(&content, &identity)?;
                 self.apply_vault_keys(&secrets_key, &members_key)?;
                 self.decrypted_jsonl = jsonl;
-                self.stored_armored = armored;
-                self.secret_types = secret_types;
+                self.meta = meta;
                 self.maybe_sync_self_into_roster(&identity)?;
                 let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
                 self.last_synced_content = content.clone();
@@ -200,19 +196,16 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.password_entries.clear();
         self.unlock = nook_core::VaultUnlock::Keys;
-        self.stored_armored.clear();
+        self.meta = nook_core::VaultMetaState::default();
         let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         let genesis =
             nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
-        self.stored_armored
-            .insert(genesis.key.to_string(), genesis.value.as_str().to_owned());
+        self.meta.apply_record(&genesis);
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
-            self.stored_armored
-                .insert(member.key.to_string(), member.value.as_str().to_owned());
+            self.meta.apply_record(&member);
         }
         self.decrypted_jsonl = String::new();
-        self.secret_types.clear();
         self.last_synced_content.clear();
         Ok(())
     }
@@ -221,24 +214,15 @@ impl NookVaultManager {
     pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("INITIALIZE_START".to_owned());
         self.decrypted_jsonl = String::new();
-        self.stored_armored.retain(|key, value| {
-            nook_core::is_vault_meta_record(&nook_core::StoredSecretRecord {
-                key: nook_core::SecretId::from_vault_record(key),
-                secret_type: None,
-                value: nook_core::StoredRecordPayload::from_trusted(value.clone()),
-            })
-        });
-        self.secret_types.clear();
+        self.meta.secrets.clear();
         if self.needs_genesis_persist() {
             let identity = self.device_identity()?;
             let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
             let members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
             let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-            self.stored_armored
-                .insert(genesis.key.to_string(), genesis.value.as_str().to_owned());
+            self.meta.apply_record(&genesis);
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
-                self.stored_armored
-                    .insert(member.key.to_string(), member.value.as_str().to_owned());
+                self.meta.apply_record(&member);
             }
         }
         if self.store_id.is_empty() {

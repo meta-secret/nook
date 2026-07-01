@@ -171,6 +171,12 @@ pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> 
     }
 }
 
+pub(crate) async fn has_local_vault() -> Result<bool, NookError> {
+    Ok(load_from_indexed_db()
+        .await?
+        .is_some_and(|content| !content.trim().is_empty()))
+}
+
 fn vault_cache_key(cache_ref: &str) -> String {
     format!("vault_cache:{cache_ref}")
 }
