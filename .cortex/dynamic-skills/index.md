@@ -7,6 +7,7 @@ so related knowledge stays consolidated.
 | Skill card | Purpose | Cursor skill |
 |---|---|---|
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional Cursor project skills | [`.cursor/skills/dynamic-skill/SKILL.md`](../../.cursor/skills/dynamic-skill/SKILL.md) |
+| [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes in Rust and reserve TypeScript for UI presentation state and browser glue | |
 
 ## How To Add One
 
