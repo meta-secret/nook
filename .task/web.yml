@@ -108,10 +108,20 @@ tasks:
   web:test:e2e:sync-live:parallel:
     desc: Live sync Playwright project in Docker when wasm/dist already built.
     deps:
-      - web:e2e:build-dist
+      - web:e2e:build-dist:sync-live
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:sync-live:parallel }
+
+  web:e2e:build-dist:sync-live:
+    desc: Rebuild web dist for live sync e2e (expose vault hook; 1000ms sync interval).
+    cmds:
+      - task: docker:task
+        vars:
+          TASK: _web:e2e:build-dist:sync-live
+          VITE_VAULT_SYNC_INTERVAL_MS: '1000'
+          VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+          VITE_VAULT_IDLE_WARNING_MS: '0'
 
   web:test:e2e:github:
     desc: Alias for web:test:e2e:sync-live (real provider API).
@@ -329,6 +339,16 @@ tasks:
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
       VITE_VAULT_SYNC_INTERVAL_MS: '500'
+      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
+      VITE_VAULT_IDLE_WARNING_MS: '0'
+    cmds:
+      - task: _web:e2e:build-if-needed
+
+  _web:e2e:build-dist:sync-live:
+    desc: Build web dist for nightly sync-live (real APIs — keep 1000ms sync interval).
+    env:
+      VITE_E2E_EXPOSE_VAULT: 'true'
+      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:

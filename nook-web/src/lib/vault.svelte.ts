@@ -229,6 +229,23 @@ export class VaultState {
     this.storageChain = Promise.resolve()
   }
 
+  /**
+   * Wait for any in-flight wasm storage op to finish and yield one event-loop
+   * turn so wasm-bindgen releases its RefMut before the next `&mut self` call.
+   */
+  private async drainWasmStorageBeforeMutation(): Promise<void> {
+    await Promise.race([
+      this.storageChain,
+      new Promise<void>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('Vault storage is busy. Try again.')),
+          VaultState.storageOpTimeoutMs,
+        )
+      }),
+    ])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
   private static storageOpTimeoutMs = 20_000
 
   private raceStorageTimeout<T>(
@@ -2614,26 +2631,8 @@ export class VaultState {
     // takes ~1s of scrypt CPU, and wasm-bindgen aliases the manager
     // borrow if a sync_vault_from_storage future is still pending.
     this.isPasswordBusy = true
-    // Drain any in-flight async wasm operation and wait one event-loop
-    // turn so wasm-bindgen's RefMut on the manager is observably released
-    // before we issue sync `&self` calls. Without this, scrypt verify
-    // races a background `sync_vault_from_storage` and trips the
-    // aliasing detector.
     try {
-      await Promise.race([
-        this.storageChain,
-        new Promise<void>((_, reject) => {
-          setTimeout(
-            () => reject(new Error('Vault storage is busy. Try again.')),
-            VaultState.storageOpTimeoutMs,
-          )
-        }),
-      ])
-    } catch {
-      this.resetStorageChain()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    try {
+      await this.drainWasmStorageBeforeMutation()
       // Background sync can refresh wasm password metadata from remote storage
       // while the UI still holds a stale list — refetch before verify/issue.
       const refreshed = await this.refreshPasswordEntriesList()
@@ -2870,7 +2869,7 @@ export class VaultState {
     }
   }
 
-  async handleAddSecret(id: string, type: VaultItemType, data: string) {
+  async handleAddSecret(type: VaultItemType, data: string) {
     if (!this.manager) return
     if (this.syncBlocked) {
       this.errorMsg = this.t('auth_storage.sync_blocked_edits')
@@ -2879,10 +2878,13 @@ export class VaultState {
     this.errorMsg = ''
     this.dismissSuccess()
     this.isSaving = true
+    this.stopVaultSync()
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
+      await this.drainWasmStorageBeforeMutation()
+      const id = this.manager.generate_secret_id()
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.raceStorageTimeout(
           this.manager!.add_secret(id, type, data),
@@ -2892,12 +2894,15 @@ export class VaultState {
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_saved'))
-      await this.runFanOutSyncAfterLocalSave()
+      this.scheduleFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
     } finally {
       this.isSaving = false
+      if (this.isAuthenticated) {
+        this.startVaultSync()
+      }
     }
   }
 
@@ -2927,10 +2932,12 @@ export class VaultState {
     this.errorMsg = ''
     this.dismissSuccess()
     this.isSaving = true
+    this.stopVaultSync()
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
     })
     try {
+      await this.drainWasmStorageBeforeMutation()
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.delete_secret(
           id,
@@ -2945,6 +2952,9 @@ export class VaultState {
       throw e
     } finally {
       this.isSaving = false
+      if (this.isAuthenticated) {
+        this.startVaultSync()
+      }
     }
   }
 
@@ -2962,6 +2972,7 @@ export class VaultState {
     })
     try {
       const newId = this.manager!.generate_secret_id()
+      await this.drainWasmStorageBeforeMutation()
       await this.enqueueStorage(async () => {
         const rawRecords = (await this.manager!.replace_secret(
           oldId,

@@ -30,11 +30,7 @@
     isSaving: boolean
     syncBlocked?: boolean
     secrets?: NookSecretRecord[]
-    onAddSecret: (
-      id: string,
-      type: VaultItemType,
-      data: string,
-    ) => Promise<void>
+    onAddSecret: (type: VaultItemType, data: string) => Promise<void>
     onReplaceSecret: (
       oldId: string,
       type: VaultItemType,

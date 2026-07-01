@@ -33,11 +33,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    onAddSecret: (
-      id: string,
-      type: VaultItemType,
-      data: string,
-    ) => Promise<void>
+    onAddSecret: (type: VaultItemType, data: string) => Promise<void>
     onReplaceSecret?: (
       oldId: string,
       type: VaultItemType,
@@ -183,12 +179,7 @@
     if (isEditMode && initialItem && onReplaceSecret) {
       await onReplaceSecret(initialItem.id, selectedType, dataYaml)
     } else {
-      const manager = vault.manager
-      if (!manager) {
-        throw new Error('Vault engine is not available.')
-      }
-      const id = manager.generate_secret_id()
-      await onAddSecret(id, selectedType, dataYaml)
+      await onAddSecret(selectedType, dataYaml)
     }
     resetForm()
     onCancel()
