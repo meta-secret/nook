@@ -9,8 +9,11 @@ import {
   UI_TIMEOUT_MS,
   uniqueSecretKey,
   unlockVaultOnLogin,
+  triggerVaultSyncRefresh,
   waitForGithubVaultState,
   waitForSecretOnDevice,
+  waitForVaultOperationsIdle,
+  waitForVaultSyncIdle,
 } from './helpers'
 import {
   createSyncTarget,
@@ -45,7 +48,9 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     const key = uniqueSecretKey('e2e-recover')
     const value = 'recovered-from-local-vault'
 
+    await waitForVaultOperationsIdle(vaultPage)
     await addSecret(vaultPage, key, value, target)
+    await waitForVaultSyncIdle(vaultPage)
     resetSyncRemote(target)
 
     await vaultPage.reload()
@@ -62,7 +67,7 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     await row.getByText(value).waitFor()
 
     await removeE2eDummyGithubSyncProvider(vaultPage)
-    await vaultPage.getByTestId('vault-sync-refresh-btn').click()
+    await triggerVaultSyncRefresh(vaultPage)
     await waitForGithubVaultState(
       target,
       (yaml) => yaml.secretIds.length >= 1,

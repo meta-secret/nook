@@ -305,9 +305,22 @@ pub fn merge_remote_yaml_user_secrets(
     secret_types: &mut HashMap<String, SecretType>,
     fresh_records: &[StoredSecretRecord],
 ) -> bool {
+    merge_remote_yaml_user_secrets_filtered(armored, secret_types, fresh_records, |_| true)
+}
+
+/// Like [`merge_remote_yaml_user_secrets`], but skip rows rejected by `should_merge`.
+pub fn merge_remote_yaml_user_secrets_filtered(
+    armored: &mut HashMap<String, String>,
+    secret_types: &mut HashMap<String, SecretType>,
+    fresh_records: &[StoredSecretRecord],
+    should_merge: impl Fn(&str) -> bool,
+) -> bool {
     let mut changed = false;
     for record in user_stored_records(fresh_records) {
         let key = record.key.to_string();
+        if !should_merge(&key) {
+            continue;
+        }
         let value = record.value.as_str();
         if armored.get(&key).is_some_and(|existing| existing == value) {
             continue;
@@ -1319,6 +1332,28 @@ mod tests {
             std::slice::from_ref(&remote_secret),
         );
         assert!(!unchanged);
+        let _ = genesis;
+    }
+
+    #[test]
+    fn merge_remote_yaml_user_secrets_filtered_skips_rejected_rows() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, armored_records) = genesis_vault(&keys);
+        let mut armored = records_to_armored_map(&armored_records);
+        let mut secret_types = std::collections::HashMap::new();
+        let remote_secret = StoredSecretRecord {
+            key: SecretId::from_vault_record("secret_deleted"),
+            secret_type: Some(SecretType::ApiKey),
+            value: StoredRecordPayload::from_trusted("armored-deleted".to_owned()),
+        };
+        let changed = merge_remote_yaml_user_secrets_filtered(
+            &mut armored,
+            &mut secret_types,
+            std::slice::from_ref(&remote_secret),
+            |key| key != "secret_deleted",
+        );
+        assert!(!changed);
+        assert!(armored.get("secret_deleted").is_none());
         let _ = genesis;
     }
 

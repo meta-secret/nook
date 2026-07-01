@@ -1625,6 +1625,10 @@ export class VaultState {
       }
       if (this.isAuthenticated) {
         await this.hydrateMultiDeviceState()
+        // After pulling remote changes, republish local state so a wiped
+        // remote provider can be rebuilt from the local-first cache.
+        await this.pushRemoteYamlSnapshotNow()
+        await this.flushRemoteEventOutboxNow()
       } else {
         this.pendingJoins = []
         this.vaultMembers = []
@@ -2522,7 +2526,7 @@ export class VaultState {
           ? this.t('toasts.password_added_rotate')
           : this.t('toasts.password_set'),
       )
-      await this.fanOutSyncToProviders({ quiet: true })
+      await this.runFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to add vault password.'
@@ -2548,7 +2552,7 @@ export class VaultState {
       )
       await this.refreshPasswordEntriesList()
       this.showSuccess(this.t('toasts.password_updated'))
-      await this.fanOutSyncToProviders({ quiet: true })
+      await this.runFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to update vault password.'
@@ -2572,7 +2576,7 @@ export class VaultState {
         this.activeEnrollmentEntryId = null
       }
       this.showSuccess(this.t('toasts.password_removed'))
-      await this.fanOutSyncToProviders({ quiet: true })
+      await this.runFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.passwordError =
         e instanceof Error ? e.message : 'Failed to remove vault password.'
@@ -2892,7 +2896,7 @@ export class VaultState {
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_saved'))
-      await this.runFanOutSyncAfterLocalSave()
+      this.scheduleFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
       throw e

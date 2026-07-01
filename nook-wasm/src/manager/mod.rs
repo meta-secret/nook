@@ -435,7 +435,6 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = nook_core::StorageMode::parse(storage_mode)?;
-        let previous_mode = self.storage_mode;
         let previous_remote_ref = self.github_repo.clone();
         self.storage_mode = mode;
         self.file_sha = None;
@@ -483,7 +482,13 @@ impl NookVaultManager {
             }
         }
 
-        if previous_mode != self.storage_mode || previous_remote_ref != self.github_repo {
+        // Only drop in-memory password state when switching to a different remote
+        // vault file/repo. Toggling local ↔ provider storage for fan-out/outbox
+        // flush must not wipe a password that was just added in local IDB.
+        if !previous_remote_ref.is_empty()
+            && !self.github_repo.is_empty()
+            && previous_remote_ref != self.github_repo
+        {
             self.password_entries.clear();
             self.unlock = nook_core::VaultUnlock::Keys;
         }

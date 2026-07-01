@@ -12,7 +12,9 @@ use crate::conversion::{
     LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
     sync_result_session, sync_result_unchanged,
 };
-use crate::storage::event_db::is_event_log_mode;
+use crate::storage::event_db::{is_event_log_mode, load_local_event_store};
+use nook_core::project_vault;
+use std::collections::HashSet;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -154,10 +156,24 @@ impl NookVaultManager {
         }
         let format = nook_core::detect_stored_format(&content)?;
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
-        let changed = nook_core::merge_remote_yaml_user_secrets(
+        let tombstoned_secret_ids = if self.ensure_event_log_mode().await? {
+            let store = load_local_event_store(&self.store_id).await?;
+            let graph = store.load_graph(&self.store_id)?;
+            let projection = project_vault(&graph, &self.store_id)?;
+            projection
+                .secrets
+                .iter()
+                .filter(|(_, secret)| !secret.is_live(&graph))
+                .map(|(id, _)| id.as_str().to_owned())
+                .collect::<HashSet<_>>()
+        } else {
+            HashSet::new()
+        };
+        let changed = nook_core::merge_remote_yaml_user_secrets_filtered(
             &mut self.stored_armored,
             &mut self.secret_types,
             &fresh_records,
+            |key| !tombstoned_secret_ids.contains(key),
         );
         if !changed {
             return Ok(false);
