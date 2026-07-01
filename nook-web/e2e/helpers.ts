@@ -1429,6 +1429,11 @@ export async function unlockVaultOnLogin(
   if (await localUnlock.isVisible()) {
     if (opts?.password) {
       await selectLoginUnlockMethod(page, 'password')
+      await expect(
+        page.getByTestId('login-password-entry-list').getByRole('button', {
+          name: opts.entryLabel ?? /.+/,
+        }),
+      ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
       if (opts.entryLabel) {
         await page
           .getByTestId('login-password-entry-list')
@@ -1773,8 +1778,9 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       }
       const owner = opts.username ?? 'e2e-user'
       const fullRepo = `${owner}/${opts.repoName}`
+      const context = page.context()
 
-      await page.route('https://api.github.com/**', async (route) => {
+      const handler = async (route: import('@playwright/test').Route) => {
         const request = route.request()
         const url = request.url().split('?')[0]!
         const method = request.method()
@@ -1918,7 +1924,9 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           return
         }
         await route.fulfill({ status: 404, body: '{}' })
-      })
+      }
+
+      await context.route('https://api.github.com/**', handler)
     },
   }
 }
@@ -2035,6 +2043,33 @@ export async function approveJoinLocalE2eFromBanner(
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
 
+/** Add GitHub sync provider stubs while vault stays unlocked (preserves password UI state). */
+export async function seedGithubSyncProvidersWhileUnlocked(
+  page: Page,
+  providers = [E2E_GITHUB_ONBOARD_PROVIDER],
+) {
+  const vaultYaml = await readLocalVaultYamlFromIdb(page)
+  await seedExtraGithubProviders(page, providers)
+  for (const provider of providers) {
+    await stubGithubVaultForLocalE2e(page, {
+      repoName: provider.githubRepo,
+      vaultYaml,
+    })
+  }
+  await page.evaluate(async () => {
+    const vault = (
+      window as Window & {
+        __nookVault?: { loadProviders?: () => Promise<void> }
+      }
+    ).__nookVault
+    if (vault?.loadProviders) {
+      await vault.loadProviders()
+    }
+  })
+  await waitForLoadedSyncProviders(page, providers.length)
+  await forceVaultQuiescentForE2e(page)
+}
+
 /** Seed a GitHub sync provider, reload, unlock, and wait for status bar sync count. */
 export async function reloadUnlockWithGithubSync(
   page: Page,
@@ -2091,6 +2126,23 @@ export async function reloadUnlockWithGithubSync(
   await forceVaultQuiescentForE2e(page)
   await waitForLoadedSyncProviders(page)
   await waitForVaultSyncIdle(page)
+
+  const yamlAfterUnlock = await readLocalVaultYamlFromIdb(page)
+  if (yamlAfterUnlock.trim()) {
+    for (const provider of providers) {
+      await stubGithubVaultForLocalE2e(page, {
+        repoName: provider.githubRepo,
+        vaultYaml: yamlAfterUnlock,
+      })
+    }
+  }
+  if (opts?.password) {
+    await waitForStableLocalVaultState(
+      page,
+      (snapshot) => snapshot.hasPasswordEnvelope,
+      { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
+    )
+  }
 }
 
 /** Wait until the status bar reflects loaded sync providers. */

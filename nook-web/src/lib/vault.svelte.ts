@@ -2447,6 +2447,7 @@ export class VaultState {
       await this.ensureProviderSaved()
       await this.loadProviders()
       await this.promoteSessionVaultToLocalIfNeeded()
+      await this.refreshPasswordEntriesList()
       await this.hydrateMultiDeviceState()
       if (this.storageMode === 'local') {
         this.showSuccess(this.t('toasts.local_loaded'))

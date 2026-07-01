@@ -10,8 +10,8 @@ import {
   expectVaultPasswordStatus,
   openStorageSettings,
   readLocalVaultYamlFromIdb,
-  reloadUnlockWithGithubSync,
   revealSecretInRow,
+  seedGithubSyncProvidersWhileUnlocked,
   selectLoginUnlockMethod,
   stubGithubVaultForLocalE2e,
   submitOnboardEnrollmentCode,
@@ -175,15 +175,17 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
     await expectVaultPasswordStatus(page, 1)
 
-    await reloadUnlockWithGithubSync(page, {
-      password: 'hunter2-secure',
-      entryLabel: 'Enrollment test',
-    })
+    await seedGithubSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
     await waitForStorageChainIdle(page)
+    await expect(page.getByTestId('onboard-password-select')).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.getByTestId('onboard-password-input').fill('wrong-typo-99')
-    await page.getByTestId('onboard-device-submit').click()
+    await page.getByTestId('onboard-device-submit').click({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(page.getByTestId('onboard-error')).toContainText(
       'does not match',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
@@ -206,10 +208,7 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
     await expectVaultPasswordStatus(page, 1)
 
-    await reloadUnlockWithGithubSync(page, {
-      password: 'hunter2-secure',
-      entryLabel: 'Enrollment test',
-    })
+    await seedGithubSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
     const codeText = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
@@ -297,10 +296,7 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openStorageSettings(pageA)
     await addVaultPassword(pageA, 'Link test', 'link-pass')
-    await reloadUnlockWithGithubSync(pageA, {
-      password: 'link-pass',
-      entryLabel: 'Link test',
-    })
+    await seedGithubSyncProvidersWhileUnlocked(pageA)
     const vaultYaml = await readLocalVaultYamlFromIdb(pageA)
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'link-pass')

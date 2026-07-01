@@ -11,7 +11,6 @@ import {
   openStorageSettings,
   revealSecretValue,
   sendJoinRequest,
-  unlockGithubVault,
   triggerVaultSyncRefresh,
   waitForPendingJoinBanner,
   uniqueSecretKey,

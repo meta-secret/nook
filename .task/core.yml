@@ -132,10 +132,10 @@ tasks:
       - task: _test
 
   _verify:parallel:
-    desc: Lint and test when wasm is already built (ci:pr parallel track).
-    cmds:
-      - task: _lint:parallel
-      - task: _test:parallel
+    desc: Lint ‖ tests when wasm is already built (ci:pr parallel track).
+    deps:
+      - _lint:parallel
+      - _test:parallel
 
   _lint:parallel:
     desc: Web linters only — Rust clippy already runs in the toolchain docker build warm-up.
@@ -143,11 +143,11 @@ tasks:
       - task: _web:lint:parallel
 
   _test:parallel:
-    desc: Rust and web tests when wasm is already built (ci:pr parallel track).
-    cmds:
-      - task: _rust:coverage:check
-      - task: _web:check:parallel
-      - task: _web:test:parallel
+    desc: Rust coverage ‖ svelte-check ‖ vitest when wasm is already built.
+    deps:
+      - _rust:coverage:check
+      - _web:check:parallel
+      - _web:test:parallel
 
   _rust:test:parallel:
     desc: Run nook-core tests when deps are already built (ci:pr parallel track).
