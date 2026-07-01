@@ -1,5 +1,4 @@
 import {
-  generateId,
   getVaultManager,
   isoTimestamp,
   type JoinRequest,
@@ -8,13 +7,7 @@ import {
   type VaultItemType,
   type VaultMember,
 } from '$lib/nook'
-import {
-  consumeEnrollmentFromLocation,
-  decryptEnrollmentPayload,
-  encryptEnrollmentPayload,
-  type EnrollmentIssueInput,
-  type EnrollmentProvider,
-} from '$lib/enrollment-code'
+import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
 import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
 import type { VaultPasswordEntrySummary } from '$lib/vault-password'
@@ -22,10 +15,7 @@ import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_VAULT_FILE,
   DEFAULT_GITHUB_REPO,
-  findDuplicateSyncProvider,
   formatDriveStorageRef,
-  loadAuthProviders,
-  loadAuthProvidersWithVaultMigration,
   providerDefaultLabel,
   saveAuthProviders,
   wasmStorageModeForProvider,
@@ -35,39 +25,13 @@ import {
   type StorageProviderType,
 } from '$lib/auth-providers'
 import {
-  ensureValidOAuthFileConfig,
-  fetchGoogleAccountEmail,
-  initGoogleAuth,
-  isGoogleOAuthConfigured,
-  oauthTokensToConfig,
-  requestGoogleAccessToken,
-  type GoogleOAuthTokens,
-} from '$lib/google-oauth'
-import {
-  ensureValidICloudOAuthFileConfig,
-  fetchICloudAccountEmail,
-  initICloudAuth,
-  isICloudOAuthConfigured,
-  oauthTokensToICloudConfig,
-  requestICloudWebAuthToken,
-  type ICloudOAuthTokens,
-} from '$lib/icloud-oauth'
-import {
   getBrowserAppLocale,
   parseAppLocale,
   type AppLocale,
 } from '$lib/locale'
-import {
-  TRANSLATION_CATALOGS,
-  loadTranslationCatalogFromWasm,
-  lookupTranslation,
-  resolveTranslationCatalog,
-} from '$lib/locale-catalogs'
+import { TRANSLATION_CATALOGS, lookupTranslation } from '$lib/locale-catalogs'
 import { hasLocalVault } from '$lib/local-vault'
-import {
-  ensureLocalProviderRow,
-  migrateLegacyVaultToLocal,
-} from '$lib/vault-migration'
+import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
 import {
   attemptReconcileVaultSyncBlobs,
   fetchRemoteVaultBlob,
@@ -75,8 +39,6 @@ import {
   readLocalVaultBlob,
   readVaultVersionFromBlob,
   resolveVaultSyncIntervalMs,
-  resolveVaultSyncConflictKeepLocal,
-  resolveVaultSyncConflictKeepRemote,
   writeLocalVaultBlob,
   writeRemoteVaultBlob,
   type PendingSyncConflict,
@@ -88,6 +50,17 @@ import {
   resolveVaultIdleWarningMs,
   type VaultIdleSessionTracker,
 } from '$lib/vault-idle-session'
+
+import * as localeActions from '$lib/vault/locale'
+import * as oauthActions from '$lib/vault/oauth'
+import * as providersActions from '$lib/vault/providers'
+import * as localLoginActions from '$lib/vault/local-login'
+import * as syncActions from '$lib/vault/sync'
+import * as multiDeviceActions from '$lib/vault/multi-device'
+import * as secretsActions from '$lib/vault/secrets'
+import * as passwordUnlockActions from '$lib/vault/password-unlock'
+import * as idleSessionActions from '$lib/vault/idle-session'
+import * as lifecycleActions from '$lib/vault/lifecycle'
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -198,19 +171,19 @@ export class VaultState {
   }
 
   /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
-  private static syncIntervalMs(): number {
+  static syncIntervalMs(): number {
     return resolveVaultSyncIntervalMs(import.meta.env)
   }
 
-  private successDismissTimer: ReturnType<typeof setTimeout> | null = null
-  private idleSessionTracker: VaultIdleSessionTracker | null = null
-  private syncTimer: ReturnType<typeof setInterval> | null = null
-  private initPromise: Promise<void> | null = null
-  private storageChain: Promise<unknown> = Promise.resolve()
-  private pendingEnrollmentFromUrl: string | null =
+  successDismissTimer: ReturnType<typeof setTimeout> | null = null
+  idleSessionTracker: VaultIdleSessionTracker | null = null
+  syncTimer: ReturnType<typeof setInterval> | null = null
+  initPromise: Promise<void> | null = null
+  storageChain: Promise<unknown> = Promise.resolve()
+  pendingEnrollmentFromUrl: string | null =
     typeof window !== 'undefined' ? consumeEnrollmentFromLocation() : null
 
-  private enqueueStorage<T>(operation: () => Promise<T>): Promise<T> {
+  enqueueStorage<T>(operation: () => Promise<T>): Promise<T> {
     const next = this.storageChain.then(() => operation())
     this.storageChain = next.then(
       () => undefined,
@@ -221,20 +194,17 @@ export class VaultState {
 
   /** E2E/dev: wait for the serialized wasm storage queue to finish. */
   waitForStorageChain(): Promise<void> {
-    return this.storageChain.then(() => undefined)
+    return lifecycleActions.waitForStorageChain(this)
   }
 
   /** E2E/dev: reset a stuck storage queue (abandons in-flight wasm work). */
   resetStorageChain(): void {
-    this.storageChain = Promise.resolve()
+    return lifecycleActions.resetStorageChain(this)
   }
 
-  private static storageOpTimeoutMs = 20_000
+  static storageOpTimeoutMs = 20_000
 
-  private raceStorageTimeout<T>(
-    promise: Promise<T>,
-    label: string,
-  ): Promise<T> {
+  raceStorageTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
     const timeoutMs = VaultState.storageOpTimeoutMs
     return Promise.race([
       promise,
@@ -247,7 +217,7 @@ export class VaultState {
     ])
   }
 
-  private wasmStorageArgs(): [string, string, string] {
+  wasmStorageArgs(): [string, string, string] {
     if (this.localVaultPresent) {
       return ['local', '', '']
     }
@@ -273,7 +243,7 @@ export class VaultState {
   }
 
   /** WASM connect always uses the local cache when one exists (unified vault). */
-  private connectStorageArgs(): [string, string, string] {
+  connectStorageArgs(): [string, string, string] {
     if (
       !this.isAuthenticated &&
       this.syncProviders.length > 0 &&
@@ -284,7 +254,7 @@ export class VaultState {
     return this.wasmStorageArgs()
   }
 
-  private stagedRemoteStorageArgs(): [string, string, string] | null {
+  stagedRemoteStorageArgs(): [string, string, string] | null {
     const type = this.loginSetupType ?? this.storageMode
     if (type === 'local') {
       return null
@@ -315,7 +285,7 @@ export class VaultState {
     return null
   }
 
-  private stagedProviderLabel(): string {
+  stagedProviderLabel(): string {
     const type = this.loginSetupType ?? this.storageMode
     if (type === 'github') {
       return providerDefaultLabel(
@@ -339,7 +309,7 @@ export class VaultState {
    * Compare local IndexedDB vault with a staged remote provider before connect.
    * Newer version wins automatically; equal version + different content → conflict UI.
    */
-  private async reconcileStagedRemoteWithLocal(options?: {
+  async reconcileStagedRemoteWithLocal(options?: {
     providerId?: string
     quiet?: boolean
   }): Promise<'ok' | 'conflict' | 'skip'> {
@@ -396,7 +366,7 @@ export class VaultState {
     }
   }
 
-  private async reconcileStagedRemoteWithLocalBlobs(ctx: {
+  async reconcileStagedRemoteWithLocalBlobs(ctx: {
     localYaml: string
     remote: Awaited<ReturnType<typeof fetchRemoteVaultBlob>>
     mode: string
@@ -468,7 +438,7 @@ export class VaultState {
     return 'ok'
   }
 
-  private hasRemoteCredentials(): boolean {
+  hasRemoteCredentials(): boolean {
     if (this.storageMode === 'github') {
       return Boolean(this.githubPat.trim())
     }
@@ -478,7 +448,7 @@ export class VaultState {
     return true
   }
 
-  private syncOAuthRemoteRefFromManager() {
+  syncOAuthRemoteRefFromManager() {
     if (this.storageMode !== 'oauth-file' || !this.manager || !this.oauthFile) {
       return
     }
@@ -490,116 +460,15 @@ export class VaultState {
   }
 
   async ensureOAuthTokensFresh(): Promise<void> {
-    if (this.storageMode !== 'oauth-file' || !this.oauthFile) {
-      return
-    }
-    const refreshed =
-      this.oauthFile.preset === 'icloud'
-        ? await ensureValidICloudOAuthFileConfig(this.oauthFile)
-        : await ensureValidOAuthFileConfig(this.oauthFile)
-    if (
-      refreshed.accessToken === this.oauthFile.accessToken &&
-      refreshed.expiresAt === this.oauthFile.expiresAt
-    ) {
-      return
-    }
-    this.oauthFile = refreshed
-    if (this.oauthFile && this.providers.some((p) => p.type === 'oauth-file')) {
-      this.providers = this.providers.map((provider) =>
-        provider.type === 'oauth-file' &&
-        provider.oauthFile?.preset === refreshed.preset
-          ? { ...provider, oauthFile: refreshed }
-          : provider,
-      )
-      await this.persistProviders()
-    }
+    return oauthActions.ensureOAuthTokensFresh(this)
   }
 
   async signInWithGoogle(): Promise<void> {
-    if (!isGoogleOAuthConfigured()) {
-      this.errorMsg = this.t('provider_setup.google_oauth_unconfigured')
-      return
-    }
-    this.googleOAuthBusy = true
-    this.errorMsg = ''
-    try {
-      await initGoogleAuth()
-      const tokens = await requestGoogleAccessToken({ prompt: 'consent' })
-      await this.applyGoogleOAuthTokens(tokens)
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error ? error.message : 'Google sign-in failed.'
-    } finally {
-      this.googleOAuthBusy = false
-    }
+    return oauthActions.signInWithGoogle(this)
   }
 
   async signInWithICloud(): Promise<void> {
-    if (!isICloudOAuthConfigured()) {
-      this.errorMsg = this.t('provider_setup.icloud_oauth_unconfigured')
-      return
-    }
-    this.icloudOAuthBusy = true
-    this.errorMsg = ''
-    try {
-      await initICloudAuth()
-      const tokens = await requestICloudWebAuthToken()
-      await this.applyICloudOAuthTokens(tokens)
-    } catch (error) {
-      this.errorMsg =
-        error instanceof Error ? error.message : 'iCloud sign-in failed.'
-    } finally {
-      this.icloudOAuthBusy = false
-    }
-  }
-
-  private async applyICloudOAuthTokens(
-    tokens: ICloudOAuthTokens,
-  ): Promise<void> {
-    const account = await fetchICloudAccountEmail()
-    this.loginSetupType = 'oauth-file'
-    if (!this.addProviderOpen) {
-      this.storageMode = 'oauth-file'
-    }
-    this.oauthSetupPreset = 'icloud'
-    this.oauthFile = oauthTokensToICloudConfig(tokens, {
-      preset: 'icloud',
-      accessToken: tokens.accessToken,
-      fileId: this.oauthFile?.fileId,
-      fileName:
-        this.oauthFile?.fileName?.trim() ||
-        this.githubRepo.trim() ||
-        DEFAULT_DRIVE_VAULT_FILE,
-      accountEmail: account,
-    })
-    this.githubPat = ''
-    this.githubRepo =
-      this.oauthFile.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
-  }
-
-  private async applyGoogleOAuthTokens(
-    tokens: GoogleOAuthTokens,
-  ): Promise<void> {
-    const email = await fetchGoogleAccountEmail(tokens.accessToken)
-    this.loginSetupType = 'oauth-file'
-    if (!this.addProviderOpen) {
-      this.storageMode = 'oauth-file'
-    }
-    this.oauthSetupPreset = 'google-drive'
-    this.oauthFile = oauthTokensToConfig(tokens, {
-      preset: 'google-drive',
-      accessToken: tokens.accessToken,
-      expiresAt: tokens.expiresAt,
-      fileId: this.oauthFile?.fileId,
-      fileName:
-        this.oauthFile?.fileName?.trim() ||
-        this.githubRepo.trim() ||
-        DEFAULT_DRIVE_VAULT_FILE,
-      accountEmail: email,
-    })
-    this.githubPat = ''
-    this.githubRepo =
-      this.oauthFile.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    return oauthActions.signInWithICloud(this)
   }
 
   dismissSuccess() {
@@ -619,31 +488,14 @@ export class VaultState {
   }
 
   dismissJoinEnrollment() {
-    this.joinEnrollmentPrompt = 'none'
+    return multiDeviceActions.dismissJoinEnrollment(this)
   }
 
   async confirmJoinRequest() {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      const storageArgs =
-        this.remoteYamlSnapshotStorageArgs() ?? this.wasmStorageArgs()
-      await this.enqueueStorage(() =>
-        this.manager!.request_vault_access(...storageArgs, isoTimestamp()),
-      )
-      await this.ensureProviderSaved()
-      this.joinEnrollmentPrompt = 'pending'
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to request vault access.'
-    } finally {
-      this.isVerifying = false
-    }
+    return multiDeviceActions.confirmJoinRequest(this)
   }
 
-  private showSuccess(message: string) {
+  showSuccess(message: string) {
     this.dismissSuccess()
     this.successMsg = message
     this.successDismissTimer = setTimeout(() => {
@@ -698,25 +550,10 @@ export class VaultState {
   }
 
   async updateLocale(newLocale: AppLocale, options?: { preferWasm?: boolean }) {
-    this.locale = newLocale
-    localStorage.setItem('nook_locale', newLocale)
-    if (typeof document !== 'undefined') {
-      document.documentElement.lang = newLocale
-    }
-
-    const preferWasm = options?.preferWasm ?? Boolean(this.manager)
-    let wasmCatalog: Record<string, unknown> | undefined
-    if (preferWasm) {
-      try {
-        wasmCatalog = await loadTranslationCatalogFromWasm(newLocale)
-      } catch {
-        // Fall back to the bundled JSON catalogs only.
-      }
-    }
-    this.translations = resolveTranslationCatalog(newLocale, wasmCatalog)
+    return localeActions.updateLocale(this, newLocale, options)
   }
 
-  private resolveErrorMessage(message: string): string {
+  resolveErrorMessage(message: string): string {
     const stripped = message
       .replace(/^GitHub error:\s*/i, '')
       .replace(/^Drive error:\s*/i, '')
@@ -748,14 +585,10 @@ export class VaultState {
   }
 
   async init() {
-    if (this.initPromise) {
-      return this.initPromise
-    }
-    this.initPromise = this.initOnce()
-    return this.initPromise
+    return lifecycleActions.init(this)
   }
 
-  private async initOnce() {
+  async initOnce() {
     this.isInitializing = true
     if (!this.isVerifying) {
       this.errorMsg = ''
@@ -810,7 +643,7 @@ export class VaultState {
     }
   }
 
-  private async initDeviceIdentity() {
+  async initDeviceIdentity() {
     if (!this.manager) return
     try {
       await this.enqueueStorage(() => this.manager!.init_device())
@@ -821,7 +654,7 @@ export class VaultState {
     }
   }
 
-  private shouldAutoUnlock(): boolean {
+  shouldAutoUnlock(): boolean {
     if (isVaultSessionLocked()) {
       return false
     }
@@ -838,313 +671,75 @@ export class VaultState {
 
   /** Prepare login gate for local vault unlock (password or device keys). */
   async prepareLocalLogin(): Promise<void> {
-    if (!this.localVaultPresent || this.localLoginPrepared) return
-    this.storageMode = 'local'
-    this.githubPat = ''
-    this.oauthFile = null
-    await this.refreshPasswordEntriesList()
-    this.localLoginPrepared = true
+    return localLoginActions.prepareLocalLogin(this)
   }
 
   /**
    * First-time setup: create an empty local vault secured by this device's keys.
    */
   async createLocalVaultWithDeviceKeys(): Promise<void> {
-    if (!this.manager) {
-      this.errorMsg = 'Vault engine is not available.'
-      return
-    }
-    if (this.isVerifying) return
-
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.storageMode = 'local'
-    this.githubPat = ''
-    this.oauthFile = null
-    this.isVerifying = true
-
-    try {
-      await this.initDeviceIdentity()
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.connect('local', '', ''),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      this.localVaultPresent = true
-      this.localLoginPrepared = true
-      await this.ensureProviderSaved()
-      await this.hydrateMultiDeviceState()
-      this.showSuccess(this.t('toasts.local_loaded'))
-      this.startVaultSync()
-    } catch (e: unknown) {
-      this.isAuthenticated = false
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to create local vault.'
-    } finally {
-      this.isVerifying = false
-    }
+    return localLoginActions.createLocalVaultWithDeviceKeys(this)
   }
 
   /** @deprecated Use {@link createLocalVaultWithDeviceKeys}. Backup passwords belong in Settings. */
   async createLocalVault(password: string): Promise<void> {
-    if (!this.manager) {
-      this.errorMsg = 'Vault engine is not available.'
-      return
-    }
-    if (this.isVerifying) return
-    if (password.trim().length < 8) {
-      this.errorMsg = this.t('login.password_too_short')
-      return
-    }
-
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.storageMode = 'local'
-    this.githubPat = ''
-    this.oauthFile = null
-    this.isVerifying = true
-
-    try {
-      await this.initDeviceIdentity()
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.connect('local', '', ''),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      await this.addVaultPassword(
-        this.t('login.master_password_label'),
-        password,
-      )
-      this.localVaultPresent = true
-      this.localLoginPrepared = true
-      await this.ensureProviderSaved()
-      await this.hydrateMultiDeviceState()
-      this.showSuccess(this.t('toasts.local_loaded'))
-      this.startVaultSync()
-    } catch (e: unknown) {
-      this.isAuthenticated = false
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to create local vault.'
-    } finally {
-      this.isVerifying = false
-    }
+    return localLoginActions.createLocalVault(this, password)
   }
 
   async loadProviders(options?: { migrateLegacyVault?: boolean }) {
-    const snapshot = options?.migrateLegacyVault
-      ? await loadAuthProvidersWithVaultMigration()
-      : await loadAuthProviders()
-    this.providers = snapshot.providers.map((p) =>
-      p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
-    )
-    this.providersLoaded = true
+    return providersActions.loadProviders(this, options)
   }
 
   applyActiveProviderCredentials() {
-    if (this.localVaultPresent) {
-      this.storageMode = 'local'
-      this.githubPat = ''
-      this.oauthFile = null
-      return
-    }
-
-    if (this.loginSetupType) {
-      this.storageMode = this.loginSetupType
-      if (this.loginSetupType !== 'github') {
-        this.githubPat = ''
-      }
-      if (this.loginSetupType !== 'oauth-file') {
-        this.oauthFile = null
-      }
-      return
-    }
-
-    const stagingGoogle =
-      this.loginSetupType === 'oauth-file' &&
-      Boolean(this.oauthFile?.accessToken?.trim())
-
-    const syncProvider = this.syncProviders[0]
-    if (!syncProvider) {
-      return
-    }
-
-    if (stagingGoogle && this.addProviderOpen) {
-      this.storageMode = syncProvider.type
-      this.githubPat = syncProvider.githubPat ?? ''
-      this.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-      return
-    }
-
-    this.storageMode = syncProvider.type
-    this.githubPat = syncProvider.githubPat ?? ''
-    if (syncProvider.type === 'oauth-file') {
-      this.oauthFile = syncProvider.oauthFile ?? null
-      this.githubRepo =
-        syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
-    } else {
-      this.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-      this.oauthFile = null
-    }
+    return providersActions.applyActiveProviderCredentials(this)
   }
 
   async persistProviders(opts?: { replace?: boolean }) {
-    if (!opts?.replace && this.localVaultPresent) {
-      const snapshot = await loadAuthProviders()
-      const memoryIds = this.providers.map((p) => p.id)
-      const extraSync = snapshot.providers.filter(
-        (p) => p.type !== 'local' && !memoryIds.includes(p.id),
-      )
-      if (extraSync.length > 0) {
-        this.providers = [...this.providers, ...extraSync]
-      }
-    }
-    await saveAuthProviders({
-      providers: this.providers,
-    })
+    return providersActions.persistProviders(this, opts)
   }
 
   beginProviderSetup(type: StorageProviderType, oauthPreset?: OAuthFilePreset) {
-    this.resetVaultSessionState()
-    this.loginSetupType = type
-    this.storageMode = type
-    this.githubPat = ''
-    this.githubRepo =
-      type === 'oauth-file' ? DEFAULT_DRIVE_VAULT_FILE : DEFAULT_GITHUB_REPO
-    if (type === 'oauth-file') {
-      const preset = oauthPreset ?? 'google-drive'
-      this.oauthSetupPreset = preset
-      this.oauthFile = {
-        preset,
-        accessToken: '',
-        fileName: DEFAULT_DRIVE_VAULT_FILE,
-      }
-    } else {
-      this.oauthSetupPreset = null
-      this.oauthFile = null
-    }
-    this.errorMsg = ''
-    this.dismissSuccess()
+    return providersActions.beginProviderSetup(this, type, oauthPreset)
   }
 
   beginAddProvider() {
-    this.resetVaultSessionState()
-    this.addProviderOpen = true
-    this.loginSetupType = null
-    this.errorMsg = ''
+    return providersActions.beginAddProvider(this)
   }
 
   cancelAddProvider() {
-    this.addProviderOpen = false
-    this.loginSetupType = null
-    this.applyActiveProviderCredentials()
-    this.errorMsg = ''
+    return providersActions.cancelAddProvider(this)
   }
 
   cancelProviderSetup() {
-    if (this.addProviderOpen && this.loginSetupType !== null) {
-      const setupType = this.loginSetupType
-      this.loginSetupType = null
-      this.githubPat = ''
-      this.githubRepo =
-        setupType === 'oauth-file'
-          ? DEFAULT_DRIVE_VAULT_FILE
-          : DEFAULT_GITHUB_REPO
-      this.errorMsg = ''
-      return
-    }
-    this.loginSetupType = null
-    this.addProviderOpen = false
-    this.applyActiveProviderCredentials()
-    this.errorMsg = ''
+    return providersActions.cancelProviderSetup(this)
   }
 
   /**
    * Detect whether the vault unlocks with device keys or a password envelope.
    */
   async probeLoginUnlockMode(): Promise<void> {
-    await this.refreshPasswordEntriesList()
+    return localLoginActions.probeLoginUnlockMode(this)
   }
 
   async refreshPasswordEntriesList(): Promise<boolean> {
-    if (!this.manager) return false
-    try {
-      if (!this.hasRemoteCredentials()) {
-        this.passwordEntries = []
-        this.loginUnlockMode = 'unknown'
-        return false
-      }
-      await this.ensureOAuthTokensFresh()
-      const raw = await this.enqueueStorage(() =>
-        this.manager!.fetchVaultPasswordEntries(...this.wasmStorageArgs()),
-      )
-      this.passwordEntries = raw
-      this.loginUnlockMode = 'keys'
-      if (this.passwordEntries.length === 1 && !this.selectedPasswordEntryId) {
-        this.selectedPasswordEntryId = this.passwordEntries[0]!.id
-      }
-      return true
-    } catch {
-      if (!this.isAuthenticated) {
-        this.loginUnlockMode = 'unknown'
-      }
-      this.passwordEntries = []
-      return false
-    }
+    return secretsActions.refreshPasswordEntriesList(this)
   }
 
   clearRemoteVaultRecovery() {
-    this.remoteVaultRecoveryPrompt = 'none'
-    this.pendingConnectRecovery = 'none'
-    try {
-      this.manager?.clearConnectRecovery()
-    } catch {
-      // Engine not ready yet.
-    }
+    return syncActions.clearRemoteVaultRecovery(this)
   }
 
   /** User chose to restore a deleted remote vault from the browser cache. */
   async confirmRecoverRemoteVault(): Promise<void> {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.isVerifying = true
-    try {
-      this.manager.prepareConnectFromLocalCache()
-      this.pendingConnectRecovery = 'from_cache'
-      this.remoteVaultRecoveryPrompt = 'none'
-      if (this.loginSetupType) {
-        await this.loadDb()
-        return
-      }
-      await this.refreshPasswordEntriesList()
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Could not load the local vault copy.'
-    } finally {
-      this.isVerifying = false
-    }
+    return syncActions.confirmRecoverRemoteVault(this)
   }
 
   /** User chose to create a fresh vault file on remote storage. */
   async confirmCreateFreshRemoteVault(): Promise<void> {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.pendingConnectRecovery = 'fresh'
-    this.remoteVaultRecoveryPrompt = 'none'
-    if (this.loginSetupType) {
-      this.isVerifying = true
-      try {
-        await this.loadDb()
-      } catch (e: unknown) {
-        this.errorMsg =
-          e instanceof Error ? e.message : 'Could not create a new vault file.'
-      } finally {
-        this.isVerifying = false
-      }
-      return
-    }
+    return syncActions.confirmCreateFreshRemoteVault(this)
   }
 
-  private async assessVaultConnectStatus(): Promise<string> {
+  async assessVaultConnectStatus(): Promise<string> {
     const args =
       !this.isAuthenticated &&
       this.syncProviders.length > 0 &&
@@ -1168,9 +763,7 @@ export class VaultState {
     })) as string
   }
 
-  private async handleRemoteVaultAssessStatus(
-    accessStatus: string,
-  ): Promise<boolean> {
+  async handleRemoteVaultAssessStatus(accessStatus: string): Promise<boolean> {
     if (accessStatus === 'remote_missing_local_cache') {
       this.remoteVaultRecoveryPrompt = 'with_cache'
       await this.refreshPasswordEntriesList()
@@ -1188,7 +781,7 @@ export class VaultState {
   }
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
-  private resetVaultSessionState() {
+  resetVaultSessionState() {
     try {
       this.manager?.resetVaultSession()
     } catch {
@@ -1200,7 +793,7 @@ export class VaultState {
     this.loginPasswordPrompt = false
   }
 
-  private ensureIdleSessionTracker() {
+  ensureIdleSessionTracker() {
     if (this.idleSessionTracker) return
     this.idleSessionTracker = createVaultIdleSessionTracker({
       timeoutMs: resolveVaultIdleTimeoutMs(import.meta.env),
@@ -1211,34 +804,32 @@ export class VaultState {
   }
 
   startIdleSessionTracking() {
-    if (!this.isAuthenticated) return
-    this.ensureIdleSessionTracker()
-    this.idleSessionTracker!.start()
+    return idleSessionActions.startIdleSessionTracking(this)
   }
 
   stopIdleSessionTracking() {
-    this.idleSessionTracker?.stop()
+    return idleSessionActions.stopIdleSessionTracking(this)
   }
 
-  private showIdleLockWarning() {
+  showIdleLockWarning() {
     if (!this.isAuthenticated) return
     this.showSuccess(this.t('session.idle_warning'))
   }
 
-  private lockVaultDueToIdle() {
+  lockVaultDueToIdle() {
     if (!this.isAuthenticated) return
     this.sessionExpiredByIdle = true
     this.lockVault()
   }
 
-  private markVaultUnlocked() {
+  markVaultUnlocked() {
     setVaultSessionLocked(false)
     this.isAuthenticated = true
     this.sessionExpiredByIdle = false
     this.startIdleSessionTracking()
   }
 
-  private clearUnlockedSession() {
+  clearUnlockedSession() {
     this.stopIdleSessionTracking()
     this.stopVaultSync()
     this.isAuthenticated = false
@@ -1256,182 +847,22 @@ export class VaultState {
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
   async removeProvider(id: string): Promise<void> {
-    const target = this.providers.find((p) => p.id === id)
-    if (!target || target.type === 'local') return
-
-    this.providers = this.providers.filter((p) => p.id !== id)
-
-    if (this.providers.length === 0 && this.isAuthenticated) {
-      this.clearUnlockedSession()
-    }
-
-    this.applyActiveProviderCredentials()
-    await this.persistProviders({ replace: true })
-
-    this.showSuccess(this.t('toasts.removed_device', { label: target.label }))
+    return providersActions.removeProvider(this, id)
   }
 
   async ensureProviderSaved(): Promise<boolean> {
-    const pat = this.githubPat.trim()
-    const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
-    const driveFile = this.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
-    const type = this.loginSetupType ?? this.storageMode
-    const isNewSetup = this.loginSetupType !== null
-    const vaultStoreId = this.manager?.vaultStoreId?.trim() || undefined
-    const oauthPreset =
-      this.oauthFile?.preset ?? this.oauthSetupPreset ?? 'google-drive'
-    const oauthSnapshot: OAuthFileConfig | undefined =
-      type === 'oauth-file'
-        ? {
-            preset: oauthPreset,
-            accessToken: this.oauthFile?.accessToken ?? '',
-            refreshToken: this.oauthFile?.refreshToken,
-            expiresAt: this.oauthFile?.expiresAt,
-            fileId: this.oauthFile?.fileId,
-            accountEmail: this.oauthFile?.accountEmail,
-            fileName: driveFile,
-          }
-        : undefined
-
-    const isExplicitAdd =
-      this.addProviderOpen ||
-      (this.isAuthenticated && this.loginSetupType !== null)
-
-    if (isNewSetup && type !== 'local') {
-      const provider: StorageProvider = {
-        id: generateId(),
-        type,
-        label: providerDefaultLabel(
-          type,
-          type === 'github'
-            ? repo
-            : type === 'oauth-file'
-              ? driveFile
-              : undefined,
-          oauthPreset,
-        ),
-        githubPat: type === 'github' ? pat : undefined,
-        githubRepo: type === 'github' ? repo : undefined,
-        oauthFile: oauthSnapshot,
-        storeId: vaultStoreId,
-        createdAt: isoTimestamp(),
-      }
-      if (findDuplicateSyncProvider(this.providers, provider)) {
-        if (isExplicitAdd) {
-          this.errorMsg = this.t('auth_storage.duplicate_sync_provider')
-          return false
-        }
-      } else {
-        this.providers = [...this.providers, provider]
-      }
-    } else if (isNewSetup && type === 'local' && !this.localProvider) {
-      const provider: StorageProvider = {
-        id: generateId(),
-        type: 'local',
-        label: providerDefaultLabel('local'),
-        storeId: vaultStoreId,
-        createdAt: isoTimestamp(),
-      }
-      this.providers = [...this.providers, provider]
-    } else if (this.localProvider) {
-      this.providers = this.providers.map((provider) =>
-        provider.type === 'local'
-          ? {
-              ...provider,
-              storeId: vaultStoreId ?? provider.storeId,
-            }
-          : provider,
-      )
-    } else {
-      this.providers = ensureLocalProviderRow({
-        providers: this.providers,
-      }).providers
-    }
-
-    if (this.storageMode === 'oauth-file' && this.oauthFile?.fileId) {
-      const activePreset = this.oauthFile.preset
-      this.providers = this.providers.map((provider) => {
-        if (
-          provider.type !== 'oauth-file' ||
-          !provider.oauthFile ||
-          provider.oauthFile.preset !== activePreset
-        ) {
-          return provider
-        }
-        const merged: OAuthFileConfig = {
-          preset: activePreset,
-          accessToken:
-            this.oauthFile!.accessToken || provider.oauthFile.accessToken,
-          refreshToken: provider.oauthFile.refreshToken,
-          expiresAt: provider.oauthFile.expiresAt ?? this.oauthFile!.expiresAt,
-          fileId: this.oauthFile!.fileId,
-          fileName:
-            provider.oauthFile.fileName?.trim() ||
-            this.oauthFile!.fileName?.trim() ||
-            driveFile,
-          accountEmail:
-            provider.oauthFile.accountEmail ?? this.oauthFile!.accountEmail,
-        }
-        return { ...provider, oauthFile: merged }
-      })
-      this.oauthFile =
-        this.providers.find(
-          (p) =>
-            p.type === 'oauth-file' && p.oauthFile?.preset === activePreset,
-        )?.oauthFile ?? this.oauthFile
-    }
-
-    this.loginSetupType = null
-    this.addProviderOpen = false
-    this.applyActiveProviderCredentials()
-    await this.persistProviders()
-    return true
+    return providersActions.ensureProviderSaved(this)
   }
 
   startVaultSync() {
-    this.stopVaultSync()
-    const needsRemoteUpdates =
-      this.isAuthenticated || this.joinEnrollmentPrompt !== 'none'
-    if (!needsRemoteUpdates) {
-      return
-    }
-    if (this.isAuthenticated) {
-      void this.syncFromStorage()
-    }
-    this.syncTimer = setInterval(() => {
-      if (
-        this.isVerifying ||
-        this.isSaving ||
-        this.isSyncing ||
-        this.isPasswordBusy
-      ) {
-        return
-      }
-      if (!this.isAuthenticated && this.joinEnrollmentPrompt === 'none') {
-        return
-      }
-      // Local-only vaults with no sync provider and no pending join have
-      // nothing remote to reconcile — skip the tick entirely rather than
-      // re-reading local IndexedDB into itself every interval.
-      if (
-        this.isAuthenticated &&
-        this.syncProviders.length === 0 &&
-        this.joinEnrollmentPrompt === 'none'
-      ) {
-        return
-      }
-      void this.syncFromStorage()
-    }, VaultState.syncIntervalMs())
+    return syncActions.startVaultSync(this)
   }
 
   stopVaultSync() {
-    if (this.syncTimer !== null) {
-      clearInterval(this.syncTimer)
-      this.syncTimer = null
-    }
+    return syncActions.stopVaultSync(this)
   }
 
-  private applyVaultSyncResult(result: NookVaultSyncResult) {
+  applyVaultSyncResult(result: NookVaultSyncResult) {
     if (this.isAuthenticated) {
       if (result.secrets.length > 0) {
         this.secrets = result.secrets
@@ -1466,7 +897,7 @@ export class VaultState {
    * `enqueueStorage` guarantees these reads observe a quiescent
    * manager rather than racing it.
    */
-  private async hydrateMultiDeviceState(): Promise<void> {
+  async hydrateMultiDeviceState(): Promise<void> {
     if (!this.manager || !this.isAuthenticated) return
     const mergedJoins: JoinRequest[] = []
     try {
@@ -1514,66 +945,16 @@ export class VaultState {
     }
   }
 
-  private async refreshPasswordEnvelopeState(): Promise<void> {
+  async refreshPasswordEnvelopeState(): Promise<void> {
     await this.refreshPasswordEntriesList()
   }
 
   async syncFromStorage(options?: { force?: boolean }) {
-    if (!this.manager) return
-    if (this.syncBlocked) return
-    if (!options?.force && this.isVerifying) return
-    if (!options?.force && this.isSaving) return
-    if (!options?.force && this.isPasswordBusy) return
-    if (!options?.force && this.isSyncing) return
-
-    if (!this.isAuthenticated && this.syncProviders.length > 0) {
-      this.isSyncing = true
-      try {
-        const [mode, pat, repo] = this.providerWasmArgs(this.syncProviders[0]!)
-        const raw = await this.enqueueStorage(() =>
-          this.manager!.sync_vault_from_storage(mode, pat, repo),
-        )
-        this.applyVaultSyncResult(raw)
-        this.refreshSecretsFromSession()
-        this.lastSyncedAt = new SvelteDate()
-      } catch {
-        // Background sync should not interrupt the UI.
-      } finally {
-        this.isSyncing = false
-      }
-      return
-    }
-
-    if (!this.hasRemoteCredentials()) return
-
-    if (
-      this.isAuthenticated &&
-      this.localVaultPresent &&
-      this.syncProviders.length > 0
-    ) {
-      await this.syncFromSyncProviders({ quiet: true, force: options?.force })
-      return
-    }
-
-    await this.ensureOAuthTokensFresh()
-
-    this.isSyncing = true
-    try {
-      const raw = await this.enqueueStorage(() =>
-        this.manager!.sync_vault_from_storage(...this.wasmStorageArgs()),
-      )
-      this.applyVaultSyncResult(raw)
-      this.refreshSecretsFromSession()
-      this.lastSyncedAt = new SvelteDate()
-    } catch {
-      // Background sync should not interrupt the UI.
-    } finally {
-      this.isSyncing = false
-    }
+    return syncActions.syncFromStorage(this, options)
   }
 
   /** Pull local vault from every sync provider (background / manual refresh). */
-  private async syncFromSyncProviders(options?: {
+  async syncFromSyncProviders(options?: {
     quiet?: boolean
     force?: boolean
   }): Promise<void> {
@@ -1605,35 +986,7 @@ export class VaultState {
   }
 
   async manualSync() {
-    if (!this.manager) return
-    if (this.syncBlocked) return
-    if (this.isSyncing) return
-    this.isSyncing = true
-    try {
-      await this.initDeviceIdentity()
-      if (this.syncProviders.length === 0) {
-        if (this.hasRemoteCredentials()) {
-          await this.syncFromStorage({ force: true })
-        } else {
-          this.pendingJoins = []
-          this.vaultMembers = []
-        }
-        return
-      }
-      for (const provider of this.syncProviders) {
-        await this.syncProviderById(provider.id)
-      }
-      if (this.isAuthenticated) {
-        await this.hydrateMultiDeviceState()
-      } else {
-        this.pendingJoins = []
-        this.vaultMembers = []
-      }
-    } catch {
-      // Manual refresh should not interrupt the UI.
-    } finally {
-      this.isSyncing = false
-    }
+    return syncActions.manualSync(this)
   }
 
   /** Reconcile local vault with one sync provider using `reconcileVaultBlobs`. */
@@ -1641,68 +994,17 @@ export class VaultState {
     providerId: string,
     options?: { quiet?: boolean },
   ): Promise<void> {
-    if (!this.manager) return
-    if (this.syncBlocked) return
-    const provider = this.providers.find((p) => p.id === providerId)
-    if (!provider || provider.type === 'local') return
-    if (this.syncingProviderId && this.syncingProviderId !== providerId) return
-
-    this.syncingProviderId = providerId
-    if (!options?.quiet) {
-      this.errorMsg = ''
-    }
-    try {
-      const [mode, pat, repo] = this.providerWasmArgs(provider)
-      // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
-      // `eventLogMode()` bit can be false after reload until connect finishes.
-      const raw = await this.enqueueStorage(() =>
-        this.raceStorageTimeout(
-          this.manager!.sync_vault_from_storage(mode, pat, repo),
-          'Vault sync',
-        ),
-      )
-      this.applyVaultSyncResult(raw)
-      this.refreshSecretsFromSession()
-      await this.refreshReplacementConflicts()
-      await this.updateProviderSyncMetadata(
-        providerId,
-        await readLocalVaultBlob(),
-        null,
-      )
-      return
-    } catch (e: unknown) {
-      if (!options?.quiet) {
-        this.errorMsg =
-          e instanceof Error ? e.message : 'Sync failed for this provider.'
-      }
-    } finally {
-      if (this.isAuthenticated) {
-        await this.hydrateMultiDeviceState()
-      }
-      if (this.syncingProviderId === providerId) {
-        this.syncingProviderId = null
-      }
-    }
+    return syncActions.syncProviderById(this, providerId, options)
   }
 
-  private fanOutSyncChain: Promise<void> = Promise.resolve()
+  fanOutSyncChain: Promise<void> = Promise.resolve()
 
   /** Push the local vault to every connected sync provider (after CRUD or manual sync). */
   async fanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void> {
-    if (!this.manager || !this.isAuthenticated) return
-    if (this.syncBlocked) return
-    if (this.syncProviders.length === 0) return
-
-    const run = this.fanOutSyncChain.then(() =>
-      this.runFanOutSyncToProviders(options),
-    )
-    this.fanOutSyncChain = run.catch(() => undefined)
-    return run
+    return syncActions.fanOutSyncToProviders(this, options)
   }
 
-  private async runFanOutSyncToProviders(options?: {
-    quiet?: boolean
-  }): Promise<void> {
+  async runFanOutSyncToProviders(options?: { quiet?: boolean }): Promise<void> {
     if (this.isFanOutSyncing) return
 
     this.isFanOutSyncing = true
@@ -1718,22 +1020,22 @@ export class VaultState {
     }
   }
 
-  private async runFanOutSyncAfterLocalSave(): Promise<void> {
+  async runFanOutSyncAfterLocalSave(): Promise<void> {
     await this.pushRemoteYamlSnapshotNow()
     await this.flushRemoteEventOutboxNow()
     await this.fanOutSyncToProviders({ quiet: true })
   }
 
-  private scheduleFanOutSyncAfterLocalSave(): void {
+  scheduleFanOutSyncAfterLocalSave(): void {
     void this.runFanOutSyncAfterLocalSave()
   }
 
   /** Fire-and-forget YAML projection for providers that still read nook-vault.yaml. */
-  private scheduleRemoteYamlSnapshotPush(): void {
+  scheduleRemoteYamlSnapshotPush(): void {
     void this.pushRemoteYamlSnapshotNow()
   }
 
-  private remoteYamlSnapshotStorageArgs(): [string, string, string] | null {
+  remoteYamlSnapshotStorageArgs(): [string, string, string] | null {
     if (this.syncProviders.length > 0) {
       return this.providerWasmArgs(this.syncProviders[0]!)
     }
@@ -1743,7 +1045,7 @@ export class VaultState {
     return null
   }
 
-  private async pushRemoteYamlSnapshotNow(): Promise<void> {
+  async pushRemoteYamlSnapshotNow(): Promise<void> {
     if (!this.manager) return
     const args = this.remoteYamlSnapshotStorageArgs()
     if (!args) return
@@ -1752,7 +1054,7 @@ export class VaultState {
     )
   }
 
-  private async applyReconcileResult(
+  async applyReconcileResult(
     result: ReconcileVaultResult,
     ctx: {
       providerId: string
@@ -1855,7 +1157,7 @@ export class VaultState {
     }
   }
 
-  private async updateProviderSyncMetadata(
+  async updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
     revision: string | null,
@@ -1877,18 +1179,10 @@ export class VaultState {
   }
 
   async refreshReplacementConflicts(): Promise<void> {
-    if (!this.manager?.eventLogMode()) {
-      this.replacementConflicts = []
-      return
-    }
-    const conflicts = await this.manager.listProjectionConflicts()
-    this.replacementConflicts = conflicts.map((conflict) => ({
-      oldSecretId: conflict.oldSecretId,
-      candidatesJson: conflict.candidatesJson,
-    }))
+    return syncActions.refreshReplacementConflicts(this)
   }
 
-  private async stageVaultSyncConflict(
+  async stageVaultSyncConflict(
     conflict: Omit<
       PendingSyncConflict,
       'localVersion' | 'remoteVersion' | 'kind'
@@ -1906,94 +1200,24 @@ export class VaultState {
     this.errorMsg = ''
   }
 
-  private clearPendingSyncConflict() {
+  clearPendingSyncConflict() {
     this.pendingSyncConflict = null
   }
 
   /** E2E / dev: open the conflict dialog without reaching remote storage. */
   stageSyncConflict(conflict: PendingSyncConflict) {
-    this.pendingSyncConflict = conflict
-    this.errorMsg = ''
+    return syncActions.stageSyncConflict(this, conflict)
   }
 
   async resolveSyncConflictKeepLocal(): Promise<void> {
-    const conflict = this.pendingSyncConflict
-    if (!conflict || this.isVerifying) return
-
-    this.isVerifying = true
-    this.errorMsg = ''
-    try {
-      const remoteYaml = resolveVaultSyncConflictKeepLocal(
-        conflict.localYaml,
-        conflict.remoteYaml,
-        conflict.remoteRevision,
-      )
-      const revision = await writeRemoteVaultBlob(
-        conflict.mode,
-        conflict.pat,
-        conflict.repo,
-        remoteYaml,
-        conflict.remoteRevision,
-      )
-      const providerId = await this.ensureProviderSavedAfterConflict(conflict)
-      await this.updateProviderSyncMetadata(
-        providerId,
-        conflict.localYaml,
-        revision,
-      )
-      this.clearPendingSyncConflict()
-      this.finishStagedProviderConnectAfterConflict(conflict)
-      this.showSuccess(
-        this.t('auth_storage.sync_conflict_resolved_local', {
-          provider: conflict.providerLabel,
-        }),
-      )
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : this.t('auth_storage.sync_failed')
-    } finally {
-      this.isVerifying = false
-    }
+    return syncActions.resolveSyncConflictKeepLocal(this)
   }
 
   async resolveSyncConflictKeepRemote(): Promise<void> {
-    const conflict = this.pendingSyncConflict
-    if (!conflict || this.isVerifying) return
-
-    this.isVerifying = true
-    this.errorMsg = ''
-    try {
-      const localYaml = resolveVaultSyncConflictKeepRemote(
-        conflict.localYaml,
-        conflict.remoteYaml,
-        conflict.remoteRevision,
-      )
-      await writeLocalVaultBlob(localYaml)
-      if (this.isAuthenticated) {
-        await this.reloadSessionFromLocal()
-      }
-      const providerId = await this.ensureProviderSavedAfterConflict(conflict)
-      await this.updateProviderSyncMetadata(
-        providerId,
-        conflict.remoteYaml,
-        conflict.remoteRevision,
-      )
-      this.clearPendingSyncConflict()
-      this.finishStagedProviderConnectAfterConflict(conflict)
-      this.showSuccess(
-        this.t('auth_storage.sync_conflict_resolved_remote', {
-          provider: conflict.providerLabel,
-        }),
-      )
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : this.t('auth_storage.sync_failed')
-    } finally {
-      this.isVerifying = false
-    }
+    return syncActions.resolveSyncConflictKeepRemote(this)
   }
 
-  private finishStagedProviderConnectAfterConflict(
+  finishStagedProviderConnectAfterConflict(
     conflict: PendingSyncConflict,
   ): void {
     if (conflict.providerId !== '__pending_provider__') {
@@ -2003,7 +1227,7 @@ export class VaultState {
     this.addProviderOpen = false
   }
 
-  private async ensureProviderSavedAfterConflict(
+  async ensureProviderSavedAfterConflict(
     conflict: PendingSyncConflict,
   ): Promise<string> {
     if (
@@ -2025,7 +1249,7 @@ export class VaultState {
     return provider.id
   }
 
-  private async reloadSessionFromLocal(): Promise<void> {
+  async reloadSessionFromLocal(): Promise<void> {
     if (!this.manager) return
     const raw = await this.enqueueStorage(() =>
       this.manager!.sync_vault_from_storage('local', '', ''),
@@ -2037,35 +1261,7 @@ export class VaultState {
 
   /** Settings: connect a new sync provider and reconcile with local vault. */
   async connectAndSyncStagedProvider(): Promise<void> {
-    if (!this.manager) return
-    if (this.isVerifying) return
-    this.isVerifying = true
-    try {
-      const reconcileOutcome = await this.reconcileStagedRemoteWithLocal()
-      if (reconcileOutcome === 'conflict') {
-        return
-      }
-
-      const saved = await this.ensureProviderSaved()
-      if (!saved) {
-        return
-      }
-      const provider =
-        this.syncProviders[this.syncProviders.length - 1] ??
-        this.providers[this.providers.length - 1]
-      if (!provider || provider.type === 'local') {
-        this.errorMsg = 'Choose a cloud sync provider.'
-        return
-      }
-      await this.syncProviderById(provider.id, { quiet: true })
-      this.loginSetupType = null
-      this.addProviderOpen = false
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : this.t('auth_storage.sync_failed')
-    } finally {
-      this.isVerifying = false
-    }
+    return providersActions.connectAndSyncStagedProvider(this)
   }
 
   openSettings(
@@ -2087,10 +1283,7 @@ export class VaultState {
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
   lockVault() {
-    this.helpOpen = false
-    this.stopIdleSessionTracking()
-    setVaultSessionLocked(true)
-    this.clearUnlockedSession()
+    return idleSessionActions.lockVault(this)
   }
 
   openHelp() {
@@ -2103,231 +1296,48 @@ export class VaultState {
   }
 
   filterSecrets(query: string): NookSecretRecord[] {
-    if (!this.manager) return []
-    return this.manager.filter_secrets(query)
+    return secretsActions.filterSecrets(this, query)
   }
 
-  private refreshSecretsFromSession() {
+  refreshSecretsFromSession() {
     this.secrets = this.filterSecrets('')
   }
 
   async refreshDeviceState() {
-    await this.manualSync()
+    return multiDeviceActions.refreshDeviceState(this)
   }
 
   /** Merge remote YAML join rows into the session (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
-    await this.hydrateMultiDeviceState()
+    return multiDeviceActions.refreshPendingJoinsFromProviders(this)
   }
 
   async requestVaultAccess() {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.request_vault_access(
-          ...this.wasmStorageArgs(),
-          isoTimestamp(),
-        ),
-      )
-      await this.ensureProviderSaved()
-      await this.refreshDeviceState()
-      if (this.localVaultPresent && this.syncProviders.length > 0) {
-        this.scheduleFanOutSyncAfterLocalSave()
-      } else {
-        this.scheduleRemoteYamlSnapshotPush()
-      }
-      this.showSuccess(this.t('login.join_request_sent'))
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to request vault access.'
-    } finally {
-      this.isVerifying = false
-    }
+    return multiDeviceActions.requestVaultAccess(this)
   }
 
   async approveJoin(joinDeviceId: string) {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    try {
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.approve_join_request(joinDeviceId),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      await this.pushRemoteYamlSnapshotNow()
-      await this.flushRemoteEventOutboxNow()
-      await this.hydrateMultiDeviceState()
-      this.pendingJoins = this.pendingJoins.filter(
-        (entry) => entry.deviceId !== joinDeviceId,
-      )
-      await this.fanOutSyncToProviders({ quiet: true })
-      this.pendingJoins = this.pendingJoins.filter(
-        (entry) => entry.deviceId !== joinDeviceId,
-      )
-      this.showSuccess(this.t('toasts.device_approved_success'))
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to approve join request.'
-    } finally {
-      this.isSaving = false
-    }
+    return multiDeviceActions.approveJoin(this, joinDeviceId)
   }
 
   async denyJoin(joinDeviceId: string) {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    try {
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.deny_join_request(joinDeviceId),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      await this.hydrateMultiDeviceState()
-      this.scheduleFanOutSyncAfterLocalSave()
-      this.showSuccess(this.t('toasts.join_denied'))
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to deny join request.'
-    } finally {
-      this.isSaving = false
-    }
+    return multiDeviceActions.denyJoin(this, joinDeviceId)
   }
 
   async renameDevice(authId: string, label: string) {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.rename_vault_member(authId, label),
-      )
-      await this.hydrateMultiDeviceState()
-      this.scheduleFanOutSyncAfterLocalSave()
-      this.showSuccess(
-        label.trim()
-          ? this.t('toasts.device_renamed')
-          : this.t('toasts.device_name_reset'),
-      )
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to rename device.'
-      throw e
-    } finally {
-      this.isSaving = false
-    }
+    return multiDeviceActions.renameDevice(this, authId, label)
   }
 
   async revokeDevice(authId: string) {
-    if (!this.manager) return
-    const isSelf = this.vaultMembers.some(
-      (member) => member.authId === authId && member.deviceId === this.deviceId,
-    )
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    try {
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.revoke_vault_member(authId),
-      )) as NookSecretRecord[]
-      if (isSelf) {
-        this.clearUnlockedSession()
-        this.showSuccess(this.t('toasts.device_removed'))
-        return
-      }
-      this.secrets = rawRecords
-      await this.hydrateMultiDeviceState()
-      this.scheduleFanOutSyncAfterLocalSave()
-      this.showSuccess(this.t('toasts.device_revoked'))
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to revoke device access.'
-      throw e
-    } finally {
-      this.isSaving = false
-    }
+    return multiDeviceActions.revokeDevice(this, authId)
   }
 
   async createFreshVault() {
-    if (!this.manager) return
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      await this.initDeviceIdentity()
-      const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise = this.manager!.connect_fresh(
-          ...this.wasmStorageArgs(),
-        )
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  'Connection timed out. Check your PAT, network, and try again.',
-                ),
-              ),
-            30_000,
-          )
-        })
-        return (await Promise.race([
-          connectPromise,
-          timeoutPromise,
-        ])) as NookSecretRecord[]
-      })
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      await this.ensureProviderSaved()
-      await this.hydrateMultiDeviceState()
-      this.joinEnrollmentPrompt = 'none'
-      this.showSuccess(this.t('toasts.vault_created'))
-    } catch (e: unknown) {
-      this.isAuthenticated = false
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to create a new vault.'
-    } finally {
-      this.isVerifying = false
-    }
+    return lifecycleActions.createFreshVault(this)
   }
 
   async enrollAndConnect() {
-    if (!this.manager) return
-    const secretsKey = this.enrollSecretsKey.trim()
-    const membersKey = this.enrollMembersKey.trim()
-    if (!secretsKey || !membersKey) return
-
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.enroll_and_connect(
-          ...this.wasmStorageArgs(),
-          secretsKey,
-          membersKey,
-        ),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      this.enrollSecretsKey = ''
-      this.enrollMembersKey = ''
-      await this.ensureProviderSaved()
-      void this.hydrateMultiDeviceState()
-      await this.syncFromStorage()
-      this.showSuccess(this.t('toasts.enrolled_connected'))
-      this.joinEnrollmentPrompt = 'none'
-      this.closeSettings()
-    } catch (e: unknown) {
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to enroll with vault keys.'
-    } finally {
-      this.isVerifying = false
-    }
+    return multiDeviceActions.enrollAndConnect(this)
   }
 
   generatePassword(
@@ -2337,10 +1347,8 @@ export class VaultState {
     numbers: boolean,
     symbols: boolean,
   ): string {
-    if (!this.manager) {
-      throw new Error('Vault engine is not available.')
-    }
-    return this.manager.generate_password(
+    return secretsActions.generatePassword(
+      this,
       length,
       lowercase,
       uppercase,
@@ -2350,141 +1358,14 @@ export class VaultState {
   }
 
   async connectStagedProvider(): Promise<void> {
-    if (this.loginSetupType) {
-      this.storageMode = this.loginSetupType
-    }
-    if (this.isAuthenticated && this.loginSetupType !== 'local') {
-      await this.connectAndSyncStagedProvider()
-      return
-    }
-    await this.loadDb()
+    return providersActions.connectStagedProvider(this)
   }
 
   async loadDb() {
-    if (this.isInitializing) {
-      this.errorMsg = 'Vault engine is still loading. Try again in a moment.'
-      return
-    }
-
-    if (!this.manager) {
-      this.errorMsg =
-        'Vault engine is not available. Refresh the page and try again.'
-      return
-    }
-
-    if (this.isVerifying) {
-      this.errorMsg = 'Connection already in progress.'
-      return
-    }
-
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      await this.initDeviceIdentity()
-      await this.ensureOAuthTokensFresh()
-
-      if (!this.isAuthenticated && this.syncProviders.length > 0) {
-        await this.syncProviderById(this.syncProviders[0]!.id, { quiet: true })
-      }
-
-      const accessStatus = await this.assessVaultConnectStatus()
-
-      if (
-        this.pendingConnectRecovery === 'none' &&
-        (await this.handleRemoteVaultAssessStatus(accessStatus))
-      ) {
-        return
-      }
-
-      if (accessStatus === 'needs_enrollment') {
-        await this.ensureProviderSaved()
-        const hasPasswordFallback = await this.refreshPasswordEntriesList()
-        if (hasPasswordFallback && this.passwordEntries.length > 0) {
-          this.loginPasswordPrompt = true
-          this.joinEnrollmentPrompt = 'none'
-          return
-        }
-        this.joinEnrollmentPrompt = 'needs_request'
-        this.startVaultSync()
-        return
-      }
-      if (accessStatus === 'join_pending') {
-        await this.ensureProviderSaved()
-        const hasPasswordFallback = await this.refreshPasswordEntriesList()
-        if (hasPasswordFallback && this.passwordEntries.length > 0) {
-          this.loginPasswordPrompt = true
-          this.joinEnrollmentPrompt = 'none'
-          return
-        }
-        this.joinEnrollmentPrompt = 'pending'
-        this.startVaultSync()
-        return
-      }
-
-      if (this.stagedRemoteStorageArgs()) {
-        const reconcileOutcome = await this.reconcileStagedRemoteWithLocal()
-        if (reconcileOutcome === 'conflict') {
-          return
-        }
-      }
-
-      const rawRecords = await this.enqueueStorage(async () => {
-        const connectPromise =
-          this.pendingConnectRecovery === 'fresh'
-            ? this.manager!.connect_fresh(...this.connectStorageArgs())
-            : this.manager!.connect(...this.connectStorageArgs())
-        this.pendingConnectRecovery = 'none'
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  'Connection timed out. Check your PAT, network, and try again.',
-                ),
-              ),
-            30_000,
-          )
-        })
-        return (await Promise.race([
-          connectPromise,
-          timeoutPromise,
-        ])) as NookSecretRecord[]
-      })
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      this.syncOAuthRemoteRefFromManager()
-      await this.ensureProviderSaved()
-      await this.loadProviders()
-      await this.promoteSessionVaultToLocalIfNeeded()
-      await this.refreshPasswordEntriesList()
-      await this.hydrateMultiDeviceState()
-      if (this.storageMode === 'local') {
-        this.showSuccess(this.t('toasts.local_loaded'))
-      } else if (this.storageMode === 'oauth-file') {
-        this.showSuccess(this.t('toasts.google_drive_connected'))
-      } else {
-        this.showSuccess(this.t('toasts.github_connected'))
-      }
-    } catch (e: unknown) {
-      this.isAuthenticated = false
-      const message = e instanceof Error ? e.message : String(e)
-      this.errorMsg = this.resolveErrorMessage(message)
-    } finally {
-      this.isVerifying = false
-    }
-
-    if (this.isAuthenticated) {
-      try {
-        await this.syncFromStorage({ force: true })
-      } catch {
-        // Post-unlock sync should not block the login gate.
-      }
-      this.startVaultSync()
-    }
+    return secretsActions.loadDb(this)
   }
 
-  private async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
+  async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
     const { snapshot, migrated } = await migrateLegacyVaultToLocal({
       providers: this.providers,
     })
@@ -2501,96 +1382,31 @@ export class VaultState {
   }
 
   async addVaultPassword(label: string, password: string): Promise<void> {
-    if (!this.manager) {
-      this.passwordError = 'Vault engine is not available.'
-      return
-    }
-    if (!this.isAuthenticated) {
-      this.passwordError = 'Unlock the vault before adding a password.'
-      return
-    }
-    const hadPasswords = this.passwordEntries.length > 0
-    this.passwordError = ''
-    this.isPasswordBusy = true
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.addVaultPassword(label.trim(), password),
-      )
-      await this.refreshPasswordEntriesList()
-      this.showSuccess(
-        hadPasswords
-          ? this.t('toasts.password_added_rotate')
-          : this.t('toasts.password_set'),
-      )
-      await this.fanOutSyncToProviders({ quiet: true })
-    } catch (e: unknown) {
-      this.passwordError =
-        e instanceof Error ? e.message : 'Failed to add vault password.'
-      throw e
-    } finally {
-      this.isPasswordBusy = false
-    }
+    return passwordUnlockActions.addVaultPassword(this, label, password)
   }
 
   async updateVaultPasswordEntry(
     entryId: string,
     password: string,
   ): Promise<void> {
-    if (!this.manager) {
-      this.passwordError = 'Vault engine is not available.'
-      return
-    }
-    this.passwordError = ''
-    this.isPasswordBusy = true
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.updateVaultPasswordEntry(entryId, password),
-      )
-      await this.refreshPasswordEntriesList()
-      this.showSuccess(this.t('toasts.password_updated'))
-      await this.fanOutSyncToProviders({ quiet: true })
-    } catch (e: unknown) {
-      this.passwordError =
-        e instanceof Error ? e.message : 'Failed to update vault password.'
-      throw e
-    } finally {
-      this.isPasswordBusy = false
-    }
+    return passwordUnlockActions.updateVaultPasswordEntry(
+      this,
+      entryId,
+      password,
+    )
   }
 
   async removeVaultPasswordEntry(entryId: string): Promise<void> {
-    if (!this.manager) return
-    this.passwordError = ''
-    this.isPasswordBusy = true
-    try {
-      await this.enqueueStorage(() =>
-        this.manager!.removeVaultPasswordEntry(entryId),
-      )
-      await this.refreshPasswordEntriesList()
-      if (this.activeEnrollmentEntryId === entryId) {
-        this.enrollmentCode = ''
-        this.activeEnrollmentEntryId = null
-      }
-      this.showSuccess(this.t('toasts.password_removed'))
-      await this.fanOutSyncToProviders({ quiet: true })
-    } catch (e: unknown) {
-      this.passwordError =
-        e instanceof Error ? e.message : 'Failed to remove vault password.'
-      throw e
-    } finally {
-      this.isPasswordBusy = false
-    }
+    return passwordUnlockActions.removeVaultPasswordEntry(this, entryId)
   }
 
   /** @deprecated Use addVaultPassword — kept for older callers. */
   async setVaultPassword(password: string): Promise<void> {
-    await this.addVaultPassword('Vault password', password)
+    return passwordUnlockActions.setVaultPassword(this, password)
   }
 
   async removeVaultPassword(): Promise<void> {
-    const entry = this.passwordEntries[0]
-    if (!entry) return
-    await this.removeVaultPasswordEntry(entry.id)
+    return passwordUnlockActions.removeVaultPassword(this)
   }
 
   /**
@@ -2607,164 +1423,23 @@ export class VaultState {
     password: string,
     providerId = this.syncProviders[0]?.id ?? '',
   ): Promise<string> {
-    if (!this.manager) {
-      throw new Error('Vault engine is not available.')
-    }
-    // Block the background sync timer for the duration: each verify call
-    // takes ~1s of scrypt CPU, and wasm-bindgen aliases the manager
-    // borrow if a sync_vault_from_storage future is still pending.
-    this.isPasswordBusy = true
-    // Drain any in-flight async wasm operation and wait one event-loop
-    // turn so wasm-bindgen's RefMut on the manager is observably released
-    // before we issue sync `&self` calls. Without this, scrypt verify
-    // races a background `sync_vault_from_storage` and trips the
-    // aliasing detector.
-    try {
-      await Promise.race([
-        this.storageChain,
-        new Promise<void>((_, reject) => {
-          setTimeout(
-            () => reject(new Error('Vault storage is busy. Try again.')),
-            VaultState.storageOpTimeoutMs,
-          )
-        }),
-      ])
-    } catch {
-      this.resetStorageChain()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    try {
-      // Background sync can refresh wasm password metadata from remote storage
-      // while the UI still holds a stale list — refetch before verify/issue.
-      const refreshed = await this.refreshPasswordEntriesList()
-      if (!refreshed || this.passwordEntries.length === 0) {
-        throw new Error(
-          'Add a backup vault password first; enrollment codes wrap that password.',
-        )
-      }
-      if (!this.passwordEntries.some((entry) => entry.id === entryId)) {
-        throw new Error(
-          'Password entry not found. Wait for sync to finish and try again.',
-        )
-      }
-      // `verifyVaultPassword` returns false on a wrong password but can
-      // also throw if the underlying age decryptor panics on certain
-      // scrypt failures inside the wasm runtime — treat both as "wrong
-      // password" so the UI message stays predictable.
-      let verified: boolean
-      try {
-        verified = await this.enqueueStorage(async () => {
-          await Promise.resolve()
-          return this.manager!.verifyVaultPassword(entryId, password)
-        })
-      } catch {
-        verified = false
-      }
-      if (!verified) {
-        throw new Error('Password does not match the vault.')
-      }
-      const selectedProvider = this.providers.find((p) => p.id === providerId)
-      if (!selectedProvider) {
-        throw new Error('Choose a sync provider.')
-      }
-      if (selectedProvider.type === 'local') {
-        throw new Error(
-          'Choose a cloud sync provider — local vault is already on this device.',
-        )
-      }
-      const provider: EnrollmentProvider =
-        selectedProvider.type === 'github'
-          ? {
-              type: 'github',
-              pat: selectedProvider.githubPat?.trim() ?? '',
-              repo: selectedProvider.githubRepo?.trim() ?? '',
-            }
-          : (() => {
-              throw new Error(
-                'Onboarding QR requires a GitHub sync provider for now.',
-              )
-            })()
-      if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
-        throw new Error(
-          'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
-        )
-      }
-      const payload: EnrollmentIssueInput = {
-        provider,
-        entry_id: entryId,
-        issued_at: isoTimestamp(),
-      }
-      const selectedPassword = this.passwordEntries.find(
-        (e) => e.id === entryId,
-      )
-      const code = await encryptEnrollmentPayload(
-        payload,
-        password,
-        selectedPassword?.label ?? '',
-      )
-      this.enrollmentCode = code
-      this.activeEnrollmentEntryId = entryId
-      return code
-    } finally {
-      this.isPasswordBusy = false
-    }
+    return passwordUnlockActions.issueEnrollmentCode(
+      this,
+      entryId,
+      password,
+      providerId,
+    )
   }
 
   clearEnrollmentCode() {
-    this.enrollmentCode = ''
-    this.activeEnrollmentEntryId = null
+    return passwordUnlockActions.clearEnrollmentCode(this)
   }
 
   /**
    * Unlock the vault with a labelled password entry.
    */
   async unlockWithPassword(entryId: string, password: string): Promise<void> {
-    if (!this.manager) {
-      this.errorMsg = 'Vault engine is not available.'
-      return
-    }
-    if (this.isVerifying) return
-    if (!this.hasRemoteCredentials()) {
-      this.errorMsg =
-        this.storageMode === 'oauth-file'
-          ? this.t('errors.google_sign_in_required')
-          : 'Configure GitHub credentials before unlocking.'
-      return
-    }
-    await this.ensureOAuthTokensFresh()
-    if (!entryId.trim()) {
-      this.errorMsg = 'Choose a vault password to unlock.'
-      return
-    }
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      await this.initDeviceIdentity()
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.connectWithPassword(
-          ...this.wasmStorageArgs(),
-          entryId,
-          password,
-        ),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      await this.ensureProviderSaved()
-      await this.loadProviders()
-      await this.refreshPasswordEntriesList()
-      void this.hydrateMultiDeviceState()
-      this.joinEnrollmentPrompt = 'none'
-      this.loginPasswordPrompt = false
-      this.showSuccess(this.t('toasts.vault_unlocked'))
-      this.startVaultSync()
-    } catch (e: unknown) {
-      this.isAuthenticated = false
-      this.errorMsg =
-        e instanceof Error ? e.message : 'Failed to unlock with password.'
-    } finally {
-      this.isVerifying = false
-    }
+    return passwordUnlockActions.unlockWithPassword(this, entryId, password)
   }
 
   /**
@@ -2772,140 +1447,18 @@ export class VaultState {
    * self-enrol via `connectWithPassword`. Skips approval entirely.
    */
   async connectWithEnrollmentCode(code: string, password = ''): Promise<void> {
-    if (!this.manager) {
-      this.errorMsg = 'Vault engine is not available.'
-      return
-    }
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isVerifying = true
-    try {
-      const payload = await decryptEnrollmentPayload(code, password)
-      const entryId = payload.entry_id.trim()
-      const unlockPassword = password.trim()
-      if (!entryId) {
-        throw new Error('Enrollment code is missing a vault password entry id.')
-      }
-      if (!unlockPassword) {
-        throw new Error('Enter the vault password for this onboarding QR.')
-      }
-
-      if (payload.provider.type === 'github') {
-        this.storageMode = 'github'
-        this.githubPat = payload.provider.pat
-        this.githubRepo = payload.provider.repo
-        this.loginSetupType = 'github'
-      } else {
-        this.storageMode = 'local'
-        this.loginSetupType = 'local'
-      }
-
-      await this.initDeviceIdentity()
-
-      if (payload.provider.type === 'github') {
-        const remote = await fetchRemoteVaultBlob(
-          'github',
-          payload.provider.pat,
-          payload.provider.repo,
-        )
-        if (!remote.content.trim()) {
-          throw new Error(
-            'This sync provider has no vault copy yet. Save secrets on the issuing device first.',
-          )
-        }
-        const localYaml = await readLocalVaultBlob()
-        const attempt = attemptReconcileVaultSyncBlobs(
-          localYaml,
-          remote.content,
-          remote.revision,
-        )
-        if (attempt.status === 'store_id_mismatch') {
-          throw new Error(
-            this.t('auth_storage.sync_store_id_mismatch', {
-              provider: 'GitHub',
-            }),
-          )
-        }
-        const reconcile = attempt.result
-        if (reconcile.action === 'conflict') {
-          throw new Error(
-            'Local and sync-provider vaults conflict. Resolve on the issuing device first.',
-          )
-        }
-        if (!localYaml.trim() || reconcile.action === 'adopt_remote') {
-          await writeLocalVaultBlob(reconcile.localYaml)
-        }
-        this.localVaultPresent = true
-      }
-
-      const rawRecords = (await this.enqueueStorage(() =>
-        this.manager!.connectWithPassword(
-          'local',
-          '',
-          '',
-          entryId,
-          unlockPassword,
-        ),
-      )) as NookSecretRecord[]
-      this.secrets = rawRecords
-      this.markVaultUnlocked()
-      await this.ensureProviderSaved()
-      await this.loadProviders()
-      await this.refreshPasswordEntriesList()
-      void this.hydrateMultiDeviceState()
-      this.joinEnrollmentPrompt = 'none'
-      this.loginEnrollmentCode = ''
-      this.prefillEnrollmentCode = ''
-      this.enrollmentFromUrlPending = false
-      this.showSuccess(this.t('toasts.device_enrolled'))
-      this.startVaultSync()
-    } catch (e: unknown) {
-      this.isAuthenticated = false
-      this.errorMsg =
-        e instanceof Error
-          ? e.message
-          : 'Failed to enroll with the provided code.'
-    } finally {
-      this.isVerifying = false
-    }
+    return passwordUnlockActions.connectWithEnrollmentCode(this, code, password)
   }
 
   async handleAddSecret(id: string, type: VaultItemType, data: string) {
-    if (!this.manager) return
-    if (this.syncBlocked) {
-      this.errorMsg = this.t('auth_storage.sync_blocked_edits')
-      return
-    }
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-    })
-    try {
-      await this.enqueueStorage(async () => {
-        const rawRecords = (await this.raceStorageTimeout(
-          this.manager!.add_secret(id, type, data),
-          'Add secret',
-        )) as NookSecretRecord[]
-        this.secrets = rawRecords
-      })
-      this.refreshSecretsFromSession()
-      this.showSuccess(this.t('toasts.secret_saved'))
-      await this.runFanOutSyncAfterLocalSave()
-    } catch (e: unknown) {
-      this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
-      throw e
-    } finally {
-      this.isSaving = false
-    }
+    return secretsActions.handleAddSecret(this, id, type, data)
   }
 
-  private scheduleRemoteEventOutboxFlush(): void {
+  scheduleRemoteEventOutboxFlush(): void {
     void this.flushRemoteEventOutboxNow()
   }
 
-  private async flushRemoteEventOutboxNow(): Promise<void> {
+  async flushRemoteEventOutboxNow(): Promise<void> {
     if (!this.manager) return
     const args = this.remoteYamlSnapshotStorageArgs()
     if (!args) return
@@ -2919,66 +1472,10 @@ export class VaultState {
   }
 
   async handleDeleteSecret(id: string) {
-    if (!this.manager) return
-    if (this.syncBlocked) {
-      this.errorMsg = this.t('auth_storage.sync_blocked_edits')
-      return
-    }
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-    })
-    try {
-      await this.enqueueStorage(async () => {
-        const rawRecords = (await this.manager!.delete_secret(
-          id,
-        )) as NookSecretRecord[]
-        this.secrets = rawRecords
-      })
-      this.refreshSecretsFromSession()
-      this.showSuccess(this.t('toasts.secret_deleted'))
-      this.scheduleFanOutSyncAfterLocalSave()
-    } catch (e: unknown) {
-      this.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
-      throw e
-    } finally {
-      this.isSaving = false
-    }
+    return secretsActions.handleDeleteSecret(this, id)
   }
 
   async handleReplaceSecret(oldId: string, type: VaultItemType, data: string) {
-    if (!this.manager) return
-    if (this.syncBlocked) {
-      this.errorMsg = this.t('auth_storage.sync_blocked_edits')
-      return
-    }
-    this.errorMsg = ''
-    this.dismissSuccess()
-    this.isSaving = true
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-    })
-    try {
-      const newId = this.manager!.generate_secret_id()
-      await this.enqueueStorage(async () => {
-        const rawRecords = (await this.manager!.replace_secret(
-          oldId,
-          newId,
-          type,
-          data,
-        )) as NookSecretRecord[]
-        this.secrets = rawRecords
-      })
-      this.refreshSecretsFromSession()
-      this.showSuccess(this.t('toasts.item_updated'))
-      this.scheduleFanOutSyncAfterLocalSave()
-    } catch (e: unknown) {
-      this.errorMsg = `Failed to update item: ${e instanceof Error ? e.message : String(e)}`
-      throw e
-    } finally {
-      this.isSaving = false
-    }
+    return secretsActions.handleReplaceSecret(this, oldId, type, data)
   }
 }
