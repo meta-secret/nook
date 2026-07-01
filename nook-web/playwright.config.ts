@@ -8,7 +8,7 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(rootDir, '.env.test.local') })
 
 /** Fast GitHub sync in e2e — production default stays 60s via app code. */
-process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '1000'
+process.env.VITE_VAULT_SYNC_INTERVAL_MS ??= '300'
 /** Fast idle auto-lock in e2e — production default stays 5 minutes via app code. */
 process.env.VITE_VAULT_IDLE_TIMEOUT_MS ??= '2500'
 process.env.VITE_VAULT_IDLE_WARNING_MS ??= '0'

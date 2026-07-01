@@ -65,7 +65,8 @@ export async function waitForStubVaultState(
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
-  const intervalMs = options?.intervalMs ?? 500
+  // Pure in-memory read (no network, no page round-trip) — poll fast.
+  const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
   let lastError = 'stub vault empty'
 

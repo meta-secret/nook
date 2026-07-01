@@ -166,7 +166,8 @@ export async function waitForSyncRemoteState(
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? 30_000
-  const intervalMs = options?.intervalMs ?? 500
+  // Pure in-memory read (no network, no page round-trip) — poll fast.
+  const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
   let lastError = 'stub vault empty'
 

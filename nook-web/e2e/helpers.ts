@@ -1187,7 +1187,8 @@ export async function waitForStableLocalVaultState(
   },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
-  const intervalMs = options?.intervalMs ?? 500
+  // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
+  const intervalMs = options?.intervalMs ?? 150
   const stableReads = options?.stableReads ?? 3
   const deadline = Date.now() + timeoutMs
   let consecutive = 0
@@ -1689,7 +1690,8 @@ export async function waitForLocalVaultState(
   options?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
-  const intervalMs = options?.intervalMs ?? 500
+  // IndexedDB read via page.evaluate — small round-trip, still much cheaper than network.
+  const intervalMs = options?.intervalMs ?? 150
   const deadline = Date.now() + timeoutMs
   let lastError = 'local vault missing'
 
