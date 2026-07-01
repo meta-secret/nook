@@ -134,7 +134,7 @@ tasks:
       - task: docker:task
         vars:
           TASK: _web:e2e:build-dist
-          VITE_VAULT_SYNC_INTERVAL_MS: '300'
+          VITE_VAULT_SYNC_INTERVAL_MS: '500'
           VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
           VITE_VAULT_IDLE_WARNING_MS: '0'
 
@@ -200,7 +200,7 @@ tasks:
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
@@ -248,7 +248,7 @@ tasks:
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
@@ -268,7 +268,7 @@ tasks:
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
@@ -279,7 +279,7 @@ tasks:
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
@@ -317,7 +317,7 @@ tasks:
       - _wasm:build
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
@@ -328,7 +328,7 @@ tasks:
     desc: Build web dist with fast vault sync for CI e2e preview (skips when already fresh).
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
@@ -359,7 +359,7 @@ tasks:
       - _wasm:build
     env:
       VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '300'
+      VITE_VAULT_SYNC_INTERVAL_MS: '500'
       VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
       VITE_VAULT_IDLE_WARNING_MS: '0'
     cmds:
