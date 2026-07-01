@@ -96,9 +96,9 @@ COPY nook-core nook-core
 COPY nook-wasm nook-wasm
 COPY .config .config
 # nextest --no-run first: reuse chef-cooked rustc artifacts; clippy then Checks deps instead of recompiling them.
-RUN cargo nextest run --no-run -p nook-core --profile ci \
-    && cargo clippy -p nook-core --all-targets -- -D warnings \
-    && bash -c 'set -euo pipefail; source <(cargo llvm-cov show-env --sh); cargo nextest run --no-run -p nook-core --profile ci'
+RUN cargo nextest run --no-run -p nook-core --profile ci
+RUN cargo clippy -p nook-core --all-targets -- -D warnings
+RUN bash -c 'set -euo pipefail; source <(cargo llvm-cov show-env --sh); cargo nextest run --no-run -p nook-core --profile ci'
 
 # --- Wasm release build + pkg (parallel with builder-debug after builder-deps) ---
 FROM builder-deps AS builder-wasm
