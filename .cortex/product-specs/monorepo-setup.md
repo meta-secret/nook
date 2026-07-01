@@ -27,5 +27,5 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Playwright in the image.** Chromium + system deps installed at build time (`PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright`).
 - **CI runners:** GitHub-hosted `ubuntu-latest` only. Do not use Blacksmith or other third-party runner labels in workflows.
 - **PR workflow cancellation:** `concurrency` with `cancel-in-progress: true` on `pr-<number>` — no custom cancel scripts. A new push or PR `closed` event queues a run in the same group and GitHub cancels the in-flight one.
-- **PR CI.** `pr.yml` runs **`task ci:pr:publish`** — one container for format, wasm, verify ‖ build, e2e-pr, then toolchain push. **`main.yml`** runs **`task ci:main:publish`** — same single-container model with full stub e2e. **Nightly** runs sync-live (real provider APIs).
+- **PR CI.** `pr.yml` runs **`task ci:pr`** — one container for format, wasm, verify ‖ build, e2e-pr (~5 min). Toolchain push is **main only** (`ci:main:publish`). **`main.yml`** runs **`task ci:main:publish`** with full stub e2e. **Nightly** runs sync-live (real provider APIs).
 - **Within a CI job**, wasm and web `dist/` persist on the runner via the bind mount. Rust `target/` lives at `/opt/nook/target` inside the container and is reused for all rustc steps in that one `docker run`.

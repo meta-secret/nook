@@ -1,6 +1,5 @@
-# Pull requests: build toolchain once, verify ‖ web build, e2e-pr, deploy preview.
-#
-# Fast e2e-pr (~1 min) runs in ci:pr — IndexedDB specs only.
+# Pull requests: pull toolchain, verify/build/e2e in one container, deploy preview.
+# Toolchain image push runs on main only (ci:main:publish) — not on every PR.
 # Main CI runs full stub e2e; nightly runs sync-live. See e2e-pr.yml for manual PR e2e.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
@@ -33,12 +32,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify, build preview, and push toolchain
-        run: task ci:pr:publish VITE_BASE=/
+      - name: Verify and build preview
+        run: task ci:pr VITE_BASE=/
         env:
           CI: true
-          PUSH_TOOLCHAIN: "1"
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.2.0
