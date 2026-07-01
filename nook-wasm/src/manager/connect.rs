@@ -184,6 +184,10 @@ impl NookVaultManager {
 
         if use_genesis || vault_file_missing {
             self.flush_event_outbox().await?;
+            // Event-log mode still needs an initial YAML snapshot on the remote
+            // provider for assess/connect and legacy sync readers.
+            self.push_remote_vault_yaml_snapshot().await?;
+            let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
         }
 
         let _ = self.status_tx.send("READY".to_owned());

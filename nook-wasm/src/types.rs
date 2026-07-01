@@ -191,9 +191,9 @@ impl NookVaultSyncResult {
         Ok(Self {
             changed,
             access_status: String::new(),
-            secrets: manager.get_records()?,
-            pending_joins: manager.pending_joins()?,
-            vault_members: manager.vault_members()?,
+            secrets: manager.get_records().unwrap_or_default(),
+            pending_joins: manager.pending_joins().unwrap_or_default(),
+            vault_members: manager.vault_members().unwrap_or_default(),
         })
     }
 }

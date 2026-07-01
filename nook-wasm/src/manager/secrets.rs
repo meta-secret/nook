@@ -157,6 +157,61 @@ impl NookVaultManager {
         Ok(self.get_records()?)
     }
 
+    #[wasm_bindgen(js_name = pushRemoteVaultYamlSnapshot)]
+    pub async fn push_remote_vault_yaml_snapshot_js(&mut self) -> Result<(), JsError> {
+        self.push_remote_vault_yaml_snapshot()
+            .await
+            .map_err(Into::into)
+    }
+
+    #[wasm_bindgen(js_name = pushRemoteVaultYamlSnapshotForProvider)]
+    pub async fn push_remote_vault_yaml_snapshot_for_provider(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<(), JsError> {
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        self.push_remote_vault_yaml_snapshot()
+            .await
+            .map_err(Into::into)
+    }
+
+    #[wasm_bindgen(js_name = mergeRemoteJoinsFromProvider)]
+    pub async fn merge_remote_joins_from_provider(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
+        let restore_local = self.storage_mode == nook_core::StorageMode::Local;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        let _ = self.merge_remote_yaml_joins_from_storage().await?;
+        if restore_local {
+            self.prepare_storage("local", "", "").await?;
+        }
+        Ok(self.pending_joins()?)
+    }
+
+    #[wasm_bindgen(js_name = flushEventOutboxForProvider)]
+    pub async fn flush_event_outbox_for_provider(
+        &mut self,
+        storage_mode: String,
+        github_pat: String,
+        github_repo: String,
+    ) -> Result<(), JsError> {
+        let restore_local = self.storage_mode == nook_core::StorageMode::Local;
+        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+            .await?;
+        self.flush_event_outbox().await?;
+        if restore_local {
+            self.prepare_storage("local", "", "").await?;
+        }
+        Ok(())
+    }
+
     #[wasm_bindgen(js_name = syncEventLogForProvider)]
     pub async fn sync_event_log_for_provider(
         &mut self,
@@ -167,6 +222,7 @@ impl NookVaultManager {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
+        let _ = self.merge_remote_yaml_joins_from_storage().await?;
         self.flush_event_outbox().await?;
         Ok(())
     }

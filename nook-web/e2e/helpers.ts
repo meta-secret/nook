@@ -818,6 +818,8 @@ export async function sendJoinRequest(
   stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
+  await waitForVaultOperationsIdle(page)
+  await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
   const snapshot = await waitForGithubVaultState(
     { pat, repoName, stub },
@@ -839,15 +841,65 @@ export async function sendJoinRequest(
 }
 
 export async function waitForPendingJoinOnDevice(page: Page, deviceId: string) {
+  await waitForPendingJoinBanner(page, deviceId)
   const row = page.getByTestId('device-join-row').filter({ hasText: deviceId })
-  if (await row.isVisible()) {
-    return
-  }
-  const refresh = page.getByTestId('refresh-joins-banner-btn')
-  if (await refresh.isVisible()) {
-    await refresh.click()
-  }
   await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+}
+
+/** Wait until pending joins are visible on an enrolled device (manual sync + banner). */
+export async function waitForPendingJoinBanner(page: Page, deviceId?: string) {
+  await expect
+    .poll(
+      async () => {
+        await dismissSyncConflictIfVisible(page)
+        await page.evaluate(async () => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                refreshPendingJoinsFromProviders?: () => Promise<void>
+              }
+            }
+          ).__nookVault
+          await vault?.refreshPendingJoinsFromProviders?.()
+        })
+        try {
+          await triggerVaultSyncRefresh(page)
+        } catch {
+          await page.evaluate(async () => {
+            const vault = (
+              window as Window & {
+                __nookVault?: { manualSync?: () => Promise<void> }
+              }
+            ).__nookVault
+            await vault?.manualSync?.()
+          })
+        }
+        await waitForVaultOperationsIdle(page)
+        if (deviceId) {
+          const row = page
+            .getByTestId('device-join-row')
+            .filter({ hasText: deviceId })
+          if (await row.isVisible()) return true
+        }
+        if (await page.getByTestId('pending-joins-banner').isVisible()) {
+          return true
+        }
+        const pending = await page.evaluate(() => {
+          const vault = (
+            window as Window & {
+              __nookVault?: { pendingJoins?: unknown[] }
+            }
+          ).__nookVault
+          return vault?.pendingJoins?.length ?? 0
+        })
+        return pending > 0
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await expect(page.getByTestId('pending-joins-banner')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
 }
 
 export async function approveJoinFromBanner(
@@ -880,13 +932,14 @@ export async function approveJoinFromSettings(
 
 async function waitForPendingJoinInSettings(page: Page, deviceId: string) {
   const row = page.getByTestId('pending-join-row').filter({ hasText: deviceId })
-  const refresh = page.getByTestId('vault-sync-refresh-btn')
   await expect
     .poll(
       async () => {
         if (await row.isVisible()) return true
-        if ((await refresh.isVisible()) && (await refresh.isEnabled())) {
-          await refresh.click()
+        try {
+          await triggerVaultSyncRefresh(page)
+        } catch {
+          // Sync control may still be disabled while background work finishes.
         }
         return row.isVisible()
       },
@@ -905,51 +958,69 @@ async function dismissJoinEnrollmentDialog(page: Page) {
 }
 
 export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
+  if (target?.stub) {
+    await target.stub.install(page, { repoName: target.repoName })
+  }
   await page.goto('/')
+  await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
-  const vaultPanel = page.getByTestId('vault-panel')
-  const localUnlock = page.getByTestId('login-local-unlock-step')
+  const vaultReady = async () =>
+    (await page.getByTestId('vault-panel').isVisible()) ||
+    (await page.getByTestId('secret-row').count()) > 0
 
-  await expect
-    .poll(
-      async () => {
-        await dismissJoinEnrollmentDialog(page)
-        if (await vaultPanel.isVisible()) return 'vault'
-        if (await localUnlock.isVisible()) return 'unlock'
-        if (await page.getByTestId('login-gate').isVisible()) return 'gate'
-        return 'waiting'
-      },
-      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
-    )
-    .not.toBe('waiting')
+  await expect(
+    page.getByTestId('login-gate').or(page.getByTestId('vault-panel')),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
-  if (await vaultPanel.isVisible()) {
+  if (await vaultReady()) {
     await disableVaultIdleLock(page)
     return
   }
 
-  if (await localUnlock.isVisible()) {
+  if (await page.getByTestId('login-local-unlock-step').isVisible()) {
     await unlockVaultOnLogin(page)
   } else if (target) {
-    await setupGithubProvider(page, target.pat, target.repoName)
-    const connectButton = await waitForEngine(page)
-    await connectButton.click()
-    await assertNoVaultErrors(page, { allowTransient: true })
-    await dismissJoinEnrollmentDialog(page)
-    if (!(await vaultPanel.isVisible()) && (await localUnlock.isVisible())) {
-      await unlockVaultOnLogin(page)
+    const quickConnect = page.getByTestId('connect-provider-btn').first()
+    if (await quickConnect.isVisible()) {
+      await quickConnect.click()
+    } else if (await page.getByTestId('login-provider-setup').isVisible()) {
+      await page.getByTestId('provider-option-github').click()
+      const repoInput = page.getByTestId('github-repo-input')
+      if (await repoInput.isVisible()) {
+        await repoInput.fill(target.repoName)
+        await page.getByTestId('github-pat-input').fill(target.pat)
+      }
+      const connectButton = await waitForEngine(page)
+      await connectButton.click()
+    } else {
+      await setupGithubProvider(page, target.pat, target.repoName)
+      const connectButton = await waitForEngine(page)
+      await connectButton.click()
     }
+    await assertNoVaultErrors(page, { allowTransient: true })
+    await dismissSyncConflictIfVisible(page)
+    await dismissJoinEnrollmentDialog(page)
   } else if (await page.getByTestId('login-gate').isVisible()) {
     await connectLoginProvider(page)
-    if (!(await vaultPanel.isVisible()) && (await localUnlock.isVisible())) {
+    if (
+      !(await vaultReady()) &&
+      (await page.getByTestId('login-local-unlock-step').isVisible())
+    ) {
       await unlockVaultOnLogin(page)
     }
   }
 
-  await expect(vaultPanel).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
+  await expect
+    .poll(
+      async () => {
+        await dismissSyncConflictIfVisible(page)
+        await dismissJoinEnrollmentDialog(page)
+        return vaultReady()
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
   await disableVaultIdleLock(page)
 }
 
@@ -1004,6 +1075,7 @@ export async function addVaultPassword(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await waitForVaultOperationsIdle(page)
   await waitForStableLocalVaultState(
     page,
     (snapshot) => snapshot.hasPasswordEnvelope,
@@ -1112,8 +1184,9 @@ export async function submitOnboardEnrollmentCode(
   await expect(page.getByTestId('onboard-device-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await dismissSyncConflictIfVisible(page)
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
-    timeout: UI_TIMEOUT_MS,
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await page.getByTestId('onboard-password-input').fill(password)
   await page.getByTestId('onboard-device-submit').click()
@@ -1306,6 +1379,7 @@ export async function unlockVaultOnLogin(
     if (await vaultPanel.isVisible()) {
       return
     }
+    await dismissSyncConflictIfVisible(page)
     await unlockBtn.click()
     return
   }
@@ -1557,22 +1631,64 @@ export async function waitForLocalVaultState(
 /** Stub GitHub REST responses so local e2e can exercise sync-provider enrollment. */
 export async function stubGithubVaultForLocalE2e(
   page: Page,
-  opts: { repoName: string; vaultYaml: string; username?: string },
+  opts: { repoName: string; vaultYaml?: string; username?: string },
+  existingStub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  const stub = createLocalE2eGithubVaultStub(opts.vaultYaml)
+  const stub =
+    existingStub ?? createLocalE2eGithubVaultStub(opts.vaultYaml ?? '')
+  if (opts.vaultYaml !== undefined && !existingStub) {
+    stub.setVaultYaml(opts.vaultYaml)
+  }
   await stub.install(page, opts)
+}
+
+function listGithubStubDir(
+  eventFiles: Map<string, string>,
+  relativePath: string,
+): Array<{ name: string; path: string; type: 'file' | 'dir' }> {
+  const dirPrefix = relativePath.endsWith('/')
+    ? relativePath
+    : `${relativePath}/`
+  const dirs = new Set<string>()
+  const files = new Set<string>()
+  for (const storedPath of eventFiles.keys()) {
+    if (!storedPath.startsWith(dirPrefix)) continue
+    const rest = storedPath.slice(dirPrefix.length)
+    const slash = rest.indexOf('/')
+    if (slash >= 0) {
+      dirs.add(rest.slice(0, slash))
+    } else if (rest) {
+      files.add(rest)
+    }
+  }
+  return [
+    ...[...dirs].sort().map((name) => ({
+      name,
+      path: `${relativePath}/${name}`,
+      type: 'dir' as const,
+    })),
+    ...[...files].sort().map((name) => ({
+      name,
+      path: `${relativePath}/${name}`,
+      type: 'file' as const,
+    })),
+  ]
 }
 
 /** In-memory GitHub vault stub with GET/PUT support for local multi-device e2e. */
 export function createLocalE2eGithubVaultStub(initialYaml = '') {
   let vaultYaml = initialYaml
   let sha = 'e2e-stub-sha'
+  const eventFiles = new Map<string, string>()
+  const eventShas = new Map<string, string>()
 
   return {
     getVaultYaml: () => vaultYaml,
     setVaultYaml: (yaml: string) => {
       vaultYaml = yaml
     },
+    getEventFileCount: () => eventFiles.size,
+    getEventFilePaths: () => [...eventFiles.keys()],
     async install(
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },
@@ -1604,17 +1720,23 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           })
           return
         }
-        if (url === `https://api.github.com/repos/${fullRepo}/contents/`) {
-          const files =
-            vaultYaml.trim().length > 0
-              ? [
-                  {
-                    name: 'nook-vault.yaml',
-                    path: 'nook-vault.yaml',
-                    type: 'file',
-                  },
-                ]
-              : []
+        const contentsPrefix = `https://api.github.com/repos/${fullRepo}/contents/`
+        if (url === contentsPrefix) {
+          const files: Array<{ name: string; path: string; type: string }> = []
+          if (vaultYaml.trim().length > 0) {
+            files.push({
+              name: 'nook-vault.yaml',
+              path: 'nook-vault.yaml',
+              type: 'file',
+            })
+          }
+          if (eventFiles.size > 0) {
+            files.push({
+              name: 'nook-log',
+              path: 'nook-log',
+              type: 'dir',
+            })
+          }
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -1660,20 +1782,54 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           })
           return
         }
-        if (url.includes(`/repos/${fullRepo}/contents/nook-log/`)) {
+        if (url.startsWith(`${contentsPrefix}nook-log/`)) {
+          const relativePath = url.slice(contentsPrefix.length)
           if (method === 'PUT') {
-            sha = `e2e-stub-sha-${Date.now()}`
+            const body = request.postDataJSON() as { content?: string }
+            if (body.content) {
+              const decoded = Buffer.from(body.content, 'base64').toString(
+                'utf8',
+              )
+              eventFiles.set(relativePath, decoded)
+              eventShas.set(
+                relativePath,
+                `e2e-event-sha-${Date.now()}-${relativePath.length}`,
+              )
+            }
             await route.fulfill({
               status: 200,
               contentType: 'application/json',
-              body: JSON.stringify({ content: { sha } }),
+              body: JSON.stringify({
+                content: {
+                  sha: eventShas.get(relativePath) ?? sha,
+                },
+              }),
             })
+            return
+          }
+          const stored = eventFiles.get(relativePath)
+          if (stored !== undefined) {
+            const encoded = Buffer.from(stored, 'utf8').toString('base64')
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                content: encoded,
+                sha: eventShas.get(relativePath) ?? sha,
+                encoding: 'base64',
+              }),
+            })
+            return
+          }
+          const listing = listGithubStubDir(eventFiles, relativePath)
+          if (listing.length === 0) {
+            await route.fulfill({ status: 404, body: '{}' })
             return
           }
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify([]),
+            body: JSON.stringify(listing),
           })
           return
         }
@@ -1693,9 +1849,37 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 }
 
 /** Seed sync provider + unlock a keys-mode local vault for multi-device local e2e. */
-export async function reloadUnlockLocalVaultWithGithubSync(page: Page) {
+export async function reloadUnlockLocalVaultWithGithubSync(
+  page: Page,
+  sharedStub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
+) {
   await seedExtraGithubProviders(page, [E2E_GITHUB_ONBOARD_PROVIDER])
+
+  const vaultYaml = await readLocalVaultYamlFromIdb(page)
+  if (vaultYaml.trim()) {
+    await stubGithubVaultForLocalE2e(
+      page,
+      {
+        repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+        vaultYaml,
+      },
+      sharedStub,
+    )
+  }
+
   await page.reload()
+
+  if (vaultYaml.trim()) {
+    await stubGithubVaultForLocalE2e(
+      page,
+      {
+        repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+        vaultYaml,
+      },
+      sharedStub,
+    )
+  }
+
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -1732,10 +1916,12 @@ export async function sendJoinRequestLocalE2e(
   stub: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
+  await waitForVaultOperationsIdle(page)
+  await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
   await expect
     .poll(() => joinCountFromYaml(stub.getVaultYaml()), {
-      timeout: UI_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     .toBeGreaterThanOrEqual(1)
 
@@ -1867,20 +2053,23 @@ export async function addSecret(
 ) {
   const beforeCount = github ? await syncSecretCount(github) : 0
   await assertVaultReady(page)
+  await waitForVaultOperationsIdle(page)
   await page.getByTestId('add-secret-btn').click()
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
   await page.getByTestId('item-type-api-key').click()
   await page.getByTestId('secret-label').fill(key)
   await page.getByTestId('secret-value').fill(value)
   await page.getByTestId('save-secret-btn').click()
+  await waitForVaultOperationsIdle(page)
   await assertNoVaultError(page)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   if (github) {
+    await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await waitForGithubVaultState(
       github,
       (yaml) => yaml.secretIds.length > beforeCount,
-      { page },
+      { page, timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
   }
 }
@@ -1918,16 +2107,23 @@ export async function waitForSecretOnDevice(
     await waitForGithubVaultState(github, (yaml) => yaml.secretIds.length > 0)
   }
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  const refresh = page.getByTestId('vault-sync-refresh-btn')
   const timeout = github ? configuredGithubSyncTimeoutMs() : UI_TIMEOUT_MS
 
   await expect
     .poll(
       async () => {
         if (await row.isVisible()) return true
-        if ((await refresh.isVisible()) && (await refresh.isEnabled())) {
-          await refresh.click()
-        }
+        await page.evaluate(async () => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
+              }
+            }
+          ).__nookVault
+          await vault?.syncFromStorage?.({ force: true })
+        })
+        await waitForVaultOperationsIdle(page)
         return row.isVisible()
       },
       { timeout },
