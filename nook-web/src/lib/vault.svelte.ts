@@ -1410,6 +1410,16 @@ export class VaultState {
       if (!this.isAuthenticated && this.joinEnrollmentPrompt === 'none') {
         return
       }
+      // Local-only vaults with no sync provider and no pending join have
+      // nothing remote to reconcile — skip the tick entirely rather than
+      // re-reading local IndexedDB into itself every interval.
+      if (
+        this.isAuthenticated &&
+        this.syncProviders.length === 0 &&
+        this.joinEnrollmentPrompt === 'none'
+      ) {
+        return
+      }
       void this.syncFromStorage()
     }, VaultState.syncIntervalMs())
   }
