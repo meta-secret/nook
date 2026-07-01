@@ -1516,11 +1516,7 @@ export class VaultState {
     if (!options?.force && this.isPasswordBusy) return
     if (!options?.force && this.isSyncing) return
 
-    if (
-      !this.isAuthenticated &&
-      this.joinEnrollmentPrompt !== 'none' &&
-      this.syncProviders.length > 0
-    ) {
+    if (!this.isAuthenticated && this.syncProviders.length > 0) {
       this.isSyncing = true
       try {
         const [mode, pat, repo] = this.providerWasmArgs(this.syncProviders[0]!)
@@ -2377,6 +2373,10 @@ export class VaultState {
     try {
       await this.initDeviceIdentity()
       await this.ensureOAuthTokensFresh()
+
+      if (!this.isAuthenticated && this.syncProviders.length > 0) {
+        await this.syncProviderById(this.syncProviders[0]!.id, { quiet: true })
+      }
 
       const accessStatus = await this.assessVaultConnectStatus()
 

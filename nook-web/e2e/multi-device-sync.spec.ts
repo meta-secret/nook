@@ -18,6 +18,7 @@ import {
   UI_TIMEOUT_MS,
   NOTIFICATION_TIMEOUT_MS,
   waitForGithubVaultState,
+  waitForJoinerVaultReady,
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
 } from './helpers'
@@ -63,6 +64,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await disableVaultIdleLock(deviceA)
     await disableVaultIdleLock(deviceA)
     await waitForVaultOperationsIdle(deviceA)
     await addSecret(deviceA, genesisSecretKey, genesisSecretValue, target)
@@ -145,7 +147,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
   })
 
   test('device B unlocks and reads genesis secret', async () => {
-    await unlockGithubVault(deviceB, target)
+    await waitForJoinerVaultReady(deviceB, target)
     await assertVaultReady(deviceB)
 
     await waitForSecretOnDevice(deviceB, genesisSecretKey, target)
@@ -201,6 +203,7 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await disableVaultIdleLock(deviceA)
   })
 
   test.afterAll(async () => {
@@ -227,7 +230,7 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
     expect(parsed.authPkIds).toHaveLength(2)
     expect(parsed.memberPkIds).toHaveLength(2)
 
-    await unlockGithubVault(deviceB, target)
+    await waitForJoinerVaultReady(deviceB, target)
     await assertVaultReady(deviceB)
   })
 })
@@ -253,6 +256,7 @@ test.describe(`multi-device join background sync (${providerLabel} stub sync)`, 
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await disableVaultIdleLock(deviceA)
   })
 
   test.afterAll(async () => {

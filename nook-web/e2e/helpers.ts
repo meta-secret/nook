@@ -935,6 +935,16 @@ async function waitForPendingJoinInSettings(page: Page, deviceId: string) {
   await expect
     .poll(
       async () => {
+        await page.evaluate(async () => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                refreshPendingJoinsFromProviders?: () => Promise<void>
+              }
+            }
+          ).__nookVault
+          await vault?.refreshPendingJoinsFromProviders?.()
+        })
         if (await row.isVisible()) return true
         try {
           await triggerVaultSyncRefresh(page)
@@ -955,6 +965,83 @@ async function dismissJoinEnrollmentDialog(page: Page) {
       await button.click()
     }
   }
+}
+
+/** Pull remote vault state on the login gate (joiner waiting for / after approval). */
+async function refreshGithubVaultOnLoginGate(page: Page) {
+  await page.evaluate(async () => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
+        }
+      }
+    ).__nookVault
+    await vault?.syncFromStorage?.({ force: true })
+  })
+  await waitForVaultOperationsIdle(page)
+}
+
+async function tryGithubVaultConnect(page: Page, target: GithubE2eTarget) {
+  await refreshGithubVaultOnLoginGate(page)
+  await dismissSyncConflictIfVisible(page)
+  await dismissJoinEnrollmentDialog(page)
+
+  const quickConnect = page.getByTestId('connect-provider-btn').first()
+  if (await quickConnect.isVisible()) {
+    if (await quickConnect.isEnabled()) {
+      await quickConnect.click()
+      await waitForVaultOperationsIdle(page)
+    }
+    return
+  }
+  if (await page.getByTestId('login-provider-setup').isVisible()) {
+    await page.getByTestId('provider-option-github').click()
+    const repoInput = page.getByTestId('github-repo-input')
+    if (await repoInput.isVisible()) {
+      await repoInput.fill(target.repoName)
+      await page.getByTestId('github-pat-input').fill(target.pat)
+    }
+    const connectButton = await waitForEngine(page)
+    await connectButton.click()
+    await waitForVaultOperationsIdle(page)
+    return
+  }
+  await setupGithubProvider(page, target.pat, target.repoName)
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
+  await waitForVaultOperationsIdle(page)
+}
+
+export async function waitForJoinerVaultReady(
+  page: Page,
+  target: GithubE2eTarget,
+) {
+  if (target.stub) {
+    await target.stub.install(page, { repoName: target.repoName })
+  }
+  await expect
+    .poll(
+      async () => {
+        await refreshGithubVaultOnLoginGate(page)
+        await dismissSyncConflictIfVisible(page)
+        await dismissJoinEnrollmentDialog(page)
+        if (
+          (await page.getByTestId('vault-panel').isVisible()) ||
+          (await page.getByTestId('secret-row').count()) > 0
+        ) {
+          return true
+        }
+        await tryGithubVaultConnect(page, target)
+        return (
+          (await page.getByTestId('vault-panel').isVisible()) ||
+          (await page.getByTestId('secret-row').count()) > 0
+        )
+      },
+      { timeout: GITHUB_CONNECT_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await disableVaultIdleLock(page)
 }
 
 export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
@@ -981,23 +1068,7 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
   if (await page.getByTestId('login-local-unlock-step').isVisible()) {
     await unlockVaultOnLogin(page)
   } else if (target) {
-    const quickConnect = page.getByTestId('connect-provider-btn').first()
-    if (await quickConnect.isVisible()) {
-      await quickConnect.click()
-    } else if (await page.getByTestId('login-provider-setup').isVisible()) {
-      await page.getByTestId('provider-option-github').click()
-      const repoInput = page.getByTestId('github-repo-input')
-      if (await repoInput.isVisible()) {
-        await repoInput.fill(target.repoName)
-        await page.getByTestId('github-pat-input').fill(target.pat)
-      }
-      const connectButton = await waitForEngine(page)
-      await connectButton.click()
-    } else {
-      await setupGithubProvider(page, target.pat, target.repoName)
-      const connectButton = await waitForEngine(page)
-      await connectButton.click()
-    }
+    await tryGithubVaultConnect(page, target)
     await assertNoVaultErrors(page, { allowTransient: true })
     await dismissSyncConflictIfVisible(page)
     await dismissJoinEnrollmentDialog(page)
@@ -1014,8 +1085,12 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
   await expect
     .poll(
       async () => {
+        if (await vaultReady()) return true
         await dismissSyncConflictIfVisible(page)
         await dismissJoinEnrollmentDialog(page)
+        if (target) {
+          await tryGithubVaultConnect(page, target)
+        }
         return vaultReady()
       },
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },

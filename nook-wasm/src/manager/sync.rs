@@ -56,6 +56,9 @@ impl NookVaultManager {
             let event_changed = self.sync_event_log_from_storage().await.unwrap_or(false);
             let yaml_secrets_changed = self.merge_remote_yaml_user_secrets_from_storage().await?;
             let changed = event_changed || yaml_changed || yaml_secrets_changed;
+            if changed {
+                self.persist_projection_cache().await?;
+            }
             let result = sync_result_session(self, changed)?;
             if restore_local {
                 self.prepare_storage("local", "", "").await?;
