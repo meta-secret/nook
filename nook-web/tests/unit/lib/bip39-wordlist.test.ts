@@ -6,7 +6,7 @@ import {
   loadBip39Wordlist,
   parseMnemonicWords,
   suggestBip39Words,
-} from './bip39-wordlist'
+} from '$lib/bip39-wordlist'
 
 const SAMPLE_WORDS = Array.from({ length: 2048 }, (_, index) => `word${index}`)
 

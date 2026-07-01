@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   parseVaultStoreIdMismatch,
   resolveVaultSyncIntervalMs,
-} from './vault-sync'
+} from '$lib/vault-sync'
 
 describe('vault-sync store_id mismatch', () => {
   test('parseVaultStoreIdMismatch extracts store ids from core error text', () => {

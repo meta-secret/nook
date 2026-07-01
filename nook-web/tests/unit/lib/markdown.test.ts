@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { renderMarkdown } from './markdown'
+import { renderMarkdown } from '$lib/markdown'
 
 describe('renderMarkdown', () => {
   test('renders emphasis', () => {

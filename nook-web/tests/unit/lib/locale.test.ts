@@ -4,7 +4,7 @@ import {
   parseAppLocale,
   resolveAppLocaleFromTag,
   resolveAppLocaleFromTags,
-} from './locale'
+} from '$lib/locale'
 
 describe('locale', () => {
   test('parseAppLocale accepts only supported values', () => {

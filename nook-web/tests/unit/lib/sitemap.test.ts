@@ -5,7 +5,7 @@ import {
   buildSitemapXml,
   PUBLIC_SITEMAP_ENTRIES,
   siteUrlFromEnv,
-} from './sitemap'
+} from '$lib/sitemap'
 
 describe('sitemap', () => {
   test('lists home and legal pages', () => {

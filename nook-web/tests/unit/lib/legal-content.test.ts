@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { getLegalPageFromPath, LEGAL_PAGES } from './legal-content'
+import { getLegalPageFromPath, LEGAL_PAGES } from '$lib/legal-content'
 
 describe('legal-content', () => {
   test('maps privacy and terms paths', () => {

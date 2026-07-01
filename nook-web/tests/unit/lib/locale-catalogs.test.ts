@@ -3,7 +3,7 @@ import {
   TRANSLATION_CATALOGS,
   lookupTranslation,
   mergeTranslationCatalogs,
-} from './locale-catalogs'
+} from '$lib/locale-catalogs'
 
 describe('locale-catalogs', () => {
   test('includes Google Drive provider picker strings', () => {
