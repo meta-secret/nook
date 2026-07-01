@@ -2,8 +2,9 @@
 
 use nook_core::{
     ApiKeySecret, Database, PasswordOptions, ReplaceSecretInput, SecretId, SecretType, SecretValue,
-    SymmetricKey, VaultCrypto, VaultFormat, deserialize_stored, filter_secrets, generate_password,
-    replace_secret, serialize_stored, validate_connect, validate_secret_data, validate_secret_id,
+    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
+    deserialize_stored, filter_secrets, generate_password, replace_secret, serialize_stored,
+    validate_connect, validate_secret_data, validate_secret_id,
 };
 use std::collections::HashMap;
 
@@ -115,24 +116,26 @@ fn incremental_delete_secret() {
 fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
     let crypto = VaultCrypto::new(&test_key()).unwrap();
     let mut db = Database::new();
-    let mut armored = HashMap::new();
-    let mut secret_types = HashMap::new();
+    let mut state = VaultMetaState::default();
 
     let old_id = "github.com";
     let old_yaml = api_key_yaml("hunter2");
     db.insert(sid(old_id), api_key("hunter2"));
-    armored.insert(
+    state.secrets.insert(
         sid(old_id),
-        crypto.encrypt_value(&old_yaml).unwrap().as_str().to_owned(),
+        (
+            SecretType::ApiKey,
+            StoredRecordPayload::from_trusted(
+                crypto.encrypt_value(&old_yaml).unwrap().as_str().to_owned(),
+            ),
+        ),
     );
-    secret_types.insert(sid(old_id), SecretType::ApiKey);
 
     let new_id = "github-updated.com";
     let new_yaml = api_key_yaml("new-token");
     replace_secret(
         &mut db,
-        &mut armored,
-        &mut secret_types,
+        &mut state,
         &crypto,
         &ReplaceSecretInput {
             old_id,
@@ -150,14 +153,22 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
     assert_eq!(db.list()[0].id.as_str(), new_id);
     assert_eq!(db.list()[0].data, api_key("new-token"));
 
-    assert!(!armored.contains_key(&sid(old_id)));
-    assert!(armored.contains_key(&sid(new_id)));
-    assert!(!secret_types.contains_key(&sid(old_id)));
-    assert_eq!(secret_types.get(&sid(new_id)), Some(&SecretType::ApiKey));
+    assert!(!state.secrets.contains_key(&sid(old_id)));
+    assert!(state.secrets.contains_key(&sid(new_id)));
+    assert_eq!(
+        state.secrets.get(&sid(new_id)).map(|(t, _)| *t),
+        Some(SecretType::ApiKey)
+    );
 
     let decrypted = crypto
         .decrypt_value(&nook_core::AgeArmoredCiphertext::from_trusted_armored(
-            armored.get(&sid(new_id)).unwrap().clone(),
+            state
+                .secrets
+                .get(&sid(new_id))
+                .unwrap()
+                .1
+                .as_str()
+                .to_owned(),
         ))
         .unwrap();
     assert_eq!(decrypted.as_str(), new_yaml);
@@ -167,13 +178,11 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
 fn incremental_replace_secret_rejects_missing_old_id() {
     let crypto = VaultCrypto::new(&test_key()).unwrap();
     let mut db = Database::new();
-    let mut armored = HashMap::new();
-    let mut secret_types = HashMap::new();
+    let mut state = VaultMetaState::default();
 
     let err = replace_secret(
         &mut db,
-        &mut armored,
-        &mut secret_types,
+        &mut state,
         &crypto,
         &ReplaceSecretInput {
             old_id: "missing",
@@ -190,34 +199,40 @@ fn incremental_replace_secret_rejects_missing_old_id() {
 fn incremental_replace_secret_rejects_duplicate_new_id() {
     let crypto = VaultCrypto::new(&test_key()).unwrap();
     let mut db = Database::new();
-    let mut armored = HashMap::new();
-    let mut secret_types = HashMap::new();
+    let mut state = VaultMetaState::default();
 
     db.insert(sid("keep"), api_key("a"));
     db.insert(sid("replace-me"), api_key("b"));
-    armored.insert(
+    state.secrets.insert(
         sid("keep"),
-        crypto
-            .encrypt_value(api_key_yaml("a"))
-            .unwrap()
-            .as_str()
-            .to_owned(),
+        (
+            SecretType::ApiKey,
+            StoredRecordPayload::from_trusted(
+                crypto
+                    .encrypt_value(api_key_yaml("a"))
+                    .unwrap()
+                    .as_str()
+                    .to_owned(),
+            ),
+        ),
     );
-    armored.insert(
+    state.secrets.insert(
         sid("replace-me"),
-        crypto
-            .encrypt_value(api_key_yaml("b"))
-            .unwrap()
-            .as_str()
-            .to_owned(),
+        (
+            SecretType::ApiKey,
+            StoredRecordPayload::from_trusted(
+                crypto
+                    .encrypt_value(api_key_yaml("b"))
+                    .unwrap()
+                    .as_str()
+                    .to_owned(),
+            ),
+        ),
     );
-    secret_types.insert(sid("keep"), SecretType::ApiKey);
-    secret_types.insert(sid("replace-me"), SecretType::ApiKey);
 
     let err = replace_secret(
         &mut db,
-        &mut armored,
-        &mut secret_types,
+        &mut state,
         &crypto,
         &ReplaceSecretInput {
             old_id: "replace-me",

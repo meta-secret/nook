@@ -11,7 +11,6 @@ use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::hash::BuildHasher;
 use std::io::{Read, Write};
 
 /// Symmetric vault key (32-byte random hex).
@@ -88,14 +87,12 @@ pub fn parse_auth_envelopes(value: &str) -> MultiDeviceResult<AuthEnvelopes> {
 
 #[must_use]
 pub fn is_join_stored_record(record: &StoredSecretRecord) -> bool {
-    parse_join_request(record.value.as_str()).is_ok()
+    matches!(VaultMetaRecord::classify(record), VaultMetaRecord::Join(..))
 }
 
 #[must_use]
 pub fn is_auth_stored_record(record: &StoredSecretRecord) -> bool {
-    !is_join_stored_record(record)
-        && is_auth_id(record.key.as_str())
-        && parse_auth_envelopes(record.value.as_str()).is_ok()
+    matches!(VaultMetaRecord::classify(record), VaultMetaRecord::Auth(..))
 }
 
 /// Back-compat alias.
@@ -146,15 +143,202 @@ fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool 
 
 #[must_use]
 pub fn is_members_stored_record(record: &StoredSecretRecord) -> bool {
-    record.key.as_str().starts_with(MEMBER_RECORD_PREFIX)
-        && record.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
+    matches!(
+        VaultMetaRecord::classify(record),
+        VaultMetaRecord::Member(..)
+    )
 }
 
 #[must_use]
 pub fn is_vault_meta_record(record: &StoredSecretRecord) -> bool {
-    is_join_stored_record(record)
-        || is_auth_stored_record(record)
-        || is_members_stored_record(record)
+    !matches!(
+        VaultMetaRecord::classify(record),
+        VaultMetaRecord::Secret(..)
+    )
+}
+
+/// Single classification site for the four record kinds that share the
+/// `StoredSecretRecord { key, secret_type, value }` wire shape.
+///
+/// Replaces scattered `is_join_stored_record` / `is_auth_stored_record` /
+/// `is_members_stored_record` probing at call sites that need to branch on
+/// record kind. Those helpers remain as thin wrappers over this for
+/// call sites that only need a boolean (e.g. wire-boundary partitioning in
+/// `vault_format.rs`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VaultMetaRecord {
+    /// A user-visible secret: id, its declared type, and the age-armored ciphertext.
+    Secret(SecretId, SecretType, StoredRecordPayload),
+    /// This device's (or another enrolled device's) auth envelope pair.
+    Auth(AuthKeyId, AuthEnvelopes),
+    /// A pending join request awaiting approval.
+    Join(DeviceId, JoinRequest),
+    /// A roster entry, still encrypted with `members_key`.
+    Member(AuthKeyId, StoredRecordPayload),
+}
+
+impl VaultMetaRecord {
+    #[must_use]
+    pub fn classify(record: &StoredSecretRecord) -> Self {
+        if let Ok(join) = parse_join_request(record.value.as_str()) {
+            return Self::Join(join.device_id.clone(), join);
+        }
+        if let Some(pk_id_str) = record.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
+            && record.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
+            && let Ok(auth_id) = AuthKeyId::parse(pk_id_str)
+        {
+            return Self::Member(auth_id, record.value.clone());
+        }
+        if is_auth_id(record.key.as_str())
+            && let Ok(envelopes) = parse_auth_envelopes(record.value.as_str())
+            && let Ok(auth_id) = AuthKeyId::parse(record.key.as_str())
+        {
+            return Self::Auth(auth_id, envelopes);
+        }
+        Self::Secret(
+            record.key.clone(),
+            record.secret_type.unwrap_or(SecretType::SecureNote),
+            record.value.clone(),
+        )
+    }
+
+    /// Wire-boundary encoding back to the shared `StoredSecretRecord` shape.
+    pub fn to_stored(&self) -> MultiDeviceResult<StoredSecretRecord> {
+        Ok(match self {
+            Self::Secret(id, secret_type, payload) => StoredSecretRecord {
+                key: id.clone(),
+                secret_type: Some(*secret_type),
+                value: payload.clone(),
+            },
+            Self::Auth(auth_id, envelopes) => StoredSecretRecord {
+                key: SecretId::from_vault_record(auth_id.as_str()),
+                secret_type: None,
+                value: StoredRecordPayload::from_trusted(
+                    serde_json::to_string(envelopes)
+                        .map_err(MultiDeviceError::AuthEnvelopesSerialize)?,
+                ),
+            },
+            Self::Join(_, join) => StoredSecretRecord {
+                key: SecretId::from_vault_record(&join_record_key(&join.device_id)),
+                secret_type: None,
+                value: StoredRecordPayload::from_trusted(
+                    serde_json::to_string(join).map_err(MultiDeviceError::JoinRequestSerialize)?,
+                ),
+            },
+            Self::Member(auth_id, payload) => StoredSecretRecord {
+                key: SecretId::from_vault_record(&member_stored_key(auth_id)),
+                secret_type: None,
+                value: payload.clone(),
+            },
+        })
+    }
+}
+
+/// Typed replacement for the flat `armored: HashMap<String, String>` meta cache:
+/// one bucket per record kind instead of four implicit kinds sharing one map.
+///
+/// Built from / flattened back to `StoredSecretRecord` rows at the wire
+/// boundary via [`VaultMetaState::from_stored_records`] /
+/// [`VaultMetaState::to_stored_records`] so on-disk YAML/JSONL shape is
+/// unaffected — this type only changes how the meta cache is held and
+/// mutated in memory.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VaultMetaState {
+    pub secrets: HashMap<SecretId, (SecretType, StoredRecordPayload)>,
+    pub auth: HashMap<AuthKeyId, AuthEnvelopes>,
+    pub joins: HashMap<DeviceId, JoinRequest>,
+    pub members: HashMap<AuthKeyId, StoredRecordPayload>,
+}
+
+impl VaultMetaState {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.secrets.is_empty()
+            && self.auth.is_empty()
+            && self.joins.is_empty()
+            && self.members.is_empty()
+    }
+
+    #[must_use]
+    pub fn from_stored_records(records: &[StoredSecretRecord]) -> Self {
+        let mut state = Self::default();
+        for record in records {
+            state.apply_record(record);
+        }
+        state
+    }
+
+    /// Insert or overwrite whichever bucket `record` classifies into.
+    pub fn apply_record(&mut self, record: &StoredSecretRecord) {
+        match VaultMetaRecord::classify(record) {
+            VaultMetaRecord::Secret(id, secret_type, payload) => {
+                self.secrets.insert(id, (secret_type, payload));
+            }
+            VaultMetaRecord::Auth(auth_id, envelopes) => {
+                self.auth.insert(auth_id, envelopes);
+            }
+            VaultMetaRecord::Join(device_id, join) => {
+                self.joins.insert(device_id, join);
+            }
+            VaultMetaRecord::Member(auth_id, payload) => {
+                self.members.insert(auth_id, payload);
+            }
+        }
+    }
+
+    /// Remove whichever bucket a raw on-disk key refers to (join rows are
+    /// removed by device id; everything else by its own key encoding).
+    pub fn remove_key(&mut self, key: &str) {
+        if let Ok(device_id) = DeviceId::parse(key) {
+            self.joins.remove(&device_id);
+        }
+        if let Some(pk_id_str) = key.strip_prefix(MEMBER_RECORD_PREFIX)
+            && let Ok(auth_id) = AuthKeyId::parse(pk_id_str)
+        {
+            self.members.remove(&auth_id);
+        }
+        if let Ok(auth_id) = AuthKeyId::parse(key) {
+            self.auth.remove(&auth_id);
+        }
+        self.secrets.remove(&SecretId::from_vault_record(key));
+    }
+
+    #[must_use]
+    pub fn to_stored_records(&self) -> Vec<StoredSecretRecord> {
+        let mut records = Vec::with_capacity(
+            self.secrets.len() + self.auth.len() + self.joins.len() + self.members.len(),
+        );
+        for (id, (secret_type, payload)) in &self.secrets {
+            records.push(StoredSecretRecord {
+                key: id.clone(),
+                secret_type: Some(*secret_type),
+                value: payload.clone(),
+            });
+        }
+        for (auth_id, envelopes) in &self.auth {
+            if let Ok(record) =
+                VaultMetaRecord::Auth(auth_id.clone(), envelopes.clone()).to_stored()
+            {
+                records.push(record);
+            }
+        }
+        for join in self.joins.values() {
+            if let Ok(record) =
+                VaultMetaRecord::Join(join.device_id.clone(), join.clone()).to_stored()
+            {
+                records.push(record);
+            }
+        }
+        for (auth_id, payload) in &self.members {
+            records.push(StoredSecretRecord {
+                key: SecretId::from_vault_record(&member_stored_key(auth_id)),
+                secret_type: None,
+                value: payload.clone(),
+            });
+        }
+        records.sort_by(|a, b| a.key.as_str().cmp(b.key.as_str()));
+        records
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -276,20 +460,11 @@ pub fn list_join_requests(records: &[StoredSecretRecord]) -> Vec<JoinRequest> {
 }
 
 /// Replace in-memory join rows with the latest join rows from a freshly fetched vault file.
-pub fn merge_remote_join_records<S: BuildHasher>(
-    armored: &mut HashMap<String, String, S>,
-    fresh_records: &[StoredSecretRecord],
-) {
-    armored.retain(|_, value| {
-        !is_join_stored_record(&StoredSecretRecord {
-            key: SecretId::from_vault_record(""),
-            secret_type: None,
-            value: StoredRecordPayload::from_trusted(value.clone()),
-        })
-    });
+pub fn merge_remote_join_records(state: &mut VaultMetaState, fresh_records: &[StoredSecretRecord]) {
+    state.joins.clear();
     for record in fresh_records {
-        if is_join_stored_record(record) {
-            armored.insert(record.key.to_string(), record.value.as_str().to_owned());
+        if let VaultMetaRecord::Join(device_id, join) = VaultMetaRecord::classify(record) {
+            state.joins.insert(device_id, join);
         }
     }
 }
@@ -299,24 +474,29 @@ pub fn merge_remote_join_records<S: BuildHasher>(
 /// Event-log vaults treat `nook-log/` as authoritative for ordering, but the YAML
 /// projection is still pushed after every save and may hold ciphertext for events
 /// another device has not yet fetched (or whose parents never reached the remote log).
-#[allow(clippy::implicit_hasher)]
 pub fn merge_remote_yaml_user_secrets(
-    armored: &mut HashMap<String, String>,
-    secret_types: &mut HashMap<String, SecretType>,
+    state: &mut VaultMetaState,
     fresh_records: &[StoredSecretRecord],
 ) -> bool {
     let mut changed = false;
     for record in user_stored_records(fresh_records) {
-        let key = record.key.to_string();
-        let value = record.value.as_str();
-        if armored.get(&key).is_some_and(|existing| existing == value) {
+        let unchanged = state
+            .secrets
+            .get(&record.key)
+            .is_some_and(|(_, existing)| existing == &record.value);
+        if unchanged {
             continue;
         }
-        armored.insert(key.clone(), value.to_owned());
+        // Only known-typed rows enter the typed `secrets` map; an untyped
+        // remote row (shouldn't happen on any current write path) is dropped
+        // rather than silently defaulting its type, matching the strict
+        // typing this state now enforces.
         if let Some(secret_type) = record.secret_type {
-            secret_types.insert(key, secret_type);
+            state
+                .secrets
+                .insert(record.key.clone(), (secret_type, record.value.clone()));
+            changed = true;
         }
-        changed = true;
     }
     changed
 }
@@ -581,13 +761,12 @@ pub fn genesis_dec_record(
     genesis_auth_record(identity, &key, &key)
 }
 
-/// Apply a single meta-domain operation to the flat armored session cache.
+/// Apply a single meta-domain operation to the typed session meta cache.
 ///
 /// User secrets are projected separately; this covers join rows and other
 /// meta keys that the event log records but `project_vault` does not replay.
-#[allow(clippy::implicit_hasher)]
 pub fn apply_vault_meta_operation(
-    armored: &mut HashMap<String, String>,
+    state: &mut VaultMetaState,
     operation: &crate::vault_event::VaultOperation,
     requested_at: &str,
 ) -> MultiDeviceResult<()> {
@@ -599,19 +778,18 @@ pub fn apply_vault_meta_operation(
             encryption_public_key,
             ..
         } => {
-            let request = JoinRequest {
-                device_id: device_id.clone(),
-                public_key: encryption_public_key.clone(),
-                requested_at: requested_at.to_owned(),
-            };
-            armored.insert(
-                join_record_key(device_id),
-                serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
+            state.joins.insert(
+                device_id.clone(),
+                JoinRequest {
+                    device_id: device_id.clone(),
+                    public_key: encryption_public_key.clone(),
+                    requested_at: requested_at.to_owned(),
+                },
             );
         }
         VaultOperation::JoinDenied { device_id }
         | VaultOperation::JoinApproved { device_id, .. } => {
-            armored.remove(&join_record_key(device_id));
+            state.joins.remove(device_id);
         }
         VaultOperation::VaultImported { .. }
         | VaultOperation::SecretCreated { .. }
@@ -630,10 +808,9 @@ pub fn apply_vault_meta_operation(
 }
 
 /// Replay meta-domain operations from the event graph in topological order.
-#[allow(clippy::implicit_hasher)]
 pub fn materialize_vault_meta_from_graph(
     graph: &crate::vault_event_graph::EventGraph,
-    armored: &mut HashMap<String, String>,
+    state: &mut VaultMetaState,
 ) -> MultiDeviceResult<()> {
     let order = graph
         .topological_order()
@@ -643,7 +820,7 @@ pub fn materialize_vault_meta_from_graph(
             MultiDeviceError::InvalidDeviceIdentity(format!("Missing event {event_id} in graph."))
         })?;
         for operation in &event.body.operations {
-            apply_vault_meta_operation(armored, operation, event.body.created_at.as_str())?;
+            apply_vault_meta_operation(state, operation, event.body.created_at.as_str())?;
         }
     }
     Ok(())
@@ -1278,16 +1455,15 @@ mod tests {
         let (genesis, armored_records) = genesis_vault(&keys);
         let joiner = DeviceIdentity::generate().unwrap();
         let join = create_join_request_record(&joiner, "2026-01-01T00:00:00Z").unwrap();
-        let mut armored = records_to_armored_map(&armored_records);
-        merge_remote_join_records(&mut armored, std::slice::from_ref(&join));
-        assert_eq!(list_join_requests(&records_from_armored(&armored)).len(), 1);
+        let mut state = VaultMetaState::from_stored_records(&armored_records);
+        merge_remote_join_records(&mut state, std::slice::from_ref(&join));
+        assert_eq!(state.joins.len(), 1);
 
         let joiner2 = DeviceIdentity::generate().unwrap();
         let join2 = create_join_request_record(&joiner2, "2026-01-02T00:00:00Z").unwrap();
-        merge_remote_join_records(&mut armored, std::slice::from_ref(&join2));
-        let pending_joins = list_join_requests(&records_from_armored(&armored));
-        assert_eq!(pending_joins.len(), 1);
-        assert_eq!(pending_joins[0].device_id, *joiner2.device_id());
+        merge_remote_join_records(&mut state, std::slice::from_ref(&join2));
+        assert_eq!(state.joins.len(), 1);
+        assert!(state.joins.contains_key(joiner2.device_id()));
         let _ = genesis;
     }
 
@@ -1295,53 +1471,28 @@ mod tests {
     fn merge_remote_yaml_user_secrets_adds_missing_rows() {
         let keys = generate_vault_keys().unwrap();
         let (genesis, armored_records) = genesis_vault(&keys);
-        let mut armored = records_to_armored_map(&armored_records);
-        let mut secret_types = std::collections::HashMap::new();
+        let mut state = VaultMetaState::from_stored_records(&armored_records);
         let remote_secret = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_remote"),
             secret_type: Some(SecretType::ApiKey),
             value: StoredRecordPayload::from_trusted("armored-remote".to_owned()),
         };
-        let changed = merge_remote_yaml_user_secrets(
-            &mut armored,
-            &mut secret_types,
-            std::slice::from_ref(&remote_secret),
-        );
+        let changed =
+            merge_remote_yaml_user_secrets(&mut state, std::slice::from_ref(&remote_secret));
         assert!(changed);
         assert_eq!(
-            armored.get("secret_remote"),
-            Some(&"armored-remote".to_owned())
+            state
+                .secrets
+                .get(&SecretId::from_vault_record("secret_remote")),
+            Some(&(
+                SecretType::ApiKey,
+                StoredRecordPayload::from_trusted("armored-remote".to_owned())
+            ))
         );
-        assert_eq!(secret_types.get("secret_remote"), Some(&SecretType::ApiKey));
-        let unchanged = merge_remote_yaml_user_secrets(
-            &mut armored,
-            &mut secret_types,
-            std::slice::from_ref(&remote_secret),
-        );
+        let unchanged =
+            merge_remote_yaml_user_secrets(&mut state, std::slice::from_ref(&remote_secret));
         assert!(!unchanged);
         let _ = genesis;
-    }
-
-    fn records_to_armored_map(
-        records: &[StoredSecretRecord],
-    ) -> std::collections::HashMap<String, String> {
-        records
-            .iter()
-            .map(|record| (record.key.to_string(), record.value.as_str().to_owned()))
-            .collect()
-    }
-
-    fn records_from_armored(
-        armored: &std::collections::HashMap<String, String>,
-    ) -> Vec<StoredSecretRecord> {
-        armored
-            .iter()
-            .map(|(key, value)| StoredSecretRecord {
-                key: SecretId::from_vault_record(key),
-                secret_type: None,
-                value: StoredRecordPayload::from_trusted(value.clone()),
-            })
-            .collect()
     }
 
     #[test]
@@ -1360,18 +1511,18 @@ mod tests {
         use crate::vault_wire::{DeviceSigningPublicKey, MemberLabel};
 
         let joiner = DeviceIdentity::generate().unwrap();
-        let mut armored = HashMap::new();
+        let mut state = VaultMetaState::default();
         let join_requested = VaultOperation::JoinRequested {
             device_id: joiner.device_id().clone(),
             encryption_public_key: joiner.public_key(),
             signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
             label: MemberLabel::from_trusted(String::new()),
         };
-        apply_vault_meta_operation(&mut armored, &join_requested, "2026-06-21T00:00:00Z").unwrap();
-        assert!(armored.contains_key(&join_record_key(joiner.device_id())));
+        apply_vault_meta_operation(&mut state, &join_requested, "2026-06-21T00:00:00Z").unwrap();
+        assert!(state.joins.contains_key(joiner.device_id()));
 
         apply_vault_meta_operation(
-            &mut armored,
+            &mut state,
             &VaultOperation::JoinApproved {
                 device_id: joiner.device_id().clone(),
                 encryption_public_key: joiner.public_key(),
@@ -1383,18 +1534,111 @@ mod tests {
             "2026-06-21T00:00:00Z",
         )
         .unwrap();
-        assert!(!armored.contains_key(&join_record_key(joiner.device_id())));
+        assert!(!state.joins.contains_key(joiner.device_id()));
 
-        apply_vault_meta_operation(&mut armored, &join_requested, "2026-06-21T00:00:00Z").unwrap();
+        apply_vault_meta_operation(&mut state, &join_requested, "2026-06-21T00:00:00Z").unwrap();
         apply_vault_meta_operation(
-            &mut armored,
+            &mut state,
             &VaultOperation::JoinDenied {
                 device_id: joiner.device_id().clone(),
             },
             "2026-06-21T00:00:00Z",
         )
         .unwrap();
-        assert!(!armored.contains_key(&join_record_key(joiner.device_id())));
+        assert!(!state.joins.contains_key(joiner.device_id()));
+    }
+
+    #[test]
+    fn classify_distinguishes_all_four_record_kinds() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        let join_record = create_join_request_record(&joiner, "2026-06-21T00:00:00Z").unwrap();
+        let secret_record = StoredSecretRecord {
+            key: SecretId::from_vault_record("secret_abc"),
+            secret_type: Some(SecretType::Login),
+            value: StoredRecordPayload::from_trusted("ciphertext".to_owned()),
+        };
+
+        let auth_record = records
+            .iter()
+            .find(|r| is_auth_stored_record(r))
+            .expect("genesis vault has an auth row");
+        let member_record = records
+            .iter()
+            .find(|r| is_members_stored_record(r))
+            .expect("genesis vault has a member row");
+
+        assert!(matches!(
+            VaultMetaRecord::classify(auth_record),
+            VaultMetaRecord::Auth(..)
+        ));
+        assert!(matches!(
+            VaultMetaRecord::classify(member_record),
+            VaultMetaRecord::Member(..)
+        ));
+        assert!(matches!(
+            VaultMetaRecord::classify(&join_record),
+            VaultMetaRecord::Join(..)
+        ));
+        assert!(matches!(
+            VaultMetaRecord::classify(&secret_record),
+            VaultMetaRecord::Secret(..)
+        ));
+        let _ = genesis;
+    }
+
+    #[test]
+    fn vault_meta_record_to_stored_round_trips_through_classify() {
+        let keys = generate_vault_keys().unwrap();
+        let (_genesis, records) = genesis_vault(&keys);
+        for record in &records {
+            let classified = VaultMetaRecord::classify(record);
+            let restored = classified.to_stored().unwrap();
+            assert_eq!(restored.key, record.key);
+            assert_eq!(VaultMetaRecord::classify(&restored), classified);
+        }
+    }
+
+    #[test]
+    fn vault_meta_state_round_trips_stored_records() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, mut records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        records.push(create_join_request_record(&joiner, "2026-06-21T00:00:00Z").unwrap());
+        records.push(StoredSecretRecord {
+            key: SecretId::from_vault_record("secret_abc"),
+            secret_type: Some(SecretType::Login),
+            value: StoredRecordPayload::from_trusted("ciphertext".to_owned()),
+        });
+
+        let state = VaultMetaState::from_stored_records(&records);
+        assert_eq!(state.auth.len(), 1);
+        assert_eq!(state.members.len(), 1);
+        assert_eq!(state.joins.len(), 1);
+        assert_eq!(state.secrets.len(), 1);
+
+        let mut expected = records.clone();
+        expected.sort_by(|a, b| a.key.as_str().cmp(b.key.as_str()));
+        let mut roundtripped = state.to_stored_records();
+        roundtripped.sort_by(|a, b| a.key.as_str().cmp(b.key.as_str()));
+        assert_eq!(roundtripped, expected);
+        let _ = genesis;
+    }
+
+    #[test]
+    fn vault_meta_state_remove_key_clears_correct_bucket() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, records) = genesis_vault(&keys);
+        let joiner = DeviceIdentity::generate().unwrap();
+        let join = create_join_request_record(&joiner, "2026-06-21T00:00:00Z").unwrap();
+
+        let mut state = VaultMetaState::from_stored_records(&records);
+        state.apply_record(&join);
+        assert_eq!(state.joins.len(), 1);
+        state.remove_key(&join_record_key(joiner.device_id()));
+        assert!(state.joins.is_empty());
+        let _ = genesis;
     }
 
     #[test]
@@ -1402,8 +1646,8 @@ mod tests {
         use crate::vault_event_graph::EventGraph;
 
         let graph = EventGraph::new();
-        let mut armored = HashMap::new();
-        materialize_vault_meta_from_graph(&graph, &mut armored).unwrap();
-        assert!(armored.is_empty());
+        let mut state = VaultMetaState::default();
+        materialize_vault_meta_from_graph(&graph, &mut state).unwrap();
+        assert!(state.joins.is_empty());
     }
 }

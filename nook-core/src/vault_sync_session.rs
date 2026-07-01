@@ -3,10 +3,9 @@
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
 use crate::{
-    DeviceIdentity, VaultUnlock, capture_vault_unlock_from_content, load_stored_vault,
-    merge_remote_join_records,
+    DeviceIdentity, VaultMetaState, VaultUnlock, capture_vault_unlock_from_content,
+    load_stored_vault, merge_remote_join_records,
 };
-use std::collections::HashMap;
 
 /// Outcome of comparing remote YAML against the last synced snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,8 +20,7 @@ pub enum YamlSyncOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YamlSyncReloaded {
     pub jsonl: String,
-    pub armored: HashMap<String, String>,
-    pub secret_types: HashMap<String, crate::SecretType>,
+    pub meta: VaultMetaState,
     pub secrets_key: String,
     pub members_key: String,
     pub unlock: VaultUnlock,
@@ -32,13 +30,12 @@ pub struct YamlSyncReloaded {
 }
 
 /// Decide how to update session state when remote YAML changes (legacy blob sync path).
-#[allow(clippy::implicit_hasher)]
 pub fn reconcile_yaml_sync(
     content: &str,
     last_synced_content: &str,
     members_key: &str,
     identity: &DeviceIdentity,
-    armored: &mut HashMap<String, String>,
+    state: &mut VaultMetaState,
     event_log_mode: bool,
 ) -> VaultResult<YamlSyncOutcome> {
     if content.trim() == last_synced_content.trim() {
@@ -47,8 +44,7 @@ pub fn reconcile_yaml_sync(
                 let loaded = load_stored_vault(content, identity)?;
                 return Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
                     jsonl: loaded.jsonl,
-                    armored: loaded.armored,
-                    secret_types: loaded.secret_types,
+                    meta: loaded.meta,
                     secrets_key: loaded.secrets_key,
                     members_key: loaded.members_key,
                     unlock: VaultUnlock::Keys,
@@ -73,13 +69,12 @@ pub fn reconcile_yaml_sync(
 
     let format = crate::detect_stored_format(content)?;
     let fresh_records = crate::deserialize_stored(content, format)?;
-    merge_remote_join_records(armored, &fresh_records);
+    merge_remote_join_records(state, &fresh_records);
     let loaded = load_stored_vault(content, identity)?;
     let (unlock, password_entries, store_id, version) = capture_vault_unlock_from_content(content)?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
         jsonl: loaded.jsonl,
-        armored: loaded.armored,
-        secret_types: loaded.secret_types,
+        meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,
         unlock,
@@ -128,13 +123,13 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let yaml = genesis_yaml(&keys, &identity)?;
         let yaml_str = yaml.as_str();
-        let mut armored = HashMap::new();
+        let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(
             yaml_str,
             yaml_str,
             keys.members_key.as_str(),
             &identity,
-            &mut armored,
+            &mut state,
             false,
         )?;
         assert_eq!(outcome, YamlSyncOutcome::Unchanged);
@@ -146,13 +141,13 @@ mod tests {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
         let yaml = genesis_yaml(&keys, &identity)?;
-        let mut armored = HashMap::new();
+        let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(
             yaml.as_str(),
             yaml.as_str(),
             "",
             &identity,
-            &mut armored,
+            &mut state,
             true,
         )?;
         match outcome {

@@ -2,11 +2,10 @@
 
 use crate::errors::VaultResult;
 use crate::{
-    ConnectAccessStatus, Database, DeviceIdentity, SecretType, StoredSecretRecord, VaultCrypto,
+    ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultCrypto, VaultMetaState,
     VaultUnlock, assess_connect_access, deserialize_stored, detect_stored_format,
     resolve_members_key, resolve_secrets_key, user_stored_records, vault_has_multi_device_records,
 };
-use std::collections::HashMap;
 use std::fmt;
 
 /// Connect pre-flight status for the web layer (`new_vault` or enrolled-device access).
@@ -49,8 +48,7 @@ impl From<ConnectAccessStatus> for VaultAccessStatus {
 /// Decrypted session material loaded from a stored vault blob.
 pub struct LoadedVault {
     pub jsonl: String,
-    pub armored: HashMap<String, String>,
-    pub secret_types: HashMap<String, SecretType>,
+    pub meta: VaultMetaState,
     pub secrets_key: String,
     pub members_key: String,
 }
@@ -84,51 +82,34 @@ pub fn access_status_for_vault_content(
     Ok(assess_connect_access(&records, identity).into())
 }
 
-fn records_to_secret_types(records: &[StoredSecretRecord]) -> HashMap<String, SecretType> {
-    records
-        .iter()
-        .filter_map(|record| {
-            record
-                .secret_type
-                .map(|secret_type| (record.key.to_string(), secret_type))
-        })
-        .collect()
-}
-
 /// Decrypt and hydrate an in-memory session from stored vault YAML.
-#[allow(clippy::implicit_hasher)]
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let stored_records = deserialize_stored(content, format)?;
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
     let crypto = VaultCrypto::new(&secrets_key)?;
-    let mut armored = HashMap::with_capacity(stored_records.len());
-    for record in &stored_records {
-        armored.insert(record.key.to_string(), record.value.as_str().to_owned());
-    }
+    let meta = VaultMetaState::from_stored_records(&stored_records);
     let user_records = user_stored_records(&stored_records);
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
     let jsonl = db.to_jsonl()?;
-    let secret_types = records_to_secret_types(&stored_records);
     Ok(LoadedVault {
         jsonl: jsonl.into_inner(),
-        armored,
-        secret_types,
+        meta,
         secrets_key: secrets_key.into_inner(),
         members_key: members_key.into_inner(),
     })
 }
 
-/// Replace member roster rows in an armored cache map.
-#[allow(clippy::implicit_hasher)]
-pub fn apply_member_records(
-    armored: &mut HashMap<String, String>,
-    member_records: &[StoredSecretRecord],
-) {
-    armored.retain(|key, _| !key.starts_with(crate::MEMBER_RECORD_PREFIX));
+/// Replace member roster rows in the typed session meta state.
+pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[StoredSecretRecord]) {
+    state.members.clear();
     for record in member_records {
-        armored.insert(record.key.to_string(), record.value.as_str().to_owned());
+        if let crate::VaultMetaRecord::Member(auth_id, payload) =
+            crate::VaultMetaRecord::classify(record)
+        {
+            state.members.insert(auth_id, payload);
+        }
     }
 }
 
@@ -192,7 +173,7 @@ mod tests {
         );
         let loaded = load_stored_vault(yaml.as_str(), &identity)?;
         assert_eq!(loaded.secrets_key, keys.secrets_key.as_str());
-        assert!(loaded.jsonl.is_empty() || loaded.armored.len() >= 2);
+        assert!(loaded.jsonl.is_empty() || loaded.meta.auth.len() + loaded.meta.members.len() >= 2);
         Ok(())
     }
 }

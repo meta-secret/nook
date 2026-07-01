@@ -5,11 +5,10 @@ use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, SessionJsonl, Sha256Hex};
 use crate::{
     AppendEventInput, EventId, LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord,
-    VaultCrypto, VaultOperation, VaultProjection, build_members_records, build_signed_event,
-    project_vault, resolve_member_roster, rotate_vault_keys_with_secrets, sha256_hex,
-    union_remote_events,
+    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
+    build_signed_event, project_vault, resolve_member_roster, rotate_vault_keys_with_secrets,
+    sha256_hex, union_remote_events,
 };
-use std::collections::HashMap;
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
 #[derive(Debug, Clone)]
@@ -92,14 +91,13 @@ impl VaultEventSession {
     pub fn apply_projection_to_armored(
         &self,
         crypto: &VaultCrypto,
-        armored: &mut HashMap<String, String>,
-        secret_types: &mut HashMap<String, crate::SecretType>,
+        state: &mut VaultMetaState,
     ) -> VaultResult<SessionJsonl> {
         let graph = self.store.load_graph(&self.store_id)?;
         let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<StoredSecretRecord> = live.into_values().collect();
-        crate::apply_user_records_to_armored_session(user_records, crypto, armored, secret_types)
+        crate::apply_user_records_to_armored_session(user_records, crypto, state)
     }
 
     pub fn members_checkpoint_hash(

@@ -2,16 +2,14 @@
 
 use crate::errors::{EventError, VaultEpochError, VaultEpochResult, VaultResult};
 use crate::multi_device::{DeviceIdentity, VaultKeys};
-use crate::secret_types::{StoredRecordPayload, StoredSecretRecord};
+#[cfg(test)]
+use crate::secret_types::StoredRecordPayload;
+use crate::secret_types::StoredSecretRecord;
 use crate::vault_connect::apply_member_records;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_event::EncryptedSecretPayload;
 use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
-use crate::{
-    SecretId, build_members_records, genesis_auth_record, is_auth_stored_record,
-    resolve_member_roster,
-};
-use std::collections::HashMap;
+use crate::{VaultMetaRecord, build_members_records, genesis_auth_record, resolve_member_roster};
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub fn reencrypt_user_secrets_for_epoch(
@@ -64,27 +62,22 @@ pub fn members_checkpoint_hash_from_roster(
     Ok(crate::sha256_hex(json.as_bytes()))
 }
 
-/// Replace auth + member meta rows in an armored cache after epoch rotation.
-#[allow(clippy::implicit_hasher)]
+/// Replace auth + member meta rows in the typed session meta state after epoch rotation.
 pub fn rewrap_vault_meta_for_epoch(
-    armored: &mut HashMap<String, String>,
+    state: &mut crate::VaultMetaState,
     identity: &DeviceIdentity,
     records_snapshot: &[StoredSecretRecord],
     old_members_key: &SymmetricKey,
     new_keys: &VaultKeys,
 ) -> VaultResult<()> {
     let auth = genesis_auth_record(identity, &new_keys.secrets_key, &new_keys.members_key)?;
-    armored.retain(|key, value| {
-        !is_auth_stored_record(&StoredSecretRecord {
-            key: SecretId::from_vault_record(key),
-            secret_type: None,
-            value: StoredRecordPayload::from_trusted(value.clone()),
-        })
-    });
-    armored.insert(auth.key.to_string(), auth.value.as_str().to_owned());
+    state.auth.clear();
+    if let VaultMetaRecord::Auth(auth_id, envelopes) = VaultMetaRecord::classify(&auth) {
+        state.auth.insert(auth_id, envelopes);
+    }
     let roster = resolve_member_roster(records_snapshot, old_members_key)?;
     let member_records = build_members_records(&roster, &new_keys.members_key)?;
-    apply_member_records(armored, &member_records);
+    apply_member_records(state, &member_records);
     Ok(())
 }
 
@@ -172,23 +165,22 @@ mod tests {
             &old_keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let auth_key = records[0].key.to_string();
-        let mut armored: HashMap<String, String> = records
-            .iter()
-            .map(|record| (record.key.to_string(), record.value.as_str().to_owned()))
-            .collect();
-        let old_auth_value = armored[&auth_key].clone();
+        let mut state = crate::VaultMetaState::from_stored_records(&records);
+        let old_auth_envelopes = state.auth.get(&identity.auth_id()).cloned();
 
         rewrap_vault_meta_for_epoch(
-            &mut armored,
+            &mut state,
             &identity,
             &records,
             &old_keys.members_key,
             &new_keys,
         )?;
 
-        assert_ne!(armored[&auth_key], old_auth_value);
-        assert!(armored.keys().any(|key| key.starts_with("member:")));
+        assert_ne!(
+            state.auth.get(&identity.auth_id()),
+            old_auth_envelopes.as_ref()
+        );
+        assert!(!state.members.is_empty());
         Ok(())
     }
 }

@@ -4,10 +4,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookSecretRecord;
-use crate::conversion::{
-    records_to_vec, secret_id_armored_to_string, secret_id_types_to_string,
-    string_armored_to_secret_id, string_secret_types_to_secret_id,
-};
+use crate::conversion::records_to_vec;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -83,16 +80,15 @@ impl NookVaultManager {
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
             .encrypt_value(&data)?;
-        self.stored_armored
-            .insert(id.to_string(), armored.as_str().to_owned());
-        self.secret_types.insert(id.to_string(), secret_type);
+        let ciphertext = armored.as_str().to_owned();
+        self.meta.secrets.insert(
+            id.clone(),
+            (
+                secret_type,
+                nook_core::StoredRecordPayload::from_trusted(ciphertext.clone()),
+            ),
+        );
 
-        let id_str = id.to_string();
-        let ciphertext = self
-            .stored_armored
-            .get(&id_str)
-            .cloned()
-            .unwrap_or_default();
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
             secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
         }])
@@ -118,12 +114,9 @@ impl NookVaultManager {
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
         let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
         let mut db = nook_core::Database::from_jsonl(&jsonl)?;
-        let mut armored_sid = string_armored_to_secret_id(&self.stored_armored);
-        let mut secret_types_sid = string_secret_types_to_secret_id(&self.secret_types);
         nook_core::replace_secret(
             &mut db,
-            &mut armored_sid,
-            &mut secret_types_sid,
+            &mut self.meta,
             crypto,
             &nook_core::ReplaceSecretInput {
                 old_id: &old_id,
@@ -132,17 +125,15 @@ impl NookVaultManager {
                 data_yaml: &data,
             },
         )?;
-        self.stored_armored = secret_id_armored_to_string(&armored_sid);
-        self.secret_types = secret_id_types_to_string(&secret_types_sid);
         self.decrypted_jsonl = db.to_jsonl()?.into_inner();
 
         let validated_new = nook_core::validate_secret_id(&new_id)?;
         let validated_old = nook_core::validate_secret_id(&old_id)?;
-        let validated_new_str = validated_new.to_string();
         let ciphertext = self
-            .stored_armored
-            .get(&validated_new_str)
-            .cloned()
+            .meta
+            .secrets
+            .get(&validated_new)
+            .map(|(_, payload)| payload.as_str().to_owned())
             .unwrap_or_default();
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
             old_id: validated_old,
@@ -251,9 +242,7 @@ impl NookVaultManager {
         db.remove(&id);
         let new_jsonl = db.to_jsonl()?;
         self.decrypted_jsonl = new_jsonl.into_inner();
-        let id_str = id.to_string();
-        self.stored_armored.remove(&id_str);
-        self.secret_types.remove(&id_str);
+        self.meta.secrets.remove(&id);
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
             secret_id: id,
         }])
