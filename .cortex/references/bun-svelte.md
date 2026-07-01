@@ -11,7 +11,9 @@
 - The Svelte config is located in `svelte.config.js` and Vite config in `vite.config.ts`.
 
 ## 3. E2e tests
+- **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
 - Fast PR Playwright (`e2e-pr` project): `task web:test:e2e:pr` — vault CRUD, login, legal pages (no sync HTTP).
 - Full stub Playwright (`e2e` project): `task web:test:e2e` — all stub specs including sync; runs on main CI.
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-web/.env.test.local`.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
+- Prefer local Docker (cached images) over GitHub Actions for e2e iteration; push only when local gates pass. See [workflows/coding-bro.md](../workflows/coding-bro.md).
