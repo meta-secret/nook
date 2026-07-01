@@ -56,7 +56,7 @@ test.describe('idle session auto-lock', () => {
     })
     await unlockVaultOnLogin(page)
     await expect(page.getByTestId('authenticated-shell')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
     const bumpInterval = Math.max(500, Math.floor(IDLE_LOCK_MS / 2))
