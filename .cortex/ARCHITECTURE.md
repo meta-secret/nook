@@ -165,7 +165,7 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 | `nook-web/node_modules` | Each `docker run` overlays an **anonymous volume** at `/workspace/nook-web/node_modules` so parallel containers install independently. `BUN_INSTALL_CACHE_DIR` is baked at `/opt/nook/bun-install-cache`; the entrypoint runs `bun install --frozen-lockfile` (fast link from cache; correct rolldown native bindings). |
 | Web wasm pkg | Baked at `/opt/nook/nook-wasm-pkg` during image build (cached with wasm/core sources). Entrypoint seeds `nook-web/src/lib/nook-wasm` when empty; `task wasm:build` skips wasm-pack when sources are unchanged. |
 | Playwright Chromium | `playwright install --with-deps chromium` in `toolchain-web` (Playwright owns the apt list; reruns only when web deps change). |
-| CI Docker builds | **`task ci:pr:publish`** (PR) / **`task ci:main:publish`** (main) — buildx `toolchain-push`, not `docker push`. Buildcache during bake; `:latest` after green verify. |
+| CI Docker builds | **`task ci:pr`** (PR verify only) / **`task ci:main:publish`** (main — buildx `toolchain-push` after green verify). Buildcache during bake; `:latest` after green main CI. |
 
 Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 
