@@ -274,7 +274,11 @@ export class VaultState {
 
   /** WASM connect always uses the local cache when one exists (unified vault). */
   private connectStorageArgs(): [string, string, string] {
-    if (!this.isAuthenticated && this.syncProviders.length > 0) {
+    if (
+      !this.isAuthenticated &&
+      this.syncProviders.length > 0 &&
+      this.joinEnrollmentPrompt !== 'none'
+    ) {
       return this.providerWasmArgs(this.syncProviders[0]!)
     }
     return this.wasmStorageArgs()
@@ -1142,7 +1146,9 @@ export class VaultState {
 
   private async assessVaultConnectStatus(): Promise<string> {
     const args =
-      !this.isAuthenticated && this.syncProviders.length > 0
+      !this.isAuthenticated &&
+      this.syncProviders.length > 0 &&
+      this.joinEnrollmentPrompt !== 'none'
         ? this.providerWasmArgs(this.syncProviders[0]!)
         : this.wasmStorageArgs()
     return (await this.enqueueStorage(async () => {
