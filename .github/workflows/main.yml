@@ -1,4 +1,4 @@
-# Main branch: prepare once, then verify ‖ web build ‖ e2e in parallel (task ci:main:publish); deploy Pages.
+# Main branch: one container for format/wasm/verify/build/e2e (task ci:main:publish); deploy Pages.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
@@ -45,25 +45,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare (format + wasm)
-        run: task ci:main:prepare VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-
-      - name: Verify and build
-        run: task ci:main:parallel VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
+      - name: Check, build, e2e, and push toolchain
+        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
         env:
           CI: true
-
-      - name: E2e (stub)
-        run: |
-          cp -a nook-web/dist nook-web/dist-prod
-          task ci:main:e2e VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-          task web:e2e:restore-prod-dist
-        env:
-          CI: true
-
-      - name: Push toolchain image
-        run: task docker:push:ci
-        env:
           PUSH_TOOLCHAIN: "1"
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
