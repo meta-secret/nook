@@ -222,11 +222,6 @@ impl NookVaultManager {
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
         self.persist_projection_cache().await?;
-        if self.storage_mode == nook_core::StorageMode::Local {
-            self.flush_sync_event_outbox().await?;
-        } else {
-            self.flush_event_outbox().await?;
-        }
         Ok(())
     }
 
