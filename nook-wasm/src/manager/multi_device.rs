@@ -76,15 +76,24 @@ impl NookVaultManager {
         self.stored_armored = records_to_armored(&records);
         self.secret_types = records_to_secret_types(&records);
         save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
-        let signing = self.ensure_signing_identity().await?;
-        let signing_pk = hex::encode(signing.verifying_key().as_bytes());
-        self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
-            device_id: identity.device_id().clone(),
-            encryption_public_key: identity.public_key().clone(),
-            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
-            label: nook_core::MemberLabel::from_trusted(String::new()),
-        }])
-        .await?;
+        let can_decrypt =
+            self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok();
+        if can_decrypt {
+            let signing = self.ensure_signing_identity().await?;
+            let signing_pk = hex::encode(signing.verifying_key().as_bytes());
+            self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
+                device_id: identity.device_id().clone(),
+                encryption_public_key: identity.public_key().clone(),
+                signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
+                label: nook_core::MemberLabel::from_trusted(String::new()),
+            }])
+            .await?;
+        } else {
+            self.persist_projection_cache().await?;
+        }
+        if self.storage_mode != nook_core::StorageMode::Local {
+            self.push_remote_vault_yaml_snapshot().await?;
+        }
         Ok(())
     }
 

@@ -3,8 +3,8 @@ use crate::vault_wire::{
     AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, SymmetricKey,
 };
 use crate::{
-    AuthKeyId, CompactToken, DeviceId, SecretId, StoredRecordPayload, StoredSecretRecord,
-    VaultCrypto,
+    AuthKeyId, CompactToken, DeviceId, SecretId, SecretType, StoredRecordPayload,
+    StoredSecretRecord, VaultCrypto,
 };
 use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
@@ -294,6 +294,33 @@ pub fn merge_remote_join_records<S: BuildHasher>(
     }
 }
 
+/// Merge user secret rows from a remote YAML projection cache into the session.
+///
+/// Event-log vaults treat `nook-log/` as authoritative for ordering, but the YAML
+/// projection is still pushed after every save and may hold ciphertext for events
+/// another device has not yet fetched (or whose parents never reached the remote log).
+#[allow(clippy::implicit_hasher)]
+pub fn merge_remote_yaml_user_secrets(
+    armored: &mut HashMap<String, String>,
+    secret_types: &mut HashMap<String, SecretType>,
+    fresh_records: &[StoredSecretRecord],
+) -> bool {
+    let mut changed = false;
+    for record in user_stored_records(fresh_records) {
+        let key = record.key.to_string();
+        let value = record.value.as_str();
+        if armored.get(&key).is_some_and(|existing| existing == value) {
+            continue;
+        }
+        armored.insert(key.clone(), value.to_owned());
+        if let Some(secret_type) = record.secret_type {
+            secret_types.insert(key, secret_type);
+        }
+        changed = true;
+    }
+    changed
+}
+
 #[must_use]
 pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
     records.iter().any(is_auth_stored_record)
@@ -552,6 +579,74 @@ pub fn genesis_dec_record(
 ) -> MultiDeviceResult<StoredSecretRecord> {
     let key = SymmetricKey::parse(dec).map_err(MultiDeviceError::Validation)?;
     genesis_auth_record(identity, &key, &key)
+}
+
+/// Apply a single meta-domain operation to the flat armored session cache.
+///
+/// User secrets are projected separately; this covers join rows and other
+/// meta keys that the event log records but `project_vault` does not replay.
+#[allow(clippy::implicit_hasher)]
+pub fn apply_vault_meta_operation(
+    armored: &mut HashMap<String, String>,
+    operation: &crate::vault_event::VaultOperation,
+    requested_at: &str,
+) -> MultiDeviceResult<()> {
+    use crate::vault_event::VaultOperation;
+
+    match operation {
+        VaultOperation::JoinRequested {
+            device_id,
+            encryption_public_key,
+            ..
+        } => {
+            let request = JoinRequest {
+                device_id: device_id.clone(),
+                public_key: encryption_public_key.clone(),
+                requested_at: requested_at.to_owned(),
+            };
+            armored.insert(
+                join_record_key(device_id),
+                serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
+            );
+        }
+        VaultOperation::JoinDenied { device_id }
+        | VaultOperation::JoinApproved { device_id, .. } => {
+            armored.remove(&join_record_key(device_id));
+        }
+        VaultOperation::VaultImported { .. }
+        | VaultOperation::SecretCreated { .. }
+        | VaultOperation::SecretDeleted { .. }
+        | VaultOperation::SecretReplaced { .. }
+        | VaultOperation::SecretConflictResolved { .. }
+        | VaultOperation::MemberRenamed { .. }
+        | VaultOperation::DeviceRevoked { .. }
+        | VaultOperation::PasswordAdded { .. }
+        | VaultOperation::PasswordRotated { .. }
+        | VaultOperation::PasswordRemoved { .. }
+        | VaultOperation::VaultCleared
+        | VaultOperation::EpochCheckpoint { .. } => {}
+    }
+    Ok(())
+}
+
+/// Replay meta-domain operations from the event graph in topological order.
+#[allow(clippy::implicit_hasher)]
+pub fn materialize_vault_meta_from_graph(
+    graph: &crate::vault_event_graph::EventGraph,
+    armored: &mut HashMap<String, String>,
+) -> MultiDeviceResult<()> {
+    let order = graph
+        .topological_order()
+        .map_err(|e| MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
+    for event_id in order {
+        let event = graph.get(&event_id).ok_or_else(|| {
+            MultiDeviceError::InvalidDeviceIdentity(format!("Missing event {event_id} in graph."))
+        })?;
+        for operation in &event.body.operations {
+            apply_vault_meta_operation(armored, operation, event.body.created_at.as_str())?;
+        }
+    }
+    Ok(())
 }
 
 pub fn create_join_request_record(
@@ -1196,6 +1291,37 @@ mod tests {
         let _ = genesis;
     }
 
+    #[test]
+    fn merge_remote_yaml_user_secrets_adds_missing_rows() {
+        let keys = generate_vault_keys().unwrap();
+        let (genesis, armored_records) = genesis_vault(&keys);
+        let mut armored = records_to_armored_map(&armored_records);
+        let mut secret_types = std::collections::HashMap::new();
+        let remote_secret = StoredSecretRecord {
+            key: SecretId::from_vault_record("secret_remote"),
+            secret_type: Some(SecretType::ApiKey),
+            value: StoredRecordPayload::from_trusted("armored-remote".to_owned()),
+        };
+        let changed = merge_remote_yaml_user_secrets(
+            &mut armored,
+            &mut secret_types,
+            std::slice::from_ref(&remote_secret),
+        );
+        assert!(changed);
+        assert_eq!(
+            armored.get("secret_remote"),
+            Some(&"armored-remote".to_owned())
+        );
+        assert_eq!(secret_types.get("secret_remote"), Some(&SecretType::ApiKey));
+        let unchanged = merge_remote_yaml_user_secrets(
+            &mut armored,
+            &mut secret_types,
+            std::slice::from_ref(&remote_secret),
+        );
+        assert!(!unchanged);
+        let _ = genesis;
+    }
+
     fn records_to_armored_map(
         records: &[StoredSecretRecord],
     ) -> std::collections::HashMap<String, String> {
@@ -1226,5 +1352,58 @@ mod tests {
             assess_connect_access(&records, &genesis),
             ConnectAccessStatus::Ready
         );
+    }
+
+    #[test]
+    fn apply_vault_meta_operation_manages_join_rows() {
+        use crate::vault_event::VaultOperation;
+        use crate::vault_wire::{DeviceSigningPublicKey, MemberLabel};
+
+        let joiner = DeviceIdentity::generate().unwrap();
+        let mut armored = HashMap::new();
+        let join_requested = VaultOperation::JoinRequested {
+            device_id: joiner.device_id().clone(),
+            encryption_public_key: joiner.public_key(),
+            signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
+            label: MemberLabel::from_trusted(String::new()),
+        };
+        apply_vault_meta_operation(&mut armored, &join_requested, "2026-06-21T00:00:00Z").unwrap();
+        assert!(armored.contains_key(&join_record_key(joiner.device_id())));
+
+        apply_vault_meta_operation(
+            &mut armored,
+            &VaultOperation::JoinApproved {
+                device_id: joiner.device_id().clone(),
+                encryption_public_key: joiner.public_key(),
+                signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
+                label: MemberLabel::from_trusted(String::new()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted(String::new()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(String::new()),
+            },
+            "2026-06-21T00:00:00Z",
+        )
+        .unwrap();
+        assert!(!armored.contains_key(&join_record_key(joiner.device_id())));
+
+        apply_vault_meta_operation(&mut armored, &join_requested, "2026-06-21T00:00:00Z").unwrap();
+        apply_vault_meta_operation(
+            &mut armored,
+            &VaultOperation::JoinDenied {
+                device_id: joiner.device_id().clone(),
+            },
+            "2026-06-21T00:00:00Z",
+        )
+        .unwrap();
+        assert!(!armored.contains_key(&join_record_key(joiner.device_id())));
+    }
+
+    #[test]
+    fn materialize_vault_meta_from_empty_graph() {
+        use crate::vault_event_graph::EventGraph;
+
+        let graph = EventGraph::new();
+        let mut armored = HashMap::new();
+        materialize_vault_meta_from_graph(&graph, &mut armored).unwrap();
+        assert!(armored.is_empty());
     }
 }

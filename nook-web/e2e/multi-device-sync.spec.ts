@@ -6,16 +6,20 @@ import {
   assertEnrolledVaultOnGithub,
   assertVaultReady,
   createIsolatedContext,
+  disableVaultIdleLock,
   expandSettingsSection,
   openStorageSettings,
   revealSecretValue,
   sendJoinRequest,
-  unlockGithubVault,
+  triggerVaultSyncRefresh,
+  waitForPendingJoinBanner,
   uniqueSecretKey,
   UI_TIMEOUT_MS,
   NOTIFICATION_TIMEOUT_MS,
   waitForGithubVaultState,
+  waitForJoinerVaultReady,
   waitForSecretOnDevice,
+  waitForVaultOperationsIdle,
 } from './helpers'
 import { parseVaultYamlSnapshot, assertGenesisVaultYaml } from './vault-yaml'
 import {
@@ -30,8 +34,10 @@ import {
 
 const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
+// One worker per file — nested describes share stub timing and must not overlap.
+test.describe.configure({ mode: 'serial' })
+
 test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
-  test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
   let deviceA: Page
@@ -53,9 +59,13 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
+    await disableVaultIdleLock(deviceB)
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await disableVaultIdleLock(deviceA)
+    await disableVaultIdleLock(deviceA)
+    await waitForVaultOperationsIdle(deviceA)
     await addSecret(deviceA, genesisSecretKey, genesisSecretValue, target)
 
     const genesisYaml = await waitForGithubVaultState(
@@ -105,17 +115,12 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
       )
     ).joinEntries[0]
 
-    await deviceA.getByTestId('vault-sync-refresh-btn').click()
+    await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
       /just now|s ago/,
       { timeout: UI_TIMEOUT_MS },
     )
-    await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(
-      deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
-    ).toBeVisible()
+    await waitForPendingJoinBanner(deviceA, join.deviceId)
   })
 
   test('device A sees pending join and approves from banner', async () => {
@@ -141,7 +146,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
   })
 
   test('device B unlocks and reads genesis secret', async () => {
-    await unlockGithubVault(deviceB, target)
+    await waitForJoinerVaultReady(deviceB, target)
     await assertVaultReady(deviceB)
 
     await waitForSecretOnDevice(deviceB, genesisSecretKey, target)
@@ -158,6 +163,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
     )
     expect(yaml.secretIds).toHaveLength(2)
 
+    await assertVaultReady(deviceA)
     await waitForSecretOnDevice(deviceA, joinerSecretKey, target)
     const revealed = await revealSecretValue(deviceA, joinerSecretKey)
     expect(revealed).toBe(joinerSecretValue)
@@ -176,7 +182,6 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
 })
 
 test.describe(`multi-device approve from settings (${providerLabel} stub sync)`, () => {
-  test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
   let deviceA: Page
@@ -193,9 +198,11 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
+    await disableVaultIdleLock(deviceB)
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await disableVaultIdleLock(deviceA)
   })
 
   test.afterAll(async () => {
@@ -222,13 +229,12 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
     expect(parsed.authPkIds).toHaveLength(2)
     expect(parsed.memberPkIds).toHaveLength(2)
 
-    await unlockGithubVault(deviceB, target)
+    await waitForJoinerVaultReady(deviceB, target)
     await assertVaultReady(deviceB)
   })
 })
 
 test.describe(`multi-device join background sync (${providerLabel} stub sync)`, () => {
-  test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
   let deviceA: Page
@@ -245,9 +251,11 @@ test.describe(`multi-device join background sync (${providerLabel} stub sync)`, 
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
+    await disableVaultIdleLock(deviceB)
 
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
+    await disableVaultIdleLock(deviceA)
   })
 
   test.afterAll(async () => {

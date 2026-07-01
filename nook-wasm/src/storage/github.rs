@@ -175,6 +175,51 @@ pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(
     )))
 }
 
+async fn fetch_github_file_at_path(
+    pat: &str,
+    repo: &str,
+    path: &str,
+) -> Result<Option<GitHubVaultFile>, NookError> {
+    let client = reqwest::Client::new();
+    let mut request = client.get(github_cache_bust_url(&format!(
+        "https://api.github.com/repos/{repo}/contents/{path}"
+    )));
+    for (name, value) in github_get_headers(pat) {
+        request = request.header(name, value);
+    }
+    let file_response = request.send().await?;
+
+    if file_response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    if !file_response.status().is_success() {
+        return Err(NookError::GitHub(format!(
+            "GitHub API responded with status {}",
+            file_response.status()
+        )));
+    }
+
+    let text = file_response.text().await?;
+
+    let parsed: GitHubFileResponse = serde_json::from_str(&text)
+        .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
+
+    let cleaned_content = parsed
+        .content
+        .replace('\n', "")
+        .replace('\r', "")
+        .replace(' ', "");
+    let decoded_bytes = base64_decode(&cleaned_content)?;
+    let vault_content = String::from_utf8(decoded_bytes)
+        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
+
+    Ok(Some(GitHubVaultFile {
+        content: vault_content,
+        sha: parsed.sha,
+    }))
+}
+
 pub(crate) async fn fetch_github_vault(
     pat: &str,
     repo: &str,
@@ -186,6 +231,12 @@ pub(crate) async fn fetch_github_vault(
     }
 
     let pat = pat.trim();
+
+    // Event files and other nested paths are not listed under the repo root.
+    if path.contains('/') {
+        return fetch_github_file_at_path(pat, repo, path).await;
+    }
+
     let client = reqwest::Client::new();
     let apply_headers = |request: reqwest::RequestBuilder| {
         let mut request = request;
@@ -226,40 +277,7 @@ pub(crate) async fn fetch_github_vault(
         return Ok(None);
     }
 
-    let file_url = github_cache_bust_url(&format!(
-        "https://api.github.com/repos/{repo}/contents/{path}"
-    ));
-    let file_response = apply_headers(client.get(&file_url)).send().await?;
-
-    if file_response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-
-    if !file_response.status().is_success() {
-        return Err(NookError::GitHub(format!(
-            "GitHub API responded with status {}",
-            file_response.status()
-        )));
-    }
-
-    let text = file_response.text().await?;
-
-    let parsed: GitHubFileResponse = serde_json::from_str(&text)
-        .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
-
-    let cleaned_content = parsed
-        .content
-        .replace('\n', "")
-        .replace('\r', "")
-        .replace(' ', "");
-    let decoded_bytes = base64_decode(&cleaned_content)?;
-    let vault_content = String::from_utf8(decoded_bytes)
-        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
-
-    Ok(Some(GitHubVaultFile {
-        content: vault_content,
-        sha: parsed.sha,
-    }))
+    fetch_github_file_at_path(pat, repo, path).await
 }
 
 pub(crate) async fn write_github_text_file(

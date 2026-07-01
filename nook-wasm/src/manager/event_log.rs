@@ -27,6 +27,23 @@ fn iso_timestamp() -> String {
     wasm_iso_timestamp()
 }
 
+fn vault_operations_need_remote_yaml_snapshot(operations: &[VaultOperation]) -> bool {
+    operations.iter().any(|operation| {
+        matches!(
+            operation,
+            VaultOperation::JoinRequested { .. }
+                | VaultOperation::JoinApproved { .. }
+                | VaultOperation::JoinDenied { .. }
+                | VaultOperation::MemberRenamed { .. }
+                | VaultOperation::DeviceRevoked { .. }
+                | VaultOperation::PasswordAdded { .. }
+                | VaultOperation::PasswordRotated { .. }
+                | VaultOperation::PasswordRemoved { .. }
+                | VaultOperation::VaultImported { .. }
+        )
+    })
+}
+
 impl NookVaultManager {
     pub(in crate::manager) async fn ensure_event_log_mode(&mut self) -> Result<bool, NookError> {
         if self.event_log_mode || is_event_log_mode().await? {
@@ -142,7 +159,9 @@ impl NookVaultManager {
         save_heads(&self.store_id, &self.event_heads).await?;
         save_key_epoch(&self.store_id, &self.key_epoch).await?;
         self.activate_event_log_mode().await?;
-        self.apply_event_projection_to_session().await?;
+        if self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
+            self.apply_event_projection_to_session().await?;
+        }
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
         let _ = self.status_tx.send("MIGRATION_SUCCESS".to_owned());
@@ -183,13 +202,23 @@ impl NookVaultManager {
             parents,
             key_epoch: &key_epoch,
             created_at: &created_at,
-            operations,
+            operations: operations.clone(),
         })?;
         let event_id = event.id()?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
         self.event_heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.store_id, &self.event_heads).await?;
-        self.apply_event_projection_to_session().await?;
+        if self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
+            self.apply_event_projection_to_session().await?;
+        } else {
+            for operation in &operations {
+                nook_core::apply_vault_meta_operation(
+                    &mut self.stored_armored,
+                    operation,
+                    created_at.as_str(),
+                )?;
+            }
+        }
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
         self.persist_projection_cache().await?;
@@ -216,6 +245,7 @@ impl NookVaultManager {
             &mut self.secret_types,
         )?
         .into_inner();
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.stored_armored)?;
         Ok(())
     }
 
@@ -238,12 +268,32 @@ impl NookVaultManager {
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
-        if self.storage_mode == nook_core::StorageMode::Local {
-            return Ok(());
-        }
-        let provider_id = self.local_cache_ref();
+        let provider_id = if self.storage_mode == nook_core::StorageMode::Local {
+            if self.sync_outbox_provider_id.is_empty() {
+                return Ok(());
+            }
+            self.sync_outbox_provider_id.clone()
+        } else {
+            self.local_cache_ref()
+        };
         queue_outbox_entry(&provider_id, event_id.as_str(), bytes).await?;
         append_outbox_index(&provider_id, event_id.as_str()).await?;
+        Ok(())
+    }
+
+    pub(in crate::manager) async fn flush_sync_event_outbox(&mut self) -> Result<(), NookError> {
+        if self.storage_mode != nook_core::StorageMode::Local {
+            return self.flush_event_outbox().await;
+        }
+        if self.sync_outbox_provider_id.is_empty() {
+            return Ok(());
+        }
+        let mode = self.sync_outbox_storage_mode.to_string();
+        let pat = self.sync_outbox_pat.clone();
+        let repo = self.sync_outbox_repo_arg.clone();
+        self.prepare_storage(&mode, &pat, &repo).await?;
+        self.flush_event_outbox().await?;
+        self.prepare_storage("local", "", "").await?;
         Ok(())
     }
 
@@ -312,7 +362,9 @@ impl NookVaultManager {
 
         self.event_heads = heads.clone();
         save_heads(&self.store_id, &heads).await?;
-        self.apply_event_projection_to_session().await?;
+        if self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
+            self.apply_event_projection_to_session().await?;
+        }
         Ok(())
     }
 
@@ -348,11 +400,15 @@ impl NookVaultManager {
         operations: Vec<VaultOperation>,
     ) -> Result<(), NookError> {
         self.ensure_event_log_ready().await?;
+        let needs_yaml = vault_operations_need_remote_yaml_snapshot(&operations);
         if operations.is_empty() {
             self.persist_projection_cache().await?;
-            self.flush_event_outbox().await?;
+            self.flush_sync_event_outbox().await?;
         } else {
             self.append_vault_operations(operations).await?;
+        }
+        if needs_yaml && self.storage_mode != nook_core::StorageMode::Local {
+            self.push_remote_vault_yaml_snapshot().await?;
         }
         Ok(())
     }
@@ -366,7 +422,8 @@ impl NookVaultManager {
         let before = self.event_heads.clone();
         self.sync_events_from_current_provider().await?;
         let changed = self.event_heads != before;
-        if changed {
+        if changed && (self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok())
+        {
             self.apply_event_projection_to_session().await?;
         }
         Ok(changed)

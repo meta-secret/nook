@@ -72,16 +72,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare (format + wasm)
-        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
 
       - name: Verify and build web
-        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
         env:
           CI: true
 
       - name: E2e (e2e-pr)
         if: inputs.suite == 'e2e-pr' || inputs.suite == 'local'
-        run: task web:test:e2e:pr:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task web:test:e2e:pr:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
         env:
           CI: true
 
@@ -89,7 +89,7 @@ jobs:
         if: >-
           inputs.suite == 'all' || inputs.suite == 'e2e' ||
           inputs.suite == 'sync-stub'
-        run: task web:test:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task web:test:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
         env:
           CI: true
 

@@ -274,6 +274,13 @@ export class VaultState {
 
   /** WASM connect always uses the local cache when one exists (unified vault). */
   private connectStorageArgs(): [string, string, string] {
+    if (
+      !this.isAuthenticated &&
+      this.syncProviders.length > 0 &&
+      this.joinEnrollmentPrompt !== 'none'
+    ) {
+      return this.providerWasmArgs(this.syncProviders[0]!)
+    }
     return this.wasmStorageArgs()
   }
 
@@ -621,18 +628,13 @@ export class VaultState {
     this.dismissSuccess()
     this.isVerifying = true
     try {
+      const storageArgs =
+        this.remoteYamlSnapshotStorageArgs() ?? this.wasmStorageArgs()
       await this.enqueueStorage(() =>
-        this.manager!.request_vault_access(
-          ...this.wasmStorageArgs(),
-          isoTimestamp(),
-        ),
+        this.manager!.request_vault_access(...storageArgs, isoTimestamp()),
       )
       await this.ensureProviderSaved()
-      if (this.localVaultPresent && this.syncProviders.length > 0) {
-        this.scheduleFanOutSyncAfterLocalSave()
-      }
       this.joinEnrollmentPrompt = 'pending'
-      this.startVaultSync()
     } catch (e: unknown) {
       this.errorMsg =
         e instanceof Error ? e.message : 'Failed to request vault access.'
@@ -1143,10 +1145,14 @@ export class VaultState {
   }
 
   private async assessVaultConnectStatus(): Promise<string> {
+    const args =
+      !this.isAuthenticated &&
+      this.syncProviders.length > 0 &&
+      this.joinEnrollmentPrompt !== 'none'
+        ? this.providerWasmArgs(this.syncProviders[0]!)
+        : this.wasmStorageArgs()
     return (await this.enqueueStorage(async () => {
-      const assessPromise = this.manager!.assess_vault_connect(
-        ...this.wasmStorageArgs(),
-      )
+      const assessPromise = this.manager!.assess_vault_connect(...args)
       const assessTimeout = new Promise<never>((_, reject) => {
         setTimeout(
           () =>
@@ -1404,6 +1410,16 @@ export class VaultState {
       if (!this.isAuthenticated && this.joinEnrollmentPrompt === 'none') {
         return
       }
+      // Local-only vaults with no sync provider and no pending join have
+      // nothing remote to reconcile — skip the tick entirely rather than
+      // re-reading local IndexedDB into itself every interval.
+      if (
+        this.isAuthenticated &&
+        this.syncProviders.length === 0 &&
+        this.joinEnrollmentPrompt === 'none'
+      ) {
+        return
+      }
       void this.syncFromStorage()
     }, VaultState.syncIntervalMs())
   }
@@ -1417,17 +1433,11 @@ export class VaultState {
 
   private applyVaultSyncResult(result: NookVaultSyncResult) {
     if (this.isAuthenticated) {
-      const unchanged =
-        !result.changed &&
-        !result.accessStatus &&
-        result.secrets.length === 0 &&
-        result.pendingJoins.length === 0 &&
-        result.vaultMembers.length === 0
-      if (!unchanged) {
+      if (result.secrets.length > 0) {
         this.secrets = result.secrets
-        this.pendingJoins = result.pendingJoins
-        this.vaultMembers = result.vaultMembers
       }
+      this.pendingJoins = result.pendingJoins
+      this.vaultMembers = result.vaultMembers
       return
     }
 
@@ -1458,16 +1468,43 @@ export class VaultState {
    */
   private async hydrateMultiDeviceState(): Promise<void> {
     if (!this.manager || !this.isAuthenticated) return
+    const mergedJoins: JoinRequest[] = []
+    try {
+      for (const provider of this.syncProviders) {
+        const [mode, pat, repo] = this.providerWasmArgs(provider)
+        const joins = (await this.enqueueStorage(() =>
+          this.manager!.mergeRemoteJoinsFromProvider(mode, pat, repo),
+        )) as JoinRequest[]
+        if (joins.length > 0) {
+          mergedJoins.push(...joins)
+        }
+      }
+    } catch {
+      // Merge can fail transiently while wasm is busy; still read session joins.
+    }
     try {
       const snapshot = await this.enqueueStorage(async () => {
         await Promise.resolve()
+        let pendingJoins: JoinRequest[]
+        let vaultMembers: VaultMember[]
+        try {
+          pendingJoins = this.manager!.list_pending_joins()
+        } catch {
+          pendingJoins = []
+        }
+        try {
+          vaultMembers = this.manager!.list_vault_members()
+        } catch {
+          vaultMembers = []
+        }
         return {
-          pendingJoins: this.manager!.list_pending_joins(),
-          vaultMembers: this.manager!.list_vault_members(),
+          pendingJoins,
+          vaultMembers,
           unlockMode: this.manager!.vaultUnlockMode(),
         }
       })
-      this.pendingJoins = snapshot.pendingJoins
+      this.pendingJoins =
+        snapshot.pendingJoins.length > 0 ? snapshot.pendingJoins : mergedJoins
       this.vaultMembers = snapshot.vaultMembers
       this.unlockMode = 'keys'
       await this.refreshPasswordEntriesList()
@@ -1488,6 +1525,25 @@ export class VaultState {
     if (!options?.force && this.isSaving) return
     if (!options?.force && this.isPasswordBusy) return
     if (!options?.force && this.isSyncing) return
+
+    if (!this.isAuthenticated && this.syncProviders.length > 0) {
+      this.isSyncing = true
+      try {
+        const [mode, pat, repo] = this.providerWasmArgs(this.syncProviders[0]!)
+        const raw = await this.enqueueStorage(() =>
+          this.manager!.sync_vault_from_storage(mode, pat, repo),
+        )
+        this.applyVaultSyncResult(raw)
+        this.refreshSecretsFromSession()
+        this.lastSyncedAt = new SvelteDate()
+      } catch {
+        // Background sync should not interrupt the UI.
+      } finally {
+        this.isSyncing = false
+      }
+      return
+    }
+
     if (!this.hasRemoteCredentials()) return
 
     if (
@@ -1507,6 +1563,7 @@ export class VaultState {
         this.manager!.sync_vault_from_storage(...this.wasmStorageArgs()),
       )
       this.applyVaultSyncResult(raw)
+      this.refreshSecretsFromSession()
       this.lastSyncedAt = new SvelteDate()
     } catch {
       // Background sync should not interrupt the UI.
@@ -1555,15 +1612,19 @@ export class VaultState {
     try {
       await this.initDeviceIdentity()
       if (this.syncProviders.length === 0) {
-        this.pendingJoins = []
-        this.vaultMembers = []
+        if (this.hasRemoteCredentials()) {
+          await this.syncFromStorage({ force: true })
+        } else {
+          this.pendingJoins = []
+          this.vaultMembers = []
+        }
         return
       }
       for (const provider of this.syncProviders) {
         await this.syncProviderById(provider.id)
       }
       if (this.isAuthenticated) {
-        void this.hydrateMultiDeviceState()
+        await this.hydrateMultiDeviceState()
       } else {
         this.pendingJoins = []
         this.vaultMembers = []
@@ -1592,63 +1653,32 @@ export class VaultState {
     }
     try {
       const [mode, pat, repo] = this.providerWasmArgs(provider)
-      if (this.manager.eventLogMode()) {
-        await this.enqueueStorage(() =>
-          this.raceStorageTimeout(
-            this.manager!.syncEventLogForProvider(mode, pat, repo),
-            'Event log sync',
-          ),
-        )
-        await this.reloadSessionFromLocal()
-        await this.refreshReplacementConflicts()
-        await this.updateProviderSyncMetadata(
-          providerId,
-          await readLocalVaultBlob(),
-          null,
-        )
-        return
-      }
-      const localYaml = await readLocalVaultBlob()
-      const remote = await fetchRemoteVaultBlob(mode, pat, repo)
-      const attempt = attemptReconcileVaultSyncBlobs(
-        localYaml,
-        remote.content,
-        remote.revision,
+      // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
+      // `eventLogMode()` bit can be false after reload until connect finishes.
+      const raw = await this.enqueueStorage(() =>
+        this.raceStorageTimeout(
+          this.manager!.sync_vault_from_storage(mode, pat, repo),
+          'Vault sync',
+        ),
       )
-      if (attempt.status === 'store_id_mismatch') {
-        await this.stageVaultSyncConflict({
-          providerId,
-          providerLabel: provider.label,
-          localYaml,
-          remoteYaml: remote.content,
-          mode,
-          pat,
-          repo,
-          remoteRevision: remote.revision,
-          kind: 'store_id',
-          localStoreId: attempt.localStoreId,
-          remoteStoreId: attempt.remoteStoreId,
-        })
-        return
-      }
-
-      await this.applyReconcileResult(
-        attempt.result,
-        {
-          providerId,
-          remote,
-          mode,
-          pat,
-          repo,
-        },
-        options,
+      this.applyVaultSyncResult(raw)
+      this.refreshSecretsFromSession()
+      await this.refreshReplacementConflicts()
+      await this.updateProviderSyncMetadata(
+        providerId,
+        await readLocalVaultBlob(),
+        null,
       )
+      return
     } catch (e: unknown) {
       if (!options?.quiet) {
         this.errorMsg =
           e instanceof Error ? e.message : 'Sync failed for this provider.'
       }
     } finally {
+      if (this.isAuthenticated) {
+        await this.hydrateMultiDeviceState()
+      }
       if (this.syncingProviderId === providerId) {
         this.syncingProviderId = null
       }
@@ -1688,8 +1718,38 @@ export class VaultState {
     }
   }
 
+  private async runFanOutSyncAfterLocalSave(): Promise<void> {
+    await this.pushRemoteYamlSnapshotNow()
+    await this.flushRemoteEventOutboxNow()
+    await this.fanOutSyncToProviders({ quiet: true })
+  }
+
   private scheduleFanOutSyncAfterLocalSave(): void {
-    void this.fanOutSyncToProviders({ quiet: true })
+    void this.runFanOutSyncAfterLocalSave()
+  }
+
+  /** Fire-and-forget YAML projection for providers that still read nook-vault.yaml. */
+  private scheduleRemoteYamlSnapshotPush(): void {
+    void this.pushRemoteYamlSnapshotNow()
+  }
+
+  private remoteYamlSnapshotStorageArgs(): [string, string, string] | null {
+    if (this.syncProviders.length > 0) {
+      return this.providerWasmArgs(this.syncProviders[0]!)
+    }
+    if (this.hasRemoteCredentials()) {
+      return this.wasmStorageArgs()
+    }
+    return null
+  }
+
+  private async pushRemoteYamlSnapshotNow(): Promise<void> {
+    if (!this.manager) return
+    const args = this.remoteYamlSnapshotStorageArgs()
+    if (!args) return
+    await this.enqueueStorage(() =>
+      this.manager!.pushRemoteVaultYamlSnapshotForProvider(...args),
+    )
   }
 
   private async applyReconcileResult(
@@ -1972,7 +2032,7 @@ export class VaultState {
     )
     this.applyVaultSyncResult(raw)
     this.refreshSecretsFromSession()
-    void this.hydrateMultiDeviceState()
+    await this.hydrateMultiDeviceState()
   }
 
   /** Settings: connect a new sync provider and reconcile with local vault. */
@@ -2055,6 +2115,11 @@ export class VaultState {
     await this.manualSync()
   }
 
+  /** Merge remote YAML join rows into the session (manual sync + provider poll). */
+  async refreshPendingJoinsFromProviders() {
+    await this.hydrateMultiDeviceState()
+  }
+
   async requestVaultAccess() {
     if (!this.manager) return
     this.errorMsg = ''
@@ -2071,6 +2136,8 @@ export class VaultState {
       await this.refreshDeviceState()
       if (this.localVaultPresent && this.syncProviders.length > 0) {
         this.scheduleFanOutSyncAfterLocalSave()
+      } else {
+        this.scheduleRemoteYamlSnapshotPush()
       }
       this.showSuccess(this.t('login.join_request_sent'))
     } catch (e: unknown) {
@@ -2091,8 +2158,16 @@ export class VaultState {
         this.manager!.approve_join_request(joinDeviceId),
       )) as NookSecretRecord[]
       this.secrets = rawRecords
+      await this.pushRemoteYamlSnapshotNow()
+      await this.flushRemoteEventOutboxNow()
       await this.hydrateMultiDeviceState()
-      this.scheduleFanOutSyncAfterLocalSave()
+      this.pendingJoins = this.pendingJoins.filter(
+        (entry) => entry.deviceId !== joinDeviceId,
+      )
+      await this.fanOutSyncToProviders({ quiet: true })
+      this.pendingJoins = this.pendingJoins.filter(
+        (entry) => entry.deviceId !== joinDeviceId,
+      )
       this.showSuccess(this.t('toasts.device_approved_success'))
     } catch (e: unknown) {
       this.errorMsg =
@@ -2309,6 +2384,10 @@ export class VaultState {
       await this.initDeviceIdentity()
       await this.ensureOAuthTokensFresh()
 
+      if (!this.isAuthenticated && this.syncProviders.length > 0) {
+        await this.syncProviderById(this.syncProviders[0]!.id, { quiet: true })
+      }
+
       const accessStatus = await this.assessVaultConnectStatus()
 
       if (
@@ -2378,6 +2457,7 @@ export class VaultState {
       await this.ensureProviderSaved()
       await this.loadProviders()
       await this.promoteSessionVaultToLocalIfNeeded()
+      await this.refreshPasswordEntriesList()
       await this.hydrateMultiDeviceState()
       if (this.storageMode === 'local') {
         this.showSuccess(this.t('toasts.local_loaded'))
@@ -2804,21 +2884,37 @@ export class VaultState {
     })
     try {
       await this.enqueueStorage(async () => {
-        const rawRecords = (await this.manager!.add_secret(
-          id,
-          type,
-          data,
+        const rawRecords = (await this.raceStorageTimeout(
+          this.manager!.add_secret(id, type, data),
+          'Add secret',
         )) as NookSecretRecord[]
         this.secrets = rawRecords
       })
       this.refreshSecretsFromSession()
       this.showSuccess(this.t('toasts.secret_saved'))
-      this.scheduleFanOutSyncAfterLocalSave()
+      await this.runFanOutSyncAfterLocalSave()
     } catch (e: unknown) {
       this.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
       throw e
     } finally {
       this.isSaving = false
+    }
+  }
+
+  private scheduleRemoteEventOutboxFlush(): void {
+    void this.flushRemoteEventOutboxNow()
+  }
+
+  private async flushRemoteEventOutboxNow(): Promise<void> {
+    if (!this.manager) return
+    const args = this.remoteYamlSnapshotStorageArgs()
+    if (!args) return
+    try {
+      await this.enqueueStorage(() =>
+        this.manager!.flushEventOutboxForProvider(...args),
+      )
+    } catch {
+      // Best-effort — YAML snapshot push carries the legacy projection.
     }
   }
 
