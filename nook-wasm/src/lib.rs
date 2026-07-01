@@ -23,8 +23,8 @@ pub use types::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
     NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
     NookReplacementConflict, NookResolveConflictKeepLocalResult,
-    NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookVaultMember,
-    NookVaultSyncResult,
+    NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookSyncProviderTarget,
+    NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -115,6 +115,79 @@ pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
 #[wasm_bindgen(js_name = generateSecretId)]
 pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_secret_id()?.to_string())
+}
+
+#[wasm_bindgen(js_name = defaultGithubRepo)]
+#[must_use]
+pub fn default_github_repo() -> String {
+    nook_core::DEFAULT_GITHUB_REPO_NAME.to_owned()
+}
+
+#[wasm_bindgen(js_name = defaultDriveVaultFile)]
+#[must_use]
+pub fn default_drive_vault_file() -> String {
+    nook_core::DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
+}
+
+#[wasm_bindgen(js_name = formatDriveStorageRef)]
+pub fn format_drive_storage_ref(file_id: Option<String>, file_name: &str) -> String {
+    nook_core::format_drive_storage_ref_raw(file_id.unwrap_or_default().as_str(), file_name)
+}
+
+#[wasm_bindgen(js_name = wasmStorageModeForProvider)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn wasm_storage_mode_for_provider(
+    provider_type: &str,
+    oauth_preset: Option<String>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_preset = oauth_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
+    Ok(
+        nook_core::storage_mode_for_provider(provider_type, oauth_preset)
+            .as_str()
+            .to_owned(),
+    )
+}
+
+#[wasm_bindgen(js_name = providerDefaultLabel)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn provider_default_label(
+    provider_type: &str,
+    detail: Option<String>,
+    oauth_preset: Option<String>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_preset = oauth_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
+    Ok(nook_core::sync_provider_default_label(
+        provider_type,
+        detail.as_deref(),
+        oauth_preset,
+    ))
+}
+
+#[wasm_bindgen(js_name = syncProviderTargetKey)]
+#[must_use]
+pub fn sync_provider_target_key(target: &NookSyncProviderTarget) -> Option<String> {
+    nook_core::sync_provider_target_key(target.as_core())
+}
+
+/// Masked GitHub PAT hint for provider lists. `None` means no token is saved;
+/// the JS layer supplies the localized "no token" copy. `Some` is a truncated
+/// hint that never contains the full secret.
+#[wasm_bindgen(js_name = maskGithubPatHint)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn mask_github_pat_hint(pat: Option<String>) -> Option<String> {
+    match nook_core::mask_github_pat(pat.as_deref().unwrap_or_default()) {
+        nook_core::GithubPatMask::NoToken => None,
+        nook_core::GithubPatMask::Hint(hint) => Some(hint),
+    }
 }
 
 #[wasm_bindgen(js_name = encryptEnrollmentPayload)]

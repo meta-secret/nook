@@ -93,9 +93,12 @@ pub use password_envelope::{
 pub use session::{ReplaceSecretInput, replace_secret};
 pub use validation::{
     DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
-    DriveVaultFileName, GithubPat, GithubRepoName, OauthAccessToken, STORAGE_MODE_GITHUB,
-    STORAGE_MODE_LOCAL, StorageMode, filter_secrets, format_drive_storage_ref,
-    format_sync_provider_cache_ref, parse_drive_storage_ref, validate_connect,
+    DriveVaultFileName, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
+    OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB,
+    STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget, filter_secrets,
+    format_drive_storage_ref, format_drive_storage_ref_raw, format_sync_provider_cache_ref,
+    mask_github_pat, parse_drive_storage_ref, storage_mode_for_provider,
+    sync_provider_default_label, sync_provider_target_key, validate_connect,
     validate_drive_vault_file_name, validate_github_pat, validate_github_repo_name,
     validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };

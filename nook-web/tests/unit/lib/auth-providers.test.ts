@@ -130,6 +130,12 @@ describe('formatDriveStorageRef', () => {
       DEFAULT_DRIVE_VAULT_FILE,
     )
   })
+
+  test('formats without validating draft file names', () => {
+    expect(formatDriveStorageRef(' abc ', ' work vault.yaml ')).toBe(
+      'abc\twork vault.yaml',
+    )
+  })
 })
 
 describe('providerDefaultLabel', () => {
@@ -264,6 +270,17 @@ describe('syncProviderTargetKey', () => {
     expect(syncProviderTargetKey(personal)).not.toBe(
       syncProviderTargetKey(work),
     )
+  })
+
+  test('returns null for incomplete OAuth providers', () => {
+    expect(
+      syncProviderTargetKey({
+        id: 'gd-missing',
+        type: 'oauth-file',
+        label: 'Google Drive',
+        createdAt: '2026-06-24T00:00:00.000Z',
+      }),
+    ).toBeNull()
   })
 })
 

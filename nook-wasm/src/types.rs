@@ -195,6 +195,84 @@ impl NookEnrollmentProvider {
     }
 }
 
+/// Thin wasm newtype wrapper over the core `SyncProviderTarget` enum. Construct
+/// via the variant constructors; read via `is_*` / `as_*` accessors.
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookSyncProviderTarget(nook_core::SyncProviderTarget);
+
+#[wasm_bindgen]
+impl NookSyncProviderTarget {
+    #[wasm_bindgen(js_name = local)]
+    #[must_use]
+    pub fn local() -> Self {
+        Self(nook_core::SyncProviderTarget::Local)
+    }
+
+    #[wasm_bindgen(js_name = github)]
+    #[must_use]
+    pub fn github(repo: Option<String>, pat: Option<String>) -> Self {
+        Self(nook_core::SyncProviderTarget::Github(
+            nook_core::GithubSyncTarget { repo, pat },
+        ))
+    }
+
+    #[wasm_bindgen(js_name = oauthFile)]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn oauth_file(
+        preset: Option<String>,
+        file_id: Option<String>,
+        file_name: Option<String>,
+        account_email: Option<String>,
+        access_token: Option<String>,
+    ) -> Result<NookSyncProviderTarget, wasm_bindgen::JsError> {
+        let preset = nook_core::OauthFilePreset::parse(preset.as_deref().unwrap_or(""))?;
+        Ok(Self(nook_core::SyncProviderTarget::OauthFile(
+            nook_core::OauthFileSyncTarget {
+                preset,
+                file_id,
+                file_name,
+                account_email,
+                access_token,
+            },
+        )))
+    }
+
+    #[wasm_bindgen(js_name = missingOauthFileConfig)]
+    #[must_use]
+    pub fn missing_oauth_file_config() -> Self {
+        Self(nook_core::SyncProviderTarget::MissingOauthFileConfig)
+    }
+
+    #[wasm_bindgen(js_name = isLocal)]
+    #[must_use]
+    pub fn is_local(&self) -> bool {
+        matches!(self.0, nook_core::SyncProviderTarget::Local)
+    }
+
+    #[wasm_bindgen(js_name = isGithub)]
+    #[must_use]
+    pub fn is_github(&self) -> bool {
+        matches!(self.0, nook_core::SyncProviderTarget::Github(_))
+    }
+
+    #[wasm_bindgen(js_name = isOauthFile)]
+    #[must_use]
+    pub fn is_oauth_file(&self) -> bool {
+        matches!(self.0, nook_core::SyncProviderTarget::OauthFile(_))
+    }
+
+    pub(crate) fn as_core(&self) -> &nook_core::SyncProviderTarget {
+        &self.0
+    }
+}
+
+impl From<nook_core::SyncProviderTarget> for NookSyncProviderTarget {
+    fn from(target: nook_core::SyncProviderTarget) -> Self {
+        Self(target)
+    }
+}
+
 #[wasm_bindgen]
 pub struct NookEnrollmentIssueInput {
     provider: NookEnrollmentProvider,
