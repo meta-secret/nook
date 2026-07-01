@@ -2,17 +2,15 @@ version: '3'
 
 tasks:
   ci:pr:
-    desc: PR CI — prepare, verify ‖ e2e web build, Playwright e2e-pr, then production dist for preview.
+    desc: PR CI — one container for format/wasm/verify/build/e2e (Rust target reused in-process).
     deps:
       - setup
     cmds:
-      - task: ci:pr:prepare
-      - task: ci:pr:parallel
-      - task: ci:pr:e2e
-      - task: web:e2e:restore-prod-dist
+      - task: docker:task
+        vars: { TASK: _ci:pr }
 
   ci:pr:e2e:
-    desc: Fast Playwright e2e-pr for PR CI (saves prod dist, rebuilds e2e dist, runs tests).
+    desc: Fast Playwright e2e-pr only (when dist/wasm already built in the same job).
     cmds:
       - cp -a nook-web/dist nook-web/dist-prod
       - task: web:e2e:build-dist
@@ -29,29 +27,39 @@ tasks:
       - task: ci:pr
       - task: docker:push:ci
 
-  ci:main:prepare:
-    desc: Toolchain setup, format check, and wasm build (shared artifacts for parallel tracks).
+  ci:main:
+    desc: Main branch CI — one container for format/wasm/verify/build/e2e.
     deps:
       - setup
     cmds:
-      - task: ci:pr:prepare
+      - task: docker:task
+        vars: { TASK: _ci:main }
 
-  ci:main:
-    desc: Main branch CI — prepare once, then verify ‖ web build ‖ e2e in parallel containers.
+  ci:main:prepare:
+    desc: Format check and wasm build in one container (manual/debug only — prefer ci:main:build).
+    deps:
+      - setup
     cmds:
-      - task: ci:main:prepare
-      - task: ci:main:finish
+      - task: docker:task
+        vars: { TASK: _ci:pr:prepare }
+
+  ci:main:parallel:
+    desc: Verify ‖ web build in one container (manual/debug — wasm must exist on bind mount).
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _ci:pr:parallel }
 
   ci:main:finish:
-    desc: Verify ‖ web build ‖ stub e2e — e2e runs in one Docker container.
-    deps:
-      - ci:main:parallel
-      - ci:main:e2e
+    desc: Alias for ci:main (legacy parallel finish name).
+    cmds:
+      - task: ci:main
 
   ci:main:e2e:
-    desc: Full stub Playwright e2e in one container (no GitHub PAT).
-    deps:
-      - web:test:e2e:parallel
+    desc: Full stub Playwright e2e when wasm/dist already built (same job container).
+    cmds:
+      - task: web:test:e2e:parallel
 
   ci:main:e2e:parallel:
     desc: Alias for ci:main:e2e.
@@ -60,25 +68,19 @@ tasks:
 
   ci:nightly:e2e:
     desc: Nightly live sync provider e2e (real APIs; requires provider credentials).
+    deps:
+      - setup
     cmds:
-      - task: ci:main:prepare
-      - task: ci:main:parallel
-      - |
-        cp -a nook-web/dist nook-web/dist-prod
-        task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-        task web:e2e:restore-prod-dist
+      - task: docker:task
+        vars: { TASK: _ci:nightly:e2e }
 
   ci:main:build:
-    desc: Format, wasm, and parallel verify/web build only (no e2e).
-    cmds:
-      - task: ci:main:prepare
-      - task: ci:main:parallel
-
-  ci:main:parallel:
-    desc: Lint/test and production web build in parallel after ci:pr:prepare.
+    desc: Format, wasm, verify, and web build in one container (no e2e).
     deps:
-      - ci:verify:parallel
-      - web:build:parallel
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _ci:main:build }
 
   ci:main:publish:
     desc: Main CI verify/build/e2e, then push toolchain to GHCR on success.
@@ -104,16 +106,20 @@ tasks:
       - task: docker:push
 
   ci:pr:prepare:
-    desc: Format check and wasm build in one container (shared artifacts for parallel tracks).
+    desc: Format check and wasm build in one container (manual/debug only — prefer ci:pr).
+    deps:
+      - setup
     cmds:
       - task: docker:task
         vars: { TASK: _ci:pr:prepare }
 
   ci:pr:parallel:
-    desc: Lint, test, and production web build in parallel after ci:pr:prepare (e2e dist rebuilt before Playwright).
+    desc: Verify ‖ web build in one container (manual/debug — wasm must exist on bind mount).
     deps:
-      - ci:verify:parallel
-      - web:build:parallel
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _ci:pr:parallel }
 
   ci:verify:parallel:
     desc: Lint and test in Docker without rebuilding wasm.
@@ -129,8 +135,49 @@ tasks:
       - task: docker:task
         vars: { TASK: _verify }
 
+  _ci:pr:
+    desc: PR gate — format, wasm, verify ‖ build, e2e-pr, restore prod dist (one container).
+    cmds:
+      - task: _format:check
+      - task: _wasm:build
+      - task: _ci:pr:parallel
+      - cp -a nook-web/dist nook-web/dist-prod
+      - task: _web:e2e:build-dist
+      - task: _web:test:e2e:pr:parallel
+      - task: _web:e2e:restore-prod-dist
+
+  _ci:pr:parallel:
+    desc: Lint/test ‖ production web build after wasm is ready.
+    deps:
+      - _verify:parallel
+      - _web:build:parallel
+
+  _ci:main:build:
+    desc: Main verify/build track without e2e.
+    cmds:
+      - task: _format:check
+      - task: _wasm:build
+      - task: _ci:pr:parallel
+
+  _ci:main:
+    desc: Main gate — format, wasm, verify ‖ build, stub e2e, restore prod dist.
+    cmds:
+      - task: _ci:main:build
+      - cp -a nook-web/dist nook-web/dist-prod
+      - task: _web:e2e:build-dist
+      - task: _web:test:e2e:parallel
+      - task: _web:e2e:restore-prod-dist
+
+  _ci:nightly:e2e:
+    desc: Nightly live sync e2e after full main build in one container.
+    cmds:
+      - task: _ci:main:build
+      - cp -a nook-web/dist nook-web/dist-prod
+      - task: _web:test:e2e:sync-live:parallel
+      - task: _web:e2e:restore-prod-dist
+
   _ci:pr:prepare:
-    desc: Shared PR prep — format and wasm before parallel verify/build containers.
+    desc: Format and wasm (split-container debug only — prefer _ci:pr).
     cmds:
       - task: _format:check
       - task: _wasm:build

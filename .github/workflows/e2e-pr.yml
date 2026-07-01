@@ -71,11 +71,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare (format + wasm)
-        run: task ci:main:prepare VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
-
-      - name: Verify and build web
-        run: task ci:main:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
+      - name: Build (format, wasm, verify, web)
+        run: task ci:main:build VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
         env:
           CI: true
 
