@@ -47,8 +47,13 @@ COPY Cargo.toml Cargo.lock ./
 COPY nook-core nook-core
 COPY nook-wasm nook-wasm
 COPY .config .config
-# Compile the nook-core test/dev/coverage builds. This layer is invalidated on any nook-core
-# source change; the deps are compiled once here and reused across the three steps below.
-RUN cargo nextest run --no-run -p nook-core --profile ci
+# nook-core verify, all as BUILD steps (fail the image build on any regression). This layer is
+# invalidated only on a nook-core source change; deps stay warm from builder-deps, so each step
+# recompiles nook-core alone.
 RUN cargo clippy -p nook-core --all-targets -- -D warnings
-RUN bash -c 'set -euo pipefail; source <(cargo llvm-cov show-env --sh); cargo nextest run --no-run -p nook-core --profile ci'
+# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov compiles + runs the
+# nook-core tests with instrumentation and enforces the committed line floor via --fail-under-lines
+# (read from nook-core/coverage-floor.json). If coverage drops below the floor the build fails. This
+# also warms the coverage-instrumented target/, so any later `task rust:coverage` is a cache hit.
+RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
+    && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only --fail-under-lines "$FLOOR"
