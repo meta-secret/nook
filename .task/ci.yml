@@ -199,6 +199,10 @@ tasks:
   _deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.
     cmds:
+      # Cloudflare does NOT support running Wrangler under the Bun runtime: `bunx wrangler` crashes
+      # (e.g. TypeError from node:timers/promises) and propagates an opaque non-zero exit (201 in CI).
+      # The image has no npm/npx, so we install wrangler with bun (package manager only) into a temp
+      # dir and then invoke it with `node` — the Node runtime Cloudflare officially supports.
       - >-
         bash -c 'set -euo pipefail;
         test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
@@ -206,10 +210,13 @@ tasks:
           echo "error: nook-web/dist not found — run the web build before deploy" >&2;
           exit 1;
         fi;
-        bunx wrangler@4 pages project create nook --production-branch=main >/dev/null 2>&1 || true;
+        wr_dir="$(mktemp -d)";
+        ( cd "$wr_dir" && printf "{\"name\":\"nook-wrangler\"}" > package.json && bun add wrangler@4 >/dev/null 2>&1 );
+        wrangler() { node "$wr_dir/node_modules/.bin/wrangler" "$@"; };
+        wrangler pages project create nook --production-branch=main >/dev/null 2>&1 || true;
         set +e;
         deploy_output="$(
-          bunx wrangler@4 pages deploy nook-web/dist \
+          wrangler pages deploy nook-web/dist \
             --project-name=nook \
             --branch="${CF_PAGES_BRANCH}" \
             --commit-dirty=true 2>&1
