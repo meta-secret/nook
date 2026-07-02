@@ -1042,6 +1042,27 @@ async function tryGithubVaultConnect(page: Page, target: GithubE2eTarget) {
   await waitForVaultOperationsIdle(page)
 }
 
+/**
+ * Keep the e2e idle lock (2.5s) suppressed across unlocks.
+ *
+ * `disableVaultIdleLock` only stops the *current* tracker; every
+ * `markVaultUnlocked()` starts a new one. While a helper is driving connect
+ * attempts, the vault can unlock and idle-lock again between two Playwright
+ * calls, so pin an interval in the page that keeps stopping the tracker.
+ */
+export async function keepVaultIdleLockDisabled(page: Page) {
+  await page.evaluate(() => {
+    const w = window as Window & {
+      __nookVault?: { stopIdleSessionTracking?: () => void }
+      __nookE2eIdleGuard?: number
+    }
+    if (w.__nookE2eIdleGuard) return
+    w.__nookE2eIdleGuard = window.setInterval(() => {
+      w.__nookVault?.stopIdleSessionTracking?.()
+    }, 300)
+  })
+}
+
 export async function waitForJoinerVaultReady(
   page: Page,
   target: GithubE2eTarget,
@@ -1049,28 +1070,83 @@ export async function waitForJoinerVaultReady(
   if (target.stub) {
     await target.stub.install(page, { repoName: target.repoName })
   }
-  await expect
-    .poll(
-      async () => {
-        await refreshGithubVaultOnLoginGate(page)
-        await dismissSyncConflictIfVisible(page)
-        await dismissJoinEnrollmentDialog(page)
-        if (
-          (await page.getByTestId('vault-panel').isVisible()) ||
-          (await page.getByTestId('secret-row').count()) > 0
-        ) {
-          return true
-        }
-        await tryGithubVaultConnect(page, target)
-        return (
-          (await page.getByTestId('vault-panel').isVisible()) ||
-          (await page.getByTestId('secret-row').count()) > 0
-        )
-      },
-      { timeout: GITHUB_CONNECT_TIMEOUT_MS },
-    )
-    .toBe(true)
+  await keepVaultIdleLockDisabled(page)
+  try {
+    await expect
+      .poll(
+        async () => {
+          await refreshGithubVaultOnLoginGate(page)
+          await dismissSyncConflictIfVisible(page)
+          await dismissJoinEnrollmentDialog(page)
+          if (
+            (await page.getByTestId('vault-panel').isVisible()) ||
+            (await page.getByTestId('secret-row').count()) > 0
+          ) {
+            return true
+          }
+          await tryGithubVaultConnect(page, target)
+          return (
+            (await page.getByTestId('vault-panel').isVisible()) ||
+            (await page.getByTestId('secret-row').count()) > 0
+          )
+        },
+        { timeout: GITHUB_CONNECT_TIMEOUT_MS },
+      )
+      .toBe(true)
+  } catch (error) {
+    await dumpNookLogs(page, 'waitForJoinerVaultReady')
+    throw error
+  }
   await disableVaultIdleLock(page)
+}
+
+/**
+ * Print the app's persisted IndexedDB debug log (`window.__nookLog`) to the
+ * test output. All levels are always persisted in the page regardless of the
+ * console level, so no extra instrumentation is needed to see the full trail.
+ */
+export async function dumpNookLogs(
+  page: Page,
+  label = 'nook-logs',
+  options?: { limit?: number },
+) {
+  try {
+    const entries = await page.evaluate(async (limit) => {
+      const log = (
+        window as Window & {
+          __nookLog?: {
+            dump: (opts?: { limit?: number }) => Promise<
+              {
+                ts: string
+                level: string
+                scope: string
+                message: string
+                data?: string
+              }[]
+            >
+          }
+        }
+      ).__nookLog
+      if (!log) return null
+      return log.dump({ limit })
+    }, options?.limit ?? 200)
+    if (!entries) {
+      console.warn(`[${label}] __nookLog is not available on the page`)
+      return
+    }
+    console.log(`[${label}] last ${entries.length} app log entries:`)
+    for (const entry of entries) {
+      const data = entry.data ? ` ${entry.data}` : ''
+      console.log(
+        `  ${entry.ts} ${entry.level.toUpperCase()} [${entry.scope}] ${entry.message}${data}`,
+      )
+    }
+  } catch (error) {
+    console.warn(
+      `[${label}] failed to dump app logs:`,
+      error instanceof Error ? error.message : error,
+    )
+  }
 }
 
 export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {

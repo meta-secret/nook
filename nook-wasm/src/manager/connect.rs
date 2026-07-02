@@ -51,7 +51,11 @@ impl NookVaultManager {
         // First boot for this session — adopt the remote unlock mode.
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
-        Ok(access_status_for_vault_content(&content, &identity)?)
+        let status = access_status_for_vault_content(&content, &identity)?;
+        let _ = self
+            .status_tx
+            .send(format!("ASSESS_{}_{}", self.storage_mode, status));
+        Ok(status)
     }
 
     // Connects to storage (loads, decrypts, and updates session state)

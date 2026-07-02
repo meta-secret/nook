@@ -55,6 +55,20 @@ impl NookVaultManager {
         Ok(msg)
     }
 
+    /// Drain all queued status messages without blocking.
+    ///
+    /// Unlike `next_status`, this never awaits, so it does not hold the
+    /// wasm-bindgen borrow across a pending future (which would block every
+    /// `&mut self` call like `connect` / `sync_vault_from_storage`).
+    #[wasm_bindgen(js_name = drainStatusLog)]
+    pub fn drain_status_log(&self) -> Vec<String> {
+        let mut messages = Vec::new();
+        while let Ok(message) = self.status_rx.try_recv() {
+            messages.push(message);
+        }
+        messages
+    }
+
     /// Check whether this device can decrypt the vault before attempting connect.
     // Add a secret
     pub async fn add_secret(

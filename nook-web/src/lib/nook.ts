@@ -13,6 +13,7 @@ import {
   generateId as wasmGenerateId,
   generateSecretId as wasmGenerateSecretId,
 } from './nook-wasm/nook_wasm'
+import { createLogger } from '$lib/log'
 
 await initNookWasm()
 
@@ -56,7 +57,9 @@ export type VaultSyncAccessStatus =
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
     await initNookWasm()
-    return new NookVaultManagerClass()
+    const manager = new NookVaultManagerClass()
+    drainWasmStatusIntoLog(manager)
+    return manager
   }
 
   const timeout = new Promise<never>((_, reject) => {
@@ -72,6 +75,28 @@ export async function getVaultManager(): Promise<NookVaultManager> {
   })
 
   return Promise.race([loadWasm(), timeout])
+}
+
+const wasmLog = createLogger('wasm')
+
+/**
+ * Pipe the wasm manager's status channel (e.g. `GITHUB_FETCH_START`,
+ * `DECRYPT_SUCCESS`) into the persistent IndexedDB log at debug level.
+ *
+ * Uses the non-blocking `drainStatusLog` on an interval — the awaiting
+ * `next_status` variant would hold the wasm-bindgen borrow and deadlock
+ * every `&mut self` manager call.
+ */
+function drainWasmStatusIntoLog(manager: NookVaultManager) {
+  setInterval(() => {
+    try {
+      for (const status of manager.drainStatusLog()) {
+        wasmLog.debug(status)
+      }
+    } catch {
+      // Manager may be mid-borrow by an async &mut call; retry next tick.
+    }
+  }, 500)
 }
 
 /** Build a validated YAML payload for `add_secret` / `replace_secret`. */

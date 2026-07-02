@@ -158,6 +158,7 @@ export async function confirmJoinRequest(state: VaultState) {
     )
     await state.ensureProviderSaved()
     state.joinEnrollmentPrompt = 'pending'
+    state.awaitingJoinApproval = true
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : 'Failed to request vault access.'

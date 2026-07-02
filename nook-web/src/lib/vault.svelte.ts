@@ -31,6 +31,7 @@ import {
 } from '$lib/locale'
 import { TRANSLATION_CATALOGS, lookupTranslation } from '$lib/locale-catalogs'
 import { hasLocalVault } from '$lib/local-vault'
+import { createLogger } from '$lib/log'
 import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
 import {
   attemptReconcileVaultSyncBlobs,
@@ -61,6 +62,8 @@ import * as secretsActions from '$lib/vault/secrets'
 import * as passwordUnlockActions from '$lib/vault/password-unlock'
 import * as idleSessionActions from '$lib/vault/idle-session'
 import * as lifecycleActions from '$lib/vault/lifecycle'
+
+const vaultLog = createLogger('vault')
 
 export class VaultState {
   locale = $state<AppLocale>('en')
@@ -108,6 +111,12 @@ export class VaultState {
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
+  /**
+   * True from the moment this device sends a join request until it unlocks.
+   * Survives the join dialog being dismissed, so background sync can still
+   * auto-connect when the approval lands (`applyVaultSyncResult`).
+   */
+  awaitingJoinApproval = $state(false)
   lastSyncedAt = $state<SvelteDate | null>(null)
   isSyncing = $state(false)
   /** Provider id currently running a manual sync (Settings UI). */
@@ -739,13 +748,16 @@ export class VaultState {
     return syncActions.confirmCreateFreshRemoteVault(this)
   }
 
-  async assessVaultConnectStatus(): Promise<string> {
+  async assessVaultConnectStatus(
+    argsOverride?: [string, string, string],
+  ): Promise<string> {
     const args =
-      !this.isAuthenticated &&
+      argsOverride ??
+      (!this.isAuthenticated &&
       this.syncProviders.length > 0 &&
       this.joinEnrollmentPrompt !== 'none'
         ? this.providerWasmArgs(this.syncProviders[0]!)
-        : this.wasmStorageArgs()
+        : this.wasmStorageArgs())
     return (await this.enqueueStorage(async () => {
       const assessPromise = this.manager!.assess_vault_connect(...args)
       const assessTimeout = new Promise<never>((_, reject) => {
@@ -825,6 +837,7 @@ export class VaultState {
   markVaultUnlocked() {
     setVaultSessionLocked(false)
     this.isAuthenticated = true
+    this.awaitingJoinApproval = false
     this.sessionExpiredByIdle = false
     this.startIdleSessionTracking()
   }
@@ -872,6 +885,12 @@ export class VaultState {
       return
     }
 
+    vaultLog.debug('sync result (unauthenticated)', {
+      changed: result.changed,
+      accessStatus: result.accessStatus,
+      joinEnrollmentPrompt: this.joinEnrollmentPrompt,
+    })
+
     if (!result.changed) return
 
     if (
@@ -880,12 +899,37 @@ export class VaultState {
     ) {
       this.joinEnrollmentPrompt = 'none'
       this.showSuccess(this.t('toasts.device_approved'))
+      this.scheduleAutoConnectAfterApproval()
+    } else if (result.accessStatus === 'ready' && this.awaitingJoinApproval) {
+      // Joiner whose approval landed after the join dialog was dismissed:
+      // sync says the remote vault is ready for this device, so unlock it
+      // instead of leaving the user stranded on the login gate.
+      this.scheduleAutoConnectAfterApproval()
     } else if (
       result.accessStatus === 'join_pending' &&
       this.joinEnrollmentPrompt === 'none'
     ) {
       this.joinEnrollmentPrompt = 'pending'
+      this.awaitingJoinApproval = true
     }
+  }
+
+  /** Connect once the remote reports this device enrolled (post-approval). */
+  private scheduleAutoConnectAfterApproval() {
+    if (this.isAuthenticated || this.isVerifying || this.loginPasswordPrompt) {
+      return
+    }
+    // Never auto-unlock a session the user (or idle timer) explicitly locked.
+    if (this.sessionExpiredByIdle || isVaultSessionLocked()) {
+      return
+    }
+    vaultLog.debug('auto-connect after approval')
+    // Fire-and-forget outside the sync call stack: loadDb serializes wasm
+    // access through the storage chain and guards itself with isVerifying.
+    setTimeout(() => {
+      if (this.isAuthenticated || this.isVerifying) return
+      void this.loadDb()
+    }, 0)
   }
 
   /**

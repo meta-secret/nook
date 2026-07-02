@@ -1,5 +1,8 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord, VaultItemType } from '$lib/nook'
+import { createLogger } from '$lib/log'
+
+const log = createLogger('connect')
 
 export async function loadDb(state: VaultState) {
   if (state.isInitializing) {
@@ -29,7 +32,34 @@ export async function loadDb(state: VaultState) {
       await state.syncProviderById(state.syncProviders[0]!.id, { quiet: true })
     }
 
-    const accessStatus = await state.assessVaultConnectStatus()
+    let accessStatus = await state.assessVaultConnectStatus()
+    let connectArgsOverride: [string, string, string] | null = null
+    log.debug('loadDb assess', {
+      accessStatus,
+      localVaultPresent: state.localVaultPresent,
+      joinEnrollmentPrompt: state.joinEnrollmentPrompt,
+      syncProviders: state.syncProviders.length,
+    })
+
+    // A joiner device keeps a pre-approval projection in the local cache
+    // (join row, no auth envelope). Once the join is approved remotely, the
+    // local cache is stale and keeps reporting join_pending/needs_enrollment
+    // forever. The sync provider remote is authoritative for enrollment
+    // state, so re-assess against it and connect there when it is ready.
+    if (
+      (accessStatus === 'join_pending' ||
+        accessStatus === 'needs_enrollment') &&
+      !state.isAuthenticated &&
+      state.syncProviders.length > 0
+    ) {
+      const providerArgs = state.providerWasmArgs(state.syncProviders[0]!)
+      const remoteStatus = await state.assessVaultConnectStatus(providerArgs)
+      log.debug('loadDb provider re-assess', { remoteStatus })
+      if (remoteStatus === 'ready') {
+        accessStatus = 'ready'
+        connectArgsOverride = providerArgs
+      }
+    }
 
     if (
       state.pendingConnectRecovery === 'none' &&
@@ -59,6 +89,7 @@ export async function loadDb(state: VaultState) {
         return
       }
       state.joinEnrollmentPrompt = 'pending'
+      state.awaitingJoinApproval = true
       state.startVaultSync()
       return
     }
@@ -71,10 +102,12 @@ export async function loadDb(state: VaultState) {
     }
 
     const rawRecords = await state.enqueueStorage(async () => {
+      const connectArgs = connectArgsOverride ?? state.connectStorageArgs()
+      log.debug('loadDb connect', { mode: connectArgs[0] })
       const connectPromise =
         state.pendingConnectRecovery === 'fresh'
-          ? state.manager!.connect_fresh(...state.connectStorageArgs())
-          : state.manager!.connect(...state.connectStorageArgs())
+          ? state.manager!.connect_fresh(...connectArgs)
+          : state.manager!.connect(...connectArgs)
       state.pendingConnectRecovery = 'none'
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
@@ -110,6 +143,7 @@ export async function loadDb(state: VaultState) {
   } catch (e: unknown) {
     state.isAuthenticated = false
     const message = e instanceof Error ? e.message : String(e)
+    log.warn('loadDb failed', message)
     state.errorMsg = state.resolveErrorMessage(message)
   } finally {
     state.isVerifying = false
