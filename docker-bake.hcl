@@ -5,7 +5,7 @@
 //   nook-core/docker-bake.hcl          -> builder-deps, builder-debug
 //   nook-wasm/docker-bake.hcl          -> builder-wasm      (FROM builder-debug)
 //   docker/toolchain.docker-bake.hcl   -> _toolchain-common (FROM builder-wasm; linear top: web deps)
-//   docker/nook-web.docker-bake.hcl    -> _nook-web-common  (FROM toolchain + workspace source)
+//   nook-web/docker-bake.hcl           -> _nook-web-common  (FROM toolchain + workspace source)
 // Callers (Taskfile `setup`, .task/docker.yml) pass all files via the NOOK_BAKE_FILES list.
 //
 // LINEAR CHAIN (no COPY --from of target/): nook-base -> builder-deps -> builder-debug ->
@@ -54,7 +54,7 @@ group "builders" {
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
-// _nook-web-common lives in docker/nook-web.docker-bake.hcl.
+// _nook-web-common lives in nook-web/docker-bake.hcl.
 target "nook-web" {
   inherits = ["_nook-web-common"]
   tags     = [DOCKER_IMAGE]

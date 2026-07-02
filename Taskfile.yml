@@ -23,7 +23,7 @@ vars:
     -f nook-core/docker-bake.hcl
     -f nook-wasm/docker-bake.hcl
     -f docker/toolchain.docker-bake.hcl
-    -f docker/nook-web.docker-bake.hcl
+    -f nook-web/docker-bake.hcl
   # ci sets TOOLCHAIN_REGISTRY so bake reuses GHCR :buildcache; dev builds locally.
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'

@@ -151,7 +151,7 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile`. The workspace **source is copied into the nook-web image** at build time (`docker/nook-web.Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The one exception is `task web:dev`, which mounts the repo for Vite hot-reload.
+All development tasks run containerized via `Taskfile`. The workspace **source is copied into the nook-web image** at build time (`nook-web/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The one exception is `task web:dev`, which mounts the repo for Vite hot-reload.
 
 ### Two image tiers
 

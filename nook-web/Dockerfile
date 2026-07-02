@@ -6,7 +6,7 @@
 # self-contained and reproducible. Rebuilt per commit; only the small source + dist layers rebuild
 # on top of the fully cached toolchain.
 #
-# Bake context (wired in docker/nook-web.docker-bake.hcl):
+# Bake context (wired in nook-web/docker-bake.hcl):
 #   toolchain -> nook-web/Dockerfile (linear top: deps, warm target/, wasm pkg, node_modules, playwright)
 #
 # NOTE: no COPY --from here. The generated wasm pkg (nook-web/src/lib/nook-wasm) is already present

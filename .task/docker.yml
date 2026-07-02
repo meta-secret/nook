@@ -41,7 +41,7 @@ tasks:
 
   docker:task:
     internal: true
-    # No bind mount: the nook-web image already contains the workspace source (docker/nook-web.Dockerfile).
+    # No bind mount: the nook-web image already contains the workspace source (nook-web/Dockerfile).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
@@ -72,7 +72,7 @@ tasks:
   docker:e2e:run:
     desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
     internal: true
-    # No bind mount: the nook-web image already contains the workspace source (docker/nook-web.Dockerfile).
+    # No bind mount: the nook-web image already contains the workspace source (nook-web/Dockerfile).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
