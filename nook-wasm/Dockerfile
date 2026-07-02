@@ -10,11 +10,6 @@
 
 FROM builder-debug AS builder-wasm
 
-# Cargo.toml/Cargo.lock/nook-core/nook-wasm already copied identically in builder-debug, so these
-# are cache hits; kept explicit in case builder-debug's context ever diverges.
-COPY Cargo.toml Cargo.lock ./
-COPY nook-core nook-core
-COPY nook-wasm nook-wasm
 # Separate RUNs so each layer caches independently.
 RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
 RUN cargo build --release --target wasm32-unknown-unknown -p nook-wasm
