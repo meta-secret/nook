@@ -4,15 +4,15 @@
 //   docker/base.docker-bake.hcl        -> nook-base
 //   nook-core/docker-bake.hcl          -> builder-deps, builder-debug
 //   nook-wasm/docker-bake.hcl          -> builder-wasm      (FROM builder-debug)
-//   docker/toolchain.docker-bake.hcl   -> _toolchain-common (FROM builder-wasm; linear top: web deps)
+//   docker/toolchain.docker-bake.hcl   -> web-deps, _toolchain-common (parallel web + rust merge)
 //   nook-web/docker-bake.hcl           -> _nook-web-common  (FROM toolchain + workspace source)
 // Callers (Taskfile `setup`, .task/docker.yml) pass all files via the NOOK_BAKE_FILES list.
 //
-// LINEAR CHAIN (no COPY --from of target/): nook-base -> builder-deps -> builder-debug ->
-// builder-wasm -> toolchain -> nook-web. Everything (deps, warm native+wasm target/, registry,
-// wasm pkg, node_modules, playwright) accumulates in ONE continuous image lineage, so a warm
-// rebuild is a pure cache hit. Two tiers for publishing: `toolchain` is the shared base pushed to
-// GHCR (cache); `nook-web` layers the workspace source on top and is what `task` runs.
+// LINEAR CHAIN (rust): nook-base -> builder-deps -> builder-debug -> builder-wasm -> toolchain ->
+// nook-web. The web branch (web-deps) is a PARALLEL bake target off nook-base; toolchain merges
+// node_modules via COPY --from=web-deps. Each named stage (nook-base, builder-*, web-deps) has its
+// own cache-to so GHCR :buildcache captures every layer. Two tiers for publishing: `toolchain` is
+// the shared base pushed to GHCR (cache); `nook-web` layers the workspace source on top.
 
 variable "DOCKER_IMAGE" {
   default = "nook-web:local"
