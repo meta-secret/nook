@@ -169,7 +169,9 @@ export async function refreshReplacementConflicts(
   // would trigger a wasm-bindgen recursive-borrow hang/panic.
   const conflicts = await state.enqueueStorage(() => {
     if (!state.manager!.eventLogMode()) {
-      return [] as Awaited<ReturnType<typeof state.manager.listProjectionConflicts>>
+      return [] as Awaited<
+        ReturnType<typeof state.manager.listProjectionConflicts>
+      >
     }
     return state.manager!.listProjectionConflicts()
   })
