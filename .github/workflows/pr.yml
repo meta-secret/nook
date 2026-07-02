@@ -59,7 +59,9 @@ jobs:
           # preview URL from the container's stdout marker and hand it to the comment step.
           out="$(task ci:pr:deploy-preview VITE_BASE=/ 2>&1)"
           echo "$out"
-          url="$(echo "$out" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+          # Strip ANSI codes before matching the marker (defensive; the container already sanitizes).
+          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
+          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
           echo "preview_url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR

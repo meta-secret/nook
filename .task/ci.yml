@@ -103,17 +103,21 @@ tasks:
 
   docker:push:ci:
     desc: Publish the toolchain base image + cache to GHCR (after green main CI).
-    env:
-      PUSH_TOOLCHAIN: "1"
+    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
+    # a called subtask, but it does propagate call vars. docker:push maps this var into its own env.
     cmds:
       - task: docker:push
+        vars:
+          PUSH_TOOLCHAIN: "1"
 
   docker:push:cache:ci:
     desc: Publish only the :buildcache layers to GHCR (after green PR CI — no :latest overwrite).
-    env:
-      PUSH_TOOLCHAIN: "1"
+    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
+    # a called subtask, but it does propagate call vars. docker:push:cache maps this var into its env.
     cmds:
       - task: docker:push:cache
+        vars:
+          PUSH_TOOLCHAIN: "1"
 
   ci:pr:prepare:
     desc: Format check and wasm build in one container (manual/debug only — prefer ci:pr).
@@ -224,19 +228,14 @@ tasks:
           fi;
           exit "$deploy_status";
         fi;
+        # Strip ANSI color codes first: wrangler colorizes the URL, which broke the host-side
+        # NOOK_PREVIEW_URL=<url> capture (escape sequences landed right after the "=").
+        clean_output="$(printf "%s" "$deploy_output" | sed -E "s/\x1b\[[0-9;]*[a-zA-Z]//g")";
         deployment_url="$(
-          echo "$deploy_output" \
-            | grep -oE "Deployment alias URL: https://[^ ]+" \
-            | sed "s/Deployment alias URL: //" \
+          printf "%s" "$clean_output" \
+            | grep -oE "https://[a-zA-Z0-9.-]+\.pages\.dev[a-zA-Z0-9./_-]*" \
             | tail -1
         )";
-        if [ -z "$deployment_url" ]; then
-          deployment_url="$(
-            echo "$deploy_output" \
-              | grep -oE "https://[a-zA-Z0-9.-]+\.pages\.dev[^ ]*" \
-              | tail -1
-          )";
-        fi;
         if [ -z "$deployment_url" ]; then
           echo "Could not parse Cloudflare deployment URL from wrangler output" >&2;
           exit 1;
