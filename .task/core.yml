@@ -171,15 +171,29 @@ tasks:
       - bash .github/scripts/rust-coverage-check.sh
 
   _rust:coverage:update:
-    desc: Rewrite coverage-floor.json to measured line coverage (optional).
+    desc: Recompute coverage-floor.json, then print the change as a git diff (sealed image — apply on host).
     cmds:
       - bash .github/scripts/rust-coverage-check.sh --update-floor
+      - >-
+        sh -c 'if git diff --quiet -- coverage-floor.json; then
+          echo "==> coverage-floor.json unchanged.";
+        else
+          echo "==> coverage-floor.json change (apply with: task rust:coverage:update | git apply):";
+          git --no-pager diff -- coverage-floor.json;
+        fi'
 
   _format:
-    desc: Format all projects.
+    desc: Format all projects, then print the changes as a git diff (sealed image — apply on host).
     cmds:
       - cargo fmt --all
       - cd nook-web && bun run format
+      - >-
+        sh -c 'if git diff --quiet; then
+          echo "==> Already formatted; no changes.";
+        else
+          echo "==> Formatting changes (apply with: task format | git apply):";
+          git --no-pager diff;
+        fi'
 
   _format:check:
     desc: Check formatting for all projects.

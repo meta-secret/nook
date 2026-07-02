@@ -151,7 +151,24 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile` (`docker run` with the repo bind-mounted at `/workspace`).
+All development tasks run containerized via `Taskfile`. The workspace **source is copied into the nook-web image** at build time (`docker/nook-web.Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The one exception is `task web:dev`, which mounts the repo for Vite hot-reload.
+
+### Two image tiers
+
+- **Toolchain base** (`ghcr.io/<owner>/<repo>/toolchain`): `nook-base` (Rust/bun/task/mold/wasm-pack/llvm-cov on Debian trixie) + chef-cooked deps + crates.io registry + warm `target/` + bun deps + Playwright chromium. Pushed to GHCR as the shared cache (`:latest`/`:buildcache`, always **linux/amd64**). Rarely changes.
+- **nook-web image** (`nook-web:local`): `FROM toolchain`, `COPY` the workspace source, layer in the generated wasm pkg, build the production `dist`. Rebuilt per commit; the source layer is small on top of the cached base. This is what `task` runs. Source is `COPY`'d as late as possible (after the wasm-pkg copy) so a source edit never invalidates the cached layers above it.
+
+`task setup` always (re)builds the **nook-web** image (source may have changed); buildx reuses the toolchain base + GHCR `:buildcache`, so only the source + dist layers rebuild (seconds).
+
+### Build export: docker driver + containerd image store
+
+The nook-web image is large (~9 GB — it bakes the warm `target/` so runtime `task` never recompiles). Exporting that on every build is the dominant warm-build cost **if** it is re-materialized wholesale. We avoid that by building with the **`docker` driver** builder (BuildKit embedded in the daemon) on top of the **containerd image store**: the build result is written **directly into the image store**, so a warm rebuild only writes the small changed source/dist layers — the unchanged multi-GB deps/target layers are already there. A source-only change goes from a ~60 s full re-export down to **sub-second** export.
+
+- **Builder selection:** `task setup` passes `--builder $(docker context show)`. buildx auto-creates a docker-driver builder named after the active context, so this resolves to `desktop-linux` on Docker Desktop and `default` on plain Linux/CI. **Never** point this at a `docker-container` builder (e.g. what `docker/setup-buildx-action` creates) — that driver forces a full-image re-export every build. Override with `BUILDX_BUILDER` if needed.
+- **CI parity:** `.github/actions/nook-docker-setup` enables the containerd image store on the runner (`daemon.json` `features.containerd-snapshotter=true`, then restart + assert) and does **not** use `setup-buildx-action`. Recent `ubuntu-latest` (Docker 29+) enables it by default; we set it explicitly so the fast path survives runner-image drift.
+- **Registry push is unaffected:** publishing the toolchain base to GHCR (`type=registry` / `type=cacheonly`) works from the docker driver; GHCR accepts the OCI manifests the containerd store produces.
+
+**Shared cache is pull-always, push-CI-only.** `cache-from` (the GHCR `:buildcache`/`:latest` layers) is wired for **every** build — local dev included — so a fresh checkout with a cold Docker cache pulls CI's warm dep/target layers instead of a catastrophic cold recompile. `cache-to` (publish) is gated on `TOOLCHAIN_PUSH`, which only CI sets: **PRs** publish just the `:buildcache` layers (`docker:push:cache` -> `toolchain-cache`, no `:latest` overwrite), and **main** publishes the verified base image + cache (`docker:push` -> `toolchain-push`). Local never pushes (so no auth/`403`); an unauthenticated local pull that misses simply falls back to a cold build. No global mutable state blocks a local build — the registry is cache, not a dependency.
 
 ### Docker cache model (no named volumes)
 
@@ -159,18 +176,24 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 
 | What | How it is cached |
 |------|------------------|
-| Toolchain image | Single **`ghcr.io/<owner>/<repo>/toolchain:latest`** image (always **linux/amd64**). Docker tasks depend on **`setup`**. **`NOOK_ENV=dev`** (default): skip setup if `nook-build:local` exists. **`NOOK_ENV=ci`**: always `docker buildx bake` with GHCR **`toolchain:buildcache`**. |
-| Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) and clippy/test warm-up during image build. Artifacts live at **`/opt/nook/target`** (`CARGO_TARGET_DIR`), outside the bind mount. |
-| `target/` at runtime | Cargo uses **`/opt/nook/target`** in the image (not under `/workspace`). **CI runs format/wasm/verify/build/e2e in one `docker run`** (`task ci:pr` / `task ci:main`) so rustc artifacts persist in-process; do not split Rust work across multiple containers per job. |
-| `nook-web/node_modules` | Each `docker run` overlays an **anonymous volume** at `/workspace/nook-web/node_modules` so parallel containers install independently. `BUN_INSTALL_CACHE_DIR` is baked at `/opt/nook/bun-install-cache`; the entrypoint runs `bun install --frozen-lockfile` (fast link from cache; correct rolldown native bindings). |
-| Web wasm pkg | Baked at `/opt/nook/nook-wasm-pkg` during image build (cached with wasm/core sources). Entrypoint seeds `nook-web/src/lib/nook-wasm` when empty; `task wasm:build` skips wasm-pack when sources are unchanged. |
-| Playwright Chromium | `playwright install --with-deps chromium` in `toolchain-web` (Playwright owns the apt list; reruns only when web deps change). |
-| CI Docker builds | **`task ci:pr`** (PR verify only) / **`task ci:main:publish`** (main — buildx `toolchain-push` after green verify). Buildcache during bake; `:latest` after green main CI. |
+| Toolchain base image | `cache-from` pulled by **every** build (local + CI). **PRs** publish `:buildcache` layers only (`ci:pr:publish` -> `toolchain-cache`); **main** publishes the verified `:latest` image + cache (`ci:main:publish` -> `toolchain-push`). Local never publishes. |
+| Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) + clippy/test warm-up during the toolchain build. |
+| `target/` | Lives at the **default in-tree path** `/meta-secret/nook/target` (= WORKDIR). Baked warm into the toolchain base; the nook-web image COPYs source over the same workdir and reuses it (no dep recompile). No bind mount means nothing shadows it — so **no `CARGO_TARGET_DIR` override, no `/opt` gymnastics, no single-container hack**. |
+| `nook-web/node_modules` | Installed in the `toolchain-web` stage (baked in the base). `BUN_INSTALL_CACHE_DIR` at `/opt/nook/bun-install-cache`. `web:dev` (mounted) runs `bun install` in its command. |
+| Web wasm pkg | Generated by `wasm-pack` in the wasm builder into `nook-web/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY). |
+| Web dist | Built at **nook-web image build time** (`bun run build`, `VITE_BASE` arg) so it is present in every container: the Cloudflare preview deploy (in-container) and the GitHub Pages upload (extracted via `task docker:extract:dist`) both read it. |
+| Playwright Chromium | `playwright install --with-deps chromium` in `toolchain-web` (reruns only when web deps change). |
+| CI Docker builds | **`task ci:pr`** (PR verify, in-container Cloudflare deploy) / **`task ci:main:publish`** (main — `toolchain-push` after green verify, then `docker:extract:dist` for Pages). |
 
 Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
+
+### Sealed-image consequences
+
+- **Write-type tasks emit diffs, not host writes.** `task format` / `task rust:coverage:update` mutate the in-container source and print a `git diff` (the nook-web image seeds a throwaway git repo). Apply on the host with `task format | git apply`.
+- **`dist` hand-off.** Cloudflare (PR) deploys from inside the container; GitHub Pages (main) extracts `dist` to the runner with `task docker:extract:dist` before `upload-pages-artifact`.
 
 ### Build & verify
 
 - **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
-- **Wasm:** `task wasm:build` — `wasm-pack build nook-wasm` from the workspace root (wasm-pack in the image; chef-cached `/opt/nook/target`).
+- **Wasm:** generated by `wasm-pack build nook-wasm` in the `builder-wasm` stage into `nook-web/src/lib/nook-wasm` (COPY'd into the nook-web image; `task wasm:build` only regenerates on the mounted `web:dev` path when sources change). Chef-cached `target/` at the default in-tree path.
 - **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build).

@@ -2,7 +2,7 @@ import type { ToolCall } from "@cursor/sdk";
 
 const WORKSPACE_PREFIXES = [
   "/home/runner/work/nook/nook/",
-  "/workspace/",
+  "/meta-secret/nook/",
 ];
 
 const MAX_SHELL_STREAM_CHARS = 16_000;
