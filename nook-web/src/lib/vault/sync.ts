@@ -13,7 +13,9 @@ import {
 export function startVaultSync(state: VaultState) {
   state.stopVaultSync()
   const needsRemoteUpdates =
-    state.isAuthenticated || state.joinEnrollmentPrompt !== 'none'
+    state.isAuthenticated ||
+    state.joinEnrollmentPrompt !== 'none' ||
+    state.awaitingJoinApproval
   if (!needsRemoteUpdates) {
     return
   }
@@ -29,7 +31,11 @@ export function startVaultSync(state: VaultState) {
     ) {
       return
     }
-    if (!state.isAuthenticated && state.joinEnrollmentPrompt === 'none') {
+    if (
+      !state.isAuthenticated &&
+      state.joinEnrollmentPrompt === 'none' &&
+      !state.awaitingJoinApproval
+    ) {
       return
     }
     // Local-only vaults with no sync provider and no pending join have

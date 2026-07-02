@@ -50,6 +50,7 @@ impl NookVaultManager {
                     let fresh_records = nook_core::deserialize_stored(&content, format)?;
                     nook_core::merge_remote_join_records(&mut self.meta, &fresh_records);
                     if !nook_core::list_join_requests(&self.stored_records_snapshot()).is_empty() {
+                        let _ = self.status_tx.send("SYNC_JOINS_PENDING".to_owned());
                         self.last_synced_content = content.clone();
                         return sync_result_session(self, true);
                     }
@@ -58,6 +59,7 @@ impl NookVaultManager {
                 self.last_synced_content = content.clone();
                 let identity = self.ensure_device_identity().await?;
                 let status = access_status_for_vault_content(&content, &identity)?;
+                let _ = self.status_tx.send(format!("SYNC_ASSESS_{status}"));
                 return sync_result_access_status(&status);
             }
             let yaml_changed = self.merge_remote_yaml_joins_from_storage().await?;
