@@ -20,8 +20,8 @@
 FROM nook-base AS web-deps
 
 COPY nook-web/package.json nook-web/bun.lock ./nook-web/
-RUN mkdir -p "$BUN_INSTALL_CACHE_DIR" \
-    && cd nook-web && bun install --frozen-lockfile
+RUN --mount=type=cache,target=/opt/nook/bun-install-cache,sharing=locked \
+    cd nook-web && bun install --frozen-lockfile
 
 # --- Merge: rust lineage (target/ + wasm pkg in place) + web node_modules copied in cheaply ---
 FROM builder-wasm AS toolchain
