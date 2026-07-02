@@ -38,6 +38,12 @@ RUN echo '' > nook-core/src/lib.rs
 RUN echo '' > nook-wasm/src/lib.rs
 RUN cargo nextest run --no-run -p nook-core --profile ci
 RUN cargo clippy -p nook-core --all-targets -- -D warnings
+# Also warm the COVERAGE-instrumented deps: cargo-llvm-cov builds with -Cinstrument-coverage +
+# cfg(coverage) into its own target/llvm-cov-target dir — a distinct fingerprint AND location from
+# the plain nextest/clippy builds above. Without this, builder-debug's `cargo llvm-cov nextest`
+# recompiles every dependency with instrumentation. --no-report builds + runs the (empty) stub tests
+# but skips report merge, warming the instrumented deps so builder-debug's coverage step is a cache hit.
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-core
 RUN rm -rf nook-core/src nook-wasm/src
 
 # --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---

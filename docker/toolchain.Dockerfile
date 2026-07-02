@@ -1,24 +1,29 @@
 # syntax=docker/dockerfile:1.4
 
-# toolchain: the LINEAR TOP of the build chain. FROM builder-wasm, which already carries (in one
-# continuous image lineage) the chef-cooked deps, native warm target/, wasm32 target/, the crates
-# registry, and the generated wasm pkg. This stage ADDS only the bun node_modules on top — placed
-# AFTER all the Rust compiles (nook-core native + nook-wasm), right before the web/js layer.
+# PARALLEL BRANCHES merged into one toolchain. Two independent inputs must not serialize:
+#   - RUST branch (builder-deps -> builder-debug -> builder-wasm): owns the multi-GB target/ and
+#     produces the small generated wasm pkg (nook-web/src/lib/nook-wasm). Keyed on Rust source.
+#   - WEB branch (web-deps): `bun install` -> node_modules. Keyed ONLY on package.json + bun.lock.
+# In the old linear chain the web branch sat ON TOP of the rust chain, so a Rust edit needlessly
+# re-ran `bun install` and the two never built concurrently. Here they are SEPARATE branches off the
+# shared nook-base, so BuildKit builds them in PARALLEL, and `toolchain` merges them at the end.
 #
-# Playwright (apt system libs + chromium browser binaries) is NOT here — it lives in nook-base, so
-# the ~one-time browser download survives BOTH Rust source edits and JS dep bumps (it only rebuilds
-# on a base / Playwright-version bump). Only `bun install` remains here because node_modules is
-# genuinely keyed on nook-web/package.json + bun.lock; a JS dep bump invalidates just this layer and
-# the nook-web image on top, leaving the entire expensive Rust chain below cached (no recompile).
-#
-# No COPY --from of target/registry/node_modules/wasm — the whole toolchain is one continuous image
-# lineage, so the BuildKit cache chain stays intact and a warm rebuild is a pure cache hit (no
-# recompile, no multi-GB layer copy). `builder-wasm` is injected by bake via
-# `contexts = { builder-wasm = "target:builder-wasm" }` (see docker/toolchain.docker-bake.hcl).
+# The merge keeps the 1.5GB target/ IN-LINEAGE (toolchain FROM builder-wasm, no copy) and pulls the
+# comparatively small node_modules (~350MB) across with a single COPY --from=web-deps. The wasm pkg
+# is already in the rust lineage (wasm-pack wrote it in builder-wasm), so it needs no copy. Net:
+#   - Rust edit  -> rust branch rebuilds; web-deps stays cached (only the node_modules COPY re-runs).
+#   - JS dep bump -> web-deps rebuilds; the whole rust branch stays cached.
+# Contexts (nook-base, builder-wasm) are injected by bake (see docker/toolchain.docker-bake.hcl).
 # This `toolchain` stage is the base for the sealed nook-web image (nook-web/Dockerfile).
 
-FROM builder-wasm AS toolchain
+# --- WEB branch: node_modules only, independent of Rust (builds in parallel with the rust chain) ---
+FROM nook-base AS web-deps
 
 COPY nook-web/package.json nook-web/bun.lock ./nook-web/
 RUN mkdir -p "$BUN_INSTALL_CACHE_DIR" \
     && cd nook-web && bun install --frozen-lockfile
+
+# --- Merge: rust lineage (target/ + wasm pkg in place) + web node_modules copied in cheaply ---
+FROM builder-wasm AS toolchain
+
+COPY --from=web-deps /meta-secret/nook/nook-web/node_modules ./nook-web/node_modules

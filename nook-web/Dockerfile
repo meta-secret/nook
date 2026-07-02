@@ -1,17 +1,17 @@
 # syntax=docker/dockerfile:1.4
 
-# nook-web image: the LINEAR toolchain top (deps + warm native/wasm target/ + generated wasm pkg +
-# bun deps + playwright, all in one continuous image lineage) with the workspace SOURCE copied in.
-# This is what `task` runs against at runtime — there is NO bind mount, so the image is
-# self-contained and reproducible. Rebuilt per commit; only the small source + dist layers rebuild
-# on top of the fully cached toolchain.
+# nook-web image: the merged toolchain (rust lineage with warm native/wasm target/ + generated wasm
+# pkg, plus node_modules copied from the parallel web-deps branch, plus Playwright from nook-base)
+# with the workspace SOURCE copied in. This is what `task` runs against at runtime — there is NO
+# bind mount, so the image is self-contained and reproducible. Rebuilt per commit; only the small
+# source + dist layers rebuild on top of the fully cached toolchain.
 #
 # Bake context (wired in nook-web/docker-bake.hcl):
-#   toolchain -> nook-web/Dockerfile (linear top: deps, warm target/, wasm pkg, node_modules, playwright)
+#   toolchain -> nook-web/Dockerfile (merged top: rust target/ + wasm pkg + node_modules + playwright)
 #
-# NOTE: no COPY --from here. The generated wasm pkg (nook-web/src/lib/nook-wasm) is already present
-# because builder-wasm produced it earlier in the SAME lineage. .dockerignore excludes it from the
-# source COPY below, so the source layer never clobbers it.
+# NOTE: no COPY --from here. The wasm pkg (nook-web/src/lib/nook-wasm) and node_modules are already
+# present in the toolchain (wasm pkg from the rust lineage, node_modules merged from web-deps).
+# .dockerignore excludes both from the source COPY below, so the source layer never clobbers them.
 
 FROM toolchain AS nook-web
 
