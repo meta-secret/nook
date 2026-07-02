@@ -203,6 +203,10 @@ tasks:
       # (e.g. TypeError from node:timers/promises) and propagates an opaque non-zero exit (201 in CI).
       # The image has no npm/npx, so we install wrangler with bun (package manager only) into a temp
       # dir and then invoke it with `node` — the Node runtime Cloudflare officially supports.
+      #
+      # NOTE: this is a `>-` FOLDED scalar — every newline becomes a space, so the whole block runs
+      # as ONE line. Do NOT put `#` comments inside the shell body below: a folded `#` comments out
+      # the rest of the line (i.e. every following command) and breaks the deploy.
       - >-
         bash -c 'set -euo pipefail;
         test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
@@ -235,8 +239,6 @@ tasks:
           fi;
           exit "$deploy_status";
         fi;
-        # Strip ANSI color codes first: wrangler colorizes the URL, which broke the host-side
-        # NOOK_PREVIEW_URL=<url> capture (escape sequences landed right after the "=").
         clean_output="$(printf "%s" "$deploy_output" | sed -E "s/\x1b\[[0-9;]*[a-zA-Z]//g")";
         deployment_url="$(
           printf "%s" "$clean_output" \
@@ -248,7 +250,6 @@ tasks:
           exit 1;
         fi;
         echo "$deployment_url" > .cloudflare-preview-url;
-        # Stable marker for the host to capture the URL from container stdout (no bind mount).
         echo "NOOK_PREVIEW_URL=$deployment_url"'
 
   _comment-preview:
