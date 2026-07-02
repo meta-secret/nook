@@ -52,6 +52,9 @@ jobs:
           PUSH_TOOLCHAIN: "1"
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
+      - name: Extract dist from nook-web image
+        run: task docker:extract:dist
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
@@ -87,7 +90,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Resolve toolchain image
         run: task setup

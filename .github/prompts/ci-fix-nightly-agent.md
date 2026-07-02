@@ -12,7 +12,7 @@ Read `.cortex/AGENTS.md` before making changes.
 
 ## CI toolchain (Docker)
 
-The job runs `task setup` before you start. CI uses the GHCR toolchain image (`NOOK_ENV=ci`); image ref is in `.nook/docker-image` — **not** `nook-build:local`. All `task` Docker commands read that ref automatically.
+The job runs `task setup` before you start. It builds the sealed **nook-web image** (toolchain base from GHCR cache + workspace source) and loads it as `nook-web:local`. All `task` Docker commands run that image automatically.
 
 Live e2e requires `NOOK_GITHUB_PAT` and a disposable `NOOK_GITHUB_E2E_REPO` (already set in the job environment).
 
