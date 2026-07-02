@@ -150,9 +150,10 @@ export async function handleAddSecret(
       )) as NookSecretRecord[]
       state.secrets = rawRecords
     })
-    state.refreshSecretsFromSession()
+    await state.refreshSecretsFromSession()
     state.showSuccess(state.t('toasts.secret_saved'))
     await state.runFanOutSyncAfterLocalSave()
+    await state.refreshSecretsFromSession()
   } catch (e: unknown) {
     state.errorMsg = `Failed to save secret: ${e instanceof Error ? e.message : String(e)}`
     throw e
@@ -170,6 +171,11 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
   state.errorMsg = ''
   state.dismissSuccess()
   state.isSaving = true
+  // Drop the row immediately so the UI reflects the delete without waiting for
+  // the authoritative wasm op, which can queue behind background sync work
+  // (restored below if the delete fails).
+  const previousSecrets = state.secrets
+  state.secrets = state.secrets.filter((record) => record.id !== id)
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   })
@@ -180,10 +186,11 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
       )) as NookSecretRecord[]
       state.secrets = rawRecords
     })
-    state.refreshSecretsFromSession()
+    await state.refreshSecretsFromSession()
     state.showSuccess(state.t('toasts.secret_deleted'))
     state.scheduleFanOutSyncAfterLocalSave()
   } catch (e: unknown) {
+    state.secrets = previousSecrets
     state.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
     throw e
   } finally {
@@ -219,7 +226,7 @@ export async function handleReplaceSecret(
       )) as NookSecretRecord[]
       state.secrets = rawRecords
     })
-    state.refreshSecretsFromSession()
+    await state.refreshSecretsFromSession()
     state.showSuccess(state.t('toasts.item_updated'))
     state.scheduleFanOutSyncAfterLocalSave()
   } catch (e: unknown) {

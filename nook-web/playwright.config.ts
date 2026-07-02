@@ -18,7 +18,7 @@ const isCi = !!process.env.CI
 const distDir = path.join(rootDir, 'dist')
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; stubs are per-page. */
 
-/** IndexedDB-only specs — PR CI subset (~1 min). */
+/** IndexedDB-only specs — fast manual/debug subset of the full stub suite. */
 const PR_SPECS = [
   'connect.spec.ts',
   'local-vault.spec.ts',

@@ -48,18 +48,37 @@
     onOpenPasswordSettings?: () => void
   } = $props()
 
-  let providerId = $state(syncProviders[0]?.id ?? '')
-  let passwordEntryId = $state(passwordEntries[0]?.id ?? '')
+  let providerId = $state<string | null>(null)
+  let passwordEntryId = $state<string | null>(null)
   let passwordInput = $state('')
   let localError = $state('')
   let copied = $state(false)
-  let qrDataUrl = $state('')
 
+  const effectiveProviderId = $derived.by(() => {
+    if (
+      providerId !== null &&
+      syncProviders.some((provider) => provider.id === providerId)
+    ) {
+      return providerId
+    }
+    return syncProviders[0]?.id ?? ''
+  })
+  const effectivePasswordEntryId = $derived.by(() => {
+    if (
+      passwordEntryId !== null &&
+      passwordEntries.some((entry) => entry.id === passwordEntryId)
+    ) {
+      return passwordEntryId
+    }
+    return passwordEntries[0]?.id ?? ''
+  })
   const selectedProvider = $derived(
-    syncProviders.find((provider) => provider.id === providerId) ?? null,
+    syncProviders.find((provider) => provider.id === effectiveProviderId) ??
+      null,
   )
   const selectedPassword = $derived(
-    passwordEntries.find((entry) => entry.id === passwordEntryId) ?? null,
+    passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
+      null,
   )
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
@@ -68,47 +87,16 @@
     if (!enrollmentCode) return ''
     return peekEnrollmentIssuedAt(enrollmentCode) ?? ''
   })
-
-  $effect(() => {
-    if (
-      providerId &&
-      !syncProviders.some((provider) => provider.id === providerId)
-    ) {
-      providerId = syncProviders[0]?.id ?? ''
-    } else if (!providerId && syncProviders[0]) {
-      providerId = syncProviders[0].id
+  const qrDataUrlPromise = $derived.by(() => {
+    if (!enrollmentCode || typeof window === 'undefined') {
+      return Promise.resolve('')
     }
-  })
-
-  $effect(() => {
-    if (
-      passwordEntryId &&
-      !passwordEntries.some((entry) => entry.id === passwordEntryId)
-    ) {
-      passwordEntryId = passwordEntries[0]?.id ?? ''
-    } else if (!passwordEntryId && passwordEntries[0]) {
-      passwordEntryId = passwordEntries[0].id
-    }
-  })
-
-  $effect(() => {
-    void enrollmentCode
-    if (!enrollmentCode) {
-      qrDataUrl = ''
-      return
-    }
-    QRCode.toDataURL(enrollmentLink, {
+    return QRCode.toDataURL(enrollmentLink, {
       errorCorrectionLevel: 'H',
       margin: 1,
       width: 240,
       color: { dark: '#111317', light: '#ffffff' },
-    })
-      .then((url: string) => {
-        qrDataUrl = url
-      })
-      .catch(() => {
-        qrDataUrl = ''
-      })
+    }).catch(() => '')
   })
 
   async function submitOnboard() {
@@ -211,7 +199,7 @@
             data-testid="onboard-provider-list"
           >
             {#each syncProviders as provider (provider.id)}
-              {@const selected = provider.id === providerId}
+              {@const selected = provider.id === effectiveProviderId}
               <button
                 type="button"
                 role="radio"
@@ -284,7 +272,10 @@
           <select
             id="onboard-password-entry"
             class="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            bind:value={passwordEntryId}
+            value={effectivePasswordEntryId}
+            onchange={(event) => {
+              passwordEntryId = event.currentTarget.value
+            }}
             disabled={passwordEntries.length === 0}
             data-testid="onboard-password-select"
           >
@@ -386,17 +377,19 @@
         </button>
       </div>
 
-      {#if qrDataUrl}
-        <div class="flex justify-center">
-          <img
-            src={qrDataUrl}
-            alt="Onboarding QR"
-            class="rounded-md border border-border"
-            width="240"
-            height="240"
-          />
-        </div>
-      {/if}
+      {#await qrDataUrlPromise then qrDataUrl}
+        {#if qrDataUrl}
+          <div class="flex justify-center">
+            <img
+              src={qrDataUrl}
+              alt="Onboarding QR"
+              class="rounded-md border border-border"
+              width="240"
+              height="240"
+            />
+          </div>
+        {/if}
+      {/await}
 
       <span class="sr-only" data-testid="onboard-link">{enrollmentLink}</span>
       <textarea

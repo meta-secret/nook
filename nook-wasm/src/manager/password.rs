@@ -14,6 +14,8 @@ use crate::types::password_entries_to_vec;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+const E2E_PASSWORD_SCRYPT_LOG_N: u8 = 10;
+
 #[wasm_bindgen]
 impl NookVaultManager {
     #[wasm_bindgen(js_name = "vaultUnlockMode")]
@@ -72,6 +74,26 @@ impl NookVaultManager {
         label: String,
         password: String,
     ) -> Result<(), JsError> {
+        self.add_vault_password_with_work_factor(label, password, nook_core::PASSWORD_SCRYPT_LOG_N)
+            .await
+    }
+
+    #[wasm_bindgen(js_name = "addVaultPasswordForE2e")]
+    pub async fn add_vault_password_for_e2e(
+        &mut self,
+        label: String,
+        password: String,
+    ) -> Result<(), JsError> {
+        self.add_vault_password_with_work_factor(label, password, E2E_PASSWORD_SCRYPT_LOG_N)
+            .await
+    }
+
+    async fn add_vault_password_with_work_factor(
+        &mut self,
+        label: String,
+        password: String,
+        work_factor: u8,
+    ) -> Result<(), JsError> {
         self.ensure_vault_crypto_from_cache().await?;
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             return Err(NookError::Database(
@@ -83,12 +105,13 @@ impl NookVaultManager {
             secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
             members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
         };
-        let entry = nook_core::create_password_entry(
+        let entry = nook_core::create_password_entry_with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             &label,
             &wasm_iso_timestamp(),
             &password,
+            work_factor,
         )?;
 
         self.password_entries.push(entry);
@@ -125,6 +148,34 @@ impl NookVaultManager {
         entry_id: String,
         password: String,
     ) -> Result<(), JsError> {
+        self.update_vault_password_entry_with_work_factor(
+            entry_id,
+            password,
+            nook_core::PASSWORD_SCRYPT_LOG_N,
+        )
+        .await
+    }
+
+    #[wasm_bindgen(js_name = "updateVaultPasswordEntryForE2e")]
+    pub async fn update_vault_password_entry_for_e2e(
+        &mut self,
+        entry_id: String,
+        password: String,
+    ) -> Result<(), JsError> {
+        self.update_vault_password_entry_with_work_factor(
+            entry_id,
+            password,
+            E2E_PASSWORD_SCRYPT_LOG_N,
+        )
+        .await
+    }
+
+    async fn update_vault_password_entry_with_work_factor(
+        &mut self,
+        entry_id: String,
+        password: String,
+        work_factor: u8,
+    ) -> Result<(), JsError> {
         self.ensure_vault_crypto_from_cache().await?;
         if self.secrets_key.is_empty() || self.members_key.is_empty() {
             return Err(NookError::Database(
@@ -142,7 +193,11 @@ impl NookVaultManager {
                 .iter_mut()
                 .find(|entry| entry.id == entry_id)
                 .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-            target.envelope = nook_core::attach_password_envelope(&keys, &password)?;
+            target.envelope = nook_core::attach_password_envelope_with_work_factor(
+                &keys,
+                &password,
+                work_factor,
+            )?;
         }
         let envelope_ciphertext = self
             .password_entries
@@ -169,7 +224,11 @@ impl NookVaultManager {
             .iter_mut()
             .find(|entry| entry.id == entry_id)
             .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-        target.envelope = nook_core::attach_password_envelope(&rotated_keys, &password)?;
+        target.envelope = nook_core::attach_password_envelope_with_work_factor(
+            &rotated_keys,
+            &password,
+            work_factor,
+        )?;
         self.persist_vault_change(vec![]).await?;
         Ok(())
     }

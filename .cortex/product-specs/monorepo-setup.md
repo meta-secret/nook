@@ -1,16 +1,19 @@
 # Product Spec: Monorepo & Toolchain Setup
 
 ## 1. Goal & Context
+
 Nook is a development environment for crypto tools combining Rust logic with WebAssembly and a frontend web UI.
 To ensure high developer velocity and agent autonomy, the repository must be self-contained, easy to build, and require minimal host-side environment setup.
 
 ## 2. Core Requirements
+
 - **Unified Command Interface**: All developer workflows (install, lint, format, check, test, build, dev) must run via `Taskfile.yml`.
 - **Zero-Config Host**: No local installations of Rust toolchains, Bun, or wasm-pack should be required on the host system for builds.
 - **Docker-Safe Dev Server**: Vite dev server must run in a container and bind ports correctly to be accessible at `http://localhost:5173`.
 - **Pinned Dependencies**: All packages (Cargo, package.json) must use exact version pinning to guarantee reproducibility.
 
 ## 3. Toolchain & Runtime Specs
+
 - **Rust Version**: `1.96` (using trixie Debian base; `DEBIAN_RELEASE` arg in `docker/base.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
@@ -28,4 +31,4 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Write tasks emit diffs.** `task format` / `task rust:coverage:update` mutate the in-container source and print a `git diff` (sealed image — apply on host with `| git apply`).
 - **CI runners:** GitHub-hosted `ubuntu-latest` only. Do not use Blacksmith or other third-party runner labels in workflows.
 - **PR workflow cancellation:** `concurrency` with `cancel-in-progress: true` on `pr-<number>` — no custom cancel scripts. A new push or PR `closed` event queues a run in the same group and GitHub cancels the in-flight one.
-- **PR CI.** `pr.yml` runs **`task ci:pr`** — one container for format, verify ‖ build, e2e-pr (~5 min), then in-container Cloudflare preview deploy. Toolchain push is **main only** (`ci:main:publish`). **`main.yml`** runs **`task ci:main:publish`** with full stub e2e, then extracts `dist` for Pages. **Nightly** runs sync-live (real provider APIs).
+- **PR CI.** `pr.yml` runs **`task ci:pr`** — one container for format, verify ‖ build, full stub e2e, then in-container Cloudflare preview deploy. Toolchain push is **main only** (`ci:main:publish`). **`main.yml`** runs **`task ci:main:publish`** with full stub e2e, then extracts `dist` for Pages. **Nightly** runs sync-live (real provider APIs).

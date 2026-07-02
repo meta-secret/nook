@@ -4,12 +4,12 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 ## Workflow map
 
-| Workflow | Trigger | What runs | GitHub PAT |
-|----------|---------|-----------|------------|
-| [`pr.yml`](../../.github/workflows/pr.yml) | PR open/sync | Format, verify, web build, Cloudflare preview | No |
-| [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Verify, build, **full stub e2e**, Pages deploy, push toolchain | No |
+| Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
+| ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, web build, Cloudflare preview                             | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, build, **full stub e2e**, Pages deploy, push toolchain            | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`) | Only for `sync-live` |
+| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 
 ```mermaid
 flowchart LR
@@ -29,8 +29,8 @@ flowchart LR
 
 The **same sync spec files** run against different backends. CI swaps providers by setting one env var per job:
 
-| Env | Values | Default |
-|-----|--------|---------|
+| Env                      | Values                   | Default  |
+| ------------------------ | ------------------------ | -------- |
 | `NOOK_E2E_SYNC_PROVIDER` | `github`, `google-drive` | `github` |
 
 Registry and factories live in `nook-web/e2e/sync-provider.ts`:
@@ -46,16 +46,16 @@ Registry and factories live in `nook-web/e2e/sync-provider.ts`:
 ```yaml
 strategy:
   matrix:
-    provider: [github]  # add google-drive when secret exists
+    provider: [github] # add google-drive when secret exists
 env:
   NOOK_E2E_SYNC_PROVIDER: ${{ matrix.provider }}
 ```
 
 Live credentials per provider:
 
-| Provider | Secret / env |
-|----------|----------------|
-| `github` | `NOOK_GITHUB_PAT` |
+| Provider       | Secret / env                                              |
+| -------------- | --------------------------------------------------------- |
+| `github`       | `NOOK_GITHUB_PAT`                                         |
 | `google-drive` | `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (when live smoke is wired) |
 
 Stub mode uses in-memory route mocks (`sync-stub.ts`, `drive-stub.ts`) — no API quota.
@@ -65,7 +65,7 @@ Stub mode uses in-memory route mocks (`sync-stub.ts`, `drive-stub.ts`) — no AP
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
 
 1. **`e2e` project** — all stub-backed specs (IndexedDB flows + sync via `page.route()` mocks). One Playwright process, fully parallel, one preview server.
-2. **`e2e-pr` project** — subset of `e2e` (IndexedDB-only specs) for fast PR CI (~1 min).
+2. **`e2e-pr` project** — subset of `e2e` (IndexedDB-only specs) for fast manual/debug runs.
 3. **`sync-live` project** — Specs under `e2e/live/` hit the **real provider API** using `NOOK_GITHUB_PAT`. Minimal smoke; nightly + manual only.
 
 When adding Google Drive or other sync providers, add stub-backed specs to the `e2e` list and thin live smoke specs to `e2e/live/`.
@@ -88,11 +88,11 @@ Do **not** spin up multiple Nook servers for parallel stub e2e unless debugging 
 
 Defined in `nook-web/playwright.config.ts`:
 
-| Project | Specs | CI |
-|---------|-------|-----|
-| `e2e` | All stub-backed specs (IndexedDB + sync stubs) | main, e2e-pr (manual) |
-| `e2e-pr` | IndexedDB-only subset (~1 min) | pr.yml |
-| `sync-live` | `e2e/live/**/*.spec.ts` | e2e-nightly, e2e-pr (manual) |
+| Project     | Specs                                          | CI                            |
+| ----------- | ---------------------------------------------- | ----------------------------- |
+| `e2e`       | All stub-backed specs (IndexedDB + sync stubs) | pr.yml, main, e2e-pr (manual) |
+| `e2e-pr`    | IndexedDB-only subset                          | e2e-pr (manual/debug)         |
+| `sync-live` | `e2e/live/**/*.spec.ts`                        | e2e-nightly, e2e-pr (manual)  |
 
 Legacy script aliases: `test:e2e:local` → `e2e-pr`, `test:e2e:sync-stub` → `e2e`.
 
@@ -104,12 +104,12 @@ All commands run containerized via `Taskfile.yml`:
 # Minimum before every agent push
 task check                          # format, clippy, unit tests, web build
 
-# Full PR CI mirror (~3–4 min) — before opening PR; mandatory after any remote CI failure
-task ci:pr                          # prepare → verify ‖ build → e2e-pr
+# Full PR CI mirror — before opening PR; mandatory after any remote CI failure
+task ci:pr                          # prepare → verify ‖ build → full stub e2e
 
-# Subsets
-task web:test:e2e:pr                # e2e-pr only (PR gate)
-task web:test:e2e                   # full stub e2e (main gate)
+# E2e projects
+task web:test:e2e                   # full stub e2e (PR/main gate)
+task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
 
 # Single spec — preferred during fix/debug (E2E_SPEC paths relative to nook-web/)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
@@ -127,7 +127,7 @@ task web:test:e2e:github            # → sync-live
 
 ## Local vs remote CI
 
-**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, e2e-pr, Cloudflare preview — no toolchain push). Main pushes `:latest` after green verify. Expect **~5 minutes** per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
+**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full stub e2e, Cloudflare preview — no `:latest` toolchain push). Main pushes `:latest` after green verify. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
 
 **Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Push only when local gates pass and the change is ready.
 
@@ -141,23 +141,23 @@ After targeted fixes pass, run the relevant project or full PR mirror once befor
 
 **Agent efficiency rules:**
 
-1. **Before push / opening a PR** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
+1. **Before push / opening a PR** — `task check` minimum; add `task web:test:e2e` or `task ci:pr` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
 2. **Push when locally ready** — do not push hoping remote CI will catch issues that local Docker would find in seconds.
 3. **After any remote CI failure** — read logs, fix locally (prefer single-spec e2e while iterating), run `task ci:pr` until green, then push again.
 
-Local `task ci:pr` completes in roughly **3–4 minutes** on a warm cached toolchain image. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [coding-bro.md](coding-bro.md).
+Local `task ci:pr` is still much faster on a warm cached toolchain image than a cold remote run. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [coding-bro.md](coding-bro.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
 ## Secrets and env
 
-| Secret / env | Used by |
-|--------------|---------|
-| `NOOK_GITHUB_PAT` | sync-live e2e **and** ci-fix PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
-| `NOOK_GITHUB_E2E_REPO` | CI sets per run for live suites (one repo per container) |
-| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy |
-| `GITHUB_TOKEN` | Toolchain GHCR, PR comments |
-| `CURSOR_API_KEY` | ci-fix agent (main.yml, e2e-nightly.yml) |
+| Secret / env                                        | Used by                                                                                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOOK_GITHUB_PAT`                                   | sync-live e2e **and** ci-fix PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
+| `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
+| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy                                                                                                                                                   |
+| `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments                                                                                                                                         |
+| `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml)                                                                                                                            |
 
 Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
@@ -190,10 +190,10 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 2026-06-29 20:14:35,001 INFO  [ci-agent/cursor] shell exit 1
 ```
 
-| Field | Meaning |
-|-------|---------|
-| Timestamp | UTC, `yyyy-MM-dd HH:mm:ss,SSS` |
-| Level | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` |
+| Field     | Meaning                                                                                                                |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Timestamp | UTC, `yyyy-MM-dd HH:mm:ss,SSS`                                                                                         |
+| Level     | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`                                                                          |
 | Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
 
 Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m).
@@ -206,6 +206,6 @@ The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Witho
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** run `task ci:pr` (or `task web:test:e2e` for full stub suite) before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI runs fast **e2e-pr** only; main runs full **e2e**; nightly runs **sync-live**.
+5. PR CI and main both run full stub **e2e**; nightly runs **sync-live**.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).

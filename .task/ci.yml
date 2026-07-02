@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 tasks:
   ci:pr:
@@ -10,11 +10,11 @@ tasks:
         vars: { TASK: _ci:pr }
 
   ci:pr:e2e:
-    desc: Fast Playwright e2e-pr only (when dist/wasm already built in the same job).
+    desc: Full stub Playwright e2e for PRs (when dist/wasm already built in the same job).
     cmds:
       - cp -a nook-web/dist nook-web/dist-prod
       - task: web:e2e:build-dist
-      - task: web:test:e2e:pr:parallel
+      - task: web:test:e2e:parallel
 
   ci:pr:e2e:local:
     desc: Alias for ci:pr:e2e.
@@ -150,14 +150,14 @@ tasks:
         vars: { TASK: _verify }
 
   _ci:pr:
-    desc: PR gate — format, wasm, verify ‖ build, e2e-pr, restore prod dist (one container).
+    desc: PR gate — format, wasm, verify ‖ build, full stub e2e, restore prod dist (one container).
     cmds:
       - task: _format:check
       - task: _wasm:build
       - task: _ci:pr:parallel
       - cp -a nook-web/dist nook-web/dist-prod
       - task: _web:e2e:build-dist
-      - task: _web:test:e2e:pr:parallel
+      - task: _web:test:e2e:parallel
       - task: _web:e2e:restore-prod-dist
 
   _ci:pr:parallel:

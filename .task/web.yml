@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 tasks:
   web:install:
@@ -54,7 +54,7 @@ tasks:
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:parallel:
-    desc: Full stub Playwright e2e in Docker when wasm/dist already built (ci:main).
+    desc: Full stub Playwright e2e in Docker when wasm/dist already built (ci:pr/main).
     deps:
       - setup
     cmds:
@@ -66,12 +66,12 @@ tasks:
     deps:
       - setup
     env:
-      E2E_SPEC: '{{.E2E_SPEC}}'
+      E2E_SPEC: "{{.E2E_SPEC}}"
     cmds:
       - task: docker:e2e:run
         vars:
           TASK: _web:test:e2e:file
-          E2E_SPEC: '{{.E2E_SPEC}}'
+          E2E_SPEC: "{{.E2E_SPEC}}"
 
   web:test:e2e:pr:
     desc: Fast Playwright e2e-pr in Docker (IndexedDB specs only).
@@ -82,7 +82,7 @@ tasks:
         vars: { TASK: _web:test:e2e:pr }
 
   web:test:e2e:pr:parallel:
-    desc: Fast Playwright e2e-pr when wasm and e2e dist already built (ci:pr).
+    desc: Fast Playwright e2e-pr when wasm and e2e dist already built (manual/debug).
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:pr:parallel }
@@ -134,9 +134,9 @@ tasks:
       - task: docker:task
         vars:
           TASK: _web:e2e:build-dist
-          VITE_VAULT_SYNC_INTERVAL_MS: '500'
-          VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-          VITE_VAULT_IDLE_WARNING_MS: '0'
+          VITE_VAULT_SYNC_INTERVAL_MS: "500"
+          VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+          VITE_VAULT_IDLE_WARNING_MS: "0"
 
   web:e2e:restore-prod-dist:
     desc: Restore production dist after e2e (Docker-owned files cannot be rm'd on the host).
@@ -184,25 +184,25 @@ tasks:
     deps:
       - _wasm:build
     env:
-      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_BASE: "{{.VITE_BASE}}"
     cmds:
       - cd nook-web && bun run build
 
   _web:build:parallel:
     desc: Build the Svelte app when wasm is already built (ci:pr parallel track).
     env:
-      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_BASE: "{{.VITE_BASE}}"
     cmds:
       - cd nook-web && bun run build
 
   _web:build:parallel:e2e:
     desc: Build dist with fast vault sync for local e2e (PR CI rebuilds this only for Playwright).
     env:
-      VITE_BASE: '{{.VITE_BASE}}'
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      VITE_BASE: "{{.VITE_BASE}}"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd nook-web && bun run build
 
@@ -244,13 +244,13 @@ tasks:
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Full stub Playwright e2e when wasm/dist already built (ci:main).
+    desc: Full stub Playwright e2e when wasm/dist already built (ci:pr/main).
     env:
-      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - echo "==> Playwright e2e project (CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
       - cd nook-web && bun run build
@@ -266,22 +266,22 @@ tasks:
     internal: true
     desc: Vite build for e2e preview when dist is missing or sources/env changed.
     env:
-      VITE_BASE: '{{.VITE_BASE}}'
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      VITE_BASE: "{{.VITE_BASE}}"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - bash .github/scripts/e2e-build-if-needed.sh
 
   _web:test:e2e:file:
     desc: Run one or more Playwright e2e spec files (E2E_SPEC; skips vite when dist is fresh).
     env:
-      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - test -n "${E2E_SPEC:-}" || (echo "E2E_SPEC is required (e.g. e2e/connect.spec.ts)" >&2; exit 1)
       - echo "==> Playwright e2e scoped run (${E2E_SPEC})"
@@ -298,9 +298,9 @@ tasks:
       - defer: cd nook-web && bun run test:e2e:cleanup
 
   _web:test:e2e:pr:parallel:
-    desc: Fast Playwright e2e-pr when wasm/dist already built (ci:pr).
+    desc: Fast Playwright e2e-pr when wasm/dist already built (manual/debug).
     env:
-      NOOK_E2E_SKIP_GITHUB_CLEANUP: '1'
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
     cmds:
       - echo "==> Playwright e2e-pr project (CI=${CI:-}, dist=$([ -d nook-web/dist ] && echo yes || echo no))"
       - >-
@@ -316,10 +316,10 @@ tasks:
     deps:
       - _wasm:build
     env:
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:pr
@@ -327,10 +327,10 @@ tasks:
   _web:e2e:build-dist:
     desc: Build web dist with fast vault sync for CI e2e preview (skips when already fresh).
     env:
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - task: _web:e2e:build-if-needed
 
@@ -358,10 +358,10 @@ tasks:
     deps:
       - _wasm:build
     env:
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '500'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e
@@ -371,10 +371,10 @@ tasks:
     deps:
       - _wasm:build
     env:
-      VITE_E2E_EXPOSE_VAULT: 'true'
-      VITE_VAULT_SYNC_INTERVAL_MS: '1000'
-      VITE_VAULT_IDLE_TIMEOUT_MS: '2500'
-      VITE_VAULT_IDLE_WARNING_MS: '0'
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "1000"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
       - cd nook-web && bun run build
       - cd nook-web && bun run test:e2e:sync-live
@@ -420,6 +420,6 @@ tasks:
     deps:
       - _wasm:build
     env:
-      VITE_BASE: '{{.VITE_BASE}}'
+      VITE_BASE: "{{.VITE_BASE}}"
     cmds:
       - cd nook-web && bun run dev -- --host 0.0.0.0

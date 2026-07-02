@@ -663,12 +663,22 @@ export async function waitForVaultOperationsIdle(
               __nookVault?: {
                 isVerifying?: boolean
                 isSaving?: boolean
+                isSyncing?: boolean
+                isFanOutSyncing?: boolean
+                syncingProviderId?: string | null
                 isPasswordBusy?: boolean
               }
             }
           ).__nookVault
           if (!vault) return true
-          return !vault.isVerifying && !vault.isSaving && !vault.isPasswordBusy
+          return (
+            !vault.isVerifying &&
+            !vault.isSaving &&
+            !vault.isSyncing &&
+            !vault.isFanOutSyncing &&
+            !vault.syncingProviderId &&
+            !vault.isPasswordBusy
+          )
         }),
       { timeout: timeoutMs },
     )
@@ -731,7 +741,26 @@ export async function waitForVaultUnlocked(
   page: Page,
   timeout = UI_TIMEOUT_MS,
 ) {
-  await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
+  try {
+    await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
+  } catch (error) {
+    const errorText = (
+      await page
+        .getByTestId('vault-error')
+        .or(page.getByTestId('onboard-error'))
+        .or(page.getByTestId('vault-password-error'))
+        .allTextContents()
+    )
+      .map((text) => text.trim())
+      .filter(Boolean)
+      .join(' | ')
+    throw new Error(
+      errorText
+        ? `Vault did not unlock. Visible error: ${errorText}`
+        : `Vault did not unlock: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    )
+  }
 }
 
 export async function connectGithubVault(
@@ -1470,99 +1499,16 @@ export async function unlockVaultOnLogin(
   )
 }
 
-/**
- * Add a saved sync provider so `VaultState.shouldAutoUnlock()` stays false
- * and the login gate remains visible after reload.
- */
+/** Mark the browser session as explicitly locked so auto-unlock stays off after reload. */
 export async function disableLoginAutoUnlock(page: Page) {
   await page.evaluate(() => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('nook_auth', 1)
-      request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('auth', 'readwrite')
-        const store = tx.objectStore('auth')
-        const getReq = store.get('providers')
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          const snapshot = getReq.result as {
-            providers: Array<{
-              id: string
-              type: string
-              label: string
-              githubPat?: string
-              githubRepo?: string
-              createdAt: string
-            }>
-          } | null
-          if (!snapshot?.providers?.length) {
-            reject(new Error('No saved providers in nook_auth.'))
-            return
-          }
-          snapshot.providers.push({
-            id: 'e2e-dummy-github-sync',
-            type: 'github',
-            label: 'GitHub (e2e auto-unlock block)',
-            githubPat: 'ghp_e2e_dummy',
-            githubRepo: 'nook-e2e-dummy',
-            createdAt: new Date().toISOString(),
-          })
-          const putReq = store.put(snapshot, 'providers')
-          putReq.onerror = () =>
-            reject(putReq.error ?? new Error('idb write failed'))
-          putReq.onsuccess = () => undefined
-        }
-        tx.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-      }
-    })
+    sessionStorage.setItem('nook_vault_session_locked', '1')
   })
 }
 
-/** Remove the invalid dummy GitHub provider added by {@link disableLoginAutoUnlock}. */
+/** @deprecated `disableLoginAutoUnlock` no longer adds a dummy provider. */
 export async function removeE2eDummyGithubSyncProvider(page: Page) {
-  await page.evaluate(() => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('nook_auth', 1)
-      request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('auth', 'readwrite')
-        const store = tx.objectStore('auth')
-        const getReq = store.get('providers')
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          const snapshot = getReq.result as {
-            providers: Array<{ id: string }>
-          } | null
-          if (!snapshot?.providers) {
-            resolve()
-            return
-          }
-          snapshot.providers = snapshot.providers.filter(
-            (provider) => provider.id !== 'e2e-dummy-github-sync',
-          )
-          const putReq = store.put(snapshot, 'providers')
-          putReq.onerror = () =>
-            reject(putReq.error ?? new Error('idb write failed'))
-          putReq.onsuccess = () => undefined
-        }
-        tx.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-      }
-    })
-  })
+  await page.evaluate(() => undefined)
 }
 
 /**
@@ -2192,7 +2138,57 @@ export async function addSecret(
   await waitForVaultOperationsIdle(page)
   await assertNoVaultError(page)
   const row = page.getByTestId('secret-row').filter({ hasText: key })
-  await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  try {
+    await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  } catch (error) {
+    const debug = await page.evaluate(async (expectedKey) => {
+      const vault = (
+        window as Window & {
+          __nookVault?: {
+            secrets?: unknown[]
+            storageMode?: string
+            localVaultPresent?: boolean
+            syncProviders?: unknown[]
+            isSaving?: boolean
+            isSyncing?: boolean
+            errorMsg?: string
+          }
+        }
+      ).__nookVault
+      const idbYaml = await new Promise<string>((resolve) => {
+        const request = indexedDB.open('nook_db', 1)
+        request.onerror = () => resolve(`idb-open-error:${request.error}`)
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('vault', 'readonly')
+          const store = tx.objectStore('vault')
+          const getReq = store.get('encrypted_db')
+          getReq.onerror = () => resolve(`idb-read-error:${getReq.error}`)
+          getReq.onsuccess = () =>
+            resolve(typeof getReq.result === 'string' ? getReq.result : '')
+          tx.oncomplete = () => db.close()
+        }
+      })
+      return {
+        secrets: vault?.secrets?.length ?? null,
+        storageMode: vault?.storageMode ?? null,
+        localVaultPresent: vault?.localVaultPresent ?? null,
+        syncProviders: vault?.syncProviders?.length ?? null,
+        isSaving: vault?.isSaving ?? null,
+        isSyncing: vault?.isSyncing ?? null,
+        errorMsg: vault?.errorMsg ?? null,
+        localYamlHasKey: idbYaml.includes(expectedKey),
+        localYamlSecretCount:
+          idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length ?? 0,
+      }
+    }, key)
+    throw new Error(
+      `Secret row "${key}" did not appear. Debug: ${JSON.stringify(debug)}. Original: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error },
+    )
+  }
   if (github) {
     await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
     await waitForGithubVaultState(

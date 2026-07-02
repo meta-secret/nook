@@ -32,6 +32,9 @@ pub enum PasswordError {
     #[error("Unsupported password envelope KDF: {kdf}")]
     UnsupportedEnvelopeKdf { kdf: String },
 
+    #[error("Password envelope work factor must be between 1 and 63.")]
+    InvalidWorkFactor,
+
     #[error("Envelope plaintext is not valid UTF-8")]
     EnvelopePlaintextUtf8(#[source] std::string::FromUtf8Error),
 

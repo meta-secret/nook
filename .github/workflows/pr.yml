@@ -1,6 +1,6 @@
 # Pull requests: pull toolchain cache, verify/build/e2e in one container, publish buildcache, deploy preview.
 # PRs publish only the :buildcache layers (keeps local + CI warm); the :latest base IMAGE is pushed
-# on main only (ci:main:publish). Main CI runs full stub e2e; nightly runs sync-live. See e2e-pr.yml.
+# on main only (ci:main:publish). PR and main CI run full stub e2e; nightly runs sync-live.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
