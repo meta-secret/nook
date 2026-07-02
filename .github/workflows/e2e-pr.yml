@@ -1,6 +1,6 @@
 # Manually run Playwright e2e against a pull request branch.
 #
-# PR CI (pr.yml) runs e2e-pr automatically via ci:pr:e2e. Main CI runs full e2e
+# PR CI (pr.yml) runs full stub e2e automatically via ci:pr:e2e. Main CI also runs full e2e
 # after merge; nightly runs sync-live. Use this workflow to re-run or debug on a PR branch.
 # Inputs:
 #   pr_number — PR to checkout (refs/pull/<n>/head)
@@ -97,6 +97,6 @@ jobs:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-pr-${{ inputs.pr_number }}-${{ github.run_id }}
-          NOOK_GITHUB_POLL_MS: '3000'
-          NOOK_GITHUB_SYNC_TIMEOUT_MS: '15000'
-          NOOK_GITHUB_CONNECT_TIMEOUT_MS: '30000'
+          NOOK_GITHUB_POLL_MS: "3000"
+          NOOK_GITHUB_SYNC_TIMEOUT_MS: "15000"
+          NOOK_GITHUB_CONNECT_TIMEOUT_MS: "30000"

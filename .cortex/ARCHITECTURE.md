@@ -28,6 +28,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 
 ### Dependency Enforcements
+
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
 2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`.
 
@@ -36,6 +37,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ## 2. Package Responsibilities & Layers
 
 ### A. `nook-core` (The Domain Core)
+
 - **`multi_device`:** `secrets_key` + `members_key`, device identity, join/approve/enroll; YAML `auth:` / `joins:` / `members:` sections.
 - **`Database`:** In-memory JSONL session (sorted KV records); user secrets only at rest in session.
 - **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load; `vault_version` monotonic counter.
@@ -47,12 +49,14 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
 ### B. `nook-wasm` (The Bridge Layer)
+
 - **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
 ### C. `nook-web` (The Presentation Layer)
+
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
 - **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
@@ -66,6 +70,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ## 3. Detailed Data Flow & Execution Model
 
 ### Connect (multi-device)
+
 ```
 [Svelte] → VaultState.loadDb()
          → NookVaultManager.connect(mode, pat)
@@ -77,6 +82,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 
 ### Add Secret (incremental save)
+
 ```
 [Svelte] → add_secret(key, value)
          → validate_secret_label, validate_secret_value
@@ -87,6 +93,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 
 ### Search
+
 ```
 [Svelte] → filter_secrets(query)  [sync WASM call]
          → nook-core::filter_secrets on session records
@@ -97,18 +104,18 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ## 4. Storage & Cryptographic Specs
 
-| Layer | Format | Location |
-|-------|--------|----------|
-| Session (plaintext user secrets) | JSONL lines | WASM `decrypted_jsonl` only |
-| On-disk user secrets | YAML `secrets:` list | Values encrypted with `secrets_key` |
-| Logical secret store | YAML `store_id` | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md)) |
-| Vault revision | YAML `vault_version` | Monotonic counter; incremented on every save ([unified-vault.md](design-docs/unified-vault.md)) |
-| Active unlock mode | YAML `unlock:` tagged union (omitted when keys — the default) | `{type: password, …}` for password-only vaults; device-key vaults use `auth:` (+ optional `password_entries`). See [password-envelope.md](product-specs/password-envelope.md). |
-| On-disk key envelopes (keys mode only) | YAML `auth:` list | `key_{sha256}` → age-armored `secrets_key` + `members_key` |
-| Member catalog | YAML `members:` list | `pk_id` + `members_key`-encrypted `{pk_id, pk}` |
-| Pending joins (keys mode only) | YAML `joins:` list | `device_id` → JSON (includes `public_key` while pending) |
-| Device identity (X25519 private) | age secret string | IndexedDB `device_identity_secret` only |
-| Auth providers (GitHub PAT, labels) | JSON snapshot | IndexedDB `nook_auth` → `providers` key |
+| Layer                                  | Format                                                        | Location                                                                                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Session (plaintext user secrets)       | JSONL lines                                                   | WASM `decrypted_jsonl` only                                                                                                                                                    |
+| On-disk user secrets                   | YAML `secrets:` list                                          | Values encrypted with `secrets_key`                                                                                                                                            |
+| Logical secret store                   | YAML `store_id`                                               | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md))                                                             |
+| Vault revision                         | YAML `vault_version`                                          | Monotonic counter; incremented on every save ([unified-vault.md](design-docs/unified-vault.md))                                                                                |
+| Active unlock mode                     | YAML `unlock:` tagged union (omitted when keys — the default) | `{type: password, …}` for password-only vaults; device-key vaults use `auth:` (+ optional `password_entries`). See [password-envelope.md](product-specs/password-envelope.md). |
+| On-disk key envelopes (keys mode only) | YAML `auth:` list                                             | `key_{sha256}` → age-armored `secrets_key` + `members_key`                                                                                                                     |
+| Member catalog                         | YAML `members:` list                                          | `pk_id` + `members_key`-encrypted `{pk_id, pk}`                                                                                                                                |
+| Pending joins (keys mode only)         | YAML `joins:` list                                            | `device_id` → JSON (includes `public_key` while pending)                                                                                                                       |
+| Device identity (X25519 private)       | age secret string                                             | IndexedDB `device_identity_secret` only                                                                                                                                        |
+| Auth providers (GitHub PAT, labels)    | JSON snapshot                                                 | IndexedDB `nook_auth` → `providers` key                                                                                                                                        |
 
 See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.
 See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
@@ -139,11 +146,11 @@ members:  members_key-encrypted catalog entries
 
 ## 6. Testing Strategy
 
-| Package | Tests |
-|---------|-------|
-| `nook-core` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-core/coverage-floor.json`); fast path `task rust:test` |
-| `nook-web` | Playwright e2e: `task web:test:e2e:pr` (PR), `task web:test:e2e` (main stub suite), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
-| `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required |
+| Package     | Tests                                                                                                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nook-core` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
+| `nook-web`  | Playwright e2e: `task web:test:e2e` (PR/main stub suite), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
+| `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |
 
 Domain logic changes **must** add or update Rust tests before merge. **Line coverage must stay at or above 90%** (`task rust:coverage:check`).
 
@@ -174,16 +181,16 @@ The nook-web image is large (~9 GB — it bakes the warm `target/` so runtime `t
 
 GitHub Actions **does not persist Docker named volumes** between jobs or workflow runs. Nook therefore **must not** rely on named volumes for `target/` or `node_modules` caching across runs.
 
-| What | How it is cached |
-|------|------------------|
-| Toolchain base image | `cache-from` pulled by **every** build (local + CI). **PRs** publish `:buildcache` layers only (`ci:pr:publish` -> `toolchain-cache`); **main** publishes the verified `:latest` image + cache (`ci:main:publish` -> `toolchain-push`). Local never publishes. |
-| Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) + clippy/test warm-up during the toolchain build. |
-| `target/` | Lives at the **default in-tree path** `/meta-secret/nook/target` (= WORKDIR). Baked warm into the toolchain base; the nook-web image COPYs source over the same workdir and reuses it (no dep recompile). No bind mount means nothing shadows it — so **no `CARGO_TARGET_DIR` override, no `/opt` gymnastics, no single-container hack**. |
-| `nook-web/node_modules` | Installed in the `web-deps` bake target (parallel branch, own `cache-to` like `builder-deps`). BuildKit cache mount at `/opt/nook/bun-install-cache` during `bun install`. `web:dev` (mounted) runs `bun install` in its command. |
-| Web wasm pkg | Generated by `wasm-pack` in the wasm builder into `nook-web/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY). |
-| Web dist | Built at **nook-web image build time** (`bun run build`, `VITE_BASE` arg) so it is present in every container: the Cloudflare preview deploy (in-container) and the GitHub Pages upload (extracted via `task docker:extract:dist`) both read it. |
-| Playwright Chromium | Pre-installed in `nook-base` (baked once; reruns only when base/Playwright version changes). |
-| CI Docker builds | **`task ci:pr`** (PR verify, in-container Cloudflare deploy) / **`task ci:main:publish`** (main — `toolchain-push` after green verify, then `docker:extract:dist` for Pages). |
+| What                    | How it is cached                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Toolchain base image    | `cache-from` pulled by **every** build (local + CI). **PRs** publish `:buildcache` layers only (`ci:pr:publish` -> `toolchain-cache`); **main** publishes the verified `:latest` image + cache (`ci:main:publish` -> `toolchain-push`). Local never publishes.                                                                            |
+| Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) + clippy/test warm-up during the toolchain build.                                                                                                                                                                                                                   |
+| `target/`               | Lives at the **default in-tree path** `/meta-secret/nook/target` (= WORKDIR). Baked warm into the toolchain base; the nook-web image COPYs source over the same workdir and reuses it (no dep recompile). No bind mount means nothing shadows it — so **no `CARGO_TARGET_DIR` override, no `/opt` gymnastics, no single-container hack**. |
+| `nook-web/node_modules` | Installed in the `web-deps` bake target (parallel branch, own `cache-to` like `builder-deps`). BuildKit cache mount at `/opt/nook/bun-install-cache` during `bun install`. `web:dev` (mounted) runs `bun install` in its command.                                                                                                         |
+| Web wasm pkg            | Generated by `wasm-pack` in the wasm builder into `nook-web/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY).                                                                                                                                         |
+| Web dist                | Built at **nook-web image build time** (`bun run build`, `VITE_BASE` arg) so it is present in every container: the Cloudflare preview deploy (in-container) and the GitHub Pages upload (extracted via `task docker:extract:dist`) both read it.                                                                                          |
+| Playwright Chromium     | Pre-installed in `nook-base` (baked once; reruns only when base/Playwright version changes).                                                                                                                                                                                                                                              |
+| CI Docker builds        | **`task ci:pr`** (PR verify, in-container Cloudflare deploy) / **`task ci:main:publish`** (main — `toolchain-push` after green verify, then `docker:extract:dist` for Pages).                                                                                                                                                             |
 
 Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 

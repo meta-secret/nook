@@ -13,6 +13,14 @@ import {
   writeLocalVaultBlob,
 } from '$lib/vault-sync'
 
+type E2ePasswordManager = {
+  addVaultPasswordForE2e?: (label: string, password: string) => Promise<void>
+  updateVaultPasswordEntryForE2e?: (
+    entryId: string,
+    password: string,
+  ) => Promise<void>
+}
+
 export async function addVaultPassword(
   state: VaultState,
   label: string,
@@ -30,16 +38,25 @@ export async function addVaultPassword(
   state.passwordError = ''
   state.isPasswordBusy = true
   try {
-    await state.enqueueStorage(() =>
-      state.manager!.addVaultPassword(label.trim(), password),
-    )
+    const manager = state.manager!
+    await state.enqueueStorage(() => {
+      const trimmedLabel = label.trim()
+      const e2eManager = manager as typeof manager & E2ePasswordManager
+      if (
+        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        e2eManager.addVaultPasswordForE2e
+      ) {
+        return e2eManager.addVaultPasswordForE2e(trimmedLabel, password)
+      }
+      return manager.addVaultPassword(trimmedLabel, password)
+    })
     await state.refreshPasswordEntriesList()
     state.showSuccess(
       hadPasswords
         ? state.t('toasts.password_added_rotate')
         : state.t('toasts.password_set'),
     )
-    await state.fanOutSyncToProviders({ quiet: true })
+    await state.runFanOutSyncAfterLocalSave()
   } catch (e: unknown) {
     state.passwordError =
       e instanceof Error ? e.message : 'Failed to add vault password.'
@@ -61,12 +78,20 @@ export async function updateVaultPasswordEntry(
   state.passwordError = ''
   state.isPasswordBusy = true
   try {
-    await state.enqueueStorage(() =>
-      state.manager!.updateVaultPasswordEntry(entryId, password),
-    )
+    const manager = state.manager!
+    await state.enqueueStorage(() => {
+      const e2eManager = manager as typeof manager & E2ePasswordManager
+      if (
+        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        e2eManager.updateVaultPasswordEntryForE2e
+      ) {
+        return e2eManager.updateVaultPasswordEntryForE2e(entryId, password)
+      }
+      return manager.updateVaultPasswordEntry(entryId, password)
+    })
     await state.refreshPasswordEntriesList()
     state.showSuccess(state.t('toasts.password_updated'))
-    await state.fanOutSyncToProviders({ quiet: true })
+    await state.runFanOutSyncAfterLocalSave()
   } catch (e: unknown) {
     state.passwordError =
       e instanceof Error ? e.message : 'Failed to update vault password.'
@@ -93,7 +118,7 @@ export async function removeVaultPasswordEntry(
       state.activeEnrollmentEntryId = null
     }
     state.showSuccess(state.t('toasts.password_removed'))
-    await state.fanOutSyncToProviders({ quiet: true })
+    await state.runFanOutSyncAfterLocalSave()
   } catch (e: unknown) {
     state.passwordError =
       e instanceof Error ? e.message : 'Failed to remove vault password.'
@@ -286,46 +311,46 @@ export async function issueEnrollmentCode(
   if (!state.manager) {
     throw new Error('Vault engine is not available.')
   }
-  // Block the background sync timer for the duration: each verify call
-  // takes ~1s of scrypt CPU, and wasm-bindgen aliases the manager
-  // borrow if a sync_vault_from_storage future is still pending.
+  // Password verification borrows the wasm manager synchronously (`&self`).
+  // `isPasswordBusy` makes the periodic sync tick skip, but we still have to
+  // wait for any *already in-flight* `&mut self` storage future to release its
+  // borrow before verify runs, or wasm-bindgen's borrow detector trips.
   state.isPasswordBusy = true
-  // Drain any in-flight async wasm operation and wait one event-loop
-  // turn so wasm-bindgen's RefMut on the manager is observably released
-  // before we issue sync `&self` calls. Without state, scrypt verify
-  // races a background `sync_vault_from_storage` and trips the
-  // aliasing detector.
   try {
-    await Promise.race([
-      state.storageChain,
-      new Promise<void>((_, reject) => {
-        setTimeout(
-          () => reject(new Error('Vault storage is busy. Try again.')),
-          VaultState.storageOpTimeoutMs,
-        )
-      }),
-    ])
-  } catch {
-    state.resetStorageChain()
-  }
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  try {
-    // Background sync can refresh wasm password metadata from remote storage
-    // while the UI still holds a stale list — refetch before verify/issue.
-    const refreshed = await state.refreshPasswordEntriesList()
-    if (!refreshed || state.passwordEntries.length === 0) {
-      throw new Error(
-        'Add a backup vault password first; enrollment codes wrap that password.',
+    // Wait for the queued wasm op to settle. We deliberately do NOT
+    // `resetStorageChain()` on timeout: abandoning an in-flight `&mut self`
+    // future leaves its IndexedDB transaction dangling, which surfaces later as
+    // "database is not open" and poisons subsequent borrows. Surface a
+    // retriable error instead.
+    try {
+      await state.raceStorageTimeout(
+        state.storageChain as Promise<void>,
+        'Vault storage',
       )
+    } catch {
+      throw new Error('Vault storage is busy. Try again.')
     }
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // The target entry is already loaded in memory after `addVaultPassword`.
+    // Only hit storage when it is genuinely missing — a redundant refresh can
+    // otherwise queue behind (or race) background sync work and stall
+    // enrollment on the shared storage chain.
     if (!state.passwordEntries.some((entry) => entry.id === entryId)) {
-      throw new Error(
-        'Password entry not found. Wait for sync to finish and try again.',
-      )
+      const refreshed = await state.refreshPasswordEntriesList()
+      if (!refreshed || state.passwordEntries.length === 0) {
+        throw new Error(
+          'Add a backup vault password first; enrollment codes wrap that password.',
+        )
+      }
+      if (!state.passwordEntries.some((entry) => entry.id === entryId)) {
+        throw new Error(
+          'Password entry not found. Wait for sync to finish and try again.',
+        )
+      }
     }
-    // `verifyVaultPassword` returns false on a wrong password but can
-    // also throw if the underlying age decryptor panics on certain
-    // scrypt failures inside the wasm runtime — treat both as "wrong
+    // `verifyVaultPassword` returns false on a wrong password but can also
+    // throw if the underlying age decryptor rejects — treat both as "wrong
     // password" so the UI message stays predictable.
     let verified: boolean
     try {

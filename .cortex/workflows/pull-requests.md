@@ -6,12 +6,12 @@ Use this checklist for every change that lands on `main`. **AI agents must follo
 
 **Every PR merged into `main` MUST be squash-merged.**
 
-| Allowed | Forbidden |
-|--------|-----------|
-| GitHub UI: **Squash and merge** | Create a merge commit |
-| CLI: `gh pr merge <n> --squash` | `gh pr merge --merge` |
-| One commit per PR on `main` | `gh pr merge --rebase` |
-| | Fast-forward that keeps branch commit history on `main` |
+| Allowed                         | Forbidden                                               |
+| ------------------------------- | ------------------------------------------------------- |
+| GitHub UI: **Squash and merge** | Create a merge commit                                   |
+| CLI: `gh pr merge <n> --squash` | `gh pr merge --merge`                                   |
+| One commit per PR on `main`     | `gh pr merge --rebase`                                  |
+|                                 | Fast-forward that keeps branch commit history on `main` |
 
 `main` must stay linear: **one squash commit per PR**. Feature branches can have many commits; that history is discarded at merge time.
 
@@ -78,23 +78,23 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 **Full PR CI mirror** — run before push when web/vault flows change; **mandatory after any remote CI failure**, before the next push:
 
 ```bash
-task ci:pr    # prepare → verify ‖ web build → e2e-pr (~3–4 min locally)
+task ci:pr    # prepare → verify ‖ web build → full stub e2e
 ```
 
 Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then commit and push. This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and Cloudflare deploy).
 
-| When | Command | Why |
-|------|---------|-----|
-| While debugging e2e | `E2E_SPEC=… task web:test:e2e:file` | Fast feedback — one spec, not the full suite |
-| Before push / open PR | `task check` (+ scoped e2e when needed) | Cached local Docker; **must finish before push** |
-| Web/vault/sync changes | `task web:test:e2e:pr` or `task ci:pr` | Full e2e-pr or PR mirror locally before push |
-| After **any** remote CI failure | `task ci:pr` until green | Full PR gates locally; **must finish before the fix push** |
+| When                            | Command                                 | Why                                                        |
+| ------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
+| While debugging e2e             | `E2E_SPEC=… task web:test:e2e:file`     | Fast feedback — one spec, not the full suite               |
+| Before push / open PR           | `task check` (+ scoped e2e when needed) | Cached local Docker; **must finish before push**           |
+| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr`     | Full stub e2e or PR mirror locally before push             |
+| After **any** remote CI failure | `task ci:pr` until green                | Full PR gates locally; **must finish before the fix push** |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 3. Local e2e (debug and pre-push validation)
 
-PR CI runs **e2e-pr** (~1 min locally, longer on cold GH runners). Use e2e when the change touches:
+PR CI runs the full stub-backed **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` before pushing changes that touch:
 
 - vault sync, join, or enrollment flows
 - login / unlock / password envelope UI
@@ -106,12 +106,12 @@ PR CI runs **e2e-pr** (~1 min locally, longer on cold GH runners). Use e2e when 
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-**Before push — relevant project or subset:**
+**Before push — full stub project or PR mirror:**
 
 ```bash
-task web:test:e2e:pr       # fast e2e-pr project in Docker
+task web:test:e2e          # full stub e2e project in Docker
 # or, after task check already built wasm + dist:
-task web:test:e2e:pr:parallel
+task web:test:e2e:parallel
 ```
 
 Skip e2e for small, isolated Rust-only or docs-only changes.
@@ -125,7 +125,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-`pr.yml` runs `task ci:pr:publish`: prepare → verify ‖ web build → **e2e-pr** → toolchain push, then deploys a Cloudflare preview.
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, refreshes the buildcache, then deploys a Cloudflare preview.
 
 ### 5. Monitor CI until green
 
@@ -168,6 +168,7 @@ Every agent turn that **finishes a user-assigned task** must end with a short **
 
 ```markdown
 ## Duration
+
 12m 34s (started 2026-06-28T20:15:00Z, finished 2026-06-28T20:27:34Z)
 ```
 

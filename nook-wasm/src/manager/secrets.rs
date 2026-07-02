@@ -162,8 +162,12 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<(), JsError> {
+        let password_entries = self.password_entries.clone();
+        let unlock = self.unlock.clone();
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
+        self.password_entries = password_entries;
+        self.unlock = unlock;
         self.push_remote_vault_yaml_snapshot()
             .await
             .map_err(Into::into)

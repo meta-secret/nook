@@ -245,6 +245,25 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Secret ids the local event log has tombstoned (deleted).
+    ///
+    /// Used to stop a background YAML pull from resurrecting a just-deleted
+    /// secret before this device's own delete push reaches the remote snapshot.
+    pub(in crate::manager) async fn locally_deleted_secret_ids(
+        &self,
+    ) -> Result<std::collections::BTreeSet<nook_core::SecretId>, NookError> {
+        let store = load_local_event_store(&self.store_id).await?;
+        let graph = store.load_graph(&self.store_id)?;
+        let projection = project_vault(&graph, &self.store_id)?;
+        let mut deleted = std::collections::BTreeSet::new();
+        for (id, secret) in &projection.secrets {
+            if !secret.is_live(&graph) {
+                deleted.insert(id.clone());
+            }
+        }
+        Ok(deleted)
+    }
+
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.meta.to_stored_records();
         let yaml = nook_core::serialize_stored_yaml_with_unlock(

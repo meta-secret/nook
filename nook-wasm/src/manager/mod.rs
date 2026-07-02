@@ -254,6 +254,15 @@ impl NookVaultManager {
         if self.storage_mode == nook_core::StorageMode::Local {
             return Ok(());
         }
+        // Re-derive the session from the authoritative event log before
+        // serializing. `self.meta` can drift from the live projection (e.g. a
+        // background YAML merge that raced a local delete), and publishing it
+        // would resurrect a tombstoned secret in the remote snapshot.
+        if self.event_log_mode
+            && (self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok())
+        {
+            self.apply_event_projection_to_session().await?;
+        }
         let yaml = self.serialize_current_projection_yaml()?;
         self.write_persisted_vault_yaml(&yaml).await
     }

@@ -25,8 +25,17 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<NookVaultSyncResult, JsError> {
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
+        // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
+        // switch (it assumes a *different* vault). A same-vault sync only
+        // toggles the local-cache/remote tag, so preserve the backup-password
+        // envelope; otherwise the subsequent `persist_projection_cache` rewrites
+        // the local YAML without it and drops the password unlock envelope.
+        let password_entries = self.password_entries.clone();
+        let unlock = self.unlock.clone();
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
+        self.password_entries = password_entries;
+        self.unlock = unlock;
 
         if self.event_log_mode || is_event_log_mode().await? {
             self.event_log_mode = true;
@@ -61,7 +70,13 @@ impl NookVaultManager {
             }
             let result = sync_result_session(self, changed)?;
             if restore_local {
+                // Same preservation as above: flipping the tag back to the local
+                // cache must not wipe the in-memory password envelope.
+                let password_entries = self.password_entries.clone();
+                let unlock = self.unlock.clone();
                 self.prepare_storage("local", "", "").await?;
+                self.password_entries = password_entries;
+                self.unlock = unlock;
             }
             return Ok(result);
         }
@@ -152,7 +167,11 @@ impl NookVaultManager {
         }
         let format = nook_core::detect_stored_format(&content)?;
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
-        let changed = nook_core::merge_remote_yaml_user_secrets(&mut self.meta, &fresh_records);
+        // Don't let a stale remote snapshot re-add a secret this device already
+        // deleted in its event log; the delete push may not have landed yet.
+        let deleted_ids = self.locally_deleted_secret_ids().await.unwrap_or_default();
+        let changed =
+            nook_core::merge_remote_yaml_user_secrets(&mut self.meta, &fresh_records, &deleted_ids);
         if !changed {
             return Ok(false);
         }

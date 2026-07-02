@@ -1023,7 +1023,6 @@ export class VaultState {
   async runFanOutSyncAfterLocalSave(): Promise<void> {
     await this.pushRemoteYamlSnapshotNow()
     await this.flushRemoteEventOutboxNow()
-    await this.fanOutSyncToProviders({ quiet: true })
   }
 
   scheduleFanOutSyncAfterLocalSave(): void {
@@ -1163,6 +1162,11 @@ export class VaultState {
     revision: string | null,
   ): Promise<void> {
     const version = await readVaultVersionFromBlob(yaml)
+    // `vaultStoreId` borrows the wasm manager; read it through the storage chain
+    // so it can't alias an in-flight `&mut self` op (recursive-borrow hang).
+    const managerStoreId = this.manager
+      ? await this.enqueueStorage(() => this.manager!.vaultStoreId)
+      : ''
     this.providers = this.providers.map((p) =>
       p.id === providerId
         ? {
@@ -1170,7 +1174,7 @@ export class VaultState {
             lastSyncedAt: isoTimestamp(),
             lastSyncedVersion: version || p.lastSyncedVersion,
             lastSyncRevision: revision ?? p.lastSyncRevision,
-            storeId: this.manager?.vaultStoreId || p.storeId,
+            storeId: managerStoreId || p.storeId,
           }
         : p,
     )
@@ -1255,7 +1259,7 @@ export class VaultState {
       this.manager!.sync_vault_from_storage('local', '', ''),
     )
     this.applyVaultSyncResult(raw)
-    this.refreshSecretsFromSession()
+    await this.refreshSecretsFromSession()
     await this.hydrateMultiDeviceState()
   }
 
@@ -1299,8 +1303,17 @@ export class VaultState {
     return secretsActions.filterSecrets(this, query)
   }
 
-  refreshSecretsFromSession() {
-    this.secrets = this.filterSecrets('')
+  async refreshSecretsFromSession() {
+    if (!this.manager) {
+      this.secrets = []
+      return
+    }
+    // `filter_secrets` borrows the wasm manager; route it through the storage
+    // chain so a background sync's refresh can't alias an in-flight foreground
+    // `&mut self` op (delete/add) and trigger a recursive-borrow hang.
+    this.secrets = await this.enqueueStorage(() =>
+      this.manager!.filter_secrets(''),
+    )
   }
 
   async refreshDeviceState() {

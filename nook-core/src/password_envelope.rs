@@ -169,6 +169,28 @@ pub fn create_password_entry(
     created_at: &str,
     password: &str,
 ) -> PasswordResult<PasswordUnlockEntry> {
+    create_password_entry_with_work_factor(
+        keys,
+        id,
+        label,
+        created_at,
+        password,
+        PASSWORD_SCRYPT_LOG_N,
+    )
+}
+
+/// Build a labelled password entry with an explicit scrypt work factor.
+///
+/// This is primarily for browser test builds, where the age crate cannot
+/// calibrate scrypt in wasm and high work factors block Chromium's main thread.
+pub fn create_password_entry_with_work_factor(
+    keys: &VaultKeys,
+    id: &str,
+    label: &str,
+    created_at: &str,
+    password: &str,
+    work_factor: u8,
+) -> PasswordResult<PasswordUnlockEntry> {
     let trimmed_label = label.trim();
     if trimmed_label.is_empty() {
         return Err(PasswordError::LabelEmpty);
@@ -177,7 +199,7 @@ pub fn create_password_entry(
         id: id.to_owned(),
         label: trimmed_label.to_owned(),
         created_at: created_at.to_owned(),
-        envelope: attach_password_envelope(keys, password)?,
+        envelope: attach_password_envelope_with_work_factor(keys, password, work_factor)?,
     })
 }
 
@@ -209,6 +231,18 @@ pub fn attach_password_envelope(
     keys: &VaultKeys,
     password: &str,
 ) -> PasswordResult<PasswordEnvelope> {
+    attach_password_envelope_with_work_factor(keys, password, PASSWORD_SCRYPT_LOG_N)
+}
+
+/// Wrap `secrets_key` + `members_key` with an explicit scrypt work factor.
+pub fn attach_password_envelope_with_work_factor(
+    keys: &VaultKeys,
+    password: &str,
+    work_factor: u8,
+) -> PasswordResult<PasswordEnvelope> {
+    if !(1..64).contains(&work_factor) {
+        return Err(PasswordError::InvalidWorkFactor);
+    }
     if password.len() < PASSWORD_MIN_LENGTH {
         return Err(PasswordError::TooShort {
             min: PASSWORD_MIN_LENGTH,
@@ -223,14 +257,14 @@ pub fn attach_password_envelope(
 
     let secret = age::secrecy::SecretString::from(password.to_owned());
     let mut recipient = age::scrypt::Recipient::new(secret);
-    recipient.set_work_factor(PASSWORD_SCRYPT_LOG_N);
+    recipient.set_work_factor(work_factor);
 
     let ciphertext = age_encrypt_scrypt(&recipient, plaintext.as_bytes())?;
 
     Ok(PasswordEnvelope {
         version: ENVELOPE_VERSION,
         kdf: ENVELOPE_KDF.to_owned(),
-        work_factor: PASSWORD_SCRYPT_LOG_N,
+        work_factor,
         ciphertext: ciphertext.as_str().to_owned(),
     })
 }

@@ -55,7 +55,7 @@ test.describe('fresh vault password entries (stub sync)', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await waitForLoadedSyncProviders(page, 2)
+    await waitForLoadedSyncProviders(page, 1)
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')

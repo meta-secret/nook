@@ -1,6 +1,7 @@
 import { VaultState } from '$lib/vault.svelte'
 import { SvelteDate } from 'svelte/reactivity'
 import {
+  fetchRemoteVaultBlob,
   readLocalVaultBlob,
   resolveVaultSyncConflictKeepLocal,
   resolveVaultSyncConflictKeepRemote,
@@ -71,7 +72,7 @@ export async function syncFromStorage(
         state.manager!.sync_vault_from_storage(mode, pat, repo),
       )
       state.applyVaultSyncResult(raw)
-      state.refreshSecretsFromSession()
+      await state.refreshSecretsFromSession()
       state.lastSyncedAt = new SvelteDate()
     } catch {
       // Background sync should not interrupt the UI.
@@ -100,7 +101,7 @@ export async function syncFromStorage(
       state.manager!.sync_vault_from_storage(...state.wasmStorageArgs()),
     )
     state.applyVaultSyncResult(raw)
-    state.refreshSecretsFromSession()
+    await state.refreshSecretsFromSession()
     state.lastSyncedAt = new SvelteDate()
   } catch {
     // Background sync should not interrupt the UI.
@@ -159,11 +160,19 @@ export async function fanOutSyncToProviders(
 export async function refreshReplacementConflicts(
   state: VaultState,
 ): Promise<void> {
-  if (!state.manager?.eventLogMode()) {
+  if (!state.manager) {
     state.replacementConflicts = []
     return
   }
-  const conflicts = await state.manager.listProjectionConflicts()
+  // These borrow the wasm manager (`&mut self`); route them through the storage
+  // chain so they never alias an in-flight foreground op (e.g. a delete), which
+  // would trigger a wasm-bindgen recursive-borrow hang/panic.
+  const conflicts = await state.enqueueStorage(() => {
+    if (!state.manager!.eventLogMode()) {
+      return [] as Awaited<ReturnType<typeof state.manager.listProjectionConflicts>>
+    }
+    return state.manager!.listProjectionConflicts()
+  })
   state.replacementConflicts = conflicts.map((conflict) => ({
     oldSecretId: conflict.oldSecretId,
     candidatesJson: conflict.candidatesJson,
@@ -320,6 +329,14 @@ export async function syncProviderById(
 ): Promise<void> {
   if (!state.manager) return
   if (state.syncBlocked) return
+  // A foreground password op (verify/enroll/rotate) borrows the wasm manager;
+  // a per-provider sync's `&mut self` future would alias that borrow.
+  if (state.isPasswordBusy) return
+  // A foreground secret edit (add/delete) writes the event log to IndexedDB via
+  // the serialized storage chain; this per-provider sync's out-of-chain IDB
+  // reads (fetch/read local/update metadata) would otherwise race that write
+  // and deadlock the IndexedDB transaction.
+  if (state.isSaving) return
   const provider = state.providers.find((p) => p.id === providerId)
   if (!provider || provider.type === 'local') return
   if (state.syncingProviderId && state.syncingProviderId !== providerId) return
@@ -330,6 +347,30 @@ export async function syncProviderById(
   }
   try {
     const [mode, pat, repo] = state.providerWasmArgs(provider)
+    if (state.isAuthenticated && state.localVaultPresent) {
+      const remote = await fetchRemoteVaultBlob(mode, pat, repo)
+      if (remote.missing || !remote.content.trim()) {
+        await state.enqueueStorage(() =>
+          state.manager!.pushRemoteVaultYamlSnapshotForProvider(
+            mode,
+            pat,
+            repo,
+          ),
+        )
+        const localYaml = await readLocalVaultBlob()
+        if (localYaml.trim()) {
+          await state.updateProviderSyncMetadata(
+            providerId,
+            localYaml,
+            remote.revision,
+          )
+        }
+        if (!options?.quiet) {
+          state.showSuccess(state.t('auth_storage.sync_pushed'))
+        }
+        return
+      }
+    }
     // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
     // `eventLogMode()` bit can be false after reload until connect finishes.
     const raw = await state.enqueueStorage(() =>
@@ -339,7 +380,7 @@ export async function syncProviderById(
       ),
     )
     state.applyVaultSyncResult(raw)
-    state.refreshSecretsFromSession()
+    await state.refreshSecretsFromSession()
     await state.refreshReplacementConflicts()
     await state.updateProviderSyncMetadata(
       providerId,

@@ -105,17 +105,17 @@ E2E_SPEC=e2e/multi-device-local.spec.ts task web:test:e2e:file
 After single-spec fixes pass, run the relevant project or full PR mirror once before pushing:
 
 ```bash
-task web:test:e2e:pr             # fast e2e-pr project (~1 min locally)
-task ci:pr                       # full PR mirror (~3–4 min locally); mandatory after a prior CI failure
+task web:test:e2e                # full stub e2e project
+task ci:pr                       # full PR mirror; mandatory after a prior CI failure
 ```
 
 ```text
 implement → fix → E2E_SPEC=… task web:test:e2e:file   (fast debug loop)
-           → task check / web:test:e2e:pr / task ci:pr  (before push)
+           → task check / web:test:e2e / task ci:pr     (before push)
            → commit → push → gh pr create               (when local gates pass)
 ```
 
-Add `task web:test:e2e:pr` or `task ci:pr` before the first push when the change touches vault sync, login/unlock, multi-step web flows, or Playwright helpers. Skip e2e for isolated Rust-only or docs-only changes.
+Add `task web:test:e2e` or `task ci:pr` before the first push when the change touches vault sync, login/unlock, multi-step web flows, or Playwright helpers. Skip e2e for isolated Rust-only or docs-only changes.
 
 ### 7 — Full local loop (after any remote CI failure)
 
@@ -123,7 +123,7 @@ Add `task web:test:e2e:pr` or `task ci:pr` before the first push when the change
 
 ```bash
 gh run view <run-id> --log-failed   # diagnose
-task ci:pr                          # full PR mirror (~3–4 min)
+task ci:pr                          # full PR mirror
 # fix, re-run task ci:pr until green, then commit and push
 gh pr checks <number> --watch
 ```
@@ -136,10 +136,10 @@ E2e helpers when debugging web flows:
 # One spec — preferred during fix/debug (fast feedback)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 
-# Full e2e-pr project — before push or after remote e2e failure
-task web:test:e2e:pr
+# Full stub e2e project — before push or after remote e2e failure
+task web:test:e2e
 # or, after task check already built wasm + dist:
-task web:test:e2e:pr:parallel
+task web:test:e2e:parallel
 ```
 
 If the failure was obviously fmt/lint-only, `task format:check` plus the relevant lint/test subset can unblock a quick fix — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
