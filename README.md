@@ -227,7 +227,7 @@ task web:dev
 
 Open [http://localhost:5173](http://localhost:5173).
 
-`setup` runs automatically before docker tasks. **Dev** (`NOOK_ENV=dev`, default): skips when `nook-build:local` already exists. **CI** sets `NOOK_ENV=ci`: always builds with GHCR `:buildcache`.
+`setup` runs automatically before docker tasks and always rebuilds the `nook-web:local` image so it reflects current source. buildx reuses the cached toolchain base + GHCR `:buildcache`, so only the small source + dist layers rebuild.
 
 To use GitHub storage, connect a personal access token in the UI. Nook creates the
 selected repository as private when it does not already exist and stores the
@@ -258,29 +258,43 @@ TypeScript diagnostics, ESLint, Prettier, Vitest, and production builds.
 ### Rust dependency cache
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) to pre-compile
-crate dependencies and warm clippy/tests into the **linux/amd64** toolchain image. CI and dev
-machines share remote cache and image tags:
+crate dependencies and warm clippy/tests into a **linux/amd64 toolchain base image**. The
+workspace **source is then copied into the nook-web image** on top of that base — there is **no runtime
+bind mount** (except `task web:dev`), so the image is self-contained. CI and dev share the base:
 
 ```text
-ghcr.io/<owner>/<repo>/toolchain:latest       # runnable toolbox (docker run)
+ghcr.io/<owner>/<repo>/toolchain:latest       # deps + warm target/ base (shared cache)
 ghcr.io/<owner>/<repo>/toolchain:buildcache   # buildx layer cache (cargo chef cook, etc.)
+nook-web:local                                # nook-web image (base + your source) that task runs
 ```
 
-`task check`, `task web:dev`, and CI use the same tasks. **`NOOK_ENV=dev`** (default) skips `setup` when the local toolchain image exists; **`NOOK_ENV=ci`** (set in CI) always runs `docker buildx bake` with GHCR `:buildcache`. Force a local rebuild: `NOOK_ENV=ci task web:dev`. All `docker run` invocations use `--platform linux/amd64`
-(Mac included). Rust artifacts live at `/opt/nook/target` in the image (`CARGO_TARGET_DIR`), outside the repo bind mount — no runtime copy. **Do not use Docker named volumes** — GitHub Actions does
-not persist them between jobs. See [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
+`task check`, `task web:dev`, and CI use the same tasks. `task setup` always (re)builds the app
+image so it reflects current source; buildx reuses the toolchain base + GHCR `:buildcache`, so
+only the small source layer rebuilds.
 
-Build with GHCR cache (optional — defaults to `ghcr.io/meta-secret/nook/toolchain`; run `docker login ghcr.io` once):
+**The GHCR cache is pull-always, push-CI-only.** Every build — including local — pulls the shared
+`:buildcache`/`:latest` layers (`cache-from`), so a fresh checkout reuses whatever CI already
+compiled instead of a cold recompile of the entire dep graph. Run `docker login ghcr.io` once so
+local pulls authenticate (a miss just falls back to a cold build — the registry is cache, never a
+build dependency). Publishing is CI-only: PRs push the `:buildcache` layers, and main pushes the
+verified base image. Local never pushes.
+
+All `docker run` invocations use `--platform linux/amd64`
+(Mac included). Rust `target/` lives at the default `/meta-secret/nook/target` inside the image
+(baked warm; no bind mount to shadow it). Write tasks (`task format`, `task rust:coverage:update`)
+print a `git diff` to apply on the host (`task format | git apply`). **Do not use Docker named
+volumes** — GitHub Actions does not persist them between jobs. See
+[`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
+
+Build with the GHCR cache (defaults to `ghcr.io/meta-secret/nook/toolchain`; run `docker login ghcr.io`
+once so local pulls authenticate):
 
 ```sh
-task check   # or task web:dev
+task check   # or task web:dev — pulls the shared cache automatically
 ```
 
-Push your image after local verify (`PUSH_TOOLCHAIN=1`; uses buildx registry push, not `docker push`):
-
-```sh
-PUSH_TOOLCHAIN=1 task docker:push
-```
+Publishing the shared cache is handled by CI (PRs push `:buildcache`, main pushes the base image).
+You normally never push from a workstation.
 
 After changing Rust dependencies in any `Cargo.toml`, commit the updated lockfile:
 

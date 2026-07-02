@@ -2,32 +2,52 @@ version: '3'
 
 tasks:
   docker:build:
-    desc: Alias for setup (build linux/amd64 toolchain image).
+    desc: Alias for setup (build the linux/amd64 nook-web image).
     cmds:
       - task: setup
 
   docker:push:
-    desc: Push :latest via buildx registry output (dedupes with buildcache; after green CI).
+    desc: Publish the toolchain base to GHCR (:latest image + :buildcache layers) after green main CI.
+    # PUSH_TOOLCHAIN is re-declared here (not just on the docker:push:ci wrapper): go-task does NOT
+    # propagate a parent task's `env:` into a called subtask, so we source it from the ambient var
+    # so the gate below sees it regardless of caller.
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      PUSH_TOOLCHAIN: '{{.PUSH_TOOLCHAIN}}'
     cmds:
+      # Gate on PUSH_TOOLCHAIN (set by CI). TOOLCHAIN_PUSH is the bake flag that enables the
+      # registry tag + cache-to; local dev never sets it, so it only ever pulls the cache.
       - >-
         sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        HASH="$(bash .github/scripts/toolchain-inputs-hash.sh "{{.ROOT_DIR}}")";
-        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" TOOLCHAIN_INPUTS_HASH="$HASH"
-        {{.DOCKER}} buildx bake -f docker-bake.hcl toolchain-push'
+        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" TOOLCHAIN_PUSH=1
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push'
+
+  docker:push:cache:
+    desc: Publish only the :buildcache layers to GHCR (any branch / PR — no :latest image overwrite).
+    # PUSH_TOOLCHAIN is re-declared here (not just on the docker:push:cache:ci wrapper): go-task does
+    # NOT propagate a parent task's `env:` into a called subtask, so we source it from the ambient
+    # var so the gate below sees it regardless of caller.
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      PUSH_TOOLCHAIN: '{{.PUSH_TOOLCHAIN}}'
+    cmds:
+      # Keeps the shared layer cache fresh from PRs so local + CI builds on any branch pull warm
+      # layers. TOOLCHAIN_PUSH enables cache-to; the target has no :latest tag, so it is safe from
+      # feature branches. Best-effort: never fail CI if the cache push is rejected.
+      - >-
+        sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" TOOLCHAIN_PUSH=1
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-cache || echo "warn: cache push skipped/failed"'
 
   docker:task:
     internal: true
+    # No bind mount: the nook-web image already contains the workspace source (nook-web/Dockerfile).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - >-
-        sh -c 'IMG="${DOCKER_IMAGE:-}";
-        if [ -z "$IMG" ] && [ -f .nook/docker-image ]; then IMG="$(tr -d "\n" < .nook/docker-image)"; fi;
-        if [ -z "$IMG" ]; then IMG="nook-build:local"; fi;
-        exec {{.DOCKER}} run --rm
+        {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
@@ -45,25 +65,21 @@ tasks:
         -e GITHUB_REPOSITORY
         -e PR_NUMBER
         -e PREVIEW_URL
-        -v "{{.ROOT_DIR}}:/workspace"
-        -v /workspace/nook-web/node_modules
-        -w /workspace
-        "$IMG"
-        task {{.TASK}}'
+        -w /meta-secret/nook
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
 
   docker:e2e:run:
     desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
     internal: true
+    # No bind mount: the nook-web image already contains the workspace source (nook-web/Dockerfile).
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
       E2E_SPEC: '{{.E2E_SPEC}}'
     cmds:
       - >-
-        sh -c 'IMG="${DOCKER_IMAGE:-}";
-        if [ -z "$IMG" ] && [ -f .nook/docker-image ]; then IMG="$(tr -d "\n" < .nook/docker-image)"; fi;
-        if [ -z "$IMG" ]; then IMG="nook-build:local"; fi;
-        exec {{.DOCKER}} run --rm
+        {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
         -e VITE_BASE="{{.VITE_BASE}}"
@@ -78,25 +94,31 @@ tasks:
         -e NOOK_E2E_SYNC_PROVIDER
         -e NOOK_GOOGLE_E2E_ACCESS_TOKEN
         -e E2E_SPEC
-        -v "{{.ROOT_DIR}}:/workspace"
-        -v /workspace/nook-web/node_modules
-        -w /workspace
-        "$IMG"
-        task {{.TASK}}'
+        -w /meta-secret/nook
+        {{.DOCKER_IMAGE}}
+        task {{.TASK}}
+
+  docker:extract:dist:
+    desc: Copy the nook-web image's built nook-web/dist to the host (for GitHub Pages upload on main).
+    cmds:
+      - >-
+        sh -c 'rm -rf nook-web/dist;
+        cid="$({{.DOCKER}} create --platform linux/amd64 {{.DOCKER_IMAGE}})";
+        trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-web/dist" nook-web/dist'
 
   docker:web:dev:
     internal: true
+    # The ONLY mounted task: the repo is bind-mounted for Vite hot-reload. node_modules is an
+    # anonymous volume (host has none) and bun install + wasm build run in the command.
     cmds:
       - >-
-        sh -c 'IMG="${DOCKER_IMAGE:-}";
-        if [ -z "$IMG" ] && [ -f .nook/docker-image ]; then IMG="$(tr -d "\n" < .nook/docker-image)"; fi;
-        if [ -z "$IMG" ]; then IMG="nook-build:local"; fi;
-        exec {{.DOCKER}} run --rm
+        {{.DOCKER}} run --rm
         --platform linux/amd64
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
-        -v "{{.ROOT_DIR}}:/workspace"
-        -v /workspace/nook-web/node_modules
-        -w /workspace
-        "$IMG"
-        sh -c "cd nook-web && bun install && task _web:dev"'
+        -v "{{.ROOT_DIR}}:/meta-secret/nook"
+        -v /meta-secret/nook/nook-web/node_modules
+        -w /meta-secret/nook
+        {{.DOCKER_IMAGE}}
+        sh -c "cd nook-web && bun install && task _web:dev"

@@ -169,7 +169,7 @@ Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../.
 
 Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT with `repo` scope, or fine-grained with contents + pull requests write on this repo).
 
-The `ci-fix` job runs **`task setup`** (pull GHCR toolchain or bake) **before** `task ci-agent:fix`. Without this, parallel Docker tasks such as `ci:main:e2e` would default to `nook-build:local`, which does not exist on CI runners. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` writes the resolved ref to `.nook/docker-image`.
+The `ci-fix` job runs **`task setup`** (bake the sealed nook-web image, reusing the GHCR toolchain base as cache) **before** `task ci-agent:fix`. Without this, Docker tasks would have no `nook-web:local` image to run. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` builds and loads `nook-web:local`.
 
 Optional env: `CI_AGENT_PROMPT_FILE` (agent instructions), `CI_FIX_LABEL` (PR title/body label).
 

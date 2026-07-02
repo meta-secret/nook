@@ -1,114 +1,94 @@
+// Root bake: shared variables, parallel groups, and the publish variants.
+// Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
+// is merged in via multiple -f flags (bake has no `include`):
+//   docker/base.docker-bake.hcl        -> nook-base
+//   nook-core/docker-bake.hcl          -> builder-deps, builder-debug
+//   nook-wasm/docker-bake.hcl          -> builder-wasm      (FROM builder-debug)
+//   docker/toolchain.docker-bake.hcl   -> _toolchain-common (FROM builder-wasm; linear top: web deps)
+//   nook-web/docker-bake.hcl           -> _nook-web-common  (FROM toolchain + workspace source)
+// Callers (Taskfile `setup`, .task/docker.yml) pass all files via the NOOK_BAKE_FILES list.
+//
+// LINEAR CHAIN (no COPY --from of target/): nook-base -> builder-deps -> builder-debug ->
+// builder-wasm -> toolchain -> nook-web. Everything (deps, warm native+wasm target/, registry,
+// wasm pkg, node_modules, playwright) accumulates in ONE continuous image lineage, so a warm
+// rebuild is a pure cache hit. Two tiers for publishing: `toolchain` is the shared base pushed to
+// GHCR (cache); `nook-web` layers the workspace source on top and is what `task` runs.
+
 variable "DOCKER_IMAGE" {
-  default = "nook-build:local"
+  default = "nook-web:local"
 }
 
-// ghcr.io/<owner>/<repo>/toolchain — shared remote cache (pull before build, push after green CI).
+// ghcr.io/<owner>/<repo>/toolchain — shared remote cache. Defaults to the canonical repo path so
+// that EVERYONE (local dev included) pulls the warm dep/target layers CI already published. This is
+// the whole point: a fresh local build reuses CI's cache instead of a catastrophic cold recompile.
 variable "TOOLCHAIN_REGISTRY" {
+  default = "ghcr.io/meta-secret/nook/toolchain"
+}
+
+// Push the cache to GHCR? Only CI has write creds and should publish the shared base. Local dev
+// leaves this empty, so it PULLS the cache but never pushes (avoids a 403 without registry auth).
+variable "TOOLCHAIN_PUSH" {
   default = ""
 }
 
-// Set by toolchain-setup.sh; stored on :latest after green CI for pull-skip on web-only PRs.
-variable "TOOLCHAIN_INPUTS_HASH" {
-  default = ""
-}
+// Shared cache settings referenced by package targets (in their own bake files) and the root.
+// cache-from: always on (pull the shared base). cache-to: gated on TOOLCHAIN_PUSH (CI only).
+// Platform is always linux/amd64 (hardcoded per target); no cross-platform builds.
+shared_cache_from = TOOLCHAIN_REGISTRY != "" ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
+] : []
 
+shared_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
+] : []
+
+// Default: build the nook-web image (source-in-image) that `task` runs.
 group "default" {
+  targets = ["nook-web"]
+}
+
+// Pre-build the linear chain top explicitly so cold CI warms the whole toolchain in one target.
+group "builders" {
   targets = ["toolchain"]
 }
 
-// Pre-build parallel rust stages explicitly so cold CI can fan out native + wasm tracks.
-group "rust-builders" {
-  targets = ["builder-debug", "builder-wasm"]
+// --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
+// _nook-web-common lives in nook-web/docker-bake.hcl.
+target "nook-web" {
+  inherits = ["_nook-web-common"]
+  tags     = [DOCKER_IMAGE]
+  output   = ["type=docker"]
 }
 
-target "builder-deps" {
-  context    = "."
-  dockerfile = "Dockerfile"
-  target     = "builder-deps"
-  platforms  = ["linux/amd64"]
-  cache-from = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
-  ] : []
-  cache-to = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
-  ] : []
-}
+// --- Toolchain base image (linear top: deps + warm native/wasm target/ + node_modules + wasm pkg;
+// the shared GHCR cache). _toolchain-common lives in docker/toolchain.docker-bake.hcl; the variants
+// below inherit it and set output/tags/cache-to. ---
 
-target "builder-debug" {
-  context    = "."
-  dockerfile = "Dockerfile"
-  target     = "builder-debug"
-  platforms  = ["linux/amd64"]
-  cache-from = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
-  ] : []
-  cache-to = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
-  ] : []
-}
-
-target "builder-wasm" {
-  context    = "."
-  dockerfile = "Dockerfile"
-  target     = "builder-wasm"
-  platforms  = ["linux/amd64"]
-  cache-from = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
-  ] : []
-  cache-to = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
-  ] : []
-}
-
-target "_toolchain-common" {
-  context    = "."
-  dockerfile = "Dockerfile"
-  target     = "toolchain"
-  platforms  = ["linux/amd64"]
-  labels = TOOLCHAIN_INPUTS_HASH != "" ? {
-    "nook.toolchain.inputs-hash" = TOOLCHAIN_INPUTS_HASH
-  } : {}
-  cache-from = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
-  ] : []
-}
-
-// Local dev: load into the Docker daemon as nook-build:local.
+// In-graph base for nook-web (local + CI). Pulls the shared cache (cache-from) but never tags/pushes
+// a registry ref — that is toolchain-push's job. Loadable locally for debugging.
 target "toolchain" {
   inherits = ["_toolchain-common"]
-  tags = TOOLCHAIN_REGISTRY != "" ? [
-    DOCKER_IMAGE,
-    "${TOOLCHAIN_REGISTRY}:latest",
-  ] : [DOCKER_IMAGE]
-  output = ["type=docker"]
-  cache-to = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
-  ] : []
+  output   = ["type=docker"]
 }
 
-// CI pre-verify build: push to :ci (registry only — no --load export).
-target "toolchain-ci" {
+// Cache-only publish (any branch / PR): push just the :buildcache layers, no :latest image tag.
+// Safe to run from feature branches — it never overwrites the canonical base image, but keeps the
+// shared layer cache fresh so LOCAL and CI builds on any branch pull warm layers. Gated on PUSH.
+target "toolchain-cache" {
   inherits = ["_toolchain-common"]
-  tags = TOOLCHAIN_REGISTRY != "" ? [
-    "${TOOLCHAIN_REGISTRY}:ci",
-  ] : []
-  output = ["type=registry"]
-  cache-to = TOOLCHAIN_REGISTRY != "" ? [
-    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
-  ] : []
+  output   = ["type=cacheonly"]
+  cache-to = shared_cache_to
 }
 
-// After green CI: promote verified image to :latest (reuses buildcache blobs — seconds).
+// After green MAIN CI: publish the verified toolchain base to GHCR (:latest image + :buildcache
+// layers) so every later build — CI and LOCAL — pulls it via cache-from. Gated on TOOLCHAIN_PUSH.
 // Do not use `docker push` after `--load`; the daemon re-uploads layers buildkit already has in GHCR.
 target "toolchain-push" {
   inherits = ["_toolchain-common"]
-  tags = TOOLCHAIN_REGISTRY != "" ? [
+  tags = TOOLCHAIN_PUSH != "" ? [
     "${TOOLCHAIN_REGISTRY}:latest",
   ] : []
   output   = ["type=registry"]
-  cache-to = []
+  cache-to = shared_cache_to
 }

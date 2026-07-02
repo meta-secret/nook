@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   ci:pr:
-    desc: PR CI — one container for format/wasm/verify/build/e2e (Rust target reused in-process).
+    desc: PR CI — one container for format/verify/build/e2e (source + warm target/ baked in the nook-web image).
     deps:
       - setup
     cmds:
@@ -22,13 +22,13 @@ tasks:
       - task: ci:pr:e2e
 
   ci:pr:publish:
-    desc: PR CI verify, then push toolchain to GHCR on success (buildx registry push).
+    desc: PR CI verify, then publish the :buildcache layers to GHCR (no :latest overwrite).
     cmds:
       - task: ci:pr
-      - task: docker:push:ci
+      - task: docker:push:cache:ci
 
   ci:main:
-    desc: Main branch CI — one container for format/wasm/verify/build/e2e.
+    desc: Main branch CI — one container for format/verify/build/e2e (source + warm target/ baked in the nook-web image).
     deps:
       - setup
     cmds:
@@ -89,21 +89,35 @@ tasks:
       - task: docker:push:ci
 
   ci:pr:deploy-preview:
-    desc: Deploy nook-web/dist to Cloudflare Pages (CI; runs on host after docker build).
+    desc: Deploy nook-web/dist to Cloudflare Pages inside the app container (dist is in-image, no mount).
+    deps:
+      - setup
     cmds:
-      - task: _deploy-preview
+      - task: docker:task
+        vars: { TASK: _deploy-preview }
 
   ci:pr:comment-preview:
-    desc: Comment or update Cloudflare preview URL on the PR (CI; runs on host).
+    desc: Comment or update Cloudflare preview URL on the PR (runs on host; only needs GITHUB_TOKEN + PR number).
     cmds:
       - task: _comment-preview
 
   docker:push:ci:
-    desc: Push toolchain image when TOOLCHAIN_REGISTRY is set (after green ci:pr).
-    env:
-      PUSH_TOOLCHAIN: "1"
+    desc: Publish the toolchain base image + cache to GHCR (after green main CI).
+    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
+    # a called subtask, but it does propagate call vars. docker:push maps this var into its own env.
     cmds:
       - task: docker:push
+        vars:
+          PUSH_TOOLCHAIN: "1"
+
+  docker:push:cache:ci:
+    desc: Publish only the :buildcache layers to GHCR (after green PR CI — no :latest overwrite).
+    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
+    # a called subtask, but it does propagate call vars. docker:push:cache maps this var into its env.
+    cmds:
+      - task: docker:push:cache
+        vars:
+          PUSH_TOOLCHAIN: "1"
 
   ci:pr:prepare:
     desc: Format check and wasm build in one container (manual/debug only — prefer ci:pr).
@@ -214,24 +228,21 @@ tasks:
           fi;
           exit "$deploy_status";
         fi;
+        # Strip ANSI color codes first: wrangler colorizes the URL, which broke the host-side
+        # NOOK_PREVIEW_URL=<url> capture (escape sequences landed right after the "=").
+        clean_output="$(printf "%s" "$deploy_output" | sed -E "s/\x1b\[[0-9;]*[a-zA-Z]//g")";
         deployment_url="$(
-          echo "$deploy_output" \
-            | grep -oE "Deployment alias URL: https://[^ ]+" \
-            | sed "s/Deployment alias URL: //" \
+          printf "%s" "$clean_output" \
+            | grep -oE "https://[a-zA-Z0-9.-]+\.pages\.dev[a-zA-Z0-9./_-]*" \
             | tail -1
         )";
-        if [ -z "$deployment_url" ]; then
-          deployment_url="$(
-            echo "$deploy_output" \
-              | grep -oE "https://[a-zA-Z0-9.-]+\.pages\.dev[^ ]*" \
-              | tail -1
-          )";
-        fi;
         if [ -z "$deployment_url" ]; then
           echo "Could not parse Cloudflare deployment URL from wrangler output" >&2;
           exit 1;
         fi;
-        echo "$deployment_url" > .cloudflare-preview-url'
+        echo "$deployment_url" > .cloudflare-preview-url;
+        # Stable marker for the host to capture the URL from container stdout (no bind mount).
+        echo "NOOK_PREVIEW_URL=$deployment_url"'
 
   _comment-preview:
     desc: Comment or update Cloudflare preview URL on the PR.

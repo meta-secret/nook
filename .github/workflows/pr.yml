@@ -1,6 +1,6 @@
-# Pull requests: pull toolchain, verify/build/e2e in one container, deploy preview.
-# Toolchain image push runs on main only (ci:main:publish) — not on every PR.
-# Main CI runs full stub e2e; nightly runs sync-live. See e2e-pr.yml for manual PR e2e.
+# Pull requests: pull toolchain cache, verify/build/e2e in one container, publish buildcache, deploy preview.
+# PRs publish only the :buildcache layers (keeps local + CI warm); the :latest base IMAGE is pushed
+# on main only (ci:main:publish). Main CI runs full stub e2e; nightly runs sync-live. See e2e-pr.yml.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
@@ -37,6 +37,14 @@ jobs:
         env:
           CI: true
 
+      - name: Publish toolchain buildcache
+        # Keep the shared GHCR layer cache fresh from PRs (no :latest image overwrite) so local and
+        # CI builds on any branch pull warm dep/target layers instead of a cold recompile.
+        run: task docker:push:cache:ci
+        env:
+          CI: true
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.2.0
 
@@ -46,11 +54,20 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}
-        run: task ci:pr:deploy-preview
+        run: |
+          # Deploy runs inside the app container (dist is in-image, no bind mount). Capture the
+          # preview URL from the container's stdout marker and hand it to the comment step.
+          out="$(task ci:pr:deploy-preview VITE_BASE=/ 2>&1)"
+          echo "$out"
+          # Strip ANSI codes before matching the marker (defensive; the container already sanitizes).
+          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
+          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
         if: steps.deploy.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         run: task ci:pr:comment-preview

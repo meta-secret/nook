@@ -2,17 +2,29 @@ version: '3'
 
 vars:
   DOCKER: '{{default "docker" .DOCKER}}'
-  DOCKER_IMAGE:
-    sh: |
-      if [ -n "${DOCKER_IMAGE:-}" ]; then
-        printf '%s' "${DOCKER_IMAGE}"
-      elif [ -f .nook/docker-image ]; then
-        cat .nook/docker-image
-      else
-        printf '%s' "nook-build:local"
-      fi
+  # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that, with the
+  # containerd image store, the build result is written STRAIGHT into the image store — no 9 GB
+  # tarball export + `docker load`. Warm builds only write the small changed source/dist layers;
+  # unchanged deps/target layers already live in the store. Do NOT point this at a
+  # `docker-container` builder: that driver forces a full-image re-export on every build.
+  #
+  # buildx auto-creates a docker-driver builder named after the active docker context, so
+  # `docker context show` yields the right builder everywhere: `desktop-linux` on Docker Desktop,
+  # `default` on plain Linux/CI. Override by exporting BUILDX_BUILDER.
+  BUILDX_BUILDER:
+    sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
+  # The sealed nook-web image is always loaded locally as nook-web:local (both dev and CI).
+  DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
-  # dev (default): skip setup when nook-build:local exists. ci: pull :latest or registry bake (see toolchain-setup.sh).
+  # buildx bake `-f` flags: root orchestration + one file per package (single source of truth).
+  NOOK_BAKE_FILES: >-
+    -f docker-bake.hcl
+    -f docker/base.docker-bake.hcl
+    -f nook-core/docker-bake.hcl
+    -f nook-wasm/docker-bake.hcl
+    -f docker/toolchain.docker-bake.hcl
+    -f nook-web/docker-bake.hcl
+  # ci sets TOOLCHAIN_REGISTRY so bake reuses GHCR :buildcache; dev builds locally.
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
   VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
@@ -44,9 +56,13 @@ tasks:
       - task: build
 
   setup:
-    desc: Build or pull linux/amd64 toolchain (dev loads local; ci pulls :latest or registry bake).
+    desc: Build the linux/amd64 nook-web image (source-in-image; pulls the GHCR toolchain base as cache).
+    # Always rebuild: the sealed image must reflect current source. TOOLCHAIN_REGISTRY is ALWAYS
+    # wired so buildx pulls the shared toolchain base + :buildcache (cache-from) — local dev and CI
+    # alike — so a fresh checkout reuses CI's warm dep/target layers instead of a cold recompile.
+    # setup never sets TOOLCHAIN_PUSH, so it only pulls; publishing is CI-only (docker:push).
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
-      NOOK_ENV: '{{.NOOK_ENV}}'
+      VITE_BASE: '{{.VITE_BASE}}'
     cmds:
-      - bash .github/scripts/toolchain-setup.sh {{.ROOT_DIR}}
+      - '{{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-web'

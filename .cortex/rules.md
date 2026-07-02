@@ -69,8 +69,7 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 | Artifact | Purpose |
 |----------|---------|
 | `nook-core/coverage-floor.json` | Minimum **line** coverage % (currently **90**) |
-| `.github/scripts/rust-coverage-check.sh` | Runs tests + compares measured vs floor |
-| `task rust:coverage:check` | CI/local gate (part of `task check`, `task ci:pr`) |
+| `task rust:coverage:check` | CI/local gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check`, `task ci:pr`) |
 | `task rust:coverage` | Report only (no threshold check) |
 | `task rust:coverage:update` | Optional — rewrite floor file to measured % (user approval only) |
 
