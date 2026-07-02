@@ -183,7 +183,7 @@ export class VaultState {
   pendingEnrollmentFromUrl: string | null =
     typeof window !== 'undefined' ? consumeEnrollmentFromLocation() : null
 
-  enqueueStorage<T>(operation: () => Promise<T>): Promise<T> {
+  enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
     const next = this.storageChain.then(() => operation())
     this.storageChain = next.then(
       () => undefined,
