@@ -57,8 +57,17 @@ jobs:
         run: |
           # Deploy runs inside the app container (dist is in-image, no bind mount). Capture the
           # preview URL from the container's stdout marker and hand it to the comment step.
+          # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
+          # print the container output (it holds the real error) before failing the step.
+          set +e
           out="$(task ci:pr:deploy-preview VITE_BASE=/ 2>&1)"
+          status=$?
+          set -e
           echo "$out"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Cloudflare preview deploy failed (exit $status)"
+            exit "$status"
+          fi
           # Strip ANSI codes before matching the marker (defensive; the container already sanitizes).
           clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
           url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
