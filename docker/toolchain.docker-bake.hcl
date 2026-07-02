@@ -1,8 +1,9 @@
-// Final image assembly: COPY artifacts from the parallel package builders into one image.
-// Declares its own builder dependencies as contexts (like every package bake file), so the
-// wiring lives next to docker/toolchain.Dockerfile. The root docker-bake.hcl only adds the
-// publish variants (toolchain / -ci / -push) that inherit this and set tags/output.
-// cache-from comes from shared_cache_from in the root docker-bake.hcl (platform is always amd64).
+// toolchain target: the LINEAR TOP of the build chain (docker/toolchain.Dockerfile).
+// FROM builder-wasm, adding bun deps + Playwright on top. No merge/COPY --from — the whole
+// toolchain (deps, warm native+wasm target/, wasm pkg, node_modules, playwright) is one continuous
+// image lineage. This is the base for the sealed nook-web image (docker/nook-web.Dockerfile).
+// The root docker-bake.hcl adds the output/publish variants (toolchain / -cache / -push).
+// cache-from/to come from shared_cache_* in the root docker-bake.hcl (platform is always amd64).
 
 target "_toolchain-common" {
   context    = "."
@@ -10,10 +11,7 @@ target "_toolchain-common" {
   target     = "toolchain"
   platforms  = ["linux/amd64"]
   contexts = {
-    toolchain-web = "target:toolchain-web"
-    builder-deps  = "target:builder-deps"
-    builder-debug = "target:builder-debug"
-    builder-wasm  = "target:builder-wasm"
+    builder-wasm = "target:builder-wasm"
   }
   cache-from = shared_cache_from
 }

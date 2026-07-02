@@ -16,8 +16,7 @@ target "_nook-web-common" {
     VITE_BASE = VITE_BASE
   }
   contexts = {
-    toolchain    = "target:toolchain"
-    builder-wasm = "target:builder-wasm"
+    toolchain = "target:toolchain"
   }
   cache-from = shared_cache_from
 }

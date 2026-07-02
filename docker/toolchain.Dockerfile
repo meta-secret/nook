@@ -1,17 +1,18 @@
 # syntax=docker/dockerfile:1.4
 
-# Toolchain image: deps + warm target/ + bun deps + playwright. No app source (that lives in
-# the nook-web image, docker/nook-web.Dockerfile). All COPY sources below are bake `contexts` (target:<name>)
-# wired in the sibling docker/toolchain.docker-bake.hcl:
-#   toolchain-web  -> nook-web/Dockerfile   (bun deps + playwright; also the base here)
-#   builder-deps   -> nook-core/Dockerfile  (crates.io registry cache)
-#   builder-debug  -> nook-core/Dockerfile  (native/coverage target/)
-#   builder-wasm   -> nook-wasm/Dockerfile  (wasm32 target/)
-# target/ lives at the default in-tree path (/meta-secret/nook/target = WORKDIR); the nook-web image
-# COPYs source over the same workdir and reuses this warm target with no recompile of deps.
+# toolchain: the LINEAR TOP of the build chain. FROM builder-wasm, which already carries (in one
+# continuous image lineage) the chef-cooked deps, native warm target/, wasm32 target/, the crates
+# registry, and the generated wasm pkg. This stage only ADDS the web toolchain (bun deps +
+# Playwright chromium) on top — there is NO COPY --from of target/registry/node_modules/wasm, so
+# the BuildKit cache chain stays intact and a warm rebuild is a pure cache hit (no recompile, no
+# multi-GB layer copy). `builder-wasm` is injected by bake via
+# `contexts = { builder-wasm = "target:builder-wasm" }` (see docker/toolchain.docker-bake.hcl).
+# This `toolchain` stage is the base for the sealed nook-web image (docker/nook-web.Dockerfile).
 
-FROM toolchain-web AS toolchain
+FROM builder-wasm AS toolchain
 
-COPY --from=builder-deps /usr/local/cargo/registry /usr/local/cargo/registry
-COPY --from=builder-debug /meta-secret/nook/target /meta-secret/nook/target
-COPY --from=builder-wasm /meta-secret/nook/target/wasm32-unknown-unknown /meta-secret/nook/target/wasm32-unknown-unknown
+COPY nook-web/package.json nook-web/bun.lock ./nook-web/
+RUN mkdir -p "$BUN_INSTALL_CACHE_DIR" \
+    && cd nook-web && bun install --frozen-lockfile
+RUN mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
+    && cd nook-web && bunx playwright install --with-deps chromium

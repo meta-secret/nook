@@ -3,14 +3,16 @@
 // is merged in via multiple -f flags (bake has no `include`):
 //   docker/base.docker-bake.hcl        -> nook-base
 //   nook-core/docker-bake.hcl          -> builder-deps, builder-debug
-//   nook-wasm/docker-bake.hcl          -> builder-wasm
-//   nook-web/docker-bake.hcl           -> toolchain-web
-//   docker/toolchain.docker-bake.hcl   -> _toolchain-common (deps + warm target/ base image)
-//   docker/nook-web.docker-bake.hcl    -> _nook-web-common (toolchain + workspace source)
+//   nook-wasm/docker-bake.hcl          -> builder-wasm      (FROM builder-debug)
+//   docker/toolchain.docker-bake.hcl   -> _toolchain-common (FROM builder-wasm; linear top: web deps)
+//   docker/nook-web.docker-bake.hcl    -> _nook-web-common  (FROM toolchain + workspace source)
 // Callers (Taskfile `setup`, .task/docker.yml) pass all files via the NOOK_BAKE_FILES list.
 //
-// Two tiers: `toolchain` is the deps/warm-target base pushed to GHCR (shared cache); `nook-web`
-// layers the workspace source on top and is what `task` runs (no bind mount). Local dev builds it.
+// LINEAR CHAIN (no COPY --from of target/): nook-base -> builder-deps -> builder-debug ->
+// builder-wasm -> toolchain -> nook-web. Everything (deps, warm native+wasm target/, registry,
+// wasm pkg, node_modules, playwright) accumulates in ONE continuous image lineage, so a warm
+// rebuild is a pure cache hit. Two tiers for publishing: `toolchain` is the shared base pushed to
+// GHCR (cache); `nook-web` layers the workspace source on top and is what `task` runs.
 
 variable "DOCKER_IMAGE" {
   default = "nook-web:local"
@@ -46,9 +48,9 @@ group "default" {
   targets = ["nook-web"]
 }
 
-// Pre-build parallel package stages explicitly so cold CI can fan out core + wasm + web tracks.
+// Pre-build the linear chain top explicitly so cold CI warms the whole toolchain in one target.
 group "builders" {
-  targets = ["builder-debug", "builder-wasm", "toolchain-web"]
+  targets = ["toolchain"]
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
@@ -59,10 +61,11 @@ target "nook-web" {
   output   = ["type=docker"]
 }
 
-// --- Toolchain base image (deps + warm target/; the shared GHCR cache) ---
-// _toolchain-common lives in docker/toolchain.docker-bake.hcl; variants below set tags/output/cache-to.
+// --- Toolchain base image (linear top: deps + warm native/wasm target/ + node_modules + wasm pkg;
+// the shared GHCR cache). _toolchain-common lives in docker/toolchain.docker-bake.hcl; the variants
+// below inherit it and set output/tags/cache-to. ---
 
-// In-graph base for `app` (local + CI). Pulls the shared cache (cache-from) but never tags/pushes
+// In-graph base for nook-web (local + CI). Pulls the shared cache (cache-from) but never tags/pushes
 // a registry ref — that is toolchain-push's job. Loadable locally for debugging.
 target "toolchain" {
   inherits = ["_toolchain-common"]

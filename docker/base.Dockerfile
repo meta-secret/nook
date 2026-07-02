@@ -4,16 +4,11 @@
 # Only apt packages + pinned CLIs that change on version bumps — no repo sources.
 # Consumed by the other package Dockerfiles via bake `contexts` (target:nook-base).
 
+# Global ARGs used ONLY by the FROM lines below. A pre-FROM ARG is not visible inside any stage's
+# RUN/ENV — to use one there you must re-declare it in that stage (see nook-base). So only the args
+# that parameterize a base image live here; the CLI-version args are declared once, in nook-base.
 ARG RUST_VERSION=1.96
 ARG DEBIAN_RELEASE=trixie
-ARG BUN_VERSION=1.3.14
-ARG TASK_VERSION=3.42.1
-ARG WASM_PACK_VERSION=0.15.0
-ARG LLVM_COV_VERSION=0.8.7
-# Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
-# Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
-# avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
-ARG BINARYEN_VERSION=122
 ARG NODE_IMAGE=node:24-${DEBIAN_RELEASE}-slim
 
 FROM lukemathwalker/cargo-chef:latest-rust-${RUST_VERSION}-${DEBIAN_RELEASE} AS cargo-chef
@@ -24,11 +19,16 @@ FROM ${NODE_IMAGE} AS playwright-node
 # --- Super-base: every apt package + CLI that only changes on version bumps (no repo sources) ---
 FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE} AS nook-base
 
-ARG BUN_VERSION
-ARG TASK_VERSION
-ARG WASM_PACK_VERSION
-ARG LLVM_COV_VERSION
-ARG BINARYEN_VERSION
+# Pinned CLI versions, declared once here because they are used only inside this stage's RUNs
+# (a pre-FROM ARG would not be visible in RUN). Override with --build-arg / bake args.
+ARG BUN_VERSION=1.3.14
+ARG TASK_VERSION=3.42.1
+ARG WASM_PACK_VERSION=0.15.0
+ARG LLVM_COV_VERSION=0.8.7
+# Binaryen (wasm-opt): pinned to a modern release so wasm-pack uses a correct, local wasm-opt.
+# Debian's binaryen is too old (corrupts externref tables -> table.grow crash); baking it here also
+# avoids wasm-pack downloading it from GitHub at build time (flaky, rate-limited).
+ARG BINARYEN_VERSION=122
 
 ENV BUN_INSTALL=/usr/local/bun
 ENV BUN_INSTALL_CACHE_DIR=/opt/nook/bun-install-cache

@@ -1,13 +1,17 @@
 # syntax=docker/dockerfile:1.4
 
 # nook-wasm build stage: wasm32 clippy + release build + wasm-pack bundle.
-# Build context is the repo root (shared Cargo workspace). `builder-deps` (the chef-cooked
-# rust dependency cache from nook-core/Dockerfile) is injected by bake via
-# `contexts = { builder-deps = "target:builder-deps" }`, so deps are cooked once and reused.
-# Runs in parallel with builder-debug after builder-deps.
+# LINEAR CHAIN: FROM builder-debug (native warm-up), so this stage inherits the native target/
+# in place and adds the wasm32 target/ + generated JS/wasm bundle to the SAME image lineage.
+# No COPY --from of target/ anywhere — the whole toolchain is one continuous image, which keeps
+# the BuildKit cache chain intact (a warm rebuild is a pure cache hit, no recompile) and avoids
+# re-materializing multi-GB target/ layers. `builder-debug` is injected by bake via
+# `contexts = { builder-debug = "target:builder-debug" }`.
 
-FROM builder-deps AS builder-wasm
+FROM builder-debug AS builder-wasm
 
+# Cargo.toml/Cargo.lock/nook-core/nook-wasm already copied identically in builder-debug, so these
+# are cache hits; kept explicit in case builder-debug's context ever diverges.
 COPY Cargo.toml Cargo.lock ./
 COPY nook-core nook-core
 COPY nook-wasm nook-wasm
