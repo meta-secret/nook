@@ -26,6 +26,7 @@ pub struct YamlSyncReloaded {
     pub unlock: VaultUnlock,
     pub password_entries: Vec<crate::PasswordUnlockEntry>,
     pub store_id: Option<String>,
+    pub vault_name: Option<String>,
     pub version: u64,
 }
 
@@ -50,6 +51,7 @@ pub fn reconcile_yaml_sync(
                     unlock: VaultUnlock::Keys,
                     password_entries: Vec::new(),
                     store_id: None,
+                    vault_name: None,
                     version: 0,
                 })));
             }
@@ -71,16 +73,17 @@ pub fn reconcile_yaml_sync(
     let fresh_records = crate::deserialize_stored(content, format)?;
     merge_remote_join_records(state, &fresh_records);
     let loaded = load_stored_vault(content, identity)?;
-    let (unlock, password_entries, store_id, version) = capture_vault_unlock_from_content(content)?;
+    let metadata = capture_vault_unlock_from_content(content)?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
         jsonl: loaded.jsonl,
         meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,
-        unlock,
-        password_entries,
-        store_id,
-        version,
+        unlock: metadata.unlock,
+        password_entries: metadata.password_entries,
+        store_id: metadata.store_id,
+        vault_name: metadata.vault_name,
+        version: metadata.version,
     })))
 }
 

@@ -48,6 +48,7 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
     if first_line.starts_with('-')
         || first_line.starts_with('[')
         || first_line.starts_with("%YAML")
+        || first_line.starts_with("name:")
         || first_line.starts_with("secrets:")
         || first_line.starts_with("store_id:")
         || first_line.starts_with("schema_version:")
@@ -136,6 +137,9 @@ struct StoredVaultYaml {
     /// Logical secret-store identity — same id on every provider replica of this vault.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     store_id: Option<String>,
+    /// Human-readable vault label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
     /// Active unlock mechanism. Omitted on write when `Keys` (the default);
     /// legacy reads infer mode from `password_envelope` / `unlock.type: password`.
     #[serde(default, skip_serializing_if = "vault_unlock_is_keys")]
@@ -294,6 +298,12 @@ fn resolve_store_id_for_write(store_id: Option<&str>) -> VaultFormatResult<Optio
     }
 }
 
+fn resolve_vault_name_for_write(name: Option<&str>) -> Option<String> {
+    name.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
 /// Serialize records together with unlock metadata. Backup passwords live in
 /// `password_entries` alongside `auth:` device-key rows; `unlock.type` stays
 /// `keys` for hybrid vaults.
@@ -304,13 +314,68 @@ pub fn serialize_stored_yaml_with_unlock(
     store_id: Option<&str>,
     vault_version: Option<u64>,
 ) -> VaultFormatResult<VaultYamlBlob> {
+    serialize_stored_yaml_with_unlock_and_name(
+        records,
+        unlock,
+        password_entries,
+        store_id,
+        None,
+        vault_version,
+    )
+}
+
+/// Serialize records together with unlock metadata and a human vault label.
+pub fn serialize_stored_yaml_with_unlock_and_name(
+    records: &[StoredSecretRecord],
+    unlock: &VaultUnlock,
+    password_entries: &[PasswordUnlockEntry],
+    store_id: Option<&str>,
+    vault_name: Option<&str>,
+    vault_version: Option<u64>,
+) -> VaultFormatResult<VaultYamlBlob> {
     let mut vault = partition_yaml_records(records);
     vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
     vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
+    vault.name = resolve_vault_name_for_write(vault_name);
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
+    serde_yaml::to_string(&vault)
+        .map(VaultYamlBlob::from_trusted)
+        .map_err(VaultFormatError::YamlSerialize)
+}
+
+/// Read the human-readable vault label from on-disk YAML.
+pub fn read_vault_name(stored: &str) -> VaultFormatResult<Option<String>> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Ok(None);
+    }
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
+    Ok(vault
+        .name
+        .and_then(|name| resolve_vault_name_for_write(Some(&name))))
+}
+
+/// Update the human-readable vault label without decrypting records.
+pub fn set_vault_name(stored: &str, name: &str) -> VaultFormatResult<VaultYamlBlob> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Err(VaultFormatError::YamlMissingSections);
+    }
+    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
+        return Err(VaultFormatError::UnrecognizedFormat {
+            first_line: "jsonl".to_owned(),
+        });
+    }
+    let mut vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
+    vault.name = resolve_vault_name_for_write(Some(name));
     serde_yaml::to_string(&vault)
         .map(VaultYamlBlob::from_trusted)
         .map_err(VaultFormatError::YamlSerialize)
@@ -873,6 +938,45 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             read_vault_store_id(backfilled.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
+    }
+
+    #[test]
+    fn vault_name_roundtrip_and_update() {
+        let records = sample_records();
+        let yaml = serialize_stored_yaml_with_unlock_and_name(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("  Personal vault  "),
+            Some(1),
+        )
+        .unwrap();
+        assert!(yaml.as_str().contains("name: Personal vault"));
+        assert_eq!(
+            read_vault_name(yaml.as_str()).unwrap(),
+            Some("Personal vault".to_owned())
+        );
+        assert_eq!(deserialize_stored_yaml(yaml.as_str()).unwrap(), records);
+
+        let renamed = set_vault_name(yaml.as_str(), "Work vault").unwrap();
+        assert_eq!(
+            read_vault_name(renamed.as_str()).unwrap(),
+            Some("Work vault".to_owned())
+        );
+        assert_eq!(read_vault_version(renamed.as_str()).unwrap(), 1);
+        assert_eq!(
+            read_vault_store_id(renamed.as_str()).unwrap(),
+            Some("store_SMypl8K0w9Y".to_owned())
+        );
+        assert_eq!(deserialize_stored_yaml(renamed.as_str()).unwrap(), records);
+    }
+
+    #[test]
+    fn vault_name_is_optional_for_legacy_yaml() {
+        let legacy = "schema_version: 1\nstore_id: store_SMypl8K0w9Y\nsecrets: []\n";
+        assert_eq!(read_vault_name(legacy).unwrap(), None);
+        assert!(deserialize_stored_yaml(legacy).unwrap().is_empty());
     }
 
     #[test]

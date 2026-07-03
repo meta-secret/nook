@@ -329,7 +329,8 @@ impl NookVaultManager {
         self.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.unlock = nook_core::VaultUnlock::Keys;
-        let import_yaml = nook_core::serialize_stored_yaml_with_unlock(
+        let content_vault_name = nook_core::read_vault_name(&content).ok().flatten();
+        let import_yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
             &self.unlock,
             &self.password_entries,
@@ -337,6 +338,7 @@ impl NookVaultManager {
                 .ok()
                 .flatten()
                 .as_deref(),
+            content_vault_name.as_deref().or(self.vault_name.as_deref()),
             None,
         )?;
         self.import_stored_vault_to_event_log(import_yaml.as_str())

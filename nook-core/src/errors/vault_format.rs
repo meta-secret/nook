@@ -28,6 +28,9 @@ pub enum VaultFormatError {
     #[error("Failed to parse stored YAML for store id")]
     YamlParseStoreId(#[source] serde_yaml::Error),
 
+    #[error("Failed to parse stored YAML for vault name")]
+    YamlParseName(#[source] serde_yaml::Error),
+
     #[error("Failed to parse stored YAML: expected secrets/auth/joins/members sections")]
     YamlMissingSections,
 

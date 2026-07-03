@@ -101,6 +101,7 @@ export async function createLocalVaultWithDeviceKeys(
     state.markVaultUnlocked()
     const storeId = requireManagerVaultStoreId(state.manager)
     state.activeVaultStoreId = storeId
+    state.manager.setVaultName(trimmedLabel)
     await renameLocalVault(storeId, trimmedLabel)
     await refreshLocalVaultCatalog(state)
     state.localLoginPrepared = true

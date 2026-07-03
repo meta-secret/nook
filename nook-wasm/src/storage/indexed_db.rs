@@ -144,6 +144,10 @@ fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
         .ok_or_else(|| NookError::Database("Vault YAML is missing store_id.".to_owned()))
 }
 
+fn label_from_yaml(content: &str) -> Option<String> {
+    nook_core::read_vault_name(content).ok().flatten()
+}
+
 pub(crate) async fn load_vault_registry() -> Result<VaultRegistry, NookError> {
     let raw = idb_get_string(VAULT_REGISTRY_KEY).await?;
     let Some(json) = raw else {
@@ -522,7 +526,12 @@ pub(crate) async fn set_local_vault_label(store_id: &str, label: &str) -> Result
         )));
     }
     upsert_registry_entry(&mut registry, store_id, Some(trimmed), false);
-    save_vault_registry(&registry).await
+    save_vault_registry(&registry).await?;
+    if let Some(content) = load_vault_blob(store_id).await? {
+        let named = nook_core::set_vault_name(&content, trimmed)?;
+        idb_put_string(&vault_blob_key(store_id), named.as_str()).await?;
+    }
+    Ok(())
 }
 
 pub(crate) async fn switch_active_vault(store_id: &str) -> Result<(), NookError> {
@@ -547,9 +556,11 @@ pub(crate) async fn import_vault_blob(
 ) -> Result<String, NookError> {
     let store_id = store_id_from_yaml(content)?;
     save_vault_blob(&store_id, content).await?;
-    if label.is_some() {
+    let yaml_label = label_from_yaml(content);
+    let label = label.or(yaml_label.as_deref());
+    if let Some(label) = label {
         let mut registry = load_vault_registry().await?;
-        upsert_registry_entry(&mut registry, &store_id, label, false);
+        upsert_registry_entry(&mut registry, &store_id, Some(label), false);
         save_vault_registry(&registry).await?;
     }
     Ok(store_id)

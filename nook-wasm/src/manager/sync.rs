@@ -35,12 +35,8 @@ impl NookVaultManager {
         // toggles the local-cache/remote tag, so preserve the backup-password
         // envelope; otherwise the subsequent `persist_projection_cache` rewrites
         // the local YAML without it and drops the password unlock envelope.
-        let password_entries = self.password_entries.clone();
-        let unlock = self.unlock.clone();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
-        self.password_entries = password_entries;
-        self.unlock = unlock;
 
         if self.event_log_mode || is_event_log_mode().await? {
             self.event_log_mode = true;
@@ -85,11 +81,8 @@ impl NookVaultManager {
             if restore_local {
                 // Same preservation as above: flipping the tag back to the local
                 // cache must not wipe the in-memory password envelope.
-                let password_entries = self.password_entries.clone();
-                let unlock = self.unlock.clone();
-                self.prepare_storage("local", "", "").await?;
-                self.password_entries = password_entries;
-                self.unlock = unlock;
+                self.prepare_storage_preserving_vault_metadata("local", "", "")
+                    .await?;
             }
             return Ok(result);
         }
@@ -167,6 +160,23 @@ impl NookVaultManager {
             return Ok(joins_changed || content_changed || has_remote_joins);
         }
         Ok(false)
+    }
+
+    async fn prepare_storage_preserving_vault_metadata(
+        &mut self,
+        storage_mode: &str,
+        github_pat: &str,
+        github_repo: &str,
+    ) -> Result<(), NookError> {
+        let password_entries = self.password_entries.clone();
+        let unlock = self.unlock.clone();
+        let vault_name = self.vault_name.clone();
+        self.prepare_storage(storage_mode, github_pat, github_repo)
+            .await?;
+        self.password_entries = password_entries;
+        self.unlock = unlock;
+        self.vault_name = vault_name;
+        Ok(())
     }
 
     /// Merge user secret ciphertext from the remote YAML projection cache.
