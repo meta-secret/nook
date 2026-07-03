@@ -164,6 +164,18 @@ test.describe('multi-vault on one browser profile', () => {
     await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
 
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await expect(
+      page.locator(
+        '[data-testid="vault-admin-name"][data-store-id="' + storeB + '"]',
+      ),
+    ).toContainText('Vault B')
+    await page
+      .locator(
+        '[data-testid="vault-admin-rename-btn"][data-store-id="' +
+          storeB +
+          '"]',
+      )
+      .click()
     await page
       .locator(
         '[data-testid="vault-admin-name-input"][data-store-id="' +

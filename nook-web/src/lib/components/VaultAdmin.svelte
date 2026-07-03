@@ -3,8 +3,10 @@
     Check,
     CheckCircle2,
     FolderKey,
+    PencilLine,
     Plus,
     RefreshCw,
+    X,
   } from '@lucide/svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -27,6 +29,7 @@
   let drafts = $state<Record<string, string>>({})
   let draftSeed = $state('')
   let creating = $state(false)
+  let editingStoreId = $state<string | null>(null)
   let renamingStoreId = $state<string | null>(null)
   let switchingTo = $state<string | null>(null)
 
@@ -74,6 +77,19 @@
     )
   }
 
+  function beginRename(entry: LocalVaultEntry) {
+    if (isBusy) return
+    setDraft(entry, vaultDisplayLabel(entry, vault.t))
+    editingStoreId = entry.storeId
+  }
+
+  function cancelRename(entry: LocalVaultEntry) {
+    setDraft(entry, vaultDisplayLabel(entry, vault.t))
+    if (editingStoreId === entry.storeId) {
+      editingStoreId = null
+    }
+  }
+
   async function createVault() {
     const label = newVaultName.trim()
     if (!label || isBusy) return
@@ -93,6 +109,9 @@
     renamingStoreId = entry.storeId
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry))
+      if (!vault.errorMsg) {
+        editingStoreId = null
+      }
     } finally {
       renamingStoreId = null
     }
@@ -177,6 +196,7 @@
       >
         {#each vaults as entry (entry.storeId)}
           {@const isActive = entry.storeId === activeStoreId}
+          {@const isEditing = editingStoreId === entry.storeId}
           <li
             class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
             data-testid="vault-admin-entry"
@@ -194,25 +214,40 @@
             </div>
 
             <div class="min-w-0 space-y-2">
-              <input
-                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                aria-label={vault.t('vault.manager_name_label')}
-                data-testid="vault-admin-name-input"
-                data-store-id={entry.storeId}
-                value={draftFor(entry)}
-                disabled={isBusy}
-                oninput={(event) =>
-                  setDraft(
-                    entry,
-                    (event.currentTarget as HTMLInputElement).value,
-                  )}
-                onkeydown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void renameVault(entry)
-                  }
-                }}
-              />
+              {#if isEditing}
+                <input
+                  class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+                  aria-label={vault.t('vault.manager_name_label')}
+                  data-testid="vault-admin-name-input"
+                  data-store-id={entry.storeId}
+                  value={draftFor(entry)}
+                  disabled={isBusy}
+                  oninput={(event) =>
+                    setDraft(
+                      entry,
+                      (event.currentTarget as HTMLInputElement).value,
+                    )}
+                  onkeydown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void renameVault(entry)
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault()
+                      cancelRename(entry)
+                    }
+                  }}
+                />
+              {:else}
+                <div
+                  class="flex h-10 min-w-0 items-center"
+                  data-testid="vault-admin-name"
+                  data-store-id={entry.storeId}
+                >
+                  <span class="truncate text-sm font-medium text-foreground">
+                    {vaultDisplayLabel(entry, vault.t)}
+                  </span>
+                </div>
+              {/if}
               <div
                 class="truncate font-mono text-[10px] leading-none text-muted-foreground"
               >
@@ -223,7 +258,21 @@
             <div
               class="grid grid-cols-2 gap-2 md:w-[14.5rem] md:grid-cols-[7rem_6.5rem]"
             >
-              {#if !isActive}
+              {#if isEditing}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="h-10 w-full"
+                  data-testid="vault-admin-cancel-rename-btn"
+                  data-store-id={entry.storeId}
+                  disabled={renamingStoreId === entry.storeId}
+                  onclick={() => cancelRename(entry)}
+                >
+                  <X class="size-4" />
+                  {vault.t('common.cancel')}
+                </Button>
+              {:else if !isActive}
                 <Button
                   type="button"
                   variant="outline"
@@ -255,13 +304,16 @@
                 class="h-10 w-full"
                 data-testid="vault-admin-rename-btn"
                 data-store-id={entry.storeId}
-                disabled={!canSave(entry)}
-                onclick={() => void renameVault(entry)}
+                disabled={isEditing ? !canSave(entry) : isBusy}
+                onclick={() =>
+                  isEditing ? void renameVault(entry) : beginRename(entry)}
               >
-                {#if renamingStoreId === entry.storeId}
+                {#if isEditing && renamingStoreId === entry.storeId}
                   <RefreshCw class="size-4 animate-spin" />
+                {:else if !isEditing}
+                  <PencilLine class="size-4" />
                 {/if}
-                {vault.t('common.save')}
+                {vault.t('common.rename')}
               </Button>
             </div>
           </li>
