@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Plus } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
   import type { VaultState } from '$lib/vault.svelte'
@@ -12,6 +14,7 @@
     isUnlocking = false,
     onUnlock,
     onUnlockWithPassword,
+    onCreateAnotherVault,
   }: {
     vault: VaultState
     passwordEntries?: VaultPasswordEntrySummary[]
@@ -24,6 +27,7 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
+    onCreateAnotherVault?: () => void | Promise<void>
   } = $props()
 </script>
 
@@ -46,4 +50,18 @@
     {onUnlock}
     {onUnlockWithPassword}
   />
+
+  {#if onCreateAnotherVault}
+    <Button
+      type="button"
+      variant="outline"
+      class="w-full sm:w-auto"
+      data-testid="login-create-additional-vault-btn"
+      disabled={isVerifying || isInitializing}
+      onclick={() => onCreateAnotherVault()}
+    >
+      <Plus class="size-4" />
+      {vault.t('login.vault_picker_create_new')}
+    </Button>
+  {/if}
 </div>

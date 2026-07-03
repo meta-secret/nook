@@ -105,18 +105,10 @@ async function seedScopedGithubProviders(
   )
   await disableLoginAutoUnlock(page)
   await page.reload()
-  await expect(page.getByTestId('login-vault-picker')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
+  await expect(page.getByTestId('login-gate')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page
-    .locator(
-      '[data-testid="login-vault-option"][data-store-id="' + storeA + '"]',
-    )
-    .click()
-  await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
-  await unlockVaultOnLogin(page)
+  await unlockVaultOnLogin(page, { storeId: storeA })
   await expect(page.getByTestId('vault-panel')).toBeVisible()
 }
 
@@ -132,7 +124,7 @@ test.describe('multi-vault on one browser profile', () => {
     const storeA = parseStoreId(vaultAYaml)
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-vault-picker')).toBeVisible({
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 

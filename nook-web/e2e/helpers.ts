@@ -1643,8 +1643,22 @@ export async function selectLoginUnlockMethod(
 /** Unlock from the login gate — optional password when device keys are unavailable. */
 export async function unlockVaultOnLogin(
   page: Page,
-  opts?: { password?: string; entryLabel?: string },
+  opts?: { password?: string; entryLabel?: string; storeId?: string },
 ) {
+  const vaultPicker = page.getByTestId('login-vault-picker')
+  if (await vaultPicker.isVisible()) {
+    const option = opts?.storeId
+      ? page.locator(
+          `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
+        )
+      : page.getByTestId('login-vault-option').first()
+    await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await option.click()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+  }
+
   const localUnlock = page.getByTestId('login-local-unlock-step')
   if (await localUnlock.isVisible()) {
     if (opts?.password) {

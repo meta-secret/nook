@@ -267,6 +267,7 @@
             {isUnlocking}
             {onUnlock}
             {onUnlockWithPassword}
+            onCreateAnotherVault={onCreateDeviceVault}
           />
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}

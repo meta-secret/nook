@@ -556,7 +556,7 @@ export class VaultState {
   get showLoginVaultPicker(): boolean {
     return (
       !this.isAuthenticated &&
-      this.localVaults.length >= 1 &&
+      this.localVaults.length > 1 &&
       this.selectedLoginVaultStoreId === null &&
       this.loginSetupType === null &&
       !this.addProviderOpen &&
