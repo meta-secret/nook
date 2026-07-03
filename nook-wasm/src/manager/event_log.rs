@@ -269,11 +269,12 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.meta.to_stored_records();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock(
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
             &self.unlock,
             &self.password_entries,
             Some(self.store_id.as_str()),
+            self.vault_name.as_deref(),
             None,
         )?;
         save_to_indexed_db(yaml.as_str()).await?;

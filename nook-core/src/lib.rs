@@ -121,8 +121,9 @@ pub use validation::{
     validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };
 pub use vault_connect::{
-    LoadedVault, VaultAccessStatus, access_status_for_vault_content, apply_member_records,
-    capture_vault_unlock_from_content, content_requires_genesis, load_stored_vault,
+    LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,
+    apply_member_records, capture_vault_unlock_from_content, content_requires_genesis,
+    load_stored_vault,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch::{
@@ -146,9 +147,10 @@ pub use vault_event_session::VaultEventSession;
 pub use vault_event_store::{LocalEventStore, union_remote_events, union_remote_events_and_heads};
 pub use vault_format::{
     VaultFormat, current_vault_schema_version, deserialize_stored,
-    deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_password_entries,
-    read_vault_schema_version, read_vault_store_id, read_vault_unlock, read_vault_version,
-    serialize_stored, serialize_stored_yaml_with_unlock,
+    deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,
+    read_vault_password_entries, read_vault_schema_version, read_vault_store_id, read_vault_unlock,
+    read_vault_version, serialize_stored, serialize_stored_yaml_with_unlock,
+    serialize_stored_yaml_with_unlock_and_name, set_vault_name,
 };
 pub use vault_ids::{
     AUTH_KEY_ID_PREFIX, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX, STORE_ID_PREFIX,

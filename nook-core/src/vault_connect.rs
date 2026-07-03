@@ -53,6 +53,15 @@ pub struct LoadedVault {
     pub members_key: String,
 }
 
+/// Non-secret top-level YAML metadata captured without decrypting records.
+pub struct VaultContentMetadata {
+    pub unlock: VaultUnlock,
+    pub password_entries: Vec<crate::PasswordUnlockEntry>,
+    pub store_id: Option<String>,
+    pub vault_name: Option<String>,
+    pub version: u64,
+}
+
 /// Whether connect should bootstrap a genesis vault for this content.
 pub fn content_requires_genesis(content: &str, force_genesis: bool) -> VaultResult<bool> {
     if force_genesis {
@@ -114,19 +123,19 @@ pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[Stored
 }
 
 /// Read unlock metadata from vault YAML without decrypting secrets.
-pub fn capture_vault_unlock_from_content(
-    content: &str,
-) -> VaultResult<(
-    VaultUnlock,
-    Vec<crate::PasswordUnlockEntry>,
-    Option<String>,
-    u64,
-)> {
+pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultContentMetadata> {
     let unlock = crate::read_vault_unlock(content).unwrap_or(VaultUnlock::Keys);
     let password_entries = crate::read_vault_password_entries(content).unwrap_or_default();
     let store_id = crate::read_vault_store_id(content).ok().flatten();
+    let vault_name = crate::read_vault_name(content).ok().flatten();
     let version = crate::read_vault_version(content).unwrap_or(0);
-    Ok((unlock, password_entries, store_id, version))
+    Ok(VaultContentMetadata {
+        unlock,
+        password_entries,
+        store_id,
+        vault_name,
+        version,
+    })
 }
 
 #[cfg(test)]

@@ -69,6 +69,8 @@ pub struct NookVaultManager {
     pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
     /// Logical secret-store id — persisted in vault YAML and mirrored on saved providers.
     pub(in crate::manager) store_id: String,
+    /// Human-readable vault label persisted in vault YAML.
+    pub(in crate::manager) vault_name: Option<String>,
     /// Monotonic vault revision — incremented on every save.
     pub(in crate::manager) vault_version: u64,
     pub(in crate::manager) status_tx: flume::Sender<String>,
@@ -120,6 +122,7 @@ impl NookVaultManager {
             unlock: nook_core::VaultUnlock::Keys,
             password_entries: Vec::new(),
             store_id: String::new(),
+            vault_name: None,
             vault_version: 0,
             decrypted_jsonl: String::new(),
             file_sha: None,
@@ -152,6 +155,21 @@ impl NookVaultManager {
     #[wasm_bindgen(getter, js_name = vaultVersion)]
     pub fn vault_version(&self) -> u64 {
         self.vault_version
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultName)]
+    pub fn vault_name(&self) -> Option<String> {
+        self.vault_name.clone()
+    }
+
+    #[wasm_bindgen(js_name = setVaultName)]
+    pub fn set_vault_name(&mut self, name: &str) {
+        let trimmed = name.trim();
+        self.vault_name = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        };
     }
 
     #[wasm_bindgen(getter)]
@@ -203,6 +221,7 @@ impl NookVaultManager {
         self.unlock = nook_core::VaultUnlock::Keys;
         self.use_local_cache_for_connect = false;
         self.store_id.clear();
+        self.vault_name = None;
         self.vault_version = 0;
         self.event_log_mode = false;
         self.signing_seed.zeroize();
@@ -246,11 +265,12 @@ impl NookVaultManager {
             ));
         }
         let records = self.meta.to_stored_records();
-        Ok(nook_core::serialize_stored_yaml_with_unlock(
+        Ok(nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
             &self.unlock,
             &self.password_entries,
             Some(self.store_id.as_str()),
+            self.vault_name.as_deref(),
             None,
         )?
         .into_inner())
@@ -360,15 +380,16 @@ impl NookVaultManager {
     /// race with our own write and return the pre-write YAML, which
     /// would clobber a freshly-set password envelope back to keys mode.
     pub(in crate::manager) fn capture_vault_unlock(&mut self, content: &str) {
-        if let Ok((unlock, password_entries, store_id, version)) =
-            nook_core::capture_vault_unlock_from_content(content)
-        {
-            self.unlock = unlock;
-            self.password_entries = password_entries;
-            if let Some(id) = store_id {
+        if let Ok(metadata) = nook_core::capture_vault_unlock_from_content(content) {
+            self.unlock = metadata.unlock;
+            self.password_entries = metadata.password_entries;
+            if let Some(id) = metadata.store_id {
                 self.store_id = id;
             }
-            self.vault_version = version;
+            if metadata.vault_name.is_some() {
+                self.vault_name = metadata.vault_name;
+            }
+            self.vault_version = metadata.version;
         }
     }
 
@@ -520,6 +541,7 @@ impl NookVaultManager {
         if previous_mode != self.storage_mode || previous_remote_ref != self.github_repo {
             self.password_entries.clear();
             self.unlock = nook_core::VaultUnlock::Keys;
+            self.vault_name = None;
         }
 
         if mode != nook_core::StorageMode::Local {
