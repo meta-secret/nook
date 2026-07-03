@@ -4,9 +4,12 @@ import {
   normalizeAuthSnapshot,
 } from '$lib/vault-migration'
 import {
+  decryptWithDeviceKey,
   default as initNookWasm,
   defaultDriveVaultFile,
   defaultGithubRepo,
+  encryptWithDeviceKey,
+  ensureDeviceKey,
   formatDriveStorageRef as formatDriveStorageRefCore,
   maskGithubPatHint as maskGithubPatHintCore,
   NookSyncProviderTarget,
@@ -124,6 +127,9 @@ const DB_VERSION = 1
 const STORE = 'auth'
 const STATE_KEY = 'providers'
 
+/** age-armored ciphertext marker — sealed credentials always contain it. */
+const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
+
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
@@ -137,6 +143,93 @@ function openDb(): Promise<IDBDatabase> {
     request.onerror = () =>
       reject(request.error ?? new Error('Failed to open auth IndexedDB.'))
   })
+}
+
+/** True when a credential field is already sealed with the device key. */
+function isSealedSecret(value: string | undefined | null): boolean {
+  return typeof value === 'string' && value.includes(AGE_ARMOR_MARKER)
+}
+
+/**
+ * Seal credential fields (PAT, OAuth tokens) with the WASM device key so nothing
+ * sensitive lands in IndexedDB as plaintext. The device identity is ensured once
+ * up front so concurrent field sealing resolves the same key.
+ */
+async function encryptSnapshot(
+  snapshot: AuthProvidersSnapshot,
+): Promise<AuthProvidersSnapshot> {
+  await ensureDeviceKey()
+  const providers = await Promise.all(
+    snapshot.providers.map(async (provider) => {
+      const next: StorageProvider = { ...provider }
+      if (provider.githubPat && !isSealedSecret(provider.githubPat)) {
+        next.githubPat = await encryptWithDeviceKey(provider.githubPat)
+      }
+      if (provider.oauthFile) {
+        const oauthFile: OAuthFileConfig = { ...provider.oauthFile }
+        if (oauthFile.accessToken && !isSealedSecret(oauthFile.accessToken)) {
+          oauthFile.accessToken = await encryptWithDeviceKey(
+            oauthFile.accessToken,
+          )
+        }
+        if (oauthFile.refreshToken && !isSealedSecret(oauthFile.refreshToken)) {
+          oauthFile.refreshToken = await encryptWithDeviceKey(
+            oauthFile.refreshToken,
+          )
+        }
+        next.oauthFile = oauthFile
+      }
+      return next
+    }),
+  )
+  return { ...snapshot, providers }
+}
+
+/**
+ * Unseal credential fields back to plaintext for in-memory use via the WASM
+ * device key. `hadPlaintext` signals legacy/seeded rows still stored
+ * unencrypted, so callers can re-save to upgrade them to sealed form.
+ */
+async function decryptSnapshot(
+  snapshot: AuthProvidersSnapshot,
+): Promise<{ snapshot: AuthProvidersSnapshot; hadPlaintext: boolean }> {
+  let hadPlaintext = false
+  const providers = await Promise.all(
+    snapshot.providers.map(async (provider) => {
+      const next: StorageProvider = { ...provider }
+      if (provider.githubPat) {
+        if (isSealedSecret(provider.githubPat)) {
+          next.githubPat = await decryptWithDeviceKey(provider.githubPat)
+        } else {
+          hadPlaintext = true
+        }
+      }
+      if (provider.oauthFile) {
+        const oauthFile: OAuthFileConfig = { ...provider.oauthFile }
+        if (oauthFile.accessToken) {
+          if (isSealedSecret(oauthFile.accessToken)) {
+            oauthFile.accessToken = await decryptWithDeviceKey(
+              oauthFile.accessToken,
+            )
+          } else {
+            hadPlaintext = true
+          }
+        }
+        if (oauthFile.refreshToken) {
+          if (isSealedSecret(oauthFile.refreshToken)) {
+            oauthFile.refreshToken = await decryptWithDeviceKey(
+              oauthFile.refreshToken,
+            )
+          } else {
+            hadPlaintext = true
+          }
+        }
+        next.oauthFile = oauthFile
+      }
+      return next
+    }),
+  )
+  return { snapshot: { ...snapshot, providers }, hadPlaintext }
 }
 
 function migrateFromLocalStorage(
@@ -226,9 +319,12 @@ export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
       request.onerror = () =>
         reject(request.error ?? new Error('Failed to read auth providers.'))
     })
-    let snapshot = migrateFromLocalStorage(loaded.snapshot)
+    const { snapshot: decrypted, hadPlaintext } = await decryptSnapshot(
+      loaded.snapshot,
+    )
+    let snapshot = migrateFromLocalStorage(decrypted)
     snapshot = migrateProviderFields(snapshot)
-    if (loaded.changed || snapshot !== loaded.snapshot) {
+    if (loaded.changed || hadPlaintext || snapshot !== decrypted) {
       await saveAuthProviders(snapshot)
     }
     return snapshot
@@ -255,12 +351,16 @@ export async function loadAuthProvidersWithVaultMigration(): Promise<AuthProvide
       request.onerror = () =>
         reject(request.error ?? new Error('Failed to read auth providers.'))
     })
-    let snapshot = migrateFromLocalStorage(loaded.snapshot)
+    const { snapshot: decrypted, hadPlaintext } = await decryptSnapshot(
+      loaded.snapshot,
+    )
+    let snapshot = migrateFromLocalStorage(decrypted)
     snapshot = migrateProviderFields(snapshot)
     const { snapshot: migratedSnapshot, migrated: copiedVault } =
       await migrateLegacyVaultToLocal(snapshot, loaded.legacyActiveProviderId)
     const shouldSave =
       loaded.changed ||
+      hadPlaintext ||
       copiedVault ||
       migratedSnapshot.providers.length !== snapshot.providers.length
     if (shouldSave) {
@@ -275,7 +375,7 @@ export async function loadAuthProvidersWithVaultMigration(): Promise<AuthProvide
 export async function saveAuthProviders(
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
-  const storable = toStorableSnapshot(snapshot)
+  const storable = await encryptSnapshot(toStorableSnapshot(snapshot))
   const db = await openDb()
   try {
     await new Promise<void>((resolve, reject) => {

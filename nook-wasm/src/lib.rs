@@ -232,6 +232,41 @@ pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
     nook_core::peek_enrollment_issued_at(code)
 }
 
+/// Ensure this browser's device identity exists (creating and persisting it on
+/// first use) and return the device id. Callers seal/open credentials against
+/// this key via [`encrypt_with_device_key`] / [`decrypt_with_device_key`].
+#[wasm_bindgen(js_name = ensureDeviceKey)]
+pub async fn ensure_device_key() -> Result<String, wasm_bindgen::JsError> {
+    Ok(crate::storage::indexed_db::ensure_device_identity_record()
+        .await?
+        .device_id)
+}
+
+fn device_identity_from_store(
+    record: &crate::storage::indexed_db::DeviceIdentityRecord,
+) -> Result<nook_core::DeviceIdentity, wasm_bindgen::JsError> {
+    Ok(nook_core::DeviceIdentity::from_secret_str(
+        &nook_core::DeviceIdentitySecret::parse(&record.secret)?,
+    )?)
+}
+
+/// Seal a credential string to this device's key so it is never persisted in
+/// plaintext. Returns an age-armored ciphertext bound to the device identity.
+#[wasm_bindgen(js_name = encryptWithDeviceKey)]
+pub async fn encrypt_with_device_key(plaintext: String) -> Result<String, wasm_bindgen::JsError> {
+    let record = crate::storage::indexed_db::ensure_device_identity_record().await?;
+    let identity = device_identity_from_store(&record)?;
+    Ok(identity.seal_utf8(&plaintext)?.into_inner())
+}
+
+/// Open a credential string previously sealed with [`encrypt_with_device_key`].
+#[wasm_bindgen(js_name = decryptWithDeviceKey)]
+pub async fn decrypt_with_device_key(ciphertext: String) -> Result<String, wasm_bindgen::JsError> {
+    let record = crate::storage::indexed_db::ensure_device_identity_record().await?;
+    let identity = device_identity_from_store(&record)?;
+    Ok(identity.open_utf8(&nook_core::AgeArmoredCiphertext::parse(&ciphertext)?)?)
+}
+
 #[wasm_bindgen(js_name = hasLocalVault)]
 pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
     Ok(crate::storage::indexed_db::has_local_vault().await?)

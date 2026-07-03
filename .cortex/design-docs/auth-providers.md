@@ -35,7 +35,11 @@ interface StorageProvider {
 }
 ```
 
-**Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`.
+**Credentials are sealed at rest with the device key.** Secret fields — `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed before write (`saveAuthProviders`) and unsealed on read (`loadAuthProviders`). Non-secret fields (labels, repo, timestamps) stay plaintext. Sealing/unsealing runs entirely in Rust/WASM (crypto never lives in TypeScript — see [rules.md §1](../rules.md)): `encryptSnapshot`/`decryptSnapshot` in [`auth-providers.ts`](../../nook-web/src/lib/auth-providers.ts) call the `encryptWithDeviceKey` / `decryptWithDeviceKey` wasm bindings.
+
+**Device key = existing device identity.** No new key is minted for provider storage. The wasm functions reuse this browser's **age X25519 device identity** (`device_id` / `device_identity_secret` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which the load path uses to distinguish sealed vs legacy-plaintext fields). `ensureDeviceKey` creates and persists the identity on first use so encrypt/decrypt always resolve the same key.
+
+**Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`hadPlaintext` upgrade path).
 
 **Provider switch:** Changing the active saved provider calls `resetVaultSession` in wasm and clears login password-entry preview state so backup-password lists always reflect the remote vault for that provider — never a prior provider's in-memory session.
 
@@ -102,6 +106,8 @@ Version-based sync is in `nook-core/src/vault_sync.rs`. UI uses local-first `enc
 
 ## 6. Security notes
 
-- GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise of browser storage exposes GitHub repo access, not plaintext secrets (still encrypted in vault file).
-- Device identity and encrypted vault blob remain in separate IDB database (`nook_db`).
-- E2E tests clear both `nook_db` and `nook_auth` on reset.
+- Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with the device's age X25519 identity** (in Rust/WASM) before hitting IndexedDB — never stored as plaintext. A raw `nook_auth` dump exposes age-armored ciphertext, not tokens.
+- Sealing protects against passive at-rest inspection of IndexedDB, not against code executing in the page (XSS), which can still ask WASM to unseal. The device secret itself lives in `nook_db` (`device_identity_secret`); an attacker with both databases can decrypt — this is storage-at-rest hardening, not a substitute for vault encryption.
+- GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise exposes GitHub repo access, not plaintext vault secrets (still independently encrypted in the vault file).
+- Reusing the existing device identity means no extra key material and no new key-management surface; the same identity already gates vault-key envelopes.
+- Device identity and encrypted vault blob remain in a separate IDB database (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.

@@ -414,6 +414,18 @@ impl DeviceIdentity {
     ) -> MultiDeviceResult<SymmetricKey> {
         self.decrypt_envelope(envelope)
     }
+
+    /// Seal an arbitrary UTF-8 string to this device's own public key so only
+    /// this device (holding the matching identity secret) can open it later.
+    /// Used to keep sync-provider credentials encrypted at rest in `IndexedDB`.
+    pub fn seal_utf8(&self, plaintext: &str) -> MultiDeviceResult<AgeArmoredCiphertext> {
+        encrypt_with_recipient(plaintext.as_bytes(), &self.identity.to_public())
+    }
+
+    /// Open a string previously sealed with [`DeviceIdentity::seal_utf8`].
+    pub fn open_utf8(&self, ciphertext: &AgeArmoredCiphertext) -> MultiDeviceResult<String> {
+        decrypt_with_identity(ciphertext, &self.identity)
+    }
 }
 
 pub fn device_id_from_public(recipient: &Recipient) -> DeviceId {
@@ -1226,6 +1238,52 @@ mod tests {
     fn resolve_secrets_key_fails_without_auth_envelope() {
         let device = DeviceIdentity::generate().unwrap();
         assert!(resolve_secrets_key(&[], &device).is_err());
+    }
+
+    #[test]
+    fn seal_and_open_utf8_round_trips_on_same_device() {
+        let device = DeviceIdentity::generate().unwrap();
+        let secret = "github_pat_11ABCDEF_credential";
+        let sealed = device.seal_utf8(secret).unwrap();
+        assert!(sealed.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
+        assert!(!sealed.as_str().contains(secret));
+        assert_eq!(device.open_utf8(&sealed).unwrap(), secret);
+    }
+
+    #[test]
+    fn sealed_secret_cannot_be_opened_by_another_device() {
+        let device = DeviceIdentity::generate().unwrap();
+        let other = DeviceIdentity::generate().unwrap();
+        let sealed = device.seal_utf8("ya29.access-token").unwrap();
+        assert!(other.open_utf8(&sealed).is_err());
+    }
+
+    #[test]
+    fn sealed_secret_survives_identity_secret_reload() {
+        let device = DeviceIdentity::generate().unwrap();
+        let sealed = device.seal_utf8("refresh-token-xyz").unwrap();
+        let reloaded = DeviceIdentity::from_secret_str(&device.secret_string()).unwrap();
+        assert_eq!(reloaded.open_utf8(&sealed).unwrap(), "refresh-token-xyz");
+    }
+
+    #[test]
+    fn seal_utf8_handles_unicode_and_empty() {
+        let device = DeviceIdentity::generate().unwrap();
+        for secret in ["tökén-🔐-密码", ""] {
+            let sealed = device.seal_utf8(secret).unwrap();
+            assert_eq!(device.open_utf8(&sealed).unwrap(), secret);
+        }
+    }
+
+    #[test]
+    fn open_utf8_rejects_non_age_ciphertext() {
+        let device = DeviceIdentity::generate().unwrap();
+        assert!(AgeArmoredCiphertext::parse("not-armored").is_err());
+        let bogus = AgeArmoredCiphertext::from_trusted_armored(
+            "-----BEGIN AGE ENCRYPTED FILE-----\ngarbage\n-----END AGE ENCRYPTED FILE-----"
+                .to_owned(),
+        );
+        assert!(device.open_utf8(&bogus).is_err());
     }
 
     #[test]
