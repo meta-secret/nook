@@ -50,6 +50,9 @@ includes:
   web:
     taskfile: .task/web.yml
     flatten: true
+  extension:
+    taskfile: .task/extension.yml
+    flatten: true
 
 tasks:
   default:

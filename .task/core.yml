@@ -98,10 +98,11 @@ tasks:
         vars: { TASK: _rust:lint }
 
   _build:
-    desc: Build Rust crates, wasm package, and web app.
+    desc: Build Rust crates, wasm package, web app, and browser extension.
     cmds:
       - task: _rust:build
       - task: _web:build
+      - task: _extension:build
 
   _test:
     desc: Run all test suites.
@@ -110,12 +111,14 @@ tasks:
       # so the image would not exist if they failed — only web tests run at task runtime.
       - task: _web:check
       - task: _web:test
+      - task: _extension:check
 
   _lint:
     desc: Run all linters.
     cmds:
       - task: _rust:lint
       - task: _web:lint
+      - task: _extension:format:check
 
   _check:
     desc: Run formatting, linting, tests, and builds.
@@ -139,15 +142,17 @@ tasks:
       - _test:parallel
 
   _lint:parallel:
-    desc: Web linters only — Rust clippy already runs in the toolchain docker build warm-up.
+    desc: Web and extension linters only — Rust clippy already runs in the toolchain docker build warm-up.
     cmds:
       - task: _web:lint:parallel
+      - task: _extension:format:check
 
   _test:parallel:
-    desc: svelte-check ‖ vitest when wasm is already built (nook-core tests+coverage ran at image build).
+    desc: svelte-check, vitest, and extension check when wasm is already built (nook-core tests+coverage ran at image build).
     deps:
       - _web:check:parallel
       - _web:test:parallel
+      - _extension:check
 
   _rust:test:parallel:
     desc: Run nook-core tests when deps are already built (ci:pr parallel track).
@@ -188,6 +193,7 @@ tasks:
     cmds:
       - cargo fmt --all
       - cd nook-web && bun run format
+      - cd nook-web-extension && bun run format
       - >-
         sh -c 'if git diff --quiet; then
           echo "==> Already formatted; no changes.";
@@ -201,6 +207,7 @@ tasks:
     cmds:
       - cargo fmt --all -- --check
       - cd nook-web && bun run format:check
+      - cd nook-web-extension && bun run format:check
 
   _rust:build:
     desc: Build the native Rust crate (wasm is built via _wasm:build).

@@ -13,6 +13,9 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 |                         nook-web                            |
 |             (Vite + Svelte 5 + TypeScript UI)               |
 +-------------------------------------------------------------+
+|                    nook-web-extension                       |
+|       (Manifest V3 extension UI, service worker, scripts)   |
++-------------------------------------------------------------+
                                |
                                v (consumes generated bindings)
 +-------------------------------------------------------------+
@@ -57,7 +60,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
-### C. `nook-web` (The Presentation Layer)
+### C. `nook-web` (The Web Presentation Layer)
 
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
@@ -68,6 +71,13 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
 - **`nook.ts`:** WASM loader + sync result mapping; vault secrets are `NookSecretRecord` wasm objects (no TS schema mirror).
 - **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
+
+### D. `nook-web-extension` (The Browser Extension Layer)
+
+- **Manifest V3 package:** Browser extension build output lives in `nook-web-extension/dist`; source lives under `nook-web-extension/src`.
+- **Separate product surface:** Popup UI, service worker, content scripts, and future autofill flows stay out of `nook-web` so extension-only browser privileges and page-injection code do not leak into the web app.
+- **Task/Docker integration:** `task extension:build` builds the extension in Docker; the sealed `nook-web:local` image also builds `nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
+- **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 
 ---
 

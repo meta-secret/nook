@@ -7,6 +7,7 @@
 nook-web/node_modules/
 nook-web/dist/
 nook-web/dist-prod/
+nook-web-extension/dist/
 agentic-ai/ci-agent/node_modules/
 agentic-ai/ci-agent/dist/
 agentic-ai/ci-agent/dist-test/
