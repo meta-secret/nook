@@ -178,59 +178,57 @@
         {#each vaults as entry (entry.storeId)}
           {@const isActive = entry.storeId === activeStoreId}
           <li
-            class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 sm:grid-cols-[1fr_auto]"
+            class="grid gap-3 border-b border-border/60 p-3 last:border-b-0 md:grid-cols-[2.5rem_minmax(0,1fr)_auto] md:items-start"
             data-testid="vault-admin-entry"
             data-store-id={entry.storeId}
           >
-            <div class="grid min-w-0 gap-3 sm:grid-cols-[auto_1fr]">
+            <div
+              class="flex size-10 items-center justify-center rounded-md border border-border/50 bg-muted/20 text-muted-foreground md:mt-0.5"
+              aria-hidden="true"
+            >
               <FolderKey
-                class="mt-2 hidden size-4 shrink-0 text-primary sm:block"
+                class="size-4 {isActive
+                  ? 'text-primary'
+                  : 'text-muted-foreground'}"
               />
-              <div class="min-w-0 space-y-2">
-                <div class="flex min-w-0 items-center gap-2">
-                  <input
-                    class="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                    aria-label={vault.t('vault.manager_name_label')}
-                    data-testid="vault-admin-name-input"
-                    data-store-id={entry.storeId}
-                    value={draftFor(entry)}
-                    disabled={isBusy}
-                    oninput={(event) =>
-                      setDraft(
-                        entry,
-                        (event.currentTarget as HTMLInputElement).value,
-                      )}
-                    onkeydown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void renameVault(entry)
-                      }
-                    }}
-                  />
-                  {#if isActive}
-                    <span
-                      class="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-2 text-xs font-medium text-primary"
-                      data-testid="vault-admin-active-badge"
-                    >
-                      <Check class="size-3.5" />
-                      {vault.t('vault.switcher_open_badge')}
-                    </span>
-                  {/if}
-                </div>
-                <div
-                  class="truncate font-mono text-[10px] text-muted-foreground"
-                >
-                  {entry.storeId}
-                </div>
+            </div>
+
+            <div class="min-w-0 space-y-2">
+              <input
+                class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+                aria-label={vault.t('vault.manager_name_label')}
+                data-testid="vault-admin-name-input"
+                data-store-id={entry.storeId}
+                value={draftFor(entry)}
+                disabled={isBusy}
+                oninput={(event) =>
+                  setDraft(
+                    entry,
+                    (event.currentTarget as HTMLInputElement).value,
+                  )}
+                onkeydown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void renameVault(entry)
+                  }
+                }}
+              />
+              <div
+                class="truncate font-mono text-[10px] leading-none text-muted-foreground"
+              >
+                {entry.storeId}
               </div>
             </div>
 
-            <div class="flex flex-wrap items-center justify-end gap-2">
+            <div
+              class="grid grid-cols-2 gap-2 md:w-[14.5rem] md:grid-cols-[7rem_6.5rem]"
+            >
               {#if !isActive}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
+                  class="h-10 w-full"
                   data-testid="vault-admin-switch-btn"
                   data-store-id={entry.storeId}
                   disabled={isBusy}
@@ -241,11 +239,20 @@
                   {/if}
                   {vault.t('common.switch')}
                 </Button>
+              {:else}
+                <span
+                  class="inline-flex h-10 w-full items-center justify-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-3 text-sm font-medium text-primary"
+                  data-testid="vault-admin-active-badge"
+                >
+                  <Check class="size-4" />
+                  {vault.t('vault.switcher_open_badge')}
+                </span>
               {/if}
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
+                class="h-10 w-full"
                 data-testid="vault-admin-rename-btn"
                 data-store-id={entry.storeId}
                 disabled={!canSave(entry)}
