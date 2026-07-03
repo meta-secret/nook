@@ -1791,8 +1791,22 @@ export async function selectLoginUnlockMethod(
 /** Unlock from the login gate — optional password when device keys are unavailable. */
 export async function unlockVaultOnLogin(
   page: Page,
-  opts?: { password?: string; entryLabel?: string },
+  opts?: { password?: string; entryLabel?: string; storeId?: string },
 ) {
+  const vaultPicker = page.getByTestId('login-vault-picker')
+  if (await vaultPicker.isVisible()) {
+    const option = opts?.storeId
+      ? page.locator(
+          `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
+        )
+      : page.getByTestId('login-vault-option').first()
+    await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await option.click()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+  }
+
   const localUnlock = page.getByTestId('login-local-unlock-step')
   if (await localUnlock.isVisible()) {
     if (opts?.password) {
@@ -1944,7 +1958,7 @@ export const E2E_GITHUB_ONBOARD_PROVIDER = {
   githubPat: 'ghp_test_token',
 }
 
-/** Read canonical local vault YAML bytes stored in IndexedDB. */
+/** Read canonical local vault YAML bytes stored in IndexedDB (active vault). */
 export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
   return page.evaluate(() => {
     return new Promise<string>((resolve, reject) => {
@@ -1955,11 +1969,25 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
         const db = request.result
         const tx = db.transaction('vault', 'readonly')
         const store = tx.objectStore('vault')
-        const getReq = store.get('encrypted_db')
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          resolve(String(getReq.result ?? ''))
+        const readBlob = (key: string) =>
+          new Promise<string>((resolveBlob, rejectBlob) => {
+            const getReq = store.get(key)
+            getReq.onerror = () =>
+              rejectBlob(getReq.error ?? new Error('idb read failed'))
+            getReq.onsuccess = () => {
+              resolveBlob(String(getReq.result ?? ''))
+            }
+          })
+        const activeReq = store.get('active_vault_id')
+        activeReq.onerror = () =>
+          reject(activeReq.error ?? new Error('idb read failed'))
+        activeReq.onsuccess = () => {
+          const activeId = String(activeReq.result ?? '').trim()
+          if (activeId) {
+            void readBlob(`vault:${activeId}`).then(resolve).catch(reject)
+            return
+          }
+          void readBlob('encrypted_db').then(resolve).catch(reject)
         }
         tx.oncomplete = () => db.close()
       }

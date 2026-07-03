@@ -55,27 +55,39 @@ export function normalizeAuthSnapshot(raw: unknown): {
     raw !== undefined &&
     typeof raw === 'object' &&
     'activeProviderId' in raw
+  const activeVaultStoreId =
+    typeof value.activeVaultStoreId === 'string'
+      ? value.activeVaultStoreId
+      : undefined
   return {
-    snapshot: { providers },
+    snapshot: { providers, activeVaultStoreId },
     legacyActiveProviderId,
     changed: hadActiveId,
   }
 }
 
-/** Ensure a local provider row exists — canonical vault always lives on this device. */
+/** Ensure a local provider row exists for the active vault. */
 export function ensureLocalProviderRow(
   snapshot: AuthProvidersSnapshot,
+  activeStoreId?: string,
 ): AuthProvidersSnapshot {
-  if (snapshot.providers.some((provider) => provider.type === 'local')) {
+  const storeId = activeStoreId ?? snapshot.activeVaultStoreId
+  const hasLocalForVault = snapshot.providers.some(
+    (provider) =>
+      provider.type === 'local' &&
+      (!storeId || !provider.storeId || provider.storeId === storeId),
+  )
+  if (hasLocalForVault) {
     return snapshot
   }
   const local: StorageProvider = {
     id: generateId(),
     type: 'local',
     label: providerDefaultLabel('local'),
+    storeId,
     createdAt: new Date().toISOString(),
   }
-  return { providers: [local, ...snapshot.providers] }
+  return { ...snapshot, providers: [local, ...snapshot.providers] }
 }
 
 /**

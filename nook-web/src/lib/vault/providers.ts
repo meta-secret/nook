@@ -28,6 +28,9 @@ export async function loadProviders(
   state.providers = snapshot.providers.map((p) =>
     p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
   )
+  if (snapshot.activeVaultStoreId) {
+    state.activeVaultStoreId = snapshot.activeVaultStoreId
+  }
   state.providersLoaded = true
   log.debug('providers loaded', {
     count: state.providers.length,
@@ -98,6 +101,7 @@ export async function persistProviders(
   }
   await saveAuthProviders({
     providers: state.providers,
+    activeVaultStoreId: state.activeVaultStoreId ?? undefined,
   })
 }
 
@@ -245,7 +249,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
     state.providers = [...state.providers, provider]
   } else if (state.localProvider) {
     state.providers = state.providers.map((provider) =>
-      provider.type === 'local'
+      provider.id === state.localProvider?.id
         ? {
             ...provider,
             storeId: vaultStoreId ?? provider.storeId,
@@ -253,9 +257,13 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         : provider,
     )
   } else {
-    state.providers = ensureLocalProviderRow({
-      providers: state.providers,
-    }).providers
+    state.providers = ensureLocalProviderRow(
+      {
+        providers: state.providers,
+        activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+      },
+      vaultStoreId,
+    ).providers
   }
 
   if (state.storageMode === 'oauth-file' && state.oauthFile?.fileId) {

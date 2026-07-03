@@ -21,6 +21,7 @@
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
+  import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
@@ -88,15 +89,21 @@
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== null)
+  const showVaultPicker = $derived(vault.showLoginVaultPicker)
   const showLocalUnlock = $derived(
-    vault.localVaultPresent && !showSetup && !addProviderOpen,
+    vault.localVaultPresent &&
+      !showSetup &&
+      !addProviderOpen &&
+      !showVaultPicker,
   )
   const showCreateVault = $derived(
     !vault.localVaultPresent &&
+      vault.localVaults.length === 0 &&
       !hasProviders &&
       !showSetup &&
       !addProviderOpen &&
-      !showProviderSetupLink,
+      !showProviderSetupLink &&
+      !showVaultPicker,
   )
   const showProviderSetup = $derived(
     (showProviderSetupLink ||
@@ -186,7 +193,9 @@
           <CardTitle
             class="text-lg font-semibold tracking-tight text-foreground"
           >
-            {#if showLocalUnlock}
+            {#if showVaultPicker}
+              {vault.t('login.vault_picker_title')}
+            {:else if showLocalUnlock}
               {vault.t('login.unlock_vault')}
             {:else if showCreateVault}
               {vault.t('login.create_vault_title')}
@@ -207,6 +216,10 @@
             <CardDescription class="text-pretty"
               >{vault.t('login.unlocking')}</CardDescription
             >
+          {:else if showVaultPicker}
+            <CardDescription class="text-pretty">
+              {vault.t('login.vault_picker_subtitle')}
+            </CardDescription>
           {:else if showLocalUnlock}
             <CardDescription class="text-pretty">
               {vault.t('login.local_vault_description')}
@@ -232,7 +245,19 @@
       </CardHeader>
 
       <CardContent class="px-6 pb-5 pt-4 sm:pb-6">
-        {#if showLocalUnlock}
+        {#if showVaultPicker && onCreateDeviceVault}
+          <LoginVaultPicker
+            {vault}
+            vaults={vault.localVaults}
+            {isVerifying}
+            {isInitializing}
+            onChooseVault={(storeId) => vault.chooseLoginVault(storeId)}
+            onCreateVault={onCreateDeviceVault}
+            onConnectStorage={() => {
+              showProviderSetupLink = true
+            }}
+          />
+        {:else if showLocalUnlock}
           <LoginUnlockStep
             {vault}
             passwordEntries={vault.passwordEntries}
@@ -242,6 +267,7 @@
             {isUnlocking}
             {onUnlock}
             {onUnlockWithPassword}
+            onCreateAnotherVault={onCreateDeviceVault}
           />
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}

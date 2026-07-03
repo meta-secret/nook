@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
+  import {
+    ArrowLeft,
+    BookOpen,
+    FolderKey,
+    Lock,
+    Moon,
+    Sun,
+  } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
@@ -161,6 +168,23 @@
 
         <div class="flex items-center gap-2">
           {#if vault.isAuthenticated && !vault.helpOpen && !legalPage}
+            {#if vault.hasMultipleLocalVaults}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+                data-testid="header-switch-vault-btn"
+                title={vault.t('common.switch_vault')}
+                disabled={vault.isVerifying || vault.isInitializing}
+                onclick={() => vault.lockVault()}
+              >
+                <FolderKey class="size-4" />
+                <span class="hidden sm:inline"
+                  >{vault.t('common.switch_vault')}</span
+                >
+              </Button>
+            {/if}
             <Button
               type="button"
               variant="outline"
@@ -536,6 +560,7 @@
         isBusy={vault.isVerifying}
         onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
         onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
+        onImportAsNewVault={() => vault.resolveSyncConflictImportRemote()}
       />
     {/if}
 
