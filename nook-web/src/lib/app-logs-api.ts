@@ -59,7 +59,9 @@ export function isAppLogsPath(pathname: string): boolean {
 
 /** Parse `/app-logs?minLevel=debug&limit=500&offset=0` query parameters. */
 export function parseAppLogsQuery(search: string): AppLogsQuery {
-  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+  const params = new URLSearchParams(
+    search.startsWith('?') ? search.slice(1) : search,
+  )
   return {
     minLevel: parseLevel(params.get('minLevel'), 'trace'),
     limit: parsePositiveInt(params.get('limit'), 500, 5000),

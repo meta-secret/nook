@@ -35,7 +35,8 @@ function buildAppLogsUrl(options?: {
   const params = new URLSearchParams()
   if (options?.minLevel) params.set('minLevel', options.minLevel)
   if (options?.limit !== undefined) params.set('limit', String(options.limit))
-  if (options?.offset !== undefined) params.set('offset', String(options.offset))
+  if (options?.offset !== undefined)
+    params.set('offset', String(options.offset))
   const qs = params.toString()
   return qs ? `/app-logs?${qs}` : '/app-logs'
 }
