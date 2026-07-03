@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { ArrowLeft, BookOpen, FolderKey, Lock, Moon, Sun } from '@lucide/svelte'
+  import {
+    ArrowLeft,
+    BookOpen,
+    FolderKey,
+    Lock,
+    Moon,
+    Sun,
+  } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
