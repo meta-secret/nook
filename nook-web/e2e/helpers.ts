@@ -179,7 +179,7 @@ export async function connectLocalVault(page: Page) {
   })
 }
 
-/** Device-key genesis via storage provider picker (e2e / migration fallback). */
+/** Device-key genesis on login gate (unlock existing or create on this device). */
 export async function connectLocalVaultLegacy(page: Page) {
   await page.goto('/')
   await expect(
@@ -201,14 +201,15 @@ export async function connectLocalVaultLegacy(page: Page) {
     return
   }
 
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-local').click()
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await disableVaultIdleLock(page)
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  if (await chooser.isVisible()) {
+    await createLocalVaultOnLogin(page)
+    return
+  }
+
+  throw new Error(
+    'Login gate has no local unlock step or create-vault chooser — use createLocalVaultOnLogin.',
+  )
 }
 
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
@@ -1522,20 +1523,13 @@ export async function assertVaultReady(page: Page) {
 }
 
 /** Start a GitHub connect from the login gate (saved provider or fresh setup). */
-export async function clickLoginConnectProvider(
-  page: Page,
-  preferred: 'local' | 'github' = 'github',
-) {
+export async function clickLoginConnectProvider(page: Page) {
   await openLoginProviderSetup(page)
-  if (preferred === 'github') {
-    const savedGithub = page.getByTestId('saved-provider-github').first()
-    if (await savedGithub.isVisible()) {
-      await savedGithub.click()
-    }
-    await page.getByTestId('provider-option-github').click()
-  } else {
-    await page.getByTestId('provider-option-local').click()
+  const savedGithub = page.getByTestId('saved-provider-github').first()
+  if (await savedGithub.isVisible()) {
+    await savedGithub.click()
   }
+  await page.getByTestId('provider-option-github').click()
   const connectButton = await waitForEngine(page)
   await connectButton.click()
 }

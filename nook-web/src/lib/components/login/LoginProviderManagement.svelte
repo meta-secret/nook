@@ -97,7 +97,7 @@
     </div>
 
     {#if onBeginSetup}
-      <ProviderPicker {vault} onSelect={onBeginSetup} />
+      <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
     {/if}
   </div>
 {:else}

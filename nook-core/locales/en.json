@@ -505,7 +505,7 @@
     "back_to_unlock": "Back to unlock",
     "choose_store_vault": "Choose where to store your vault",
     "add_provider_desc": "Pick another place for an encrypted vault file. Each saved provider is a separate vault location in this browser.",
-    "before_connect_desc": "Before you can connect, add a storage provider — local device or GitHub.",
+    "before_connect_desc": "Before you can connect, pick a sync provider — Google Drive, iCloud, or GitHub.",
     "manage_providers": "Manage storage providers",
     "saved_count": "saved",
     "manage_providers_desc": "Add or remove saved providers. Vault files on storage are not deleted.",

@@ -151,7 +151,7 @@ test.describe('login unlock flow (local-first)', () => {
 })
 
 test.describe('login storage provider setup', () => {
-  test('connects via storage provider link on create-vault screen', async ({
+  test('hides local device from sync provider picker on create-vault screen', async ({
     page,
   }) => {
     await page.goto('/')
@@ -159,12 +159,8 @@ test.describe('login storage provider setup', () => {
     await page.reload()
 
     await page.getByTestId('login-connect-storage-btn').click()
-    await page.getByTestId('provider-option-local').click()
-    const connectBtn = page.getByTestId('connect-provider-btn')
-    await expect(connectBtn).toBeEnabled({ timeout: UI_TIMEOUT_MS })
-    await connectBtn.click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('provider-option-local')).toHaveCount(0)
+    await expect(page.getByTestId('provider-option-github')).toBeVisible()
   })
 })
