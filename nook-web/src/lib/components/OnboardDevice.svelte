@@ -168,7 +168,7 @@
         initialPanel="add"
         showWarningBanner={false}
         {passwordEntries}
-        isBusy={isBusy}
+        {isBusy}
         {passwordError}
         enrollmentCode=""
         {onAddPassword}
@@ -179,203 +179,203 @@
       />
     </div>
   {:else}
-  <form
-    class="space-y-4"
-    onsubmit={(event) => {
-      event.preventDefault()
-      void submitOnboard()
-    }}
-  >
-    <div class="space-y-4">
-      <div class="space-y-1.5">
-        <div class="flex items-baseline justify-between gap-2">
-          <p
-            id="onboard-provider-label"
-            class="text-sm font-medium text-muted-foreground"
-          >
-            {vault.t('onboard_device.sync_provider')}
-          </p>
-          {#if onOpenStorageSettings}
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-primary hover:underline"
-              data-testid="onboard-open-storage-settings"
-              onclick={() => onOpenStorageSettings()}
+    <form
+      class="space-y-4"
+      onsubmit={(event) => {
+        event.preventDefault()
+        void submitOnboard()
+      }}
+    >
+      <div class="space-y-4">
+        <div class="space-y-1.5">
+          <div class="flex items-baseline justify-between gap-2">
+            <p
+              id="onboard-provider-label"
+              class="text-sm font-medium text-muted-foreground"
             >
-              {vault.t('onboard_device.add_in_settings')}
-            </button>
-          {/if}
-        </div>
-        {#if syncProviders.length === 0}
-          <p class="text-xs text-muted-foreground">
-            {vault.t('onboard_device.no_sync_providers')}
+              {vault.t('onboard_device.sync_provider')}
+            </p>
             {#if onOpenStorageSettings}
               <button
                 type="button"
-                class="font-medium text-primary hover:underline"
-                data-testid="onboard-empty-providers-settings-link"
+                class="shrink-0 text-xs font-medium text-primary hover:underline"
+                data-testid="onboard-open-storage-settings"
                 onclick={() => onOpenStorageSettings()}
               >
-                {vault.t('onboard_device.add_one_in_settings')}
+                {vault.t('onboard_device.add_in_settings')}
               </button>
             {/if}
-          </p>
-        {:else}
-          <div
-            class="space-y-1.5"
-            role="radiogroup"
-            aria-labelledby="onboard-provider-label"
-            data-testid="onboard-provider-list"
-          >
-            {#each syncProviders as provider (provider.id)}
-              {@const selected = provider.id === effectiveProviderId}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
-                  ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
-                  : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                data-testid="onboard-provider-{provider.id}"
-                disabled={isBusy || isGenerating}
-                onclick={() => {
-                  providerId = provider.id
-                }}
-              >
-                <span
-                  class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
-                    ? 'border-primary'
-                    : 'border-muted-foreground/35'}"
-                  aria-hidden="true"
-                >
-                  {#if selected}
-                    <span class="size-2 rounded-full bg-primary"></span>
-                  {/if}
-                </span>
-                {#if provider.type === 'github'}
-                  <Cloud class="size-4 shrink-0 opacity-80" />
-                {:else}
-                  <HardDrive class="size-4 shrink-0 opacity-80" />
-                {/if}
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="truncate font-medium"
-                      >{localizeProviderLabel(provider.label, vault.t)}</span
-                    >
-                  </div>
-                  <div
-                    class="truncate font-mono text-[11px] {selected
-                      ? 'text-muted-foreground'
-                      : 'text-muted-foreground/80'}"
-                    data-testid="onboard-provider-detail-{provider.id}"
-                  >
-                    {providerStorageDetail(provider, vault.t)}
-                  </div>
-                </div>
-              </button>
-            {/each}
           </div>
-        {/if}
+          {#if syncProviders.length === 0}
+            <p class="text-xs text-muted-foreground">
+              {vault.t('onboard_device.no_sync_providers')}
+              {#if onOpenStorageSettings}
+                <button
+                  type="button"
+                  class="font-medium text-primary hover:underline"
+                  data-testid="onboard-empty-providers-settings-link"
+                  onclick={() => onOpenStorageSettings()}
+                >
+                  {vault.t('onboard_device.add_one_in_settings')}
+                </button>
+              {/if}
+            </p>
+          {:else}
+            <div
+              class="space-y-1.5"
+              role="radiogroup"
+              aria-labelledby="onboard-provider-label"
+              data-testid="onboard-provider-list"
+            >
+              {#each syncProviders as provider (provider.id)}
+                {@const selected = provider.id === effectiveProviderId}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
+                    ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
+                    : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                  data-testid="onboard-provider-{provider.id}"
+                  disabled={isBusy || isGenerating}
+                  onclick={() => {
+                    providerId = provider.id
+                  }}
+                >
+                  <span
+                    class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                      ? 'border-primary'
+                      : 'border-muted-foreground/35'}"
+                    aria-hidden="true"
+                  >
+                    {#if selected}
+                      <span class="size-2 rounded-full bg-primary"></span>
+                    {/if}
+                  </span>
+                  {#if provider.type === 'github'}
+                    <Cloud class="size-4 shrink-0 opacity-80" />
+                  {:else}
+                    <HardDrive class="size-4 shrink-0 opacity-80" />
+                  {/if}
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                      <span class="truncate font-medium"
+                        >{localizeProviderLabel(provider.label, vault.t)}</span
+                      >
+                    </div>
+                    <div
+                      class="truncate font-mono text-[11px] {selected
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground/80'}"
+                      data-testid="onboard-provider-detail-{provider.id}"
+                    >
+                      {providerStorageDetail(provider, vault.t)}
+                    </div>
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        <div class="space-y-1.5">
+          <label
+            for="onboard-password-entry"
+            class="text-sm font-medium text-muted-foreground"
+          >
+            {vault.t('onboard_device.vault_password')}
+          </label>
+          <div class="relative">
+            <select
+              id="onboard-password-entry"
+              class="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              value={effectivePasswordEntryId}
+              onchange={(event) => {
+                passwordEntryId = event.currentTarget.value
+              }}
+              disabled={passwordEntries.length === 0 || isBusy || isGenerating}
+              data-testid="onboard-password-select"
+            >
+              {#each passwordEntries as entry (entry.id)}
+                <option value={entry.id}>{entry.label}</option>
+              {/each}
+            </select>
+            <ChevronDown
+              class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
       </div>
 
       <div class="space-y-1.5">
         <label
-          for="onboard-password-entry"
+          for="onboard-password"
           class="text-sm font-medium text-muted-foreground"
         >
-          {vault.t('onboard_device.vault_password')}
+          {vault.t('vault_passwords.confirm_password')}
         </label>
-        <div class="relative">
-          <select
-            id="onboard-password-entry"
-            class="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            value={effectivePasswordEntryId}
-            onchange={(event) => {
-              passwordEntryId = event.currentTarget.value
-            }}
-            disabled={passwordEntries.length === 0 || isBusy || isGenerating}
-            data-testid="onboard-password-select"
-          >
-            {#each passwordEntries as entry (entry.id)}
-              <option value={entry.id}>{entry.label}</option>
-            {/each}
-          </select>
-          <ChevronDown
-            class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
+        <input
+          id="onboard-password"
+          type="password"
+          class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          bind:value={passwordInput}
+          autocomplete="current-password"
+          disabled={isBusy || isGenerating}
+          data-testid="onboard-password-input"
+        />
       </div>
-    </div>
 
-    <div class="space-y-1.5">
-      <label
-        for="onboard-password"
-        class="text-sm font-medium text-muted-foreground"
+      {#if localError}
+        <p class="text-xs text-destructive" data-testid="onboard-error">
+          {localError}
+        </p>
+      {/if}
+
+      <Button
+        type="submit"
+        disabled={isBusy || isGenerating || syncProviders.length === 0}
+        data-testid="onboard-device-submit"
       >
-        {vault.t('vault_passwords.confirm_password')}
-      </label>
-      <input
-        id="onboard-password"
-        type="password"
-        class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        bind:value={passwordInput}
-        autocomplete="current-password"
-        disabled={isBusy || isGenerating}
-        data-testid="onboard-password-input"
-      />
-    </div>
+        {#if isBusy || isGenerating}
+          <RefreshCw class="size-4 animate-spin" />
+          {vault.t('onboard_device.generating')}
+        {:else}
+          <QrCode class="size-4" />
+          {vault.t('onboard_device.title')}
+        {/if}
+      </Button>
+    </form>
 
-    {#if localError}
-      <p class="text-xs text-destructive" data-testid="onboard-error">
-        {localError}
-      </p>
+    {#if showGenerating}
+      <div
+        class="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-4"
+        data-testid="onboard-generating"
+        role="status"
+        aria-live="polite"
+      >
+        <RefreshCw class="size-5 shrink-0 animate-spin text-primary" />
+        <p class="text-sm text-muted-foreground">
+          {vault.t('onboard_device.generating_qr')}
+        </p>
+      </div>
     {/if}
 
-    <Button
-      type="submit"
-      disabled={isBusy || isGenerating || syncProviders.length === 0}
-      data-testid="onboard-device-submit"
-    >
-      {#if isBusy || isGenerating}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t('onboard_device.generating')}
-      {:else}
-        <QrCode class="size-4" />
-        {vault.t('onboard_device.title')}
-      {/if}
-    </Button>
-  </form>
-
-  {#if showGenerating}
-    <div
-      class="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-4"
-      data-testid="onboard-generating"
-      role="status"
-      aria-live="polite"
-    >
-      <RefreshCw class="size-5 shrink-0 animate-spin text-primary" />
-      <p class="text-sm text-muted-foreground">
-        {vault.t('onboard_device.generating_qr')}
-      </p>
-    </div>
-  {/if}
-
-  {#if enrollmentCode}
-    <EnrollmentOnboardResult
-      {vault}
-      {enrollmentLink}
-      {qrDataUrlPromise}
-      instruction={vault.t('onboard_device.ready_desc')}
-      issuedSuffix={issuedAt
-        ? vault.t('onboard_device.issued_time', {
-            time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
-          })
-        : ''}
-      linkTitle={vault.t('onboard_device.link_title')}
-      linkDescription={vault.t('onboard_device.link_desc')}
-      passwordReminder={vault.t('onboard_device.share_password')}
-    />
-  {/if}
+    {#if enrollmentCode}
+      <EnrollmentOnboardResult
+        {vault}
+        {enrollmentLink}
+        {qrDataUrlPromise}
+        instruction={vault.t('onboard_device.ready_desc')}
+        issuedSuffix={issuedAt
+          ? vault.t('onboard_device.issued_time', {
+              time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
+            })
+          : ''}
+        linkTitle={vault.t('onboard_device.link_title')}
+        linkDescription={vault.t('onboard_device.link_desc')}
+        passwordReminder={vault.t('onboard_device.share_password')}
+      />
+    {/if}
   {/if}
 </section>

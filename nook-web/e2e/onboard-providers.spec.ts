@@ -24,7 +24,9 @@ test.describe('onboard provider picker', () => {
   }) => {
     await openOnboardDevicePanel(page)
 
-    await expect(page.getByTestId('onboard-password-prerequisite')).toBeVisible()
+    await expect(
+      page.getByTestId('onboard-password-prerequisite'),
+    ).toBeVisible()
     await expect(page.getByTestId('vault-password-label')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
     await expect(page.getByTestId('onboard-provider-list')).toHaveCount(0)
