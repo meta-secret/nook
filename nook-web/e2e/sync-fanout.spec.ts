@@ -3,7 +3,7 @@ import {
   addSecret,
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  reloadUnlockWithGithubSync,
+  reloadUnlockWithSyncProvider,
   uniqueSecretKey,
 } from './helpers'
 
@@ -17,7 +17,7 @@ test.describe('sync fan-out on save', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page)
+    await reloadUnlockWithSyncProvider(page)
 
     await expect(page.getByTestId('vault-status-bar')).toContainText('Vault')
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
@@ -34,13 +34,13 @@ test.describe('sync fan-out on save', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page)
+    await reloadUnlockWithSyncProvider(page)
 
     const key = uniqueSecretKey('e2e-fanout')
     await addSecret(page, key, 'fan-out-test-value')
 
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
-      /Syncing to GitHub \(e2e onboard\)|1 sync provider/,
+      /Syncing to Google Drive \(e2e onboard\)|1 sync provider/,
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
   })

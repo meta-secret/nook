@@ -1,14 +1,16 @@
 import { expect, test, type Page } from './fixtures'
 import {
   authorizeDeviceProtection,
-  connectGithubSyncProviderFromSettings,
-  createLocalE2eGithubVaultStub,
+  connectGoogleDriveSyncProviderFromSettings,
+  createLocalE2eGoogleDriveVaultStub,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  seedExtraGithubProviders,
-  stubGithubVaultForLocalE2e,
+  seedExtraOauthFileProviders,
+  seedOauthFileSyncProvidersWhileUnlocked,
+  stubGoogleDriveVaultForLocalE2e,
+  triggerVaultSyncRefresh,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForLoadedSyncProviders,
@@ -53,29 +55,29 @@ test.describe('sync conflict resolution', () => {
     const localYaml = await readLocalVaultYamlFromIdb(page)
     expect(localYaml.trim().length).toBeGreaterThan(0)
 
-    await stubGithubVaultForLocalE2e(page, {
-      repoName: 'nook-e2e-conflict',
+    await stubGoogleDriveVaultForLocalE2e(page, {
+      fileName: 'nook-e2e-conflict.yaml',
       vaultYaml: localYaml,
     })
-    await seedExtraGithubProviders(page, [
+    await seedExtraOauthFileProviders(page, [
       {
-        id: 'e2e-conflict-github',
-        label: 'GitHub (e2e)',
-        githubRepo: 'nook-e2e-conflict',
-        githubPat: 'ghp_test_token',
+        id: 'e2e-conflict-sync',
+        label: 'Google Drive (e2e)',
+        fileName: 'nook-e2e-conflict.yaml',
+        accessToken: 'ya29.e2e_stub_access_token',
       },
     ])
 
     await stageVaultSyncConflict(page, {
-      providerId: 'e2e-conflict-github',
-      providerLabel: 'GitHub (e2e)',
+      providerId: 'e2e-conflict-sync',
+      providerLabel: 'Google Drive (e2e)',
       localYaml,
       remoteYaml: `${localYaml.trimEnd()}\n`,
       localVersion: 1,
       remoteVersion: 1,
-      mode: 'github',
-      pat: 'ghp_test_token',
-      repo: 'nook-e2e-conflict',
+      mode: 'google-drive',
+      pat: 'ya29.e2e_stub_access_token',
+      repo: 'nook-e2e-conflict.yaml',
       remoteRevision: 'abc123',
     })
 
@@ -91,16 +93,16 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('app-success')).toContainText(
-      'Vault updated from GitHub (e2e)',
+      'Vault updated from Google Drive (e2e)',
     )
   })
 
-  test('resolves store_id conflict when second vault uses the same github repo', async ({
+  test('resolves store_id conflict when second vault uses the same drive file', async ({
     page,
   }) => {
-    const repoName = 'nook-e2e-shared-vault-file'
-    const stub = createLocalE2eGithubVaultStub()
-    await stub.install(page, { repoName })
+    const fileName = 'nook-e2e-shared-vault-file.yaml'
+    const stub = createLocalE2eGoogleDriveVaultStub('', fileName)
+    await stub.install(page, { fileName })
 
     await page.goto('/')
     await createLocalVaultOnLogin(page, 'test')
@@ -112,10 +114,19 @@ test.describe('sync conflict resolution', () => {
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
     const storeA = parseStoreId(vaultAYaml)
 
-    await connectGithubSyncProviderFromSettings(page, repoName)
-    await expect(page.getByTestId('settings-provider-github')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await seedOauthFileSyncProvidersWhileUnlocked(
+      page,
+      [
+        {
+          id: 'e2e-shared-sync-a',
+          label: 'Shared Drive A',
+          fileName,
+          accessToken: 'ya29.e2e_stub_access_token',
+        },
+      ],
+      stub,
+    )
+    await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
     await expect
       .poll(() => parseStoreId(stub.getVaultYaml()), {
@@ -143,10 +154,11 @@ test.describe('sync conflict resolution', () => {
     const storeB = parseStoreId(vaultBYaml)
     expect(storeB).not.toEqual(storeA)
 
-    await connectGithubSyncProviderFromSettings(
+    stub.setVaultYaml(vaultAYaml)
+    await connectGoogleDriveSyncProviderFromSettings(
       page,
-      repoName,
-      'ghp_test_token',
+      fileName,
+      'ya29.e2e_stub_access_token',
       {
         expectConflict: true,
       },
@@ -163,7 +175,7 @@ test.describe('sync conflict resolution', () => {
     await expect(
       page.getByTestId('vault-sync-conflict-dialog'),
     ).not.toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await expect(page.getByTestId('settings-provider-github')).toBeVisible({
+    await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     expect(parseStoreId(stub.getVaultYaml())).toEqual(storeB)

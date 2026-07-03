@@ -5,7 +5,7 @@ import {
   assertVaultReady,
   createLocalVaultOnLogin,
   expectAppLogMilestones,
-  reloadUnlockWithGithubSync,
+  reloadUnlockWithSyncProvider,
   triggerVaultSyncRefresh,
   uniqueSecretKey,
   waitForPersistedAppLog,
@@ -24,7 +24,7 @@ test.describe('event-log sync then add', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page)
+    await reloadUnlockWithSyncProvider(page)
 
     await triggerVaultSyncRefresh(page)
     await assertNoVaultError(page)

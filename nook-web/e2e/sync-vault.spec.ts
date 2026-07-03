@@ -2,21 +2,24 @@ import { test, expect, type Page } from './fixtures'
 import {
   addSecret,
   clearBrowserVault,
+  connectLocalVault,
   deleteSecret,
   assertVaultReady,
-  reconnectGithubVault,
+  reconnectSyncVault,
+  reloadUnlockWithSyncProvider,
   revealSecretInRow,
   installPasskeyMock,
   uniqueSecretKey,
+  waitForLoadedSyncProviders,
 } from './helpers'
 import {
-  connectSyncVault,
   createSyncTarget,
   e2eSyncProviderDef,
   installSyncStub,
   resolveE2eSyncProvider,
   type SyncE2eTarget,
 } from './sync-provider'
+import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 const providerId = resolveE2eSyncProvider()
 const providerLabel = e2eSyncProviderDef(providerId).label
@@ -35,7 +38,21 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectSyncVault(vaultPage, target)
+    await connectLocalVault(vaultPage)
+    await reloadUnlockWithSyncProvider(vaultPage, {
+      providers: [
+        {
+          id: 'e2e-sync-vault',
+          label: 'E2E Drive',
+          fileName: target.repoName,
+          accessToken: target.pat,
+        },
+      ],
+      sharedStub: target.stub as ReturnType<
+        typeof createLocalE2eGoogleDriveVaultStub
+      >,
+    })
+    await waitForLoadedSyncProviders(vaultPage)
   })
 
   test.afterAll(async () => {
@@ -67,7 +84,8 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
     await addSecret(vaultPage, key, value, target)
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
-    await reconnectGithubVault(vaultPage)
+    await installSyncStub(vaultPage, target, target.stub?.getVaultYaml())
+    await reconnectSyncVault(vaultPage)
     await assertVaultReady(vaultPage)
 
     const row = vaultPage.getByTestId('secret-row').filter({ hasText: key })

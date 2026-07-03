@@ -5,7 +5,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectAppLogMilestones,
   openLoginProviderSetup,
-  reloadUnlockWithGithubSync,
+  reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
   waitForPersistedAppLog,
 } from './helpers'
@@ -221,23 +221,23 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await reloadUnlockWithGithubSync(page, {
+    await reloadUnlockWithSyncProvider(page, {
       providers: [
         {
-          id: 'e2e-sync-github',
-          label: 'GitHub (e2e)',
-          githubRepo: 'nook-e2e-remove',
-          githubPat: 'ghp_test_token',
+          id: 'e2e-sync-drive',
+          label: 'Google Drive (e2e)',
+          fileName: 'nook-e2e-remove.yaml',
+          accessToken: 'ya29.e2e_stub_access_token',
         },
       ],
     })
 
     await dismissSyncConflictIfVisible(page)
     await page.getByTestId('vault-settings-tab').click()
-    const githubProvider = page.getByTestId('settings-provider-github')
-    await expect(githubProvider).toBeVisible()
+    const driveProvider = page.getByTestId('settings-provider-oauth-file')
+    await expect(driveProvider).toBeVisible()
 
-    const removeBtn = page.getByTestId('remove-provider-e2e-sync-github')
+    const removeBtn = page.getByTestId('remove-provider-e2e-sync-drive')
     await expect(removeBtn).toBeEnabled({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -249,7 +249,9 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('connected-badge')).toBeVisible()
-    await expect(page.getByTestId('settings-provider-github')).toHaveCount(0)
+    await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
+      0,
+    )
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 })

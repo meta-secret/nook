@@ -5,16 +5,16 @@ import {
   connectLocalE2eJoinerDevice,
   connectLocalVaultLegacy,
   createIsolatedContext,
-  createLocalE2eGithubVaultStub,
+  createLocalE2eGoogleDriveVaultStub,
   disableVaultIdleLock,
-  E2E_GITHUB_ONBOARD_PROVIDER,
+  E2E_SYNC_ONBOARD_PROVIDER,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   NOTIFICATION_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  reloadUnlockLocalVaultWithGithubSync,
+  reloadUnlockLocalVaultWithSync,
   sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
-  waitForGithubVaultState,
+  waitForSyncStubVaultState,
   waitForPendingJoinBanner,
 } from './helpers'
 import { joinCountFromYaml, parseVaultYamlSnapshot } from './vault-yaml'
@@ -23,12 +23,12 @@ test.describe('multi-device local vault with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(120_000)
 
-  const repoName = E2E_GITHUB_ONBOARD_PROVIDER.githubRepo
+  const fileName = E2E_SYNC_ONBOARD_PROVIDER.fileName
   let deviceA: Page
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let stub: ReturnType<typeof createLocalE2eGithubVaultStub>
+  let stub: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
@@ -41,11 +41,11 @@ test.describe('multi-device local vault with sync provider', () => {
     await assertVaultReady(deviceA)
 
     const genesisYaml = await readLocalVaultYamlFromIdb(deviceA)
-    stub = createLocalE2eGithubVaultStub(genesisYaml)
-    await stub.install(deviceA, { repoName, vaultYaml: genesisYaml })
-    await stub.install(deviceB, { repoName, vaultYaml: genesisYaml })
+    stub = createLocalE2eGoogleDriveVaultStub(genesisYaml, fileName)
+    await stub.install(deviceA, { fileName, vaultYaml: genesisYaml })
+    await stub.install(deviceB, { fileName, vaultYaml: genesisYaml })
 
-    await reloadUnlockLocalVaultWithGithubSync(deviceA, stub)
+    await reloadUnlockLocalVaultWithSync(deviceA, stub)
     await triggerVaultSyncRefresh(deviceA)
     await expect(deviceA.getByTestId('vault-last-sync')).toContainText(
       /just now|s ago/,
@@ -62,7 +62,7 @@ test.describe('multi-device local vault with sync provider', () => {
   })
 
   test('joiner sends a request to the stubbed sync provider', async () => {
-    await connectLocalE2eJoinerDevice(deviceB, repoName)
+    await connectLocalE2eJoinerDevice(deviceB, fileName)
     const join = await sendJoinRequestLocalE2e(deviceB, stub)
 
     expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
@@ -72,12 +72,8 @@ test.describe('multi-device local vault with sync provider', () => {
 
   test('genesis device sees pending join after sync refresh', async () => {
     const join = (
-      await waitForGithubVaultState(
-        {
-          pat: E2E_GITHUB_ONBOARD_PROVIDER.githubPat,
-          repoName,
-          stub,
-        },
+      await waitForSyncStubVaultState(
+        stub,
         (snapshot) => snapshot.joinEntries.length === 1,
       )
     ).joinEntries[0]!
@@ -101,7 +97,7 @@ test.describe('multi-device local vault with sync provider', () => {
 
   test('genesis device eventually sees pending join without manual refresh', async () => {
     test.setTimeout(200_000)
-    await connectLocalE2eJoinerDevice(deviceB, repoName)
+    await connectLocalE2eJoinerDevice(deviceB, fileName)
     const join = await sendJoinRequestLocalE2e(deviceB, stub)
 
     await expect
@@ -149,9 +145,7 @@ test.describe('multi-device local vault with sync provider', () => {
   })
 })
 
-function parseJoinFromStub(
-  stub: ReturnType<typeof createLocalE2eGithubVaultStub>,
-) {
+function parseJoinFromStub(stub: { getVaultYaml: () => string }) {
   const snapshot = parseVaultYamlSnapshot(stub.getVaultYaml())
   if (snapshot.joinEntries.length === 0) {
     throw new Error('Expected a pending join entry in stub vault YAML')

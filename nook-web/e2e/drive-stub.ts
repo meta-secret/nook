@@ -49,8 +49,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           url === 'https://www.googleapis.com/drive/v3/files' &&
           method === 'GET'
         ) {
-          const files =
-            vaultYaml.trim().length > 0 ? [{ id: fileId, md5Checksum }] : []
+          const files = fileId ? [{ id: fileId, md5Checksum }] : []
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -59,14 +58,17 @@ export function createLocalE2eGoogleDriveVaultStub(
           return
         }
 
-        if (
-          url === `https://www.googleapis.com/drive/v3/files/${fileId}` &&
-          fullUrl.includes('alt=media')
-        ) {
+        const driveFileMatch = url.match(
+          /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/([^/]+)$/,
+        )
+        const driveFileId = driveFileMatch?.[1]
+
+        if (driveFileId && fullUrl.includes('alt=media')) {
           if (!vaultYaml.trim()) {
             await route.fulfill({ status: 404, body: '{}' })
             return
           }
+          fileId = driveFileId
           await route.fulfill({
             status: 200,
             contentType: 'application/x-yaml',
@@ -75,14 +77,12 @@ export function createLocalE2eGoogleDriveVaultStub(
           return
         }
 
-        if (
-          url === `https://www.googleapis.com/drive/v3/files/${fileId}` &&
-          method === 'GET'
-        ) {
+        if (driveFileId && method === 'GET') {
           if (!vaultYaml.trim()) {
             await route.fulfill({ status: 404, body: '{}' })
             return
           }
+          fileId = driveFileId
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -95,8 +95,6 @@ export function createLocalE2eGoogleDriveVaultStub(
           url === 'https://www.googleapis.com/upload/drive/v3/files' &&
           method === 'POST'
         ) {
-          const body = request.postData() ?? ''
-          vaultYaml = body
           fileId = `e2e-drive-file-${Date.now()}`
           md5Checksum = `e2e-stub-md5-${Date.now()}`
           await route.fulfill({
@@ -112,6 +110,12 @@ export function createLocalE2eGoogleDriveVaultStub(
           method === 'PATCH'
         ) {
           const body = request.postData() ?? ''
+          const patchId = url.slice(
+            'https://www.googleapis.com/upload/drive/v3/files/'.length,
+          )
+          if (patchId) {
+            fileId = patchId
+          }
           if (body) {
             vaultYaml = body
             md5Checksum = `e2e-stub-md5-${Date.now()}`
@@ -124,7 +128,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           return
         }
 
-        await route.fulfill({ status: 404, body: '{}' })
+        await route.fallback()
       })
     },
   }
