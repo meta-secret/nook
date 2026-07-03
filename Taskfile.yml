@@ -16,6 +16,8 @@ vars:
   # The sealed nook-web image is always loaded locally as nook-web:local (both dev and CI).
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
+  GIT_COMMIT_ID:
+    sh: git rev-parse HEAD
   # buildx bake `-f` flags: root orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     -f docker-bake.hcl
@@ -63,6 +65,7 @@ tasks:
     # setup never sets TOOLCHAIN_PUSH, so it only pulls; publishing is CI-only (docker:push).
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       VITE_BASE: '{{.VITE_BASE}}'
     cmds:
       - '{{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-web'

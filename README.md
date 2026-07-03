@@ -263,7 +263,7 @@ workspace **source is then copied into the nook-web image** on top of that base 
 bind mount** (except `task web:dev`), so the image is self-contained. CI and dev share the base:
 
 ```text
-ghcr.io/<owner>/<repo>/toolchain:latest       # deps + warm target/ base (shared cache)
+ghcr.io/<owner>/<repo>/toolchain:<git-commit>  # deps + warm target/ base (immutable tag per main push)
 ghcr.io/<owner>/<repo>/toolchain:buildcache   # buildx layer cache (cargo chef cook, etc.)
 nook-web:local                                # nook-web image (base + your source) that task runs
 ```
@@ -273,7 +273,7 @@ image so it reflects current source; buildx reuses the toolchain base + GHCR `:b
 only the small source layer rebuilds.
 
 **The GHCR cache is pull-always, push-main-only.** Every build — including local — pulls the shared
-`:buildcache`/`:latest` layers (`cache-from`), so a fresh checkout reuses whatever CI already
+`:buildcache` layers and the current commit tag when present (`cache-from`), so a fresh checkout reuses whatever CI already
 compiled instead of a cold recompile of the entire dep graph. Run `docker login ghcr.io` once so
 local pulls authenticate (a miss just falls back to a cold build — the registry is cache, never a
 build dependency). Main CI publishes the verified base image + cache after green builds. PR CI and
