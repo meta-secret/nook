@@ -218,6 +218,7 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
       : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
 
     await triggerVaultSyncRefresh(deviceA)
+    await waitForPendingJoinBanner(deviceA, join.deviceId)
     await approveJoinFromSettings(deviceA, join.deviceId, target, 2)
 
     const enrolledYaml = await assertEnrolledVaultOnGithub(target, 2)

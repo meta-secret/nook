@@ -11,6 +11,8 @@ import {
   openStorageSettings,
   revealSecretValue,
   rotateVaultPassword,
+  seedExtraOauthFileProviders,
+  seedLocalVaultYamlForEnrollment,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   UI_TIMEOUT_MS,
@@ -23,8 +25,10 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
+  installSyncStub,
   installSyncStubOnPages,
   connectSyncGenesisDevice,
+  waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
 
@@ -54,6 +58,7 @@ test.describe('vault password envelope (stub sync)', () => {
     await installSyncStubOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
     await addSecret(deviceA, sharedSecretKey, sharedSecretValue, target)
+    await waitForSyncRemoteState(target, (yaml) => yaml.secretIds.length >= 1)
   })
 
   test.afterAll(async () => {
@@ -117,9 +122,41 @@ test.describe('vault password envelope (stub sync)', () => {
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')
 
+    const remoteYaml = target.stub?.getVaultYaml() ?? ''
+    expect(remoteYaml.trim().length).toBeGreaterThan(0)
+    await installSyncStub(deviceB, target, remoteYaml)
+
     await deviceB.goto('/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
+    })
+    await deviceB.waitForFunction(
+      () =>
+        Boolean(
+          (
+            window as Window & {
+              __nookVault?: unknown
+            }
+          ).__nookVault,
+        ),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    await seedLocalVaultYamlForEnrollment(deviceB, remoteYaml)
+    await seedExtraOauthFileProviders(deviceB, [
+      {
+        id: 'e2e-enroll-sync',
+        label: 'E2E Drive',
+        fileName: target.repoName,
+        accessToken: target.pat,
+      },
+    ])
+    await deviceB.evaluate(async () => {
+      const vault = (
+        window as Window & {
+          __nookVault?: { loadProviders?: () => Promise<void> }
+        }
+      ).__nookVault
+      await vault?.loadProviders?.()
     })
 
     await expandLoginEnrollmentPanel(deviceB)

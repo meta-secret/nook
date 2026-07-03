@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import { expect } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { createLocalE2eICloudVaultStub } from './icloud-stub'
 import { createE2eStubRepoName } from './sync-stub'
@@ -239,17 +240,29 @@ export async function connectSyncGenesisDevice(
   if (backend === 'google-drive') {
     const {
       clearBrowserVault,
-      connectLocalVault,
+      connectLocalVaultLegacy,
+      createLocalVaultOnLogin,
       assertVaultReady,
       readLocalVaultYamlFromIdb,
       reloadUnlockWithSyncProvider,
       triggerVaultSyncRefresh,
       disableVaultIdleLock,
+      ENROLLMENT_UNLOCK_TIMEOUT_MS,
     } = await import('./helpers')
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVault(page)
+    await expect(
+      page
+        .getByTestId('login-create-vault-chooser')
+        .or(page.getByTestId('login-local-unlock-step')),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    const chooser = page.getByTestId('login-create-vault-chooser')
+    if (await chooser.isVisible()) {
+      await createLocalVaultOnLogin(page)
+    } else {
+      await connectLocalVaultLegacy(page)
+    }
     await assertVaultReady(page)
     const genesisYaml = await readLocalVaultYamlFromIdb(page)
     const stub = target.stub as ReturnType<

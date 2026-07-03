@@ -7,8 +7,10 @@ import {
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  seedExtraSyncProviders,
-  stubSyncVaultForLocalE2e,
+  seedExtraOauthFileProviders,
+  seedOauthFileSyncProvidersWhileUnlocked,
+  stubGoogleDriveVaultForLocalE2e,
+  triggerVaultSyncRefresh,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForLoadedSyncProviders,
@@ -53,18 +55,16 @@ test.describe('sync conflict resolution', () => {
     const localYaml = await readLocalVaultYamlFromIdb(page)
     expect(localYaml.trim().length).toBeGreaterThan(0)
 
-    await stubSyncVaultForLocalE2e(page, {
+    await stubGoogleDriveVaultForLocalE2e(page, {
       fileName: 'nook-e2e-conflict.yaml',
       vaultYaml: localYaml,
     })
-    await seedExtraSyncProviders(page, [
+    await seedExtraOauthFileProviders(page, [
       {
         id: 'e2e-conflict-sync',
         label: 'Google Drive (e2e)',
         fileName: 'nook-e2e-conflict.yaml',
         accessToken: 'ya29.e2e_stub_access_token',
-        type: 'oauth-file',
-        oauthPreset: 'google-drive',
       },
     ])
 
@@ -114,10 +114,19 @@ test.describe('sync conflict resolution', () => {
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
     const storeA = parseStoreId(vaultAYaml)
 
-    await connectGoogleDriveSyncProviderFromSettings(page, fileName)
-    await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await seedOauthFileSyncProvidersWhileUnlocked(
+      page,
+      [
+        {
+          id: 'e2e-shared-sync-a',
+          label: 'Shared Drive A',
+          fileName,
+          accessToken: 'ya29.e2e_stub_access_token',
+        },
+      ],
+      stub,
+    )
+    await triggerVaultSyncRefresh(page)
     await waitForLoadedSyncProviders(page)
     await expect
       .poll(() => parseStoreId(stub.getVaultYaml()), {
@@ -145,6 +154,7 @@ test.describe('sync conflict resolution', () => {
     const storeB = parseStoreId(vaultBYaml)
     expect(storeB).not.toEqual(storeA)
 
+    stub.setVaultYaml(vaultAYaml)
     await connectGoogleDriveSyncProviderFromSettings(
       page,
       fileName,

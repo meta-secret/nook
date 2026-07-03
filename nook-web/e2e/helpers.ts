@@ -2633,6 +2633,66 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
   })
 }
 
+/** Seed a joiner's local vault copy from remote YAML before password enrollment. */
+export async function seedLocalVaultYamlForEnrollment(
+  page: Page,
+  vaultYaml: string,
+) {
+  const trimmed = vaultYaml.trim()
+  if (!trimmed) {
+    throw new Error('seedLocalVaultYamlForEnrollment: vault YAML is empty')
+  }
+  const storeId = trimmed.match(/^store_id:\s*(\S+)/m)?.[1]
+  if (!storeId) {
+    throw new Error(
+      'seedLocalVaultYamlForEnrollment: store_id missing from yaml',
+    )
+  }
+
+  await page.evaluate(
+    ({ content, storeId: id }) => {
+      return new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_db', 1)
+        request.onerror = () =>
+          reject(request.error ?? new Error('idb open failed'))
+        request.onupgradeneeded = () => {
+          const db = request.result
+          if (!db.objectStoreNames.contains('vault')) {
+            db.createObjectStore('vault')
+          }
+        }
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('vault', 'readwrite')
+          const store = tx.objectStore('vault')
+          const now = new Date().toISOString()
+          const registry = {
+            vaults: [
+              {
+                store_id: id,
+                last_unlocked_at: now,
+              },
+            ],
+          }
+          store.put(content, `vault:${id}`)
+          store.put(id, 'active_vault_id')
+          store.put(JSON.stringify(registry), 'vault_registry')
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+        }
+      })
+    },
+    { content: trimmed, storeId },
+  )
+
+  await expect
+    .poll(() => readLocalVaultYamlFromIdb(page), { timeout: UI_TIMEOUT_MS })
+    .toContain(storeId)
+}
+
 /** Poll local vault YAML until predicate passes (local-first canonical copy). */
 export async function waitForLocalVaultState(
   page: Page,
@@ -3050,14 +3110,19 @@ export async function seedGithubSyncProvidersWhileUnlocked(
 export async function seedOauthFileSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_OAUTH_ONBOARD_PROVIDER],
+  sharedStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   await seedExtraOauthFileProviders(page, providers)
   for (const provider of providers) {
-    await stubGoogleDriveVaultForLocalE2e(page, {
-      fileName: provider.fileName,
-      vaultYaml,
-    })
+    await stubGoogleDriveVaultForLocalE2e(
+      page,
+      {
+        fileName: provider.fileName,
+        vaultYaml,
+      },
+      sharedStub,
+    )
   }
   await page.evaluate(async () => {
     const vault = (
