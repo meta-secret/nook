@@ -249,7 +249,9 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('connected-badge')).toBeVisible()
-    await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(0)
+    await expect(page.getByTestId('settings-provider-oauth-file')).toHaveCount(
+      0,
+    )
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 })

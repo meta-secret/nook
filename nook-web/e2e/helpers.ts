@@ -2334,65 +2334,67 @@ export async function seedExtraOauthFileProviders(
 
   await page.evaluate(
     ({ providers, storeIdFromVault: vaultStoreId }) => {
-    return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('nook_auth', 1)
-      request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('auth', 'readwrite')
-        const store = tx.objectStore('auth')
-        const getReq = store.get('providers')
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          const existing = getReq.result as {
-            providers: Array<{
-              id: string
-              type: string
-              label: string
-              oauthFile?: {
-                preset: string
-                accessToken: string
-                fileName: string
-                accountEmail?: string
-              }
-              storeId?: string
-              createdAt: string
-            }>
-            activeVaultStoreId?: string
-          } | null
-          const snapshot = existing ?? { providers: [] }
-          const storeId =
-            snapshot.activeVaultStoreId?.trim() || vaultStoreId || undefined
-          for (const provider of providers) {
-            snapshot.providers.push({
-              id: provider.id,
-              type: 'oauth-file',
-              label: provider.label,
-              oauthFile: {
-                preset: 'google-drive',
-                accessToken: provider.accessToken,
-                fileName: provider.fileName,
-                accountEmail: provider.accountEmail,
-              },
-              storeId,
-              createdAt: new Date().toISOString(),
-            })
+      return new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_auth', 1)
+        request.onerror = () =>
+          reject(request.error ?? new Error('idb open failed'))
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('auth', 'readwrite')
+          const store = tx.objectStore('auth')
+          const getReq = store.get('providers')
+          getReq.onerror = () =>
+            reject(getReq.error ?? new Error('idb read failed'))
+          getReq.onsuccess = () => {
+            const existing = getReq.result as {
+              providers: Array<{
+                id: string
+                type: string
+                label: string
+                oauthFile?: {
+                  preset: string
+                  accessToken: string
+                  fileName: string
+                  accountEmail?: string
+                }
+                storeId?: string
+                createdAt: string
+              }>
+              activeVaultStoreId?: string
+            } | null
+            const snapshot = existing ?? { providers: [] }
+            const storeId =
+              snapshot.activeVaultStoreId?.trim() || vaultStoreId || undefined
+            for (const provider of providers) {
+              snapshot.providers.push({
+                id: provider.id,
+                type: 'oauth-file',
+                label: provider.label,
+                oauthFile: {
+                  preset: 'google-drive',
+                  accessToken: provider.accessToken,
+                  fileName: provider.fileName,
+                  accountEmail: provider.accountEmail,
+                },
+                storeId,
+                createdAt: new Date().toISOString(),
+              })
+            }
+            const putReq = store.put(snapshot, 'providers')
+            putReq.onerror = () =>
+              reject(putReq.error ?? new Error('idb write failed'))
+            putReq.onsuccess = () => undefined
           }
-          const putReq = store.put(snapshot, 'providers')
-          putReq.onerror = () =>
-            reject(putReq.error ?? new Error('idb write failed'))
-          putReq.onsuccess = () => undefined
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
         }
-        tx.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
-      }
-    })
-  }, { providers: extras, storeIdFromVault })
+      })
+    },
+    { providers: extras, storeIdFromVault },
+  )
 
   await page.waitForFunction(
     (expectedIds) => {
@@ -2929,7 +2931,8 @@ export async function reloadUnlockLocalVaultWithSync(
 }
 
 /** @deprecated Use {@link reloadUnlockLocalVaultWithSync}. */
-export const reloadUnlockLocalVaultWithGithubSync = reloadUnlockLocalVaultWithSync
+export const reloadUnlockLocalVaultWithGithubSync =
+  reloadUnlockLocalVaultWithSync
 
 /** Connect a joiner browser to a stubbed local sync remote (keys-mode join dialog). */
 export async function connectLocalE2eJoinerDevice(
