@@ -18,6 +18,7 @@ const INLINE_ONBOARD_PASSWORD = 'onboard-pass-1'
 async function createOnboardPasswordInline(
   page: import('@playwright/test').Page,
 ) {
+  await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
   await page.getByTestId('vault-password-label').fill('test')
   await page.getByTestId('vault-password-input').fill(INLINE_ONBOARD_PASSWORD)
   await page.getByTestId('vault-password-confirm').fill(INLINE_ONBOARD_PASSWORD)
@@ -25,7 +26,6 @@ async function createOnboardPasswordInline(
   await expect(page.getByTestId('app-success')).toContainText(/password/i, {
     timeout: UI_TIMEOUT_MS,
   })
-  await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(0)
 }
 
 test.describe('onboard provider picker', () => {
@@ -36,63 +36,50 @@ test.describe('onboard provider picker', () => {
     await connectLocalVaultLegacy(page)
   })
 
-  test('shows inline password creation when no vault passwords exist', async ({
+  test('wizard starts on vault password step when no passwords exist', async ({
     page,
   }) => {
     await openOnboardDevicePanel(page)
 
+    await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
     await expect(
       page.getByTestId('onboard-password-prerequisite'),
     ).toBeVisible()
-    await expect(page.getByTestId('vault-password-label')).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
     await expect(page.getByTestId('onboard-provider-list')).toHaveCount(0)
+  })
 
-    await page.getByTestId('vault-password-label').fill('Onboard primary')
-    await page.getByTestId('vault-password-input').fill('onboard-pass-1')
-    await page.getByTestId('vault-password-confirm').fill('onboard-pass-1')
-    await page.getByTestId('submit-vault-password').click()
+  test('wizard advances to sync provider step after inline password creation', async ({
+    page,
+  }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
 
-    await expect(page.getByTestId('app-success')).toContainText(/password/i, {
-      timeout: UI_TIMEOUT_MS,
-    })
     await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(
       0,
     )
-    await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
-    await expect(page.getByTestId('onboard-device-submit')).toBeDisabled()
+    await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
+    await expect(page.getByTestId('add-provider-btn')).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
   })
 
-  test('keeps onboard submit disabled without a sync provider after inline password and confirm password', async ({
+  test('generate step stays locked until a sync provider exists', async ({
     page,
   }) => {
     await openOnboardDevicePanel(page)
     await createOnboardPasswordInline(page)
 
-    await page
-      .getByTestId('onboard-password-input')
-      .fill(INLINE_ONBOARD_PASSWORD)
-    const submit = page.getByTestId('onboard-device-submit')
-    await expect(submit).toBeDisabled()
-    await expect(
-      page.getByTestId('onboard-empty-providers-settings-link'),
-    ).toBeVisible()
-  })
-
-  test('enables onboard submit after inline password creation once a sync provider exists', async ({
-    page,
-  }) => {
-    await openOnboardDevicePanel(page)
-    await createOnboardPasswordInline(page)
-
-    await page
-      .getByTestId('onboard-password-input')
-      .fill(INLINE_ONBOARD_PASSWORD)
-    await expect(page.getByTestId('onboard-device-submit')).toBeDisabled()
+    await expect(page.getByTestId('add-provider-btn')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
 
     await seedGithubSyncProvidersWhileUnlocked(page)
     await page.getByTestId('vault-onboard-tab').click()
     await expect(page.getByTestId('onboard-provider-list')).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -159,21 +146,12 @@ test.describe('onboard provider picker', () => {
     await expect(alpha).toHaveAttribute('aria-checked', 'false')
   })
 
-  test('storage settings link opens the storage section when passwords exist', async ({
-    page,
-  }) => {
-    await openStorageSettings(page)
-    await addVaultPassword(page, 'Settings link', 'settings-pass-1')
+  test('sync step offers inline add-provider flow', async ({ page }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
 
-    await page.getByTestId('vault-onboard-tab').click()
-    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
-
-    await page.getByTestId('onboard-open-storage-settings').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    await expect(
-      page
-        .getByTestId('storage-providers-section')
-        .locator('button[aria-expanded]'),
-    ).toHaveAttribute('aria-expanded', 'true')
+    await page.getByTestId('add-provider-btn').click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('provider-option-github')).toBeVisible()
   })
 })
