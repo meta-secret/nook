@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    ChevronDown,
     ChevronLeft,
     Cloud,
     HardDrive,
@@ -84,7 +83,6 @@
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const hasSyncProviders = $derived(syncProviders.length > 0)
-  const wizardReady = $derived(hasPasswords && hasSyncProviders)
   const showSetup = $derived(setupType !== null)
   const addingProvider = $derived(addProviderOpen || showSetup)
 
@@ -119,7 +117,7 @@
     ) {
       return passwordEntryId
     }
-    return passwordEntries[0]?.id ?? ''
+    return ''
   })
   const selectedProvider = $derived(
     syncProviders.find((provider) => provider.id === effectiveProviderId) ??
@@ -129,6 +127,8 @@
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
       null,
   )
+  const hasPasswordSelection = $derived(selectedPassword !== null)
+  const wizardReady = $derived(hasPasswordSelection && hasSyncProviders)
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
   )
@@ -152,15 +152,17 @@
   )
 
   const passwordStepSubtitle = $derived(
-    hasPasswords
-      ? passwordEntries.length === 1
-        ? vault.t('onboard_device.wizard_password_ready_singular', {
-            label: passwordEntries[0]?.label ?? '',
-          })
-        : vault.t('onboard_device.wizard_password_ready_plural', {
-            count: String(passwordEntries.length),
-          })
-      : vault.t('onboard_device.wizard_password_subtitle'),
+    selectedPassword
+      ? vault.t('onboard_device.wizard_password_selected', {
+          label: selectedPassword.label,
+        })
+      : hasPasswords
+        ? passwordEntries.length === 1
+          ? vault.t('onboard_device.wizard_password_choose_singular')
+          : vault.t('onboard_device.wizard_password_choose_plural', {
+              count: String(passwordEntries.length),
+            })
+        : vault.t('onboard_device.wizard_password_subtitle'),
   )
 
   const syncStepSubtitle = $derived(
@@ -187,7 +189,19 @@
   )
 
   $effect(() => {
+    if (enrollmentCode) {
+      passwordStepOpen = false
+      syncStepOpen = false
+      generateStepOpen = false
+      return
+    }
     if (!hasPasswords) {
+      passwordStepOpen = true
+      syncStepOpen = false
+      generateStepOpen = false
+      return
+    }
+    if (!hasPasswordSelection) {
       passwordStepOpen = true
       syncStepOpen = false
       generateStepOpen = false
@@ -278,9 +292,62 @@
       testId="onboard-wizard-password-step"
     >
       {#if hasPasswords}
-        <p class="text-sm text-muted-foreground text-pretty">
-          {vault.t('onboard_device.wizard_password_existing_desc')}
-        </p>
+        <div class="space-y-3">
+          <p class="text-sm text-muted-foreground text-pretty">
+            {vault.t('onboard_device.wizard_password_existing_desc')}
+          </p>
+
+          <div
+            class="space-y-1.5"
+            role="radiogroup"
+            aria-label={vault.t('onboard_device.vault_password')}
+            data-testid="onboard-password-entry-list"
+          >
+            {#each passwordEntries as entry (entry.id)}
+              {@const selected = entry.id === effectivePasswordEntryId}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
+                  ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
+                  : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                data-testid="onboard-password-entry-{entry.id}"
+                disabled={isBusy || isGenerating}
+                onclick={() => {
+                  passwordEntryId = entry.id
+                  passwordInput = ''
+                }}
+              >
+                <span
+                  class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                    ? 'border-primary'
+                    : 'border-muted-foreground/35'}"
+                  aria-hidden="true"
+                >
+                  {#if selected}
+                    <span class="size-2 rounded-full bg-primary"></span>
+                  {/if}
+                </span>
+                <ShieldCheck class="size-4 shrink-0 opacity-80" />
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate font-medium">{entry.label}</span>
+                  {#if entry.createdAt}
+                    <span
+                      class="block truncate text-[11px] {selected
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground/80'}"
+                    >
+                      {vault.t('vault_passwords.added_date', {
+                        date: entry.createdAt.slice(0, 10),
+                      })}
+                    </span>
+                  {/if}
+                </span>
+              </button>
+            {/each}
+          </div>
+        </div>
       {:else}
         <form
           class="space-y-4"
@@ -378,7 +445,7 @@
       stepNumber={2}
       title={vault.t('onboard_device.wizard_sync_step')}
       subtitle={syncStepSubtitle}
-      disabled={!hasPasswords}
+      disabled={!hasPasswordSelection}
       bind:open={syncStepOpen}
       testId="onboard-wizard-sync-step"
     >
@@ -527,41 +594,30 @@
           void submitOnboard()
         }}
       >
-        <div class="space-y-1.5">
-          <label
-            for="onboard-password-entry"
-            class="text-xs font-medium text-foreground"
+        {#if selectedPassword}
+          <div
+            class="rounded-lg border border-border bg-muted/20 px-3 py-2.5"
+            data-testid="onboard-password-selected-summary"
           >
-            {vault.t('onboard_device.vault_password')}
-          </label>
-          <div class="relative">
-            <select
-              id="onboard-password-entry"
-              class="h-9 w-full appearance-none rounded-md border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
-              value={effectivePasswordEntryId}
-              onchange={(event) => {
-                passwordEntryId = event.currentTarget.value
-              }}
-              disabled={isBusy || isGenerating}
-              data-testid="onboard-password-select"
-            >
-              {#each passwordEntries as entry (entry.id)}
-                <option value={entry.id}>{entry.label}</option>
-              {/each}
-            </select>
-            <ChevronDown
-              class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
+            <p class="text-xs font-medium text-muted-foreground">
+              {vault.t('onboard_device.vault_password')}
+            </p>
+            <p class="truncate text-sm font-medium text-foreground">
+              {selectedPassword.label}
+            </p>
           </div>
-        </div>
+        {/if}
 
         <div class="space-y-1.5">
           <label
             for="onboard-password"
             class="text-xs font-medium text-foreground"
           >
-            {vault.t('vault_passwords.confirm_password')}
+            {selectedPassword
+              ? vault.t('vault_passwords.password_for', {
+                  label: selectedPassword.label,
+                })
+              : vault.t('vault_passwords.confirm_password')}
           </label>
           <input
             id="onboard-password"

@@ -28,6 +28,14 @@ async function createOnboardPasswordInline(
   })
 }
 
+async function chooseFirstOnboardPassword(
+  page: import('@playwright/test').Page,
+) {
+  const entryList = page.getByTestId('onboard-password-entry-list')
+  await expect(entryList).toBeVisible()
+  await entryList.getByRole('radio').first().click()
+}
+
 test.describe('onboard provider picker', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
@@ -51,7 +59,7 @@ test.describe('onboard provider picker', () => {
     await expect(page.getByTestId('onboard-provider-list')).toHaveCount(0)
   })
 
-  test('wizard advances to sync provider step after inline password creation', async ({
+  test('wizard requires an explicit password choice before sync setup', async ({
     page,
   }) => {
     await openOnboardDevicePanel(page)
@@ -60,6 +68,14 @@ test.describe('onboard provider picker', () => {
     await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(
       0,
     )
+    const entryList = page.getByTestId('onboard-password-entry-list')
+    await expect(entryList).toBeVisible()
+    await expect(entryList.getByRole('radio')).toHaveCount(1)
+    await expect(page.getByTestId('add-provider-btn')).toHaveCount(0)
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
+
+    await chooseFirstOnboardPassword(page)
+
     await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
     await expect(page.getByTestId('add-provider-btn')).toBeVisible()
     await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
@@ -71,6 +87,7 @@ test.describe('onboard provider picker', () => {
   }) => {
     await openOnboardDevicePanel(page)
     await createOnboardPasswordInline(page)
+    await chooseFirstOnboardPassword(page)
 
     await expect(page.getByTestId('add-provider-btn')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
@@ -129,6 +146,7 @@ test.describe('onboard provider picker', () => {
 
     await openOnboardDevicePanel(page)
     await createOnboardPasswordInline(page)
+    await chooseFirstOnboardPassword(page)
 
     await page
       .getByTestId('onboard-wizard-sync-step')
@@ -162,6 +180,7 @@ test.describe('onboard provider picker', () => {
   test('sync step offers inline add-provider flow', async ({ page }) => {
     await openOnboardDevicePanel(page)
     await createOnboardPasswordInline(page)
+    await chooseFirstOnboardPassword(page)
 
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()

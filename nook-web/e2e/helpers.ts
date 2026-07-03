@@ -1661,6 +1661,10 @@ export async function submitOnboardEnrollmentCode(
     timeout: UI_TIMEOUT_MS,
   })
   await dismissSyncConflictIfVisible(page)
+  const entryList = page.getByTestId('onboard-password-entry-list')
+  if (await entryList.isVisible()) {
+    await entryList.getByRole('radio').first().click()
+  }
   await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

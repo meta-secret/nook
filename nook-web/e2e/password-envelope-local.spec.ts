@@ -180,9 +180,11 @@ test.describe('vault password envelope (local)', () => {
 
     await openOnboardDevicePanel(page)
     await waitForStorageChainIdle(page)
-    await expect(page.getByTestId('onboard-password-select')).toBeEnabled({
+    const entryList = page.getByTestId('onboard-password-entry-list')
+    await expect(entryList).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await entryList.getByRole('radio').first().click()
     await page.getByTestId('onboard-password-input').fill('wrong-typo-99')
     await page.getByTestId('onboard-device-submit').click({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -213,6 +215,12 @@ test.describe('vault password envelope (local)', () => {
 
     await openOnboardDevicePanel(page)
     const linkInput = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
+    await expect(
+      page
+        .getByTestId('onboard-wizard-generate-step')
+        .getByRole('button')
+        .first(),
+    ).toHaveAttribute('aria-expanded', 'false')
     await expect(linkInput).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
