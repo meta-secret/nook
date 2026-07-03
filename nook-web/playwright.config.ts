@@ -20,6 +20,7 @@ const distDir = path.join(rootDir, 'dist')
 
 /** IndexedDB-only specs — fast manual/debug subset of the full stub suite. */
 const PR_SPECS = [
+  'auth-provider-credential-encryption.spec.ts',
   'connect.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',

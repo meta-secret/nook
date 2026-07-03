@@ -9,6 +9,7 @@
     Sun,
   } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
+  import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
@@ -83,6 +84,17 @@
       import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true'
     ) {
       ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
+      ;(
+        window as Window & {
+          __nookAuthProviders?: {
+            loadAuthProviders: typeof loadAuthProviders
+            saveAuthProviders: typeof saveAuthProviders
+          }
+        }
+      ).__nookAuthProviders = {
+        loadAuthProviders,
+        saveAuthProviders,
+      }
     }
 
     syncRoute()

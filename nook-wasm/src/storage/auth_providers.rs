@@ -8,8 +8,8 @@
 //! and browser storage access.
 
 use nook_core::{
-    AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DeviceIdentitySecret,
-    NormalizedAuthSnapshot,
+    AuthProvidersSnapshotData, DeviceIdentity, DeviceIdentitySecret, NormalizedAuthSnapshot,
+    open_provider_credentials, seal_provider_credentials,
 };
 
 use crate::NookError;
@@ -19,8 +19,6 @@ use super::indexed_db::ensure_device_identity_record;
 const DB_NAME: &str = "nook_auth";
 const STORE: &str = "auth";
 const STATE_KEY: &str = "providers";
-/// Marker present in every age-armored ciphertext — sealed fields contain it.
-const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const LEGACY_STORAGE_MODE_KEY: &str = "nook_storage_mode";
 const LEGACY_GITHUB_PAT_KEY: &str = "nook_github_pat";
 
@@ -90,97 +88,11 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
     Ok(())
 }
 
-fn is_sealed(value: &str) -> bool {
-    value.contains(AGE_ARMOR_MARKER)
-}
-
 async fn device_identity() -> Result<DeviceIdentity, NookError> {
     let record = ensure_device_identity_record().await?;
     Ok(DeviceIdentity::from_secret_str(
         &DeviceIdentitySecret::parse(&record.secret)?,
     )?)
-}
-
-fn seal_optional(identity: &DeviceIdentity, field: &mut Option<String>) -> Result<(), NookError> {
-    let Some(text) = field.clone() else {
-        return Ok(());
-    };
-    if !text.is_empty() && !is_sealed(&text) {
-        *field = Some(identity.seal_utf8(&text)?.into_inner());
-    }
-    Ok(())
-}
-
-fn seal_required(identity: &DeviceIdentity, field: &mut String) -> Result<(), NookError> {
-    if !field.is_empty() && !is_sealed(field) {
-        *field = identity.seal_utf8(field)?.into_inner();
-    }
-    Ok(())
-}
-
-fn seal_snapshot(
-    identity: &DeviceIdentity,
-    snapshot: &mut AuthProvidersSnapshotData,
-) -> Result<(), NookError> {
-    for provider in &mut snapshot.providers {
-        seal_optional(identity, &mut provider.github_pat)?;
-        if let Some(oauth) = provider.oauth_file.as_mut() {
-            seal_required(identity, &mut oauth.access_token)?;
-            seal_optional(identity, &mut oauth.refresh_token)?;
-        }
-    }
-    Ok(())
-}
-
-fn open_optional(
-    identity: &DeviceIdentity,
-    field: &mut Option<String>,
-    had_plaintext: &mut bool,
-) -> Result<(), NookError> {
-    let Some(text) = field.clone() else {
-        return Ok(());
-    };
-    if text.is_empty() {
-        return Ok(());
-    }
-    if is_sealed(&text) {
-        *field = Some(identity.open_utf8(&AgeArmoredCiphertext::parse(&text)?)?);
-    } else {
-        *had_plaintext = true;
-    }
-    Ok(())
-}
-
-fn open_required(
-    identity: &DeviceIdentity,
-    field: &mut String,
-    had_plaintext: &mut bool,
-) -> Result<(), NookError> {
-    if !field.is_empty() {
-        if is_sealed(field) {
-            *field = identity.open_utf8(&AgeArmoredCiphertext::parse(field)?)?;
-        } else {
-            *had_plaintext = true;
-        }
-    }
-    Ok(())
-}
-
-/// Unseal credential fields in place, reporting whether any were still plaintext
-/// (legacy/seeded rows) so the caller re-saves them sealed.
-fn open_snapshot(
-    identity: &DeviceIdentity,
-    snapshot: &mut AuthProvidersSnapshotData,
-) -> Result<bool, NookError> {
-    let mut had_plaintext = false;
-    for provider in &mut snapshot.providers {
-        open_optional(identity, &mut provider.github_pat, &mut had_plaintext)?;
-        if let Some(oauth) = provider.oauth_file.as_mut() {
-            open_required(identity, &mut oauth.access_token, &mut had_plaintext)?;
-            open_optional(identity, &mut oauth.refresh_token, &mut had_plaintext)?;
-        }
-    }
-    Ok(had_plaintext)
 }
 
 fn legacy_local_storage() -> Option<web_sys::Storage> {
@@ -203,7 +115,7 @@ pub(crate) async fn load_auth_providers() -> Result<NormalizedAuthSnapshot, Nook
     let normalized = nook_core::normalize_auth_snapshot(&raw);
     let identity = device_identity().await?;
     let mut snapshot = normalized.snapshot;
-    let had_plaintext = open_snapshot(&identity, &mut snapshot)?;
+    let had_plaintext = open_provider_credentials(&identity, &mut snapshot)?;
 
     let mut seeded_legacy = false;
     let legacy_storage = if snapshot.providers.is_empty() {
@@ -253,7 +165,7 @@ pub(crate) async fn save_auth_providers(
 ) -> Result<(), NookError> {
     let identity = device_identity().await?;
     let mut sealed = snapshot.clone();
-    seal_snapshot(&identity, &mut sealed)?;
+    seal_provider_credentials(&identity, &mut sealed)?;
     write_snapshot(&sealed).await
 }
 
@@ -261,4 +173,135 @@ pub(crate) async fn delete_auth_providers_db() -> Result<(), NookError> {
     rexie::Rexie::delete(DB_NAME)
         .await
         .map_err(|e| idb_err("nook_auth delete error", e))
+}
+
+#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
+mod wasm_idb_tests {
+    use super::*;
+    use nook_core::{OAuthFileConfigData, StorageProviderData};
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn github_snapshot(pat: &str) -> AuthProvidersSnapshotData {
+        AuthProvidersSnapshotData {
+            providers: vec![StorageProviderData {
+                id: "gh-wasm".to_owned(),
+                provider_type: "github".to_owned(),
+                label: "GitHub".to_owned(),
+                github_pat: Some(pat.to_owned()),
+                github_repo: Some("nook".to_owned()),
+                oauth_file: None,
+                store_id: None,
+                last_synced_version: None,
+                last_synced_at: None,
+                last_sync_revision: None,
+                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+            }],
+            active_vault_store_id: None,
+        }
+    }
+
+    async fn clear_auth_dbs() {
+        let _ = delete_auth_providers_db().await;
+        let _ = rexie::Rexie::delete("nook_db").await;
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_seals_github_pat_in_indexed_db() {
+        clear_auth_dbs().await;
+        let pat = "github_pat_11WASMtestSECRET";
+        save_auth_providers(&github_snapshot(pat))
+            .await
+            .expect("save");
+        let raw = read_raw_snapshot().await.expect("read raw");
+        let stored_pat = raw["providers"][0]["githubPat"]
+            .as_str()
+            .expect("githubPat");
+        assert!(nook_core::is_sealed_credential(stored_pat));
+        assert!(!stored_pat.contains("WASMtestSECRET"));
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_decrypts_sealed_github_pat() {
+        clear_auth_dbs().await;
+        let pat = "github_pat_22LOADroundTRIP";
+        save_auth_providers(&github_snapshot(pat))
+            .await
+            .expect("save");
+        let loaded = load_auth_providers().await.expect("load");
+        assert_eq!(
+            loaded.snapshot.providers[0].github_pat.as_deref(),
+            Some(pat)
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn load_upgrades_legacy_plaintext_to_sealed_storage() {
+        clear_auth_dbs().await;
+        let pat = "github_pat_33LEGACYplain";
+        write_snapshot(&github_snapshot(pat))
+            .await
+            .expect("write plaintext");
+        let loaded = load_auth_providers().await.expect("load");
+        assert_eq!(
+            loaded.snapshot.providers[0].github_pat.as_deref(),
+            Some(pat)
+        );
+        let raw = read_raw_snapshot().await.expect("read raw");
+        let stored_pat = raw["providers"][0]["githubPat"]
+            .as_str()
+            .expect("githubPat");
+        assert!(nook_core::is_sealed_credential(stored_pat));
+        assert!(!stored_pat.contains("LEGACYplain"));
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_seals_oauth_tokens_in_indexed_db() {
+        clear_auth_dbs().await;
+        let access = "ya29.wasm-oauth-access";
+        let refresh = "1//wasm-refresh-secret";
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![StorageProviderData {
+                id: "gd-wasm".to_owned(),
+                provider_type: "oauth-file".to_owned(),
+                label: "Google Drive".to_owned(),
+                github_pat: None,
+                github_repo: None,
+                oauth_file: Some(OAuthFileConfigData {
+                    preset: "google-drive".to_owned(),
+                    access_token: access.to_owned(),
+                    refresh_token: Some(refresh.to_owned()),
+                    expires_at: None,
+                    file_id: None,
+                    file_name: Some("nook-vault.yaml".to_owned()),
+                    account_email: None,
+                }),
+                store_id: None,
+                last_synced_version: None,
+                last_synced_at: None,
+                last_sync_revision: None,
+                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+            }],
+            active_vault_store_id: None,
+        };
+        save_auth_providers(&snapshot).await.expect("save");
+        let raw = read_raw_snapshot().await.expect("read raw");
+        let oauth = &raw["providers"][0]["oauthFile"];
+        let stored_access = oauth["accessToken"].as_str().expect("accessToken");
+        let stored_refresh = oauth["refreshToken"].as_str().expect("refreshToken");
+        assert!(nook_core::is_sealed_credential(stored_access));
+        assert!(nook_core::is_sealed_credential(stored_refresh));
+        assert!(!stored_access.contains(access));
+        assert!(!stored_refresh.contains(refresh));
+
+        let loaded = load_auth_providers().await.expect("load");
+        let loaded_oauth = loaded.snapshot.providers[0]
+            .oauth_file
+            .as_ref()
+            .expect("oauth");
+        assert_eq!(loaded_oauth.access_token, access);
+        assert_eq!(loaded_oauth.refresh_token.as_deref(), Some(refresh));
+    }
 }
