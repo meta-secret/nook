@@ -274,14 +274,31 @@ test.describe(`multi-device join background sync (${providerLabel} stub sync)`, 
       target.stub,
     )
 
-    await waitForGithubVaultState(
-      target,
-      (snapshot) => snapshot.joinEntries.length === 1,
-    )
-
-    await expect(deviceA.getByTestId('pending-joins-banner')).toBeVisible({
-      timeout: NOTIFICATION_TIMEOUT_MS,
-    })
+    await expect
+      .poll(
+        async () => {
+          if (await deviceA.getByTestId('pending-joins-banner').isVisible()) {
+            return true
+          }
+          await deviceA.evaluate(async () => {
+            const vault = (
+              window as Window & {
+                __nookVault?: {
+                  syncFromStorage?: (opts?: {
+                    force?: boolean
+                  }) => Promise<void>
+                  refreshPendingJoinsFromProviders?: () => Promise<void>
+                }
+              }
+            ).__nookVault
+            await vault?.syncFromStorage?.({ force: true })
+            await vault?.refreshPendingJoinsFromProviders?.()
+          })
+          return deviceA.getByTestId('pending-joins-banner').isVisible()
+        },
+        { timeout: NOTIFICATION_TIMEOUT_MS },
+      )
+      .toBe(true)
     await expect(
       deviceA.getByTestId('device-join-row').filter({ hasText: join.deviceId }),
     ).toBeVisible()

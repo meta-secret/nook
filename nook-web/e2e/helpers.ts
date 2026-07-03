@@ -1986,7 +1986,30 @@ export async function openOnboardDevicePanel(page: Page) {
 
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectSyncVault(page: Page) {
-  await unlockGithubVault(page)
+  await page.goto('/')
+  await dismissSyncConflictIfVisible(page)
+  await dismissJoinEnrollmentDialog(page)
+
+  const vaultReady = async () =>
+    (await page.getByTestId('vault-panel').isVisible()) ||
+    (await page.getByTestId('secret-row').count()) > 0
+
+  await expect(
+    page.getByTestId('login-gate').or(page.getByTestId('vault-panel')),
+  ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+
+  if (await vaultReady()) {
+    await disableVaultIdleLock(page)
+    return
+  }
+
+  await unlockVaultOnLogin(page)
+  await expect
+    .poll(async () => vaultReady(), {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    .toBe(true)
+  await disableVaultIdleLock(page)
 }
 
 /** @deprecated Use {@link reconnectSyncVault}. */

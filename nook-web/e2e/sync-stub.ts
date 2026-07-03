@@ -73,11 +73,16 @@ export async function waitForStubVaultState(
   while (Date.now() < deadline) {
     const yaml = target.stub.getVaultYaml()
     if (yaml.trim()) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
-      if (predicate(snapshot)) {
-        return snapshot
+      try {
+        const snapshot = parseVaultYamlSnapshot(yaml)
+        if (predicate(snapshot)) {
+          return snapshot
+        }
+        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error.message : 'invalid stub vault yaml'
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
     }
     await sleep(intervalMs)
   }

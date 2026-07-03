@@ -10,11 +10,14 @@ import {
   expectVaultPasswordStatus,
   expandSettingsSection,
   openStorageSettings,
-  seedExtraSyncProviders,
+  readLocalVaultYamlFromIdb,
+  reloadUnlockWithSyncProvider,
+  stubGoogleDriveVaultForLocalE2e,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
 } from './helpers'
 import { createSyncTarget, installSyncStub } from './sync-provider'
+import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 test.describe('unified vault backup passwords (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -36,30 +39,27 @@ test.describe('unified vault backup passwords (stub sync)', () => {
     await expectVaultPasswordStatus(page, 1)
 
     await disableLoginAutoUnlock(page)
-    await seedExtraSyncProviders(page, [
-      {
-        id: 'e2e-empty-sync',
-        label: 'Empty Drive',
-        fileName: target.repoName,
-        accessToken: target.pat,
-        type: 'oauth-file',
-        oauthPreset: 'google-drive',
-      },
-    ])
-    await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
-
-    await unlockVaultOnLogin(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+    const vaultYaml = await readLocalVaultYamlFromIdb(page)
+    await stubGoogleDriveVaultForLocalE2e(
+      page,
+      { fileName: target.repoName, vaultYaml },
+      target.stub as ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+    )
+    await reloadUnlockWithSyncProvider(page, {
+      providers: [
+        {
+          id: 'e2e-empty-sync',
+          label: 'Empty Drive',
+          fileName: target.repoName,
+          accessToken: target.pat,
+        },
+      ],
+      sharedStub: target.stub as ReturnType<
+        typeof createLocalE2eGoogleDriveVaultStub
+      >,
     })
     await disableVaultIdleLock(page)
 
-    await openStorageSettings(page)
-    await expandSettingsSection(page, 'storage')
     await page.getByTestId('vault-secrets-tab').click()
     await expect
       .poll(async () => page.getByTestId('header-lock-vault-btn').isEnabled(), {

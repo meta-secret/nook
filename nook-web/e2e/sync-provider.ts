@@ -183,11 +183,16 @@ export async function waitForSyncRemoteState(
   while (Date.now() < deadline) {
     const yaml = target.stub?.getVaultYaml() ?? ''
     if (yaml.trim()) {
-      const snapshot = parseVaultYamlSnapshot(yaml)
-      if (predicate(snapshot)) {
-        return snapshot
+      try {
+        const snapshot = parseVaultYamlSnapshot(yaml)
+        if (predicate(snapshot)) {
+          return snapshot
+        }
+        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error.message : 'invalid stub vault yaml'
       }
-      lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
     }
     await sleep(intervalMs)
   }
@@ -232,13 +237,44 @@ export async function connectSyncGenesisDevice(
 ) {
   const backend = stubBackendId(target.providerId)
   if (backend === 'google-drive') {
-    const { connectGoogleDriveGenesisDevice } = await import('./helpers')
-    await connectGoogleDriveGenesisDevice(
-      page,
-      target.pat,
-      target.repoName,
-      target.stub as ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
-    )
+    const {
+      clearBrowserVault,
+      connectLocalVault,
+      assertVaultReady,
+      readLocalVaultYamlFromIdb,
+      reloadUnlockWithSyncProvider,
+      triggerVaultSyncRefresh,
+      disableVaultIdleLock,
+    } = await import('./helpers')
+    await page.goto('/')
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+    await assertVaultReady(page)
+    const genesisYaml = await readLocalVaultYamlFromIdb(page)
+    const stub = target.stub as ReturnType<
+      typeof createLocalE2eGoogleDriveVaultStub
+    >
+    if (stub) {
+      stub.setVaultYaml(genesisYaml)
+      await stub.install(page, {
+        fileName: target.repoName,
+        vaultYaml: genesisYaml,
+      })
+    }
+    await reloadUnlockWithSyncProvider(page, {
+      providers: [
+        {
+          id: 'e2e-genesis-sync',
+          label: 'E2E Drive',
+          fileName: target.repoName,
+          accessToken: target.pat,
+        },
+      ],
+      sharedStub: stub,
+    })
+    await triggerVaultSyncRefresh(page)
+    await disableVaultIdleLock(page)
     return
   }
   if (backend === 'github') {
@@ -262,13 +298,16 @@ export async function connectSyncJoinerDevice(
 ) {
   const backend = stubBackendId(target.providerId)
   if (backend === 'google-drive') {
-    const { connectGoogleDriveJoinerDevice } = await import('./helpers')
-    await connectGoogleDriveJoinerDevice(
-      page,
-      target.pat,
-      target.repoName,
-      target.stub as ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
-    )
+    const stub = target.stub as ReturnType<
+      typeof createLocalE2eGoogleDriveVaultStub
+    >
+    const { assertGenesisVaultOnSyncStub, connectLocalE2eJoinerDevice } =
+      await import('./helpers')
+    await assertGenesisVaultOnSyncStub(stub)
+    if (stub) {
+      await stub.install(page, { fileName: target.repoName })
+    }
+    await connectLocalE2eJoinerDevice(page, target.repoName, target.pat)
     return
   }
   if (backend === 'github') {
