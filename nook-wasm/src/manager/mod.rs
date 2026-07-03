@@ -55,7 +55,7 @@ pub struct NookVaultManager {
     pub(in crate::manager) secrets_key: String,
     pub(in crate::manager) members_key: String,
     pub(in crate::manager) device_id: String,
-    pub(in crate::manager) device_identity_secret: String,
+    pub(in crate::manager) device_identity_private_key: String,
     pub(in crate::manager) crypto: Option<nook_core::VaultCrypto>,
     pub(in crate::manager) meta: nook_core::VaultMetaState,
     pub(in crate::manager) decrypted_jsonl: String,
@@ -92,7 +92,7 @@ impl Drop for NookVaultManager {
         self.github_pat.zeroize();
         self.secrets_key.zeroize();
         self.members_key.zeroize();
-        self.device_identity_secret.zeroize();
+        self.device_identity_private_key.zeroize();
         self.decrypted_jsonl.zeroize();
         self.signing_seed.zeroize();
         self.key_epoch.zeroize();
@@ -114,7 +114,7 @@ impl NookVaultManager {
             secrets_key: String::new(),
             members_key: String::new(),
             device_id: String::new(),
-            device_identity_secret: String::new(),
+            device_identity_private_key: String::new(),
             crypto: None,
             meta: nook_core::VaultMetaState::default(),
             unlock: nook_core::VaultUnlock::Keys,
@@ -171,10 +171,10 @@ impl NookVaultManager {
 
     #[wasm_bindgen(getter)]
     pub fn device_public_key(&self) -> String {
-        if self.device_identity_secret.is_empty() {
+        if self.device_identity_private_key.is_empty() {
             return String::new();
         }
-        nook_core::DeviceIdentitySecret::parse(&self.device_identity_secret)
+        nook_core::DeviceIdentitySecret::parse(&self.device_identity_private_key)
             .ok()
             .and_then(|secret| nook_core::DeviceIdentity::from_secret_str(&secret).ok())
             .map(|identity| identity.public_key().as_str().to_owned())
@@ -345,7 +345,7 @@ impl NookVaultManager {
 
     pub(crate) fn device_identity(&self) -> Result<nook_core::DeviceIdentity, NookError> {
         Ok(nook_core::DeviceIdentity::from_secret_str(
-            &nook_core::DeviceIdentitySecret::parse(&self.device_identity_secret)?,
+            &nook_core::DeviceIdentitySecret::parse(&self.device_identity_private_key)?,
         )?)
     }
 
@@ -535,7 +535,7 @@ impl NookVaultManager {
     pub(in crate::manager) fn ensure_device_identity(
         &mut self,
     ) -> Result<nook_core::DeviceIdentity, NookError> {
-        if self.device_identity_secret.is_empty() {
+        if self.device_identity_private_key.is_empty() {
             return Err(NookError::Decryption(
                 "errors.device_protection.authorization_required".to_owned(),
             ));
