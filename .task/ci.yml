@@ -138,10 +138,9 @@ tasks:
         vars: { TASK: _verify }
 
   _ci:pr:
-    desc: PR gate — format, wasm, verify ‖ build, full stub e2e, restore prod dist (one container).
+    desc: PR gate — format, wasm (image-seeded), verify ‖ build, full stub e2e, restore prod dist (one container).
     cmds:
       - task: _format:check
-      - task: _wasm:build
       - task: _ci:pr:parallel
       - cp -a nook-web/dist nook-web/dist-prod
       - task: _web:e2e:build-dist
@@ -158,7 +157,6 @@ tasks:
     desc: Main verify/build track without e2e.
     cmds:
       - task: _format:check
-      - task: _wasm:build
       - task: _ci:pr:parallel
 
   _ci:main:
@@ -179,10 +177,9 @@ tasks:
       - task: _web:e2e:restore-prod-dist
 
   _ci:pr:prepare:
-    desc: Format and wasm (split-container debug only — prefer _ci:pr).
+    desc: Format check only (split-container debug — prefer _ci:pr).
     cmds:
       - task: _format:check
-      - task: _wasm:build
 
   _deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.

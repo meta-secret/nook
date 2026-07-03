@@ -19,10 +19,15 @@ tasks:
     cmds:
       - >-
         sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
-        need=0;
-        if [ ! -f "$out" ]; then need=1;
-        elif find nook-wasm/src nook-core/src -newer "$out" -print -quit | grep -q .; then need=1;
-        fi;
-        if [ "$need" -eq 1 ]; then
+        stamp=nook-web/src/lib/nook-wasm/.wasm-source-sha256;
+        current="$(find nook-wasm/src nook-core/src -type f -name "*.rs" -print0 \
+          | LC_ALL=C sort -z \
+          | xargs -0 sha256sum \
+          | sha256sum \
+          | cut -d" " -f1)";
+        stored="";
+        if [ -f "$stamp" ]; then stored="$(cat "$stamp")"; fi;
+        if [ ! -f "$out" ] || [ "$current" != "$stored" ]; then
           wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm;
+          echo "$current" > "$stamp";
         fi'

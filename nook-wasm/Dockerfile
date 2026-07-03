@@ -12,7 +12,11 @@ FROM builder-debug AS builder-wasm
 
 # Separate RUNs so each layer caches independently.
 RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings
-RUN cargo build --release --target wasm32-unknown-unknown -p nook-wasm
 # --out-dir is relative to the crate dir (nook-wasm/), so "../nook-web/..." lands the JS/wasm bundle
 # in the web source tree where Vite imports it. target/ stays in-tree for reuse.
-RUN wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm
+RUN wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm \
+    && ( find nook-wasm/src nook-core/src -type f -name '*.rs' -print0 \
+         | LC_ALL=C sort -z \
+         | xargs -0 sha256sum \
+         | sha256sum \
+         | cut -d' ' -f1 > nook-web/src/lib/nook-wasm/.wasm-source-sha256 )
