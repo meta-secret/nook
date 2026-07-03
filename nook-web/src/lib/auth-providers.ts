@@ -1,19 +1,16 @@
-import { generateId } from '$lib/nook'
+import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
 import {
-  migrateLegacyVaultToLocal,
-  normalizeAuthSnapshot,
-} from '$lib/vault-migration'
-import {
-  decryptWithDeviceKey,
+  deleteAuthProvidersDb as deleteAuthProvidersDbWasm,
   default as initNookWasm,
   defaultDriveVaultFile,
   defaultGithubRepo,
-  encryptWithDeviceKey,
-  ensureDeviceKey,
+  findDuplicateSyncProvider as findDuplicateSyncProviderWasm,
   formatDriveStorageRef as formatDriveStorageRefCore,
+  loadAuthProviders as loadAuthProvidersWasm,
   maskGithubPatHint as maskGithubPatHintCore,
   NookSyncProviderTarget,
   providerDefaultLabel as providerDefaultLabelCore,
+  saveAuthProviders as saveAuthProvidersWasm,
   syncProviderTargetKey as syncProviderTargetKeyCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
 } from './nook-wasm/nook_wasm'
@@ -35,8 +32,45 @@ export interface OAuthFileConfig {
   accountEmail?: string
 }
 
+export interface StorageProvider {
+  id: string
+  type: StorageProviderType
+  label: string
+  githubPat?: string
+  /** GitHub repository name (not owner/name). Defaults to `nook`. */
+  githubRepo?: string
+  oauthFile?: OAuthFileConfig
+  /** Logical secret-store id — same across provider replicas of one vault. */
+  storeId?: string
+  /** Monotonic vault_version after last successful sync to this provider. */
+  lastSyncedVersion?: number
+  /** ISO timestamp of last successful sync. */
+  lastSyncedAt?: string
+  /** Remote revision token (GitHub sha, Drive revisionId) for the next write. */
+  lastSyncRevision?: string
+  createdAt: string
+}
+
+export interface AuthProvidersSnapshot {
+  providers: StorageProvider[]
+  /** Active vault store_id — providers are scoped to this vault. */
+  activeVaultStoreId?: string
+}
+
+/** Shape returned by the wasm `loadAuthProviders` pipeline. */
+interface LoadedAuthProviders {
+  snapshot: AuthProvidersSnapshot
+  legacyActiveProviderId: string | null
+  changed: boolean
+}
+
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
 export const DEFAULT_DRIVE_VAULT_FILE = defaultDriveVaultFile()
+
+/** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
+function toPlain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
 
 /** Canonical identity for a sync target — two providers with the same key are duplicates. */
 export function syncProviderTargetKey(
@@ -71,16 +105,11 @@ export function findDuplicateSyncProvider(
   candidate: StorageProvider,
   options?: { excludeId?: string },
 ): StorageProvider | undefined {
-  const candidateKey = syncProviderTargetKey(candidate)
-  if (!candidateKey) {
-    return undefined
-  }
-  return providers.find((provider) => {
-    if (options?.excludeId && provider.id === options.excludeId) {
-      return false
-    }
-    return syncProviderTargetKey(provider) === candidateKey
-  })
+  return findDuplicateSyncProviderWasm(
+    toPlain(providers),
+    toPlain(candidate),
+    options?.excludeId ?? undefined,
+  ) as StorageProvider | undefined
 }
 
 export function formatDriveStorageRef(
@@ -90,305 +119,32 @@ export function formatDriveStorageRef(
   return formatDriveStorageRefCore(fileId ?? null, fileName)
 }
 
-export interface StorageProvider {
-  id: string
-  type: StorageProviderType
-  label: string
-  githubPat?: string
-  /** GitHub repository name (not owner/name). Defaults to `nook`. */
-  githubRepo?: string
-  oauthFile?: OAuthFileConfig
-  /** Logical secret-store id — same across provider replicas of one vault. */
-  storeId?: string
-  /** Monotonic vault_version after last successful sync to this provider. */
-  lastSyncedVersion?: number
-  /** ISO timestamp of last successful sync. */
-  lastSyncedAt?: string
-  /** Remote revision token (GitHub sha, Drive revisionId) for the next write. */
-  lastSyncRevision?: string
-  createdAt: string
-}
-
-export interface AuthProvidersSnapshot {
-  providers: StorageProvider[]
-  /** Active vault store_id — providers are scoped to this vault. */
-  activeVaultStoreId?: string
-}
-
-/** Plain snapshot safe for IndexedDB structured clone (no reactive proxies). */
-function toStorableSnapshot(
-  snapshot: AuthProvidersSnapshot,
-): AuthProvidersSnapshot {
-  return JSON.parse(JSON.stringify(snapshot)) as AuthProvidersSnapshot
-}
-
-const DB_NAME = 'nook_auth'
-const DB_VERSION = 1
-const STORE = 'auth'
-const STATE_KEY = 'providers'
-
-/** age-armored ciphertext marker — sealed credentials always contain it. */
-const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
-    request.onupgradeneeded = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE)
-      }
-    }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () =>
-      reject(request.error ?? new Error('Failed to open auth IndexedDB.'))
-  })
-}
-
-/** True when a credential field is already sealed with the device key. */
-function isSealedSecret(value: string | undefined | null): boolean {
-  return typeof value === 'string' && value.includes(AGE_ARMOR_MARKER)
-}
-
-/**
- * Seal credential fields (PAT, OAuth tokens) with the WASM device key so nothing
- * sensitive lands in IndexedDB as plaintext. The device identity is ensured once
- * up front so concurrent field sealing resolves the same key.
- */
-async function encryptSnapshot(
-  snapshot: AuthProvidersSnapshot,
-): Promise<AuthProvidersSnapshot> {
-  await ensureDeviceKey()
-  const providers = await Promise.all(
-    snapshot.providers.map(async (provider) => {
-      const next: StorageProvider = { ...provider }
-      if (provider.githubPat && !isSealedSecret(provider.githubPat)) {
-        next.githubPat = await encryptWithDeviceKey(provider.githubPat)
-      }
-      if (provider.oauthFile) {
-        const oauthFile: OAuthFileConfig = { ...provider.oauthFile }
-        if (oauthFile.accessToken && !isSealedSecret(oauthFile.accessToken)) {
-          oauthFile.accessToken = await encryptWithDeviceKey(
-            oauthFile.accessToken,
-          )
-        }
-        if (oauthFile.refreshToken && !isSealedSecret(oauthFile.refreshToken)) {
-          oauthFile.refreshToken = await encryptWithDeviceKey(
-            oauthFile.refreshToken,
-          )
-        }
-        next.oauthFile = oauthFile
-      }
-      return next
-    }),
-  )
-  return { ...snapshot, providers }
-}
-
-/**
- * Unseal credential fields back to plaintext for in-memory use via the WASM
- * device key. `hadPlaintext` signals legacy/seeded rows still stored
- * unencrypted, so callers can re-save to upgrade them to sealed form.
- */
-async function decryptSnapshot(
-  snapshot: AuthProvidersSnapshot,
-): Promise<{ snapshot: AuthProvidersSnapshot; hadPlaintext: boolean }> {
-  let hadPlaintext = false
-  const providers = await Promise.all(
-    snapshot.providers.map(async (provider) => {
-      const next: StorageProvider = { ...provider }
-      if (provider.githubPat) {
-        if (isSealedSecret(provider.githubPat)) {
-          next.githubPat = await decryptWithDeviceKey(provider.githubPat)
-        } else {
-          hadPlaintext = true
-        }
-      }
-      if (provider.oauthFile) {
-        const oauthFile: OAuthFileConfig = { ...provider.oauthFile }
-        if (oauthFile.accessToken) {
-          if (isSealedSecret(oauthFile.accessToken)) {
-            oauthFile.accessToken = await decryptWithDeviceKey(
-              oauthFile.accessToken,
-            )
-          } else {
-            hadPlaintext = true
-          }
-        }
-        if (oauthFile.refreshToken) {
-          if (isSealedSecret(oauthFile.refreshToken)) {
-            oauthFile.refreshToken = await decryptWithDeviceKey(
-              oauthFile.refreshToken,
-            )
-          } else {
-            hadPlaintext = true
-          }
-        }
-        next.oauthFile = oauthFile
-      }
-      return next
-    }),
-  )
-  return { snapshot: { ...snapshot, providers }, hadPlaintext }
-}
-
-function migrateFromLocalStorage(
-  snapshot: AuthProvidersSnapshot,
-): AuthProvidersSnapshot {
-  if (snapshot.providers.length > 0) {
-    return snapshot
-  }
-
-  const mode = localStorage.getItem('nook_storage_mode')
-  const pat = localStorage.getItem('nook_github_pat')?.trim() ?? ''
-  if (!mode && !pat) {
-    return snapshot
-  }
-
-  const type: StorageProviderType = mode === 'github' ? 'github' : 'local'
-  const provider: StorageProvider = {
-    id: generateId(),
-    type,
-    label: providerDefaultLabel(type),
-    githubPat: type === 'github' ? pat : undefined,
-    githubRepo: type === 'github' ? DEFAULT_GITHUB_REPO : undefined,
-    createdAt: new Date().toISOString(),
-  }
-
-  localStorage.removeItem('nook_storage_mode')
-  localStorage.removeItem('nook_github_pat')
-
-  return {
-    providers: [provider],
-  }
-}
-
-function migrateProviderFields(
-  snapshot: AuthProvidersSnapshot,
-): AuthProvidersSnapshot {
-  let changed = false
-  const providers = snapshot.providers.map((provider) => {
-    if (provider.type === 'github') {
-      if (provider.githubRepo?.trim()) {
-        return provider
-      }
-      changed = true
-      return { ...provider, githubRepo: DEFAULT_GITHUB_REPO }
-    }
-    if (provider.type === 'oauth-file') {
-      if (provider.oauthFile?.fileName?.trim()) {
-        return provider
-      }
-      changed = true
-      const existing = provider.oauthFile
-      return {
-        ...provider,
-        oauthFile: {
-          preset: existing?.preset ?? ('google-drive' as const),
-          accessToken: existing?.accessToken ?? '',
-          refreshToken: existing?.refreshToken,
-          expiresAt: existing?.expiresAt,
-          fileId: existing?.fileId,
-          accountEmail: existing?.accountEmail,
-          fileName: DEFAULT_DRIVE_VAULT_FILE,
-        },
-      }
-    }
-    return provider
-  })
-  if (!changed) {
-    return snapshot
-  }
-  return { ...snapshot, providers }
-}
-
 export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
-  const db = await openDb()
-  try {
-    const loaded = await new Promise<{
-      snapshot: AuthProvidersSnapshot
-      legacyActiveProviderId: string | null
-      changed: boolean
-    }>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly')
-      const store = tx.objectStore(STORE)
-      const request = store.get(STATE_KEY)
-      request.onsuccess = () => {
-        resolve(normalizeAuthSnapshot(request.result))
-      }
-      request.onerror = () =>
-        reject(request.error ?? new Error('Failed to read auth providers.'))
-    })
-    const { snapshot: decrypted, hadPlaintext } = await decryptSnapshot(
-      loaded.snapshot,
-    )
-    let snapshot = migrateFromLocalStorage(decrypted)
-    snapshot = migrateProviderFields(snapshot)
-    if (loaded.changed || hadPlaintext || snapshot !== decrypted) {
-      await saveAuthProviders(snapshot)
-    }
-    return snapshot
-  } finally {
-    db.close()
-  }
+  const loaded = (await loadAuthProvidersWasm()) as LoadedAuthProviders
+  return loaded.snapshot
 }
 
-/** Load providers, strip legacy fields, and copy a remote vault into local storage once. */
+/** Load providers, then copy a legacy remote vault into local storage once. */
 export async function loadAuthProvidersWithVaultMigration(): Promise<AuthProvidersSnapshot> {
-  const db = await openDb()
-  try {
-    const loaded = await new Promise<{
-      snapshot: AuthProvidersSnapshot
-      legacyActiveProviderId: string | null
-      changed: boolean
-    }>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly')
-      const store = tx.objectStore(STORE)
-      const request = store.get(STATE_KEY)
-      request.onsuccess = () => {
-        resolve(normalizeAuthSnapshot(request.result))
-      }
-      request.onerror = () =>
-        reject(request.error ?? new Error('Failed to read auth providers.'))
-    })
-    const { snapshot: decrypted, hadPlaintext } = await decryptSnapshot(
+  const loaded = (await loadAuthProvidersWasm()) as LoadedAuthProviders
+  const { snapshot: migratedSnapshot, migrated } =
+    await migrateLegacyVaultToLocal(
       loaded.snapshot,
+      loaded.legacyActiveProviderId,
     )
-    let snapshot = migrateFromLocalStorage(decrypted)
-    snapshot = migrateProviderFields(snapshot)
-    const { snapshot: migratedSnapshot, migrated: copiedVault } =
-      await migrateLegacyVaultToLocal(snapshot, loaded.legacyActiveProviderId)
-    const shouldSave =
-      loaded.changed ||
-      hadPlaintext ||
-      copiedVault ||
-      migratedSnapshot.providers.length !== snapshot.providers.length
-    if (shouldSave) {
-      await saveAuthProviders(migratedSnapshot)
-    }
-    return migratedSnapshot
-  } finally {
-    db.close()
+  if (
+    migrated ||
+    migratedSnapshot.providers.length !== loaded.snapshot.providers.length
+  ) {
+    await saveAuthProviders(migratedSnapshot)
   }
+  return migratedSnapshot
 }
 
 export async function saveAuthProviders(
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
-  const storable = await encryptSnapshot(toStorableSnapshot(snapshot))
-  const db = await openDb()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite')
-      const store = tx.objectStore(STORE)
-      store.put(storable, STATE_KEY)
-      tx.oncomplete = () => resolve()
-      tx.onerror = () =>
-        reject(tx.error ?? new Error('Failed to save auth providers.'))
-    })
-  } finally {
-    db.close()
-  }
+  await saveAuthProvidersWasm(toPlain(snapshot))
 }
 
 export function wasmStorageModeForProvider(
@@ -490,11 +246,5 @@ export function providerStorageDetail(
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(DB_NAME)
-    request.onsuccess = () => resolve()
-    request.onerror = () =>
-      reject(request.error ?? new Error('Failed to delete auth IndexedDB.'))
-    request.onblocked = () => resolve()
-  })
+  await deleteAuthProvidersDbWasm()
 }

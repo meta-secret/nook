@@ -1,18 +1,16 @@
 import {
   DEFAULT_DRIVE_VAULT_FILE,
   formatDriveStorageRef,
-  providerDefaultLabel,
   type AuthProvidersSnapshot,
   type StorageProvider,
   wasmStorageModeForProvider,
 } from '$lib/auth-providers'
-import { generateId } from '$lib/nook'
 import { hasLocalVault } from '$lib/local-vault'
+import {
+  ensureLocalProviderRow as ensureLocalProviderRowWasm,
+  normalizeAuthSnapshot as normalizeAuthSnapshotWasm,
+} from '$lib/nook-wasm/nook_wasm'
 import { fetchRemoteVaultBlob, writeLocalVaultBlob } from '$lib/vault-sync'
-
-type LegacyAuthSnapshot = AuthProvidersSnapshot & {
-  activeProviderId?: string | null
-}
 
 function providerRemoteArgs(
   provider: StorageProvider,
@@ -46,23 +44,10 @@ export function normalizeAuthSnapshot(raw: unknown): {
   legacyActiveProviderId: string | null
   changed: boolean
 } {
-  const value = (raw ?? {}) as LegacyAuthSnapshot
-  const providers = Array.isArray(value.providers) ? value.providers : []
-  const legacyActiveProviderId =
-    typeof value.activeProviderId === 'string' ? value.activeProviderId : null
-  const hadActiveId =
-    raw !== null &&
-    raw !== undefined &&
-    typeof raw === 'object' &&
-    'activeProviderId' in raw
-  const activeVaultStoreId =
-    typeof value.activeVaultStoreId === 'string'
-      ? value.activeVaultStoreId
-      : undefined
-  return {
-    snapshot: { providers, activeVaultStoreId },
-    legacyActiveProviderId,
-    changed: hadActiveId,
+  return normalizeAuthSnapshotWasm(raw) as {
+    snapshot: AuthProvidersSnapshot
+    legacyActiveProviderId: string | null
+    changed: boolean
   }
 }
 
@@ -71,23 +56,10 @@ export function ensureLocalProviderRow(
   snapshot: AuthProvidersSnapshot,
   activeStoreId?: string,
 ): AuthProvidersSnapshot {
-  const storeId = activeStoreId ?? snapshot.activeVaultStoreId
-  const hasLocalForVault = snapshot.providers.some(
-    (provider) =>
-      provider.type === 'local' &&
-      (!storeId || !provider.storeId || provider.storeId === storeId),
-  )
-  if (hasLocalForVault) {
-    return snapshot
-  }
-  const local: StorageProvider = {
-    id: generateId(),
-    type: 'local',
-    label: providerDefaultLabel('local'),
-    storeId,
-    createdAt: new Date().toISOString(),
-  }
-  return { ...snapshot, providers: [local, ...snapshot.providers] }
+  return ensureLocalProviderRowWasm(
+    JSON.parse(JSON.stringify(snapshot)),
+    activeStoreId ?? undefined,
+  ) as AuthProvidersSnapshot
 }
 
 /**
