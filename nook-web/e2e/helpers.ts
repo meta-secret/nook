@@ -886,11 +886,7 @@ async function waitForGoogleOAuthSignedIn(page: Page) {
     .toBe(true)
 }
 
-async function setupGoogleDriveProvider(
-  page: Page,
-  fileName: string,
-  accessToken: string,
-) {
+async function setupGoogleDriveProvider(page: Page, fileName: string) {
   await openLoginProviderSetup(page)
   await page.getByTestId('provider-option-oauth-file').click()
   await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
@@ -1030,7 +1026,7 @@ export async function connectGoogleDriveVault(
     await stub.install(page, { fileName })
   }
   await page.goto('/')
-  await setupGoogleDriveProvider(page, fileName, accessToken)
+  await setupGoogleDriveProvider(page, fileName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await waitForSyncStubVaultState(
@@ -1069,7 +1065,7 @@ export async function connectGoogleDriveJoinerDevice(
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
-  await setupGoogleDriveProvider(page, fileName, accessToken)
+  await setupGoogleDriveProvider(page, fileName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await waitForJoinEnrollmentDialog(page)
@@ -2944,7 +2940,7 @@ export async function connectLocalE2eJoinerDevice(
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
-  await setupGoogleDriveProvider(page, fileName, accessToken)
+  await setupGoogleDriveProvider(page, fileName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await waitForJoinEnrollmentDialog(page)

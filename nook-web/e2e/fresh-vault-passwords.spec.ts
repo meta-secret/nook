@@ -10,7 +10,6 @@ import {
   readLocalVaultYamlFromIdb,
   reloadUnlockWithSyncProvider,
   stubGoogleDriveVaultForLocalE2e,
-  UI_TIMEOUT_MS,
 } from './helpers'
 import { createSyncTarget, installSyncStub } from './sync-provider'
 

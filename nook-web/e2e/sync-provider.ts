@@ -213,12 +213,11 @@ export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
   }
   if (backend === 'github') {
     const { connectGithubVault } = await import('./helpers')
-    const { createLocalE2eGithubVaultStub } = await import('./helpers')
     await connectGithubVault(
       page,
       target.pat,
       target.repoName,
-      target.stub as ReturnType<typeof createLocalE2eGithubVaultStub>,
+      target.stub as NonNullable<Parameters<typeof connectGithubVault>[3]>,
     )
     return
   }
