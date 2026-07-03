@@ -1,4 +1,4 @@
-//! Passkey-PRF setup, unlock, migration, and recovery orchestration.
+//! Passkey-PRF setup, unlock, and recovery orchestration.
 
 use super::NookVaultManager;
 use crate::storage::{auth_providers, indexed_db};
@@ -12,12 +12,12 @@ impl NookVaultManager {
     /// Require passkey authorization again before any device-key operation.
     #[wasm_bindgen(js_name = lockDeviceIdentity)]
     pub fn lock_device_identity(&mut self) {
-        self.device_identity_secret.zeroize();
+        self.device_identity_private_key.zeroize();
     }
 
     #[wasm_bindgen(js_name = deviceProtectionStatus)]
     pub async fn device_protection_status(&self) -> Result<String, JsError> {
-        if !self.device_identity_secret.is_empty() {
+        if !self.device_identity_private_key.is_empty() {
             return Ok("unlocked".to_owned());
         }
         Ok(indexed_db::device_identity_protection_status()
@@ -27,32 +27,16 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = beginDeviceProtection)]
     pub async fn begin_device_protection(&mut self) -> Result<NookPasskeySetup, JsError> {
-        if self.device_identity_secret.is_empty() {
-            match indexed_db::device_identity_protection_status().await? {
-                "passkey" => {
-                    return Err(NookError::Decryption(
-                        "errors.device_protection.authorization_required".to_owned(),
-                    )
-                    .into());
-                }
-                "plaintext" => {
-                    let legacy = indexed_db::load_legacy_device_identity()
-                        .await?
-                        .ok_or_else(|| {
-                            NookError::IndexedDb(
-                                "Legacy device identity disappeared during migration.".to_owned(),
-                            )
-                        })?;
-                    self.device_id = legacy.device_id;
-                    self.device_identity_secret = legacy.secret;
-                    self.device_identity()?;
-                }
-                _ => {
-                    let identity = nook_core::DeviceIdentity::generate()?;
-                    self.device_id = identity.device_id().to_string();
-                    self.device_identity_secret = identity.secret_string().into_inner();
-                }
+        if self.device_identity_private_key.is_empty() {
+            if indexed_db::device_identity_protection_status().await? == "passkey" {
+                return Err(NookError::Decryption(
+                    "errors.device_protection.authorization_required".to_owned(),
+                )
+                .into());
             }
+            let identity = nook_core::DeviceIdentity::generate()?;
+            self.device_id = identity.device_id().to_string();
+            self.device_identity_private_key = identity.secret_string().into_inner();
         }
 
         let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
@@ -109,7 +93,7 @@ impl NookVaultManager {
                 ));
             }
             self.device_id = stored_device_id;
-            self.device_identity_secret = secret.into_inner();
+            self.device_identity_private_key = secret.into_inner();
             Ok(())
         }
         .await;
@@ -122,7 +106,7 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = resetDeviceProtectionForRecovery)]
     pub async fn reset_device_protection_for_recovery(&mut self) -> Result<(), JsError> {
         self.reset_vault_session();
-        self.device_identity_secret.zeroize();
+        self.device_identity_private_key.zeroize();
         self.device_id.clear();
         self.github_pat.zeroize();
         self.github_repo.clear();

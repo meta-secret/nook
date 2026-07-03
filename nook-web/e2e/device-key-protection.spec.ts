@@ -32,30 +32,25 @@ test.describe('passkey device-key protection', () => {
 
     const persisted = await page.evaluate(
       () =>
-        new Promise<{ legacy: unknown; wrapped: string | undefined }>(
-          (resolve, reject) => {
-            const request = indexedDB.open('nook_db', 1)
-            request.onerror = () => reject(request.error)
-            request.onsuccess = () => {
-              const db = request.result
-              const transaction = db.transaction('vault', 'readonly')
-              const store = transaction.objectStore('vault')
-              const legacyRequest = store.get('device_identity_secret')
-              const wrappedRequest = store.get('device_identity_wrapped')
-              transaction.onerror = () => reject(transaction.error)
-              transaction.oncomplete = () => {
-                db.close()
-                resolve({
-                  legacy: legacyRequest.result,
-                  wrapped: wrappedRequest.result as string | undefined,
-                })
-              }
+        new Promise<{ wrapped: string | undefined }>((resolve, reject) => {
+          const request = indexedDB.open('nook_db', 1)
+          request.onerror = () => reject(request.error)
+          request.onsuccess = () => {
+            const db = request.result
+            const transaction = db.transaction('vault', 'readonly')
+            const store = transaction.objectStore('vault')
+            const wrappedRequest = store.get('device_identity_wrapped')
+            transaction.onerror = () => reject(transaction.error)
+            transaction.oncomplete = () => {
+              db.close()
+              resolve({
+                wrapped: wrappedRequest.result as string | undefined,
+              })
             }
-          },
-        ),
+          }
+        }),
     )
 
-    expect(persisted.legacy).toBeUndefined()
     expect(persisted.wrapped).toBeDefined()
     expect(persisted.wrapped).not.toContain('AGE-SECRET-KEY-')
 

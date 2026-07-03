@@ -109,7 +109,6 @@ test.describe('vault password envelope (local)', () => {
             const tx = db.transaction('vault', 'readwrite')
             const store = tx.objectStore('vault')
             store.delete('device_id')
-            store.delete('device_identity_secret')
             store.delete('device_identity_wrapped')
             tx.oncomplete = () => {
               db.close()
