@@ -881,6 +881,10 @@ export class VaultState {
     return localLoginActions.createLocalVaultWithDeviceKeys(this, label)
   }
 
+  async renameLocalVault(storeId: string, label: string): Promise<void> {
+    return localLoginActions.renameLocalVaultLabel(this, storeId, label)
+  }
+
   async selectVaultForUnlock(storeId: string): Promise<void> {
     return localLoginActions.selectVaultForUnlock(this, storeId)
   }
@@ -928,6 +932,8 @@ export class VaultState {
       return
     }
     this.helpOpen = false
+    this.cancelProviderSetup()
+    this.cancelAddProvider()
     this.isVerifying = true
     try {
       await this.waitForStorageChain()

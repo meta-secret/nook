@@ -9,9 +9,14 @@ import {
   unlockVaultOnLogin,
 } from './helpers'
 
-async function listLocalVaultStoreIds(page: import('@playwright/test').Page) {
+type LocalVaultRegistryEntry = {
+  store_id?: string
+  label?: string
+}
+
+async function listLocalVaultEntries(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
-    return new Promise<string[]>((resolve, reject) => {
+    return new Promise<LocalVaultRegistryEntry[]>((resolve, reject) => {
       const request = indexedDB.open('nook_db', 1)
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
@@ -27,13 +32,9 @@ async function listLocalVaultStoreIds(page: import('@playwright/test').Page) {
             const raw = getReq.result
             const parsed =
               typeof raw === 'string'
-                ? (JSON.parse(raw) as { vaults?: Array<{ store_id?: string }> })
+                ? (JSON.parse(raw) as { vaults?: LocalVaultRegistryEntry[] })
                 : { vaults: [] }
-            resolve(
-              (parsed.vaults ?? [])
-                .map((entry) => entry.store_id ?? '')
-                .filter(Boolean),
-            )
+            resolve(parsed.vaults ?? [])
           } catch (error) {
             reject(error)
           }
@@ -139,7 +140,7 @@ test.describe('multi-vault on one browser profile', () => {
       'One vault on this device',
     )
     await page.getByTestId('vault-switcher-create-btn').click()
-    await expect(page.getByTestId('vault-switcher-create-form')).toBeVisible()
+    await expect(page.getByTestId('vault-switcher-create-dialog')).toBeVisible()
     await page.getByTestId('login-vault-name-input').fill('Vault B')
     await page.getByTestId('vault-switcher-create-submit').click()
     await expect
@@ -155,11 +156,47 @@ test.describe('multi-vault on one browser profile', () => {
     const storeB = parseStoreId(vaultBYaml)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
-    const registry = await listLocalVaultStoreIds(page)
-    expect(registry).toEqual(expect.arrayContaining([storeA, storeB]))
+    const registry = await listLocalVaultEntries(page)
+    const registryStoreIds = registry.map((entry) => entry.store_id)
+    expect(registryStoreIds).toEqual(expect.arrayContaining([storeA, storeB]))
     expect(registry).toHaveLength(2)
 
     await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+
+    await page.getByTestId('vault-switcher-trigger').click()
+    await page.getByTestId('vault-switcher-manage-btn').click()
+    await expect(page.getByTestId('vault-manager-dialog')).toBeVisible()
+    await page
+      .locator(
+        '[data-testid="vault-manager-name-input"][data-store-id="' +
+          storeB +
+          '"]',
+      )
+      .fill('Vault Bee')
+    await page
+      .locator(
+        '[data-testid="vault-manager-rename-btn"][data-store-id="' +
+          storeB +
+          '"]',
+      )
+      .click()
+    await expect
+      .poll(async () => {
+        const entries = await listLocalVaultEntries(page)
+        return entries.find((entry) => entry.store_id === storeB)?.label
+      })
+      .toBe('Vault Bee')
+    await page.getByRole('button', { name: 'Done' }).click()
+    await expect(page.getByTestId('vault-switcher-trigger')).toContainText(
+      'Vault Bee',
+    )
+
+    await page.getByTestId('vault-switcher-trigger').click()
+    await page.getByTestId('vault-switcher-import-btn').click()
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('vault-switcher-trigger').click()
     await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()

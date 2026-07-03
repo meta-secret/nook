@@ -1,7 +1,13 @@
 <script lang="ts">
-  import { Check, ChevronDown, FolderKey, Plus } from '@lucide/svelte'
-  import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
-  import { Button } from '$lib/components/ui/button'
+  import {
+    Check,
+    ChevronDown,
+    CloudDownload,
+    FolderKey,
+    Plus,
+    Settings2,
+  } from '@lucide/svelte'
+  import VaultManagementDialog from '$lib/components/VaultManagementDialog.svelte'
   import type { LocalVaultEntry } from '$lib/local-vault'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
@@ -9,7 +15,7 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let createOpen = $state(false)
+  let dialogMode = $state<'create' | 'manage' | null>(null)
   let root = $state<HTMLDivElement | null>(null)
   let switchingTo = $state<string | null>(null)
 
@@ -55,9 +61,6 @@
   async function toggleOpen() {
     const next = !open
     open = next
-    if (!next) {
-      createOpen = false
-    }
     if (next) {
       await vault.refreshLocalVaultCatalog()
     }
@@ -75,15 +78,30 @@
   }
 
   function createAnotherVault() {
-    createOpen = true
+    open = false
+    dialogMode = 'create'
+  }
+
+  function manageVaults() {
+    open = false
+    dialogMode = 'manage'
+  }
+
+  function importExistingVault() {
+    open = false
+    vault.openSettings('storage', 'storage')
+    vault.beginAddProvider()
   }
 
   async function submitCreateVault(label: string) {
     await vault.createLocalVaultWithDeviceKeys(label)
     if (!vault.errorMsg) {
-      createOpen = false
-      open = false
+      dialogMode = null
     }
+  }
+
+  async function renameVault(entry: LocalVaultEntry, label: string) {
+    await vault.renameLocalVault(entry.storeId, label)
   }
 </script>
 
@@ -165,50 +183,67 @@
           {/each}
         </ul>
         <div class="mt-1.5 border-t border-border/50 pt-1.5">
-          {#if createOpen}
-            <div
-              class="space-y-3 px-2 py-1.5"
-              data-testid="vault-switcher-create-form"
-            >
-              <LoginVaultNameForm
-                {vault}
-                isVerifying={vault.isVerifying}
-                isInitializing={vault.isInitializing}
-                testId="vault-switcher-create-submit"
-                submitLabel={vault.t('vault.switcher_create_new')}
-                onCreate={submitCreateVault}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="w-full"
-                disabled={isBusy}
-                onclick={() => {
-                  createOpen = false
-                }}
-              >
-                {vault.t('common.cancel')}
-              </Button>
-            </div>
-          {:else}
-            <button
-              type="button"
-              role="menuitem"
-              class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary transition-colors hover:bg-accent/60"
-              data-testid="vault-switcher-create-btn"
-              disabled={isBusy}
-              onclick={(event) => {
-                event.stopPropagation()
-                createAnotherVault()
-              }}
-            >
-              <Plus class="size-4" />
-              {vault.t('vault.switcher_create_new')}
-            </button>
-          {/if}
+          <button
+            type="button"
+            role="menuitem"
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary transition-colors hover:bg-accent/60"
+            data-testid="vault-switcher-create-btn"
+            disabled={isBusy}
+            onclick={(event) => {
+              event.stopPropagation()
+              createAnotherVault()
+            }}
+          >
+            <Plus class="size-4" />
+            {vault.t('vault.switcher_create_new')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            data-testid="vault-switcher-import-btn"
+            disabled={isBusy}
+            onclick={(event) => {
+              event.stopPropagation()
+              importExistingVault()
+            }}
+          >
+            <CloudDownload class="size-4" />
+            {vault.t('vault.switcher_import_existing')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+            data-testid="vault-switcher-manage-btn"
+            disabled={isBusy}
+            onclick={(event) => {
+              event.stopPropagation()
+              manageVaults()
+            }}
+          >
+            <Settings2 class="size-4" />
+            {vault.t('vault.switcher_manage_vaults')}
+          </button>
         </div>
       </div>
     {/if}
   </div>
+{/if}
+
+{#if dialogMode}
+  <VaultManagementDialog
+    {vault}
+    mode={dialogMode}
+    {vaults}
+    {activeStoreId}
+    {isBusy}
+    {switchingTo}
+    onClose={() => {
+      dialogMode = null
+    }}
+    onCreate={submitCreateVault}
+    onRename={renameVault}
+    onSwitch={switchTo}
+  />
 {/if}
