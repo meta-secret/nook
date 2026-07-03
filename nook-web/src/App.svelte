@@ -11,6 +11,7 @@
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
+  import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
@@ -81,13 +82,19 @@
       ;(
         window as Window & {
           __nookAuthProviders?: {
-            loadAuthProviders: typeof loadAuthProviders
-            saveAuthProviders: typeof saveAuthProviders
+            loadAuthProviders: () => ReturnType<typeof loadAuthProviders>
+            saveAuthProviders: (
+              snapshot: Parameters<typeof saveAuthProviders>[1],
+            ) => ReturnType<typeof saveAuthProviders>
           }
         }
       ).__nookAuthProviders = {
-        loadAuthProviders,
-        saveAuthProviders,
+        loadAuthProviders: () =>
+          vault.enqueueStorage(() => loadAuthProviders(vault.manager!)),
+        saveAuthProviders: (snapshot) =>
+          vault.enqueueStorage(() =>
+            saveAuthProviders(vault.manager!, snapshot),
+          ),
       }
     }
 
@@ -97,6 +104,7 @@
     return () => {
       vault.stopVaultSync()
       vault.stopIdleSessionTracking()
+      void vault.lockDeviceProtection()
       window.removeEventListener('popstate', syncRoute)
     }
   })
@@ -317,6 +325,8 @@
             onDismissError={() => vault.dismissError()}
           />
         </div>
+      {:else if !vault.deviceProtectionReady}
+        <DeviceProtectionGate {vault} />
       {:else if vault.isAuthenticated}
         <div
           class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"

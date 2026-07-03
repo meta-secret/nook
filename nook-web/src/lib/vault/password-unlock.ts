@@ -194,6 +194,7 @@ export async function unlockWithPassword(
     state.joinEnrollmentPrompt = 'none'
     state.loginPasswordPrompt = false
     state.showSuccess(state.t('toasts.vault_unlocked'))
+    state.startIdleSessionTracking()
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
@@ -300,6 +301,7 @@ export async function connectWithEnrollmentCode(
     state.prefillEnrollmentCode = ''
     state.enrollmentFromUrlPending = false
     state.showSuccess(state.t('toasts.device_enrolled'))
+    state.startIdleSessionTracking()
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false

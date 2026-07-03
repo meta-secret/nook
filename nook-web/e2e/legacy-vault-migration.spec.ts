@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  authorizeDeviceProtection,
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
@@ -89,13 +90,10 @@ test.describe('legacy vault migration to event log', () => {
     const storeId = parseStoreId(yaml)
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
     await clearEventLogState(page, storeId)
     expect(await readVaultIdbKey(page, 'event_log:mode')).toBeNull()
 
+    await authorizeDeviceProtection(page)
     await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

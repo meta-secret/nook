@@ -45,7 +45,9 @@ export async function selectVaultForUnlock(
   try {
     await switchActiveVault(storeId)
     state.activeVaultStoreId = storeId
-    state.manager?.resetVaultSession()
+    if (state.manager) {
+      await state.enqueueStorage(() => state.manager!.resetVaultSession())
+    }
     state.localVaultPresent = await hasActiveLocalVault()
     state.localLoginPrepared = false
     await state.syncActiveVaultStoreIdToAuth()
@@ -87,14 +89,14 @@ export async function createLocalVaultWithDeviceKeys(
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
       await prepareCreateNewVaultSlot()
-      state.manager.resetVaultSession()
     }
-    const connect = creatingAdditionalVault
-      ? state.manager.connect_fresh('local', '', '')
-      : state.manager.connect('local', '', '')
-    const rawRecords = (await state.enqueueStorage(
-      () => connect,
-    )) as NookSecretRecord[]
+    const rawRecords = (await state.enqueueStorage(() => {
+      if (creatingAdditionalVault) {
+        state.manager!.resetVaultSession()
+        return state.manager!.connect_fresh('local', '', '')
+      }
+      return state.manager!.connect('local', '', '')
+    })) as NookSecretRecord[]
     state.secrets = rawRecords
     state.markVaultUnlocked()
     const storeId = requireManagerVaultStoreId(state.manager)
@@ -111,6 +113,7 @@ export async function createLocalVaultWithDeviceKeys(
       storeId,
     })
     state.showSuccess(state.t('toasts.local_loaded'))
+    state.startIdleSessionTracking()
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
@@ -149,14 +152,14 @@ export async function createLocalVault(
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
       await prepareCreateNewVaultSlot()
-      state.manager.resetVaultSession()
     }
-    const connect = creatingAdditionalVault
-      ? state.manager.connect_fresh('local', '', '')
-      : state.manager.connect('local', '', '')
-    const rawRecords = (await state.enqueueStorage(
-      () => connect,
-    )) as NookSecretRecord[]
+    const rawRecords = (await state.enqueueStorage(() => {
+      if (creatingAdditionalVault) {
+        state.manager!.resetVaultSession()
+        return state.manager!.connect_fresh('local', '', '')
+      }
+      return state.manager!.connect('local', '', '')
+    })) as NookSecretRecord[]
     state.secrets = rawRecords
     state.markVaultUnlocked()
     await state.addVaultPassword(
@@ -173,6 +176,7 @@ export async function createLocalVault(
       secrets: rawRecords.length,
     })
     state.showSuccess(state.t('toasts.local_loaded'))
+    state.startIdleSessionTracking()
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
@@ -195,8 +199,10 @@ export async function syncActiveVaultStoreIdToAuth(
 ): Promise<void> {
   const storeId = state.activeVaultStoreId?.trim()
   if (!storeId) return
-  await saveAuthProviders({
-    providers: state.providers,
-    activeVaultStoreId: storeId,
-  })
+  await state.enqueueStorage(() =>
+    saveAuthProviders(state.manager!, {
+      providers: state.providers,
+      activeVaultStoreId: storeId,
+    }),
+  )
 }

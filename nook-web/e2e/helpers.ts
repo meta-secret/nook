@@ -25,6 +25,7 @@ import {
   GITHUB_VAULT_PATH,
 } from './github-api'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { installMockPasskeyRuntime } from './passkey-mock'
 
 const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
 
@@ -154,11 +155,39 @@ export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
 ) {
-  await page.getByTestId('login-vault-name-input').fill(vaultName)
-  await page.getByTestId('login-create-device-vault-btn').click()
+  const nameInput = page.getByTestId('login-vault-name-input')
+  await expect(nameInput).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(nameInput).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+
+  const createButton = page.getByTestId('login-create-device-vault-btn')
+  await expect(createButton).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await disableVaultIdleLock(page)
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            !(
+              window as Window & {
+                __nookVault?: { isVerifying?: boolean }
+              }
+            ).__nookVault?.isVerifying,
+        ),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await waitForStorageChainIdle(page)
   await disableVaultIdleLock(page)
 }
 
@@ -496,9 +525,13 @@ export async function assertNoVaultError(page: Page) {
 
 /** Click the vault sync refresh control when available. */
 export async function triggerVaultSyncRefresh(page: Page) {
+  await keepVaultIdleLockDisabled(page)
+  await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
   const refresh = page.getByTestId('vault-sync-refresh-btn')
-  await expect(refresh).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(refresh).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await expect
     .poll(
       async () => {
@@ -508,7 +541,7 @@ export async function triggerVaultSyncRefresh(page: Page) {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
-  await refresh.click()
+  await refresh.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await expect
     .poll(
       async () =>
@@ -572,7 +605,13 @@ export async function clearBrowserVault(page: Page) {
 export async function createIsolatedContext(
   browser: Browser,
 ): Promise<BrowserContext> {
-  return browser.newContext()
+  const context = await browser.newContext()
+  await context.addInitScript(installMockPasskeyRuntime)
+  return context
+}
+
+export async function installPasskeyMock(page: Page): Promise<void> {
+  await page.addInitScript(installMockPasskeyRuntime)
 }
 
 /**
@@ -763,7 +802,7 @@ async function assertGithubConnected(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
-  await disableVaultIdleLock(page)
+  await keepVaultIdleLockDisabled(page)
 }
 
 async function setupGithubProvider(page: Page, pat: string, repoName: string) {
@@ -1482,9 +1521,31 @@ export async function expandLoginEnrollmentPanel(page: Page) {
 
 /** Open storage settings (must already be connected). */
 export async function openStorageSettings(page: Page) {
-  await page.getByTestId('vault-settings-tab').click()
-  await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-  await expect(page.getByTestId('vault-panel')).not.toBeVisible()
+  await keepVaultIdleLockDisabled(page)
+  await assertVaultReady(page)
+  await waitForVaultOperationsIdle(page)
+  const settingsTab = page.getByTestId('vault-settings-tab')
+  await expect
+    .poll(
+      async () => {
+        try {
+          await expect(settingsTab).toBeVisible({ timeout: UI_TIMEOUT_MS })
+          await expect(settingsTab).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+          await settingsTab.click({ timeout: UI_TIMEOUT_MS })
+          return await page.getByTestId('storage-settings-panel').isVisible()
+        } catch {
+          return false
+        }
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('vault-panel')).not.toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 }
 
 /** Add and connect a GitHub sync provider from vault settings (vault must be unlocked). */
@@ -1494,10 +1555,7 @@ export async function connectGithubSyncProviderFromSettings(
   pat = 'ghp_test_token',
   options?: { expectConflict?: boolean },
 ) {
-  await page.getByTestId('vault-settings-tab').click()
-  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await openStorageSettings(page)
   await page.getByTestId('add-provider-btn').first().click()
   await page.getByTestId('provider-option-github').click()
   await expect(page.getByTestId('github-token-setup')).toBeVisible({
@@ -1528,9 +1586,15 @@ export async function expandSettingsSection(
   section: SettingsSection,
 ) {
   const sectionEl = page.getByTestId(SETTINGS_SECTION_TEST_IDS[section])
+  await expect(sectionEl).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   const toggle = sectionEl.getByRole('button').first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
-    await toggle.click()
+  await expect(toggle).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  if (
+    (await toggle.getAttribute('aria-expanded', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })) !== 'true'
+  ) {
+    await toggle.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   }
 }
 
@@ -1826,6 +1890,17 @@ export async function selectLoginUnlockMethod(
   const button = page.getByTestId(`login-unlock-method-${method}`)
   await expect(button).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await button.click()
+}
+
+/** Authorize the wrapped device identity after an explicit or idle lock. */
+export async function authorizeDeviceProtection(page: Page) {
+  const button = page.getByTestId('device-protection-unlock-btn')
+  await expect(button).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await button.click()
+  await expect(page.getByTestId('login-gate')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await waitForVaultOperationsIdle(page)
 }
 
 /** Unlock from the login gate — optional password when device keys are unavailable. */
@@ -2160,7 +2235,14 @@ export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
       return hook.loadAuthProviders()
     }
     const auth = await import('/src/lib/auth-providers.ts')
-    return auth.loadAuthProviders()
+    const manager = (
+      window as Window & {
+        __nookVault?: { manager?: unknown }
+      }
+    ).__nookVault?.manager
+    return auth.loadAuthProviders(
+      manager as Parameters<typeof auth.loadAuthProviders>[0],
+    )
   })
 }
 
@@ -2184,7 +2266,15 @@ export async function saveAuthProvidersInBrowser(
       return
     }
     const auth = await import('/src/lib/auth-providers.ts')
-    await auth.saveAuthProviders(value)
+    const manager = (
+      window as Window & {
+        __nookVault?: { manager?: unknown }
+      }
+    ).__nookVault?.manager
+    await auth.saveAuthProviders(
+      manager as Parameters<typeof auth.saveAuthProviders>[0],
+      value,
+    )
   }, snapshot)
 }
 
@@ -2791,14 +2881,34 @@ export async function addSecret(
   github?: GithubE2eTarget,
 ) {
   const beforeCount = github ? await syncSecretCount(github) : 0
+  await keepVaultIdleLockDisabled(page)
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
-  await page.getByTestId('add-secret-btn').click()
-  await expect(page.getByTestId('add-secret-panel')).toBeVisible()
-  await page.getByTestId('item-type-api-key').click()
-  await page.getByTestId('secret-label').fill(key)
-  await page.getByTestId('secret-value').fill(value)
-  await page.getByTestId('save-secret-btn').click()
+  const addButton = page.getByTestId('add-secret-btn')
+  await expect(addButton).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(addButton).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await addButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await expect(page.getByTestId('add-secret-panel')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page
+    .getByTestId('item-type-api-key')
+    .click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await page
+    .getByTestId('secret-label')
+    .fill(key, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  await page
+    .getByTestId('secret-value')
+    .fill(value, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  const saveButton = page.getByTestId('save-secret-btn')
+  await expect(saveButton).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await saveButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   await waitForVaultOperationsIdle(page)
   await assertNoVaultError(page)
   const row = page.getByTestId('secret-row').filter({ hasText: key })

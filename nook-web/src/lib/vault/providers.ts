@@ -23,9 +23,11 @@ export async function loadProviders(
   state: VaultState,
   options?: { migrateLegacyVault?: boolean },
 ) {
-  const snapshot = options?.migrateLegacyVault
-    ? await loadAuthProvidersWithVaultMigration()
-    : await loadAuthProviders()
+  const snapshot = await state.enqueueStorage(() =>
+    options?.migrateLegacyVault
+      ? loadAuthProvidersWithVaultMigration(state.manager!)
+      : loadAuthProviders(state.manager!),
+  )
   state.providers = snapshot.providers.map((p) =>
     p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
   )
@@ -91,7 +93,9 @@ export async function persistProviders(
   opts?: { replace?: boolean },
 ) {
   if (!opts?.replace && state.localVaultPresent) {
-    const snapshot = await loadAuthProviders()
+    const snapshot = await state.enqueueStorage(() =>
+      loadAuthProviders(state.manager!),
+    )
     const memoryIds = state.providers.map((p) => p.id)
     const extraSync = snapshot.providers.filter(
       (p) => p.type !== 'local' && !memoryIds.includes(p.id),
@@ -100,10 +104,12 @@ export async function persistProviders(
       state.providers = [...state.providers, ...extraSync]
     }
   }
-  await saveAuthProviders({
-    providers: state.providers,
-    activeVaultStoreId: state.activeVaultStoreId ?? undefined,
-  })
+  await state.enqueueStorage(() =>
+    saveAuthProviders(state.manager!, {
+      providers: state.providers,
+      activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+    }),
+  )
 }
 
 export function beginProviderSetup(

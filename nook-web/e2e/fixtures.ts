@@ -16,10 +16,12 @@
  */
 import { test as base, expect } from '@playwright/test'
 import { captureNookLogsOnFailure } from './helpers'
+import { installMockPasskeyRuntime } from './passkey-mock'
 
 export const test = base.extend<{ nookLogsOnFailure: void }>({
   nookLogsOnFailure: [
-    async ({ page }, use, testInfo) => {
+    async ({ page, context }, use, testInfo) => {
+      await context.addInitScript(installMockPasskeyRuntime)
       await use()
       if (testInfo.status === testInfo.expectedStatus) return
       // Multi-context specs may leave the default page on about:blank.

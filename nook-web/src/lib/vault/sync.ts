@@ -263,7 +263,9 @@ export async function resolveSyncConflictImportRemote(
     )
     state.activeVaultStoreId = importedStoreId
     state.selectedLoginVaultStoreId = importedStoreId
-    state.manager?.resetVaultSession()
+    if (state.manager) {
+      await state.enqueueStorage(() => state.manager!.resetVaultSession())
+    }
     state.localVaultPresent = true
     await localLoginActions.refreshLocalVaultCatalog(state)
     providerId = await state.ensureProviderSavedAfterConflict(conflict)
@@ -398,7 +400,9 @@ export async function confirmRecoverRemoteVault(
   state.errorMsg = ''
   state.isVerifying = true
   try {
-    state.manager.prepareConnectFromLocalCache()
+    await state.enqueueStorage(() =>
+      state.manager!.prepareConnectFromLocalCache(),
+    )
     state.pendingConnectRecovery = 'from_cache'
     state.remoteVaultRecoveryPrompt = 'none'
     if (state.loginSetupType) {

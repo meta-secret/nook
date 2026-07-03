@@ -19,6 +19,7 @@
 //! in this file because every submodule depends on it.
 
 mod connect;
+mod device_protection;
 mod event_log;
 mod multi_device;
 mod password;
@@ -37,14 +38,12 @@ use crate::storage::{
         ensure_icloud_vault_record, fetch_icloud_vault, verify_icloud_access,
         write_icloud_vault_with_retry,
     },
-    indexed_db::{
-        load_from_indexed_db, load_or_create_device_identity, save_to_indexed_db,
-        save_vault_local_cache,
-    },
+    indexed_db::{load_from_indexed_db, save_to_indexed_db, save_vault_local_cache},
 };
 use crate::types::records_to_vec;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use wasm_bindgen::prelude::wasm_bindgen;
+use zeroize::Zeroize;
 
 // Session state of our secret vault
 #[wasm_bindgen]
@@ -86,6 +85,19 @@ pub struct NookVaultManager {
     pub(in crate::manager) sync_outbox_storage_mode: nook_core::StorageMode,
     pub(in crate::manager) sync_outbox_pat: String,
     pub(in crate::manager) sync_outbox_repo_arg: String,
+}
+
+impl Drop for NookVaultManager {
+    fn drop(&mut self) {
+        self.github_pat.zeroize();
+        self.secrets_key.zeroize();
+        self.members_key.zeroize();
+        self.device_identity_secret.zeroize();
+        self.decrypted_jsonl.zeroize();
+        self.signing_seed.zeroize();
+        self.key_epoch.zeroize();
+        self.sync_outbox_pat.zeroize();
+    }
 }
 
 #[wasm_bindgen]
@@ -179,11 +191,11 @@ impl NookVaultManager {
     /// Device identity and configured storage credentials are preserved.
     #[wasm_bindgen(js_name = "resetVaultSession")]
     pub fn reset_vault_session(&mut self) {
-        self.secrets_key.clear();
-        self.members_key.clear();
+        self.secrets_key.zeroize();
+        self.members_key.zeroize();
         self.crypto = None;
         self.meta = nook_core::VaultMetaState::default();
-        self.decrypted_jsonl.clear();
+        self.decrypted_jsonl.zeroize();
         self.password_entries.clear();
         self.file_sha = None;
         self.last_synced_content.clear();
@@ -193,12 +205,12 @@ impl NookVaultManager {
         self.store_id.clear();
         self.vault_version = 0;
         self.event_log_mode = false;
-        self.signing_seed.clear();
-        self.key_epoch.clear();
+        self.signing_seed.zeroize();
+        self.key_epoch.zeroize();
         self.event_heads.clear();
         self.sync_outbox_provider_id.clear();
         self.sync_outbox_storage_mode = nook_core::StorageMode::Local;
-        self.sync_outbox_pat.clear();
+        self.sync_outbox_pat.zeroize();
         self.sync_outbox_repo_arg.clear();
     }
 }
@@ -331,9 +343,7 @@ impl NookVaultManager {
         )
     }
 
-    pub(in crate::manager) fn device_identity(
-        &self,
-    ) -> Result<nook_core::DeviceIdentity, NookError> {
+    pub(crate) fn device_identity(&self) -> Result<nook_core::DeviceIdentity, NookError> {
         Ok(nook_core::DeviceIdentity::from_secret_str(
             &nook_core::DeviceIdentitySecret::parse(&self.device_identity_secret)?,
         )?)
@@ -382,7 +392,7 @@ impl NookVaultManager {
         if self.crypto.is_some() {
             return Ok(());
         }
-        let identity = self.ensure_device_identity().await?;
+        let identity = self.ensure_device_identity()?;
         if !self.last_synced_content.trim().is_empty() {
             let (secrets_key, members_key) =
                 nook_core::hydrate_keys_from_projection_yaml(&self.last_synced_content, &identity)?;
@@ -522,13 +532,13 @@ impl NookVaultManager {
         Ok(())
     }
 
-    pub(in crate::manager) async fn ensure_device_identity(
+    pub(in crate::manager) fn ensure_device_identity(
         &mut self,
     ) -> Result<nook_core::DeviceIdentity, NookError> {
         if self.device_identity_secret.is_empty() {
-            let identity = load_or_create_device_identity().await?;
-            self.device_id = identity.device_id;
-            self.device_identity_secret = identity.secret;
+            return Err(NookError::Decryption(
+                "errors.device_protection.authorization_required".to_owned(),
+            ));
         }
         self.device_identity()
     }

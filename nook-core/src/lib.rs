@@ -6,6 +6,7 @@
 
 mod bip39;
 mod database;
+mod device_key_protection;
 mod enrollment;
 mod errors;
 mod event_canonical;
@@ -45,15 +46,20 @@ pub use bip39::{
     validate_bip39_mnemonic,
 };
 pub use database::Database;
+pub use device_key_protection::{
+    DEVICE_KEY_PROTECTION_VERSION, DeviceKeyProtectionSetup, WrappedDeviceIdentity,
+    parse_wrapped_device_identity, serialize_wrapped_device_identity, unwrap_device_identity,
+    wrap_device_identity,
+};
 pub use enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
     decrypt_enrollment_payload, encrypt_enrollment_payload, parse_enrollment_envelope,
     peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use errors::{
-    DatabaseError, EnrollmentError, EventError, MultiDeviceError, PasswordError,
-    SecretPayloadError, SessionError, ValidationError, VaultCryptoError, VaultEpochError,
-    VaultError, VaultFormatError, VaultResult, VaultSyncError,
+    DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, MultiDeviceError,
+    PasswordError, SecretPayloadError, SessionError, ValidationError, VaultCryptoError,
+    VaultEpochError, VaultError, VaultFormatError, VaultResult, VaultSyncError,
 };
 pub use i18n::{get_translation_catalog, translate};
 pub use secret_types::{

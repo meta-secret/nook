@@ -13,6 +13,7 @@ import {
   saveAuthProviders as saveAuthProvidersWasm,
   syncProviderTargetKey as syncProviderTargetKeyCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
+  type NookVaultManager,
 } from './nook-wasm/nook_wasm'
 
 await initNookWasm()
@@ -119,14 +120,18 @@ export function formatDriveStorageRef(
   return formatDriveStorageRefCore(fileId ?? null, fileName)
 }
 
-export async function loadAuthProviders(): Promise<AuthProvidersSnapshot> {
-  const loaded = (await loadAuthProvidersWasm()) as LoadedAuthProviders
+export async function loadAuthProviders(
+  manager: NookVaultManager,
+): Promise<AuthProvidersSnapshot> {
+  const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders
   return loaded.snapshot
 }
 
 /** Load providers, then copy a legacy remote vault into local storage once. */
-export async function loadAuthProvidersWithVaultMigration(): Promise<AuthProvidersSnapshot> {
-  const loaded = (await loadAuthProvidersWasm()) as LoadedAuthProviders
+export async function loadAuthProvidersWithVaultMigration(
+  manager: NookVaultManager,
+): Promise<AuthProvidersSnapshot> {
+  const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders
   const { snapshot: migratedSnapshot, migrated } =
     await migrateLegacyVaultToLocal(
       loaded.snapshot,
@@ -136,15 +141,16 @@ export async function loadAuthProvidersWithVaultMigration(): Promise<AuthProvide
     migrated ||
     migratedSnapshot.providers.length !== loaded.snapshot.providers.length
   ) {
-    await saveAuthProviders(migratedSnapshot)
+    await saveAuthProviders(manager, migratedSnapshot)
   }
   return migratedSnapshot
 }
 
 export async function saveAuthProviders(
+  manager: NookVaultManager,
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
-  await saveAuthProvidersWasm(toPlain(snapshot))
+  await saveAuthProvidersWasm(manager, toPlain(snapshot))
 }
 
 export function wasmStorageModeForProvider(

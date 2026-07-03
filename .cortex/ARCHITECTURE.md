@@ -39,6 +39,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ### A. `nook-core` (The Domain Core)
 
 - **`multi_device`:** `secrets_key` + `members_key`, device identity, join/approve/enroll; YAML `auth:` / `joins:` / `members:` sections.
+- **`device_key_protection`:** WebAuthn-PRF input/output validation, HKDF-SHA256 key derivation, and AES-256-GCM wrapping of the X25519 device identity.
 - **`Database`:** In-memory JSONL session (sorted KV records); user secrets only at rest in session.
 - **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load; `vault_version` monotonic counter.
 - **`vault_sync`:** Version-based local/remote reconciliation (`compare_vault_sync`).
@@ -52,6 +53,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 - **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
+- **Device protection:** Persist/migrate the wrapped identity and expose typed setup/unlock values to the web layer.
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
@@ -60,6 +62,8 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
 - **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
+- **`passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. It passes PRF output to WASM and performs no encryption.
+- **`DeviceProtectionGate`:** Mandatory passkey setup/unlock before provider credentials or device keys are loaded.
 - **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
 - **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
 - **`nook.ts`:** WASM loader + sync result mapping; vault secrets are `NookSecretRecord` wasm objects (no TS schema mirror).
@@ -72,9 +76,12 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ### Connect (multi-device)
 
 ```
-[Svelte] → VaultState.loadDb()
+[Svelte] → navigator.credentials.get({ extensions: { prf: … } })
+         → NookVaultManager.unlockDeviceIdentity(prf_output)
+              → HKDF-SHA256 → AES-256-GCM unwrap of device identity
+         → VaultState.loadDb()
          → NookVaultManager.connect(mode, pat)
-              → load/create device identity (IndexedDB)
+              → use authorized device identity (memory)
               → load nook-vault.yaml (IDB or GitHub)
               → resolve_secrets_key() + resolve_members_key() from auth row
               → VaultCrypto::new(secrets_key)
@@ -114,7 +121,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 | On-disk key envelopes (keys mode only) | YAML `auth:` list                                             | `key_{sha256}` → age-armored `secrets_key` + `members_key`                                                                                                                     |
 | Member catalog                         | YAML `members:` list                                          | `pk_id` + `members_key`-encrypted `{pk_id, pk}`                                                                                                                                |
 | Pending joins (keys mode only)         | YAML `joins:` list                                            | `device_id` → JSON (includes `public_key` while pending)                                                                                                                       |
-| Device identity (X25519 private)       | age secret string                                             | IndexedDB `device_identity_secret` only                                                                                                                                        |
+| Device identity (X25519 private)       | AES-256-GCM wrapped age secret + WebAuthn metadata             | IndexedDB `device_identity_wrapped`; legacy `device_identity_secret` exists only until one-time migration                                                                      |
 | Auth providers (GitHub PAT, labels)    | JSON snapshot                                                 | IndexedDB `nook_auth` → `providers` key                                                                                                                                        |
 
 See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.

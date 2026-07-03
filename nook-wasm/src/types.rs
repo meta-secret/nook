@@ -7,6 +7,66 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[derive(Clone)]
+pub struct NookPasskeySetup {
+    user_handle: Vec<u8>,
+    prf_input: Vec<u8>,
+}
+
+impl NookPasskeySetup {
+    pub(crate) fn from_core(setup: &nook_core::DeviceKeyProtectionSetup) -> Self {
+        Self {
+            user_handle: setup.user_handle().to_vec(),
+            prf_input: setup.prf_input().to_vec(),
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl NookPasskeySetup {
+    #[wasm_bindgen(getter, js_name = userHandle)]
+    pub fn user_handle(&self) -> Vec<u8> {
+        self.user_handle.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = prfInput)]
+    pub fn prf_input(&self) -> Vec<u8> {
+        self.prf_input.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookPasskeyUnlockOptions {
+    credential_id: Vec<u8>,
+    prf_input: Vec<u8>,
+}
+
+impl NookPasskeyUnlockOptions {
+    pub(crate) fn from_core(
+        record: &nook_core::WrappedDeviceIdentity,
+    ) -> Result<Self, nook_core::DeviceKeyProtectionError> {
+        Ok(Self {
+            credential_id: record.credential_id_bytes()?,
+            prf_input: record.prf_input_bytes()?,
+        })
+    }
+}
+
+#[wasm_bindgen]
+impl NookPasskeyUnlockOptions {
+    #[wasm_bindgen(getter, js_name = credentialId)]
+    pub fn credential_id(&self) -> Vec<u8> {
+        self.credential_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = prfInput)]
+    pub fn prf_input(&self) -> Vec<u8> {
+        self.prf_input.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookJoinRequest {
     device_id: String,
     public_key: String,

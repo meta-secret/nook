@@ -71,18 +71,19 @@ a secure password generator.
 
 ### On your first device
 
-1. Choose **This device** if the vault should stay in this browser, or **GitHub** if
+1. Create a passkey that protects this browser's private device key.
+2. Choose **This device** if the vault should stay in this browser, or **GitHub** if
    you want the encrypted file in a private repository.
-2. Add your credentials. Nook encrypts each item before saving anything to the
+3. Add your credentials. Nook encrypts each item before saving anything to the
    selected storage.
-3. The browser keeps a device key locally. That key is what allows this browser to
-   open the vault later.
+4. The browser stores only an encrypted copy of its private device key.
 
 ### When you come back
 
 - Nook remembers your storage provider.
-- This browser uses its device key to unlock the vault (or an optional labelled
-  backup password if you configured one).
+- Authorize with the passkey so Nook can decrypt this browser's device key.
+- This browser then uses its device key to unlock the vault (or an optional
+  labelled backup password if you configured one).
 - Decrypted secrets exist only in the active browser session.
 - If you saved several providers, Nook asks which vault to open.
 
@@ -97,7 +98,8 @@ a secure password generator.
 ### Technical details
 
 - Each browser creates its own public/private keypair.
-- The private key never leaves that browser.
+- The private key never leaves that browser and is encrypted at rest with a
+  WebAuthn-PRF-derived key.
 - The public key lets an approved device grant access to the new browser.
 - Vault keys are encrypted separately for every approved device.
 - Private keys and login credentials are never shared between devices.
@@ -158,10 +160,10 @@ The complete vault also contains:
 Important boundaries:
 
 - Secret data and vault keys are never sent to storage in plaintext.
-- Device private keys stay in that browser's IndexedDB.
+- Device private keys stay in that browser's IndexedDB as authenticated
+  ciphertext and require passkey authorization before use.
 - GitHub receives the encrypted vault file. The GitHub personal access token is
-  saved in browser IndexedDB for reconnect convenience and therefore should be
-  treated as locally stored provider credentials.
+  sealed to the device identity before it is saved in browser IndexedDB.
 - The item `id` and `type`, vault membership identifiers, and the existence and size
   of encrypted records are visible to the storage provider.
 - Losing every enrolled device means losing the private identities needed to open

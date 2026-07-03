@@ -2,6 +2,7 @@ import { test, expect, type Page } from '../fixtures'
 import {
   addSecret,
   clearBrowserVault,
+  installPasskeyMock,
   createE2eGithubRepoName,
   deleteSecret,
   finishE2eGithubSuite,
@@ -44,6 +45,7 @@ describeLive(`live ${providerDef.label} sync smoke`, () => {
     }
 
     vaultPage = await browser.newPage()
+    await installPasskeyMock(vaultPage)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()

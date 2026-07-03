@@ -57,6 +57,10 @@ import {
   resolveVaultIdleWarningMs,
   type VaultIdleSessionTracker,
 } from '$lib/vault-idle-session'
+import {
+  setupDeviceProtection as createPasskeyProtection,
+  unlockDeviceProtection as authorizePasskeyProtection,
+} from '$lib/passkey-device-protection'
 
 import * as localeActions from '$lib/vault/locale'
 import * as oauthActions from '$lib/vault/oauth'
@@ -105,6 +109,9 @@ export class VaultState {
   icloudOAuthBusy = $state(false)
 
   manager = $state<NookVaultManager | null>(null)
+  deviceProtectionStatus = $state<
+    'loading' | 'missing' | 'plaintext' | 'passkey' | 'unlocked' | 'error'
+  >('loading')
   isAuthenticated = $state(false)
   /** True when the login gate should explain that the last lock was due to idle timeout. */
   sessionExpiredByIdle = $state(false)
@@ -144,6 +151,10 @@ export class VaultState {
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== null
+  }
+
+  get deviceProtectionReady(): boolean {
+    return this.deviceProtectionStatus === 'unlocked'
   }
 
   get syncProviderCount(): number {
@@ -201,6 +212,7 @@ export class VaultState {
   syncTimer: ReturnType<typeof setInterval> | null = null
   initPromise: Promise<void> | null = null
   storageChain: Promise<unknown> = Promise.resolve()
+  private deviceAuthorizationInProgress = false
   pendingEnrollmentFromUrl: string | null =
     typeof window !== 'undefined' ? consumeEnrollmentFromLocation() : null
 
@@ -638,6 +650,7 @@ export class VaultState {
   async initOnce() {
     vaultLog.info('app init started')
     this.isInitializing = true
+    let deviceIdentityUnlocked = false
     if (!this.isVerifying) {
       this.errorMsg = ''
     }
@@ -646,40 +659,78 @@ export class VaultState {
       const browserLocale = getBrowserAppLocale()
       const locale = savedLocale ?? browserLocale
       await this.updateLocale(locale)
-
-      await this.loadProviders({ migrateLegacyVault: true })
       await localLoginActions.refreshLocalVaultCatalog(this)
-      if (!this.activeVaultStoreId) {
-        this.activeVaultStoreId =
-          (await loadAuthProviders()).activeVaultStoreId ??
-          this.localVaults[0]?.storeId ??
-          null
-      }
-      if (this.activeVaultStoreId) {
-        await switchActiveVault(this.activeVaultStoreId).catch(() => undefined)
-      }
-      this.localVaultPresent = await hasActiveLocalVault()
-      if (this.localVaultPresent) {
-        this.storageMode = 'local'
-        this.githubPat = ''
-        this.oauthFile = null
-      } else {
-        this.applyActiveProviderCredentials()
-      }
       this.manager = await getVaultManager()
       await this.updateLocale(locale, { preferWasm: true })
-      await this.initDeviceIdentity()
+      this.deviceProtectionStatus =
+        (await this.manager.deviceProtectionStatus()) as
+          | 'missing'
+          | 'plaintext'
+          | 'passkey'
+          | 'unlocked'
+
+      const autoAuthorizeE2e =
+        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        localStorage.getItem('nook_e2e_manual_passkey') !== 'true'
+      if (!this.deviceProtectionReady && autoAuthorizeE2e) {
+        if (this.deviceProtectionStatus === 'passkey') {
+          await this.enqueueStorage(() =>
+            authorizePasskeyProtection(this.manager!),
+          )
+        } else {
+          await this.enqueueStorage(() =>
+            createPasskeyProtection(this.manager!),
+          )
+        }
+        deviceIdentityUnlocked = true
+        this.deviceAuthorizationInProgress = true
+      }
+
+      if (!this.deviceProtectionReady && !deviceIdentityUnlocked) return
+      await this.continueInitializationAfterDeviceUnlock()
+      this.deviceProtectionStatus = 'unlocked'
     } catch (error) {
+      if (
+        this.deviceProtectionStatus === 'unlocked' ||
+        deviceIdentityUnlocked
+      ) {
+        void this.lockDeviceProtection()
+      }
+      this.deviceProtectionStatus =
+        this.deviceProtectionStatus === 'loading'
+          ? 'error'
+          : this.deviceProtectionStatus
       this.errorMsg =
         error instanceof Error
           ? error.message
           : 'Failed to initialize Nook Session Manager.'
     } finally {
+      this.deviceAuthorizationInProgress = false
       this.isInitializing = false
     }
+  }
 
+  private async continueInitializationAfterDeviceUnlock() {
+    if (!this.manager) return
+    await this.initDeviceIdentity({ allowPendingAuthorization: true })
+    await this.loadProviders({ migrateLegacyVault: true })
+    await localLoginActions.refreshLocalVaultCatalog(this)
+    if (!this.activeVaultStoreId) {
+      this.activeVaultStoreId = this.localVaults[0]?.storeId ?? null
+    }
+    if (this.activeVaultStoreId) {
+      await switchActiveVault(this.activeVaultStoreId).catch(() => undefined)
+    }
+    this.localVaultPresent = await hasActiveLocalVault()
+    if (this.localVaultPresent) {
+      this.storageMode = 'local'
+      this.githubPat = ''
+      this.oauthFile = null
+    } else {
+      this.applyActiveProviderCredentials()
+    }
     const hasPendingEnrollment = Boolean(this.pendingEnrollmentFromUrl)
-    if (this.localVaultPresent && this.manager) {
+    if (this.localVaultPresent) {
       this.storageMode = 'local'
       await this.refreshPasswordEntriesList()
     }
@@ -709,14 +760,97 @@ export class VaultState {
     })
   }
 
-  async initDeviceIdentity() {
-    if (!this.manager) return
+  async initDeviceIdentity(options?: { allowPendingAuthorization?: boolean }) {
+    if (
+      !this.manager ||
+      (!this.deviceProtectionReady &&
+        !this.deviceAuthorizationInProgress &&
+        !options?.allowPendingAuthorization)
+    ) {
+      throw new Error(this.t('errors.device_protection.authorization_required'))
+    }
+    const identity = await this.enqueueStorage(() => ({
+      deviceId: this.manager!.device_id,
+      devicePublicKey: this.manager!.device_public_key,
+    }))
+    this.deviceId = identity.deviceId
+    this.devicePublicKey = identity.devicePublicKey
+  }
+
+  async setupDeviceProtection() {
+    if (!this.manager || this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    let deviceIdentityUnlocked = false
     try {
-      await this.enqueueStorage(() => this.manager!.init_device())
-      this.deviceId = this.manager.device_id
-      this.devicePublicKey = this.manager.device_public_key
-    } catch {
-      // Device identity is optional until first connect/join action.
+      await this.enqueueStorage(() => createPasskeyProtection(this.manager!))
+      deviceIdentityUnlocked = true
+      this.deviceAuthorizationInProgress = true
+      await this.continueInitializationAfterDeviceUnlock()
+      this.deviceProtectionStatus = 'unlocked'
+    } catch (error) {
+      if (
+        this.deviceProtectionStatus === 'unlocked' ||
+        deviceIdentityUnlocked
+      ) {
+        void this.lockDeviceProtection()
+      }
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Failed to create passkey.'
+    } finally {
+      this.deviceAuthorizationInProgress = false
+      this.isVerifying = false
+      this.isInitializing = false
+    }
+  }
+
+  async unlockDeviceProtection() {
+    if (!this.manager || this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    let deviceIdentityUnlocked = false
+    try {
+      await this.enqueueStorage(() => authorizePasskeyProtection(this.manager!))
+      deviceIdentityUnlocked = true
+      this.deviceAuthorizationInProgress = true
+      await this.continueInitializationAfterDeviceUnlock()
+      this.deviceProtectionStatus = 'unlocked'
+    } catch (error) {
+      if (
+        this.deviceProtectionStatus === 'unlocked' ||
+        deviceIdentityUnlocked
+      ) {
+        void this.lockDeviceProtection()
+      }
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Passkey authorization failed.'
+    } finally {
+      this.deviceAuthorizationInProgress = false
+      this.isVerifying = false
+      this.isInitializing = false
+    }
+  }
+
+  async resetDeviceProtectionForRecovery() {
+    if (!this.manager || this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      await this.manager.resetDeviceProtectionForRecovery()
+      this.deviceProtectionStatus = 'missing'
+      this.deviceId = ''
+      this.devicePublicKey = ''
+      this.providers = []
+      this.providersLoaded = false
+      this.githubPat = ''
+      this.oauthFile = null
+      this.storageMode = 'local'
+      this.showSuccess(this.t('device_protection.recovery_complete'))
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Recovery reset failed.'
+    } finally {
+      this.isVerifying = false
     }
   }
 
@@ -752,7 +886,9 @@ export class VaultState {
   }
 
   async reloadProvidersForActiveVault(): Promise<void> {
-    const snapshot = await loadAuthProviders()
+    const snapshot = await this.enqueueStorage(() =>
+      loadAuthProviders(this.manager!),
+    )
     this.providers = snapshot.providers.map((p) =>
       p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
     )
@@ -784,11 +920,43 @@ export class VaultState {
   /** Lock and open the login unlock step for another vault on this device. */
   async switchToVault(storeId: string): Promise<void> {
     const trimmed = storeId.trim()
-    if (!trimmed || trimmed === this.activeVaultStoreId?.trim()) return
+    if (
+      !trimmed ||
+      trimmed === this.activeVaultStoreId?.trim() ||
+      this.isVerifying
+    ) {
+      return
+    }
     this.helpOpen = false
-    setVaultSessionLocked(true)
-    this.clearUnlockedSession()
-    await this.chooseLoginVault(trimmed)
+    this.isVerifying = true
+    try {
+      await this.waitForStorageChain()
+      setVaultSessionLocked(true)
+      this.clearUnlockedSession()
+      await this.waitForStorageChain()
+      await this.chooseLoginVault(trimmed)
+      this.isVerifying = true
+      await this.lockDeviceProtection()
+      vaultLog.info('vault switch completed', { storeId: trimmed })
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Failed to switch vaults.'
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  lockDeviceProtection(): Promise<void> {
+    this.deviceProtectionStatus = 'passkey'
+    this.deviceAuthorizationInProgress = false
+    this.deviceId = ''
+    this.devicePublicKey = ''
+    if (!this.manager) return Promise.resolve()
+    return this.enqueueStorage(() => this.manager!.lockDeviceIdentity()).catch(
+      () => {
+        // Persisted identity remains wrapped even if the manager is tearing down.
+      },
+    )
   }
 
   /** @deprecated Use {@link createLocalVaultWithDeviceKeys}. Backup passwords belong in Settings. */
@@ -895,10 +1063,12 @@ export class VaultState {
 
   /** Clear wasm session + login password preview so UI matches the active provider. */
   resetVaultSessionState() {
-    try {
-      this.manager?.resetVaultSession()
-    } catch {
-      // Engine not ready yet.
+    if (this.manager) {
+      void this.enqueueStorage(() => this.manager!.resetVaultSession()).catch(
+        () => {
+          // Engine may be tearing down.
+        },
+      )
     }
     this.passwordEntries = []
     this.selectedPasswordEntryId = null
@@ -941,7 +1111,6 @@ export class VaultState {
     this.awaitingJoinApproval = false
     this.sessionExpiredByIdle = false
     vaultLog.info('vault session unlocked', { secrets: this.secrets.length })
-    this.startIdleSessionTracking()
   }
 
   clearUnlockedSession() {
@@ -1547,7 +1716,9 @@ export class VaultState {
     })
     if (migrated || snapshot.providers.length !== this.providers.length) {
       this.providers = snapshot.providers
-      await saveAuthProviders(snapshot)
+      await this.enqueueStorage(() =>
+        saveAuthProviders(this.manager!, snapshot),
+      )
     }
     this.localVaultPresent = await hasLocalVault()
     if (this.localVaultPresent) {

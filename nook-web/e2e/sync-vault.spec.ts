@@ -6,6 +6,7 @@ import {
   assertVaultReady,
   reconnectGithubVault,
   revealSecretInRow,
+  installPasskeyMock,
   uniqueSecretKey,
 } from './helpers'
 import {
@@ -29,6 +30,7 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
   test.beforeAll(async ({ browser }) => {
     target = createSyncTarget('', 'sync-vault')
     vaultPage = await browser.newPage()
+    await installPasskeyMock(vaultPage)
     await installSyncStub(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)

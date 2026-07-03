@@ -12,6 +12,7 @@ import {
   revealSecretInRow,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
+  unlockVaultOnLogin,
   waitForVaultUnlocked,
 } from './helpers'
 
@@ -162,6 +163,10 @@ test.describe('local vault', () => {
     await addSecret(page, key, value)
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
 

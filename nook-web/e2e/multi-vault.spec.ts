@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  authorizeDeviceProtection,
   createLocalVaultOnLogin,
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -124,6 +125,7 @@ test.describe('multi-vault on one browser profile', () => {
     const storeA = parseStoreId(vaultAYaml)
 
     await page.getByTestId('header-lock-vault-btn').click()
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -153,6 +155,7 @@ test.describe('multi-vault on one browser profile', () => {
         '[data-testid="vault-switcher-option"][data-store-id="' + storeA + '"]',
       )
       .click()
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -169,6 +172,7 @@ test.describe('multi-vault on one browser profile', () => {
         '[data-testid="vault-switcher-option"][data-store-id="' + storeB + '"]',
       )
       .click()
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

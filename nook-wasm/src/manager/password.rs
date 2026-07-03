@@ -9,7 +9,7 @@ use crate::NookError;
 use crate::NookPasswordEntrySummary;
 use crate::NookSecretRecord;
 use crate::conversion::wasm_iso_timestamp;
-use crate::storage::indexed_db::{load_vault_local_cache, save_device_identity_to_indexed_db};
+use crate::storage::indexed_db::load_vault_local_cache;
 use crate::types::password_entries_to_vec;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -267,7 +267,7 @@ impl NookVaultManager {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity().await?;
+        let identity = self.ensure_device_identity()?;
 
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -329,7 +329,6 @@ impl NookVaultManager {
         self.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.unlock = nook_core::VaultUnlock::Keys;
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         let import_yaml = nook_core::serialize_stored_yaml_with_unlock(
             &records,
             &self.unlock,

@@ -1,9 +1,11 @@
 import { expect, test } from './fixtures'
 import {
+  authorizeDeviceProtection,
   addVaultPassword,
   clearBrowserVault,
   connectLocalVault,
   disableLoginAutoUnlock,
+  disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectVaultPasswordStatus,
   expandSettingsSection,
@@ -52,6 +54,7 @@ test.describe('unified vault backup passwords (stub sync)', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await disableVaultIdleLock(page)
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'storage')
@@ -62,9 +65,7 @@ test.describe('unified vault backup passwords (stub sync)', () => {
       })
       .toBe(true)
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -73,6 +74,7 @@ test.describe('unified vault backup passwords (stub sync)', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await disableVaultIdleLock(page)
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')

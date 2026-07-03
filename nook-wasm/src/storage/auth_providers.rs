@@ -8,13 +8,11 @@
 //! and browser storage access.
 
 use nook_core::{
-    AuthProvidersSnapshotData, DeviceIdentity, DeviceIdentitySecret, NormalizedAuthSnapshot,
-    open_provider_credentials, seal_provider_credentials,
+    AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot, open_provider_credentials,
+    seal_provider_credentials,
 };
 
 use crate::NookError;
-
-use super::indexed_db::ensure_device_identity_record;
 
 const DB_NAME: &str = "nook_auth";
 const STORE: &str = "auth";
@@ -88,13 +86,6 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
     Ok(())
 }
 
-async fn device_identity() -> Result<DeviceIdentity, NookError> {
-    let record = ensure_device_identity_record().await?;
-    Ok(DeviceIdentity::from_secret_str(
-        &DeviceIdentitySecret::parse(&record.secret)?,
-    )?)
-}
-
 fn legacy_local_storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok().flatten()
 }
@@ -110,12 +101,13 @@ fn now_iso() -> String {
 /// Full load pipeline: read → unseal → legacy seed → field migration, re-saving
 /// (sealed) when anything changed. Returns the decrypted in-memory snapshot plus
 /// the legacy active-provider id for the one-time remote vault copy.
-pub(crate) async fn load_auth_providers() -> Result<NormalizedAuthSnapshot, NookError> {
+pub(crate) async fn load_auth_providers(
+    identity: &DeviceIdentity,
+) -> Result<NormalizedAuthSnapshot, NookError> {
     let raw = read_raw_snapshot().await?;
     let normalized = nook_core::normalize_auth_snapshot(&raw);
-    let identity = device_identity().await?;
     let mut snapshot = normalized.snapshot;
-    let had_plaintext = open_provider_credentials(&identity, &mut snapshot)?;
+    let had_plaintext = open_provider_credentials(identity, &mut snapshot)?;
 
     let mut seeded_legacy = false;
     let legacy_storage = if snapshot.providers.is_empty() {
@@ -149,7 +141,7 @@ pub(crate) async fn load_auth_providers() -> Result<NormalizedAuthSnapshot, Nook
 
     let changed = normalized.changed || had_plaintext || seeded_legacy || changed_fields;
     if changed {
-        save_auth_providers(&snapshot).await?;
+        save_auth_providers(identity, &snapshot).await?;
     }
 
     Ok(NormalizedAuthSnapshot {
@@ -161,11 +153,11 @@ pub(crate) async fn load_auth_providers() -> Result<NormalizedAuthSnapshot, Nook
 
 /// Seal credential fields and persist the snapshot.
 pub(crate) async fn save_auth_providers(
+    identity: &DeviceIdentity,
     snapshot: &AuthProvidersSnapshotData,
 ) -> Result<(), NookError> {
-    let identity = device_identity().await?;
     let mut sealed = snapshot.clone();
-    seal_provider_credentials(&identity, &mut sealed)?;
+    seal_provider_credentials(identity, &mut sealed)?;
     write_snapshot(&sealed).await
 }
 
@@ -211,8 +203,9 @@ mod wasm_idb_tests {
     #[wasm_bindgen_test]
     async fn save_seals_github_pat_in_indexed_db() {
         clear_auth_dbs().await;
+        let identity = DeviceIdentity::generate().expect("identity");
         let pat = "github_pat_11WASMtestSECRET";
-        save_auth_providers(&github_snapshot(pat))
+        save_auth_providers(&identity, &github_snapshot(pat))
             .await
             .expect("save");
         let raw = read_raw_snapshot().await.expect("read raw");
@@ -226,11 +219,12 @@ mod wasm_idb_tests {
     #[wasm_bindgen_test]
     async fn load_decrypts_sealed_github_pat() {
         clear_auth_dbs().await;
+        let identity = DeviceIdentity::generate().expect("identity");
         let pat = "github_pat_22LOADroundTRIP";
-        save_auth_providers(&github_snapshot(pat))
+        save_auth_providers(&identity, &github_snapshot(pat))
             .await
             .expect("save");
-        let loaded = load_auth_providers().await.expect("load");
+        let loaded = load_auth_providers(&identity).await.expect("load");
         assert_eq!(
             loaded.snapshot.providers[0].github_pat.as_deref(),
             Some(pat)
@@ -240,11 +234,12 @@ mod wasm_idb_tests {
     #[wasm_bindgen_test]
     async fn load_upgrades_legacy_plaintext_to_sealed_storage() {
         clear_auth_dbs().await;
+        let identity = DeviceIdentity::generate().expect("identity");
         let pat = "github_pat_33LEGACYplain";
         write_snapshot(&github_snapshot(pat))
             .await
             .expect("write plaintext");
-        let loaded = load_auth_providers().await.expect("load");
+        let loaded = load_auth_providers(&identity).await.expect("load");
         assert_eq!(
             loaded.snapshot.providers[0].github_pat.as_deref(),
             Some(pat)
@@ -260,6 +255,7 @@ mod wasm_idb_tests {
     #[wasm_bindgen_test]
     async fn save_seals_oauth_tokens_in_indexed_db() {
         clear_auth_dbs().await;
+        let identity = DeviceIdentity::generate().expect("identity");
         let access = "ya29.wasm-oauth-access";
         let refresh = "1//wasm-refresh-secret";
         let snapshot = AuthProvidersSnapshotData {
@@ -286,7 +282,9 @@ mod wasm_idb_tests {
             }],
             active_vault_store_id: None,
         };
-        save_auth_providers(&snapshot).await.expect("save");
+        save_auth_providers(&identity, &snapshot)
+            .await
+            .expect("save");
         let raw = read_raw_snapshot().await.expect("read raw");
         let oauth = &raw["providers"][0]["oauthFile"];
         let stored_access = oauth["accessToken"].as_str().expect("accessToken");
@@ -296,7 +294,7 @@ mod wasm_idb_tests {
         assert!(!stored_access.contains(access));
         assert!(!stored_refresh.contains(refresh));
 
-        let loaded = load_auth_providers().await.expect("load");
+        let loaded = load_auth_providers(&identity).await.expect("load");
         let loaded_oauth = loaded.snapshot.providers[0]
             .oauth_file
             .as_ref()

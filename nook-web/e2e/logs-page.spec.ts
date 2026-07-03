@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  authorizeDeviceProtection,
   addSecret,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
@@ -67,9 +68,7 @@ test.describe('application logging', () => {
     await createLocalVaultOnLogin(page)
     await addSecret(page, 'log-test-key', 'log-test-value')
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await authorizeDeviceProtection(page)
 
     await waitForPersistedAppLog(page, {
       scope: 'connect',
@@ -110,7 +109,7 @@ test.describe('application logging', () => {
 
     await page.goto('/logs')
     await expectLogsPageHasEntries(page)
-    await expect(page.getByTestId('logs-count')).not.toContainText('0 stored')
+    await expect(page.getByTestId('logs-count')).not.toHaveText('0 stored')
   })
 
   test('clear removes stored entries from /logs', async ({ page }) => {

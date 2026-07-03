@@ -162,16 +162,16 @@ export async function loadDb(state: VaultState) {
     log.warn('loadDb failed', message)
     state.errorMsg = state.resolveErrorMessage(message)
   } finally {
-    state.isVerifying = false
-  }
-
-  if (state.isAuthenticated) {
-    try {
-      await state.syncFromStorage({ force: true })
-    } catch {
-      // Post-unlock sync should not block the login gate.
+    if (state.isAuthenticated) {
+      try {
+        await state.syncFromStorage({ force: true })
+      } catch {
+        // Post-unlock sync should not block the login gate.
+      }
+      state.startIdleSessionTracking()
+      state.startVaultSync()
     }
-    state.startVaultSync()
+    state.isVerifying = false
   }
 }
 

@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  authorizeDeviceProtection,
   clearBrowserVault,
   connectLocalVaultLegacy,
   disableLoginAutoUnlock,
@@ -35,9 +36,7 @@ test.describe('idle session auto-lock', () => {
 
     await page.waitForTimeout(IDLE_LOCK_MS + 1500)
 
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-session-expired')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
 

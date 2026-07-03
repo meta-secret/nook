@@ -96,18 +96,34 @@ test.describe('vault connect flow', () => {
   test('shows login gate on first visit', async ({ page }) => {
     await page.goto('/')
 
-    await expect(page.getByTestId('login-gate')).toBeVisible()
-    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
   })
 
   test('opens help page from header', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByTestId('help-open-btn').click()
-    await expect(page.getByTestId('help-page')).toBeVisible()
-    await expect(page.getByTestId('help-navigation')).toBeVisible()
-    await expect(page.getByTestId('help-section-local-first')).toBeVisible()
+    await expect(page.getByTestId('help-open-btn')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('help-open-btn').click({
+      noWaitAfter: true,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('help-page')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('help-navigation')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('help-section-local-first')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(page.getByTestId('help-section-join')).toBeVisible()
     await page.getByTestId('help-navigation').selectOption('sync')
     await expect(page.getByTestId('help-section-sync')).toBeVisible()
@@ -115,8 +131,13 @@ test.describe('vault connect flow', () => {
     await expect(diagram).toBeVisible()
     await expect(diagram.locator('svg')).toBeVisible({ timeout: 10_000 })
     await expect(diagram).not.toContainText('flowchart TB')
-    await page.getByTestId('help-close-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await page.getByTestId('help-close-btn').click({
+      noWaitAfter: true,
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 
   test('add provider from storage settings while connected', async ({
@@ -141,18 +162,27 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 
-  test('auto-unlocks device-key vault after reload', async ({ page }) => {
+  test('returns to vault login after passkey authorization on reload', async ({
+    page,
+  }) => {
     await page.goto('/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.reload()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await expect(page.getByTestId('login-gate')).not.toBeVisible()
+    await page.reload()
+    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await page.getByTestId('device-protection-unlock-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('vault-panel')).not.toBeVisible()
   })
 
   test('stays locked after reload when user locked the vault', async ({
@@ -165,7 +195,7 @@ test.describe('vault connect flow', () => {
     })
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
+    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
