@@ -31,13 +31,18 @@ variable "TOOLCHAIN_PUSH" {
   default = ""
 }
 
+// Current git commit — immutable toolchain image tag (set by Taskfile `GIT_COMMIT_ID` var).
+variable "GIT_COMMIT_ID" {
+  default = ""
+}
+
 // Shared cache settings referenced by package targets (in their own bake files) and the root.
 // cache-from: always on (pull the shared base). cache-to: gated on TOOLCHAIN_PUSH (CI only).
 // Platform is always linux/amd64 (hardcoded per target); no cross-platform builds.
-shared_cache_from = TOOLCHAIN_REGISTRY != "" ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:latest",
-] : []
+shared_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
+  ["type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache"],
+  GIT_COMMIT_ID != "" ? ["type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}"] : [],
+) : []
 
 shared_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
   "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
@@ -72,7 +77,7 @@ target "toolchain" {
   output   = ["type=docker"]
 }
 
-// Cache-only publish (manual / legacy): push just the :buildcache layers, no :latest image tag.
+// Cache-only publish (manual / legacy): push just the :buildcache layers, no commit-tagged image.
 // CI uses toolchain-push on main only; this target is not invoked by Taskfile workflows.
 target "toolchain-cache" {
   inherits = ["_toolchain-common"]
@@ -80,13 +85,13 @@ target "toolchain-cache" {
   cache-to = shared_cache_to
 }
 
-// After green MAIN CI: publish the verified toolchain base to GHCR (:latest image + :buildcache
+// After green MAIN CI: publish the verified toolchain base to GHCR (commit hash tag + :buildcache
 // layers) so every later build — CI and LOCAL — pulls it via cache-from. Gated on TOOLCHAIN_PUSH.
 // Do not use `docker push` after `--load`; the daemon re-uploads layers buildkit already has in GHCR.
 target "toolchain-push" {
   inherits = ["_toolchain-common"]
-  tags = TOOLCHAIN_PUSH != "" ? [
-    "${TOOLCHAIN_REGISTRY}:latest",
+  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
+    "${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
   ] : []
   output   = ["type=registry"]
   cache-to = shared_cache_to
