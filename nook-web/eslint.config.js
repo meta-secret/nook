@@ -5,7 +5,12 @@ import ts from 'typescript-eslint'
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'src/lib/nook-wasm/**'],
+    ignores: [
+      'dist/**',
+      'dist-prod/**',
+      'node_modules/**',
+      'src/lib/nook-wasm/**',
+    ],
   },
   js.configs.recommended,
   ...ts.configs.recommended,

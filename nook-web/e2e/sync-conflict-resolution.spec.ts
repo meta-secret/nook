@@ -2,33 +2,12 @@ import { expect, test, type Page } from './fixtures'
 import {
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  readLocalVaultYamlFromIdb,
   seedExtraGithubProviders,
   stubGithubVaultForLocalE2e,
   UI_TIMEOUT_MS,
 } from './helpers'
 import type { PendingSyncConflict } from '../src/lib/vault-sync'
-
-async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    return new Promise<string>((resolve, reject) => {
-      const request = indexedDB.open('nook_db', 1)
-      request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('vault', 'readonly')
-        const store = tx.objectStore('vault')
-        const getReq = store.get('encrypted_db')
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          resolve(String(getReq.result ?? ''))
-        }
-        tx.oncomplete = () => db.close()
-      }
-    })
-  })
-}
 
 async function stageVaultSyncConflict(
   page: Page,

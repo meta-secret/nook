@@ -17,12 +17,14 @@
     isBusy = false,
     onKeepLocal,
     onKeepRemote,
+    onImportAsNewVault,
   }: {
     vault: VaultState
     conflict: PendingSyncConflict
     isBusy?: boolean
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>
+    onImportAsNewVault?: () => void | Promise<void>
   } = $props()
 
   const versionLabel = $derived(
@@ -133,7 +135,22 @@
         </li>
       </ul>
 
-      <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+        {#if conflict.kind === 'store_id' && onImportAsNewVault}
+          <Button
+            type="button"
+            variant="secondary"
+            class="sm:min-w-[160px]"
+            data-testid="sync-conflict-import-new-vault-btn"
+            disabled={isBusy}
+            onclick={() => void onImportAsNewVault()}
+          >
+            {#if isBusy}
+              <RefreshCw class="size-4 animate-spin" />
+            {/if}
+            {vault.t('auth_storage.sync_conflict_import_new_vault')}
+          </Button>
+        {/if}
         <Button
           type="button"
           variant="outline"

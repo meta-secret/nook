@@ -15,7 +15,8 @@
     "done": "Done",
     "none": "None",
     "switch": "Switch",
-    "lock_vault": "Lock vault"
+    "lock_vault": "Lock vault",
+    "switch_vault": "Switch vault"
   },
   "session": {
     "lock_desc": "Clear decrypted secrets from memory and return to the login screen. Your encrypted vault and sync providers stay on this device.",
@@ -93,6 +94,12 @@
     "path_cloud_title": "Open from sync provider",
     "path_cloud_description": "Connect GitHub or another provider to open a vault that already exists, or to join a shared vault.",
     "path_cloud_btn": "Connect sync provider",
+    "vault_picker_title": "Choose a vault",
+    "vault_picker_subtitle": "Open an existing vault on this device, create another, or import one from a sync provider.",
+    "vault_picker_hint": "Each vault has its own secrets and sync providers.",
+    "vault_picker_unnamed": "Vault {store}",
+    "vault_picker_create_new": "Create new vault",
+    "vault_picker_import": "Import from sync provider",
     "back_to_get_started": "Back to setup options",
     "creating_vault": "Creating vault…",
     "master_password_label": "Master password",
@@ -353,6 +360,8 @@
     "sync_conflict_store_id_remote": "Vault {store}",
     "sync_store_id_mismatch": "{provider} holds a different vault than this device. Connect from Settings to choose which copy to keep.",
     "sync_conflict_store_id_banner": "Different vault on {provider} — choose which copy to keep.",
+    "sync_conflict_import_new_vault": "Import as new vault",
+    "sync_conflict_imported_vault": "Imported vault from {provider}. Unlock it from the vault picker.",
     "sync_blocked_edits": "Resolve the sync conflict before changing secrets.",
     "sync_failed": "Sync failed for this provider.",
     "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",
