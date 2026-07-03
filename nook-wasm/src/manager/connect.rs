@@ -52,7 +52,9 @@ impl NookVaultManager {
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
         let status = access_status_for_vault_content(&content, &identity)?;
-        let _ = self.status_tx.send(format!("ASSESS_{}_{}", self.storage_mode, status));
+        let _ = self
+            .status_tx
+            .send(format!("ASSESS_{}_{}", self.storage_mode, status));
         tracing::info!(
             scope = "wasm-connect",
             status = %status,
