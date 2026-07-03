@@ -20,9 +20,21 @@ test.describe('vault connect flow', () => {
     await createLocalVaultOnLogin(page)
 
     await expectAppLogMilestones(page, [
-      { scope: 'vault-local', level: 'info', messageIncludes: 'local vault created' },
-      { scope: 'wasm-connect', level: 'info', messageIncludes: 'connect complete' },
-      { scope: 'vault', level: 'info', messageIncludes: 'vault session unlocked' },
+      {
+        scope: 'vault-local',
+        level: 'info',
+        messageIncludes: 'local vault created',
+      },
+      {
+        scope: 'wasm-connect',
+        level: 'info',
+        messageIncludes: 'connect complete',
+      },
+      {
+        scope: 'vault',
+        level: 'info',
+        messageIncludes: 'vault session unlocked',
+      },
     ])
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()

@@ -102,7 +102,8 @@ export async function createLocalVaultWithDeviceKeys(
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
-    const message = e instanceof Error ? e.message : 'Failed to create local vault.'
+    const message =
+      e instanceof Error ? e.message : 'Failed to create local vault.'
     log.warn('local vault create failed', { error: message })
     state.errorMsg = message
   } finally {
@@ -163,7 +164,8 @@ export async function createLocalVault(
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
-    const message = e instanceof Error ? e.message : 'Failed to create local vault.'
+    const message =
+      e instanceof Error ? e.message : 'Failed to create local vault.'
     log.warn('local vault create failed', { error: message })
     state.errorMsg = message
   } finally {
