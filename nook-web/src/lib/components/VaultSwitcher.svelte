@@ -101,9 +101,7 @@
       <FolderKey class="size-4 shrink-0 text-primary" />
       <span class="min-w-0 truncate text-foreground">{activeLabel}</span>
       <ChevronDown
-        class="size-4 shrink-0 transition-transform {open
-          ? 'rotate-180'
-          : ''}"
+        class="size-4 shrink-0 transition-transform {open ? 'rotate-180' : ''}"
       />
     </button>
 
