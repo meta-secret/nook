@@ -16,6 +16,7 @@ import {
   DEFAULT_DRIVE_VAULT_FILE,
   DEFAULT_GITHUB_REPO,
   formatDriveStorageRef,
+  loadAuthProviders,
   providerDefaultLabel,
   saveAuthProviders,
   wasmStorageModeForProvider,
@@ -30,7 +31,12 @@ import {
   type AppLocale,
 } from '$lib/locale'
 import { TRANSLATION_CATALOGS, lookupTranslation } from '$lib/locale-catalogs'
-import { hasLocalVault } from '$lib/local-vault'
+import {
+  hasActiveLocalVault,
+  hasLocalVault,
+  switchActiveVault,
+} from '$lib/local-vault'
+import type { LocalVaultEntry } from '$lib/local-vault'
 import { createLogger } from '$lib/log'
 import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
 import {
@@ -78,7 +84,13 @@ export class VaultState {
 
   providers = $state<StorageProvider[]>([])
   providersLoaded = $state(false)
-  /** True when `nook_db.encrypted_db` holds a vault blob (local-first model). */
+  /** Locally cached vaults on this browser (metadata only). */
+  localVaults = $state<LocalVaultEntry[]>([])
+  /** Active vault store_id — sync providers and local blob are scoped to this. */
+  activeVaultStoreId = $state<string | null>(null)
+  /** Login gate: user picked a vault but has not unlocked yet. */
+  selectedLoginVaultStoreId = $state<string | null>(null)
+  /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false)
   localLoginPrepared = $state(false)
   loginSetupType = $state<StorageProviderType | null>(null)
@@ -513,7 +525,7 @@ export class VaultState {
   }
 
   get localProvider(): StorageProvider | null {
-    return this.providers.find((p) => p.type === 'local') ?? null
+    return this.activeVaultProviders.find((p) => p.type === 'local') ?? null
   }
 
   /** Canonical on-device vault row — alias kept while settings code migrates. */
@@ -521,9 +533,35 @@ export class VaultState {
     return this.localProvider
   }
 
-  /** Cloud sync destinations — local vault is always canonical and omitted. */
+  /** Providers belonging to the active vault only. */
+  get activeVaultProviders(): StorageProvider[] {
+    const sid = this.activeVaultStoreId?.trim()
+    if (!sid) {
+      return this.providers
+    }
+    return this.providers.filter(
+      (provider) => !provider.storeId || provider.storeId === sid,
+    )
+  }
+
+  /** Cloud sync destinations for the active vault — local row omitted. */
   get syncProviders(): StorageProvider[] {
-    return this.providers.filter((p) => p.type !== 'local')
+    return this.activeVaultProviders.filter((p) => p.type !== 'local')
+  }
+
+  get hasMultipleLocalVaults(): boolean {
+    return this.localVaults.length > 1
+  }
+
+  get showLoginVaultPicker(): boolean {
+    return (
+      !this.isAuthenticated &&
+      this.localVaults.length >= 1 &&
+      this.selectedLoginVaultStoreId === null &&
+      this.loginSetupType === null &&
+      !this.addProviderOpen &&
+      isVaultSessionLocked()
+    )
   }
 
   providerWasmArgs(provider: StorageProvider): [string, string, string] {
@@ -609,7 +647,17 @@ export class VaultState {
       await this.updateLocale(locale)
 
       await this.loadProviders({ migrateLegacyVault: true })
-      this.localVaultPresent = await hasLocalVault()
+      await localLoginActions.refreshLocalVaultCatalog(this)
+      if (!this.activeVaultStoreId) {
+        this.activeVaultStoreId =
+          (await loadAuthProviders()).activeVaultStoreId ??
+          this.localVaults[0]?.storeId ??
+          null
+      }
+      if (this.activeVaultStoreId) {
+        await switchActiveVault(this.activeVaultStoreId).catch(() => undefined)
+      }
+      this.localVaultPresent = await hasActiveLocalVault()
       if (this.localVaultPresent) {
         this.storageMode = 'local'
         this.githubPat = ''
@@ -688,6 +736,36 @@ export class VaultState {
    */
   async createLocalVaultWithDeviceKeys(): Promise<void> {
     return localLoginActions.createLocalVaultWithDeviceKeys(this)
+  }
+
+  async selectVaultForUnlock(storeId: string): Promise<void> {
+    return localLoginActions.selectVaultForUnlock(this, storeId)
+  }
+
+  async reloadProvidersForActiveVault(): Promise<void> {
+    const snapshot = await loadAuthProviders()
+    this.providers = snapshot.providers.map((p) =>
+      p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
+    )
+    if (snapshot.activeVaultStoreId) {
+      this.activeVaultStoreId = snapshot.activeVaultStoreId
+    }
+    this.applyActiveProviderCredentials()
+  }
+
+  async syncActiveVaultStoreIdToAuth(): Promise<void> {
+    return localLoginActions.syncActiveVaultStoreIdToAuth(this)
+  }
+
+  beginLoginVaultPicker() {
+    this.selectedLoginVaultStoreId = null
+    this.localLoginPrepared = false
+    this.resetVaultSessionState()
+  }
+
+  async chooseLoginVault(storeId: string) {
+    await this.selectVaultForUnlock(storeId)
+    this.selectedLoginVaultStoreId = storeId
   }
 
   /** @deprecated Use {@link createLocalVaultWithDeviceKeys}. Backup passwords belong in Settings. */
@@ -1257,6 +1335,10 @@ export class VaultState {
     return syncActions.stageSyncConflict(this, conflict)
   }
 
+  async resolveSyncConflictImportRemote(): Promise<void> {
+    return syncActions.resolveSyncConflictImportRemote(this)
+  }
+
   async resolveSyncConflictKeepLocal(): Promise<void> {
     return syncActions.resolveSyncConflictKeepLocal(this)
   }
@@ -1331,6 +1413,7 @@ export class VaultState {
 
   /** End the in-memory session and return to the login gate (encrypted vault + sync providers stay on disk). */
   lockVault() {
+    this.beginLoginVaultPicker()
     return idleSessionActions.lockVault(this)
   }
 

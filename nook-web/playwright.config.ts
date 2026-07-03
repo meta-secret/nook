@@ -32,6 +32,7 @@ const PR_SPECS = [
   'sync-conflict-resolution.spec.ts',
   'event-log-sync.spec.ts',
   'legacy-vault-migration.spec.ts',
+  'multi-vault.spec.ts',
   'vault-password-device-key.spec.ts',
   'legal-pages.spec.ts',
   'logs-page.spec.ts',

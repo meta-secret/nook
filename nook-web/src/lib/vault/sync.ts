@@ -9,6 +9,8 @@ import {
   writeRemoteVaultBlob,
   type PendingSyncConflict,
 } from '$lib/vault-sync'
+import { importVaultAsNewLocalCopy } from '$lib/local-vault'
+import * as localLoginActions from '$lib/vault/local-login'
 
 export function startVaultSync(state: VaultState) {
   state.stopVaultSync()
@@ -193,6 +195,53 @@ export function stageSyncConflict(
 ) {
   state.pendingSyncConflict = conflict
   state.errorMsg = ''
+}
+
+export async function resolveSyncConflictImportRemote(
+  state: VaultState,
+): Promise<void> {
+  const conflict = state.pendingSyncConflict
+  if (
+    !conflict ||
+    conflict.kind !== 'store_id' ||
+    !conflict.remoteStoreId ||
+    state.isVerifying
+  ) {
+    return
+  }
+
+  state.isVerifying = true
+  state.errorMsg = ''
+  try {
+    const importedStoreId = await importVaultAsNewLocalCopy(
+      conflict.remoteYaml,
+      conflict.providerLabel,
+    )
+    state.activeVaultStoreId = importedStoreId
+    state.selectedLoginVaultStoreId = importedStoreId
+    state.manager?.resetVaultSession()
+    state.localVaultPresent = true
+    await localLoginActions.refreshLocalVaultCatalog(state)
+    const providerId = await state.ensureProviderSavedAfterConflict(conflict)
+    await state.updateProviderSyncMetadata(
+      providerId,
+      conflict.remoteYaml,
+      conflict.remoteRevision,
+    )
+    state.clearPendingSyncConflict()
+    state.finishStagedProviderConnectAfterConflict(conflict)
+    await state.syncActiveVaultStoreIdToAuth()
+    state.showSuccess(
+      state.t('auth_storage.sync_conflict_imported_vault', {
+        provider: conflict.providerLabel,
+      }),
+    )
+  } catch (e: unknown) {
+    state.errorMsg =
+      e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
+  } finally {
+    state.isVerifying = false
+  }
 }
 
 export async function resolveSyncConflictKeepLocal(

@@ -237,6 +237,79 @@ pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
     Ok(crate::storage::indexed_db::has_local_vault().await?)
 }
 
+#[wasm_bindgen(js_name = hasActiveLocalVault)]
+pub async fn has_active_local_vault() -> Result<bool, wasm_bindgen::JsError> {
+    Ok(crate::storage::indexed_db::has_active_local_vault().await?)
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookLocalVaultEntry {
+    store_id: String,
+    label: Option<String>,
+    last_unlocked_at: Option<String>,
+}
+
+#[wasm_bindgen]
+impl NookLocalVaultEntry {
+    #[wasm_bindgen(getter, js_name = storeId)]
+    pub fn store_id(&self) -> String {
+        self.store_id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn label(&self) -> Option<String> {
+        self.label.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
+    pub fn last_unlocked_at(&self) -> Option<String> {
+        self.last_unlocked_at.clone()
+    }
+}
+
+#[wasm_bindgen(js_name = listLocalVaults)]
+pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, wasm_bindgen::JsError> {
+    Ok(crate::storage::indexed_db::list_vault_registry_entries()
+        .await?
+        .into_iter()
+        .map(|entry| NookLocalVaultEntry {
+            store_id: entry.store_id,
+            label: entry.label,
+            last_unlocked_at: entry.last_unlocked_at,
+        })
+        .collect())
+}
+
+#[wasm_bindgen(js_name = getActiveVaultId)]
+pub async fn get_active_vault_id() -> Result<Option<String>, wasm_bindgen::JsError> {
+    Ok(crate::storage::indexed_db::get_active_vault_id().await?)
+}
+
+#[wasm_bindgen(js_name = setActiveVault)]
+pub async fn set_active_vault(store_id: String) -> Result<(), wasm_bindgen::JsError> {
+    crate::storage::indexed_db::switch_active_vault(&store_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = prepareNewLocalVaultSlot)]
+pub async fn prepare_new_local_vault_slot() -> Result<(), wasm_bindgen::JsError> {
+    crate::storage::indexed_db::prepare_new_local_vault_slot()
+        .await
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = importLocalVaultBlob)]
+pub async fn import_local_vault_blob(
+    content: String,
+    label: Option<String>,
+) -> Result<String, wasm_bindgen::JsError> {
+    crate::storage::indexed_db::import_vault_blob(&content, label.as_deref())
+        .await
+        .map_err(Into::into)
+}
+
 /// Compare local vs remote vault YAML and return a sync action label:
 /// `unchanged`, `adopt_remote`, `push_local`, or `conflict`.
 #[wasm_bindgen(js_name = compareVaultSync)]

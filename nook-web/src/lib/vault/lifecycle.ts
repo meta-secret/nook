@@ -1,5 +1,7 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
+import { prepareCreateNewVaultSlot } from '$lib/local-vault'
+import * as localLoginActions from '$lib/vault/local-login'
 
 export async function init(state: VaultState) {
   if (state.initPromise) {
@@ -24,6 +26,11 @@ export async function createFreshVault(state: VaultState) {
   state.isVerifying = true
   try {
     await state.initDeviceIdentity()
+    const creatingAdditionalVault = state.localVaults.length > 0
+    if (creatingAdditionalVault) {
+      await prepareCreateNewVaultSlot()
+      state.manager.resetVaultSession()
+    }
     const rawRecords = await state.enqueueStorage(async () => {
       const connectPromise = state.manager!.connect_fresh(
         ...state.wasmStorageArgs(),
@@ -46,7 +53,10 @@ export async function createFreshVault(state: VaultState) {
     })
     state.secrets = rawRecords
     state.markVaultUnlocked()
+    state.activeVaultStoreId = state.manager.vaultStoreId?.trim() || null
+    await localLoginActions.refreshLocalVaultCatalog(state)
     await state.ensureProviderSaved()
+    await state.syncActiveVaultStoreIdToAuth()
     await state.hydrateMultiDeviceState()
     state.joinEnrollmentPrompt = 'none'
     state.showSuccess(state.t('toasts.vault_created'))

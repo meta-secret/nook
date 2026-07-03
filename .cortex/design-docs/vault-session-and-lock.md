@@ -11,7 +11,7 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, an
 | Concept | What it is | Persists when locked? |
 |---------|------------|------------------------|
 | **Vault** | One logical encrypted database identified by `store_id` in YAML | Yes — encrypted blob on disk |
-| **Local vault cache** | Authoritative copy in `nook_db.encrypted_db` (UTF-8 YAML) | Yes |
+| **Local vault cache** | Authoritative copies in `nook_db` as `vault:{store_id}` blobs + registry | Yes |
 | **Sync provider** | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth` | Yes — credentials only |
 | **Device identity** | X25519 key in `nook_db.device_identity_secret` | Yes |
 | **Unlocked session** | WASM `decrypted_jsonl` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
@@ -46,7 +46,7 @@ flowchart TB
 
 | Cleared (memory) | Kept (disk) |
 |------------------|-------------|
-| `isAuthenticated`, `secrets[]` | `nook_db.encrypted_db` |
+| `isAuthenticated`, `secrets[]` | `nook_db` vault blobs + registry |
 | WASM `decrypted_jsonl` via `resetVaultSession()` | `nook_db.device_identity_secret` |
 | Pending joins / roster UI cache | `nook_auth` sync provider list + tokens |
 | Settings / help panels | Password entries inside encrypted YAML |
@@ -55,24 +55,25 @@ flowchart TB
 
 After lock, the app shows **`LoginGate`**:
 
-- **Local vault on device** → unlock with device keys and/or backup password.
+- **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
+- **Single local vault** → unlock with device keys and/or backup password.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault.
-- **Multiple sync providers** → connect via provider flow; reconciliation uses `store_id` + `vault_version`.
 
 Lock is the safe “step away from this browser” action — analogous to logging out of a password manager while keeping the encrypted database file.
 
 ---
 
-## 3. Current vs target: multiple vaults on one browser
+## 3. Multiple vaults on one browser (#120)
 
-| | **Today** | **Target** |
-|---|-----------|------------|
-| Local cache | One `encrypted_db` row per browser profile | Vault picker: user selects which vault is active |
-| Login gate | One local vault detected + optional cloud connect | Explicit vault list: open existing / create new / import from provider |
-| Sync providers | Many providers → replicas of **one** active `store_id` | Providers scoped per vault; mismatch on `store_id` rejected |
-| Lock | Clears session for the active vault | Same — user returns to vault chooser |
+| Surface | Behavior |
+|---------|----------|
+| Local cache | Multiple `vault:{store_id}` blobs + `vault_registry` in `nook_db` |
+| Login gate | Vault picker when >1 vault: open / create new / import from provider |
+| Sync providers | Scoped to active vault `store_id`; full list in `nook_auth` |
+| Lock / switch | Clears session; vault chooser when multiple vaults exist |
+| `store_id` mismatch | **Import as new vault** in sync conflict dialog |
 
-Today’s unified-vault rollout assumes **one active vault per browser profile**. Multi-vault UX (switch vault without wiping IDB) is a follow-on; the data model (`store_id`, provider `storeId`) already supports it.
+Legacy `encrypted_db` migrates to `vault:{store_id}` on first load. Code: `nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
 
 ---
 
@@ -82,9 +83,9 @@ Today’s unified-vault rollout assumes **one active vault per browser profile**
 |-------------|----------------|
 | **Create a vault** | Login → **Create vault** (starts in this browser) |
 | **Replicate this vault** | Settings → Sync providers → Add GitHub / Drive |
-| **Open a vault from elsewhere** | Login → **Connect sync provider** |
+| **Open a vault from elsewhere** | Login → **Connect sync provider** or **Import as new vault** |
 
-If remote `store_id` ≠ local `store_id`, sync reconciliation **errors** — Nook refuses to merge unrelated databases ([unified-vault.md](unified-vault.md) §5).
+If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **import as new vault** or keep one copy — Nook refuses to merge unrelated databases ([unified-vault.md](unified-vault.md) §5).
 
 ---
 
@@ -92,11 +93,11 @@ If remote `store_id` ≠ local `store_id`, sync reconciliation **errors** — No
 
 | Surface | Purpose |
 |---------|---------|
-| **Header Lock** | Primary lock control when vault is unlocked |
-| **Login gate chooser** | After lock — create local vault or connect sync provider |
-| **Settings → Sync providers** | Manage replica targets for the **current** vault only |
+| **Header Lock / Switch vault** | End session; switch vault when multiple exist |
+| **Login gate chooser** | Vault picker, create local vault, or connect sync provider |
+| **Settings → Sync providers** | Manage replica targets for the **active** vault only |
 
-**Test ids:** `header-lock-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
+**Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `sync-conflict-import-new-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
 
 ---
 

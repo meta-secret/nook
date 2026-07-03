@@ -108,6 +108,8 @@ export interface StorageProvider {
 
 export interface AuthProvidersSnapshot {
   providers: StorageProvider[]
+  /** Active vault store_id — providers are scoped to this vault. */
+  activeVaultStoreId?: string
 }
 
 /** Plain snapshot safe for IndexedDB structured clone (no reactive proxies). */
