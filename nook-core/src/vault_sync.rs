@@ -94,24 +94,36 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyn
     if let (Some(local_store), Some(remote_store)) = (&local_rev.store_id, &remote_rev.store_id)
         && local_store != remote_store
     {
+        tracing::warn!(
+            scope = "vault-sync",
+            local_store = local_store.as_str(),
+            remote_store = remote_store.as_str(),
+            "vault store_id mismatch; refusing to reconcile different vaults"
+        );
         return Err(VaultSyncError::StoreIdMismatch {
             local_store: local_store.clone(),
             remote_store: remote_store.clone(),
         });
     }
 
-    if local_rev.version < remote_rev.version {
-        return Ok(VaultSyncAction::AdoptRemote);
-    }
-    if local_rev.version > remote_rev.version {
-        return Ok(VaultSyncAction::PushLocal);
-    }
+    let action = if local_rev.version < remote_rev.version {
+        VaultSyncAction::AdoptRemote
+    } else if local_rev.version > remote_rev.version {
+        VaultSyncAction::PushLocal
+    } else if local_rev.content_hash != remote_rev.content_hash {
+        VaultSyncAction::Conflict
+    } else {
+        VaultSyncAction::Unchanged
+    };
 
-    if local_rev.content_hash != remote_rev.content_hash {
-        return Ok(VaultSyncAction::Conflict);
-    }
-
-    Ok(VaultSyncAction::Unchanged)
+    tracing::debug!(
+        scope = "vault-sync",
+        local_version = local_rev.version,
+        remote_version = remote_rev.version,
+        action = action.label(),
+        "reconciled vault versions"
+    );
+    Ok(action)
 }
 
 fn content_hash(content: &str) -> String {

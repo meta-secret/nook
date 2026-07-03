@@ -7,7 +7,10 @@
     TriangleAlert,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import { createLogger } from '$lib/log'
   import type { JoinRequest, VaultMember } from '$lib/nook'
+
+  const log = createLogger('device-enrollment')
 
   let {
     deviceId,
@@ -50,8 +53,8 @@
     if (!value) return
     try {
       await navigator.clipboard.writeText(value)
-    } catch {
-      console.error(`Copy failed for ${label}`)
+    } catch (error) {
+      log.error(`Copy failed for ${label}`, error)
     }
   }
 
