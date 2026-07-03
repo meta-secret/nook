@@ -3,13 +3,30 @@ import {
   addVaultPassword,
   clearBrowserVault,
   connectLocalVaultLegacy,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
   forceVaultQuiescentForE2e,
   openOnboardDevicePanel,
   openStorageSettings,
   seedExtraGithubProviders,
+  seedGithubSyncProvidersWhileUnlocked,
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
 } from './helpers'
+
+const INLINE_ONBOARD_PASSWORD = 'onboard-pass-1'
+
+async function createOnboardPasswordInline(
+  page: import('@playwright/test').Page,
+) {
+  await page.getByTestId('vault-password-label').fill('test')
+  await page.getByTestId('vault-password-input').fill(INLINE_ONBOARD_PASSWORD)
+  await page.getByTestId('vault-password-confirm').fill(INLINE_ONBOARD_PASSWORD)
+  await page.getByTestId('submit-vault-password').click()
+  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(0)
+}
 
 test.describe('onboard provider picker', () => {
   test.beforeEach(async ({ page }) => {
@@ -43,6 +60,42 @@ test.describe('onboard provider picker', () => {
       0,
     )
     await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toBeDisabled()
+  })
+
+  test('keeps onboard submit disabled without a sync provider after inline password and confirm password', async ({
+    page,
+  }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
+
+    await page
+      .getByTestId('onboard-password-input')
+      .fill(INLINE_ONBOARD_PASSWORD)
+    const submit = page.getByTestId('onboard-device-submit')
+    await expect(submit).toBeDisabled()
+    await expect(
+      page.getByTestId('onboard-empty-providers-settings-link'),
+    ).toBeVisible()
+  })
+
+  test('enables onboard submit after inline password creation once a sync provider exists', async ({
+    page,
+  }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
+
+    await page
+      .getByTestId('onboard-password-input')
+      .fill(INLINE_ONBOARD_PASSWORD)
+    await expect(page.getByTestId('onboard-device-submit')).toBeDisabled()
+
+    await seedGithubSyncProvidersWhileUnlocked(page)
+    await page.getByTestId('vault-onboard-tab').click()
+    await expect(page.getByTestId('onboard-provider-list')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 
   test('shows repository and token hints for multiple GitHub providers', async ({
