@@ -16,6 +16,8 @@ mod password_envelope;
 mod secret_types;
 mod secret_view;
 mod session;
+mod sync_provider_credentials;
+mod sync_provider_store;
 mod validation;
 mod vault_connect;
 mod vault_crypto;
@@ -93,6 +95,14 @@ pub use password_envelope::{
     verify_password, verify_password_entry,
 };
 pub use session::{ReplaceSecretInput, replace_secret};
+pub use sync_provider_credentials::{
+    AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials, seal_provider_credentials,
+};
+pub use sync_provider_store::{
+    AuthProvidersSnapshotData, NormalizedAuthSnapshot, OAuthFileConfigData, StorageProviderData,
+    ensure_local_provider_row, find_duplicate_sync_provider, migrate_provider_fields,
+    normalize_auth_snapshot, provider_target_key, seed_provider_from_legacy_storage,
+};
 pub use validation::{
     DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
     DriveVaultFileName, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,

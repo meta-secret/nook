@@ -21,21 +21,42 @@ How Nook persists **sync provider** credentials, the **login gate**, and how tha
 
 | Key | Value |
 |-----|-------|
-| `providers` | `{ providers: StorageProvider[], activeProviderId: string \| null }` |
+| `providers` | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
+
+The persisted object is a structured-clone JS object (not a JSON string). Its wire shape is owned by `nook-core` (`AuthProvidersSnapshotData` / `StorageProviderData`, `camelCase`); the TS `StorageProvider` interface mirrors it:
 
 ```typescript
 interface StorageProvider {
   id: string
-  type: 'local' | 'github'
+  type: 'local' | 'github' | 'oauth-file'
   label: string
-  githubPat?: string   // GitHub only — stored after first sign-in
+  githubPat?: string   // GitHub only — sealed at rest
   githubRepo?: string  // GitHub only — repo name (default `nook`)
+  oauthFile?: OAuthFileConfig  // Drive/iCloud — accessToken/refreshToken sealed at rest
   storeId?: string     // Logical secret store (`store_{token}`) — see secret-store-identity.md
+  lastSyncedVersion?: number
+  lastSyncedAt?: string
+  lastSyncRevision?: string
   createdAt: string    // ISO timestamp
 }
 ```
 
-**Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`.
+> The deprecated `activeProviderId` field is stripped by `normalize_auth_snapshot` on load (its value drives the one-time legacy vault copy, then it is dropped).
+
+**Persistence + crypto live in Rust/WASM.** `nook_auth` I/O, credential sealing, snapshot shaping, and the legacy `localStorage` migration all run in `nook-wasm`/`nook-core`; [`auth-providers.ts`](../../nook-web/src/lib/auth-providers.ts) is a thin shim that owns only the TS **type declarations**, i18n presentation helpers (`localizeProviderLabel`, `maskGithubPat`, `providerStorageDetail` — coupled to the web `t()` catalog), and wasm-wrapper functions. Ownership split:
+
+| Concern | Home |
+|---------|------|
+| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-core/src/sync_provider_store.rs` (Rust-tested) |
+| `nook_auth` IndexedDB I/O (rexie), device-key seal/unseal, `localStorage` read/clear, full load pipeline | `nook-wasm/src/storage/auth_providers.rs` |
+| wasm bindings (`loadAuthProviders`, `saveAuthProviders`, `deleteAuthProvidersDb`, `normalizeAuthSnapshot`, `findDuplicateSyncProvider`, `ensureLocalProviderRow`) | `nook-wasm/src/lib.rs` |
+| Type declarations, i18n presentation, wasm wrappers | `nook-web/src/lib/auth-providers.ts` |
+
+**Credentials are sealed at rest with the device key.** Secret fields — `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed inside `save_auth_providers` and unsealed inside the `load_auth_providers` pipeline. Non-secret fields (labels, repo, timestamps) stay plaintext. Crypto never lives in TypeScript (see [rules.md §1](../rules.md)).
+
+**Device key = existing device identity.** No new key is minted for provider storage. The wasm layer reuses this browser's **age X25519 device identity** (`device_id` / `device_identity_secret` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which the load path uses to distinguish sealed vs legacy-plaintext fields). `ensure_device_identity_record` creates and persists the identity on first use so seal/unseal always resolve the same key.
+
+**Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`had_plaintext` upgrade path).
 
 **Provider switch:** Changing the active saved provider calls `resetVaultSession` in wasm and clears login password-entry preview state so backup-password lists always reflect the remote vault for that provider — never a prior provider's in-memory session.
 
@@ -81,7 +102,7 @@ Legacy login wizard docs (connection × authorization accordion) are superseded 
 
 `VaultState` loads providers on `init()`, applies `activeProvider` credentials to `storageMode` / `githubPat` before WASM calls, and calls `ensureProviderSaved()` after successful connect/enroll/join.
 
-WASM still receives `(storageMode, githubPat)` per call — no change to the Rust bridge. Provider persistence is entirely a web-layer concern.
+WASM still receives `(storageMode, githubPat)` per call — no change to the Rust sync bridge. Provider **persistence and shaping** now live in `nook-wasm`/`nook-core`; the web layer only maps snapshots onto `VaultState` and drives the one-time legacy remote-vault copy (`migrateLegacyVaultToLocal`, which stays in TS because it fetches over the network).
 
 ---
 
@@ -102,6 +123,8 @@ Version-based sync is in `nook-core/src/vault_sync.rs`. UI uses local-first `enc
 
 ## 6. Security notes
 
-- GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise of browser storage exposes GitHub repo access, not plaintext secrets (still encrypted in vault file).
-- Device identity and encrypted vault blob remain in separate IDB database (`nook_db`).
-- E2E tests clear both `nook_db` and `nook_auth` on reset.
+- Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with the device's age X25519 identity** (in Rust/WASM) before hitting IndexedDB — never stored as plaintext. A raw `nook_auth` dump exposes age-armored ciphertext, not tokens.
+- Sealing protects against passive at-rest inspection of IndexedDB, not against code executing in the page (XSS), which can still ask WASM to unseal. The device secret itself lives in `nook_db` (`device_identity_secret`); an attacker with both databases can decrypt — this is storage-at-rest hardening, not a substitute for vault encryption.
+- GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise exposes GitHub repo access, not plaintext vault secrets (still independently encrypted in the vault file).
+- Reusing the existing device identity means no extra key material and no new key-management surface; the same identity already gates vault-key envelopes.
+- Device identity and encrypted vault blob remain in a separate IDB database (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.

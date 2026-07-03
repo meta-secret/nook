@@ -1989,6 +1989,117 @@ export async function seedExtraGithubProviders(
   )
 }
 
+const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
+
+export type RawAuthProvidersSnapshot = {
+  providers: Array<{
+    id: string
+    type: string
+    githubPat?: string
+    oauthFile?: {
+      accessToken?: string
+      refreshToken?: string
+    }
+  }>
+}
+
+/** Read the raw `nook_auth` snapshot as persisted (sealed credential fields). */
+export async function readRawAuthProvidersFromIdb(
+  page: Page,
+): Promise<RawAuthProvidersSnapshot> {
+  return page.evaluate(() => {
+    return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
+      const request = indexedDB.open('nook_auth', 1)
+      request.onerror = () =>
+        reject(request.error ?? new Error('idb open failed'))
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('auth', 'readonly')
+        const store = tx.objectStore('auth')
+        const getReq = store.get('providers')
+        getReq.onerror = () =>
+          reject(getReq.error ?? new Error('idb read failed'))
+        getReq.onsuccess = () => {
+          resolve(
+            (getReq.result as RawAuthProvidersSnapshot | undefined) ?? {
+              providers: [],
+            },
+          )
+        }
+        tx.oncomplete = () => db.close()
+        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+      }
+    })
+  })
+}
+
+export async function waitForAuthProvidersE2eHook(page: Page) {
+  await page.waitForFunction(
+    () =>
+      !!(window as Window & { __nookAuthProviders?: unknown })
+        .__nookAuthProviders,
+    undefined,
+    { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+  )
+}
+
+/** Load decrypted sync providers via wasm in the browser. */
+export async function loadDecryptedAuthProvidersInBrowser(page: Page) {
+  return page.evaluate(async () => {
+    const hook = (
+      window as Window & {
+        __nookAuthProviders?: {
+          loadAuthProviders: () => Promise<{
+            providers: Array<{
+              id?: string
+              githubPat?: string
+              oauthFile?: { accessToken?: string; refreshToken?: string }
+            }>
+          }>
+        }
+      }
+    ).__nookAuthProviders
+    if (hook?.loadAuthProviders) {
+      return hook.loadAuthProviders()
+    }
+    const auth = await import('/src/lib/auth-providers.ts')
+    return auth.loadAuthProviders()
+  })
+}
+
+/** Save sync providers through wasm (plaintext in → sealed in IndexedDB). */
+export async function saveAuthProvidersInBrowser(
+  page: Page,
+  snapshot: RawAuthProvidersSnapshot & {
+    activeVaultStoreId?: string
+  },
+) {
+  await page.evaluate(async (value) => {
+    const hook = (
+      window as Window & {
+        __nookAuthProviders?: {
+          saveAuthProviders: (snapshot: unknown) => Promise<void>
+        }
+      }
+    ).__nookAuthProviders
+    if (hook?.saveAuthProviders) {
+      await hook.saveAuthProviders(value)
+      return
+    }
+    const auth = await import('/src/lib/auth-providers.ts')
+    await auth.saveAuthProviders(value)
+  }, snapshot)
+}
+
+export function expectSealedCredential(
+  stored: string | undefined,
+  plaintext: string,
+) {
+  expect(stored).toBeDefined()
+  expect(stored).toContain(AGE_ARMOR_MARKER)
+  expect(stored).not.toContain(plaintext)
+}
+
 /** Default GitHub sync provider for local e2e onboarding / fan-out specs. */
 export const E2E_GITHUB_ONBOARD_PROVIDER = {
   id: 'e2e-onboard-github',

@@ -4,6 +4,7 @@
 //! `nook_core::StorageMode`. New backends (S3, IPFS, …) become new
 //! submodules with the same async function shape.
 
+pub(crate) mod auth_providers;
 pub(crate) mod drive;
 pub(crate) mod drive_events;
 pub(crate) mod event_db;

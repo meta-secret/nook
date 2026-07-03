@@ -31,3 +31,8 @@ tasks:
           wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm;
           echo "$current" > "$stamp";
         fi'
+
+  wasm:test:browser:
+    desc: Run nook-wasm wasm-bindgen tests in headless Chrome (needs chromedriver).
+    cmds:
+      - wasm-pack test --chrome --headless nook-wasm

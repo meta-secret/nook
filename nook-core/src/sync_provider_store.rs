@@ -1,0 +1,572 @@
+//! Persisted sync-provider snapshot model plus the pure transforms the web app
+//! runs over it (normalize, field migration, local-row seeding, dedup).
+//!
+//! The browser stores an [`AuthProvidersSnapshotData`] in the `nook_auth`
+//! `IndexedDB` database. All shaping of that data lives here so it is unit-tested
+//! in Rust; `nook-wasm` owns the `IndexedDB` I/O and device-key sealing, and the
+//! web layer keeps only the wire type declarations plus i18n presentation.
+
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, GithubSyncTarget, OauthFilePreset,
+    OauthFileSyncTarget, StorageProviderType, SyncProviderTarget, sync_provider_default_label,
+    sync_provider_target_key,
+};
+
+/// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
+///
+/// Field names are `camelCase` on the wire to match the structured-clone object
+/// the web layer and e2e seeders read/write directly in `IndexedDB`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthFileConfigData {
+    pub preset: String,
+    #[serde(default)]
+    pub access_token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_email: Option<String>,
+}
+
+/// One persisted sync provider row.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageProviderData {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub provider_type: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_pat: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_repo: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth_file: Option<OAuthFileConfigData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_synced_version: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_synced_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_sync_revision: Option<String>,
+    pub created_at: String,
+}
+
+/// The full persisted snapshot: provider rows plus the active vault scope.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthProvidersSnapshotData {
+    #[serde(default)]
+    pub providers: Vec<StorageProviderData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_vault_store_id: Option<String>,
+}
+
+/// Result of [`normalize_auth_snapshot`] — the cleaned snapshot plus signals the
+/// caller uses to decide whether to re-persist and to run legacy vault copy.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NormalizedAuthSnapshot {
+    pub snapshot: AuthProvidersSnapshotData,
+    pub legacy_active_provider_id: Option<String>,
+    pub changed: bool,
+}
+
+fn non_empty(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+/// Sync-target identity for one provider, mirroring the web `oauthFile ? … :
+/// missing` fallback for `oauth-file` rows without captured OAuth config.
+fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
+    match provider.provider_type.as_str() {
+        "local" => SyncProviderTarget::Local,
+        "github" => SyncProviderTarget::Github(GithubSyncTarget {
+            repo: provider.github_repo.clone(),
+            pat: provider.github_pat.clone(),
+        }),
+        _ => match &provider.oauth_file {
+            Some(oauth) => SyncProviderTarget::OauthFile(OauthFileSyncTarget {
+                preset: OauthFilePreset::parse(&oauth.preset)
+                    .unwrap_or(OauthFilePreset::GoogleDrive),
+                file_id: oauth.file_id.clone(),
+                file_name: oauth.file_name.clone(),
+                account_email: oauth.account_email.clone(),
+                access_token: Some(oauth.access_token.clone()),
+            }),
+            None => SyncProviderTarget::MissingOauthFileConfig,
+        },
+    }
+}
+
+/// Canonical dedup key for a provider (`None` when it has no stable identity).
+#[must_use]
+pub fn provider_target_key(provider: &StorageProviderData) -> Option<String> {
+    sync_provider_target_key(&provider_target(provider))
+}
+
+/// Find an existing provider whose sync target matches `candidate`, optionally
+/// skipping a provider by id (used to let a row match against itself on edit).
+#[must_use]
+pub fn find_duplicate_sync_provider(
+    providers: &[StorageProviderData],
+    candidate: &StorageProviderData,
+    exclude_id: Option<&str>,
+) -> Option<StorageProviderData> {
+    let candidate_key = provider_target_key(candidate)?;
+    providers
+        .iter()
+        .find(|provider| {
+            if exclude_id.is_some_and(|excluded| provider.id == excluded) {
+                return false;
+            }
+            provider_target_key(provider).as_deref() == Some(candidate_key.as_str())
+        })
+        .cloned()
+}
+
+/// Drop the deprecated `activeProviderId` field from a raw persisted snapshot,
+/// returning the cleaned snapshot plus the legacy id (for one-time vault copy)
+/// and whether anything changed.
+#[must_use]
+pub fn normalize_auth_snapshot(raw: &serde_json::Value) -> NormalizedAuthSnapshot {
+    let object = raw.as_object();
+    let providers = object
+        .and_then(|object| object.get("providers"))
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| serde_json::from_value::<StorageProviderData>(item.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let legacy_active_provider_id = object
+        .and_then(|object| object.get("activeProviderId"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    let changed = object.is_some_and(|object| object.contains_key("activeProviderId"));
+    let active_vault_store_id = object
+        .and_then(|object| object.get("activeVaultStoreId"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned);
+    NormalizedAuthSnapshot {
+        snapshot: AuthProvidersSnapshotData {
+            providers,
+            active_vault_store_id,
+        },
+        legacy_active_provider_id,
+        changed,
+    }
+}
+
+/// Backfill default repo / vault-file names onto older provider rows. Returns
+/// the (possibly rebuilt) snapshot and whether any row changed.
+#[must_use]
+pub fn migrate_provider_fields(
+    snapshot: &AuthProvidersSnapshotData,
+) -> (AuthProvidersSnapshotData, bool) {
+    let mut changed = false;
+    let providers = snapshot
+        .providers
+        .iter()
+        .map(|provider| match provider.provider_type.as_str() {
+            "github" => {
+                if non_empty(provider.github_repo.as_deref()).is_some() {
+                    return provider.clone();
+                }
+                changed = true;
+                StorageProviderData {
+                    github_repo: Some(DEFAULT_GITHUB_REPO_NAME.to_owned()),
+                    ..provider.clone()
+                }
+            }
+            "oauth-file" => {
+                let has_file_name = provider
+                    .oauth_file
+                    .as_ref()
+                    .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
+                    .is_some();
+                if has_file_name {
+                    return provider.clone();
+                }
+                changed = true;
+                let existing = provider.oauth_file.as_ref();
+                StorageProviderData {
+                    oauth_file: Some(OAuthFileConfigData {
+                        preset: existing.map_or_else(
+                            || OauthFilePreset::GoogleDrive.as_str().to_owned(),
+                            |oauth| oauth.preset.clone(),
+                        ),
+                        access_token: existing
+                            .map(|oauth| oauth.access_token.clone())
+                            .unwrap_or_default(),
+                        refresh_token: existing.and_then(|oauth| oauth.refresh_token.clone()),
+                        expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
+                        file_id: existing.and_then(|oauth| oauth.file_id.clone()),
+                        account_email: existing.and_then(|oauth| oauth.account_email.clone()),
+                        file_name: Some(DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()),
+                    }),
+                    ..provider.clone()
+                }
+            }
+            _ => provider.clone(),
+        })
+        .collect();
+    if !changed {
+        return (snapshot.clone(), false);
+    }
+    (
+        AuthProvidersSnapshotData {
+            providers,
+            active_vault_store_id: snapshot.active_vault_store_id.clone(),
+        },
+        true,
+    )
+}
+
+/// Ensure a `local` provider row exists for the active vault, prepending one
+/// when missing. Returns the snapshot and whether a row was added. `new_id` /
+/// `created_at` are injected by the caller (the browser owns id/time sources).
+#[must_use]
+pub fn ensure_local_provider_row(
+    snapshot: &AuthProvidersSnapshotData,
+    active_store_id: Option<&str>,
+    new_id: &str,
+    created_at: &str,
+) -> (AuthProvidersSnapshotData, bool) {
+    let store_id =
+        non_empty(active_store_id).or_else(|| non_empty(snapshot.active_vault_store_id.as_deref()));
+    let has_local_for_vault = snapshot.providers.iter().any(|provider| {
+        provider.provider_type == "local"
+            && match (&store_id, non_empty(provider.store_id.as_deref())) {
+                (None, _) | (Some(_), None) => true,
+                (Some(active), Some(existing)) => *active == existing,
+            }
+    });
+    if has_local_for_vault {
+        return (snapshot.clone(), false);
+    }
+    let local = StorageProviderData {
+        id: new_id.to_owned(),
+        provider_type: StorageProviderType::Local.as_str().to_owned(),
+        label: sync_provider_default_label(StorageProviderType::Local, None, None),
+        github_pat: None,
+        github_repo: None,
+        oauth_file: None,
+        store_id,
+        last_synced_version: None,
+        last_synced_at: None,
+        last_sync_revision: None,
+        created_at: created_at.to_owned(),
+    };
+    let mut providers = Vec::with_capacity(snapshot.providers.len() + 1);
+    providers.push(local);
+    providers.extend(snapshot.providers.iter().cloned());
+    (
+        AuthProvidersSnapshotData {
+            providers,
+            active_vault_store_id: snapshot.active_vault_store_id.clone(),
+        },
+        true,
+    )
+}
+
+/// One-time seeding of a provider row from legacy `localStorage` values. Returns
+/// `Some(new_snapshot)` only when the snapshot has no providers yet and legacy
+/// state exists; the caller then clears the legacy keys.
+#[must_use]
+pub fn seed_provider_from_legacy_storage(
+    snapshot: &AuthProvidersSnapshotData,
+    legacy_mode: Option<&str>,
+    legacy_pat: &str,
+    new_id: &str,
+    created_at: &str,
+) -> Option<AuthProvidersSnapshotData> {
+    if !snapshot.providers.is_empty() {
+        return None;
+    }
+    let mode = non_empty(legacy_mode);
+    let pat = legacy_pat.trim();
+    if mode.is_none() && pat.is_empty() {
+        return None;
+    }
+    let is_github = mode.as_deref() == Some("github");
+    let provider_type = if is_github {
+        StorageProviderType::Github
+    } else {
+        StorageProviderType::Local
+    };
+    let provider = StorageProviderData {
+        id: new_id.to_owned(),
+        provider_type: provider_type.as_str().to_owned(),
+        label: sync_provider_default_label(provider_type, None, None),
+        github_pat: is_github.then(|| pat.to_owned()),
+        github_repo: is_github.then(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
+        oauth_file: None,
+        store_id: None,
+        last_synced_version: None,
+        last_synced_at: None,
+        last_sync_revision: None,
+        created_at: created_at.to_owned(),
+    };
+    Some(AuthProvidersSnapshotData {
+        providers: vec![provider],
+        active_vault_store_id: None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
+        StorageProviderData {
+            id: id.to_owned(),
+            provider_type: "github".to_owned(),
+            label: "GitHub".to_owned(),
+            github_pat: Some(pat.to_owned()),
+            github_repo: Some(repo.to_owned()),
+            oauth_file: None,
+            store_id: None,
+            last_synced_version: None,
+            last_synced_at: None,
+            last_sync_revision: None,
+            created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+        }
+    }
+
+    #[test]
+    fn normalize_handles_missing_value() {
+        let result = normalize_auth_snapshot(&serde_json::Value::Null);
+        assert_eq!(result.snapshot, AuthProvidersSnapshotData::default());
+        assert_eq!(result.legacy_active_provider_id, None);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn normalize_strips_legacy_active_provider_id() {
+        let raw = json!({
+            "providers": [{"id": "a", "type": "github", "label": "GitHub", "createdAt": ""}],
+            "activeProviderId": "a",
+        });
+        let result = normalize_auth_snapshot(&raw);
+        assert_eq!(result.snapshot.providers.len(), 1);
+        assert_eq!(result.snapshot.providers[0].id, "a");
+        assert_eq!(result.legacy_active_provider_id.as_deref(), Some("a"));
+        assert!(result.changed);
+        // Re-serialization drops the deprecated field.
+        let value = serde_json::to_value(&result.snapshot).unwrap();
+        assert!(value.get("activeProviderId").is_none());
+    }
+
+    #[test]
+    fn normalize_keeps_active_vault_store_id() {
+        let raw = json!({ "providers": [], "activeVaultStoreId": "vault-1" });
+        let result = normalize_auth_snapshot(&raw);
+        assert_eq!(
+            result.snapshot.active_vault_store_id.as_deref(),
+            Some("vault-1")
+        );
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn find_duplicate_matches_github_repo_and_pat() {
+        let existing = github_provider("gh-existing", "nook-crdt-test-1", "github_pat_11AAAA");
+        let candidate = github_provider("gh-new", "nook-crdt-test-1", "github_pat_11AAAA");
+        let found = find_duplicate_sync_provider(&[existing], &candidate, None);
+        assert_eq!(
+            found.map(|provider| provider.id).as_deref(),
+            Some("gh-existing")
+        );
+    }
+
+    #[test]
+    fn find_duplicate_ignores_excluded_id() {
+        let existing = github_provider("gh-self", "nook", "github_pat_11AAAA");
+        let found = find_duplicate_sync_provider(
+            std::slice::from_ref(&existing),
+            &existing,
+            Some("gh-self"),
+        );
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_duplicate_returns_none_when_distinct() {
+        let existing = github_provider("gh-a", "alpha", "github_pat_11AAAA");
+        let candidate = github_provider("gh-b", "beta", "github_pat_11AAAA");
+        assert!(find_duplicate_sync_provider(&[existing], &candidate, None).is_none());
+    }
+
+    #[test]
+    fn migrate_backfills_github_repo() {
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![StorageProviderData {
+                github_repo: None,
+                ..github_provider("gh", "nook", "pat")
+            }],
+            active_vault_store_id: None,
+        };
+        let (migrated, changed) = migrate_provider_fields(&snapshot);
+        assert!(changed);
+        assert_eq!(
+            migrated.providers[0].github_repo.as_deref(),
+            Some(DEFAULT_GITHUB_REPO_NAME)
+        );
+    }
+
+    #[test]
+    fn migrate_backfills_oauth_file_name_preserving_fields() {
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![StorageProviderData {
+                id: "gd".to_owned(),
+                provider_type: "oauth-file".to_owned(),
+                label: "Google Drive".to_owned(),
+                github_pat: None,
+                github_repo: None,
+                oauth_file: Some(OAuthFileConfigData {
+                    preset: "icloud".to_owned(),
+                    access_token: "tok".to_owned(),
+                    account_email: Some("me@example.com".to_owned()),
+                    ..OAuthFileConfigData::default()
+                }),
+                store_id: None,
+                last_synced_version: None,
+                last_synced_at: None,
+                last_sync_revision: None,
+                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+            }],
+            active_vault_store_id: None,
+        };
+        let (migrated, changed) = migrate_provider_fields(&snapshot);
+        assert!(changed);
+        let oauth = migrated.providers[0].oauth_file.as_ref().unwrap();
+        assert_eq!(
+            oauth.file_name.as_deref(),
+            Some(DEFAULT_DRIVE_VAULT_FILE_NAME)
+        );
+        assert_eq!(oauth.preset, "icloud");
+        assert_eq!(oauth.access_token, "tok");
+        assert_eq!(oauth.account_email.as_deref(), Some("me@example.com"));
+    }
+
+    #[test]
+    fn migrate_is_noop_when_up_to_date() {
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![github_provider("gh", "nook", "pat")],
+            active_vault_store_id: None,
+        };
+        let (migrated, changed) = migrate_provider_fields(&snapshot);
+        assert!(!changed);
+        assert_eq!(migrated, snapshot);
+    }
+
+    #[test]
+    fn ensure_local_row_added_when_missing() {
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![github_provider("gh", "nook", "pat")],
+            active_vault_store_id: None,
+        };
+        let (next, changed) =
+            ensure_local_provider_row(&snapshot, None, "local-1", "2026-06-24T00:00:00.000Z");
+        assert!(changed);
+        assert_eq!(next.providers.len(), 2);
+        assert_eq!(next.providers[0].provider_type, "local");
+        assert_eq!(next.providers[0].label, "This device");
+    }
+
+    #[test]
+    fn ensure_local_row_noop_when_present() {
+        let snapshot = AuthProvidersSnapshotData {
+            providers: vec![StorageProviderData {
+                id: "local".to_owned(),
+                provider_type: "local".to_owned(),
+                label: "This device".to_owned(),
+                github_pat: None,
+                github_repo: None,
+                oauth_file: None,
+                store_id: Some("vault-1".to_owned()),
+                last_synced_version: None,
+                last_synced_at: None,
+                last_sync_revision: None,
+                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+            }],
+            active_vault_store_id: Some("vault-1".to_owned()),
+        };
+        let (next, changed) = ensure_local_provider_row(&snapshot, Some("vault-1"), "local-2", "x");
+        assert!(!changed);
+        assert_eq!(next.providers.len(), 1);
+    }
+
+    #[test]
+    fn seed_from_legacy_github() {
+        let snapshot = AuthProvidersSnapshotData::default();
+        let seeded = seed_provider_from_legacy_storage(
+            &snapshot,
+            Some("github"),
+            "github_pat_11AAAA",
+            "p1",
+            "2026-06-24T00:00:00.000Z",
+        )
+        .expect("seeded");
+        assert_eq!(seeded.providers.len(), 1);
+        let provider = &seeded.providers[0];
+        assert_eq!(provider.provider_type, "github");
+        assert_eq!(provider.github_pat.as_deref(), Some("github_pat_11AAAA"));
+        assert_eq!(
+            provider.github_repo.as_deref(),
+            Some(DEFAULT_GITHUB_REPO_NAME)
+        );
+    }
+
+    #[test]
+    fn seed_from_legacy_local_mode() {
+        let seeded = seed_provider_from_legacy_storage(
+            &AuthProvidersSnapshotData::default(),
+            Some("local"),
+            "",
+            "p1",
+            "t",
+        )
+        .expect("seeded");
+        assert_eq!(seeded.providers[0].provider_type, "local");
+        assert!(seeded.providers[0].github_pat.is_none());
+    }
+
+    #[test]
+    fn seed_skipped_when_providers_exist_or_no_legacy_state() {
+        let with_providers = AuthProvidersSnapshotData {
+            providers: vec![github_provider("gh", "nook", "pat")],
+            active_vault_store_id: None,
+        };
+        assert!(
+            seed_provider_from_legacy_storage(&with_providers, Some("github"), "pat", "p", "t")
+                .is_none()
+        );
+        assert!(
+            seed_provider_from_legacy_storage(
+                &AuthProvidersSnapshotData::default(),
+                None,
+                "",
+                "p",
+                "t"
+            )
+            .is_none()
+        );
+    }
+}

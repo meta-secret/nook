@@ -27,6 +27,7 @@ pub use types::{
     NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookSyncProviderTarget,
     NookVaultMember, NookVaultSyncResult,
 };
+use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(thiserror::Error, Debug)]
@@ -249,6 +250,93 @@ pub fn peek_enrollment_entry_label(code: &str) -> Option<String> {
 #[must_use]
 pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
     nook_core::peek_enrollment_issued_at(code)
+}
+
+/// Load the persisted sync-provider snapshot from the `nook_auth` `IndexedDB`
+/// database, running the full non-network pipeline in Rust: normalize, unseal
+/// credential fields with the device key, seed from legacy `localStorage`,
+/// backfill provider fields, and re-persist (sealed) when anything changed.
+///
+/// Returns `{ snapshot, legacyActiveProviderId, changed }`; `snapshot` carries
+/// decrypted credentials for in-memory sync use, and `legacyActiveProviderId`
+/// drives the one-time remote-vault copy that still lives in the web layer.
+/// Serialize with `None` mapped to JS `null` (not `undefined`) so optional
+/// fields without `skip_serializing_if` (e.g. `legacyActiveProviderId`) keep the
+/// nullable contract the web layer expects.
+fn to_js_nullable<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
+    value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true))
+}
+
+#[wasm_bindgen(js_name = loadAuthProviders)]
+pub async fn load_auth_providers() -> Result<JsValue, wasm_bindgen::JsError> {
+    let normalized = crate::storage::auth_providers::load_auth_providers().await?;
+    Ok(to_js_nullable(&normalized)?)
+}
+
+/// Seal credential fields with the device key and persist the snapshot to the
+/// `nook_auth` `IndexedDB` database.
+#[wasm_bindgen(js_name = saveAuthProviders)]
+pub async fn save_auth_providers(snapshot: JsValue) -> Result<(), wasm_bindgen::JsError> {
+    let snapshot: nook_core::AuthProvidersSnapshotData = serde_wasm_bindgen::from_value(snapshot)?;
+    crate::storage::auth_providers::save_auth_providers(&snapshot).await?;
+    Ok(())
+}
+
+/// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
+#[wasm_bindgen(js_name = deleteAuthProvidersDb)]
+pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
+    crate::storage::auth_providers::delete_auth_providers_db().await?;
+    Ok(())
+}
+
+/// Strip the deprecated `activeProviderId` field from a raw persisted snapshot,
+/// returning `{ snapshot, legacyActiveProviderId, changed }`.
+#[wasm_bindgen(js_name = normalizeAuthSnapshot)]
+pub fn normalize_auth_snapshot(raw: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+    let value: serde_json::Value = if raw.is_undefined() || raw.is_null() {
+        serde_json::Value::Null
+    } else {
+        serde_wasm_bindgen::from_value(raw)?
+    };
+    let normalized = nook_core::normalize_auth_snapshot(&value);
+    Ok(to_js_nullable(&normalized)?)
+}
+
+/// Find an existing provider whose sync target matches `candidate`, optionally
+/// excluding one provider id. Returns the matching provider or `undefined`.
+#[wasm_bindgen(js_name = findDuplicateSyncProvider)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn find_duplicate_sync_provider(
+    providers: JsValue,
+    candidate: JsValue,
+    exclude_id: Option<String>,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let providers: Vec<nook_core::StorageProviderData> = serde_wasm_bindgen::from_value(providers)?;
+    let candidate: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(candidate)?;
+    match nook_core::find_duplicate_sync_provider(&providers, &candidate, exclude_id.as_deref()) {
+        Some(provider) => Ok(serde_wasm_bindgen::to_value(&provider)?),
+        None => Ok(JsValue::UNDEFINED),
+    }
+}
+
+/// Ensure a `local` provider row exists for the active vault, prepending one
+/// (with a fresh id/timestamp) when missing. Returns the updated snapshot.
+#[wasm_bindgen(js_name = ensureLocalProviderRow)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn ensure_local_provider_row(
+    snapshot: JsValue,
+    active_store_id: Option<String>,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let snapshot: nook_core::AuthProvidersSnapshotData = serde_wasm_bindgen::from_value(snapshot)?;
+    let new_id = nook_core::generate_id()?.to_string();
+    let created_at: String = js_sys::Date::new_0().to_iso_string().into();
+    let (next, _changed) = nook_core::ensure_local_provider_row(
+        &snapshot,
+        active_store_id.as_deref(),
+        &new_id,
+        &created_at,
+    );
+    Ok(serde_wasm_bindgen::to_value(&next)?)
 }
 
 #[wasm_bindgen(js_name = hasLocalVault)]

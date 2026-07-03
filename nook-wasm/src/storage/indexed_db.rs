@@ -262,6 +262,23 @@ pub(crate) async fn load_or_create_device_identity() -> Result<DeviceIdentityRec
     })
 }
 
+/// Load the persisted device identity, generating **and persisting** a fresh one
+/// on first use. Unlike [`load_or_create_device_identity`], the freshly created
+/// identity is written back immediately so later reads (e.g. decrypting sealed
+/// sync-provider credentials) resolve the exact same device key.
+pub(crate) async fn ensure_device_identity_record() -> Result<DeviceIdentityRecord, NookError> {
+    if let Some(existing) = load_device_identity_from_indexed_db().await? {
+        return Ok(existing);
+    }
+    let identity = nook_core::DeviceIdentity::generate()?;
+    let record = DeviceIdentityRecord {
+        device_id: identity.device_id().to_string(),
+        secret: identity.secret_string().into_inner(),
+    };
+    save_device_identity_to_indexed_db(&record.device_id, &record.secret).await?;
+    Ok(record)
+}
+
 async fn load_device_identity_from_indexed_db() -> Result<Option<DeviceIdentityRecord>, NookError> {
     let rexie = open_vault_db().await?;
 
