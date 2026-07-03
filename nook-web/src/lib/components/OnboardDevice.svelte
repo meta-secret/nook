@@ -20,6 +20,7 @@
   } from '$lib/auth-providers'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
   import type { VaultState } from '$lib/vault.svelte'
+  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
 
   let {
     vault,
@@ -27,25 +28,36 @@
     passwordEntries,
     enrollmentCode,
     isBusy,
+    passwordError,
     onIssueCode,
     onClearCode,
+    onAddPassword,
+    onUpdatePassword,
+    onRemovePassword,
     onOpenStorageSettings,
-    onOpenPasswordSettings,
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
     passwordEntries: VaultPasswordEntrySummary[]
     enrollmentCode: string
     isBusy: boolean
+    passwordError: string
     onIssueCode: (
       entryId: string,
       password: string,
       providerId: string,
     ) => Promise<string | void>
     onClearCode: () => void
+    onAddPassword: (label: string, password: string) => void | Promise<void>
+    onUpdatePassword: (
+      entryId: string,
+      password: string,
+    ) => void | Promise<void>
+    onRemovePassword: (entryId: string) => void | Promise<void>
     onOpenStorageSettings?: () => void
-    onOpenPasswordSettings?: () => void
   } = $props()
+
+  const hasPasswords = $derived(passwordEntries.length > 0)
 
   let providerId = $state<string | null>(null)
   let passwordEntryId = $state<string | null>(null)
@@ -138,10 +150,35 @@
       {vault.t('onboard_device.title')}
     </h2>
     <p class="text-xs text-muted-foreground text-pretty">
-      {vault.t('onboard_device.desc')}
+      {hasPasswords
+        ? vault.t('onboard_device.desc')
+        : vault.t('onboard_device.password_required_desc')}
     </p>
   </div>
 
+  {#if !hasPasswords}
+    <div
+      class="rounded-lg border border-border bg-muted/15 p-4"
+      data-testid="onboard-password-prerequisite"
+    >
+      <VaultPasswordCard
+        {vault}
+        embedded
+        allowIssueCode={false}
+        initialPanel="add"
+        showWarningBanner={false}
+        {passwordEntries}
+        isBusy={isBusy}
+        {passwordError}
+        enrollmentCode=""
+        {onAddPassword}
+        {onUpdatePassword}
+        {onRemovePassword}
+        onIssueCode={async () => {}}
+        onClearCode={() => {}}
+      />
+    </div>
+  {:else}
   <form
     class="space-y-4"
     onsubmit={(event) => {
@@ -242,24 +279,12 @@
       </div>
 
       <div class="space-y-1.5">
-        <div class="flex items-baseline justify-between gap-2">
-          <label
-            for="onboard-password-entry"
-            class="text-sm font-medium text-muted-foreground"
-          >
-            {vault.t('onboard_device.vault_password')}
-          </label>
-          {#if onOpenPasswordSettings}
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-primary hover:underline"
-              data-testid="onboard-open-password-settings"
-              onclick={() => onOpenPasswordSettings()}
-            >
-              {vault.t('onboard_device.add_in_settings')}
-            </button>
-          {/if}
-        </div>
+        <label
+          for="onboard-password-entry"
+          class="text-sm font-medium text-muted-foreground"
+        >
+          {vault.t('onboard_device.vault_password')}
+        </label>
         <div class="relative">
           <select
             id="onboard-password-entry"
@@ -309,10 +334,7 @@
 
     <Button
       type="submit"
-      disabled={isBusy ||
-        isGenerating ||
-        syncProviders.length === 0 ||
-        passwordEntries.length === 0}
+      disabled={isBusy || isGenerating || syncProviders.length === 0}
       data-testid="onboard-device-submit"
     >
       {#if isBusy || isGenerating}
@@ -324,25 +346,6 @@
       {/if}
     </Button>
   </form>
-
-  {#if passwordEntries.length === 0}
-    <p
-      class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
-      data-testid="onboard-missing-password-hint"
-    >
-      {vault.t('onboard_device.missing_password_hint')}
-      {#if onOpenPasswordSettings}
-        <button
-          type="button"
-          class="ml-1 font-medium text-primary hover:underline"
-          data-testid="onboard-missing-password-settings-link"
-          onclick={() => onOpenPasswordSettings()}
-        >
-          {vault.t('onboard_device.missing_password_settings_link')}
-        </button>
-      {/if}
-    </p>
-  {/if}
 
   {#if showGenerating}
     <div
@@ -373,5 +376,6 @@
       linkDescription={vault.t('onboard_device.link_desc')}
       passwordReminder={vault.t('onboard_device.share_password')}
     />
+  {/if}
   {/if}
 </section>

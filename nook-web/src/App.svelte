@@ -339,21 +339,24 @@
                     vault.openSettings('storage', 'storage')}
                 />
               {/if}
-              {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
-                <OnboardDevice
-                  {vault}
-                  syncProviders={vault.syncProviders}
-                  passwordEntries={vault.passwordEntries}
-                  enrollmentCode={vault.enrollmentCode}
-                  isBusy={vault.isPasswordBusy}
-                  onIssueCode={(entryId, pw, providerId) =>
-                    vault.issueEnrollmentCode(entryId, pw, providerId)}
-                  onClearCode={() => vault.clearEnrollmentCode()}
-                  onOpenStorageSettings={() =>
-                    vault.openSettings('storage', 'storage')}
-                  onOpenPasswordSettings={() =>
-                    vault.openSettings('storage', 'passwords')}
-                />
+            {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
+              <OnboardDevice
+                {vault}
+                syncProviders={vault.syncProviders}
+                passwordEntries={vault.passwordEntries}
+                enrollmentCode={vault.enrollmentCode}
+                isBusy={vault.isPasswordBusy}
+                passwordError={vault.passwordError}
+                onIssueCode={(entryId, pw, providerId) =>
+                  vault.issueEnrollmentCode(entryId, pw, providerId)}
+                onClearCode={() => vault.clearEnrollmentCode()}
+                onAddPassword={(label, pw) => vault.addVaultPassword(label, pw)}
+                onUpdatePassword={(id, pw) =>
+                  vault.updateVaultPasswordEntry(id, pw)}
+                onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
+                onOpenStorageSettings={() =>
+                  vault.openSettings('storage', 'storage')}
+              />
               {:else if vault.settingsOpen}
                 <VaultSettingsAccordion
                   {vault}

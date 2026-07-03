@@ -1,7 +1,11 @@
 import { expect, test } from './fixtures'
 import {
+  addVaultPassword,
   clearBrowserVault,
   connectLocalVaultLegacy,
+  forceVaultQuiescentForE2e,
+  openOnboardDevicePanel,
+  openStorageSettings,
   seedExtraGithubProviders,
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
@@ -13,6 +17,30 @@ test.describe('onboard provider picker', () => {
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVaultLegacy(page)
+  })
+
+  test('shows inline password creation when no vault passwords exist', async ({
+    page,
+  }) => {
+    await openOnboardDevicePanel(page)
+
+    await expect(page.getByTestId('onboard-password-prerequisite')).toBeVisible()
+    await expect(page.getByTestId('vault-password-label')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
+    await expect(page.getByTestId('onboard-provider-list')).toHaveCount(0)
+
+    await page.getByTestId('vault-password-label').fill('Onboard primary')
+    await page.getByTestId('vault-password-input').fill('onboard-pass-1')
+    await page.getByTestId('vault-password-confirm').fill('onboard-pass-1')
+    await page.getByTestId('submit-vault-password').click()
+
+    await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(
+      0,
+    )
+    await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
   })
 
   test('shows repository and token hints for multiple GitHub providers', async ({
@@ -44,7 +72,11 @@ test.describe('onboard provider picker', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await forceVaultQuiescentForE2e(page)
     await waitForLoadedSyncProviders(page, 2)
+
+    await openStorageSettings(page)
+    await addVaultPassword(page, 'Onboard picker', 'picker-pass-1')
 
     await page.getByTestId('vault-onboard-tab').click()
     const providerList = page.getByTestId('onboard-provider-list')
@@ -72,7 +104,12 @@ test.describe('onboard provider picker', () => {
     await expect(alpha).toHaveAttribute('aria-checked', 'false')
   })
 
-  test('links open the matching settings section', async ({ page }) => {
+  test('storage settings link opens the storage section when passwords exist', async ({
+    page,
+  }) => {
+    await openStorageSettings(page)
+    await addVaultPassword(page, 'Settings link', 'settings-pass-1')
+
     await page.getByTestId('vault-onboard-tab').click()
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
 
@@ -83,17 +120,5 @@ test.describe('onboard provider picker', () => {
         .getByTestId('storage-providers-section')
         .locator('button[aria-expanded]'),
     ).toHaveAttribute('aria-expanded', 'true')
-
-    await page.getByTestId('vault-onboard-tab').click()
-    await page.getByTestId('onboard-open-password-settings').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    await expect(
-      page.getByTestId('vault-unlock-section').locator('button[aria-expanded]'),
-    ).toHaveAttribute('aria-expanded', 'true')
-    await expect(
-      page
-        .getByTestId('storage-providers-section')
-        .locator('button[aria-expanded]'),
-    ).toHaveAttribute('aria-expanded', 'false')
   })
 })

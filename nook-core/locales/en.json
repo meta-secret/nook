@@ -342,6 +342,7 @@
     "done": "Done",
     "issued_just_now": "Issued just now",
     "issued_time": "Issued {time}",
+    "password_required_desc": "Create a vault password before you can onboard another device. The new device will use this password to unlock the vault after downloading it from your sync provider.",
     "missing_password_hint": "Create a vault password before onboarding another device.",
     "missing_password_settings_link": "Open vault passwords in Settings"
   },
