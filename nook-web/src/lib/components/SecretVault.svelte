@@ -13,7 +13,6 @@
   import { Card, CardContent } from '$lib/components/ui/card'
   import AddSecretForm from './AddSecretForm.svelte'
   import SecretDetailRow from './SecretDetailRow.svelte'
-  import VaultSwitcher from './VaultSwitcher.svelte'
   import type { NookSecretRecord, VaultItemType } from '$lib/nook'
 
   let {
@@ -197,10 +196,6 @@
     </div>
   {:else}
     <div class="flex min-h-0 flex-1 flex-col gap-4">
-      {#if vault.hasMultipleLocalVaults}
-        <VaultSwitcher {vault} variant="panel" />
-      {/if}
-
       <div
         class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >

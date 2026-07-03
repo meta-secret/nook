@@ -142,7 +142,10 @@ test.describe('multi-vault on one browser profile', () => {
     expect(registry).toEqual(expect.arrayContaining([storeA, storeB]))
     expect(registry).toHaveLength(2)
 
-    await expect(page.getByTestId('vault-switcher-panel')).toBeVisible()
+    await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+
+    await page.getByTestId('vault-switcher-trigger').click()
+    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
     await expect(page.getByTestId('vault-switcher-count')).toBeVisible()
 
     await page
@@ -159,6 +162,8 @@ test.describe('multi-vault on one browser profile', () => {
     let activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeA)
 
+    await page.getByTestId('vault-switcher-trigger').click()
+    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
     await page
       .locator(
         '[data-testid="vault-switcher-option"][data-store-id="' + storeB + '"]',
