@@ -52,9 +52,13 @@ impl NookVaultManager {
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
         let status = access_status_for_vault_content(&content, &identity)?;
-        let _ = self
-            .status_tx
-            .send(format!("ASSESS_{}_{}", self.storage_mode, status));
+        let _ = self.status_tx.send(format!("ASSESS_{}_{}", self.storage_mode, status));
+        tracing::info!(
+            scope = "wasm-connect",
+            status = %status,
+            storage = %storage_mode,
+            "assess_vault_connect"
+        );
         Ok(status)
     }
 
@@ -101,6 +105,12 @@ impl NookVaultManager {
         force_genesis: bool,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("CONNECT_START".to_owned());
+        tracing::info!(
+            scope = "wasm-connect",
+            storage = %storage_mode,
+            force_genesis = force_genesis,
+            "connect started"
+        );
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity().await?;
@@ -191,7 +201,15 @@ impl NookVaultManager {
         }
 
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        tracing::info!(
+            scope = "wasm-connect",
+            storage = %storage_mode,
+            genesis = use_genesis,
+            secrets = records.len(),
+            "connect complete"
+        );
+        Ok(records)
     }
 
     fn initialize_genesis_vault(

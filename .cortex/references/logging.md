@@ -101,6 +101,15 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
   `log.debug(...)` etc. `data` may be any JSON-serialisable value. Stray
   `console.*` calls are also captured (scope `console`), but a scoped logger is
   preferred.
+- **Common web scopes:** `vault` (session lifecycle), `connect` (unlock/connect),
+  `vault-sync`, `vault-local`, `vault-password`, `vault-devices`, `vault-providers`,
+  `vault-session`, `vault-lifecycle`, `wasm` (status channel), `wasm-connect`,
+  `wasm-sync`, `wasm-secrets` (Rust tracing scopes).
+- **Prefer `info` for user-visible milestones** (unlock, lock, connect, secret
+  CRUD, provider changes, sync conflicts). Use `debug` for background ticks,
+  assess/re-assess details, and swallowed errors. At the default capture level
+  (`info`), only `info`/`warn`/`error` are persisted — lower the level on `/logs`
+  to see the full `debug` trail.
 - **Rust (`nook-core`/`nook-wasm`):** use `tracing` macros with a `scope` field,
   e.g. `tracing::debug!(scope = "vault-sync", action = %label, "reconciled")`.
   Never log secrets/keys/passwords. Prefer instrumenting spots already covered by

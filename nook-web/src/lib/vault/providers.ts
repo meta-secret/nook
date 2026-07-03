@@ -14,6 +14,9 @@ import {
   type StorageProviderType,
 } from '$lib/auth-providers'
 import { ensureLocalProviderRow } from '$lib/vault-migration'
+import { createLogger } from '$lib/log'
+
+const log = createLogger('vault-providers')
 
 export async function loadProviders(
   state: VaultState,
@@ -26,6 +29,10 @@ export async function loadProviders(
     p.label === 'GitHub sync' ? { ...p, label: 'GitHub' } : p,
   )
   state.providersLoaded = true
+  log.debug('providers loaded', {
+    count: state.providers.length,
+    localVaultPresent: state.localVaultPresent,
+  })
 }
 
 export function applyActiveProviderCredentials(state: VaultState) {
@@ -119,6 +126,7 @@ export function beginProviderSetup(
   }
   state.errorMsg = ''
   state.dismissSuccess()
+  log.debug('provider setup started', { type, oauthPreset })
 }
 
 export function beginAddProvider(state: VaultState) {
@@ -169,6 +177,7 @@ export async function removeProvider(
   state.applyActiveProviderCredentials()
   await state.persistProviders({ replace: true })
 
+  log.info('sync provider removed', { id, label: target.label })
   state.showSuccess(state.t('toasts.removed_device', { label: target.label }))
 }
 
@@ -285,6 +294,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   state.addProviderOpen = false
   state.applyActiveProviderCredentials()
   await state.persistProviders()
+  log.info('sync provider saved', { type, explicitAdd: isExplicitAdd })
   return true
 }
 
