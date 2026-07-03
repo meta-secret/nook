@@ -15,6 +15,7 @@ import {
 } from '$lib/auth-providers'
 import { ensureLocalProviderRow } from '$lib/vault-migration'
 import { createLogger } from '$lib/log'
+import { vaultStoreIdForProviderSave } from '$lib/vault-store-id'
 
 const log = createLogger('vault-providers')
 
@@ -110,7 +111,9 @@ export function beginProviderSetup(
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ) {
-  state.resetVaultSessionState()
+  if (!state.isAuthenticated) {
+    state.resetVaultSessionState()
+  }
   state.loginSetupType = type
   state.storageMode = type
   state.githubPat = ''
@@ -134,7 +137,9 @@ export function beginProviderSetup(
 }
 
 export function beginAddProvider(state: VaultState) {
-  state.resetVaultSessionState()
+  if (!state.isAuthenticated) {
+    state.resetVaultSessionState()
+  }
   state.addProviderOpen = true
   state.loginSetupType = null
   state.errorMsg = ''
@@ -191,7 +196,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
   const type = state.loginSetupType ?? state.storageMode
   const isNewSetup = state.loginSetupType !== null
-  const vaultStoreId = state.manager?.vaultStoreId?.trim() || undefined
+  const vaultStoreId = vaultStoreIdForProviderSave(state)
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? 'google-drive'
   const oauthSnapshot: OAuthFileConfig | undefined =
@@ -230,7 +235,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
       storeId: vaultStoreId,
       createdAt: isoTimestamp(),
     }
-    if (findDuplicateSyncProvider(state.providers, provider)) {
+    if (findDuplicateSyncProvider(state.activeVaultProviders, provider)) {
       if (isExplicitAdd) {
         state.errorMsg = state.t('auth_storage.duplicate_sync_provider')
         return false

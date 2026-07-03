@@ -6,6 +6,7 @@ import {
   listLocalVaults,
   prepareNewLocalVaultSlot,
   setActiveVault,
+  setLocalVaultLabel,
   type NookLocalVaultEntry,
 } from './nook-wasm/nook_wasm'
 
@@ -34,6 +35,13 @@ export async function readActiveVaultStoreId(): Promise<string | null> {
 
 export async function switchActiveVault(storeId: string): Promise<void> {
   await setActiveVault(storeId)
+}
+
+export async function renameLocalVault(
+  storeId: string,
+  label: string,
+): Promise<void> {
+  await setLocalVaultLabel(storeId, label)
 }
 
 export async function prepareCreateNewVaultSlot(): Promise<void> {

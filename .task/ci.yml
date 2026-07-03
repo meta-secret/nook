@@ -21,12 +21,6 @@ tasks:
     cmds:
       - task: ci:pr:e2e
 
-  ci:pr:publish:
-    desc: PR CI verify, then publish the :buildcache layers to GHCR (no :latest overwrite).
-    cmds:
-      - task: ci:pr
-      - task: docker:push:cache:ci
-
   ci:main:
     desc: Main branch CI — one container for format/verify/build/e2e (source + warm target/ baked in the nook-web image).
     deps:
@@ -97,9 +91,12 @@ tasks:
         vars: { TASK: _deploy-preview }
 
   ci:pr:comment-preview:
-    desc: Comment or update Cloudflare preview URL on the PR (runs on host; only needs GITHUB_TOKEN + PR number).
+    desc: Comment or update Cloudflare preview URL on the PR (runs in container; needs GITHUB_TOKEN + PR number).
+    deps:
+      - setup
     cmds:
-      - task: _comment-preview
+      - task: docker:task
+        vars: { TASK: _comment-preview }
 
   docker:push:ci:
     desc: Publish the toolchain base image + cache to GHCR (after green main CI).
@@ -107,15 +104,6 @@ tasks:
     # a called subtask, but it does propagate call vars. docker:push maps this var into its own env.
     cmds:
       - task: docker:push
-        vars:
-          PUSH_TOOLCHAIN: "1"
-
-  docker:push:cache:ci:
-    desc: Publish only the :buildcache layers to GHCR (after green PR CI — no :latest overwrite).
-    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
-    # a called subtask, but it does propagate call vars. docker:push:cache maps this var into its env.
-    cmds:
-      - task: docker:push:cache
         vars:
           PUSH_TOOLCHAIN: "1"
 
@@ -150,10 +138,9 @@ tasks:
         vars: { TASK: _verify }
 
   _ci:pr:
-    desc: PR gate — format, wasm, verify ‖ build, full stub e2e, restore prod dist (one container).
+    desc: PR gate — format, wasm (image-seeded), verify ‖ build, full stub e2e, restore prod dist (one container).
     cmds:
       - task: _format:check
-      - task: _wasm:build
       - task: _ci:pr:parallel
       - cp -a nook-web/dist nook-web/dist-prod
       - task: _web:e2e:build-dist
@@ -170,7 +157,6 @@ tasks:
     desc: Main verify/build track without e2e.
     cmds:
       - task: _format:check
-      - task: _wasm:build
       - task: _ci:pr:parallel
 
   _ci:main:
@@ -191,10 +177,9 @@ tasks:
       - task: _web:e2e:restore-prod-dist
 
   _ci:pr:prepare:
-    desc: Format and wasm (split-container debug only — prefer _ci:pr).
+    desc: Format check only (split-container debug — prefer _ci:pr).
     cmds:
       - task: _format:check
-      - task: _wasm:build
 
   _deploy-preview:
     desc: Deploy nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.

@@ -309,12 +309,18 @@
                 class="break-all font-mono text-foreground"
                 data-testid="revealed-secret"
               >
-                {revealSecrets[item.id] ? item.key : '••••••••••••••••'}
+                {revealSecrets[item.id]
+                  ? item.primaryCredential
+                  : '••••••••••••••••'}
               </code>
               <button
                 type="button"
                 onclick={() =>
-                  void onCopyToClipboard(item.key, item.id, 'secret')}
+                  void onCopyToClipboard(
+                    item.primaryCredential,
+                    item.id,
+                    'secret',
+                  )}
                 aria-label="Copy secret"
                 class="text-muted-foreground hover:text-foreground p-0.5 rounded-sm transition-colors shrink-0"
               >

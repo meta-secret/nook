@@ -1689,4 +1689,24 @@ mod tests {
         materialize_vault_meta_from_graph(&graph, &mut state).unwrap();
         assert!(state.joins.is_empty());
     }
+
+    #[test]
+    fn ensure_self_in_roster_repairs_empty_roster_with_auth() {
+        use crate::vault_connect::apply_member_records;
+
+        let keys = generate_vault_keys().unwrap();
+        let identity = DeviceIdentity::generate().unwrap();
+        let auth = genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key).unwrap();
+        let mut state = VaultMetaState::from_stored_records(std::slice::from_ref(&auth));
+        assert!(state.members.is_empty());
+
+        let records = state.to_stored_records();
+        let repaired = ensure_self_in_roster(&records, &identity, &keys.members_key)
+            .unwrap()
+            .unwrap();
+        apply_member_records(&mut state, &repaired);
+        let roster = resolve_member_roster(&state.to_stored_records(), &keys.members_key).unwrap();
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].device_id, *identity.device_id());
+    }
 }

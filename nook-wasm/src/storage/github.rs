@@ -11,6 +11,17 @@
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
+fn log_github_api_failure(operation: &str, repo: &str, path: &str, status: reqwest::StatusCode) {
+    tracing::warn!(
+        scope = "github",
+        operation,
+        repo = %repo,
+        path = %path,
+        status = %status,
+        "GitHub API request failed"
+    );
+}
+
 /// A vault file fetched from GitHub: its UTF-8 contents plus the blob `sha`
 /// the API returned so subsequent writes can submit it for optimistic
 /// concurrency.
@@ -97,15 +108,17 @@ pub(crate) async fn fetch_github_username(pat: &str) -> Result<String, NookError
         .await?;
 
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        log_github_api_failure("user", "", "", response.status());
         return Err(NookError::GitHub(
             "GitHub rejected your token (401). Check that it is valid, not expired, and has repo access.".to_owned(),
         ));
     }
 
     if !response.status().is_success() {
+        let status = response.status();
+        log_github_api_failure("user", "", "", status);
         return Err(NookError::GitHub(format!(
-            "Failed to fetch GitHub user details: status {}",
-            response.status()
+            "Failed to fetch GitHub user details: status {status}"
         )));
     }
 
@@ -134,9 +147,10 @@ pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(
     }
 
     if check.status() != reqwest::StatusCode::NOT_FOUND {
+        let status = check.status();
+        log_github_api_failure("repo_check", repo, "", status);
         return Err(NookError::GitHub(format!(
-            "Failed to check GitHub repository {repo}: status {}",
-            check.status()
+            "Failed to check GitHub repository {repo}: status {status}"
         )));
     }
 
@@ -169,9 +183,10 @@ pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(
         return Ok(());
     }
 
+    let status = create.status();
+    log_github_api_failure("repo_create", repo, "", status);
     Err(NookError::GitHub(format!(
-        "Failed to create GitHub repository {repo}: status {}",
-        create.status()
+        "Failed to create GitHub repository {repo}: status {status}"
     )))
 }
 
@@ -194,9 +209,10 @@ async fn fetch_github_file_at_path(
     }
 
     if !file_response.status().is_success() {
+        let status = file_response.status();
+        log_github_api_failure("file_fetch", repo, path, status);
         return Err(NookError::GitHub(format!(
-            "GitHub API responded with status {}",
-            file_response.status()
+            "GitHub API responded with status {status}"
         )));
     }
 
@@ -259,9 +275,10 @@ pub(crate) async fn fetch_github_vault(
     }
 
     if !list_response.status().is_success() {
+        let status = list_response.status();
+        log_github_api_failure("contents_list", repo, path, status);
         return Err(NookError::GitHub(format!(
-            "GitHub API responded with status {}",
-            list_response.status()
+            "GitHub API responded with status {status}"
         )));
     }
 
@@ -315,6 +332,7 @@ pub(crate) async fn write_github_text_file(
 
     if !response.status().is_success() {
         let status = response.status();
+        log_github_api_failure("file_write", repo, path, status);
         let message = if status == reqwest::StatusCode::NOT_FOUND {
             format!(
                 "Cannot write to {repo}/{path} (404). Ensure your PAT has repo scope and you can access {repo}."

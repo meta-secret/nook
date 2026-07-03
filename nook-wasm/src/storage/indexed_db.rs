@@ -396,6 +396,28 @@ pub(crate) async fn save_to_indexed_db(content: &str) -> Result<(), NookError> {
     save_vault_blob(&store_id, content).await
 }
 
+pub(crate) async fn set_local_vault_label(store_id: &str, label: &str) -> Result<(), NookError> {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        return Err(NookError::Database(
+            "Vault label cannot be empty.".to_owned(),
+        ));
+    }
+    migrate_legacy_encrypted_db_if_needed().await?;
+    let mut registry = load_vault_registry().await?;
+    if !registry
+        .vaults
+        .iter()
+        .any(|entry| entry.store_id == store_id)
+    {
+        return Err(NookError::Database(format!(
+            "Vault {store_id} is not registered on this device."
+        )));
+    }
+    upsert_registry_entry(&mut registry, store_id, Some(trimmed), false);
+    save_vault_registry(&registry).await
+}
+
 pub(crate) async fn switch_active_vault(store_id: &str) -> Result<(), NookError> {
     migrate_legacy_encrypted_db_if_needed().await?;
     let registry = load_vault_registry().await?;

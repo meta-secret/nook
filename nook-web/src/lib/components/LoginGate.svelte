@@ -78,7 +78,7 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
-    onCreateDeviceVault?: () => void | Promise<void>
+    onCreateDeviceVault?: (label: string) => void | Promise<void>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
@@ -95,6 +95,15 @@
       !showSetup &&
       !addProviderOpen &&
       !showVaultPicker,
+  )
+  const activeLoginVault = $derived(
+    vault.localVaults.find(
+      (entry) =>
+        entry.storeId ===
+        (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
+    ) ??
+      vault.localVaults[0] ??
+      null,
   )
   const showCreateVault = $derived(
     !vault.localVaultPresent &&
@@ -181,7 +190,7 @@
         class="text-xs text-muted-foreground"
         data-testid="login-local-vault-detected"
       >
-        {vault.t('login.local_vault_hint')}
+        {vault.t('login.vault_picker_hint')}
       </p>
     {/if}
 
@@ -196,7 +205,7 @@
             {#if showVaultPicker}
               {vault.t('login.vault_picker_title')}
             {:else if showLocalUnlock}
-              {vault.t('login.unlock_vault')}
+              {vault.t('login.open_vault_title')}
             {:else if showCreateVault}
               {vault.t('login.create_vault_title')}
             {:else if showSetup}
@@ -222,7 +231,7 @@
             </CardDescription>
           {:else if showLocalUnlock}
             <CardDescription class="text-pretty">
-              {vault.t('login.local_vault_description')}
+              {vault.t('login.open_vault_subtitle')}
             </CardDescription>
           {:else if showCreateVault}
             <CardDescription class="text-pretty">
@@ -260,6 +269,8 @@
         {:else if showLocalUnlock}
           <LoginUnlockStep
             {vault}
+            vaultEntry={activeLoginVault}
+            hasMultipleVaults={vault.hasMultipleLocalVaults}
             passwordEntries={vault.passwordEntries}
             bind:selectedPasswordEntryId={vault.selectedPasswordEntryId}
             {isVerifying}
@@ -267,7 +278,11 @@
             {isUnlocking}
             {onUnlock}
             {onUnlockWithPassword}
+            onSwitchVault={() => vault.beginLoginVaultPicker()}
             onCreateAnotherVault={onCreateDeviceVault}
+            onImportFromSync={() => {
+              showProviderSetupLink = true
+            }}
           />
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}

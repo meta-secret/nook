@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { FolderKey, Plus, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
+  import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { LocalVaultEntry } from '$lib/local-vault'
 
@@ -18,77 +20,79 @@
     isVerifying: boolean
     isInitializing: boolean
     onChooseVault: (storeId: string) => void | Promise<void>
-    onCreateVault: () => void | Promise<void>
+    onCreateVault: (label: string) => void | Promise<void>
     onConnectStorage: () => void
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-
-  function vaultLabel(entry: LocalVaultEntry): string {
-    if (entry.label?.trim()) {
-      return entry.label.trim()
-    }
-    return vault.t('login.vault_picker_unnamed', { store: entry.storeId })
-  }
 </script>
 
-<div class="space-y-3" data-testid="login-vault-picker">
-  <p class="text-sm text-muted-foreground">
-    {vault.t('login.vault_picker_hint')}
-  </p>
+<div class="space-y-5" data-testid="login-vault-picker">
+  <section class="space-y-3" data-testid="login-vault-picker-existing">
+    <div class="space-y-1">
+      <h3
+        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+      >
+        {vault.t('login.vault_picker_on_device')}
+      </h3>
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t('login.vault_picker_hint')}
+      </p>
+    </div>
 
-  <ul class="space-y-2">
-    {#each vaults as entry (entry.storeId)}
-      <li>
-        <button
-          type="button"
-          class="flex w-full items-start gap-3 rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/40"
-          data-testid="login-vault-option"
-          data-store-id={entry.storeId}
-          disabled={isBusy}
-          onclick={() => onChooseVault(entry.storeId)}
-        >
-          <FolderKey class="mt-0.5 size-5 shrink-0 text-primary" />
-          <span class="min-w-0 space-y-0.5">
-            <span class="block text-sm font-semibold text-foreground">
-              {vaultLabel(entry)}
-            </span>
-            <span class="block truncate text-xs text-muted-foreground">
-              {entry.storeId}
-            </span>
-          </span>
-        </button>
-      </li>
-    {/each}
-  </ul>
+    <ul class="space-y-2">
+      {#each vaults as entry (entry.storeId)}
+        <li>
+          <button
+            type="button"
+            class="block w-full text-left transition-opacity disabled:opacity-60"
+            data-testid="login-vault-option"
+            data-store-id={entry.storeId}
+            disabled={isBusy}
+            onclick={() => onChooseVault(entry.storeId)}
+          >
+            <LoginVaultCard {vault} {entry} interactive />
+          </button>
+        </li>
+      {/each}
+    </ul>
+  </section>
 
-  <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-    <Button
-      type="button"
-      variant="outline"
-      class="sm:min-w-[180px]"
-      data-testid="login-create-additional-vault-btn"
-      disabled={isBusy}
-      onclick={() => onCreateVault()}
-    >
-      {#if isVerifying}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t('login.creating_vault')}
-      {:else}
-        <Plus class="size-4" />
-        {vault.t('login.vault_picker_create_new')}
-      {/if}
-    </Button>
-    <Button
-      type="button"
-      variant="outline"
-      class="sm:min-w-[180px]"
-      data-testid="login-import-vault-btn"
-      disabled={isBusy}
-      onclick={onConnectStorage}
-    >
-      <ShieldCheck class="size-4" />
-      {vault.t('login.vault_picker_import')}
-    </Button>
-  </div>
+  <section
+    class="space-y-3 border-t border-border/60 pt-5"
+    data-testid="login-vault-picker-start-fresh"
+  >
+    <div class="space-y-1">
+      <h3
+        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+      >
+        {vault.t('login.vault_picker_start_fresh')}
+      </h3>
+      <p class="text-sm text-pretty text-muted-foreground">
+        {vault.t('login.other_vaults_description')}
+      </p>
+    </div>
+
+    <div class="space-y-3">
+      <LoginVaultNameForm
+        {vault}
+        {isVerifying}
+        {isInitializing}
+        testId="login-create-additional-vault-btn"
+        submitLabel={vault.t('login.vault_picker_create_new')}
+        onCreate={onCreateVault}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        class="w-full sm:w-auto sm:min-w-[180px]"
+        data-testid="login-import-vault-btn"
+        disabled={isBusy}
+        onclick={onConnectStorage}
+      >
+        <ShieldCheck class="size-4" />
+        {vault.t('login.vault_picker_import')}
+      </Button>
+    </div>
+  </section>
 </div>

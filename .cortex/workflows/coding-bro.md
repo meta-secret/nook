@@ -6,7 +6,7 @@ Use this pipeline for **every coding request** unless the user explicitly wants 
 
 ## Testing strategy — local first, remote validates
 
-**GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, run the full prepared test set (`task ci:pr:publish` on PRs). Expect **5+ minutes** per run plus queue time. A failing fmt, clippy, unit test, or e2e spec burns that entire cycle — do not use remote CI as the primary debug loop.
+**GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, run the full prepared test set (`task ci:pr` on PRs). Expect **5+ minutes** per run plus queue time. A failing fmt, clippy, unit test, or e2e spec burns that entire cycle — do not use remote CI as the primary debug loop.
 
 **Local Docker is warm and fast.** The same Task commands run against **cached** toolchain images on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating. Validate locally first; **push only when the change is ready** and local gates pass. GitHub Actions then confirms a clean environment for the PR — it is validation, not the first test pass.
 
@@ -32,6 +32,17 @@ Default agent flow:
 6. **Merge** — squash merge only when **every** remote check is green.
 
 Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.
+
+## Debug information — always check app logs
+
+When investigating failures, use sources in order:
+
+1. **Tests** — `task rust:test`, `task web:test`, e2e Playwright output.
+2. **Static analysis** — `task check` (fmt, clippy, svelte-check, eslint).
+3. **Persisted app logs** — **most important after 1–2.** Vault unlock, sync, WASM
+   tracing, and console capture live in IndexedDB (`/app-logs`, `nook-app-logs.json`).
+
+Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 ## How it works
 
@@ -134,7 +145,7 @@ task ci:pr                          # full PR mirror
 gh pr checks <number> --watch
 ```
 
-`task ci:pr` matches `pr.yml` gates (`task ci:pr:publish` minus toolchain push and Cloudflare deploy).
+`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy). Toolchain publish is main-only (`task ci:main:publish`).
 
 E2e helpers when debugging web flows:
 

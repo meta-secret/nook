@@ -1,13 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    ArrowLeft,
-    BookOpen,
-    FolderKey,
-    Lock,
-    Moon,
-    Sun,
-  } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
@@ -26,6 +19,7 @@
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
+  import VaultSwitcher from '$lib/components/VaultSwitcher.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     appPath,
@@ -164,27 +158,13 @@
       >
         <div class="flex min-w-0 items-center gap-3">
           <NookLogo {colorMode} size="sm" class="rounded-lg overflow-hidden" />
+          {#if vault.isAuthenticated && !legalPage && !logsPage && !vault.helpOpen}
+            <VaultSwitcher {vault} />
+          {/if}
         </div>
 
         <div class="flex items-center gap-2">
           {#if vault.isAuthenticated && !vault.helpOpen && !legalPage}
-            {#if vault.hasMultipleLocalVaults}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-                data-testid="header-switch-vault-btn"
-                title={vault.t('common.switch_vault')}
-                disabled={vault.isVerifying || vault.isInitializing}
-                onclick={() => vault.lockVault()}
-              >
-                <FolderKey class="size-4" />
-                <span class="hidden sm:inline"
-                  >{vault.t('common.switch_vault')}</span
-                >
-              </Button>
-            {/if}
             <Button
               type="button"
               variant="outline"
@@ -510,7 +490,8 @@
             enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
             onUnlockWithPassword={(entryId, password) =>
               vault.unlockWithPassword(entryId, password)}
-            onCreateDeviceVault={() => vault.createLocalVaultWithDeviceKeys()}
+            onCreateDeviceVault={(label) =>
+              vault.createLocalVaultWithDeviceKeys(label)}
             onRemoveProvider={(id) => vault.removeProvider(id)}
           />
           <VaultStatusBar

@@ -4,6 +4,28 @@ Nook's application logger is **owned by WASM** and persisted in the browser's
 IndexedDB. Use it for post-mortem debugging (e2e failures, user reports) without
 re-instrumenting the code.
 
+## Debugging, troubleshooting, and CI verification
+
+When a test fails, CI goes red, or the UI misbehaves, work through sources in
+this order:
+
+1. **Test output** — Rust unit/integration (`task rust:test`,
+   `task rust:coverage:check`), web unit (`task web:test`), Playwright report
+   and failure attachments.
+2. **Static analysis** — fmt, clippy, svelte-check, eslint, and type errors from
+   `task check` / `task ci:pr`.
+3. **Persisted application logs** — **the most important source after steps 1–2.**
+   Vault unlock, sync reconciliation, WASM tracing, and captured `console.*`
+   output live here. Test output and linters do not surface this layer.
+
+**Always check app logs** before changing production code or guessing from DOM
+snapshots or screenshot diffs alone. On e2e failure the fixtures attach
+`nook-app-logs.json` automatically; locally use `fetchAppLogs(page)`, `/app-logs`,
+or the `/logs` viewer. If the trail is thin, lower the capture level and
+reproduce (`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`).
+
+See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and-analysis) below for the preferred read order and helpers.
+
 ## Architecture
 
 | Layer | File | Responsibility |

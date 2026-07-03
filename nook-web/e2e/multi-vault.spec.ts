@@ -128,6 +128,7 @@ test.describe('multi-vault on one browser profile', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
+    await page.getByTestId('login-vault-name-input').fill('Vault B')
     await page.getByTestId('login-create-additional-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -141,12 +142,15 @@ test.describe('multi-vault on one browser profile', () => {
     expect(registry).toEqual(expect.arrayContaining([storeA, storeB]))
     expect(registry).toHaveLength(2)
 
-    await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-vault-picker')).toBeVisible()
+    await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+
+    await page.getByTestId('vault-switcher-trigger').click()
+    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
+    await expect(page.getByTestId('vault-switcher-count')).toBeVisible()
 
     await page
       .locator(
-        '[data-testid="login-vault-option"][data-store-id="' + storeA + '"]',
+        '[data-testid="vault-switcher-option"][data-store-id="' + storeA + '"]',
       )
       .click()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
@@ -158,10 +162,11 @@ test.describe('multi-vault on one browser profile', () => {
     let activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeA)
 
-    await page.getByTestId('header-lock-vault-btn').click()
+    await page.getByTestId('vault-switcher-trigger').click()
+    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
     await page
       .locator(
-        '[data-testid="login-vault-option"][data-store-id="' + storeB + '"]',
+        '[data-testid="vault-switcher-option"][data-store-id="' + storeB + '"]',
       )
       .click()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({

@@ -60,6 +60,7 @@ export async function addVaultPassword(
         ? state.t('toasts.password_added_rotate')
         : state.t('toasts.password_set'),
     )
+    await state.hydrateMultiDeviceState()
     await state.runFanOutSyncAfterLocalSave()
   } catch (e: unknown) {
     state.passwordError =

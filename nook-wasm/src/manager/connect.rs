@@ -146,6 +146,7 @@ impl NookVaultManager {
                 self.store_id = nook_core::generate_store_id()?.to_string();
             }
             self.bootstrap_event_log_genesis().await?;
+            self.maybe_sync_self_into_roster(&identity)?;
             self.event_log_mode = true;
             self.persist_projection_cache().await?;
         } else if !content.trim().is_empty() {

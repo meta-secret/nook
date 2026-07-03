@@ -30,6 +30,13 @@ impl NookVaultManager {
         Ok(self.vault_members()?)
     }
 
+    /// Ensure the genesis / approver device appears in the roster when keys are
+    /// present but `members:` rows were not replayed from the event log.
+    #[wasm_bindgen(js_name = ensureVaultRosterHydrated)]
+    pub async fn ensure_vault_roster_hydrated_js(&mut self) -> Result<bool, JsError> {
+        Ok(self.ensure_vault_roster_hydrated().await?)
+    }
+
     /// Device B requests access without decrypting the vault (writes join record only).
     pub async fn request_vault_access(
         &mut self,

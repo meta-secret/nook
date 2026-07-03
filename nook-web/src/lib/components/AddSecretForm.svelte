@@ -14,6 +14,7 @@
   import { Button } from '$lib/components/ui/button'
   import {
     buildSecretYaml,
+    generateSecretId,
     type NookSecretRecord,
     type VaultItemType,
   } from '$lib/nook'
@@ -111,7 +112,7 @@
       notes = item.notes ?? ''
     } else if (item.type === 'api-key') {
       websiteUrl = item.websiteUrl
-      apiKey = item.key
+      apiKey = item.primaryCredential || item.key
       expiresAt = item.expiresAt ?? ''
     } else if (item.type === 'seed-phrase') {
       accountName = item.name
@@ -183,11 +184,7 @@
     if (isEditMode && initialItem && onReplaceSecret) {
       await onReplaceSecret(initialItem.id, selectedType, dataYaml)
     } else {
-      const manager = vault.manager
-      if (!manager) {
-        throw new Error('Vault engine is not available.')
-      }
-      const id = manager.generate_secret_id()
+      const id = generateSecretId()
       await onAddSecret(id, selectedType, dataYaml)
     }
     resetForm()
@@ -206,9 +203,20 @@
 
   const isSecureNoteForm = $derived(selectedType === 'secure-note')
 
-  const canSubmit = $derived(
-    !isSaving && (selectedType !== 'seed-phrase' || seedPhraseValid),
-  )
+  const canSubmit = $derived.by(() => {
+    if (isSaving || !selectedType) return false
+    if (selectedType === 'seed-phrase') return seedPhraseValid
+    if (selectedType === 'secure-note') return noteBody.trim().length > 0
+    if (selectedType === 'api-key') return apiKey.trim().length > 0
+    if (selectedType === 'login') {
+      return (
+        websiteUrl.trim().length > 0 &&
+        username.trim().length > 0 &&
+        password.length > 0
+      )
+    }
+    return false
+  })
 
   const saveLabel = $derived(
     isSaving
@@ -359,7 +367,7 @@
       </div>
     </div>
 
-    {#if selectedType === 'login' || selectedType === 'api-key'}
+    {#if selectedType === 'login'}
       <div class="space-y-1.5">
         <label class="text-xs font-medium" for="secret-label"
           >{vault.t('add_secret.website_label')}</label
@@ -369,10 +377,27 @@
           type="text"
           data-testid="secret-label"
           bind:value={websiteUrl}
-          placeholder="https://example.com"
+          placeholder={vault.t('add_secret.placeholder_website')}
           required
           class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
         />
+      </div>
+    {:else if selectedType === 'api-key'}
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium" for="secret-label"
+          >{vault.t('add_secret.website_label')}</label
+        >
+        <input
+          id="secret-label"
+          type="text"
+          data-testid="secret-label"
+          bind:value={websiteUrl}
+          placeholder={vault.t('add_secret.placeholder_website')}
+          class="flex h-10 w-full rounded-md border border-border/45 bg-background/80 px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"
+        />
+        <p class="text-xs text-muted-foreground text-pretty">
+          {vault.t('add_secret.api_key_website_hint')}
+        </p>
       </div>
     {/if}
 
@@ -513,6 +538,7 @@
           data-testid="secret-value"
           bind:value={apiKey}
           rows="4"
+          placeholder={vault.t('add_secret.placeholder_key')}
           required
           spellcheck="false"
           class="flex w-full rounded-md border border-border/45 bg-background/80 px-3 py-2 font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring sm:bg-background"

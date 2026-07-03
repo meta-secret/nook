@@ -1,14 +1,13 @@
 <script lang="ts">
   import {
-    Check,
     ChevronDown,
     Cloud,
-    Copy,
     HardDrive,
     QrCode,
     RefreshCw,
   } from '@lucide/svelte'
   import QRCode from 'qrcode'
+  import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     buildEnrollmentLink,
@@ -52,7 +51,7 @@
   let passwordEntryId = $state<string | null>(null)
   let passwordInput = $state('')
   let localError = $state('')
-  let copied = $state(false)
+  let isGenerating = $state(false)
 
   const effectiveProviderId = $derived.by(() => {
     if (
@@ -98,6 +97,9 @@
       color: { dark: '#111317', light: '#ffffff' },
     }).catch(() => '')
   })
+  const showGenerating = $derived(
+    (isGenerating || isBusy) && !enrollmentCode && !localError,
+  )
 
   async function submitOnboard() {
     localError = ''
@@ -114,25 +116,15 @@
       localError = vault.t('onboard_device.enter_pw_err')
       return
     }
+    isGenerating = true
     try {
       await onIssueCode(selectedPassword.id, passwordInput, selectedProvider.id)
       passwordInput = ''
     } catch (e: unknown) {
       localError =
         e instanceof Error ? e.message : vault.t('onboard_device.failed_qr_err')
-    }
-  }
-
-  async function copyLink() {
-    if (!enrollmentLink) return
-    try {
-      await navigator.clipboard.writeText(enrollmentLink)
-      copied = true
-      setTimeout(() => {
-        copied = false
-      }, 1500)
-    } catch {
-      // best effort
+    } finally {
+      isGenerating = false
     }
   }
 </script>
@@ -208,7 +200,7 @@
                   ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
                   : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
                 data-testid="onboard-provider-{provider.id}"
-                disabled={isBusy}
+                disabled={isBusy || isGenerating}
                 onclick={() => {
                   providerId = provider.id
                 }}
@@ -276,7 +268,7 @@
             onchange={(event) => {
               passwordEntryId = event.currentTarget.value
             }}
-            disabled={passwordEntries.length === 0}
+            disabled={passwordEntries.length === 0 || isBusy || isGenerating}
             data-testid="onboard-password-select"
           >
             {#each passwordEntries as entry (entry.id)}
@@ -304,6 +296,7 @@
         class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         bind:value={passwordInput}
         autocomplete="current-password"
+        disabled={isBusy || isGenerating}
         data-testid="onboard-password-input"
       />
     </div>
@@ -317,11 +310,12 @@
     <Button
       type="submit"
       disabled={isBusy ||
+        isGenerating ||
         syncProviders.length === 0 ||
         passwordEntries.length === 0}
       data-testid="onboard-device-submit"
     >
-      {#if isBusy}
+      {#if isBusy || isGenerating}
         <RefreshCw class="size-4 animate-spin" />
         {vault.t('onboard_device.generating')}
       {:else}
@@ -350,54 +344,34 @@
     </p>
   {/if}
 
-  {#if enrollmentCode}
-    <div class="space-y-3 rounded-lg border border-border bg-background p-3">
-      <div class="flex items-start justify-between gap-3">
-        <p class="text-xs text-muted-foreground text-pretty">
-          {vault.t('onboard_device.ready_desc')}
-          {#if issuedAt}
-            <span class="ml-1 text-muted-foreground/80">
-              {vault.t('onboard_device.issued_time', {
-                time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
-              })}
-            </span>
-          {/if}
-        </p>
-        <button
-          type="button"
-          class="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-          onclick={copyLink}
-          data-testid="copy-onboard-link-btn"
-        >
-          {#if copied}
-            <Check class="size-3" /> {vault.t('vault.copied')}
-          {:else}
-            <Copy class="size-3" /> {vault.t('vault.copy')}
-          {/if}
-        </button>
-      </div>
-
-      {#await qrDataUrlPromise then qrDataUrl}
-        {#if qrDataUrl}
-          <div class="flex justify-center">
-            <img
-              src={qrDataUrl}
-              alt="Onboarding QR"
-              class="rounded-md border border-border"
-              width="240"
-              height="240"
-            />
-          </div>
-        {/if}
-      {/await}
-
-      <span class="sr-only" data-testid="onboard-link">{enrollmentLink}</span>
-      <textarea
-        readonly
-        rows="3"
-        class="w-full font-mono text-[10px] leading-relaxed rounded-md border border-border bg-muted/30 p-2 text-muted-foreground break-all"
-        data-testid="onboard-code">{enrollmentCode}</textarea
-      >
+  {#if showGenerating}
+    <div
+      class="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-4"
+      data-testid="onboard-generating"
+      role="status"
+      aria-live="polite"
+    >
+      <RefreshCw class="size-5 shrink-0 animate-spin text-primary" />
+      <p class="text-sm text-muted-foreground">
+        {vault.t('onboard_device.generating_qr')}
+      </p>
     </div>
+  {/if}
+
+  {#if enrollmentCode}
+    <EnrollmentOnboardResult
+      {vault}
+      {enrollmentLink}
+      {qrDataUrlPromise}
+      instruction={vault.t('onboard_device.ready_desc')}
+      issuedSuffix={issuedAt
+        ? vault.t('onboard_device.issued_time', {
+            time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
+          })
+        : ''}
+      linkTitle={vault.t('onboard_device.link_title')}
+      linkDescription={vault.t('onboard_device.link_desc')}
+      passwordReminder={vault.t('onboard_device.share_password')}
+    />
   {/if}
 </section>

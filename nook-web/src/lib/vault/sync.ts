@@ -16,8 +16,9 @@ import * as localLoginActions from '$lib/vault/local-login'
 const log = createLogger('vault-sync')
 
 function syncError(context: string, error: unknown) {
-  log.debug(`${context} failed`, {
+  log.warn(`${context} failed`, {
     error: error instanceof Error ? error.message : String(error),
+    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
   })
 }
 
@@ -220,6 +221,25 @@ export function stageSyncConflict(
   })
 }
 
+/** Finish connect/sync that was paused when the conflict dialog opened. */
+async function resumeConnectAfterSyncConflict(
+  state: VaultState,
+  providerId: string,
+): Promise<void> {
+  if (state.isAuthenticated) {
+    if (providerId !== '__pending_provider__') {
+      await state.syncProviderById(providerId, { quiet: true })
+    }
+    await state.hydrateMultiDeviceState()
+    return
+  }
+  if (!state.manager) return
+  if (!state.stagedRemoteStorageArgs() && state.syncProviders.length === 0) {
+    return
+  }
+  await state.loadDb()
+}
+
 export async function resolveSyncConflictImportRemote(
   state: VaultState,
 ): Promise<void> {
@@ -235,6 +255,7 @@ export async function resolveSyncConflictImportRemote(
 
   state.isVerifying = true
   state.errorMsg = ''
+  let providerId: string | null
   try {
     const importedStoreId = await importVaultAsNewLocalCopy(
       conflict.remoteYaml,
@@ -245,7 +266,7 @@ export async function resolveSyncConflictImportRemote(
     state.manager?.resetVaultSession()
     state.localVaultPresent = true
     await localLoginActions.refreshLocalVaultCatalog(state)
-    const providerId = await state.ensureProviderSavedAfterConflict(conflict)
+    providerId = await state.ensureProviderSavedAfterConflict(conflict)
     await state.updateProviderSyncMetadata(
       providerId,
       conflict.remoteYaml,
@@ -262,8 +283,12 @@ export async function resolveSyncConflictImportRemote(
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
+    providerId = null
   } finally {
     state.isVerifying = false
+  }
+  if (providerId) {
+    await resumeConnectAfterSyncConflict(state, providerId)
   }
 }
 
@@ -279,6 +304,7 @@ export async function resolveSyncConflictKeepLocal(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   })
+  let providerId: string | null
   try {
     const remoteYaml = resolveVaultSyncConflictKeepLocal(
       conflict.localYaml,
@@ -292,7 +318,7 @@ export async function resolveSyncConflictKeepLocal(
       remoteYaml,
       conflict.remoteRevision,
     )
-    const providerId = await state.ensureProviderSavedAfterConflict(conflict)
+    providerId = await state.ensureProviderSavedAfterConflict(conflict)
     await state.updateProviderSyncMetadata(
       providerId,
       conflict.localYaml,
@@ -308,8 +334,12 @@ export async function resolveSyncConflictKeepLocal(
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
+    providerId = null
   } finally {
     state.isVerifying = false
+  }
+  if (providerId) {
+    await resumeConnectAfterSyncConflict(state, providerId)
   }
 }
 
@@ -325,6 +355,7 @@ export async function resolveSyncConflictKeepRemote(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   })
+  let providerId: string | null
   try {
     const localYaml = resolveVaultSyncConflictKeepRemote(
       conflict.localYaml,
@@ -335,7 +366,7 @@ export async function resolveSyncConflictKeepRemote(
     if (state.isAuthenticated) {
       await state.reloadSessionFromLocal()
     }
-    const providerId = await state.ensureProviderSavedAfterConflict(conflict)
+    providerId = await state.ensureProviderSavedAfterConflict(conflict)
     await state.updateProviderSyncMetadata(
       providerId,
       conflict.remoteYaml,
@@ -351,8 +382,12 @@ export async function resolveSyncConflictKeepRemote(
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
+    providerId = null
   } finally {
     state.isVerifying = false
+  }
+  if (providerId) {
+    await resumeConnectAfterSyncConflict(state, providerId)
   }
 }
 

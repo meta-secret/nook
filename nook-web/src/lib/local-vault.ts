@@ -4,6 +4,7 @@ export {
   listLocalVaultEntries,
   prepareCreateNewVaultSlot,
   readActiveVaultStoreId,
+  renameLocalVault,
   switchActiveVault,
   type LocalVaultEntry,
 } from './vault-registry'

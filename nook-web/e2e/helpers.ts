@@ -149,7 +149,11 @@ export async function openLoginProviderSetup(page: Page) {
 /** @deprecated Use {@link openLoginProviderSetup}. */
 export const openLegacyProviderSetup = openLoginProviderSetup
 
-export async function createLocalVaultOnLogin(page: Page) {
+export async function createLocalVaultOnLogin(
+  page: Page,
+  vaultName = 'Test vault',
+) {
+  await page.getByTestId('login-vault-name-input').fill(vaultName)
   await page.getByTestId('login-create-device-vault-btn').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -179,7 +183,7 @@ export async function connectLocalVault(page: Page) {
   })
 }
 
-/** Device-key genesis via storage provider picker (e2e / migration fallback). */
+/** Device-key genesis on login gate (unlock existing or create on this device). */
 export async function connectLocalVaultLegacy(page: Page) {
   await page.goto('/')
   await expect(
@@ -201,14 +205,15 @@ export async function connectLocalVaultLegacy(page: Page) {
     return
   }
 
-  await openLoginProviderSetup(page)
-  await page.getByTestId('provider-option-local').click()
-  const connectButton = await waitForEngine(page)
-  await connectButton.click()
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await disableVaultIdleLock(page)
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  if (await chooser.isVisible()) {
+    await createLocalVaultOnLogin(page)
+    return
+  }
+
+  throw new Error(
+    'Login gate has no local unlock step or create-vault chooser — use createLocalVaultOnLogin.',
+  )
 }
 
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
@@ -1481,6 +1486,33 @@ export async function openStorageSettings(page: Page) {
   await expect(page.getByTestId('vault-panel')).not.toBeVisible()
 }
 
+/** Add and connect a GitHub sync provider from vault settings (vault must be unlocked). */
+export async function connectGithubSyncProviderFromSettings(
+  page: Page,
+  repoName: string,
+  pat = 'ghp_test_token',
+  options?: { expectConflict?: boolean },
+) {
+  await page.getByTestId('vault-settings-tab').click()
+  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('add-provider-btn').first().click()
+  await page.getByTestId('provider-option-github').click()
+  await expect(page.getByTestId('github-token-setup')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('github-repo-input').fill(repoName)
+  await page.getByTestId('github-pat-input').fill(pat)
+  await page.getByTestId('connect-provider-btn').click()
+  await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+  if (!options?.expectConflict) {
+    await expect(
+      page.getByTestId('vault-sync-conflict-dialog'),
+    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
+  }
+}
+
 const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
   unlock: 'vault-unlock-section',
@@ -1616,7 +1648,7 @@ export async function expectVaultPasswordStatus(
   })
 }
 
-/** Issue an onboard enrollment code and return the code textarea locator. */
+/** Issue an onboard enrollment code and return the onboarding link input locator. */
 export async function submitOnboardEnrollmentCode(
   page: Page,
   password: string,
@@ -1634,9 +1666,10 @@ export async function submitOnboardEnrollmentCode(
   await page.getByTestId('onboard-password-input').fill(password)
   await page.getByTestId('onboard-device-submit').click()
 
-  const codeArea = page.getByTestId('onboard-code')
+  const linkInput = page.getByTestId('onboarding-link-url')
+  const generating = page.getByTestId('onboard-generating')
   const error = page.getByTestId('onboard-error')
-  await expect(codeArea.or(error)).toBeVisible({
+  await expect(linkInput.or(error).or(generating)).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   if (await error.isVisible()) {
@@ -1644,7 +1677,20 @@ export async function submitOnboardEnrollmentCode(
       `Onboard enrollment failed: ${(await error.textContent())?.trim() ?? 'unknown error'}`,
     )
   }
-  return codeArea
+  await expect(linkInput).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  return linkInput
+}
+
+/** Raw enrollment payload from a full onboarding URL or hash link. */
+export function enrollmentCodeFromLink(link: string): string {
+  const trimmed = link.trim()
+  const hashIndex = trimmed.indexOf('#enroll=')
+  if (hashIndex >= 0) {
+    return decodeURIComponent(trimmed.slice(hashIndex + '#enroll='.length))
+  }
+  return trimmed
 }
 
 /** Open the onboard-device settings view with sync timers paused for e2e. */
@@ -1670,20 +1716,13 @@ export async function assertVaultReady(page: Page) {
 }
 
 /** Start a GitHub connect from the login gate (saved provider or fresh setup). */
-export async function clickLoginConnectProvider(
-  page: Page,
-  preferred: 'local' | 'github' = 'github',
-) {
+export async function clickLoginConnectProvider(page: Page) {
   await openLoginProviderSetup(page)
-  if (preferred === 'github') {
-    const savedGithub = page.getByTestId('saved-provider-github').first()
-    if (await savedGithub.isVisible()) {
-      await savedGithub.click()
-    }
-    await page.getByTestId('provider-option-github').click()
-  } else {
-    await page.getByTestId('provider-option-local').click()
+  const savedGithub = page.getByTestId('saved-provider-github').first()
+  if (await savedGithub.isVisible()) {
+    await savedGithub.click()
   }
+  await page.getByTestId('provider-option-github').click()
   const connectButton = await waitForEngine(page)
   await connectButton.click()
 }

@@ -73,9 +73,13 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await expect(page.getByTestId('login-path-local')).toBeVisible()
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
+    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
+    await expect(
+      page.getByTestId('login-create-device-vault-btn'),
+    ).toBeDisabled()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(

@@ -1,6 +1,6 @@
-# Pull requests: pull toolchain cache, verify/build/e2e in one container, publish buildcache, deploy preview.
-# PRs publish only the :buildcache layers (keeps local + CI warm); the :latest base IMAGE is pushed
-# on main only (ci:main:publish). PR and main CI run full stub e2e; nightly runs sync-live.
+# Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
+# Toolchain publish runs on main only (ci:main:publish). PR and main CI run full stub e2e;
+# nightly runs sync-live.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
@@ -11,7 +11,7 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
   pull-requests: write
 
 concurrency:
@@ -36,17 +36,6 @@ jobs:
         run: task ci:pr VITE_BASE=/
         env:
           CI: true
-
-      - name: Publish toolchain buildcache
-        # Keep the shared GHCR layer cache fresh from PRs (no :latest image overwrite) so local and
-        # CI builds on any branch pull warm dep/target layers instead of a cold recompile.
-        run: task docker:push:cache:ci
-        env:
-          CI: true
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2.2.0
 
       - name: Deploy to Cloudflare Pages
         id: deploy
@@ -77,6 +66,7 @@ jobs:
         if: steps.deploy.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         run: task ci:pr:comment-preview
