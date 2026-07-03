@@ -101,7 +101,9 @@
       (entry) =>
         entry.storeId ===
         (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
-    ) ?? vault.localVaults[0] ?? null,
+    ) ??
+      vault.localVaults[0] ??
+      null,
   )
   const showCreateVault = $derived(
     !vault.localVaultPresent &&

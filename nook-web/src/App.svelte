@@ -1,12 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import {
-    ArrowLeft,
-    BookOpen,
-    Lock,
-    Moon,
-    Sun,
-  } from '@lucide/svelte'
+  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
   import { VaultState } from '$lib/vault.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
@@ -496,7 +490,8 @@
             enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
             onUnlockWithPassword={(entryId, password) =>
               vault.unlockWithPassword(entryId, password)}
-            onCreateDeviceVault={(label) => vault.createLocalVaultWithDeviceKeys(label)}
+            onCreateDeviceVault={(label) =>
+              vault.createLocalVaultWithDeviceKeys(label)}
             onRemoveProvider={(id) => vault.removeProvider(id)}
           />
           <VaultStatusBar

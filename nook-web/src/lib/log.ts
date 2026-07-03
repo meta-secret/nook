@@ -235,7 +235,10 @@ export function isIgnoredErrorSource(source: string | undefined): boolean {
 /** Strip query strings from URLs before persisting (tokens may appear in params). */
 export function sanitizeLogUrl(url: string): string {
   try {
-    const parsed = new URL(url, typeof location !== 'undefined' ? location.href : undefined)
+    const parsed = new URL(
+      url,
+      typeof location !== 'undefined' ? location.href : undefined,
+    )
     parsed.search = ''
     parsed.hash = ''
     return parsed.toString()
@@ -285,13 +288,20 @@ function installGlobalErrorHandlers() {
         ? `${reason.name}: ${reason.message}`
         : stringifyArgs([reason])
     if (isIgnoredErrorSource(message)) return
-    captureDiagnostic('error', 'unhandledrejection', message, stack ? { stack } : undefined)
+    captureDiagnostic(
+      'error',
+      'unhandledrejection',
+      message,
+      stack ? { stack } : undefined,
+    )
   })
 }
 
 function installFetchInstrumentation() {
   if (typeof globalThis.fetch !== 'function') return
-  const marker = globalThis as typeof globalThis & { __nookFetchPatched?: boolean }
+  const marker = globalThis as typeof globalThis & {
+    __nookFetchPatched?: boolean
+  }
   if (marker.__nookFetchPatched) return
   marker.__nookFetchPatched = true
 
@@ -301,11 +311,16 @@ function installFetchInstrumentation() {
     if (!response.ok) {
       const url = sanitizeLogUrl(resolveFetchUrl(input))
       if (!isIgnoredErrorSource(url)) {
-        captureDiagnostic('warn', 'fetch', `HTTP ${response.status} ${response.statusText}`, {
-          url,
-          status: response.status,
-          method: init?.method ?? 'GET',
-        })
+        captureDiagnostic(
+          'warn',
+          'fetch',
+          `HTTP ${response.status} ${response.statusText}`,
+          {
+            url,
+            status: response.status,
+            method: init?.method ?? 'GET',
+          },
+        )
       }
     }
     return response

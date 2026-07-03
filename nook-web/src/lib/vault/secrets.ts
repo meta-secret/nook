@@ -1,6 +1,9 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord, VaultItemType } from '$lib/nook'
-import { generatePassword as coreGeneratePassword, generateSecretId } from '$lib/nook'
+import {
+  generatePassword as coreGeneratePassword,
+  generateSecretId,
+} from '$lib/nook'
 import { createLogger } from '$lib/log'
 
 const log = createLogger('connect')
@@ -332,11 +335,5 @@ export function generatePassword(
   numbers: boolean,
   symbols: boolean,
 ): string {
-  return coreGeneratePassword(
-    length,
-    lowercase,
-    uppercase,
-    numbers,
-    symbols,
-  )
+  return coreGeneratePassword(length, lowercase, uppercase, numbers, symbols)
 }

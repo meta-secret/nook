@@ -77,7 +77,9 @@ test.describe('vault connect flow', () => {
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
-    await expect(page.getByTestId('login-create-device-vault-btn')).toBeDisabled()
+    await expect(
+      page.getByTestId('login-create-device-vault-btn'),
+    ).toBeDisabled()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
     await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
     await expect(

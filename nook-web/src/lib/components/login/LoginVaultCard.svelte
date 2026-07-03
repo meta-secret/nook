@@ -27,7 +27,9 @@
   data-store-id={entry.storeId}
 >
   <FolderKey
-    class="mt-0.5 size-5 shrink-0 {active ? 'text-primary' : 'text-muted-foreground'}"
+    class="mt-0.5 size-5 shrink-0 {active
+      ? 'text-primary'
+      : 'text-muted-foreground'}"
   />
   <span class="min-w-0 space-y-0.5">
     <span class="block text-sm font-semibold text-foreground">

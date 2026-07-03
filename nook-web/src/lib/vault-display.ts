@@ -1,9 +1,6 @@
 import type { LocalVaultEntry } from '$lib/local-vault'
 
-type VaultTranslate = (
-  key: string,
-  params?: Record<string, string>,
-) => string
+type VaultTranslate = (key: string, params?: Record<string, string>) => string
 
 /** Human-readable label for a local vault registry entry. */
 export function vaultDisplayLabel(

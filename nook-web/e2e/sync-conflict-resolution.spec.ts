@@ -142,14 +142,21 @@ test.describe('sync conflict resolution', () => {
     const storeB = parseStoreId(vaultBYaml)
     expect(storeB).not.toEqual(storeA)
 
-    await connectGithubSyncProviderFromSettings(page, repoName, 'ghp_test_token', {
-      expectConflict: true,
-    })
+    await connectGithubSyncProviderFromSettings(
+      page,
+      repoName,
+      'ghp_test_token',
+      {
+        expectConflict: true,
+      },
+    )
 
     await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('sync-conflict-import-new-vault-btn')).toBeVisible()
+    await expect(
+      page.getByTestId('sync-conflict-import-new-vault-btn'),
+    ).toBeVisible()
 
     await page.getByTestId('sync-conflict-keep-local-btn').click()
     await expect(

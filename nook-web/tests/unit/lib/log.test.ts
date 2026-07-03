@@ -4,7 +4,9 @@ import { isIgnoredErrorSource, sanitizeLogUrl } from '$lib/log'
 describe('isIgnoredErrorSource', () => {
   it('ignores browser extension origins', () => {
     expect(
-      isIgnoredErrorSource('chrome-extension://abc/bootstrap-autofill-overlay.js'),
+      isIgnoredErrorSource(
+        'chrome-extension://abc/bootstrap-autofill-overlay.js',
+      ),
     ).toBe(true)
     expect(isIgnoredErrorSource('moz-extension://abc/script.js')).toBe(true)
   })

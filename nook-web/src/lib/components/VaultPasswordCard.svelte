@@ -557,18 +557,18 @@
         />
 
         <div class="flex items-center justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onclick={() => {
-                onClearCode()
-                closePanel()
-              }}
-            >
-              {vault.t('common.done')}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onclick={() => {
+              onClearCode()
+              closePanel()
+            }}
+          >
+            {vault.t('common.done')}
+          </Button>
+        </div>
       {/if}
     </div>
   {/if}

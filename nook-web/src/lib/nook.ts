@@ -53,13 +53,7 @@ export function generatePassword(
   numbers: boolean,
   symbols: boolean,
 ): string {
-  return wasmGeneratePassword(
-    length,
-    lowercase,
-    uppercase,
-    numbers,
-    symbols,
-  )
+  return wasmGeneratePassword(length, lowercase, uppercase, numbers, symbols)
 }
 
 export function isoTimestamp(): string {

@@ -1507,9 +1507,9 @@ export async function connectGithubSyncProviderFromSettings(
   await page.getByTestId('connect-provider-btn').click()
   await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
   if (!options?.expectConflict) {
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).not.toBeVisible(
-      { timeout: UI_TIMEOUT_MS },
-    )
+    await expect(
+      page.getByTestId('vault-sync-conflict-dialog'),
+    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
   }
 }
 
