@@ -169,9 +169,10 @@
     "manage_title": "Управление сейфами",
     "manager_name_label": "Название сейфа",
     "admin_title": "Админ",
+    "admin_vaults_title": "Сейфы",
+    "admin_vaults_desc": "Создавайте, переименовывайте и переключайте локальные сейфы на этом устройстве.",
     "admin_vault_count": "Сейфов на устройстве: {count}",
     "admin_new_vault_label": "Новый сейф",
-    "admin_sync_title": "Провайдеры синхронизации",
     "expand_secret": "Развернуть секрет",
     "collapse_secret": "Свернуть секрет",
     "types": {

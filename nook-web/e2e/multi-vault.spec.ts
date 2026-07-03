@@ -187,9 +187,15 @@ test.describe('multi-vault on one browser profile', () => {
     await expect(page.getByTestId('vault-switcher-trigger')).toContainText(
       'Vault Bee',
     )
+    await expect(page.getByTestId('vault-admin-vaults-section')).toBeVisible()
+    await expect(page.getByTestId('vault-admin-vault-count')).toContainText(
+      '2 vaults',
+    )
 
+    await page.getByTestId('vault-settings-tab').click()
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
     await page
-      .getByTestId('vault-admin-sync-panel')
+      .getByTestId('storage-providers-section')
       .getByTestId('add-provider-btn')
       .click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()

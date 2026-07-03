@@ -352,22 +352,8 @@
               {#if vault.settingsOpen && vault.settingsSection === 'admin'}
                 <VaultAdmin
                   {vault}
-                  syncProviders={vault.syncProviders}
-                  syncingProviderId={vault.syncingProviderId}
                   isVerifying={vault.isVerifying}
                   isInitializing={vault.isInitializing}
-                  addProviderOpen={vault.addProviderOpen}
-                  bind:setupType={vault.loginSetupType}
-                  bind:githubPat={vault.githubPat}
-                  bind:githubRepo={vault.githubRepo}
-                  onReconnect={handleSettingsReconnect}
-                  onSyncProvider={(id) => vault.syncProviderById(id)}
-                  onBeginAddProvider={() => vault.beginAddProvider()}
-                  onCancelAddProvider={() => vault.cancelAddProvider()}
-                  onBeginSetup={(type, preset) =>
-                    vault.beginProviderSetup(type, preset)}
-                  onCancelSetup={() => vault.cancelProviderSetup()}
-                  onRemoveProvider={(id) => vault.removeProvider(id)}
                 />
               {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
                 <OnboardDevice
