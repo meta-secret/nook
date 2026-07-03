@@ -4,6 +4,7 @@ use crate::errors::{ValidationError, ValidationResult};
 use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
+use zeroize::Zeroize;
 
 const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const SYMMETRIC_KEY_HEX_LEN: usize = 64;
@@ -52,7 +53,6 @@ macro_rules! transparent_str_newtype {
 transparent_str_newtype!(SymmetricKey);
 transparent_str_newtype!(AgeArmoredCiphertext);
 transparent_str_newtype!(DevicePublicKey);
-transparent_str_newtype!(DeviceIdentitySecret);
 transparent_str_newtype!(SessionJsonl);
 transparent_str_newtype!(StoredVaultJsonl);
 transparent_str_newtype!(StoredVaultYaml);
@@ -61,6 +61,56 @@ transparent_str_newtype!(PasswordEntryId);
 transparent_str_newtype!(OpaqueCiphertext);
 transparent_str_newtype!(DecryptedPlaintext);
 transparent_str_newtype!(SigningSeedHex);
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DeviceIdentitySecret(String);
+
+impl DeviceIdentitySecret {
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn into_inner(mut self) -> String {
+        std::mem::take(&mut self.0)
+    }
+
+    #[must_use]
+    pub fn from_trusted(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl fmt::Debug for DeviceIdentitySecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("DeviceIdentitySecret([REDACTED])")
+    }
+}
+
+impl fmt::Display for DeviceIdentitySecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl AsRef<str> for DeviceIdentitySecret {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for DeviceIdentitySecret {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl Drop for DeviceIdentitySecret {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 
 /// On-disk vault blob — JSONL or YAML wire, selected explicitly or via auto-detect.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -516,6 +566,11 @@ mod tests {
         assert_eq!(pk.as_str(), public);
         let sk = DeviceIdentitySecret::parse(&secret).unwrap();
         assert_eq!(sk.as_str(), secret);
+        assert_eq!(sk.to_string(), secret);
+        assert_eq!(format!("{sk:?}"), "DeviceIdentitySecret([REDACTED])");
+        assert_eq!(serde_json::to_string(&sk).unwrap(), format!("\"{secret}\""));
+        let trusted = DeviceIdentitySecret::from_trusted(sk.clone().into_inner());
+        assert_eq!(trusted, sk);
     }
 
     #[test]

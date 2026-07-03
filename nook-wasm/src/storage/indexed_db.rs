@@ -8,7 +8,10 @@
 //!   `connect_fresh` can bootstrap a second vault without overwriting the
 //!   previous active blob.
 //! - `encrypted_db` — legacy single-vault key (migrated on first read).
-//! - `device_id` / `device_identity_secret` — stable browser device identity.
+//! - `device_id` / `device_identity_wrapped` — stable browser device identity
+//!   encrypted with a passkey-PRF-derived key.
+//! - `device_identity_secret` — legacy plaintext identity, read only during
+//!   migration and deleted after the wrapped record is verified.
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
 
 use crate::NookError;
@@ -18,6 +21,9 @@ const LEGACY_ENCRYPTED_DB_KEY: &str = "encrypted_db";
 const ACTIVE_VAULT_KEY: &str = "active_vault_id";
 const VAULT_REGISTRY_KEY: &str = "vault_registry";
 const PENDING_NEW_LOCAL_VAULT_KEY: &str = "pending_new_local_vault";
+const DEVICE_ID_KEY: &str = "device_id";
+const LEGACY_DEVICE_IDENTITY_SECRET_KEY: &str = "device_identity_secret";
+const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 
 /// This browser's persisted device identity — the stable id we use across
 /// reloads plus the X25519 secret string that decrypts our own `auth:`
@@ -251,35 +257,8 @@ pub(crate) async fn save_vault_blob(store_id: &str, content: &str) -> Result<(),
 // IndexedDB Storage Functions (via rexie)
 // -------------------------------------------------------------
 
-pub(crate) async fn load_or_create_device_identity() -> Result<DeviceIdentityRecord, NookError> {
-    if let Some(existing) = load_device_identity_from_indexed_db().await? {
-        return Ok(existing);
-    }
-    let identity = nook_core::DeviceIdentity::generate()?;
-    Ok(DeviceIdentityRecord {
-        device_id: identity.device_id().to_string(),
-        secret: identity.secret_string().into_inner(),
-    })
-}
-
-/// Load the persisted device identity, generating **and persisting** a fresh one
-/// on first use. Unlike [`load_or_create_device_identity`], the freshly created
-/// identity is written back immediately so later reads (e.g. decrypting sealed
-/// sync-provider credentials) resolve the exact same device key.
-pub(crate) async fn ensure_device_identity_record() -> Result<DeviceIdentityRecord, NookError> {
-    if let Some(existing) = load_device_identity_from_indexed_db().await? {
-        return Ok(existing);
-    }
-    let identity = nook_core::DeviceIdentity::generate()?;
-    let record = DeviceIdentityRecord {
-        device_id: identity.device_id().to_string(),
-        secret: identity.secret_string().into_inner(),
-    };
-    save_device_identity_to_indexed_db(&record.device_id, &record.secret).await?;
-    Ok(record)
-}
-
-async fn load_device_identity_from_indexed_db() -> Result<Option<DeviceIdentityRecord>, NookError> {
+pub(crate) async fn load_legacy_device_identity() -> Result<Option<DeviceIdentityRecord>, NookError>
+{
     let rexie = open_vault_db().await?;
 
     let transaction = rexie
@@ -289,9 +268,9 @@ async fn load_device_identity_from_indexed_db() -> Result<Option<DeviceIdentityR
         .store("vault")
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
 
-    let id_key = serde_wasm_bindgen::to_value("device_id")
+    let id_key = serde_wasm_bindgen::to_value(DEVICE_ID_KEY)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let secret_key = serde_wasm_bindgen::to_value("device_identity_secret")
+    let secret_key = serde_wasm_bindgen::to_value(LEGACY_DEVICE_IDENTITY_SECRET_KEY)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let id_value = store
         .get(id_key)
@@ -327,12 +306,42 @@ async fn load_device_identity_from_indexed_db() -> Result<Option<DeviceIdentityR
     Ok(Some(DeviceIdentityRecord { device_id, secret }))
 }
 
-pub(crate) async fn save_device_identity_to_indexed_db(
-    device_id: &str,
-    secret: &str,
-) -> Result<(), NookError> {
-    let rexie = open_vault_db().await?;
+pub(crate) async fn device_identity_protection_status() -> Result<&'static str, NookError> {
+    if idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await?.is_some() {
+        return Ok("passkey");
+    }
+    if idb_get_string(LEGACY_DEVICE_IDENTITY_SECRET_KEY)
+        .await?
+        .is_some()
+    {
+        return Ok("plaintext");
+    }
+    Ok("missing")
+}
 
+pub(crate) async fn load_wrapped_device_identity()
+-> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
+    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+        return Ok(None);
+    };
+    let device_id = idb_get_string(DEVICE_ID_KEY)
+        .await?
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            NookError::IndexedDb("Protected device identity is missing device_id.".to_owned())
+        })?;
+    let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
+    Ok(Some((device_id, wrapped)))
+}
+
+/// Atomically install a verified wrapped identity and remove the legacy
+/// plaintext key only after the just-written ciphertext can be read back.
+pub(crate) async fn save_wrapped_device_identity(
+    device_id: &str,
+    record: &nook_core::WrappedDeviceIdentity,
+) -> Result<(), NookError> {
+    let wrapped = nook_core::serialize_wrapped_device_identity(record)?;
+    let rexie = open_vault_db().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
@@ -340,13 +349,15 @@ pub(crate) async fn save_device_identity_to_indexed_db(
         .store("vault")
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
 
-    let id_key = serde_wasm_bindgen::to_value("device_id")
+    let id_key = serde_wasm_bindgen::to_value(DEVICE_ID_KEY)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let secret_key = serde_wasm_bindgen::to_value("device_identity_secret")
+    let wrapped_key = serde_wasm_bindgen::to_value(WRAPPED_DEVICE_IDENTITY_KEY)
+        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
+    let legacy_secret_key = serde_wasm_bindgen::to_value(LEGACY_DEVICE_IDENTITY_SECRET_KEY)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let id_value = serde_wasm_bindgen::to_value(device_id)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let secret_value = serde_wasm_bindgen::to_value(secret)
+    let wrapped_value = serde_wasm_bindgen::to_value(&wrapped)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
 
     store
@@ -354,15 +365,94 @@ pub(crate) async fn save_device_identity_to_indexed_db(
         .await
         .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
     store
-        .put(&secret_value, Some(&secret_key))
+        .put(&wrapped_value, Some(&wrapped_key))
         .await
         .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
+    let verified_value = store
+        .get(wrapped_key)
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Verify get error: {e:?}")))?
+        .ok_or_else(|| {
+            NookError::IndexedDb("Wrapped device identity verification failed.".to_owned())
+        })?;
+    let verified: String = serde_wasm_bindgen::from_value(verified_value)
+        .map_err(|e| NookError::IndexedDb(format!("Verify parse error: {e:?}")))?;
+    if verified != wrapped {
+        return Err(NookError::IndexedDb(
+            "Wrapped device identity verification mismatch.".to_owned(),
+        ));
+    }
+    store
+        .delete(legacy_secret_key)
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Legacy key delete error: {e:?}")))?;
 
     transaction
         .done()
         .await
         .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
     Ok(())
+}
+
+pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookError> {
+    idb_delete_key(WRAPPED_DEVICE_IDENTITY_KEY).await?;
+    idb_delete_key(LEGACY_DEVICE_IDENTITY_SECRET_KEY).await?;
+    idb_delete_key(DEVICE_ID_KEY).await
+}
+
+#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
+mod device_identity_migration_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn verified_wrapped_identity_replaces_legacy_plaintext() {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let identity = nook_core::DeviceIdentity::generate().expect("identity");
+        let secret = identity.secret_string();
+        idb_put_string(DEVICE_ID_KEY, identity.device_id().as_str())
+            .await
+            .expect("save id");
+        idb_put_string(LEGACY_DEVICE_IDENTITY_SECRET_KEY, secret.as_str())
+            .await
+            .expect("save legacy secret");
+        assert_eq!(
+            device_identity_protection_status().await.expect("status"),
+            "plaintext"
+        );
+
+        let setup = nook_core::DeviceKeyProtectionSetup::generate().expect("setup");
+        let prf_output = [21u8; 32];
+        let wrapped = nook_core::wrap_device_identity(
+            &secret,
+            &[7u8; 32],
+            setup.user_handle(),
+            setup.prf_input(),
+            &prf_output,
+        )
+        .expect("wrap");
+        save_wrapped_device_identity(identity.device_id().as_str(), &wrapped)
+            .await
+            .expect("persist wrapped identity");
+
+        assert!(
+            idb_get_string(LEGACY_DEVICE_IDENTITY_SECRET_KEY)
+                .await
+                .expect("read legacy")
+                .is_none()
+        );
+        let (_, reloaded) = load_wrapped_device_identity()
+            .await
+            .expect("load")
+            .expect("record");
+        assert_eq!(
+            nook_core::unwrap_device_identity(&reloaded, &prf_output).expect("unwrap"),
+            secret
+        );
+    }
 }
 
 pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> {

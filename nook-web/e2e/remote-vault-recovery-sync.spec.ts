@@ -3,6 +3,8 @@ import {
   addSecret,
   assertVaultReady,
   clearBrowserVault,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  installPasskeyMock,
   disableLoginAutoUnlock,
   removeE2eDummyGithubSyncProvider,
   revealSecretInRow,
@@ -29,6 +31,7 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
   test.beforeAll(async ({ browser }) => {
     target = createSyncTarget('', 'remote-recovery')
     vaultPage = await browser.newPage()
+    await installPasskeyMock(vaultPage)
     await installSyncStub(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
@@ -62,7 +65,11 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     await row.getByText(value).waitFor()
 
     await removeE2eDummyGithubSyncProvider(vaultPage)
-    await vaultPage.getByTestId('vault-sync-refresh-btn').click()
+    const syncButton = vaultPage.getByTestId('vault-sync-refresh-btn')
+    await expect(syncButton).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await syncButton.click()
     await waitForGithubVaultState(
       target,
       (yaml) => yaml.secretIds.length >= 1,

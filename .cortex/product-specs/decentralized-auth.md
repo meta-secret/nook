@@ -20,7 +20,8 @@ Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** 
 ```mermaid
 flowchart TB
   subgraph local["Local only (IndexedDB)"]
-    DI["Device identity secret<br/>(X25519 private key)"]
+    DI["Wrapped device identity<br/>(AES-256-GCM ciphertext)"]
+    PK["Passkey PRF<br/>(platform authenticator)"]
     DID["device_id fingerprint<br/>(16 hex, UI only)"]
   end
 
@@ -31,7 +32,8 @@ flowchart TB
     MEM["members: pk_id + ciphertext<br/>(members_key-encrypted pk_id + pk)"]
   end
 
-  DI -->|"unwrap own auth row"| AUTH
+  PK -->|"PRF output → HKDF → unwrap"| DI
+  DI -->|"authorized X25519 key unwraps own auth row"| AUTH
   AUTH -->|"VaultCrypto(secrets_key)"| SEC
   AUTH -->|"VaultCrypto(members_key)"| MEM
   JOIN -->|"approve → auth + members row"| AUTH
@@ -41,10 +43,50 @@ flowchart TB
 |---|---|---|
 | **secrets_key** | Symmetric key — encrypts all secret *values* in `secrets:` | Per-device age envelope in `auth.secrets_key` |
 | **members_key** | Symmetric key — encrypts each `{pk_id, pk}` entry in `members:` | Per-device age envelope in `auth.members_key` |
-| **Device identity** | X25519 keypair — unwraps this device's auth envelopes | IndexedDB only |
+| **Device identity** | X25519 keypair — unwraps this device's auth envelopes | AES-256-GCM ciphertext in IndexedDB; plaintext only in an authorized WASM session |
+| **Passkey PRF** | Produces the secret input used by HKDF to unwrap the device identity | Browser/platform authenticator; never persisted by Nook |
 | **pk_id** | SHA256(public key), 64 hex | `auth:` row id and `members:` row id |
 
 Both keys are generated together on genesis (`generate_vault_keys()`).
+
+### 2.1 Local device-key protection
+
+Before any provider credential or device-key operation, the browser runs
+WebAuthn with required user verification and the PRF extension. TypeScript owns
+only `navigator.credentials.create/get`; it passes the 32-byte PRF result to
+WASM. Rust derives an AES-256-GCM key with HKDF-SHA256 and unwraps the age
+identity. Nook never stores a password or encryption key in WebAuthn `user.id`.
+
+Existing plaintext `device_identity_secret` records are migrated in place:
+WASM writes and verifies `device_identity_wrapped`, then deletes the legacy
+record. Unsupported authenticators fail closed. Losing the passkey requires a
+destructive local identity reset; encrypted local vault blobs are preserved,
+but saved sync credentials are removed because they were sealed to the old
+identity.
+
+### 2.2 Browser and authenticator support (2026-07-03)
+
+PRF support is a property of the complete browser + OS + authenticator path,
+not merely the presence of `PublicKeyCredential`. Nook therefore treats the
+actual extension result as authoritative:
+
+- Chromium implements WebAuthn PRF, but support still depends on the selected
+  passkey provider, OS API, or CTAP2 authenticator.
+- Safari added WebAuthn PRF in Safari 18 / iOS 18 / macOS 15.
+- Firefox has PRF implementations on major desktop platforms, with documented
+  platform/authenticator gaps (notably some macOS external-security-key paths).
+- WebViews and mobile passkey providers vary. Nook does not maintain a
+  user-agent allowlist.
+
+At registration Nook requires `getClientExtensionResults().prf.enabled ===
+true`; at authorization it requires a 32-byte `prf.results.first`. Missing
+support leaves the setup/unlock gate visible with an explicit error and never
+falls back to plaintext.
+
+References: [WebAuthn PRF specification](https://www.w3.org/TR/webauthn-3/#prf-extension),
+[Chromium intent to ship](https://groups.google.com/a/chromium.org/g/blink-dev/c/iTNOgLwD2bI),
+[Safari 18 release notes](https://webkit.org/blog/15865/webkit-features-in-safari-18-0/),
+[Mozilla PRF tracking](https://bugzilla.mozilla.org/show_bug.cgi?id=1863819).
 
 ---
 

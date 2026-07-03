@@ -8,16 +8,15 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::conversion::{LoadedVault, apply_member_records, load_stored_vault, wasm_iso_timestamp};
-use crate::storage::indexed_db::save_device_identity_to_indexed_db;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Load or create this browser's device identity (`IndexedDB`).
-    pub async fn init_device(&mut self) -> Result<(), JsError> {
-        self.ensure_device_identity().await?;
+    /// Verify that passkey authorization loaded this browser's device identity.
+    pub fn init_device(&mut self) -> Result<(), JsError> {
+        self.ensure_device_identity()?;
         Ok(())
     }
 
@@ -47,7 +46,7 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity().await?;
+        let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
         if vault_missing || content.trim().is_empty() {
@@ -78,7 +77,6 @@ impl NookVaultManager {
         )?);
 
         self.meta = nook_core::VaultMetaState::from_stored_records(&records);
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         let can_decrypt =
             self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok();
         if can_decrypt {
@@ -111,7 +109,7 @@ impl NookVaultManager {
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity().await?;
+        let identity = self.ensure_device_identity()?;
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
         if vault_missing || content.trim().is_empty() {
@@ -139,7 +137,6 @@ impl NookVaultManager {
         records.extend(members);
 
         self.meta = nook_core::VaultMetaState::from_stored_records(&records);
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
         self.persist_vault_change(Vec::new()).await?;
 
         let updated = nook_core::serialize_stored(&records, format)?;

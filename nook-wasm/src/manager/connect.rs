@@ -13,7 +13,7 @@ use crate::NookSecretRecord;
 use crate::conversion::{
     LoadedVault, access_status_for_vault_content, content_requires_genesis, load_stored_vault,
 };
-use crate::storage::indexed_db::{load_vault_local_cache, save_device_identity_to_indexed_db};
+use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -29,7 +29,7 @@ impl NookVaultManager {
     ) -> Result<String, JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity().await?;
+        let identity = self.ensure_device_identity()?;
         let mut vault_file_missing = false;
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
@@ -115,7 +115,7 @@ impl NookVaultManager {
         );
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity().await?;
+        let identity = self.ensure_device_identity()?;
 
         let mut vault_file_missing = false;
         let content = if self.use_local_cache_for_connect {
@@ -192,8 +192,6 @@ impl NookVaultManager {
                 self.flush_event_outbox().await?;
             }
         }
-
-        save_device_identity_to_indexed_db(&self.device_id, &self.device_identity_secret).await?;
 
         if use_genesis || vault_file_missing {
             self.flush_event_outbox().await?;

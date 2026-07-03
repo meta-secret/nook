@@ -62,7 +62,7 @@ impl NookVaultManager {
                 }
                 self.capture_vault_unlock(&content);
                 self.last_synced_content = content.clone();
-                let identity = self.ensure_device_identity().await?;
+                let identity = self.ensure_device_identity()?;
                 let status = access_status_for_vault_content(&content, &identity)?;
                 let _ = self.status_tx.send(format!("SYNC_ASSESS_{status}"));
                 return sync_result_access_status(&status);
@@ -112,7 +112,7 @@ impl NookVaultManager {
         if self.members_key.is_empty() {
             self.capture_vault_unlock(&content);
             self.last_synced_content = content.clone();
-            let identity = self.ensure_device_identity().await?;
+            let identity = self.ensure_device_identity()?;
             let status = access_status_for_vault_content(&content, &identity)?;
             return sync_result_access_status(&status);
         }

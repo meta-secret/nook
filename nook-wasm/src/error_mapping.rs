@@ -131,3 +131,9 @@ impl From<nook_core::VaultEpochError> for NookError {
         NookError::Database(err.to_string())
     }
 }
+
+impl From<nook_core::DeviceKeyProtectionError> for NookError {
+    fn from(err: nook_core::DeviceKeyProtectionError) -> Self {
+        NookError::Decryption(err.to_string())
+    }
+}

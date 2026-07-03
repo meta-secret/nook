@@ -1,5 +1,6 @@
 import { expect, test, type Page } from './fixtures'
 import {
+  authorizeDeviceProtection,
   connectGithubSyncProviderFromSettings,
   createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
@@ -126,6 +127,7 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('header-lock-vault-btn').click()
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -172,6 +174,7 @@ test.describe('sync conflict resolution', () => {
     })
 
     await page.getByTestId('header-lock-vault-btn').click()
+    await authorizeDeviceProtection(page)
     await unlockVaultOnLogin(page, { storeId: storeB })
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

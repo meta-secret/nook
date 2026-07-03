@@ -34,9 +34,11 @@ export async function createFreshVault(state: VaultState) {
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
       await prepareCreateNewVaultSlot()
-      state.manager.resetVaultSession()
     }
     const rawRecords = await state.enqueueStorage(async () => {
+      if (creatingAdditionalVault) {
+        state.manager!.resetVaultSession()
+      }
       const connectPromise = state.manager!.connect_fresh(
         ...state.wasmStorageArgs(),
       )
@@ -69,6 +71,7 @@ export async function createFreshVault(state: VaultState) {
       secrets: rawRecords.length,
     })
     state.showSuccess(state.t('toasts.vault_created'))
+    state.startIdleSessionTracking()
   } catch (e: unknown) {
     state.isAuthenticated = false
     const message =

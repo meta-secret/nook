@@ -2,10 +2,12 @@ import { beforeAll, describe, expect, test } from 'vitest'
 import {
   default as initNookWasm,
   loadAuthProviders,
+  NookVaultManager,
   saveAuthProviders,
 } from '$lib/nook-wasm/nook_wasm'
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
+let manager: NookVaultManager
 
 async function readRawAuthProvidersFromIdb(): Promise<{
   providers: Array<{
@@ -45,11 +47,23 @@ describe.sequential(
   () => {
     beforeAll(async () => {
       await initNookWasm()
+      manager = new NookVaultManager()
+      const setup = await manager.beginDeviceProtection()
+      try {
+        await manager.finishDeviceProtection(
+          new Uint8Array(32).fill(7),
+          setup.userHandle,
+          setup.prfInput,
+          new Uint8Array(32).fill(11),
+        )
+      } finally {
+        setup.free()
+      }
     })
 
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'
-      await saveAuthProviders({
+      await saveAuthProviders(manager, {
         providers: [
           {
             id: 'gh-unit',
@@ -71,7 +85,7 @@ describe.sequential(
 
     test('loadAuthProviders decrypts sealed GitHub PAT', async () => {
       const pat = 'github_pat_22LOADdecryptTOKEN'
-      await saveAuthProviders({
+      await saveAuthProviders(manager, {
         providers: [
           {
             id: 'gh-load',
@@ -84,7 +98,7 @@ describe.sequential(
         ],
       })
 
-      const loaded = await loadAuthProviders()
+      const loaded = await loadAuthProviders(manager)
       expect(loaded.snapshot.providers[0]?.githubPat).toBe(pat)
     })
 
@@ -128,7 +142,7 @@ describe.sequential(
         }
       })
 
-      const loaded = await loadAuthProviders()
+      const loaded = await loadAuthProviders(manager)
       expect(loaded.snapshot.providers[0]?.githubPat).toBe(pat)
 
       const raw = await readRawAuthProvidersFromIdb()
@@ -140,7 +154,7 @@ describe.sequential(
     test('saveAuthProviders seals OAuth access and refresh tokens', async () => {
       const access = 'ya29.unit-oauth-access-token'
       const refresh = '1//unit-refresh-token-secret'
-      await saveAuthProviders({
+      await saveAuthProviders(manager, {
         providers: [
           {
             id: 'gd-unit',
@@ -165,7 +179,7 @@ describe.sequential(
       expect(oauth?.accessToken).not.toContain(access)
       expect(oauth?.refreshToken).not.toContain(refresh)
 
-      const loaded = await loadAuthProviders()
+      const loaded = await loadAuthProviders(manager)
       const loadedOauth = loaded.snapshot.providers[0]?.oauthFile
       expect(loadedOauth?.accessToken).toBe(access)
       expect(loadedOauth?.refreshToken).toBe(refresh)

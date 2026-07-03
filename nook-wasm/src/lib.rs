@@ -22,10 +22,10 @@ mod types;
 pub use manager::NookVaultManager;
 pub use types::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
-    NookJoinRequest, NookPasswordEntrySummary, NookReconcileVaultBlobsResult, NookRemoteVaultFetch,
-    NookReplacementConflict, NookResolveConflictKeepLocalResult,
-    NookResolveConflictKeepRemoteResult, NookSecretFormFields, NookSyncProviderTarget,
-    NookVaultMember, NookVaultSyncResult,
+    NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
+    NookReconcileVaultBlobsResult, NookRemoteVaultFetch, NookReplacementConflict,
+    NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult, NookSecretFormFields,
+    NookSyncProviderTarget, NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -268,17 +268,24 @@ fn to_js_nullable<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_
 }
 
 #[wasm_bindgen(js_name = loadAuthProviders)]
-pub async fn load_auth_providers() -> Result<JsValue, wasm_bindgen::JsError> {
-    let normalized = crate::storage::auth_providers::load_auth_providers().await?;
+pub async fn load_auth_providers(
+    manager: &NookVaultManager,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let identity = manager.device_identity()?;
+    let normalized = crate::storage::auth_providers::load_auth_providers(&identity).await?;
     Ok(to_js_nullable(&normalized)?)
 }
 
 /// Seal credential fields with the device key and persist the snapshot to the
 /// `nook_auth` `IndexedDB` database.
 #[wasm_bindgen(js_name = saveAuthProviders)]
-pub async fn save_auth_providers(snapshot: JsValue) -> Result<(), wasm_bindgen::JsError> {
+pub async fn save_auth_providers(
+    manager: &NookVaultManager,
+    snapshot: JsValue,
+) -> Result<(), wasm_bindgen::JsError> {
+    let identity = manager.device_identity()?;
     let snapshot: nook_core::AuthProvidersSnapshotData = serde_wasm_bindgen::from_value(snapshot)?;
-    crate::storage::auth_providers::save_auth_providers(&snapshot).await?;
+    crate::storage::auth_providers::save_auth_providers(&identity, &snapshot).await?;
     Ok(())
 }
 

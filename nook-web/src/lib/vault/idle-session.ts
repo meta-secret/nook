@@ -24,4 +24,5 @@ export function lockVault(state: VaultState) {
   state.stopIdleSessionTracking()
   setVaultSessionLocked(true)
   state.clearUnlockedSession()
+  void state.lockDeviceProtection()
 }

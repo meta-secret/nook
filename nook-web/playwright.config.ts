@@ -22,6 +22,7 @@ const distDir = path.join(rootDir, 'dist')
 const PR_SPECS = [
   'auth-provider-credential-encryption.spec.ts',
   'connect.spec.ts',
+  'device-key-protection.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',
   'idle-session-lock.spec.ts',

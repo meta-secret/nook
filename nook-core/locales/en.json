@@ -244,6 +244,20 @@
     "subtitle": "How Nook keeps your vault encrypted and under your control.",
     "close": "Close Help"
   },
+  "device_protection": {
+    "title": "Protect this browser",
+    "setup_description": "Create a passkey to encrypt this browser's private device key. Your browser or operating system protects the passkey.",
+    "migration_description": "Your existing device key needs a one-time security upgrade. Create a passkey to encrypt it without changing vault access.",
+    "unlock_description": "Authorize with your passkey before Nook can use this browser's private device key.",
+    "unavailable_description": "Device-key protection could not be initialized. Refresh and try again in a supported browser.",
+    "setup_action": "Protect with a passkey",
+    "unlock_action": "Unlock with passkey",
+    "authorizing": "Waiting for passkey…",
+    "recovery_warning": "If this passkey is unavailable, reset this browser's device identity. Saved sync connections will be removed; local encrypted vaults remain.",
+    "recovery_action": "I can't use this passkey",
+    "recovery_confirm": "Reset this browser's device identity? Saved sync connections will be removed. Local encrypted vaults will remain, but you may need a vault password or another enrolled device to regain access.",
+    "recovery_complete": "Device identity reset. Create a new passkey to continue."
+  },
   "errors": {
     "validation": {
       "github_pat_empty": "Enter a GitHub personal access token to connect.",
@@ -262,6 +276,9 @@
       "unknown_storage_mode": "Unknown storage mode: {mode}"
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
+    "device_protection": {
+      "authorization_required": "Authorize with your passkey before using this browser's device key."
+    },
     "vault": {
       "decryption_failed": "Decryption failed. Please check your password.",
       "connection_failed": "Failed to connect to storage provider.",

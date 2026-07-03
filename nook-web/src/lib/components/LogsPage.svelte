@@ -213,7 +213,7 @@
         </p>
       {:else}
         <ul class="divide-y divide-border/40 font-mono text-xs">
-          {#each newestFirst as entry (entry.ts + entry.scope + entry.message)}
+          {#each newestFirst as entry, index (entry.ts + entry.scope + entry.message + index)}
             <li
               class="flex flex-col gap-0.5 px-4 py-2 sm:px-5"
               data-testid="logs-entry"

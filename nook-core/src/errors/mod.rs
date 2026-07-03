@@ -2,6 +2,7 @@
 
 mod age_crypto;
 mod database;
+mod device_key_protection;
 mod enrollment;
 mod event;
 mod multi_device;
@@ -16,6 +17,7 @@ mod vault_sync;
 
 pub use age_crypto::AgeCryptoError;
 pub use database::{DatabaseError, DatabaseResult};
+pub use device_key_protection::{DeviceKeyProtectionError, DeviceKeyProtectionResult};
 pub use enrollment::{EnrollmentError, EnrollmentResult};
 pub use event::EventError;
 pub use multi_device::{MultiDeviceError, MultiDeviceResult};

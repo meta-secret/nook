@@ -53,7 +53,7 @@ flowchart TB
 | Key | Value | Notes |
 |-----|-------|-------|
 | `encrypted_db` | UTF-8 vault YAML | **Authoritative local copy** — always present after first setup |
-| `device_identity_secret` | age X25519 secret | Never synced |
+| `device_identity_wrapped` | Versioned AES-256-GCM ciphertext + WebAuthn PRF metadata | Never synced; legacy `device_identity_secret` is deleted after migration |
 | `device_id` | Short fingerprint | UI only |
 
 The local vault is created on first setup and persists regardless of which sync providers are connected.
@@ -148,22 +148,26 @@ WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVault
 ```mermaid
 stateDiagram-v2
   [*] --> CheckLocal: app init
-  CheckLocal --> GetStarted: no local vault
-  CheckLocal --> Unlock: local vault exists
+  CheckLocal --> Passkey: setup / authorization
+  Passkey --> GetStarted: no local vault
+  Passkey --> Unlock: local vault exists
   GetStarted --> CreateLocal: device-key vault
   GetStarted --> ConnectProvider: cloud provider
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists
   ConnectProvider --> Vault: genesis / pull
   Unlock --> Vault: device keys or backup password
-  Vault --> LoginGate: Lock (clear session)
+  Vault --> Passkey: Lock (clear session + device identity)
+  Passkey --> LoginGate
   LoginGate --> Unlock
   Vault --> SyncSetup: add sync provider (optional)
 ```
 
-1. **Load local cache** on init when present — may auto-unlock if device keys suffice and no sync friction.
+1. **Authorize the passkey** on init, then load the local cache. The vault may
+   auto-unlock if device keys suffice and no sync friction remains.
 2. **First visit:** login chooser — create local vault (device keys) **or** connect sync provider.
-3. **Lock** (`VaultState.lockVault`) clears in-memory secrets; user returns to login gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
+3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
+   identity; user returns through the passkey gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).
 
 Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside optional backup passwords.

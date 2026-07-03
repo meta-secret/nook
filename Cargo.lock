@@ -1175,6 +1175,7 @@ dependencies = [
  "ed25519-dalek",
  "getrandom",
  "hex",
+ "hkdf",
  "pbkdf2 0.13.0",
  "rand_core",
  "serde",
@@ -1183,6 +1184,7 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.18",
  "tracing",
+ "zeroize",
 ]
 
 [[package]]
@@ -1209,6 +1211,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "web-sys",
+ "zeroize",
 ]
 
 [[package]]

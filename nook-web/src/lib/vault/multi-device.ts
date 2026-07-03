@@ -207,6 +207,7 @@ export async function enrollAndConnect(state: VaultState) {
     })
     state.joinEnrollmentPrompt = 'none'
     state.closeSettings()
+    state.startIdleSessionTracking()
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : 'Failed to enroll with vault keys.'
