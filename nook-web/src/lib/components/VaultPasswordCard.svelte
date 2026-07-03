@@ -7,11 +7,10 @@
     ShieldAlert,
     ShieldCheck,
     Trash2,
-    Copy,
-    Check,
     Plus,
     UserRound,
   } from '@lucide/svelte'
+  import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
   import QRCode from 'qrcode'
   import {
@@ -61,8 +60,6 @@
   let confirmInput = $state('')
   let showPassword = $state(false)
   let localError = $state('')
-  let copied = $state(false)
-  let qrDataUrl = $state('')
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const activeEntry = $derived(
@@ -76,6 +73,17 @@
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
   )
+  const qrDataUrlPromise = $derived.by(() => {
+    if (!enrollmentCode || typeof window === 'undefined') {
+      return Promise.resolve('')
+    }
+    return QRCode.toDataURL(enrollmentLink, {
+      errorCorrectionLevel: 'H',
+      margin: 1,
+      width: 240,
+      color: { dark: '#111317', light: '#ffffff' },
+    }).catch(() => '')
+  })
 
   const issuedAgo = $derived.by(() => {
     if (!issuedAt) return ''
@@ -90,26 +98,6 @@
       })
     const hours = Math.round(minutes / 60)
     return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
-  })
-
-  $effect(() => {
-    void enrollmentCode
-    if (!enrollmentCode) {
-      qrDataUrl = ''
-      return
-    }
-    QRCode.toDataURL(enrollmentLink, {
-      errorCorrectionLevel: 'H',
-      margin: 1,
-      width: 240,
-      color: { dark: '#111317', light: '#ffffff' },
-    })
-      .then((url: string) => {
-        qrDataUrl = url
-      })
-      .catch(() => {
-        qrDataUrl = ''
-      })
   })
 
   function openPanel(target: Panel, entryId: string | null = null) {
@@ -200,19 +188,6 @@
         e instanceof Error
           ? e.message
           : vault.t('vault_passwords.failed_issue_error')
-    }
-  }
-
-  async function copyCode() {
-    if (!enrollmentLink) return
-    try {
-      await navigator.clipboard.writeText(enrollmentLink)
-      copied = true
-      setTimeout(() => {
-        copied = false
-      }, 1500)
-    } catch {
-      // best-effort
     }
   }
 </script>
@@ -552,66 +527,36 @@
             <Button
               type="submit"
               size="sm"
+              disabled={isBusy}
               data-testid="generate-enrollment-code-btn"
             >
-              <QrCode class="size-3.5" />
-              {vault.t('vault_passwords.generate_qr')}
+              {#if isBusy}
+                <RefreshCw class="size-3.5 animate-spin" />
+                {vault.t('onboard_device.generating')}
+              {:else}
+                <QrCode class="size-3.5" />
+                {vault.t('vault_passwords.generate_qr')}
+              {/if}
             </Button>
           </div>
         </form>
       {:else}
-        <div
-          class="rounded-lg border border-border/60 bg-background p-3 space-y-3"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <p class="text-xs text-muted-foreground text-pretty">
-              {vault.t('vault_passwords.scan_qr_desc')}
-              {#if issuedAgo}
-                <span
-                  class="ml-1 text-muted-foreground/80"
-                  data-testid="enrollment-code-issued-ago"
-                >
-                  ({issuedAgo})
-                </span>
-              {/if}
-            </p>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-              onclick={copyCode}
-              data-testid="copy-enrollment-code-btn"
-            >
-              {#if copied}
-                <Check class="size-3" /> {vault.t('vault.copied')}
-              {:else}
-                <Copy class="size-3" /> {vault.t('vault.copy')}
-              {/if}
-            </button>
-          </div>
+        <EnrollmentOnboardResult
+          {vault}
+          {enrollmentLink}
+          {qrDataUrlPromise}
+          instruction={vault.t('vault_passwords.scan_qr_desc')}
+          issuedSuffix={issuedAgo ? `(${issuedAgo})` : ''}
+          linkTitle={vault.t('vault_passwords.link_title')}
+          linkDescription={vault.t('vault_passwords.link_desc')}
+          passwordReminder={vault.t('vault_passwords.share_password')}
+          copyBtnTestId="copy-enrollment-code-btn"
+          linkInputTestId="enrollment-link-url"
+          linkSrOnlyTestId="enrollment-code-link"
+          resultTestId="vault-password-enrollment-result"
+        />
 
-          {#if qrDataUrl}
-            <div class="flex justify-center">
-              <img
-                src={qrDataUrl}
-                alt="Enrollment code QR"
-                class="rounded-md border border-border"
-                width="240"
-                height="240"
-              />
-            </div>
-          {/if}
-
-          <span class="sr-only" data-testid="enrollment-code-link"
-            >{enrollmentLink}</span
-          >
-          <textarea
-            readonly
-            rows="3"
-            class="w-full font-mono text-[10px] leading-relaxed rounded-md border border-border bg-muted/30 p-2 text-muted-foreground break-all"
-            data-testid="enrollment-code-text">{enrollmentCode}</textarea
-          >
-
-          <div class="flex items-center justify-end">
+        <div class="flex items-center justify-end">
             <Button
               type="button"
               variant="ghost"
@@ -624,7 +569,6 @@
               {vault.t('common.done')}
             </Button>
           </div>
-        </div>
       {/if}
     </div>
   {/if}

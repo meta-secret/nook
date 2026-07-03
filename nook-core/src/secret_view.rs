@@ -142,7 +142,28 @@ pub fn build_secret_yaml(
     secret_type: SecretType,
     fields: &serde_json::Value,
 ) -> SecretPayloadResult<SecretPayloadYaml> {
-    let yaml = serde_yaml::to_string(fields).map_err(SecretPayloadError::Serialize)?;
+    let filtered = match secret_type {
+        SecretType::Login => serde_json::json!({
+            "websiteUrl": fields.get("websiteUrl").and_then(|v| v.as_str()).unwrap_or_default(),
+            "username": fields.get("username").and_then(|v| v.as_str()).unwrap_or_default(),
+            "password": fields.get("password").and_then(|v| v.as_str()).unwrap_or_default(),
+            "notes": fields.get("notes").and_then(|v| v.as_str()).unwrap_or_default(),
+        }),
+        SecretType::ApiKey => serde_json::json!({
+            "websiteUrl": fields.get("websiteUrl").and_then(|v| v.as_str()).unwrap_or_default(),
+            "key": fields.get("key").and_then(|v| v.as_str()).unwrap_or_default(),
+            "expiresAt": fields.get("expiresAt").and_then(|v| v.as_str()).unwrap_or_default(),
+        }),
+        SecretType::SeedPhrase => serde_json::json!({
+            "name": fields.get("name").and_then(|v| v.as_str()).unwrap_or_default(),
+            "seed": fields.get("seed").and_then(|v| v.as_str()).unwrap_or_default(),
+        }),
+        SecretType::SecureNote => serde_json::json!({
+            "title": fields.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
+            "note": fields.get("note").and_then(|v| v.as_str()).unwrap_or_default(),
+        }),
+    };
+    let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
     SecretPayloadYaml::parse(secret_type, &yaml)
 }
 
@@ -192,6 +213,32 @@ mod tests {
                 assert_eq!(value.password, "pw");
             }
             _ => panic!("expected login"),
+        }
+    }
+
+    #[test]
+    fn build_secret_yaml_round_trips_api_key_from_flat_form() {
+        let fields = serde_json::json!({
+            "websiteUrl": "https://api.example.com",
+            "username": "",
+            "password": "",
+            "notes": "",
+            "key": "tok123",
+            "expiresAt": "2030-01-01",
+            "name": "",
+            "seed": "",
+            "title": "",
+            "note": ""
+        });
+        let yaml = build_secret_yaml(SecretType::ApiKey, &fields).unwrap();
+        let parsed = SecretValue::from_yaml(SecretType::ApiKey, &yaml).unwrap();
+        match parsed {
+            SecretValue::ApiKey(value) => {
+                assert_eq!(value.website_url, "https://api.example.com");
+                assert_eq!(value.key, "tok123");
+                assert_eq!(value.expires_at, "2030-01-01");
+            }
+            _ => panic!("expected api key"),
         }
     }
 

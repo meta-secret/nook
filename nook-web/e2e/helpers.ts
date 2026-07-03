@@ -1617,7 +1617,7 @@ export async function expectVaultPasswordStatus(
   })
 }
 
-/** Issue an onboard enrollment code and return the code textarea locator. */
+/** Issue an onboard enrollment code and return the onboarding link input locator. */
 export async function submitOnboardEnrollmentCode(
   page: Page,
   password: string,
@@ -1635,9 +1635,10 @@ export async function submitOnboardEnrollmentCode(
   await page.getByTestId('onboard-password-input').fill(password)
   await page.getByTestId('onboard-device-submit').click()
 
-  const codeArea = page.getByTestId('onboard-code')
+  const linkInput = page.getByTestId('onboarding-link-url')
+  const generating = page.getByTestId('onboard-generating')
   const error = page.getByTestId('onboard-error')
-  await expect(codeArea.or(error)).toBeVisible({
+  await expect(linkInput.or(error).or(generating)).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   if (await error.isVisible()) {
@@ -1645,7 +1646,20 @@ export async function submitOnboardEnrollmentCode(
       `Onboard enrollment failed: ${(await error.textContent())?.trim() ?? 'unknown error'}`,
     )
   }
-  return codeArea
+  await expect(linkInput).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  return linkInput
+}
+
+/** Raw enrollment payload from a full onboarding URL or hash link. */
+export function enrollmentCodeFromLink(link: string): string {
+  const trimmed = link.trim()
+  const hashIndex = trimmed.indexOf('#enroll=')
+  if (hashIndex >= 0) {
+    return decodeURIComponent(trimmed.slice(hashIndex + '#enroll='.length))
+  }
+  return trimmed
 }
 
 /** Open the onboard-device settings view with sync timers paused for e2e. */

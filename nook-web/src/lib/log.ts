@@ -68,6 +68,7 @@ let wasmReady = false
 let flushTimer: ReturnType<typeof setInterval> | null = null
 let flushing = false
 let consolePatched = false
+let diagnosticsInstalled = false
 const preInitQueue: PendingRecord[] = []
 
 /**
@@ -220,6 +221,104 @@ function record(
   persist(level, scope, message, serialized)
 }
 
+/** True for browser-extension scripts we should not persist as app errors. */
+export function isIgnoredErrorSource(source: string | undefined): boolean {
+  if (!source) return false
+  const value = source.trim()
+  if (!value) return false
+  return (
+    /^(chrome|moz|safari-web|safari)-extension:/i.test(value) ||
+    value.includes('bootstrap-autofill-overlay')
+  )
+}
+
+/** Strip query strings from URLs before persisting (tokens may appear in params). */
+export function sanitizeLogUrl(url: string): string {
+  try {
+    const parsed = new URL(url, typeof location !== 'undefined' ? location.href : undefined)
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    const withoutQuery = url.split('?')[0] ?? url
+    return withoutQuery.split('#')[0] ?? withoutQuery
+  }
+}
+
+function resolveFetchUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
+/** Global `error` / `unhandledrejection` / non-OK `fetch` capture into app logs. */
+function captureDiagnostic(
+  level: LogLevel,
+  scope: string,
+  message: string,
+  data?: unknown,
+) {
+  record(level, scope, message, data)
+}
+
+function installGlobalErrorHandlers() {
+  if (typeof window === 'undefined') return
+
+  window.addEventListener('error', (event) => {
+    if (isIgnoredErrorSource(event.filename)) return
+    captureDiagnostic('error', 'window', event.message || 'Uncaught error', {
+      source: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      ...(event.error instanceof Error && event.error.stack
+        ? { stack: event.error.stack }
+        : {}),
+    })
+  })
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason
+    const stack = reason instanceof Error ? reason.stack : undefined
+    if (isIgnoredErrorSource(stack)) return
+    const message =
+      reason instanceof Error
+        ? `${reason.name}: ${reason.message}`
+        : stringifyArgs([reason])
+    if (isIgnoredErrorSource(message)) return
+    captureDiagnostic('error', 'unhandledrejection', message, stack ? { stack } : undefined)
+  })
+}
+
+function installFetchInstrumentation() {
+  if (typeof globalThis.fetch !== 'function') return
+  const marker = globalThis as typeof globalThis & { __nookFetchPatched?: boolean }
+  if (marker.__nookFetchPatched) return
+  marker.__nookFetchPatched = true
+
+  const originalFetch = globalThis.fetch.bind(globalThis)
+  globalThis.fetch = async (input, init) => {
+    const response = await originalFetch(input, init)
+    if (!response.ok) {
+      const url = sanitizeLogUrl(resolveFetchUrl(input))
+      if (!isIgnoredErrorSource(url)) {
+        captureDiagnostic('warn', 'fetch', `HTTP ${response.status} ${response.statusText}`, {
+          url,
+          status: response.status,
+          method: init?.method ?? 'GET',
+        })
+      }
+    }
+    return response
+  }
+}
+
+function installDiagnosticsCapture() {
+  if (diagnosticsInstalled) return
+  diagnosticsInstalled = true
+  installGlobalErrorHandlers()
+  installFetchInstrumentation()
+}
+
 export type ScopedLogger = {
   error: (message: string, data?: unknown) => void
   warn: (message: string, data?: unknown) => void
@@ -326,6 +425,7 @@ export function initWasmLogging() {
   if (typeof window !== 'undefined') {
     window.__nookConsole = { echo }
   }
+  installDiagnosticsCapture()
   patchConsole()
 
   nookLogInit()
@@ -381,6 +481,7 @@ declare global {
 }
 
 if (typeof window !== 'undefined') {
+  installDiagnosticsCapture()
   window.__nookLog = {
     setLevel: setLogLevel,
     getLevel: getLogLevel,

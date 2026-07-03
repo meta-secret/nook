@@ -1,5 +1,6 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord, VaultItemType } from '$lib/nook'
+import { generatePassword as coreGeneratePassword, generateSecretId } from '$lib/nook'
 import { createLogger } from '$lib/log'
 
 const log = createLogger('connect')
@@ -264,7 +265,7 @@ export async function handleReplaceSecret(
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   })
   try {
-    const newId = state.manager!.generate_secret_id()
+    const newId = generateSecretId()
     await state.enqueueStorage(async () => {
       const rawRecords = (await state.manager!.replace_secret(
         oldId,
@@ -324,17 +325,14 @@ export async function refreshPasswordEntriesList(
 }
 
 export function generatePassword(
-  state: VaultState,
+  _state: VaultState,
   length: number,
   lowercase: boolean,
   uppercase: boolean,
   numbers: boolean,
   symbols: boolean,
 ): string {
-  if (!state.manager) {
-    throw new Error('Vault engine is not available.')
-  }
-  return state.manager.generate_password(
+  return coreGeneratePassword(
     length,
     lowercase,
     uppercase,

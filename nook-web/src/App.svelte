@@ -3,7 +3,6 @@
   import {
     ArrowLeft,
     BookOpen,
-    FolderKey,
     Lock,
     Moon,
     Sun,
@@ -26,6 +25,7 @@
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
+  import VaultSwitcher from '$lib/components/VaultSwitcher.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     appPath,
@@ -162,29 +162,15 @@
       <div
         class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
       >
-        <div class="flex min-w-0 items-center gap-3">
+        <div class="flex min-w-0 flex-1 items-center gap-3">
           <NookLogo {colorMode} size="sm" class="rounded-lg overflow-hidden" />
+          {#if vault.isAuthenticated && !legalPage && !logsPage && !vault.helpOpen}
+            <VaultSwitcher {vault} variant="header" />
+          {/if}
         </div>
 
         <div class="flex items-center gap-2">
           {#if vault.isAuthenticated && !vault.helpOpen && !legalPage}
-            {#if vault.hasMultipleLocalVaults}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-                data-testid="header-switch-vault-btn"
-                title={vault.t('common.switch_vault')}
-                disabled={vault.isVerifying || vault.isInitializing}
-                onclick={() => vault.lockVault()}
-              >
-                <FolderKey class="size-4" />
-                <span class="hidden sm:inline"
-                  >{vault.t('common.switch_vault')}</span
-                >
-              </Button>
-            {/if}
             <Button
               type="button"
               variant="outline"

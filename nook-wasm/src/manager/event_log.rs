@@ -242,6 +242,9 @@ impl NookVaultManager {
             apply_user_records_to_armored_session(user_records, crypto, &mut self.meta)?
                 .into_inner();
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.meta)?;
+        if let Ok(identity) = self.device_identity() {
+            let _ = self.maybe_sync_self_into_roster(&identity);
+        }
         Ok(())
     }
 

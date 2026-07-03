@@ -15,6 +15,7 @@ import {
   selectLoginUnlockMethod,
   stubGithubVaultForLocalE2e,
   submitOnboardEnrollmentCode,
+  enrollmentCodeFromLink,
   uniqueSecretKey,
   openOnboardDevicePanel,
   UI_TIMEOUT_MS,
@@ -190,7 +191,7 @@ test.describe('vault password envelope (local)', () => {
       'does not match',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await expect(page.getByTestId('onboard-code')).toHaveCount(0)
+    await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
 
     // NOTE: We intentionally do not chain a "now try the correct password"
     // assertion onto the same page. The wasm `age` 0.11.3 scrypt decryptor
@@ -200,7 +201,7 @@ test.describe('vault password envelope (local)', () => {
     // covered by the next test from a fresh page.
   })
 
-  test('issuing an enrollment code with the correct password renders a QR + code', async ({
+  test('issuing an enrollment code with the correct password renders a QR + link', async ({
     page,
     context,
   }) => {
@@ -211,11 +212,13 @@ test.describe('vault password envelope (local)', () => {
     await seedGithubSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
-    const codeText = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
-    await expect(codeText).toBeVisible({
+    const linkInput = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
+    await expect(linkInput).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const code = (await codeText.inputValue()).trim()
+    const link = (await linkInput.inputValue()).trim()
+    expect(link).toContain('#enroll=')
+    const code = enrollmentCodeFromLink(link)
     expect(code.length).toBeGreaterThan(40)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
@@ -241,18 +244,18 @@ test.describe('vault password envelope (local)', () => {
     expect(outer.provider).toBeUndefined()
 
     // The QR/link wraps the raw code so phone cameras open a browser tab.
-    const link = (await page.getByTestId('onboard-link').textContent())!
-    expect(link).toContain('#enroll=')
-    expect(decodeURIComponent(link.split('#enroll=')[1]!)).toBe(code)
+    const srLink = (await page.getByTestId('onboard-link').textContent())!
+    expect(srLink).toBe(link)
+    expect(decodeURIComponent(srLink.split('#enroll=')[1]!)).toBe(code)
 
-    // The UI surfaces the timestamp as audit info next to the code.
+    // The UI surfaces the timestamp as audit info next to the QR.
     await expect(page.getByText('Issued')).toBeVisible()
 
-    // Copy-to-clipboard button works.
+    // Copy-to-clipboard button copies the onboarding URL.
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.getByTestId('copy-onboard-link-btn').click()
     await expect(page.getByTestId('copy-onboard-link-btn')).toContainText(
-      'Copied',
+      'Link copied',
     )
   })
 

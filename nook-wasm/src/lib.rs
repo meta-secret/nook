@@ -118,6 +118,25 @@ pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_secret_id()?.to_string())
 }
 
+/// Cryptographically secure password generation — free function so the UI can
+/// call it while the vault manager is borrowed by an in-flight `&mut self` op.
+#[wasm_bindgen(js_name = generatePassword)]
+pub fn generate_password(
+    length: u32,
+    lowercase: bool,
+    uppercase: bool,
+    numbers: bool,
+    symbols: bool,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::generate_password(&nook_core::PasswordOptions {
+        length: length as usize,
+        lowercase,
+        uppercase,
+        numbers,
+        symbols,
+    })?)
+}
+
 #[wasm_bindgen(js_name = defaultGithubRepo)]
 #[must_use]
 pub fn default_github_repo() -> String {

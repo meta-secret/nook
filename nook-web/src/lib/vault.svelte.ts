@@ -777,6 +777,20 @@ export class VaultState {
     this.selectedLoginVaultStoreId = storeId
   }
 
+  async refreshLocalVaultCatalog(): Promise<void> {
+    return localLoginActions.refreshLocalVaultCatalog(this)
+  }
+
+  /** Lock and open the login unlock step for another vault on this device. */
+  async switchToVault(storeId: string): Promise<void> {
+    const trimmed = storeId.trim()
+    if (!trimmed || trimmed === this.activeVaultStoreId?.trim()) return
+    this.helpOpen = false
+    setVaultSessionLocked(true)
+    this.clearUnlockedSession()
+    await this.chooseLoginVault(trimmed)
+  }
+
   /** @deprecated Use {@link createLocalVaultWithDeviceKeys}. Backup passwords belong in Settings. */
   async createLocalVault(password: string): Promise<void> {
     return localLoginActions.createLocalVault(this, password)
@@ -1055,6 +1069,11 @@ export class VaultState {
     try {
       const snapshot = await this.enqueueStorage(async () => {
         await Promise.resolve()
+        try {
+          await this.manager!.ensureVaultRosterHydrated()
+        } catch {
+          // Roster repair is best-effort; still read the current session.
+        }
         let pendingJoins: JoinRequest[]
         let vaultMembers: VaultMember[]
         try {

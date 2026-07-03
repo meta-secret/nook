@@ -17,24 +17,6 @@ impl NookVaultManager {
         records_to_vec(filtered).map_err(Into::into)
     }
 
-    /// Cryptographically secure password generation (same rules as the vault UI).
-    pub fn generate_password(
-        &self,
-        length: u32,
-        lowercase: bool,
-        uppercase: bool,
-        numbers: bool,
-        symbols: bool,
-    ) -> Result<String, JsError> {
-        Ok(nook_core::generate_password(&nook_core::PasswordOptions {
-            length: length as usize,
-            lowercase,
-            uppercase,
-            numbers,
-            symbols,
-        })?)
-    }
-
     /// Prefixed secret item id (`secret_{token}`).
     pub fn generate_secret_id(&self) -> Result<String, JsError> {
         Ok(nook_core::generate_secret_id()?.to_string())

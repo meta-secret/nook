@@ -12,6 +12,7 @@ import {
   revealSecretValue,
   rotateVaultPassword,
   submitOnboardEnrollmentCode,
+  enrollmentCodeFromLink,
   UI_TIMEOUT_MS,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   uniqueSecretKey,
@@ -82,12 +83,14 @@ test.describe('vault password envelope (stub sync)', () => {
     expect(yaml.secretIds.length).toBeGreaterThanOrEqual(1)
   })
 
-  test('device A issues an enrollment code carrying github credentials', async () => {
+  test('device A issues an enrollment link carrying github credentials', async () => {
     await deviceA.getByTestId('vault-secrets-tab').click()
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
     await deviceA.getByTestId('vault-onboard-tab').click()
-    const codeArea = await submitOnboardEnrollmentCode(deviceA, vaultPassword)
-    const code = (await codeArea.inputValue()).trim()
+    const linkInput = await submitOnboardEnrollmentCode(deviceA, vaultPassword)
+    const link = (await linkInput.inputValue()).trim()
+    expect(link).toContain('#enroll=')
+    const code = enrollmentCodeFromLink(link)
     expect(code).toMatch(/^[A-Za-z0-9_-]+$/)
 
     const outer = JSON.parse(
@@ -106,13 +109,13 @@ test.describe('vault password envelope (stub sync)', () => {
     expect(typeof outer.issued_at).toBe('string')
     expect(Date.parse(outer.issued_at)).not.toBeNaN()
 
-    test.info().annotations.push({ type: 'enrollment-code', description: code })
+    test.info().annotations.push({ type: 'enrollment-link', description: link })
   })
 
-  test('device B self-enrols via the pasted code without approval', async () => {
-    const codeArea = deviceA.getByTestId('onboard-code')
-    const code = (await codeArea.inputValue()).trim()
-    expect(code.length).toBeGreaterThan(40)
+  test('device B self-enrols via the pasted link without approval', async () => {
+    const linkInput = deviceA.getByTestId('onboarding-link-url')
+    const link = (await linkInput.inputValue()).trim()
+    expect(link).toContain('#enroll=')
 
     await deviceB.goto('/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
@@ -121,7 +124,7 @@ test.describe('vault password envelope (stub sync)', () => {
 
     await expandLoginEnrollmentPanel(deviceB)
     await deviceB.getByTestId('open-enrollment-code-btn').click()
-    await deviceB.getByTestId('enrollment-code-input').fill(code)
+    await deviceB.getByTestId('enrollment-code-input').fill(link)
     await deviceB.getByTestId('enrollment-password-input').fill(vaultPassword)
     await deviceB.getByTestId('submit-enrollment-code-btn').click()
 

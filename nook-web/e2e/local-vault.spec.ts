@@ -64,6 +64,21 @@ test.describe('local vault', () => {
     expect(generated.length).toBeGreaterThanOrEqual(8)
   })
 
+  test('adds an API key without a website URL', async ({ page }) => {
+    const value = 'sk-test-api-key-no-website'
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-api-key').click()
+    await page.getByTestId('secret-value').fill(value)
+    await expect(page.getByTestId('save-secret-btn')).toBeEnabled()
+    await page.getByTestId('save-secret-btn').click()
+
+    const row = page.getByTestId('vault-group-api-key').getByTestId('secret-row')
+    await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await revealSecretInRow(row)
+    await expect(row.getByText(value)).toBeVisible()
+  })
+
   test('groups logins, API keys, and seed phrases', async ({ page }) => {
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-login').click()

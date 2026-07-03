@@ -212,4 +212,28 @@ test.describe('application logging', () => {
       expect(all.meta.returned).toBeGreaterThan(infoOnly.meta.returned)
     }
   })
+
+  test('persists console errors and failed fetch responses at default level', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await createLocalVaultOnLogin(page)
+
+    await page.evaluate(async () => {
+      console.error('nook-e2e-console-error-marker')
+      await fetch('/nook-e2e-missing-resource-404')
+    })
+    await flushNookLogPersistQueue(page)
+
+    await waitForPersistedAppLog(page, {
+      scope: 'console',
+      level: 'error',
+      messageIncludes: 'nook-e2e-console-error-marker',
+    })
+    await waitForPersistedAppLog(page, {
+      scope: 'fetch',
+      level: 'warn',
+      messageIncludes: 'HTTP 404',
+    })
+  })
 })

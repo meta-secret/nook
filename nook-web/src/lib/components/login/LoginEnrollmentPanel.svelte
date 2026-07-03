@@ -133,7 +133,7 @@
             </button>
           </div>
           <textarea
-            rows="4"
+            rows="3"
             class="w-full font-mono text-xs leading-relaxed rounded-md border border-border bg-background p-3 focus:outline-none focus:ring-2 focus:ring-ring"
             placeholder={vault.t('login.paste_placeholder')}
             bind:value={enrollmentCodeInput}

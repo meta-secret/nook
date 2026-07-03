@@ -419,6 +419,28 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Repair an empty device roster when this browser holds vault keys but no
+    /// `members:` rows (event-log projection does not replay roster entries).
+    pub(in crate::manager) async fn ensure_vault_roster_hydrated(
+        &mut self,
+    ) -> Result<bool, NookError> {
+        if self.members_key.is_empty() {
+            let _ = self.ensure_vault_crypto_from_cache().await;
+        }
+        if self.members_key.is_empty() {
+            return Ok(false);
+        }
+        let identity = self.device_identity()?;
+        let before = self.vault_members().map_or(0, |members| members.len());
+        self.maybe_sync_self_into_roster(&identity)?;
+        let after = self.vault_members().map_or(0, |members| members.len());
+        if after > before {
+            self.persist_projection_cache().await?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     pub(in crate::manager) fn stored_records_snapshot(&self) -> Vec<nook_core::StoredSecretRecord> {
         self.meta.to_stored_records()
     }

@@ -16,8 +16,9 @@ import * as localLoginActions from '$lib/vault/local-login'
 const log = createLogger('vault-sync')
 
 function syncError(context: string, error: unknown) {
-  log.debug(`${context} failed`, {
+  log.warn(`${context} failed`, {
     error: error instanceof Error ? error.message : String(error),
+    ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
   })
 }
 

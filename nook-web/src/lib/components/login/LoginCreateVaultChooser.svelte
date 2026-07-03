@@ -20,7 +20,11 @@
   const isBusy = $derived(isVerifying || isInitializing)
 </script>
 
-<div class="space-y-3" data-testid="login-create-vault-chooser">
+<div class="space-y-4" data-testid="login-create-vault-chooser">
+  <p class="text-sm text-pretty text-muted-foreground">
+    {vault.t('login.create_vault_intro')}
+  </p>
+
   <div
     class="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3"
     data-testid="login-path-local"
