@@ -1,13 +1,19 @@
 /**
- * Thin web-side shim over the WASM-owned logger (`nook-wasm/src/logger.rs`).
+ * Web-side console authority + shim over the WASM-owned logger
+ * (`nook-wasm/src/logger.rs`).
  *
- * The logger itself — level gating, IndexedDB persistence (rexie, `nook_logs`
- * ring buffer), console echo — lives in WASM. This module only:
- * - forwards `createLogger(scope).info(…)` calls to the `nookLog` binding,
+ * The logger core — level gating, IndexedDB persistence (rexie, `nook_logs`
+ * ring buffer), `nook-core`/`nook-wasm` `tracing` events — lives in WASM. This
+ * module makes the WASM logger the single console authority for the web app:
+ * - captures the ORIGINAL `console.*` methods at load,
+ * - patches `console.*` so every call still prints (via the originals) AND is
+ *   persisted through the `nookLog` binding,
+ * - exposes `window.__nookConsole.echo` so Rust `tracing` events (already
+ *   persisted by the WASM layer) print through the same original methods,
+ * - forwards `createLogger(scope).info(…)` calls: echo once via the originals,
+ *   then persist,
  * - resolves the initial level from `localStorage.nook_log_level` /
- *   `VITE_LOG_LEVEL` and pushes it into WASM,
- * - drives the periodic flush of the write-behind queue,
- * - exposes `window.__nookLog` for devtools / e2e / the `/logs` page.
+ *   `VITE_LOG_LEVEL`, drives the periodic flush, and exposes `window.__nookLog`.
  *
  * Persistence is level-gated: only entries at or above the active level are
  * stored. For a deeper post-mortem, lower the level (`debug`/`trace`) and
@@ -24,6 +30,7 @@ import {
   nookLogDump,
   nookLogFlush,
   nookLogGetLevel,
+  nookLogInit,
   nookLogSetLevel,
 } from './nook-wasm/nook_wasm'
 
@@ -60,7 +67,34 @@ type PendingRecord = {
 let wasmReady = false
 let flushTimer: ReturnType<typeof setInterval> | null = null
 let flushing = false
+let consolePatched = false
 const preInitQueue: PendingRecord[] = []
+
+/**
+ * The original console methods, captured before we patch `console`. All echo
+ * paths (`createLogger`, the `console.*` patch, Rust via `__nookConsole.echo`)
+ * print through these so patching never causes recursion or double-persist.
+ */
+type ConsoleMethod = (...args: unknown[]) => void
+const originalConsole: Record<
+  'error' | 'warn' | 'info' | 'debug' | 'log',
+  ConsoleMethod
+> =
+  typeof console !== 'undefined'
+    ? {
+        error: console.error.bind(console),
+        warn: console.warn.bind(console),
+        info: console.info.bind(console),
+        debug: console.debug.bind(console),
+        log: console.log.bind(console),
+      }
+    : {
+        error: () => {},
+        warn: () => {},
+        info: () => {},
+        debug: () => {},
+        log: () => {},
+      }
 
 function parseLevel(raw: string | null | undefined): LogLevel | null {
   const value = raw?.trim().toLowerCase()
@@ -88,13 +122,75 @@ function serializeData(data: unknown): string | undefined {
   }
 }
 
-function record(
+/** Render arbitrary `console.*` arguments into a single persisted message. */
+function stringifyArgs(args: unknown[]): string {
+  return args
+    .map((arg) => {
+      if (typeof arg === 'string') return arg
+      if (arg instanceof Error)
+        return arg.stack ?? `${arg.name}: ${arg.message}`
+      try {
+        return JSON.stringify(arg)
+      } catch {
+        return String(arg)
+      }
+    })
+    .join(' ')
+}
+
+function levelRank(level: LogLevel): number {
+  return LOG_LEVELS.indexOf(level)
+}
+
+/** Local `YYYY-MM-DD HH:MM:SS.mmm` timestamp for console echo lines. */
+function formatTimestamp(date = new Date()): string {
+  const pad = (value: number, size = 2) => String(value).padStart(size, '0')
+  const y = date.getFullYear()
+  const mo = pad(date.getMonth() + 1)
+  const d = pad(date.getDate())
+  const h = pad(date.getHours())
+  const mi = pad(date.getMinutes())
+  const s = pad(date.getSeconds())
+  const ms = pad(date.getMilliseconds(), 3)
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}.${ms}`
+}
+
+/** True when `level` should be echoed/persisted under the active level. */
+function isEnabled(level: LogLevel): boolean {
+  return levelRank(level) <= levelRank(getLogLevel())
+}
+
+/**
+ * Echo one line to the console via the ORIGINAL (unpatched) methods, prefixed
+ * with a local date/time so console output is timestamped like the persisted
+ * entries. Shared by `createLogger` and Rust `tracing` events
+ * (`window.__nookConsole.echo`).
+ */
+function echo(level: LogLevel, text: string) {
+  const line = `${formatTimestamp()} ${text}`
+  switch (level) {
+    case 'error':
+      originalConsole.error(line)
+      break
+    case 'warn':
+      originalConsole.warn(line)
+      break
+    case 'debug':
+    case 'trace':
+      originalConsole.debug(line)
+      break
+    default:
+      originalConsole.info(line)
+  }
+}
+
+/** Persist one entry (no console echo). Queues until WASM is ready. */
+function persist(
   level: LogLevel,
   scope: string,
   message: string,
-  data?: unknown,
+  serialized?: string,
 ) {
-  const serialized = serializeData(data)
   if (!wasmReady) {
     if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
       preInitQueue.push({ level, scope, message, data: serialized })
@@ -106,6 +202,22 @@ function record(
   } catch {
     // Logging must never break the app.
   }
+}
+
+/** `createLogger` path: gate, echo once via originals, then persist. */
+function record(
+  level: LogLevel,
+  scope: string,
+  message: string,
+  data?: unknown,
+) {
+  if (!isEnabled(level)) return
+  const serialized = serializeData(data)
+  const text = serialized
+    ? `[${scope}] ${message} ${serialized}`
+    : `[${scope}] ${message}`
+  echo(level, text)
+  persist(level, scope, message, serialized)
 }
 
 export type ScopedLogger = {
@@ -171,11 +283,46 @@ export async function clearLogs(): Promise<void> {
 }
 
 /**
- * Wire the WASM logger once the engine is initialised: push the resolved
- * level, replay queued entries, and start the write-behind flush loop.
+ * Patch `console.*` so every call still prints (via the captured originals) and
+ * is persisted with the `console` scope. Idempotent; only the persist side is
+ * level-gated (console output is never suppressed).
+ */
+function patchConsole() {
+  if (consolePatched || typeof console === 'undefined') return
+  consolePatched = true
+
+  const wrap = (
+    method: 'error' | 'warn' | 'info' | 'debug' | 'log',
+    level: LogLevel,
+  ) => {
+    console[method] = (...args: unknown[]) => {
+      originalConsole[method](...args)
+      if (isEnabled(level)) {
+        persist(level, 'console', stringifyArgs(args))
+      }
+    }
+  }
+
+  wrap('error', 'error')
+  wrap('warn', 'warn')
+  wrap('info', 'info')
+  wrap('debug', 'debug')
+  wrap('log', 'info')
+}
+
+/**
+ * Wire the WASM logger once the engine is initialised: install the console
+ * bridge, start the Rust subscriber, push the resolved level, replay queued
+ * entries, and start the write-behind flush loop.
  * Idempotent — safe to call on every `getVaultManager()`.
  */
 export function initWasmLogging() {
+  if (typeof window !== 'undefined') {
+    window.__nookConsole = { echo }
+  }
+  patchConsole()
+
+  nookLogInit()
   nookLogSetLevel(initialLevel())
   wasmReady = true
 
@@ -218,6 +365,10 @@ declare global {
       dump: typeof dumpLogs
       count: typeof logCount
       clear: typeof clearLogs
+    }
+    /** Bridge for Rust `tracing` events to reach the original console. */
+    __nookConsole?: {
+      echo: (level: LogLevel, text: string) => void
     }
   }
 }

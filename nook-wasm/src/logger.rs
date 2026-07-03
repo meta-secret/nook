@@ -1,20 +1,34 @@
 //! Leveled application logger owned by WASM and persisted in `IndexedDB` (rexie).
 //!
-//! This is the single source of truth for Nook's application logging. The web
-//! layer (`$lib/log`) is a thin shim that forwards `createLogger(scope).info(…)`
-//! calls to [`log_record`] and drives the periodic [`log_flush`].
+//! This is the single source of truth for Nook's application logging. It is
+//! built on the [`tracing`] ecosystem so that domain logic in `nook-core` can
+//! emit structured events (`tracing::debug!/warn!/error!`) that land in the
+//! same store as web-layer logs.
+//!
+//! Two producers feed one persistence queue:
+//! - **Rust `tracing` events** flow through a reloadable global level filter
+//!   into [`IndexedDbLayer`], which appends a [`LogEntry`] and echoes to the
+//!   console via the JS `window.__nookConsole` bridge.
+//! - **The web layer** (`$lib/log`) forwards `createLogger(scope).info(…)`
+//!   calls to [`log_record`] (persist-only; the web layer owns console echo).
 //!
 //! Persistence is **level-gated**: only entries at or above the active level
-//! (set via [`log_set_level`]) are echoed to the console and appended to the
-//! `nook_logs` `IndexedDB` database (ring buffer, newest ~[`LOG_MAX_ENTRIES`]
-//! kept). To capture more detail for a post-mortem, lower the level (e.g.
-//! `debug`/`trace`) and reproduce — nothing below the threshold is stored.
+//! (set via [`log_set_level`]) are echoed and appended to the `nook_logs`
+//! `IndexedDB` database (ring buffer, newest ~[`LOG_MAX_ENTRIES`] kept). To
+//! capture more detail for a post-mortem, lower the level (e.g. `debug`/`trace`)
+//! and reproduce — nothing below the threshold is stored.
 //!
 //! Appends are buffered in memory and written behind a JS-driven flush so
 //! logging never blocks or throws into callers.
 
 use crate::NookError;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use tracing::field::{Field, Visit};
+use tracing_subscriber::Layer;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::layer::{Context, SubscriberExt};
+use tracing_subscriber::registry::Registry;
+use tracing_subscriber::reload;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -24,6 +38,15 @@ const LOG_STORE: &str = "logs";
 const LOG_MAX_ENTRIES: u32 = 5000;
 /// Extra slack so trimming runs in batches, not on every append.
 const LOG_TRIM_SLACK: u32 = 500;
+
+#[wasm_bindgen]
+extern "C" {
+    /// Echo a line to the browser console using the ORIGINAL (unpatched)
+    /// `console.*` methods captured by the web layer. Guarded with `catch` so
+    /// calls before the bridge is installed are silently ignored.
+    #[wasm_bindgen(catch, js_namespace = ["window", "__nookConsole"], js_name = echo)]
+    fn console_echo_js(level: &str, text: &str) -> Result<(), JsValue>;
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum LogLevel {
@@ -65,6 +88,27 @@ impl LogLevel {
             _ => None,
         }
     }
+
+    /// Map to the `tracing` level filter used by the reloadable global filter.
+    fn to_filter(self) -> LevelFilter {
+        match self {
+            LogLevel::Error => LevelFilter::ERROR,
+            LogLevel::Warn => LevelFilter::WARN,
+            LogLevel::Info => LevelFilter::INFO,
+            LogLevel::Debug => LevelFilter::DEBUG,
+            LogLevel::Trace => LevelFilter::TRACE,
+        }
+    }
+
+    fn from_tracing(level: tracing::Level) -> LogLevel {
+        match level {
+            tracing::Level::ERROR => LogLevel::Error,
+            tracing::Level::WARN => LogLevel::Warn,
+            tracing::Level::INFO => LogLevel::Info,
+            tracing::Level::DEBUG => LogLevel::Debug,
+            tracing::Level::TRACE => LogLevel::Trace,
+        }
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -81,32 +125,107 @@ struct LoggerState {
     level: LogLevel,
     /// Write-behind queue drained by [`log_flush`].
     pending: Vec<LogEntry>,
+    /// Setter that moves the reloadable global `tracing` level filter. Boxed to
+    /// avoid naming the reload handle's generic type.
+    set_filter: Option<Box<dyn Fn(LevelFilter)>>,
 }
 
 thread_local! {
-    static LOGGER: RefCell<LoggerState> = const {
-        RefCell::new(LoggerState {
-            level: LogLevel::Info,
-            pending: Vec::new(),
-        })
-    };
+    static LOGGER: RefCell<LoggerState> = RefCell::new(LoggerState {
+        level: LogLevel::Info,
+        pending: Vec::new(),
+        set_filter: None,
+    });
+
+    /// Guards one-time subscriber installation across HMR / repeated init.
+    static INIT_DONE: Cell<bool> = const { Cell::new(false) };
 }
 
 fn now_iso() -> String {
     js_sys::Date::new_0().to_iso_string().into()
 }
 
-fn console_echo(entry: &LogEntry) {
-    let line = format!("[{}] {}", entry.scope, entry.message);
-    let text = match &entry.data {
-        Some(data) => format!("{line} {data}"),
-        None => line,
+/// Push an entry onto the write-behind queue.
+fn queue(entry: LogEntry) {
+    LOGGER.with(|logger| logger.borrow_mut().pending.push(entry));
+}
+
+/// Echo one entry to the console via the JS bridge (original console methods).
+fn console_echo(level: &str, scope: &str, message: &str, data: Option<&str>) {
+    let text = match data {
+        Some(data) => format!("[{scope}] {message} {data}"),
+        None => format!("[{scope}] {message}"),
     };
-    let value = JsValue::from_str(&text);
-    match LogLevel::parse(&entry.level) {
-        Some(LogLevel::Error) => web_sys::console::error_1(&value),
-        Some(LogLevel::Warn) => web_sys::console::warn_1(&value),
-        _ => web_sys::console::log_1(&value),
+    let _ = console_echo_js(level, &text);
+}
+
+/// Collects the `message`, an optional `scope` field, and any remaining fields
+/// (rendered as a JSON object) from a `tracing` event.
+#[derive(Default)]
+struct FieldVisitor {
+    message: String,
+    scope: Option<String>,
+    fields: Vec<(String, String)>,
+}
+
+impl FieldVisitor {
+    fn push(&mut self, name: &str, value: String) {
+        match name {
+            "message" => self.message = value,
+            "scope" => self.scope = Some(value),
+            _ => self.fields.push((name.to_owned(), value)),
+        }
+    }
+
+    fn data_json(&self) -> Option<String> {
+        if self.fields.is_empty() {
+            return None;
+        }
+        let map: serde_json::Map<String, serde_json::Value> = self
+            .fields
+            .iter()
+            .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+            .collect();
+        serde_json::to_string(&serde_json::Value::Object(map)).ok()
+    }
+}
+
+impl Visit for FieldVisitor {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.push(field.name(), value.to_owned());
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.push(field.name(), format!("{value:?}"));
+    }
+}
+
+/// `tracing` layer that turns each event into a persisted [`LogEntry`] and
+/// echoes it to the console. Level gating is handled by the global reload
+/// filter installed above this layer, so no re-check is needed here.
+struct IndexedDbLayer;
+
+impl<S: tracing::Subscriber> Layer<S> for IndexedDbLayer {
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+        let meta = event.metadata();
+        let mut visitor = FieldVisitor::default();
+        event.record(&mut visitor);
+
+        let level = LogLevel::from_tracing(*meta.level()).as_str();
+        let scope = visitor
+            .scope
+            .clone()
+            .unwrap_or_else(|| meta.target().to_owned());
+        let data = visitor.data_json();
+
+        console_echo(level, &scope, &visitor.message, data.as_deref());
+        queue(LogEntry {
+            ts: now_iso(),
+            level: level.to_owned(),
+            scope,
+            message: visitor.message,
+            data,
+        });
     }
 }
 
@@ -215,12 +334,50 @@ async fn dump_entries(
     Ok(filtered[start..end].to_vec())
 }
 
+/// Install the global `tracing` subscriber (once). Wires a reloadable level
+/// filter -> [`IndexedDbLayer`] -> `tracing-web` performance timeline layer,
+/// and stashes a setter so [`log_set_level`] can move the filter at runtime.
+#[wasm_bindgen(js_name = nookLogInit)]
+pub fn log_init() {
+    if INIT_DONE.with(Cell::get) {
+        return;
+    }
+    INIT_DONE.with(|done| done.set(true));
+
+    let active = LOGGER.with(|logger| logger.borrow().level);
+    let (filter, handle) = reload::Layer::new(active.to_filter());
+
+    let perf = tracing_web::performance_layer()
+        .with_details_from_fields(tracing_subscriber::fmt::format::DefaultFields::new());
+
+    let subscriber = Registry::default()
+        .with(filter)
+        .with(IndexedDbLayer)
+        .with(perf);
+
+    // Ignore an existing default (e.g. across HMR reloads); the INIT_DONE guard
+    // already prevents re-entrancy on this thread.
+    if tracing::subscriber::set_global_default(subscriber).is_ok() {
+        let setter = Box::new(move |level: LevelFilter| {
+            let _ = handle.modify(|current| *current = level);
+        });
+        LOGGER.with(|logger| logger.borrow_mut().set_filter = Some(setter));
+    }
+}
+
 /// Set the active log level (`error` | `warn` | `info` | `debug` | `trace`).
+/// Moves the global `tracing` filter and the level used by the web-layer gate.
 /// Entries below this level are neither echoed nor persisted.
 #[wasm_bindgen(js_name = nookLogSetLevel)]
 pub fn log_set_level(level: &str) {
     if let Some(level) = LogLevel::parse(level) {
-        LOGGER.with(|logger| logger.borrow_mut().level = level);
+        LOGGER.with(|logger| {
+            let mut state = logger.borrow_mut();
+            state.level = level;
+            if let Some(set_filter) = state.set_filter.as_ref() {
+                set_filter(level.to_filter());
+            }
+        });
     }
 }
 
@@ -231,8 +388,9 @@ pub fn log_get_level() -> String {
     LOGGER.with(|logger| logger.borrow().level.as_str().to_owned())
 }
 
-/// Record one log entry. Dropped when below the active level; otherwise echoed
-/// to the console and queued for the next [`log_flush`].
+/// Record one log entry from the web layer (persist-only). Dropped when below
+/// the active level; the web layer owns console echo, so nothing is printed
+/// here. Otherwise queued for the next [`log_flush`].
 #[wasm_bindgen(js_name = nookLog)]
 pub fn log_record(level: &str, scope: &str, message: &str, data: Option<String>) {
     let level = LogLevel::parse(level).unwrap_or(LogLevel::Info);
@@ -240,15 +398,13 @@ pub fn log_record(level: &str, scope: &str, message: &str, data: Option<String>)
     if level.rank() > active.rank() {
         return;
     }
-    let entry = LogEntry {
+    queue(LogEntry {
         ts: now_iso(),
         level: level.as_str().to_owned(),
         scope: scope.to_owned(),
         message: message.to_owned(),
         data,
-    };
-    console_echo(&entry);
-    LOGGER.with(|logger| logger.borrow_mut().pending.push(entry));
+    });
 }
 
 /// Flush the in-memory queue to `IndexedDB`. Called on an interval by the web

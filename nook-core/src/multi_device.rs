@@ -704,6 +704,12 @@ pub fn revoke_vault_member(
         .into_iter()
         .filter(|member| member.auth_id != *auth_id)
         .collect();
+    tracing::info!(
+        scope = "multi-device",
+        auth_id = auth_id.as_str(),
+        remaining_members = remaining_roster.len(),
+        "revoked vault member"
+    );
     replace_member_records(
         &mut updated,
         build_members_records(&remaining_roster, members_key)?,

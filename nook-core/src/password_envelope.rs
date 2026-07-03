@@ -275,11 +275,23 @@ pub fn resolve_keys_from_password(
     password: &str,
 ) -> PasswordResult<VaultKeys> {
     if envelope.version != ENVELOPE_VERSION {
+        tracing::warn!(
+            scope = "password-envelope",
+            version = envelope.version,
+            supported = ENVELOPE_VERSION,
+            "unsupported password envelope version"
+        );
         return Err(PasswordError::UnsupportedEnvelopeVersion {
             version: envelope.version,
         });
     }
     if envelope.kdf != ENVELOPE_KDF {
+        tracing::warn!(
+            scope = "password-envelope",
+            kdf = envelope.kdf.as_str(),
+            supported = ENVELOPE_KDF,
+            "unsupported password envelope kdf"
+        );
         return Err(PasswordError::UnsupportedEnvelopeKdf {
             kdf: envelope.kdf.clone(),
         });

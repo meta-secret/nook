@@ -20,6 +20,7 @@ ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 thiserror = "2.0.18"
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
 pbkdf2 = { version = "0.13.0", features = ["sha2"] }
+tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }
 
 [dev-dependencies]
 rand_core = "0.6"
