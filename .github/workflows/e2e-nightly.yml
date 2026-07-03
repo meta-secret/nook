@@ -22,7 +22,7 @@ permissions:
 jobs:
   sync-live:
     name: Live sync (${{ matrix.provider }})
-    runs-on: ubuntu-latest
+    runs-on: nook
     concurrency:
       group: e2e-nightly-${{ matrix.provider }}
       cancel-in-progress: false
@@ -56,7 +56,7 @@ jobs:
     name: AI fix, PR, and merge
     needs: sync-live
     if: failure()
-    runs-on: ubuntu-latest
+    runs-on: nook
     timeout-minutes: 120
     permissions:
       contents: write
