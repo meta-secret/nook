@@ -69,4 +69,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-        run: task docker:task TASK=_comment-preview
+        run: task ci:pr:comment-preview
