@@ -255,7 +255,7 @@ export async function resolveSyncConflictImportRemote(
 
   state.isVerifying = true
   state.errorMsg = ''
-  let providerId: string | null = null
+  let providerId: string | null
   try {
     const importedStoreId = await importVaultAsNewLocalCopy(
       conflict.remoteYaml,
@@ -304,7 +304,7 @@ export async function resolveSyncConflictKeepLocal(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   })
-  let providerId: string | null = null
+  let providerId: string | null
   try {
     const remoteYaml = resolveVaultSyncConflictKeepLocal(
       conflict.localYaml,
@@ -355,7 +355,7 @@ export async function resolveSyncConflictKeepRemote(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   })
-  let providerId: string | null = null
+  let providerId: string | null
   try {
     const localYaml = resolveVaultSyncConflictKeepRemote(
       conflict.localYaml,

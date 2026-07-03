@@ -11,7 +11,6 @@ import {
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForLoadedSyncProviders,
-  waitForVaultOperationsIdle,
 } from './helpers'
 import type { PendingSyncConflict } from '../src/lib/vault-sync'
 
