@@ -1100,10 +1100,54 @@ export async function waitForJoinerVaultReady(
   await disableVaultIdleLock(page)
 }
 
+type NookLogEntry = {
+  ts: string
+  level: string
+  scope: string
+  message: string
+  data?: string
+}
+
+/** Read persisted app log entries (`window.__nookLog`) from the page, or null. */
+async function readNookLogEntries(
+  page: Page,
+  limit: number,
+): Promise<NookLogEntry[] | null> {
+  return page.evaluate(async (lim) => {
+    const log = (
+      window as Window & {
+        __nookLog?: {
+          dump: (opts?: { limit?: number }) => Promise<
+            {
+              ts: string
+              level: string
+              scope: string
+              message: string
+              data?: string
+            }[]
+          >
+        }
+      }
+    ).__nookLog
+    if (!log) return null
+    return log.dump({ limit: lim })
+  }, limit)
+}
+
+function printNookLogEntries(label: string, entries: NookLogEntry[]) {
+  console.log(`[${label}] last ${entries.length} app log entries:`)
+  for (const entry of entries) {
+    const data = entry.data ? ` ${entry.data}` : ''
+    console.log(
+      `  ${entry.ts} ${entry.level.toUpperCase()} [${entry.scope}] ${entry.message}${data}`,
+    )
+  }
+}
+
 /**
  * Print the app's persisted IndexedDB debug log (`window.__nookLog`) to the
- * test output. All levels are always persisted in the page regardless of the
- * console level, so no extra instrumentation is needed to see the full trail.
+ * test output. The WASM logger persists everything at or above the active
+ * level, so lower the level (e.g. `VITE_LOG_LEVEL=debug`) to capture more.
  */
 export async function dumpNookLogs(
   page: Page,
@@ -1111,41 +1155,39 @@ export async function dumpNookLogs(
   options?: { limit?: number },
 ) {
   try {
-    const entries = await page.evaluate(async (limit) => {
-      const log = (
-        window as Window & {
-          __nookLog?: {
-            dump: (opts?: { limit?: number }) => Promise<
-              {
-                ts: string
-                level: string
-                scope: string
-                message: string
-                data?: string
-              }[]
-            >
-          }
-        }
-      ).__nookLog
-      if (!log) return null
-      return log.dump({ limit })
-    }, options?.limit ?? 200)
+    const entries = await readNookLogEntries(page, options?.limit ?? 200)
     if (!entries) {
       console.warn(`[${label}] __nookLog is not available on the page`)
       return
     }
-    console.log(`[${label}] last ${entries.length} app log entries:`)
-    for (const entry of entries) {
-      const data = entry.data ? ` ${entry.data}` : ''
-      console.log(
-        `  ${entry.ts} ${entry.level.toUpperCase()} [${entry.scope}] ${entry.message}${data}`,
-      )
-    }
+    printNookLogEntries(label, entries)
   } catch (error) {
     console.warn(
       `[${label}] failed to dump app logs:`,
       error instanceof Error ? error.message : error,
     )
+  }
+}
+
+/**
+ * Post-mortem hook for failing tests: print the persisted app logs and attach
+ * them to the Playwright report. Wired globally via the {@link file://./fixtures.ts}
+ * auto fixture — no per-spec `afterEach` needed. Never throws.
+ */
+export async function captureNookLogsOnFailure(
+  page: Page,
+  testInfo: import('@playwright/test').TestInfo,
+) {
+  try {
+    const entries = await readNookLogEntries(page, 500)
+    if (!entries || entries.length === 0) return
+    printNookLogEntries(`nook-logs] [${testInfo.title}`, entries)
+    await testInfo.attach('nook-app-logs.json', {
+      body: JSON.stringify(entries, null, 2),
+      contentType: 'application/json',
+    })
+  } catch {
+    // Post-mortem logging must never fail the run.
   }
 }
 

@@ -34,6 +34,7 @@ const PR_SPECS = [
   'legacy-vault-migration.spec.ts',
   'vault-password-device-key.spec.ts',
   'legal-pages.spec.ts',
+  'logs-page.spec.ts',
 ] as const
 
 /** Sync provider flows via in-memory REST stubs (unlimited isolated repos). */
@@ -99,6 +100,9 @@ export default defineConfig({
           VITE_VAULT_IDLE_WARNING_MS: process.env.VITE_VAULT_IDLE_WARNING_MS,
           NOOK_GITHUB_POLL_MS: process.env.NOOK_GITHUB_POLL_MS,
           VITE_E2E_EXPOSE_VAULT: 'true',
+          // Capture debug logs so auto-dump-on-failure carries a useful trail
+          // (dev server only; prebuilt CI dist keeps the `info` default).
+          VITE_LOG_LEVEL: process.env.VITE_LOG_LEVEL ?? 'debug',
           NOOK_E2E_SYNC_PROVIDER:
             process.env.NOOK_E2E_SYNC_PROVIDER ?? 'github',
         },

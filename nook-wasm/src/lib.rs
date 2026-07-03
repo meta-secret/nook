@@ -13,6 +13,7 @@
 
 mod conversion;
 mod error_mapping;
+mod logger;
 mod manager;
 mod storage;
 mod sync_io;

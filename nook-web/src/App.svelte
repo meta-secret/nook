@@ -6,6 +6,7 @@
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import HelpPage from '$lib/components/HelpPage.svelte'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
+  import LogsPage from '$lib/components/LogsPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
@@ -21,6 +22,7 @@
   import {
     appPath,
     getLegalPageFromPath,
+    isLogsPath,
     legalPageForId,
     type LegalPageId,
   } from '$lib/legal-content'
@@ -35,15 +37,22 @@
       ? getLegalPageFromPath(window.location.pathname)
       : null,
   )
+  let logsPage = $state<boolean>(
+    typeof window !== 'undefined'
+      ? isLogsPath(window.location.pathname)
+      : false,
+  )
 
-  function syncLegalRoute() {
+  function syncRoute() {
     legalPage = getLegalPageFromPath(window.location.pathname)
+    logsPage = isLogsPath(window.location.pathname)
   }
 
   function navigateHome() {
     vault.closeHelp()
     history.pushState(null, '', appPath('/'))
     legalPage = null
+    logsPage = false
   }
 
   onMount(() => {
@@ -60,19 +69,23 @@
       ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
     }
 
-    syncLegalRoute()
-    window.addEventListener('popstate', syncLegalRoute)
+    syncRoute()
+    window.addEventListener('popstate', syncRoute)
 
     return () => {
       vault.stopVaultSync()
       vault.stopIdleSessionTracking()
-      window.removeEventListener('popstate', syncLegalRoute)
+      window.removeEventListener('popstate', syncRoute)
     }
   })
 
   $effect(() => {
     if (legalPage) {
       document.title = `${legalPageForId(legalPage).title} · Nook`
+      return
+    }
+    if (logsPage) {
+      document.title = 'Application logs · Nook'
       return
     }
     document.title = 'Nook'
@@ -202,7 +215,7 @@
           >
         </a>
 
-        {#if legalPage}
+        {#if legalPage || logsPage}
           <Button
             type="button"
             variant="outline"
@@ -244,13 +257,15 @@
   </header>
 
   <div
-    class="mx-auto px-4 sm:px-6 {shellWidth} {legalPage
+    class="mx-auto px-4 sm:px-6 {shellWidth} {legalPage || logsPage
       ? 'py-5 sm:py-6'
       : vault.isAuthenticated
         ? authenticatedShellSpacing
         : 'py-5 sm:py-6'}"
   >
-    {#if legalPage}
+    {#if logsPage}
+      <LogsPage onClose={navigateHome} />
+    {:else if legalPage}
       <LegalDocumentPage pageId={legalPage} onClose={navigateHome} />
     {:else if vault.helpOpen}
       <div class="space-y-4">
@@ -479,7 +494,7 @@
     {/if}
   </div>
 
-  {#if !legalPage}
+  {#if !legalPage && !logsPage}
     <SiteFooter />
   {/if}
 
