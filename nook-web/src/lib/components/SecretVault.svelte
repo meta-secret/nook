@@ -197,7 +197,9 @@
     </div>
   {:else}
     <div class="flex min-h-0 flex-1 flex-col gap-4">
-      <VaultSwitcher {vault} variant="panel" />
+      {#if vault.hasMultipleLocalVaults}
+        <VaultSwitcher {vault} variant="panel" />
+      {/if}
 
       <div
         class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"

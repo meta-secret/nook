@@ -140,38 +140,48 @@
       {vault.t('vault.switcher_create_new')}
     </button>
   </section>
-{:else}
-  <div bind:this={root} class="relative min-w-0 max-w-[min(100%,18rem)]">
-    <button
-      type="button"
-      class="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border/40 bg-background/60 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/60 sm:bg-background/70"
-      aria-haspopup="listbox"
-      aria-expanded={open}
-      data-testid="vault-switcher-trigger"
-      disabled={isBusy}
-      onclick={() => void toggleOpen()}
-    >
-      <FolderKey class="size-4 shrink-0 text-primary" />
-      <span class="min-w-0 flex-1">
-        <span class="block truncate text-sm font-semibold text-foreground">
-          {activeLabel}
-        </span>
-        {#if vaultCount > 1}
+{:else if vaultCount > 0}
+  <div bind:this={root} class="relative min-w-0 max-w-[min(100%,14rem)]">
+    {#if vaultCount > 1}
+      <button
+        type="button"
+        class="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border/40 bg-background/60 px-2.5 py-1.5 text-left transition-colors hover:bg-accent/60 sm:bg-background/70"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-testid="vault-switcher-trigger"
+        disabled={isBusy}
+        onclick={() => void toggleOpen()}
+      >
+        <FolderKey class="size-4 shrink-0 text-primary" />
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-semibold text-foreground">
+            {activeLabel}
+          </span>
           <span class="block truncate text-[11px] text-muted-foreground">
             {vault.t('vault.switcher_count_on_device', {
               count: String(vaultCount),
             })}
           </span>
-        {/if}
-      </span>
-      <ChevronDown
-        class="size-4 shrink-0 text-muted-foreground transition-transform {open
-          ? 'rotate-180'
-          : ''}"
-      />
-    </button>
+        </span>
+        <ChevronDown
+          class="size-4 shrink-0 text-muted-foreground transition-transform {open
+            ? 'rotate-180'
+            : ''}"
+        />
+      </button>
+    {:else}
+      <div
+        class="flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border/40 bg-background/60 px-2.5 py-1.5 sm:bg-background/70"
+        data-testid="vault-switcher-current"
+      >
+        <FolderKey class="size-4 shrink-0 text-primary" />
+        <span class="min-w-0 truncate text-sm font-semibold text-foreground">
+          {activeLabel}
+        </span>
+      </div>
+    {/if}
 
-    {#if open}
+    {#if open && vaultCount > 1}
       <div
         role="listbox"
         aria-label={vault.t('vault.switcher_choose')}
