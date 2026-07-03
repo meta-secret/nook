@@ -1,5 +1,8 @@
 import type { VaultState } from '$lib/vault.svelte'
 import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
+import { createLogger } from '$lib/log'
+
+const log = createLogger('vault-devices')
 
 export async function refreshDeviceState(state: VaultState) {
   await state.manualSync()
@@ -29,6 +32,7 @@ export async function requestVaultAccess(state: VaultState) {
       state.scheduleRemoteYamlSnapshotPush()
     }
     state.showSuccess(state.t('login.join_request_sent'))
+    log.info('join request sent', { deviceId: state.deviceId })
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : 'Failed to request vault access.'
@@ -58,6 +62,7 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
       (entry) => entry.deviceId !== joinDeviceId,
     )
     state.showSuccess(state.t('toasts.device_approved_success'))
+    log.info('join request approved', { joinDeviceId })
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : 'Failed to approve join request.'
@@ -196,6 +201,10 @@ export async function enrollAndConnect(state: VaultState) {
     void state.hydrateMultiDeviceState()
     await state.syncFromStorage()
     state.showSuccess(state.t('toasts.enrolled_connected'))
+    log.info('enrolled and connected', {
+      secrets: rawRecords.length,
+      mode: state.storageMode,
+    })
     state.joinEnrollmentPrompt = 'none'
     state.closeSettings()
   } catch (e: unknown) {

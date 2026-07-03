@@ -636,6 +636,7 @@ export class VaultState {
   }
 
   async initOnce() {
+    vaultLog.info('app init started')
     this.isInitializing = true
     if (!this.isVerifying) {
       this.errorMsg = ''
@@ -698,6 +699,14 @@ export class VaultState {
       this.prefillEnrollmentCode = code
       this.enrollmentFromUrlPending = true
     }
+
+    vaultLog.info('app init finished', {
+      localVaultPresent: this.localVaultPresent,
+      authenticated: this.isAuthenticated,
+      providers: this.providers.length,
+      syncProviders: this.syncProviders.length,
+      deviceId: this.deviceId || undefined,
+    })
   }
 
   async initDeviceIdentity() {
@@ -917,6 +926,7 @@ export class VaultState {
     this.isAuthenticated = true
     this.awaitingJoinApproval = false
     this.sessionExpiredByIdle = false
+    vaultLog.info('vault session unlocked', { secrets: this.secrets.length })
     this.startIdleSessionTracking()
   }
 
@@ -971,6 +981,13 @@ export class VaultState {
 
     if (!result.changed) return
 
+    if (result.accessStatus) {
+      vaultLog.info('sync state changed (login gate)', {
+        accessStatus: result.accessStatus,
+        pendingJoins: result.pendingJoins.length,
+      })
+    }
+
     if (
       result.accessStatus === 'ready' &&
       this.joinEnrollmentPrompt === 'pending'
@@ -1001,7 +1018,7 @@ export class VaultState {
     if (this.sessionExpiredByIdle || isVaultSessionLocked()) {
       return
     }
-    vaultLog.debug('auto-connect after approval')
+    vaultLog.info('scheduling auto-connect after join approval')
     // Fire-and-forget outside the sync call stack: loadDb serializes wasm
     // access through the storage chain and guards itself with isVerifying.
     setTimeout(() => {

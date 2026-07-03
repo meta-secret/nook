@@ -24,6 +24,11 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<NookVaultSyncResult, JsError> {
+        tracing::debug!(
+            scope = "wasm-sync",
+            storage = %storage_mode,
+            "sync_vault_from_storage started"
+        );
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
         // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
         // switch (it assumes a *different* vault). A same-vault sync only
@@ -71,6 +76,12 @@ impl NookVaultManager {
                 self.persist_projection_cache().await?;
             }
             let result = sync_result_session(self, changed)?;
+            tracing::debug!(
+                scope = "wasm-sync",
+                changed,
+                storage = %storage_mode,
+                "sync_vault_from_storage (event log)"
+            );
             if restore_local {
                 // Same preservation as above: flipping the tag back to the local
                 // cache must not wipe the in-memory password envelope.

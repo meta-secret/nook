@@ -41,6 +41,13 @@ export async function loadDb(state: VaultState) {
       syncProviders: state.syncProviders.length,
     })
 
+    if (
+      accessStatus === 'needs_enrollment' ||
+      accessStatus === 'join_pending'
+    ) {
+      log.info('loadDb waiting on enrollment', { accessStatus })
+    }
+
     // A joiner device keeps a pre-approval projection in the local cache
     // (join row, no auth envelope). Once the join is approved remotely, the
     // local cache is stale and keeps reporting join_pending/needs_enrollment
@@ -127,6 +134,11 @@ export async function loadDb(state: VaultState) {
     })
     state.secrets = rawRecords
     state.markVaultUnlocked()
+    log.info('vault connected', {
+      mode: state.storageMode,
+      secrets: rawRecords.length,
+      accessStatus,
+    })
     state.syncOAuthRemoteRefFromManager()
     await state.ensureProviderSaved()
     await state.loadProviders()
@@ -185,6 +197,7 @@ export async function handleAddSecret(
       state.secrets = rawRecords
     })
     await state.refreshSecretsFromSession()
+    log.info('secret added', { id, type })
     state.showSuccess(state.t('toasts.secret_saved'))
     await state.runFanOutSyncAfterLocalSave()
     await state.refreshSecretsFromSession()
@@ -221,6 +234,7 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
       state.secrets = rawRecords
     })
     await state.refreshSecretsFromSession()
+    log.info('secret deleted', { id })
     state.showSuccess(state.t('toasts.secret_deleted'))
     state.scheduleFanOutSyncAfterLocalSave()
   } catch (e: unknown) {
@@ -261,6 +275,7 @@ export async function handleReplaceSecret(
       state.secrets = rawRecords
     })
     await state.refreshSecretsFromSession()
+    log.info('secret replaced', { oldId, newId, type })
     state.showSuccess(state.t('toasts.item_updated'))
     state.scheduleFanOutSyncAfterLocalSave()
   } catch (e: unknown) {

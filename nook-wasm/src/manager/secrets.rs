@@ -108,7 +108,16 @@ impl NookVaultManager {
         }])
         .await?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        tracing::info!(
+            scope = "wasm-secrets",
+            action = "add",
+            id = %id,
+            secret_type = ?secret_type,
+            count = records.len(),
+            "secret added"
+        );
+        Ok(records)
     }
 
     // Replace a secret (new id + payload, single save)
@@ -262,10 +271,18 @@ impl NookVaultManager {
         self.decrypted_jsonl = new_jsonl.into_inner();
         self.meta.secrets.remove(&id);
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
-            secret_id: id,
+            secret_id: id.clone(),
         }])
         .await?;
         let _ = self.status_tx.send("READY".to_owned());
-        Ok(self.get_records()?)
+        let records = self.get_records()?;
+        tracing::info!(
+            scope = "wasm-secrets",
+            action = "delete",
+            id = %id,
+            count = records.len(),
+            "secret deleted"
+        );
+        Ok(records)
     }
 }

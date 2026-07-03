@@ -1,7 +1,10 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
+import { createLogger } from '$lib/log'
 import { prepareCreateNewVaultSlot } from '$lib/local-vault'
 import * as localLoginActions from '$lib/vault/local-login'
+
+const log = createLogger('vault-lifecycle')
 
 export async function init(state: VaultState) {
   if (state.initPromise) {
@@ -24,6 +27,7 @@ export async function createFreshVault(state: VaultState) {
   state.errorMsg = ''
   state.dismissSuccess()
   state.isVerifying = true
+  log.info('creating fresh remote vault', { mode: state.storageMode })
   try {
     await state.initDeviceIdentity()
     const creatingAdditionalVault = state.localVaults.length > 0
@@ -59,11 +63,17 @@ export async function createFreshVault(state: VaultState) {
     await state.syncActiveVaultStoreIdToAuth()
     await state.hydrateMultiDeviceState()
     state.joinEnrollmentPrompt = 'none'
+    log.info('fresh remote vault created', {
+      mode: state.storageMode,
+      secrets: rawRecords.length,
+    })
     state.showSuccess(state.t('toasts.vault_created'))
   } catch (e: unknown) {
     state.isAuthenticated = false
-    state.errorMsg =
+    const message =
       e instanceof Error ? e.message : 'Failed to create a new vault.'
+    log.warn('fresh vault create failed', { error: message })
+    state.errorMsg = message
   } finally {
     state.isVerifying = false
   }

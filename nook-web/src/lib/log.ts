@@ -282,6 +282,12 @@ export async function clearLogs(): Promise<void> {
   await nookLogClear()
 }
 
+/** Force the write-behind queue into IndexedDB (for `/logs`, e2e, post-mortem). */
+export async function flushLogs(): Promise<void> {
+  if (!wasmReady) return
+  await nookLogFlush()
+}
+
 /**
  * Patch `console.*` so every call still prints (via the captured originals) and
  * is persisted with the `console` scope. Idempotent; only the persist side is
@@ -365,6 +371,7 @@ declare global {
       dump: typeof dumpLogs
       count: typeof logCount
       clear: typeof clearLogs
+      flush: typeof flushLogs
     }
     /** Bridge for Rust `tracing` events to reach the original console. */
     __nookConsole?: {
@@ -380,5 +387,6 @@ if (typeof window !== 'undefined') {
     dump: dumpLogs,
     count: logCount,
     clear: clearLogs,
+    flush: flushLogs,
   }
 }

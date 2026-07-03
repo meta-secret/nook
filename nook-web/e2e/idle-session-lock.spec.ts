@@ -6,6 +6,7 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
+  waitForPersistedAppLog,
   waitForVaultOperationsIdle,
 } from './helpers'
 
@@ -40,6 +41,12 @@ test.describe('idle session auto-lock', () => {
     await expect(page.getByTestId('login-session-expired')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
 
+    await waitForPersistedAppLog(page, {
+      scope: 'vault-session',
+      level: 'info',
+      messageIncludes: 'vault locked',
+    })
+
     await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -48,6 +55,12 @@ test.describe('idle session auto-lock', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(page.getByTestId('login-session-expired')).not.toBeVisible()
+
+    await waitForPersistedAppLog(page, {
+      scope: 'vault',
+      level: 'info',
+      messageIncludes: 'vault session unlocked',
+    })
   })
 
   test('user activity resets the idle timer', async ({ page }) => {
