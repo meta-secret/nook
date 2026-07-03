@@ -142,26 +142,45 @@ function levelRank(level: LogLevel): number {
   return LOG_LEVELS.indexOf(level)
 }
 
+/** Local `YYYY-MM-DD HH:MM:SS.mmm` timestamp for console echo lines. */
+function formatTimestamp(date = new Date()): string {
+  const pad = (value: number, size = 2) => String(value).padStart(size, '0')
+  const y = date.getFullYear()
+  const mo = pad(date.getMonth() + 1)
+  const d = pad(date.getDate())
+  const h = pad(date.getHours())
+  const mi = pad(date.getMinutes())
+  const s = pad(date.getSeconds())
+  const ms = pad(date.getMilliseconds(), 3)
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}.${ms}`
+}
+
 /** True when `level` should be echoed/persisted under the active level. */
 function isEnabled(level: LogLevel): boolean {
   return levelRank(level) <= levelRank(getLogLevel())
 }
 
-/** Echo one line to the console via the ORIGINAL (unpatched) methods. */
+/**
+ * Echo one line to the console via the ORIGINAL (unpatched) methods, prefixed
+ * with a local date/time so console output is timestamped like the persisted
+ * entries. Shared by `createLogger` and Rust `tracing` events
+ * (`window.__nookConsole.echo`).
+ */
 function echo(level: LogLevel, text: string) {
+  const line = `${formatTimestamp()} ${text}`
   switch (level) {
     case 'error':
-      originalConsole.error(text)
+      originalConsole.error(line)
       break
     case 'warn':
-      originalConsole.warn(text)
+      originalConsole.warn(line)
       break
     case 'debug':
     case 'trace':
-      originalConsole.debug(text)
+      originalConsole.debug(line)
       break
     default:
-      originalConsole.info(text)
+      originalConsole.info(line)
   }
 }
 
