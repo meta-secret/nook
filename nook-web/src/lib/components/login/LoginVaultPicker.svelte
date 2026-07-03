@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { Plus, RefreshCw, ShieldCheck } from '@lucide/svelte'
+  import { ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
+  import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import type { LocalVaultEntry } from '$lib/local-vault'
 
@@ -19,7 +20,7 @@
     isVerifying: boolean
     isInitializing: boolean
     onChooseVault: (storeId: string) => void | Promise<void>
-    onCreateVault: () => void | Promise<void>
+    onCreateVault: (label: string) => void | Promise<void>
     onConnectStorage: () => void
   } = $props()
 
@@ -72,27 +73,19 @@
       </p>
     </div>
 
-    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+    <div class="space-y-3">
+      <LoginVaultNameForm
+        {vault}
+        {isVerifying}
+        {isInitializing}
+        testId="login-create-additional-vault-btn"
+        submitLabel={vault.t('login.vault_picker_create_new')}
+        onCreate={onCreateVault}
+      />
       <Button
         type="button"
         variant="outline"
-        class="sm:min-w-[180px]"
-        data-testid="login-create-additional-vault-btn"
-        disabled={isBusy}
-        onclick={() => onCreateVault()}
-      >
-        {#if isVerifying}
-          <RefreshCw class="size-4 animate-spin" />
-          {vault.t('login.creating_vault')}
-        {:else}
-          <Plus class="size-4" />
-          {vault.t('login.vault_picker_create_new')}
-        {/if}
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        class="sm:min-w-[180px]"
+        class="w-full sm:w-auto sm:min-w-[180px]"
         data-testid="login-import-vault-btn"
         disabled={isBusy}
         onclick={onConnectStorage}

@@ -143,7 +143,23 @@ After targeted fixes pass, run the relevant project or full PR mirror once befor
 
 1. **Before push / opening a PR** — `task check` minimum; add `task web:test:e2e` or `task ci:pr` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
 2. **Push when locally ready** — do not push hoping remote CI will catch issues that local Docker would find in seconds.
-3. **After any remote CI failure** — read logs, fix locally (prefer single-spec e2e while iterating), run `task ci:pr` until green, then push again.
+3. **After any remote CI failure** — read test output and static-analysis errors,
+   then **persisted app logs** (see below), fix locally (prefer single-spec e2e
+   while iterating), run `task ci:pr` until green, then push again.
+
+### CI verification — always check app logs
+
+After tests and static analysis (`task check`, clippy, Playwright report), **app
+logs are the most important remaining signal.** They record vault session
+lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
+
+- **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
+  the CI artifact/report before changing code.
+- **Local repro:** `E2E_SPEC=… task web:test:e2e:file`, then `fetchAppLogs(page)`
+  or open `/app-logs?minLevel=debug&limit=1000`.
+- **Human inspection:** `/logs` in the running app.
+
+Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` is still much faster on a warm cached toolchain image than a cold remote run. See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [coding-bro.md](coding-bro.md).
 

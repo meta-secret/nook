@@ -61,7 +61,10 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
 * For recurring refactor or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
 
-### E2e failures — read app logs first
-* When debugging Playwright/e2e or vault UI flows, **always use persisted app logs**
-  (`nook-app-logs.json`, `fetchAppLogs`, `/app-logs`) — not DOM-only guesses.
-  See [references/logging.md](references/logging.md).
+### Debugging and CI verification — always check app logs
+* Investigation order: **tests** → **static analysis** (`task check`) → **persisted app logs**.
+  App logs are the most important source after the first two — vault session, sync,
+  and WASM tracing do not appear in clippy or Playwright DOM assertions.
+* When debugging Playwright/e2e, vault UI flows, or red CI, **always consult app logs**
+  (`nook-app-logs.json`, `fetchAppLogs`, `/app-logs`) before changing code.
+  See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).

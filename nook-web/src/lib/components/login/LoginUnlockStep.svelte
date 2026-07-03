@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Plus, ShieldCheck } from '@lucide/svelte'
+  import { ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
+  import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import type { LocalVaultEntry } from '$lib/local-vault'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
   import type { VaultState } from '$lib/vault.svelte'
@@ -36,7 +37,7 @@
       password: string,
     ) => void | Promise<void>
     onSwitchVault?: () => void | Promise<void>
-    onCreateAnotherVault?: () => void | Promise<void>
+    onCreateAnotherVault?: (label: string) => void | Promise<void>
     onImportFromSync?: () => void
   } = $props()
 
@@ -111,19 +112,16 @@
         </p>
       </div>
 
-      <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <div class="space-y-3">
         {#if onCreateAnotherVault}
-          <Button
-            type="button"
-            variant="outline"
-            class="sm:min-w-[180px]"
-            data-testid="login-create-additional-vault-btn"
-            disabled={isBusy}
-            onclick={() => onCreateAnotherVault()}
-          >
-            <Plus class="size-4" />
-            {vault.t('login.vault_picker_create_new')}
-          </Button>
+          <LoginVaultNameForm
+            {vault}
+            {isVerifying}
+            {isInitializing}
+            testId="login-create-additional-vault-btn"
+            submitLabel={vault.t('login.vault_picker_create_new')}
+            onCreate={onCreateAnotherVault}
+          />
         {/if}
         {#if onImportFromSync}
           <Button

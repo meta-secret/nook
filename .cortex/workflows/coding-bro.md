@@ -33,6 +33,17 @@ Default agent flow:
 
 Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.
 
+## Debug information — always check app logs
+
+When investigating failures, use sources in order:
+
+1. **Tests** — `task rust:test`, `task web:test`, e2e Playwright output.
+2. **Static analysis** — `task check` (fmt, clippy, svelte-check, eslint).
+3. **Persisted app logs** — **most important after 1–2.** Vault unlock, sync, WASM
+   tracing, and console capture live in IndexedDB (`/app-logs`, `nook-app-logs.json`).
+
+Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
+
 ## How it works
 
 0. **Prompt** — User gives a task description.

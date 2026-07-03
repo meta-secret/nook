@@ -13,5 +13,5 @@ export function vaultDisplayLabel(
   if (entry.label?.trim()) {
     return entry.label.trim()
   }
-  return t('login.vault_picker_unnamed', { store: entry.storeId })
+  return t('login.vault_picker_unnamed')
 }

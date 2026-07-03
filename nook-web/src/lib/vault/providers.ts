@@ -15,6 +15,7 @@ import {
 } from '$lib/auth-providers'
 import { ensureLocalProviderRow } from '$lib/vault-migration'
 import { createLogger } from '$lib/log'
+import { requireManagerVaultStoreId } from '$lib/vault-store-id'
 
 const log = createLogger('vault-providers')
 
@@ -191,7 +192,9 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
   const type = state.loginSetupType ?? state.storageMode
   const isNewSetup = state.loginSetupType !== null
-  const vaultStoreId = state.manager?.vaultStoreId?.trim() || undefined
+  const vaultStoreId = state.manager
+    ? requireManagerVaultStoreId(state.manager)
+    : undefined
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? 'google-drive'
   const oauthSnapshot: OAuthFileConfig | undefined =

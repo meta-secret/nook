@@ -86,12 +86,13 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Complex sync cases:** Event-sourcing merge (causal DAG, not scalar vector clocks), concurrent append, out-of-order delivery, join heads, replacement/security conflicts — must have dedicated Rust tests. See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
 - **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `StoreId`, `DevicePublicKey`, …) over raw `String` / `u32` in `nook-core` domain APIs. A bare `String` does not carry meaning; the compiler cannot catch swapped arguments. Use serde-transparent wrappers so wire JSON stays unchanged. Version fields (`VaultEventSchemaVersion`, …) must be newtypes — the app keeps multiple schema versions and each struct must declare which version it speaks. Full inventory: [design-docs/typed-newtypes.md](design-docs/typed-newtypes.md). WASM getters may still return `String`; parse before calling core. No type-state for its own sake.
 - **UI / integration:** Playwright e2e in `nook-web/e2e/` — `task web:test:e2e` on PR and main CI (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
-- **E2e debug and analysis — use app logs:** When a Playwright spec fails or a web
-  flow misbehaves, agents **must** consult persisted application logs before
-  changing code: Playwright failure attachment `nook-app-logs.json`, helper
-  `fetchAppLogs(page)` (loads `/app-logs`), or `dumpNookLogs(page)`. Human UI:
-  `/logs`. Machine-readable export: `/app-logs?minLevel=debug&limit=500`. See
-  [references/logging.md](references/logging.md).
+- **Debugging / troubleshooting / CI verification — always check app logs:** After
+  test output and static analysis, persisted application logs are the **most
+  important** remaining signal. When a Playwright spec fails, CI goes red, or a web
+  flow misbehaves, agents **must** consult app logs before changing code:
+  Playwright attachment `nook-app-logs.json`, `fetchAppLogs(page)` (`/app-logs`),
+  or `dumpNookLogs(page)`. Human UI: `/logs`. See
+  [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 - **Do not** re-implement vault rules in TypeScript for testing — if TS needs behavior, expose it from WASM/core first.
 
 ---

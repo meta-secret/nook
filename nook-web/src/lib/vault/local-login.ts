@@ -6,9 +6,11 @@ import {
   listLocalVaultEntries,
   prepareCreateNewVaultSlot,
   readActiveVaultStoreId,
+  renameLocalVault,
   switchActiveVault,
 } from '$lib/local-vault'
 import { saveAuthProviders } from '$lib/auth-providers'
+import { requireManagerVaultStoreId } from '$lib/vault-store-id'
 
 const log = createLogger('vault-local')
 
@@ -59,12 +61,19 @@ export async function selectVaultForUnlock(
 
 export async function createLocalVaultWithDeviceKeys(
   state: VaultState,
+  label?: string,
 ): Promise<void> {
   if (!state.manager) {
     state.errorMsg = 'Vault engine is not available.'
     return
   }
   if (state.isVerifying) return
+
+  const trimmedLabel = label?.trim() ?? ''
+  if (!trimmedLabel) {
+    state.errorMsg = state.t('login.vault_name_required')
+    return
+  }
 
   state.errorMsg = ''
   state.dismissSuccess()
@@ -88,7 +97,9 @@ export async function createLocalVaultWithDeviceKeys(
     )) as NookSecretRecord[]
     state.secrets = rawRecords
     state.markVaultUnlocked()
-    state.activeVaultStoreId = state.manager.vaultStoreId?.trim() || null
+    const storeId = requireManagerVaultStoreId(state.manager)
+    state.activeVaultStoreId = storeId
+    await renameLocalVault(storeId, trimmedLabel)
     await refreshLocalVaultCatalog(state)
     state.localLoginPrepared = true
     await state.ensureProviderSaved()
@@ -97,6 +108,7 @@ export async function createLocalVaultWithDeviceKeys(
     log.info('local vault created (device keys)', {
       secrets: rawRecords.length,
       deviceId: state.deviceId,
+      storeId,
     })
     state.showSuccess(state.t('toasts.local_loaded'))
     state.startVaultSync()
@@ -151,7 +163,7 @@ export async function createLocalVault(
       state.t('login.master_password_label'),
       password,
     )
-    state.activeVaultStoreId = state.manager.vaultStoreId?.trim() || null
+    state.activeVaultStoreId = requireManagerVaultStoreId(state.manager)
     await refreshLocalVaultCatalog(state)
     state.localLoginPrepared = true
     await state.ensureProviderSaved()

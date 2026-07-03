@@ -149,7 +149,11 @@ export async function openLoginProviderSetup(page: Page) {
 /** @deprecated Use {@link openLoginProviderSetup}. */
 export const openLegacyProviderSetup = openLoginProviderSetup
 
-export async function createLocalVaultOnLogin(page: Page) {
+export async function createLocalVaultOnLogin(
+  page: Page,
+  vaultName = 'Test vault',
+) {
+  await page.getByTestId('login-vault-name-input').fill(vaultName)
   await page.getByTestId('login-create-device-vault-btn').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

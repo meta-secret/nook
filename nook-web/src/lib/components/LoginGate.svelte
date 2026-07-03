@@ -78,7 +78,7 @@
       entryId: string,
       password: string,
     ) => void | Promise<void>
-    onCreateDeviceVault?: () => void | Promise<void>
+    onCreateDeviceVault?: (label: string) => void | Promise<void>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean

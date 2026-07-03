@@ -743,8 +743,8 @@ export class VaultState {
   /**
    * First-time setup: create an empty local vault secured by this device's keys.
    */
-  async createLocalVaultWithDeviceKeys(): Promise<void> {
-    return localLoginActions.createLocalVaultWithDeviceKeys(this)
+  async createLocalVaultWithDeviceKeys(label?: string): Promise<void> {
+    return localLoginActions.createLocalVaultWithDeviceKeys(this, label)
   }
 
   async selectVaultForUnlock(storeId: string): Promise<void> {

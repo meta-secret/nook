@@ -139,10 +139,14 @@ gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name
 
 ### 6. Fix loop on failure
 
+Investigation order: **test output** → **static analysis** → **app logs** (most
+important after the first two). See
+[logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
+
 1. Read the failed job log: `gh run view <run-id> --log-failed`
-2. For **e2e failures**, read persisted app logs first: Playwright attachment
-   `nook-app-logs.json`, local `fetchAppLogs(page)` / `/app-logs`, or
-   `dumpNookLogs(page)`. See [logging.md](../references/logging.md).
+2. For **e2e / web failures**, read persisted app logs before changing code:
+   Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` /
+   `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
 4. **Run full local PR CI and repeat until green:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
 5. Commit, push, return to step 5.

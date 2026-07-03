@@ -312,6 +312,16 @@ pub async fn set_active_vault(store_id: String) -> Result<(), wasm_bindgen::JsEr
         .map_err(Into::into)
 }
 
+#[wasm_bindgen(js_name = setLocalVaultLabel)]
+pub async fn set_local_vault_label(
+    store_id: String,
+    label: String,
+) -> Result<(), wasm_bindgen::JsError> {
+    crate::storage::indexed_db::set_local_vault_label(&store_id, &label)
+        .await
+        .map_err(Into::into)
+}
+
 #[wasm_bindgen(js_name = prepareNewLocalVaultSlot)]
 pub async fn prepare_new_local_vault_slot() -> Result<(), wasm_bindgen::JsError> {
     crate::storage::indexed_db::prepare_new_local_vault_slot()

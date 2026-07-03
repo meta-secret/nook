@@ -12,6 +12,22 @@
 - Build the production assets: `task web:build` (outputs to `nook-web/dist/`).
 - The Svelte config is located in `svelte.config.js` and Vite config in `vite.config.ts`.
 
+### Blank page after WASM changes
+
+If `#app` stays empty (main page and `/logs` both broken), check the browser
+console first — a common error is `nook_wasm.js does not provide an export named
+'…'`. That means TypeScript imports a binding that exists on disk but Vite is
+still serving a **stale cached transform** from before `wasm-pack` ran.
+
+```bash
+docker ps --filter publish=5173 -q | xargs docker stop
+rm -rf nook-web/node_modules/.vite
+task web:dev
+```
+
+After `task wasm:build` or any `nook-wasm` / `nook-core` change, restart
+`task web:dev` if the UI does not recover on its own.
+
 ## 3. E2e tests
 
 - **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.

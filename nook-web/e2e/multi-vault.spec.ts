@@ -128,6 +128,7 @@ test.describe('multi-vault on one browser profile', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
+    await page.getByTestId('login-vault-name-input').fill('Vault B')
     await page.getByTestId('login-create-additional-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
