@@ -20,6 +20,8 @@
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
   import type { VaultState } from '$lib/vault.svelte'
 
+  type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
+
   let {
     vault,
     passwordEntries,
@@ -33,6 +35,8 @@
     onClearCode,
     embedded = false,
     allowIssueCode = true,
+    initialPanel = 'idle' as Panel,
+    showWarningBanner = true,
   }: {
     vault: VaultState
     passwordEntries: VaultPasswordEntrySummary[]
@@ -49,10 +53,11 @@
     onClearCode: () => void
     embedded?: boolean
     allowIssueCode?: boolean
+    initialPanel?: Panel
+    showWarningBanner?: boolean
   } = $props()
 
-  type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
-  let panel = $state<Panel>('idle')
+  let panel = $state<Panel>(initialPanel)
   let activeEntryId = $state<string | null>(null)
 
   let labelInput = $state('')
@@ -231,7 +236,7 @@
     </header>
   {/if}
 
-  {#if !hasPasswords}
+  {#if !hasPasswords && showWarningBanner}
     <div
       class="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
     >

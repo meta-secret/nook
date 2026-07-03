@@ -2,10 +2,31 @@ import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
   connectLocalVaultLegacy,
-  seedExtraGithubProviders,
+  ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  forceVaultQuiescentForE2e,
+  openOnboardDevicePanel,
+  seedExtraOauthFileProviders,
+  seedOauthFileSyncProvidersWhileUnlocked,
+  stubGoogleDriveVaultForLocalE2e,
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
+  readLocalVaultYamlFromIdb,
 } from './helpers'
+
+const INLINE_ONBOARD_PASSWORD = 'onboard-pass-1'
+
+async function createOnboardPasswordInline(
+  page: import('@playwright/test').Page,
+) {
+  await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
+  await page.getByTestId('vault-password-label').fill('test')
+  await page.getByTestId('vault-password-input').fill(INLINE_ONBOARD_PASSWORD)
+  await page.getByTestId('vault-password-confirm').fill(INLINE_ONBOARD_PASSWORD)
+  await page.getByTestId('submit-vault-password').click()
+  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+    timeout: UI_TIMEOUT_MS,
+  })
+}
 
 test.describe('onboard provider picker', () => {
   test.beforeEach(async ({ page }) => {
@@ -15,26 +36,85 @@ test.describe('onboard provider picker', () => {
     await connectLocalVaultLegacy(page)
   })
 
-  test('shows repository and token hints for multiple GitHub providers', async ({
+  test('wizard starts on vault password step when no passwords exist', async ({
     page,
   }) => {
-    const fullPatAlpha = 'github_pat_11AAAAbbbbCCCCDDDD'
-    const fullPatBeta = 'github_pat_22EEEEffffGGGGHHHH'
+    await openOnboardDevicePanel(page)
 
-    await seedExtraGithubProviders(page, [
+    await expect(page.getByTestId('onboard-wizard-password-step')).toBeVisible()
+    await expect(
+      page.getByTestId('onboard-password-prerequisite'),
+    ).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
+    await expect(page.getByTestId('onboard-provider-list')).toHaveCount(0)
+  })
+
+  test('wizard advances to sync provider step after inline password creation', async ({
+    page,
+  }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
+
+    await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(
+      0,
+    )
+    await expect(page.getByTestId('onboard-wizard-sync-step')).toBeVisible()
+    await expect(page.getByTestId('add-provider-btn')).toBeVisible()
+    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
+  })
+
+  test('generate step stays locked until a sync provider exists', async ({
+    page,
+  }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
+
+    await expect(page.getByTestId('add-provider-btn')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
+
+    await seedOauthFileSyncProvidersWhileUnlocked(page)
+    await page.getByTestId('vault-onboard-tab').click()
+    await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
+    await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  })
+
+  test('shows file and account hints for multiple oauth-file sync providers', async ({
+    page,
+  }) => {
+    const personalToken = 'ya29.e2e-personal-access-token-secret'
+    const workToken = 'ya29.e2e-work-access-token-secret'
+
+    const providers = [
       {
-        id: 'gh-repo-alpha',
-        label: 'GitHub · alpha',
-        githubRepo: 'alpha',
-        githubPat: fullPatAlpha,
+        id: 'gd-personal',
+        label: 'Google Drive · personal',
+        fileName: 'personal.yaml',
+        accessToken: personalToken,
+        accountEmail: 'personal@example.com',
       },
       {
-        id: 'gh-repo-beta',
-        label: 'GitHub · beta',
-        githubRepo: 'beta',
-        githubPat: fullPatBeta,
+        id: 'gd-work',
+        label: 'Google Drive · work',
+        fileName: 'work.yaml',
+        accessToken: workToken,
+        accountEmail: 'work@example.com',
       },
-    ])
+    ]
+
+    await seedExtraOauthFileProviders(page, providers)
+    const vaultYaml = await readLocalVaultYamlFromIdb(page)
+    for (const provider of providers) {
+      await stubGoogleDriveVaultForLocalE2e(page, {
+        fileName: provider.fileName,
+        vaultYaml,
+      })
+    }
 
     await page.reload()
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
@@ -44,56 +124,47 @@ test.describe('onboard provider picker', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await forceVaultQuiescentForE2e(page)
     await waitForLoadedSyncProviders(page, 2)
 
-    await page.getByTestId('vault-onboard-tab').click()
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
+
+    await page
+      .getByTestId('onboard-wizard-sync-step')
+      .getByRole('button')
+      .click()
     const providerList = page.getByTestId('onboard-provider-list')
     await expect(providerList).toBeVisible()
 
-    const alpha = page.getByTestId('onboard-provider-gh-repo-alpha')
-    const beta = page.getByTestId('onboard-provider-gh-repo-beta')
-    await expect(alpha).toBeVisible()
-    await expect(beta).toBeVisible()
+    const personal = page.getByTestId('onboard-provider-gd-personal')
+    const work = page.getByTestId('onboard-provider-gd-work')
+    await expect(personal).toBeVisible()
+    await expect(work).toBeVisible()
 
     await expect(
-      page.getByTestId('onboard-provider-detail-gh-repo-alpha'),
-    ).toContainText('alpha/nook-vault.yaml')
+      page.getByTestId('onboard-provider-detail-gd-personal'),
+    ).toContainText('personal.yaml')
     await expect(
-      page.getByTestId('onboard-provider-detail-gh-repo-beta'),
-    ).toContainText('beta/nook-vault.yaml')
-    await expect(providerList).toContainText('github_pat_11A…')
-    await expect(providerList).toContainText('github_pat_22E…')
-    await expect(providerList).not.toContainText(fullPatAlpha)
-    await expect(providerList).not.toContainText(fullPatBeta)
+      page.getByTestId('onboard-provider-detail-gd-work'),
+    ).toContainText('work.yaml')
+    await expect(providerList).toContainText('personal@example.com')
+    await expect(providerList).toContainText('work@example.com')
+    await expect(providerList).not.toContainText(personalToken)
+    await expect(providerList).not.toContainText(workToken)
     await expect(page.getByTestId('onboard-provider-local')).toHaveCount(0)
 
-    await beta.click()
-    await expect(beta).toHaveAttribute('aria-checked', 'true')
-    await expect(alpha).toHaveAttribute('aria-checked', 'false')
+    await work.click()
+    await expect(work).toHaveAttribute('aria-checked', 'true')
+    await expect(personal).toHaveAttribute('aria-checked', 'false')
   })
 
-  test('links open the matching settings section', async ({ page }) => {
-    await page.getByTestId('vault-onboard-tab').click()
-    await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
+  test('sync step offers inline add-provider flow', async ({ page }) => {
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
 
-    await page.getByTestId('onboard-open-storage-settings').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    await expect(
-      page
-        .getByTestId('storage-providers-section')
-        .locator('button[aria-expanded]'),
-    ).toHaveAttribute('aria-expanded', 'true')
-
-    await page.getByTestId('vault-onboard-tab').click()
-    await page.getByTestId('onboard-open-password-settings').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    await expect(
-      page.getByTestId('vault-unlock-section').locator('button[aria-expanded]'),
-    ).toHaveAttribute('aria-expanded', 'true')
-    await expect(
-      page
-        .getByTestId('storage-providers-section')
-        .locator('button[aria-expanded]'),
-    ).toHaveAttribute('aria-expanded', 'false')
+    await page.getByTestId('add-provider-btn').click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await expect(page.getByTestId('provider-option-github')).toBeVisible()
   })
 })

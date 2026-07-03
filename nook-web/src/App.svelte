@@ -346,13 +346,24 @@
                   passwordEntries={vault.passwordEntries}
                   enrollmentCode={vault.enrollmentCode}
                   isBusy={vault.isPasswordBusy}
+                  passwordError={vault.passwordError}
+                  isVerifying={vault.isVerifying}
+                  isInitializing={vault.isInitializing}
+                  addProviderOpen={vault.addProviderOpen}
+                  bind:setupType={vault.loginSetupType}
+                  bind:githubPat={vault.githubPat}
+                  bind:githubRepo={vault.githubRepo}
                   onIssueCode={(entryId, pw, providerId) =>
                     vault.issueEnrollmentCode(entryId, pw, providerId)}
                   onClearCode={() => vault.clearEnrollmentCode()}
-                  onOpenStorageSettings={() =>
-                    vault.openSettings('storage', 'storage')}
-                  onOpenPasswordSettings={() =>
-                    vault.openSettings('storage', 'passwords')}
+                  onAddPassword={(label, pw) =>
+                    vault.addVaultPassword(label, pw)}
+                  onBeginAddProvider={() => vault.beginAddProvider()}
+                  onCancelAddProvider={() => vault.cancelAddProvider()}
+                  onBeginSetup={(type, preset) =>
+                    vault.beginProviderSetup(type, preset)}
+                  onCancelSetup={() => vault.cancelProviderSetup()}
+                  onConnectProvider={handleSettingsReconnect}
                 />
               {:else if vault.settingsOpen}
                 <VaultSettingsAccordion

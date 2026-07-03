@@ -1,13 +1,21 @@
 <script lang="ts">
   import {
     ChevronDown,
+    ChevronLeft,
     Cloud,
     HardDrive,
+    Plus,
     QrCode,
     RefreshCw,
+    ShieldCheck,
   } from '@lucide/svelte'
   import QRCode from 'qrcode'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
+  import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
+  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
+  import ProviderPicker from '$lib/components/ProviderPicker.svelte'
+  import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
+  import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { Button } from '$lib/components/ui/button'
   import {
     buildEnrollmentLink,
@@ -16,7 +24,9 @@
   import {
     localizeProviderLabel,
     providerStorageDetail,
+    type OAuthFilePreset,
     type StorageProvider,
+    type StorageProviderType,
   } from '$lib/auth-providers'
   import type { VaultPasswordEntrySummary } from '$lib/vault-password'
   import type { VaultState } from '$lib/vault.svelte'
@@ -27,31 +37,71 @@
     passwordEntries,
     enrollmentCode,
     isBusy,
+    passwordError,
+    isVerifying,
+    isInitializing,
+    addProviderOpen = false,
+    setupType = $bindable(null as StorageProviderType | null),
+    githubPat = $bindable(''),
+    githubRepo = $bindable(''),
     onIssueCode,
     onClearCode,
-    onOpenStorageSettings,
-    onOpenPasswordSettings,
+    onAddPassword,
+    onBeginAddProvider,
+    onCancelAddProvider,
+    onBeginSetup,
+    onCancelSetup,
+    onConnectProvider,
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
     passwordEntries: VaultPasswordEntrySummary[]
     enrollmentCode: string
     isBusy: boolean
+    passwordError: string
+    isVerifying: boolean
+    isInitializing: boolean
+    addProviderOpen?: boolean
+    setupType?: StorageProviderType | null
+    githubPat: string
+    githubRepo: string
     onIssueCode: (
       entryId: string,
       password: string,
       providerId: string,
     ) => Promise<string | void>
     onClearCode: () => void
-    onOpenStorageSettings?: () => void
-    onOpenPasswordSettings?: () => void
+    onAddPassword: (label: string, password: string) => void | Promise<void>
+    onBeginAddProvider?: () => void
+    onCancelAddProvider?: () => void
+    onBeginSetup: (
+      type: StorageProviderType,
+      oauthPreset?: OAuthFilePreset,
+    ) => void
+    onCancelSetup: () => void
+    onConnectProvider: () => void | Promise<void>
   } = $props()
+
+  const hasPasswords = $derived(passwordEntries.length > 0)
+  const hasSyncProviders = $derived(syncProviders.length > 0)
+  const wizardReady = $derived(hasPasswords && hasSyncProviders)
+  const showSetup = $derived(setupType !== null)
+  const addingProvider = $derived(addProviderOpen || showSetup)
 
   let providerId = $state<string | null>(null)
   let passwordEntryId = $state<string | null>(null)
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)
+
+  let passwordLabelInput = $state('')
+  let newPasswordInput = $state('')
+  let newPasswordConfirm = $state('')
+  let passwordFormError = $state('')
+
+  let passwordStepOpen = $state(true)
+  let syncStepOpen = $state(false)
+  let generateStepOpen = $state(false)
 
   const effectiveProviderId = $derived.by(() => {
     if (
@@ -101,6 +151,83 @@
     (isGenerating || isBusy) && !enrollmentCode && !localError,
   )
 
+  const passwordStepSubtitle = $derived(
+    hasPasswords
+      ? passwordEntries.length === 1
+        ? vault.t('onboard_device.wizard_password_ready_singular', {
+            label: passwordEntries[0]?.label ?? '',
+          })
+        : vault.t('onboard_device.wizard_password_ready_plural', {
+            count: String(passwordEntries.length),
+          })
+      : vault.t('onboard_device.wizard_password_subtitle'),
+  )
+
+  const syncStepSubtitle = $derived(
+    hasSyncProviders
+      ? syncProviders.length === 1
+        ? vault.t('onboard_device.wizard_sync_ready_singular', {
+            label: localizeProviderLabel(
+              syncProviders[0]?.label ?? '',
+              vault.t,
+            ),
+          })
+        : vault.t('onboard_device.wizard_sync_ready_plural', {
+            count: String(syncProviders.length),
+          })
+      : hasPasswords
+        ? vault.t('onboard_device.wizard_sync_subtitle')
+        : vault.t('login_wizard.available_after_connect'),
+  )
+
+  const generateStepSubtitle = $derived(
+    wizardReady
+      ? vault.t('onboard_device.wizard_generate_subtitle_ready')
+      : vault.t('onboard_device.wizard_generate_subtitle_locked'),
+  )
+
+  $effect(() => {
+    if (!hasPasswords) {
+      passwordStepOpen = true
+      syncStepOpen = false
+      generateStepOpen = false
+      return
+    }
+    if (!hasSyncProviders) {
+      passwordStepOpen = false
+      syncStepOpen = true
+      generateStepOpen = false
+      return
+    }
+    passwordStepOpen = false
+    syncStepOpen = false
+    generateStepOpen = true
+  })
+
+  async function submitAddPassword() {
+    passwordFormError = ''
+    if (!passwordLabelInput.trim()) {
+      passwordFormError = vault.t('vault_passwords.enter_label_error')
+      return
+    }
+    if (newPasswordInput.length < 5) {
+      passwordFormError = vault.t('vault_passwords.min_length_error')
+      return
+    }
+    if (newPasswordInput !== newPasswordConfirm) {
+      passwordFormError = vault.t('vault_passwords.mismatch_error')
+      return
+    }
+    try {
+      await onAddPassword(passwordLabelInput.trim(), newPasswordInput)
+      passwordLabelInput = ''
+      newPasswordInput = ''
+      newPasswordConfirm = ''
+    } catch {
+      // surfaced via passwordError prop
+    }
+  }
+
   async function submitOnboard() {
     localError = ''
     onClearCode()
@@ -142,207 +269,335 @@
     </p>
   </div>
 
-  <form
-    class="space-y-4"
-    onsubmit={(event) => {
-      event.preventDefault()
-      void submitOnboard()
-    }}
-  >
-    <div class="space-y-4">
-      <div class="space-y-1.5">
-        <div class="flex items-baseline justify-between gap-2">
-          <p
-            id="onboard-provider-label"
-            class="text-sm font-medium text-muted-foreground"
-          >
-            {vault.t('onboard_device.sync_provider')}
+  <div class="space-y-3">
+    <SetupWizardStep
+      stepNumber={1}
+      title={vault.t('onboard_device.wizard_password_step')}
+      subtitle={passwordStepSubtitle}
+      bind:open={passwordStepOpen}
+      testId="onboard-wizard-password-step"
+    >
+      {#if hasPasswords}
+        <p class="text-sm text-muted-foreground text-pretty">
+          {vault.t('onboard_device.wizard_password_existing_desc')}
+        </p>
+      {:else}
+        <form
+          class="space-y-4"
+          data-testid="onboard-password-prerequisite"
+          onsubmit={(event) => {
+            event.preventDefault()
+            void submitAddPassword()
+          }}
+        >
+          <p class="text-sm text-foreground text-pretty">
+            {vault.t('onboard_device.password_required_desc')}
           </p>
-          {#if onOpenStorageSettings}
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-primary hover:underline"
-              data-testid="onboard-open-storage-settings"
-              onclick={() => onOpenStorageSettings()}
+
+          <div class="space-y-1.5">
+            <label
+              for="onboard-vault-pw-label"
+              class="text-xs font-medium text-foreground"
             >
-              {vault.t('onboard_device.add_in_settings')}
-            </button>
+              {vault.t('vault_passwords.label')}
+            </label>
+            <input
+              id="onboard-vault-pw-label"
+              type="text"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+              placeholder={vault.t('vault_passwords.label_placeholder')}
+              bind:value={passwordLabelInput}
+              data-testid="vault-password-label"
+            />
+          </div>
+
+          <div class="space-y-1.5">
+            <label
+              for="onboard-vault-pw"
+              class="text-xs font-medium text-foreground"
+            >
+              {vault.t('vault.fields.password')}
+            </label>
+            <input
+              id="onboard-vault-pw"
+              type="password"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+              bind:value={newPasswordInput}
+              autocomplete="new-password"
+              data-testid="vault-password-input"
+            />
+          </div>
+
+          <div class="space-y-1.5">
+            <label
+              for="onboard-vault-pw-confirm"
+              class="text-xs font-medium text-foreground"
+            >
+              {vault.t('vault_passwords.confirm_password')}
+            </label>
+            <input
+              id="onboard-vault-pw-confirm"
+              type="password"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+              bind:value={newPasswordConfirm}
+              autocomplete="new-password"
+              data-testid="vault-password-confirm"
+            />
+          </div>
+
+          {#if passwordFormError || passwordError}
+            <p
+              class="text-xs text-destructive"
+              data-testid="vault-password-error"
+            >
+              {passwordFormError || passwordError}
+            </p>
+          {/if}
+
+          <div class="flex justify-end">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isBusy}
+              data-testid="submit-vault-password"
+            >
+              {#if isBusy}
+                <RefreshCw class="size-3.5 animate-spin" />
+                {vault.t('vault_passwords.working')}
+              {:else}
+                <ShieldCheck class="size-3.5" />
+                {vault.t('vault_passwords.add_password')}
+              {/if}
+            </Button>
+          </div>
+        </form>
+      {/if}
+    </SetupWizardStep>
+
+    <SetupWizardStep
+      stepNumber={2}
+      title={vault.t('onboard_device.wizard_sync_step')}
+      subtitle={syncStepSubtitle}
+      disabled={!hasPasswords}
+      bind:open={syncStepOpen}
+      testId="onboard-wizard-sync-step"
+    >
+      {#if addingProvider}
+        <div class="space-y-4">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            data-testid="cancel-add-provider-btn"
+            onclick={() =>
+              showSetup ? onCancelSetup() : onCancelAddProvider?.()}
+          >
+            <ChevronLeft class="size-3.5" />
+            {vault.t('onboarding.back_to_saved')}
+          </button>
+
+          {#if showSetup}
+            {#if setupType === 'oauth-file'}
+              <OAuthProviderSetupWizard
+                {vault}
+                bind:githubRepo
+                idPrefix="onboard"
+                preset={vault.oauthFile?.preset ??
+                  vault.oauthSetupPreset ??
+                  'google-drive'}
+                {isVerifying}
+                {isInitializing}
+                {onCancelSetup}
+                onConnect={onConnectProvider}
+              />
+            {:else if setupType === 'github'}
+              <GitHubProviderSetupWizard
+                {vault}
+                bind:githubPat
+                bind:githubRepo
+                idPrefix="onboard"
+                {isVerifying}
+                {isInitializing}
+                {onCancelSetup}
+                onConnect={onConnectProvider}
+              />
+            {:else}
+              <ProviderSetupFields {vault} {onCancelSetup} />
+            {/if}
+          {:else}
+            <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
           {/if}
         </div>
-        {#if syncProviders.length === 0}
-          <p class="text-xs text-muted-foreground">
-            {vault.t('onboard_device.no_sync_providers')}
-            {#if onOpenStorageSettings}
-              <button
-                type="button"
-                class="font-medium text-primary hover:underline"
-                data-testid="onboard-empty-providers-settings-link"
-                onclick={() => onOpenStorageSettings()}
+      {:else if !hasSyncProviders}
+        <p class="text-sm text-muted-foreground text-pretty">
+          {vault.t('onboard_device.wizard_sync_empty_desc')}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="add-provider-btn"
+          onclick={() => onBeginAddProvider?.()}
+        >
+          <Plus class="size-4" />
+          {vault.t('settings.add_sync_provider')}
+        </Button>
+      {:else}
+        <div
+          class="space-y-1.5"
+          role="radiogroup"
+          aria-label={vault.t('onboard_device.sync_provider')}
+          data-testid="onboard-provider-list"
+        >
+          {#each syncProviders as provider (provider.id)}
+            {@const selected = provider.id === effectiveProviderId}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
+                ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
+                : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+              data-testid="onboard-provider-{provider.id}"
+              disabled={isBusy || isGenerating}
+              onclick={() => {
+                providerId = provider.id
+              }}
+            >
+              <span
+                class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
+                  ? 'border-primary'
+                  : 'border-muted-foreground/35'}"
+                aria-hidden="true"
               >
-                {vault.t('onboard_device.add_one_in_settings')}
-              </button>
-            {/if}
-          </p>
-        {:else}
-          <div
-            class="space-y-1.5"
-            role="radiogroup"
-            aria-labelledby="onboard-provider-label"
-            data-testid="onboard-provider-list"
-          >
-            {#each syncProviders as provider (provider.id)}
-              {@const selected = provider.id === effectiveProviderId}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-all {selected
-                  ? 'border-primary/35 bg-primary/[0.08] text-foreground shadow-sm ring-1 ring-inset ring-primary/35'
-                  : 'border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                data-testid="onboard-provider-{provider.id}"
-                disabled={isBusy || isGenerating}
-                onclick={() => {
-                  providerId = provider.id
-                }}
-              >
-                <span
-                  class="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full border-2 {selected
-                    ? 'border-primary'
-                    : 'border-muted-foreground/35'}"
-                  aria-hidden="true"
-                >
-                  {#if selected}
-                    <span class="size-2 rounded-full bg-primary"></span>
-                  {/if}
-                </span>
-                {#if provider.type === 'github'}
-                  <Cloud class="size-4 shrink-0 opacity-80" />
-                {:else}
-                  <HardDrive class="size-4 shrink-0 opacity-80" />
+                {#if selected}
+                  <span class="size-2 rounded-full bg-primary"></span>
                 {/if}
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="truncate font-medium"
-                      >{localizeProviderLabel(provider.label, vault.t)}</span
-                    >
-                  </div>
-                  <div
-                    class="truncate font-mono text-[11px] {selected
-                      ? 'text-muted-foreground'
-                      : 'text-muted-foreground/80'}"
-                    data-testid="onboard-provider-detail-{provider.id}"
+              </span>
+              {#if provider.type === 'github'}
+                <Cloud class="size-4 shrink-0 opacity-80" />
+              {:else}
+                <HardDrive class="size-4 shrink-0 opacity-80" />
+              {/if}
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="truncate font-medium"
+                    >{localizeProviderLabel(provider.label, vault.t)}</span
                   >
-                    {providerStorageDetail(provider, vault.t)}
-                  </div>
                 </div>
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+                <div
+                  class="truncate font-mono text-[11px] {selected
+                    ? 'text-muted-foreground'
+                    : 'text-muted-foreground/80'}"
+                  data-testid="onboard-provider-detail-{provider.id}"
+                >
+                  {providerStorageDetail(provider, vault.t)}
+                </div>
+              </div>
+            </button>
+          {/each}
+        </div>
 
-      <div class="space-y-1.5">
-        <div class="flex items-baseline justify-between gap-2">
+        <div class="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="onboard-add-another-provider-btn"
+            onclick={() => onBeginAddProvider?.()}
+          >
+            <Plus class="size-4" />
+            {vault.t('settings.add_sync_provider')}
+          </Button>
+        </div>
+      {/if}
+    </SetupWizardStep>
+
+    <SetupWizardStep
+      stepNumber={3}
+      title={vault.t('onboard_device.wizard_generate_step')}
+      subtitle={generateStepSubtitle}
+      disabled={!wizardReady}
+      bind:open={generateStepOpen}
+      testId="onboard-wizard-generate-step"
+    >
+      <form
+        class="space-y-4"
+        onsubmit={(event) => {
+          event.preventDefault()
+          void submitOnboard()
+        }}
+      >
+        <div class="space-y-1.5">
           <label
             for="onboard-password-entry"
-            class="text-sm font-medium text-muted-foreground"
+            class="text-xs font-medium text-foreground"
           >
             {vault.t('onboard_device.vault_password')}
           </label>
-          {#if onOpenPasswordSettings}
-            <button
-              type="button"
-              class="shrink-0 text-xs font-medium text-primary hover:underline"
-              data-testid="onboard-open-password-settings"
-              onclick={() => onOpenPasswordSettings()}
+          <div class="relative">
+            <select
+              id="onboard-password-entry"
+              class="h-9 w-full appearance-none rounded-md border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+              value={effectivePasswordEntryId}
+              onchange={(event) => {
+                passwordEntryId = event.currentTarget.value
+              }}
+              disabled={isBusy || isGenerating}
+              data-testid="onboard-password-select"
             >
-              {vault.t('onboard_device.add_in_settings')}
-            </button>
-          {/if}
+              {#each passwordEntries as entry (entry.id)}
+                <option value={entry.id}>{entry.label}</option>
+              {/each}
+            </select>
+            <ChevronDown
+              class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
         </div>
-        <div class="relative">
-          <select
-            id="onboard-password-entry"
-            class="h-10 w-full appearance-none rounded-lg border border-border bg-background pl-3 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            value={effectivePasswordEntryId}
-            onchange={(event) => {
-              passwordEntryId = event.currentTarget.value
-            }}
-            disabled={passwordEntries.length === 0 || isBusy || isGenerating}
-            data-testid="onboard-password-select"
+
+        <div class="space-y-1.5">
+          <label
+            for="onboard-password"
+            class="text-xs font-medium text-foreground"
           >
-            {#each passwordEntries as entry (entry.id)}
-              <option value={entry.id}>{entry.label}</option>
-            {/each}
-          </select>
-          <ChevronDown
-            class="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
+            {vault.t('vault_passwords.confirm_password')}
+          </label>
+          <input
+            id="onboard-password"
+            type="password"
+            class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+            bind:value={passwordInput}
+            autocomplete="current-password"
+            disabled={isBusy || isGenerating}
+            data-testid="onboard-password-input"
           />
         </div>
-      </div>
-    </div>
 
-    <div class="space-y-1.5">
-      <label
-        for="onboard-password"
-        class="text-sm font-medium text-muted-foreground"
-      >
-        {vault.t('vault_passwords.confirm_password')}
-      </label>
-      <input
-        id="onboard-password"
-        type="password"
-        class="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        bind:value={passwordInput}
-        autocomplete="current-password"
-        disabled={isBusy || isGenerating}
-        data-testid="onboard-password-input"
-      />
-    </div>
+        {#if localError}
+          <p class="text-xs text-destructive" data-testid="onboard-error">
+            {localError}
+          </p>
+        {/if}
 
-    {#if localError}
-      <p class="text-xs text-destructive" data-testid="onboard-error">
-        {localError}
-      </p>
-    {/if}
-
-    <Button
-      type="submit"
-      disabled={isBusy ||
-        isGenerating ||
-        syncProviders.length === 0 ||
-        passwordEntries.length === 0}
-      data-testid="onboard-device-submit"
-    >
-      {#if isBusy || isGenerating}
-        <RefreshCw class="size-4 animate-spin" />
-        {vault.t('onboard_device.generating')}
-      {:else}
-        <QrCode class="size-4" />
-        {vault.t('onboard_device.title')}
-      {/if}
-    </Button>
-  </form>
-
-  {#if passwordEntries.length === 0}
-    <p
-      class="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
-      data-testid="onboard-missing-password-hint"
-    >
-      {vault.t('onboard_device.missing_password_hint')}
-      {#if onOpenPasswordSettings}
-        <button
-          type="button"
-          class="ml-1 font-medium text-primary hover:underline"
-          data-testid="onboard-missing-password-settings-link"
-          onclick={() => onOpenPasswordSettings()}
-        >
-          {vault.t('onboard_device.missing_password_settings_link')}
-        </button>
-      {/if}
-    </p>
-  {/if}
+        <div class="flex justify-end">
+          <Button
+            type="submit"
+            disabled={isBusy || isGenerating}
+            data-testid="onboard-device-submit"
+          >
+            {#if isBusy || isGenerating}
+              <RefreshCw class="size-4 animate-spin" />
+              {vault.t('onboard_device.generating')}
+            {:else}
+              <QrCode class="size-4" />
+              {vault.t('onboard_device.title')}
+            {/if}
+          </Button>
+        </div>
+      </form>
+    </SetupWizardStep>
+  </div>
 
   {#if showGenerating}
     <div
