@@ -24,6 +24,7 @@ import {
   githubRepoContext,
   GITHUB_VAULT_PATH,
 } from './github-api'
+import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
 
@@ -1989,6 +1990,102 @@ export async function seedExtraGithubProviders(
   )
 }
 
+/**
+ * Add extra oauth-file providers to the saved auth snapshot for onboarding UI tests.
+ */
+export async function seedExtraOauthFileProviders(
+  page: Page,
+  extras: Array<{
+    id: string
+    label: string
+    fileName: string
+    accessToken: string
+    accountEmail?: string
+  }>,
+) {
+  await page.evaluate((providers) => {
+    return new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open('nook_auth', 1)
+      request.onerror = () =>
+        reject(request.error ?? new Error('idb open failed'))
+      request.onsuccess = () => {
+        const db = request.result
+        const tx = db.transaction('auth', 'readwrite')
+        const store = tx.objectStore('auth')
+        const getReq = store.get('providers')
+        getReq.onerror = () =>
+          reject(getReq.error ?? new Error('idb read failed'))
+        getReq.onsuccess = () => {
+          const existing = getReq.result as {
+            providers: Array<{
+              id: string
+              type: string
+              label: string
+              oauthFile?: {
+                preset: string
+                accessToken: string
+                fileName: string
+                accountEmail?: string
+              }
+              createdAt: string
+            }>
+          } | null
+          const snapshot = existing ?? { providers: [] }
+          for (const provider of providers) {
+            snapshot.providers.push({
+              id: provider.id,
+              type: 'oauth-file',
+              label: provider.label,
+              oauthFile: {
+                preset: 'google-drive',
+                accessToken: provider.accessToken,
+                fileName: provider.fileName,
+                accountEmail: provider.accountEmail,
+              },
+              createdAt: new Date().toISOString(),
+            })
+          }
+          const putReq = store.put(snapshot, 'providers')
+          putReq.onerror = () =>
+            reject(putReq.error ?? new Error('idb write failed'))
+          putReq.onsuccess = () => undefined
+        }
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
+      }
+    })
+  }, extras)
+
+  await page.waitForFunction(
+    (expectedIds) => {
+      return new Promise<boolean>((resolve) => {
+        const request = indexedDB.open('nook_auth', 1)
+        request.onerror = () => resolve(false)
+        request.onsuccess = () => {
+          const db = request.result
+          const tx = db.transaction('auth', 'readonly')
+          const store = tx.objectStore('auth')
+          const getReq = store.get('providers')
+          getReq.onerror = () => resolve(false)
+          getReq.onsuccess = () => {
+            const snapshot = getReq.result as {
+              providers?: Array<{ id: string; type: string }>
+            } | null
+            const ids = new Set(snapshot?.providers?.map((p) => p.id) ?? [])
+            resolve(expectedIds.every((id) => ids.has(id)))
+          }
+          tx.oncomplete = () => db.close()
+        }
+      })
+    },
+    extras.map((p) => p.id),
+    { timeout: UI_TIMEOUT_MS },
+  )
+}
+
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 
 export type RawAuthProvidersSnapshot = {
@@ -2108,6 +2205,15 @@ export const E2E_GITHUB_ONBOARD_PROVIDER = {
   githubPat: 'ghp_test_token',
 }
 
+/** Default oauth-file sync provider for PR / IndexedDB-only onboard e2e. */
+export const E2E_OAUTH_ONBOARD_PROVIDER = {
+  id: 'e2e-onboard-oauth',
+  label: 'Google Drive (e2e onboard)',
+  fileName: 'nook-vault.yaml',
+  accessToken: 'ya29.e2e_stub_access_token',
+  accountEmail: 'e2e-user@example.com',
+}
+
 /** Read canonical local vault YAML bytes stored in IndexedDB (active vault). */
 export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -2170,6 +2276,18 @@ export async function waitForLocalVaultState(
   }
 
   throw new Error(`Timed out waiting for local vault YAML: ${lastError}`)
+}
+
+/** Stub Google Drive REST responses for local oauth-file sync e2e. */
+export async function stubGoogleDriveVaultForLocalE2e(
+  page: Page,
+  opts: { fileName: string; vaultYaml?: string },
+) {
+  const stub = createLocalE2eGoogleDriveVaultStub(
+    opts.vaultYaml ?? '',
+    opts.fileName,
+  )
+  await stub.install(page, { vaultYaml: opts.vaultYaml, fileName: opts.fileName })
 }
 
 /** Stub GitHub REST responses so local e2e can exercise sync-provider enrollment. */
@@ -2517,6 +2635,33 @@ export async function seedGithubSyncProvidersWhileUnlocked(
   for (const provider of providers) {
     await stubGithubVaultForLocalE2e(page, {
       repoName: provider.githubRepo,
+      vaultYaml,
+    })
+  }
+  await page.evaluate(async () => {
+    const vault = (
+      window as Window & {
+        __nookVault?: { loadProviders?: () => Promise<void> }
+      }
+    ).__nookVault
+    if (vault?.loadProviders) {
+      await vault.loadProviders()
+    }
+  })
+  await waitForLoadedSyncProviders(page, providers.length)
+  await forceVaultQuiescentForE2e(page)
+}
+
+/** Add oauth-file sync providers with Drive stubs while vault stays unlocked. */
+export async function seedOauthFileSyncProvidersWhileUnlocked(
+  page: Page,
+  providers = [E2E_OAUTH_ONBOARD_PROVIDER],
+) {
+  const vaultYaml = await readLocalVaultYamlFromIdb(page)
+  await seedExtraOauthFileProviders(page, providers)
+  for (const provider of providers) {
+    await stubGoogleDriveVaultForLocalE2e(page, {
+      fileName: provider.fileName,
       vaultYaml,
     })
   }

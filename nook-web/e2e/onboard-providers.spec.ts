@@ -5,10 +5,12 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   forceVaultQuiescentForE2e,
   openOnboardDevicePanel,
-  seedExtraGithubProviders,
-  seedGithubSyncProvidersWhileUnlocked,
+  seedExtraOauthFileProviders,
+  seedOauthFileSyncProvidersWhileUnlocked,
+  stubGoogleDriveVaultForLocalE2e,
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
+  readLocalVaultYamlFromIdb,
 } from './helpers'
 
 const INLINE_ONBOARD_PASSWORD = 'onboard-pass-1'
@@ -73,7 +75,7 @@ test.describe('onboard provider picker', () => {
     await expect(page.getByTestId('add-provider-btn')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
 
-    await seedGithubSyncProvidersWhileUnlocked(page)
+    await seedOauthFileSyncProvidersWhileUnlocked(page)
     await page.getByTestId('vault-onboard-tab').click()
     await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
@@ -82,26 +84,37 @@ test.describe('onboard provider picker', () => {
     })
   })
 
-  test('shows repository and token hints for multiple GitHub providers', async ({
+  test('shows file and account hints for multiple oauth-file sync providers', async ({
     page,
   }) => {
-    const fullPatAlpha = 'github_pat_11AAAAbbbbCCCCDDDD'
-    const fullPatBeta = 'github_pat_22EEEEffffGGGGHHHH'
+    const personalToken = 'ya29.e2e-personal-access-token-secret'
+    const workToken = 'ya29.e2e-work-access-token-secret'
 
-    await seedExtraGithubProviders(page, [
+    const providers = [
       {
-        id: 'gh-repo-alpha',
-        label: 'GitHub · alpha',
-        githubRepo: 'alpha',
-        githubPat: fullPatAlpha,
+        id: 'gd-personal',
+        label: 'Google Drive · personal',
+        fileName: 'personal.yaml',
+        accessToken: personalToken,
+        accountEmail: 'personal@example.com',
       },
       {
-        id: 'gh-repo-beta',
-        label: 'GitHub · beta',
-        githubRepo: 'beta',
-        githubPat: fullPatBeta,
+        id: 'gd-work',
+        label: 'Google Drive · work',
+        fileName: 'work.yaml',
+        accessToken: workToken,
+        accountEmail: 'work@example.com',
       },
-    ])
+    ]
+
+    await seedExtraOauthFileProviders(page, providers)
+    const vaultYaml = await readLocalVaultYamlFromIdb(page)
+    for (const provider of providers) {
+      await stubGoogleDriveVaultForLocalE2e(page, {
+        fileName: provider.fileName,
+        vaultYaml,
+      })
+    }
 
     await page.reload()
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
@@ -124,26 +137,26 @@ test.describe('onboard provider picker', () => {
     const providerList = page.getByTestId('onboard-provider-list')
     await expect(providerList).toBeVisible()
 
-    const alpha = page.getByTestId('onboard-provider-gh-repo-alpha')
-    const beta = page.getByTestId('onboard-provider-gh-repo-beta')
-    await expect(alpha).toBeVisible()
-    await expect(beta).toBeVisible()
+    const personal = page.getByTestId('onboard-provider-gd-personal')
+    const work = page.getByTestId('onboard-provider-gd-work')
+    await expect(personal).toBeVisible()
+    await expect(work).toBeVisible()
 
     await expect(
-      page.getByTestId('onboard-provider-detail-gh-repo-alpha'),
-    ).toContainText('alpha/nook-vault.yaml')
+      page.getByTestId('onboard-provider-detail-gd-personal'),
+    ).toContainText('personal.yaml')
     await expect(
-      page.getByTestId('onboard-provider-detail-gh-repo-beta'),
-    ).toContainText('beta/nook-vault.yaml')
-    await expect(providerList).toContainText('github_pat_11A…')
-    await expect(providerList).toContainText('github_pat_22E…')
-    await expect(providerList).not.toContainText(fullPatAlpha)
-    await expect(providerList).not.toContainText(fullPatBeta)
+      page.getByTestId('onboard-provider-detail-gd-work'),
+    ).toContainText('work.yaml')
+    await expect(providerList).toContainText('personal@example.com')
+    await expect(providerList).toContainText('work@example.com')
+    await expect(providerList).not.toContainText(personalToken)
+    await expect(providerList).not.toContainText(workToken)
     await expect(page.getByTestId('onboard-provider-local')).toHaveCount(0)
 
-    await beta.click()
-    await expect(beta).toHaveAttribute('aria-checked', 'true')
-    await expect(alpha).toHaveAttribute('aria-checked', 'false')
+    await work.click()
+    await expect(work).toHaveAttribute('aria-checked', 'true')
+    await expect(personal).toHaveAttribute('aria-checked', 'false')
   })
 
   test('sync step offers inline add-provider flow', async ({ page }) => {
