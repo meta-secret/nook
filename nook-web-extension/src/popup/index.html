@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nook</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <img src="../icons/nook.png" alt="" width="32" height="32" />
+        <div>
+          <h1>Nook</h1>
+          <p id="tab-title">Checking this page</p>
+        </div>
+      </header>
+
+      <section class="status-panel" aria-live="polite">
+        <div>
+          <span class="metric-label">Password fields</span>
+          <strong id="password-field-count">-</strong>
+        </div>
+        <div>
+          <span class="metric-label">Login fields</span>
+          <strong id="username-field-count">-</strong>
+        </div>
+        <div>
+          <span class="metric-label">Forms</span>
+          <strong id="form-count">-</strong>
+        </div>
+      </section>
+
+      <p id="status-message" class="status-message">Scanning the active tab.</p>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

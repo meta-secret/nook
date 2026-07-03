@@ -33,10 +33,11 @@ RUN git init -q \
     && git add -A \
     && git commit -q -m "nook-web source snapshot" >/dev/null
 
-# Build the production web dist at image time so it is present in every container (the Cloudflare
-# preview deploy and GitHub Pages extraction both read nook-web/dist without a bind mount). e2e
-# rebuilds its own fast-sync dist variant as needed.
+# Build the production web dist and browser extension at image time so both artifacts are present in
+# every container. The Cloudflare preview deploy and GitHub Pages extraction read nook-web/dist; the
+# extension bundle can be extracted from nook-web-extension/dist for manual browser loading.
 RUN cd nook-web && VITE_BASE="${VITE_BASE}" bun run build
+RUN cd nook-web-extension && bun run build
 
 # No ENTRYPOINT: the image is sealed (source + deps + warm target/ baked in), so `docker run`
 # invokes the task command directly (e.g. `docker run <img> task check`).

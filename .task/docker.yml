@@ -91,6 +91,15 @@ tasks:
         trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
         {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-web/dist" nook-web/dist'
 
+  docker:extract:extension:
+    desc: Copy the nook-web image's built nook-web-extension/dist to the host (for manual browser loading).
+    cmds:
+      - >-
+        sh -c 'rm -rf nook-web-extension/dist;
+        cid="$({{.DOCKER}} create --platform linux/amd64 {{.DOCKER_IMAGE}})";
+        trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-web-extension/dist" nook-web-extension/dist'
+
   docker:web:dev:
     internal: true
     # The ONLY mounted task: the repo is bind-mounted for Vite hot-reload. node_modules is an
