@@ -11,6 +11,7 @@ import {
   openStorageSettings,
   revealSecretValue,
   sendJoinRequest,
+  sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
   waitForPendingJoinBanner,
   uniqueSecretKey,
@@ -29,6 +30,7 @@ import {
   connectSyncJoinerDevice,
   e2eSyncProviderDef,
   resolveE2eSyncProvider,
+  waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
 
@@ -68,7 +70,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
     await waitForVaultOperationsIdle(deviceA)
     await addSecret(deviceA, genesisSecretKey, genesisSecretValue, target)
 
-    const genesisYaml = await waitForGithubVaultState(
+    const genesisYaml = await waitForSyncRemoteState(
       target,
       (yaml) =>
         yaml.authPkIds.length >= 1 &&
@@ -89,12 +91,9 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
 
   test('device B sees join dialog and sends a join request', async () => {
     await connectSyncJoinerDevice(deviceB, target)
-    const join = await sendJoinRequest(
-      deviceB,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    const join = target.stub
+      ? await sendJoinRequestLocalE2e(deviceB, target.stub)
+      : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
 
     expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
     expect(join.publicKey).toMatch(/^age1/)
@@ -214,13 +213,11 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
 
   test('approves join from settings', async () => {
     await connectSyncJoinerDevice(deviceB, target)
-    const join = await sendJoinRequest(
-      deviceB,
-      target.pat,
-      target.repoName,
-      target.stub,
-    )
+    const join = target.stub
+      ? await sendJoinRequestLocalE2e(deviceB, target.stub)
+      : await sendJoinRequest(deviceB, target.pat, target.repoName, target.stub)
 
+    await triggerVaultSyncRefresh(deviceA)
     await approveJoinFromSettings(deviceA, join.deviceId, target, 2)
 
     const enrolledYaml = await assertEnrolledVaultOnGithub(target, 2)

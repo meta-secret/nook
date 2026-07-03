@@ -177,7 +177,7 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
     await expectVaultPasswordStatus(page, 1)
 
-    await seedGithubSyncProvidersWhileUnlocked(page)
+    await seedSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
     await waitForStorageChainIdle(page)
@@ -212,7 +212,7 @@ test.describe('vault password envelope (local)', () => {
     await addVaultPassword(page, 'Enrollment test', 'hunter2-secure')
     await expectVaultPasswordStatus(page, 1)
 
-    await seedGithubSyncProvidersWhileUnlocked(page)
+    await seedSyncProvidersWhileUnlocked(page)
 
     await openOnboardDevicePanel(page)
     const linkInput = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
