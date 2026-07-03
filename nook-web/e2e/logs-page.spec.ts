@@ -216,6 +216,10 @@ test.describe('application logging', () => {
   test('persists console errors and failed fetch responses at default level', async ({
     page,
   }) => {
+    await page.route('**/nook-e2e-missing-resource-404', (route) => {
+      void route.fulfill({ status: 404, body: 'not found' })
+    })
+
     await page.goto('/')
     await createLocalVaultOnLogin(page)
 

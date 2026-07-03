@@ -300,13 +300,12 @@ function installGlobalErrorHandlers() {
 function installFetchInstrumentation() {
   if (typeof globalThis.fetch !== 'function') return
   const marker = globalThis as typeof globalThis & {
-    __nookFetchPatched?: boolean
+    __nookFetchOuter?: typeof globalThis.fetch
   }
-  if (marker.__nookFetchPatched) return
-  marker.__nookFetchPatched = true
+  if (globalThis.fetch === marker.__nookFetchOuter) return
 
   const originalFetch = globalThis.fetch.bind(globalThis)
-  globalThis.fetch = async (input, init) => {
+  const wrapped: typeof globalThis.fetch = async (input, init) => {
     const response = await originalFetch(input, init)
     if (!response.ok) {
       const url = sanitizeLogUrl(resolveFetchUrl(input))
@@ -325,12 +324,16 @@ function installFetchInstrumentation() {
     }
     return response
   }
+  marker.__nookFetchOuter = wrapped
+  globalThis.fetch = wrapped
 }
 
 function installDiagnosticsCapture() {
-  if (diagnosticsInstalled) return
-  diagnosticsInstalled = true
-  installGlobalErrorHandlers()
+  if (!diagnosticsInstalled) {
+    diagnosticsInstalled = true
+    installGlobalErrorHandlers()
+  }
+  // WASM init may replace `fetch` after the first module-load install.
   installFetchInstrumentation()
 }
 
