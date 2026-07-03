@@ -1,27 +1,35 @@
 <script lang="ts">
-  import { KeyRound, QrCode, Settings2 } from '@lucide/svelte'
+  import {
+    KeyRound,
+    QrCode,
+    Settings2,
+    SlidersHorizontal,
+  } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
     settingsOpen = false,
-    settingsSection = 'storage' as 'storage' | 'onboard',
+    settingsSection = 'storage' as 'storage' | 'onboard' | 'admin',
     onSelectSecrets,
     onSelectOnboard,
+    onSelectAdmin,
     onSelectSettings,
   }: {
     vault: VaultState
     settingsOpen?: boolean
-    settingsSection?: 'storage' | 'onboard'
+    settingsSection?: 'storage' | 'onboard' | 'admin'
     onSelectSecrets?: () => void
     onSelectOnboard?: () => void
+    onSelectAdmin?: () => void
     onSelectSettings?: () => void
   } = $props()
 
   const vaultOpen = $derived(!settingsOpen)
   const onboardOpen = $derived(settingsOpen && settingsSection === 'onboard')
+  const adminOpen = $derived(settingsOpen && settingsSection === 'admin')
   const generalSettingsOpen = $derived(
-    settingsOpen && settingsSection !== 'onboard',
+    settingsOpen && settingsSection === 'storage',
   )
 </script>
 
@@ -45,6 +53,21 @@
       <KeyRound class="size-5 shrink-0" />
       <span class="text-xs font-medium leading-none"
         >{vault.t('nav.vault')}</span
+      >
+    </button>
+    <button
+      type="button"
+      aria-current={adminOpen ? 'page' : undefined}
+      aria-label="Vault admin"
+      class="relative flex flex-1 flex-col items-center gap-1 border-l border-border/35 px-2 py-2.5 text-center transition-colors sm:border-border/60 sm:py-3 {adminOpen
+        ? 'bg-background text-primary shadow-xs sm:shadow-none'
+        : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'}"
+      data-testid="vault-admin-tab"
+      onclick={() => onSelectAdmin?.()}
+    >
+      <SlidersHorizontal class="size-5 shrink-0" />
+      <span class="text-xs font-medium leading-none"
+        >{vault.t('nav.admin')}</span
       >
     </button>
     <button

@@ -139,10 +139,10 @@ test.describe('multi-vault on one browser profile', () => {
     await expect(page.getByTestId('vault-switcher-count')).toContainText(
       'One vault on this device',
     )
-    await page.getByTestId('vault-switcher-create-btn').click()
-    await expect(page.getByTestId('vault-switcher-create-dialog')).toBeVisible()
-    await page.getByTestId('login-vault-name-input').fill('Vault B')
-    await page.getByTestId('vault-switcher-create-submit').click()
+    await page.getByTestId('vault-switcher-admin-btn').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page.getByTestId('vault-admin-create-input').fill('Vault B')
+    await page.getByTestId('vault-admin-create-btn').click()
     await expect
       .poll(
         async () => {
@@ -154,7 +154,7 @@ test.describe('multi-vault on one browser profile', () => {
       .not.toBe(storeA)
     const vaultBYaml = await readLocalVaultYamlFromIdb(page)
     const storeB = parseStoreId(vaultBYaml)
-    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
     const registry = await listLocalVaultEntries(page)
     const registryStoreIds = registry.map((entry) => entry.store_id)
@@ -163,19 +163,17 @@ test.describe('multi-vault on one browser profile', () => {
 
     await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
 
-    await page.getByTestId('vault-switcher-trigger').click()
-    await page.getByTestId('vault-switcher-manage-btn').click()
-    await expect(page.getByTestId('vault-manager-dialog')).toBeVisible()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
     await page
       .locator(
-        '[data-testid="vault-manager-name-input"][data-store-id="' +
+        '[data-testid="vault-admin-name-input"][data-store-id="' +
           storeB +
           '"]',
       )
       .fill('Vault Bee')
     await page
       .locator(
-        '[data-testid="vault-manager-rename-btn"][data-store-id="' +
+        '[data-testid="vault-admin-rename-btn"][data-store-id="' +
           storeB +
           '"]',
       )
@@ -186,17 +184,29 @@ test.describe('multi-vault on one browser profile', () => {
         return entries.find((entry) => entry.store_id === storeB)?.label
       })
       .toBe('Vault Bee')
-    await page.getByRole('button', { name: 'Done' }).click()
     await expect(page.getByTestId('vault-switcher-trigger')).toContainText(
       'Vault Bee',
     )
 
-    await page.getByTestId('vault-switcher-trigger').click()
-    await page.getByTestId('vault-switcher-import-btn').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await page
+      .getByTestId('vault-admin-sync-panel')
+      .getByTestId('add-provider-btn')
+      .click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible()
+
+    for (let i = 0; i < 2; i += 1) {
+      await page.getByTestId('header-lock-vault-btn').click()
+      await authorizeDeviceProtection(page)
+      await unlockVaultOnLogin(page, { storeId: storeB })
+      await expect(page.getByTestId('vault-panel')).toBeVisible()
+      await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+      await page.getByTestId('vault-switcher-trigger').click()
+      await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('vault-switcher-menu')).toBeHidden()
+    }
 
     await page.getByTestId('vault-switcher-trigger').click()
     await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()

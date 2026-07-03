@@ -26,6 +26,7 @@
   "nav": {
     "vault": "Vault",
     "onboard": "Onboard",
+    "admin": "Admin",
     "settings": "Settings"
   },
   "onboarding": {
@@ -162,10 +163,15 @@
     "switcher_create_new": "Create another vault",
     "switcher_import_existing": "Import existing vault",
     "switcher_manage_vaults": "Manage vaults",
+    "switcher_admin": "Open Admin",
     "switcher_choose": "Switch vault",
     "create_title": "Create vault",
     "manage_title": "Manage vaults",
     "manager_name_label": "Vault name",
+    "admin_title": "Admin",
+    "admin_vault_count": "{count} vaults on this device",
+    "admin_new_vault_label": "New vault",
+    "admin_sync_title": "Sync providers",
     "expand_secret": "Expand secret",
     "collapse_secret": "Collapse secret",
     "types": {

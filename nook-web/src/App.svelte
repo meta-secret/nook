@@ -18,6 +18,7 @@
   import LocalOnlyVaultWarningBanner from '$lib/components/LocalOnlyVaultWarningBanner.svelte'
   import SecretVault from '$lib/components/SecretVault.svelte'
   import OnboardDevice from '$lib/components/OnboardDevice.svelte'
+  import VaultAdmin from '$lib/components/VaultAdmin.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import NookLogo from '$lib/components/NookLogo.svelte'
   import HeaderLanguageSelect from '$lib/components/HeaderLanguageSelect.svelte'
@@ -345,11 +346,30 @@
               {#if vault.syncProviders.length === 0}
                 <LocalOnlyVaultWarningBanner
                   {vault}
-                  onAddSyncProvider={() =>
-                    vault.openSettings('storage', 'storage')}
+                  onAddSyncProvider={() => vault.openAdmin()}
                 />
               {/if}
-              {#if vault.settingsOpen && vault.settingsSection === 'onboard'}
+              {#if vault.settingsOpen && vault.settingsSection === 'admin'}
+                <VaultAdmin
+                  {vault}
+                  syncProviders={vault.syncProviders}
+                  syncingProviderId={vault.syncingProviderId}
+                  isVerifying={vault.isVerifying}
+                  isInitializing={vault.isInitializing}
+                  addProviderOpen={vault.addProviderOpen}
+                  bind:setupType={vault.loginSetupType}
+                  bind:githubPat={vault.githubPat}
+                  bind:githubRepo={vault.githubRepo}
+                  onReconnect={handleSettingsReconnect}
+                  onSyncProvider={(id) => vault.syncProviderById(id)}
+                  onBeginAddProvider={() => vault.beginAddProvider()}
+                  onCancelAddProvider={() => vault.cancelAddProvider()}
+                  onBeginSetup={(type, preset) =>
+                    vault.beginProviderSetup(type, preset)}
+                  onCancelSetup={() => vault.cancelProviderSetup()}
+                  onRemoveProvider={(id) => vault.removeProvider(id)}
+                />
+              {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
                 <OnboardDevice
                   {vault}
                   syncProviders={vault.syncProviders}
@@ -494,6 +514,7 @@
                 settingsSection={vault.settingsSection}
                 onSelectSecrets={() => vault.closeSettings()}
                 onSelectOnboard={() => vault.openSettings('onboard')}
+                onSelectAdmin={() => vault.openAdmin()}
                 onSelectSettings={() => vault.openSettings()}
               />
             {/if}

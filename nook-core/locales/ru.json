@@ -26,6 +26,7 @@
   "nav": {
     "vault": "Сейф",
     "onboard": "Устройства",
+    "admin": "Админ",
     "settings": "Настройки"
   },
   "onboarding": {
@@ -162,10 +163,15 @@
     "switcher_create_new": "Создать ещё один сейф",
     "switcher_import_existing": "Импортировать сейф",
     "switcher_manage_vaults": "Управление сейфами",
+    "switcher_admin": "Открыть админ",
     "switcher_choose": "Переключить сейф",
     "create_title": "Создать сейф",
     "manage_title": "Управление сейфами",
     "manager_name_label": "Название сейфа",
+    "admin_title": "Админ",
+    "admin_vault_count": "Сейфов на устройстве: {count}",
+    "admin_new_vault_label": "Новый сейф",
+    "admin_sync_title": "Провайдеры синхронизации",
     "expand_secret": "Развернуть секрет",
     "collapse_secret": "Свернуть секрет",
     "types": {

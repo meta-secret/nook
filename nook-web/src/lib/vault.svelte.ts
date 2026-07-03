@@ -80,7 +80,7 @@ export class VaultState {
   translations = $state<Record<string, unknown>>({})
 
   settingsOpen = $state(false)
-  settingsSection = $state<'storage' | 'onboard'>('storage')
+  settingsSection = $state<'storage' | 'onboard' | 'admin'>('storage')
   settingsAccordionSection = $state<
     'storage' | 'passwords' | 'devices' | 'language' | null
   >('storage')
@@ -1606,19 +1606,31 @@ export class VaultState {
   }
 
   openSettings(
-    section: 'storage' | 'onboard' = 'storage',
+    section: 'storage' | 'onboard' | 'admin' = 'storage',
     accordion: 'storage' | 'passwords' | 'devices' | 'language' = 'storage',
   ) {
     this.helpOpen = false
     this.settingsSection = section
-    if (section !== 'onboard') {
+    if (section === 'storage') {
       this.settingsAccordionSection = accordion
     }
     this.settingsOpen = true
     void this.refreshDeviceState()
   }
 
+  openAdmin() {
+    this.helpOpen = false
+    this.cancelProviderSetup()
+    this.cancelAddProvider()
+    this.settingsSection = 'admin'
+    this.settingsOpen = true
+    void this.refreshLocalVaultCatalog()
+    void this.refreshDeviceState()
+  }
+
   closeSettings() {
+    this.cancelProviderSetup()
+    this.cancelAddProvider()
     this.settingsOpen = false
   }
 

@@ -2,12 +2,9 @@
   import {
     Check,
     ChevronDown,
-    CloudDownload,
     FolderKey,
-    Plus,
-    Settings2,
+    SlidersHorizontal,
   } from '@lucide/svelte'
-  import VaultManagementDialog from '$lib/components/VaultManagementDialog.svelte'
   import type { LocalVaultEntry } from '$lib/local-vault'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
@@ -15,7 +12,6 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let dialogMode = $state<'create' | 'manage' | null>(null)
   let root = $state<HTMLDivElement | null>(null)
   let switchingTo = $state<string | null>(null)
 
@@ -49,6 +45,10 @@
   }
 
   $effect(() => {
+    if (!vault.isAuthenticated || vault.isVerifying) {
+      open = false
+      return
+    }
     if (!open) return
     document.addEventListener('click', handleDocumentClick)
     document.addEventListener('keydown', handleDocumentKeydown)
@@ -59,10 +59,15 @@
   })
 
   async function toggleOpen() {
-    const next = !open
-    open = next
-    if (next) {
+    if (open) {
+      open = false
+      return
+    }
+    try {
       await vault.refreshLocalVaultCatalog()
+      open = true
+    } catch {
+      open = false
     }
   }
 
@@ -77,31 +82,9 @@
     }
   }
 
-  function createAnotherVault() {
+  function openAdmin() {
     open = false
-    dialogMode = 'create'
-  }
-
-  function manageVaults() {
-    open = false
-    dialogMode = 'manage'
-  }
-
-  function importExistingVault() {
-    open = false
-    vault.openSettings('storage', 'storage')
-    vault.beginAddProvider()
-  }
-
-  async function submitCreateVault(label: string) {
-    await vault.createLocalVaultWithDeviceKeys(label)
-    if (!vault.errorMsg) {
-      dialogMode = null
-    }
-  }
-
-  async function renameVault(entry: LocalVaultEntry, label: string) {
-    await vault.renameLocalVault(entry.storeId, label)
+    vault.openAdmin()
   }
 </script>
 
@@ -187,63 +170,18 @@
             type="button"
             role="menuitem"
             class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary transition-colors hover:bg-accent/60"
-            data-testid="vault-switcher-create-btn"
+            data-testid="vault-switcher-admin-btn"
             disabled={isBusy}
             onclick={(event) => {
               event.stopPropagation()
-              createAnotherVault()
+              openAdmin()
             }}
           >
-            <Plus class="size-4" />
-            {vault.t('vault.switcher_create_new')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            data-testid="vault-switcher-import-btn"
-            disabled={isBusy}
-            onclick={(event) => {
-              event.stopPropagation()
-              importExistingVault()
-            }}
-          >
-            <CloudDownload class="size-4" />
-            {vault.t('vault.switcher_import_existing')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            data-testid="vault-switcher-manage-btn"
-            disabled={isBusy}
-            onclick={(event) => {
-              event.stopPropagation()
-              manageVaults()
-            }}
-          >
-            <Settings2 class="size-4" />
-            {vault.t('vault.switcher_manage_vaults')}
+            <SlidersHorizontal class="size-4" />
+            {vault.t('vault.switcher_admin')}
           </button>
         </div>
       </div>
     {/if}
   </div>
-{/if}
-
-{#if dialogMode}
-  <VaultManagementDialog
-    {vault}
-    mode={dialogMode}
-    {vaults}
-    {activeStoreId}
-    {isBusy}
-    {switchingTo}
-    onClose={() => {
-      dialogMode = null
-    }}
-    onCreate={submitCreateVault}
-    onRename={renameVault}
-    onSwitch={switchTo}
-  />
 {/if}
