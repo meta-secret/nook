@@ -1,13 +1,17 @@
 import { expect, test, type Page } from './fixtures'
 import {
-  connectGithubGenesisDevice,
+  connectGithubSyncProviderFromSettings,
   createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
+  disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
   seedExtraGithubProviders,
   stubGithubVaultForLocalE2e,
   UI_TIMEOUT_MS,
+  unlockVaultOnLogin,
+  waitForLoadedSyncProviders,
+  waitForVaultOperationsIdle,
 } from './helpers'
 import type { PendingSyncConflict } from '../src/lib/vault-sync'
 
@@ -91,59 +95,56 @@ test.describe('sync conflict resolution', () => {
     )
   })
 
-  test('resolves store_id conflict during login by keeping local copy', async ({
+  test('resolves store_id conflict when second vault uses the same github repo', async ({
     page,
-    browser,
   }) => {
-    const repoName = 'nook-e2e-store-id-conflict'
+    const repoName = 'nook-e2e-shared-vault-file'
     const stub = createLocalE2eGithubVaultStub()
-
-    const genesisContext = await browser.newContext()
-    const genesisPage = await genesisContext.newPage()
-    await connectGithubGenesisDevice(
-      genesisPage,
-      'ghp_test_token',
-      repoName,
-      stub,
-    )
-    const remoteYaml = stub.getVaultYaml()
-    const remoteStoreId = parseStoreId(remoteYaml)
-    await genesisContext.close()
+    await stub.install(page, { repoName })
 
     await page.goto('/')
-    await createLocalVaultOnLogin(page)
-    const localYaml = await readLocalVaultYamlFromIdb(page)
-    const localStoreId = parseStoreId(localYaml)
-    expect(localStoreId).not.toEqual(remoteStoreId)
+    await createLocalVaultOnLogin(page, 'test')
+    await disableVaultIdleLock(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    const vaultAYaml = await readLocalVaultYamlFromIdb(page)
+    const storeA = parseStoreId(vaultAYaml)
+
+    await connectGithubSyncProviderFromSettings(page, repoName)
+    await expect(page.getByTestId('settings-provider-github')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await waitForLoadedSyncProviders(page)
+    await expect
+      .poll(() => parseStoreId(stub.getVaultYaml()), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toEqual(storeA)
+
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
-    await stubGithubVaultForLocalE2e(
-      page,
-      { repoName, vaultYaml: remoteYaml },
-      stub,
-    )
+    await page.getByTestId('login-vault-name-input').fill('test-2')
+    await page.getByTestId('login-create-additional-vault-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await disableVaultIdleLock(page)
 
-    await page.evaluate(() => {
-      const vault = (
-        window as Window & {
-          __nookVault?: { beginProviderSetup: (type: 'github') => void }
-        }
-      ).__nookVault
-      if (!vault) {
-        throw new Error('__nookVault is not exposed (dev build required).')
-      }
-      vault.beginProviderSetup('github')
+    const vaultBYaml = await readLocalVaultYamlFromIdb(page)
+    const storeB = parseStoreId(vaultBYaml)
+    expect(storeB).not.toEqual(storeA)
+
+    await connectGithubSyncProviderFromSettings(page, repoName, 'ghp_test_token', {
+      expectConflict: true,
     })
-    await expect(page.getByTestId('github-repo-input')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await page.getByTestId('github-repo-input').fill(repoName)
-    await page.getByTestId('github-pat-input').fill('ghp_test_token')
-    await page.getByTestId('connect-provider-btn').click()
 
     await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -154,10 +155,21 @@ test.describe('sync conflict resolution', () => {
     await expect(
       page.getByTestId('vault-sync-conflict-dialog'),
     ).not.toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('settings-provider-github')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    expect(parseStoreId(stub.getVaultYaml())).toEqual(storeB)
+
+    await page.getByTestId('vault-secrets-tab').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('login-gate')).not.toBeVisible()
-    expect(parseStoreId(stub.getVaultYaml())).toEqual(localStoreId)
+
+    await page.getByTestId('header-lock-vault-btn').click()
+    await unlockVaultOnLogin(page, { storeId: storeB })
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    expect(parseStoreId(await readLocalVaultYamlFromIdb(page))).toEqual(storeB)
   })
 })

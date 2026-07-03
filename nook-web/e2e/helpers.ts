@@ -1486,6 +1486,33 @@ export async function openStorageSettings(page: Page) {
   await expect(page.getByTestId('vault-panel')).not.toBeVisible()
 }
 
+/** Add and connect a GitHub sync provider from vault settings (vault must be unlocked). */
+export async function connectGithubSyncProviderFromSettings(
+  page: Page,
+  repoName: string,
+  pat = 'ghp_test_token',
+  options?: { expectConflict?: boolean },
+) {
+  await page.getByTestId('vault-settings-tab').click()
+  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('add-provider-btn').first().click()
+  await page.getByTestId('provider-option-github').click()
+  await expect(page.getByTestId('github-token-setup')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('github-repo-input').fill(repoName)
+  await page.getByTestId('github-pat-input').fill(pat)
+  await page.getByTestId('connect-provider-btn').click()
+  await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+  if (!options?.expectConflict) {
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).not.toBeVisible(
+      { timeout: UI_TIMEOUT_MS },
+    )
+  }
+}
+
 const SETTINGS_SECTION_TEST_IDS = {
   storage: 'storage-providers-section',
   unlock: 'vault-unlock-section',

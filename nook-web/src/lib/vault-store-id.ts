@@ -12,13 +12,13 @@ export function requireManagerVaultStoreId(manager: NookVaultManager): string {
 
 /** Store id for persisting a sync provider row before or after wasm connect. */
 export function vaultStoreIdForProviderSave(state: VaultState): string | undefined {
-  if (state.isAuthenticated && state.manager) {
-    return requireManagerVaultStoreId(state.manager)
+  const fromManager = state.manager?.vaultStoreId.trim()
+  if (fromManager) {
+    return fromManager
   }
   return (
     state.activeVaultStoreId?.trim() ||
     state.selectedLoginVaultStoreId?.trim() ||
-    state.manager?.vaultStoreId.trim() ||
     undefined
   )
 }
