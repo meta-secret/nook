@@ -1,5 +1,6 @@
 import { VaultState } from '$lib/vault.svelte'
 import { SvelteDate } from 'svelte/reactivity'
+import { createLogger } from '$lib/log'
 import {
   fetchRemoteVaultBlob,
   readLocalVaultBlob,
@@ -12,6 +13,14 @@ import {
 import { importVaultAsNewLocalCopy } from '$lib/local-vault'
 import * as localLoginActions from '$lib/vault/local-login'
 
+const log = createLogger('vault-sync')
+
+function syncError(context: string, error: unknown) {
+  log.debug(`${context} failed`, {
+    error: error instanceof Error ? error.message : String(error),
+  })
+}
+
 export function startVaultSync(state: VaultState) {
   state.stopVaultSync()
   const needsRemoteUpdates =
@@ -19,8 +28,14 @@ export function startVaultSync(state: VaultState) {
     state.joinEnrollmentPrompt !== 'none' ||
     state.awaitingJoinApproval
   if (!needsRemoteUpdates) {
+    log.debug('vault sync timer skipped (no remote updates needed)')
     return
   }
+  log.info('vault sync timer started', {
+    authenticated: state.isAuthenticated,
+    providers: state.syncProviders.length,
+    intervalMs: VaultState.syncIntervalMs(),
+  })
   if (state.isAuthenticated) {
     void state.syncFromStorage()
   }
@@ -58,6 +73,7 @@ export function stopVaultSync(state: VaultState) {
   if (state.syncTimer !== null) {
     clearInterval(state.syncTimer)
     state.syncTimer = null
+    log.debug('vault sync timer stopped')
   }
 }
 
@@ -82,8 +98,8 @@ export async function syncFromStorage(
       state.applyVaultSyncResult(raw)
       await state.refreshSecretsFromSession()
       state.lastSyncedAt = new SvelteDate()
-    } catch {
-      // Background sync should not interrupt the UI.
+    } catch (error) {
+      syncError('background sync (unauthenticated)', error)
     } finally {
       state.isSyncing = false
     }
@@ -111,8 +127,8 @@ export async function syncFromStorage(
     state.applyVaultSyncResult(raw)
     await state.refreshSecretsFromSession()
     state.lastSyncedAt = new SvelteDate()
-  } catch {
-    // Background sync should not interrupt the UI.
+  } catch (error) {
+    syncError('background sync', error)
   } finally {
     state.isSyncing = false
   }
@@ -122,6 +138,7 @@ export async function manualSync(state: VaultState) {
   if (!state.manager) return
   if (state.syncBlocked) return
   if (state.isSyncing) return
+  log.info('manual sync started', { providers: state.syncProviders.length })
   state.isSyncing = true
   try {
     await state.initDeviceIdentity()
@@ -143,10 +160,11 @@ export async function manualSync(state: VaultState) {
       state.pendingJoins = []
       state.vaultMembers = []
     }
-  } catch {
-    // Manual refresh should not interrupt the UI.
+  } catch (error) {
+    syncError('manual sync', error)
   } finally {
     state.isSyncing = false
+    log.debug('manual sync finished')
   }
 }
 
@@ -158,6 +176,7 @@ export async function fanOutSyncToProviders(
   if (state.syncBlocked) return
   if (state.syncProviders.length === 0) return
 
+  log.debug('fan-out sync queued', { providers: state.syncProviders.length })
   const run = state.fanOutSyncChain.then(() =>
     state.runFanOutSyncToProviders(options),
   )
@@ -195,6 +214,10 @@ export function stageSyncConflict(
 ) {
   state.pendingSyncConflict = conflict
   state.errorMsg = ''
+  log.warn('sync conflict staged', {
+    provider: conflict.providerLabel,
+    kind: conflict.kind,
+  })
 }
 
 export async function resolveSyncConflictImportRemote(
@@ -252,6 +275,10 @@ export async function resolveSyncConflictKeepLocal(
 
   state.isVerifying = true
   state.errorMsg = ''
+  log.info('sync conflict resolved (keep local)', {
+    provider: conflict.providerLabel,
+    kind: conflict.kind,
+  })
   try {
     const remoteYaml = resolveVaultSyncConflictKeepLocal(
       conflict.localYaml,
@@ -294,6 +321,10 @@ export async function resolveSyncConflictKeepRemote(
 
   state.isVerifying = true
   state.errorMsg = ''
+  log.info('sync conflict resolved (keep remote)', {
+    provider: conflict.providerLabel,
+    kind: conflict.kind,
+  })
   try {
     const localYaml = resolveVaultSyncConflictKeepRemote(
       conflict.localYaml,
@@ -402,6 +433,12 @@ export async function syncProviderById(
   if (!options?.quiet) {
     state.errorMsg = ''
   }
+  log.debug('provider sync started', {
+    providerId,
+    type: provider.type,
+    label: provider.label,
+    quiet: options?.quiet ?? false,
+  })
   try {
     const [mode, pat, repo] = state.providerWasmArgs(provider)
     if (state.isAuthenticated && state.localVaultPresent) {
@@ -444,8 +481,10 @@ export async function syncProviderById(
       await readLocalVaultBlob(),
       null,
     )
+    log.debug('provider sync finished', { providerId, type: provider.type })
     return
   } catch (e: unknown) {
+    syncError(`provider sync (${provider.label})`, e)
     if (!options?.quiet) {
       state.errorMsg =
         e instanceof Error ? e.message : 'Sync failed for state provider.'

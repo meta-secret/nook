@@ -4,9 +4,11 @@ import {
   assertNoVaultError,
   assertVaultReady,
   createLocalVaultOnLogin,
+  expectAppLogMilestones,
   reloadUnlockWithGithubSync,
   triggerVaultSyncRefresh,
   uniqueSecretKey,
+  waitForPersistedAppLog,
   waitForVaultOperationsIdle,
 } from './helpers'
 
@@ -29,6 +31,12 @@ test.describe('event-log sync then add', () => {
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)
 
+    await waitForPersistedAppLog(page, {
+      scope: 'vault-sync',
+      level: 'info',
+      messageIncludes: 'manual sync started',
+    })
+
     const title = uniqueSecretKey('e2e-event-log-note')
     const noteBody = '# Post-sync note\n\nSaved after provider sync.'
 
@@ -42,5 +50,9 @@ test.describe('event-log sync then add', () => {
     const row = page.getByTestId('secret-row').filter({ hasText: title })
     await expect(row).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(page.getByTestId('vault-group-secure-note')).toBeVisible()
+
+    await expectAppLogMilestones(page, [
+      { scope: 'connect', level: 'info', messageIncludes: 'secret added' },
+    ])
   })
 })

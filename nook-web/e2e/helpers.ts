@@ -1204,6 +1204,154 @@ export async function fetchAppLogs(
   return payload
 }
 
+/** Read persisted app log entries (`window.__nookLog`) from the page, or null. */
+export async function readPersistedAppLogs(
+  page: Page,
+  limit = 500,
+): Promise<NookLogEntry[] | null> {
+  return readNookLogEntries(page, limit)
+}
+
+/** Drain the in-memory log queue into IndexedDB before reading `/logs` or `/app-logs`. */
+export async function flushNookLogPersistQueue(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const log = (
+      window as Window & { __nookLog?: { flush: () => Promise<void> } }
+    ).__nookLog
+    await log?.flush()
+  })
+}
+
+export async function waitForPersistedAppLog(
+  page: Page,
+  filter: {
+    scope?: string
+    level?: string
+    messageIncludes?: string
+  },
+  options?: { limit?: number; timeoutMs?: number },
+): Promise<NookLogEntry> {
+  let found: NookLogEntry | undefined
+  await expect
+    .poll(
+      async () => {
+        await flushNookLogPersistQueue(page)
+        const entries = await readNookLogEntries(page, options?.limit ?? 500)
+        found = findAppLogEntry(entries ?? [], filter)
+        return found ?? null
+      },
+      { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
+    )
+    .not.toBeNull()
+  return found!
+}
+
+/** Wait for each persisted log milestone in order (see `.cortex/references/logging.md`). */
+export async function expectAppLogMilestones(
+  page: Page,
+  milestones: Array<{
+    scope?: string
+    level?: string
+    messageIncludes: string
+  }>,
+  options?: { limit?: number; timeoutMs?: number },
+): Promise<void> {
+  for (const milestone of milestones) {
+    await waitForPersistedAppLog(page, milestone, options)
+  }
+}
+
+export function findAppLogEntry(
+  entries: NookLogEntry[],
+  filter: {
+    scope?: string
+    level?: string
+    messageIncludes?: string
+  },
+): NookLogEntry | undefined {
+  return entries.find((entry) => {
+    if (filter.scope && entry.scope !== filter.scope) return false
+    if (filter.level && entry.level !== filter.level) return false
+    if (
+      filter.messageIncludes &&
+      !entry.message.includes(filter.messageIncludes)
+    ) {
+      return false
+    }
+    return true
+  })
+}
+
+export function expectAppLogEntry(
+  entries: NookLogEntry[],
+  filter: {
+    scope?: string
+    level?: string
+    messageIncludes?: string
+  },
+): NookLogEntry {
+  const entry = findAppLogEntry(entries, filter)
+  expect(
+    entry,
+    `expected app log matching ${JSON.stringify(filter)}; got scopes: ${[
+      ...new Set(entries.map((e) => e.scope)),
+    ].join(', ')}`,
+  ).toBeDefined()
+  return entry!
+}
+
+function parseLogsPageStoredCount(text: string | null): number {
+  const match = text?.match(/(\d+) stored/)
+  return match ? Number(match[1]) : 0
+}
+
+/** Wait until `/logs` shows a stored count matching `predicate` (WASM may init late). */
+export async function waitForLogsPageStoredCount(
+  page: Page,
+  predicate: (count: number) => boolean,
+  options?: { timeoutMs?: number },
+): Promise<number> {
+  let count = 0
+  await expect
+    .poll(
+      async () => {
+        await page.getByTestId('logs-refresh-btn').click()
+        count = parseLogsPageStoredCount(
+          await page.getByTestId('logs-count').textContent(),
+        )
+        return predicate(count) ? count : null
+      },
+      { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
+    )
+    .not.toBeNull()
+  return count
+}
+
+export async function expectLogsPageHasEntries(page: Page): Promise<void> {
+  await expect(page.getByTestId('logs-page')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await waitForLogsPageStoredCount(page, (stored) => stored > 0)
+  await expect(page.getByTestId('logs-entry').first()).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+}
+
+export async function expectLogsPageEmpty(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const emptyVisible = await page.getByTestId('logs-empty').isVisible()
+        const count = parseLogsPageStoredCount(
+          await page.getByTestId('logs-count').textContent(),
+        )
+        return emptyVisible && count === 0 ? count : null
+      },
+      { timeout: UI_TIMEOUT_MS * 2 },
+    )
+    .not.toBeNull()
+}
+
 /**
  * Print the app's persisted IndexedDB debug log (`window.__nookLog`) to the
  * test output. The WASM logger persists everything at or above the active

@@ -1,5 +1,6 @@
 import { VaultState } from '$lib/vault.svelte'
 import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
+import { createLogger } from '$lib/log'
 import {
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
@@ -12,6 +13,8 @@ import {
   readLocalVaultBlob,
   writeLocalVaultBlob,
 } from '$lib/vault-sync'
+
+const log = createLogger('vault-password')
 
 type E2ePasswordManager = {
   addVaultPasswordForE2e?: (label: string, password: string) => Promise<void>
@@ -51,6 +54,7 @@ export async function addVaultPassword(
       return manager.addVaultPassword(trimmedLabel, password)
     })
     await state.refreshPasswordEntriesList()
+    log.info('vault password added', { hadPasswords, label: label.trim() })
     state.showSuccess(
       hadPasswords
         ? state.t('toasts.password_added_rotate')
@@ -177,6 +181,11 @@ export async function unlockWithPassword(
     )) as NookSecretRecord[]
     state.secrets = rawRecords
     state.markVaultUnlocked()
+    log.info('vault unlocked with password', {
+      mode: state.storageMode,
+      secrets: rawRecords.length,
+      entryId,
+    })
     await state.ensureProviderSaved()
     await state.loadProviders()
     await state.refreshPasswordEntriesList()

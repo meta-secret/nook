@@ -1,5 +1,6 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
+import { createLogger } from '$lib/log'
 import {
   hasActiveLocalVault,
   listLocalVaultEntries,
@@ -8,6 +9,8 @@ import {
   switchActiveVault,
 } from '$lib/local-vault'
 import { saveAuthProviders } from '$lib/auth-providers'
+
+const log = createLogger('vault-local')
 
 export async function refreshLocalVaultCatalog(
   state: VaultState,
@@ -22,6 +25,7 @@ export async function refreshLocalVaultCatalog(
 
 export async function prepareLocalLogin(state: VaultState): Promise<void> {
   if (!state.localVaultPresent || state.localLoginPrepared) return
+  log.debug('preparing local login gate')
   state.storageMode = 'local'
   state.githubPat = ''
   state.oauthFile = null
@@ -90,12 +94,18 @@ export async function createLocalVaultWithDeviceKeys(
     await state.ensureProviderSaved()
     await state.syncActiveVaultStoreIdToAuth()
     await state.hydrateMultiDeviceState()
+    log.info('local vault created (device keys)', {
+      secrets: rawRecords.length,
+      deviceId: state.deviceId,
+    })
     state.showSuccess(state.t('toasts.local_loaded'))
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
-    state.errorMsg =
+    const message =
       e instanceof Error ? e.message : 'Failed to create local vault.'
+    log.warn('local vault create failed', { error: message })
+    state.errorMsg = message
   } finally {
     state.isVerifying = false
   }
@@ -147,18 +157,24 @@ export async function createLocalVault(
     await state.ensureProviderSaved()
     await state.syncActiveVaultStoreIdToAuth()
     await state.hydrateMultiDeviceState()
+    log.info('local vault created (with backup password)', {
+      secrets: rawRecords.length,
+    })
     state.showSuccess(state.t('toasts.local_loaded'))
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
-    state.errorMsg =
+    const message =
       e instanceof Error ? e.message : 'Failed to create local vault.'
+    log.warn('local vault create failed', { error: message })
+    state.errorMsg = message
   } finally {
     state.isVerifying = false
   }
 }
 
 export async function probeLoginUnlockMode(state: VaultState): Promise<void> {
+  log.debug('probing login unlock mode')
   await state.refreshPasswordEntriesList()
 }
 
