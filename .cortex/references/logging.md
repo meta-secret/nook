@@ -156,5 +156,31 @@ the default trail is too thin.
 - `fetchAppLogs(page, options)` in the same file loads `/app-logs` and returns
   the parsed `nook.app-logs.v1` payload.
 
+### Milestone assertions in e2e specs
+
+Use **`waitForPersistedAppLog(page, filter)`** or **`expectAppLogMilestones(page, [...])`**
+from [`e2e/helpers.ts`](../../nook-web/e2e/helpers.ts) to assert persisted `info`
+milestones **in-page** (via `window.__nookLog` + flush). Do not navigate to
+`/app-logs` mid-flow — that tears down vault UI state.
+
+Add log checks **sparingly** alongside DOM assertions: one or two milestones per
+meaningful step, not a full log transcript. Prefer `info`-level messages (stable
+at default capture level in CI).
+
+| Spec | When | Scope | Message (includes) |
+|------|------|-------|-------------------|
+| [`connect.spec.ts`](../../nook-web/e2e/connect.spec.ts) | Local vault created | `vault-local` | `local vault created` |
+| | WASM connect finished | `wasm-connect` | `connect complete` |
+| | Session unlocked | `vault` | `vault session unlocked` |
+| | User locks vault | `vault-session` | `vault locked` |
+| [`idle-session-lock.spec.ts`](../../nook-web/e2e/idle-session-lock.spec.ts) | Idle timeout | `vault-session` | `vault locked` |
+| | Re-unlock | `vault` | `vault session unlocked` |
+| [`event-log-sync.spec.ts`](../../nook-web/e2e/event-log-sync.spec.ts) | Manual sync | `vault-sync` | `manual sync started` |
+| | Secret saved | `connect` | `secret added` |
+| [`logs-page.spec.ts`](../../nook-web/e2e/logs-page.spec.ts) | Logging infra | (multiple) | See spec — owns `/logs` and `/app-logs` |
+
+**Note:** `connect` / `vault connected` is emitted by `loadDb` (provider unlock
+path), not device-key local vault creation (`vault-local` + `wasm-connect` instead).
+
 See also: [rust-wasm.md](rust-wasm.md), [bun-svelte.md](bun-svelte.md),
 [../workflows/ci-pipeline.md](../workflows/ci-pipeline.md).

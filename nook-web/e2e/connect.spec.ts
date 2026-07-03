@@ -3,9 +3,11 @@ import {
   createLocalVaultOnLogin,
   dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  expectAppLogMilestones,
   openLoginProviderSetup,
   reloadUnlockWithGithubSync,
   UI_TIMEOUT_MS,
+  waitForPersistedAppLog,
 } from './helpers'
 
 test.describe('vault connect flow', () => {
@@ -16,6 +18,12 @@ test.describe('vault connect flow', () => {
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await createLocalVaultOnLogin(page)
+
+    await expectAppLogMilestones(page, [
+      { scope: 'vault-local', level: 'info', messageIncludes: 'local vault created' },
+      { scope: 'wasm-connect', level: 'info', messageIncludes: 'connect complete' },
+      { scope: 'vault', level: 'info', messageIncludes: 'vault session unlocked' },
+    ])
 
     await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('login-gate')).not.toBeVisible()
@@ -143,6 +151,12 @@ test.describe('vault connect flow', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
+    })
+
+    await waitForPersistedAppLog(page, {
+      scope: 'vault-session',
+      level: 'info',
+      messageIncludes: 'vault locked',
     })
 
     await page.reload()
