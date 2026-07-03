@@ -1,4 +1,6 @@
-# Pull requests: pull toolchain cache, verify/build/e2e in one container, publish buildcache, deploy preview.
+# Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
+# Toolchain :buildcache publish is triggered asynchronously (pr-toolchain-cache.yml) after verify
+# so deploy is not blocked and the PR check completes when preview deploy finishes.
 # PRs publish only the :buildcache layers (keeps local + CI warm); the :latest base IMAGE is pushed
 # on main only (ci:main:publish). PR and main CI run full stub e2e; nightly runs sync-live.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
@@ -13,6 +15,7 @@ permissions:
   contents: read
   packages: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -37,13 +40,19 @@ jobs:
         env:
           CI: true
 
-      - name: Publish toolchain buildcache
-        # Keep the shared GHCR layer cache fresh from PRs (no :latest image overwrite) so local and
-        # CI builds on any branch pull warm dep/target layers instead of a cold recompile.
-        run: task docker:push:cache:ci
-        env:
-          CI: true
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+      - name: Publish toolchain buildcache (async)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'pr-toolchain-cache.yml',
+              ref: context.payload.pull_request.head.sha,
+              inputs: {
+                pr_number: String(context.payload.pull_request.number),
+              },
+            });
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2.2.0

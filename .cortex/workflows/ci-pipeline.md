@@ -7,6 +7,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
 | [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, web build, Cloudflare preview                             | No                                        |
+| [`pr-toolchain-cache.yml`](../../.github/workflows/pr-toolchain-cache.yml) | workflow_dispatch (from PR verify) | Best-effort `:buildcache` publish to GHCR (non-blocking) | No |
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, build, **full stub e2e**, Pages deploy, push toolchain            | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
@@ -14,10 +15,13 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 ```mermaid
 flowchart LR
   PR[Pull request] --> pr_yml[pr.yml]
+  pr_yml --> verify[Verify + e2e]
   pr_yml --> preview[Cloudflare preview]
+  verify --> cache_dispatch[pr-toolchain-cache.yml async]
+  cache_dispatch --> ghcr[GHCR :buildcache]
 
   merge[Squash merge to main] --> main_yml[main.yml]
-  main_yml --> verify[Verify + build]
+  main_yml --> main_verify[Verify + build]
   main_yml --> e2e_stub[stub e2e — one container]
   main_yml --> pages[GitHub Pages deploy]
 
