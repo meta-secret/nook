@@ -3,24 +3,28 @@ import {
   addSecret,
   assertVaultReady,
   clearBrowserVault,
+  connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
   disableLoginAutoUnlock,
   removeE2eDummyGithubSyncProvider,
+  reloadUnlockWithSyncProvider,
   revealSecretInRow,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
   unlockVaultOnLogin,
-  waitForGithubVaultState,
+  waitForLoadedSyncProviders,
   waitForSecretOnDevice,
+  waitForVaultOperationsIdle,
 } from './helpers'
 import {
   createSyncTarget,
   installSyncStub,
-  connectSyncVault,
   resetSyncRemote,
   type SyncE2eTarget,
 } from './sync-provider'
+import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { parseVaultYamlSnapshot } from './vault-yaml'
 
 test.describe('remote vault recovery (stub sync, local-first)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -36,8 +40,22 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
-    await connectSyncVault(vaultPage, target)
+    await connectLocalVault(vaultPage)
     await disableLoginAutoUnlock(vaultPage)
+    await reloadUnlockWithSyncProvider(vaultPage, {
+      providers: [
+        {
+          id: 'e2e-remote-recovery',
+          label: 'E2E Drive',
+          fileName: target.repoName,
+          accessToken: target.pat,
+        },
+      ],
+      sharedStub: target.stub as ReturnType<
+        typeof createLocalE2eGoogleDriveVaultStub
+      >,
+    })
+    await waitForLoadedSyncProviders(vaultPage)
   })
 
   test.afterAll(async () => {
@@ -52,12 +70,15 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     resetSyncRemote(target)
 
     await vaultPage.reload()
+    await installSyncStub(vaultPage, target)
+
     await expect(vaultPage.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
 
     await unlockVaultOnLogin(vaultPage)
     await assertVaultReady(vaultPage)
+    await waitForLoadedSyncProviders(vaultPage)
 
     await waitForSecretOnDevice(vaultPage, key)
     const row = vaultPage.getByTestId('secret-row').filter({ hasText: key })
@@ -65,15 +86,29 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     await row.getByText(value).waitFor()
 
     await removeE2eDummyGithubSyncProvider(vaultPage)
-    const syncButton = vaultPage.getByTestId('vault-sync-refresh-btn')
-    await expect(syncButton).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await syncButton.click()
-    await waitForGithubVaultState(
-      target,
-      (yaml) => yaml.secretIds.length >= 1,
-      { page: vaultPage },
-    )
+    await expect
+      .poll(
+        async () => {
+          await waitForVaultOperationsIdle(vaultPage)
+          await vaultPage.evaluate(async () => {
+            const vault = (
+              window as Window & {
+                __nookVault?: {
+                  manualSync?: () => Promise<void>
+                  runFanOutSyncAfterLocalSave?: () => Promise<void>
+                }
+              }
+            ).__nookVault
+            await vault?.runFanOutSyncAfterLocalSave?.()
+            await vault?.manualSync?.()
+          })
+          await waitForVaultOperationsIdle(vaultPage)
+          const yaml = target.stub?.getVaultYaml() ?? ''
+          if (!yaml.trim()) return 0
+          return parseVaultYamlSnapshot(yaml).secretIds.length
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBeGreaterThanOrEqual(1)
   })
 })

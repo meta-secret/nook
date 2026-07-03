@@ -7,10 +7,10 @@ import {
   expectVaultPasswordStatus,
   expandSettingsSection,
   openStorageSettings,
-  seedExtraGithubProviders,
+  readLocalVaultYamlFromIdb,
+  reloadUnlockWithSyncProvider,
+  stubGoogleDriveVaultForLocalE2e,
   UI_TIMEOUT_MS,
-  unlockVaultOnLogin,
-  waitForLoadedSyncProviders,
 } from './helpers'
 import { createSyncTarget, installSyncStub } from './sync-provider'
 
@@ -19,7 +19,7 @@ test.describe('fresh vault password entries (stub sync)', () => {
 
   const target = createSyncTarget('', 'fresh-pw')
 
-  test('local backup passwords persist after adding a github sync provider', async ({
+  test('local backup passwords persist after adding a local sync provider', async ({
     page,
   }) => {
     await installSyncStub(page, target)
@@ -39,23 +39,21 @@ test.describe('fresh vault password entries (stub sync)', () => {
     await expectVaultPasswordStatus(page, 2)
 
     await disableLoginAutoUnlock(page)
-    await seedExtraGithubProviders(page, [
-      {
-        id: 'e2e-empty-github',
-        label: 'Empty GitHub',
-        githubRepo: target.repoName,
-        githubPat: target.pat,
-      },
-    ])
-    await page.reload()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+    const vaultYaml = await readLocalVaultYamlFromIdb(page)
+    await stubGoogleDriveVaultForLocalE2e(page, {
+      fileName: target.repoName,
+      vaultYaml,
     })
-    await unlockVaultOnLogin(page)
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
+    await reloadUnlockWithSyncProvider(page, {
+      providers: [
+        {
+          id: 'e2e-empty-sync',
+          label: 'Empty Drive',
+          fileName: target.repoName,
+          accessToken: target.pat,
+        },
+      ],
     })
-    await waitForLoadedSyncProviders(page, 1)
 
     await openStorageSettings(page)
     await expandSettingsSection(page, 'unlock')

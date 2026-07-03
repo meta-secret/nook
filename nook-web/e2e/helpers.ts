@@ -61,6 +61,7 @@ export {
   cleanupAllRegisteredE2eGithubRepos,
   cleanupE2eGithubRepo,
 } from './github-repos'
+export { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 dotenv.config({
   path: path.join(
@@ -107,7 +108,7 @@ export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
 export async function openLoginProviderSetup(page: Page) {
-  if (await page.getByTestId('provider-option-github').isVisible()) {
+  if (await page.getByTestId('provider-picker-list').isVisible()) {
     return
   }
 
@@ -121,15 +122,15 @@ export async function openLoginProviderSetup(page: Page) {
       .or(legacyLink)
       .or(addBtn)
       .or(providerSetup)
-      .or(page.getByTestId('provider-option-github')),
+      .or(page.getByTestId('provider-picker-list')),
   ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
-  if (await page.getByTestId('provider-option-github').isVisible()) {
+  if (await page.getByTestId('provider-picker-list').isVisible()) {
     return
   }
 
   if (await providerSetup.isVisible()) {
-    await expect(page.getByTestId('provider-option-github')).toBeVisible({
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     return
@@ -143,7 +144,7 @@ export async function openLoginProviderSetup(page: Page) {
     await addBtn.click()
   }
 
-  await expect(page.getByTestId('provider-option-github')).toBeVisible({
+  await expect(page.getByTestId('provider-picker-list')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 }
@@ -559,6 +560,48 @@ export async function triggerVaultSyncRefresh(page: Page) {
   await waitForVaultOperationsIdle(page)
 }
 
+/** Wait until in-memory sync stub has the expected vault state. */
+export async function waitForSyncStubVaultState(
+  stub: { getVaultYaml: () => string },
+  predicate: (snapshot: VaultYamlSnapshot) => boolean,
+  options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
+): Promise<VaultYamlSnapshot> {
+  const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
+  const intervalMs = options?.intervalMs ?? 100
+  const deadline = Date.now() + timeoutMs
+  let lastError = 'stub vault empty'
+
+  while (Date.now() < deadline) {
+    const yaml = stub.getVaultYaml()
+    if (yaml.trim()) {
+      try {
+        const snapshot = parseVaultYamlSnapshot(yaml)
+        if (predicate(snapshot)) {
+          return snapshot
+        }
+        lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error.message : 'invalid stub vault yaml'
+      }
+    }
+    await sleep(intervalMs)
+  }
+
+  throw new Error(`Timed out waiting for stub vault YAML: ${lastError}`)
+}
+
+export async function assertGenesisVaultOnSyncStub(stub: {
+  getVaultYaml: () => string
+}) {
+  const snapshot = await waitForSyncStubVaultState(
+    stub,
+    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
+  )
+  assertGenesisVaultYaml(snapshot)
+  return snapshot
+}
+
 /** Wait until sync target has the expected vault state (stub or live GitHub). */
 export async function waitForGithubVaultState(
   target: GithubE2eTarget,
@@ -790,9 +833,14 @@ export function uniqueSecretKey(prefix: string) {
 
 export async function waitForEngine(page: Page) {
   const button = page.getByTestId('connect-provider-btn')
-  await expect(button.first()).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(button.first()).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(button.first()).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await expect(button.first()).not.toContainText('Loading engine', {
-    timeout: UI_TIMEOUT_MS,
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   return button.first()
 }
@@ -810,6 +858,117 @@ async function setupGithubProvider(page: Page, pat: string, repoName: string) {
   await page.getByTestId('provider-option-github').click()
   await page.getByTestId('github-repo-input').fill(repoName)
   await page.getByTestId('github-pat-input').fill(pat)
+}
+
+async function readGoogleOAuthError(page: Page): Promise<string | null> {
+  const error = page.getByTestId('google-oauth-error')
+  if (!(await error.isVisible())) {
+    return null
+  }
+  return (await error.textContent())?.trim() || null
+}
+
+async function waitForGoogleOAuthSignedIn(page: Page) {
+  await expect
+    .poll(
+      async () => {
+        const errorText = await readGoogleOAuthError(page)
+        if (errorText) {
+          throw new Error(`Google OAuth failed: ${errorText}`)
+        }
+        return (
+          (await page.getByTestId('google-account-status').isVisible()) ||
+          (await page.getByTestId('connect-provider-btn').isVisible())
+        )
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+}
+
+async function setupGoogleDriveProvider(
+  page: Page,
+  fileName: string,
+  accessToken: string,
+) {
+  await openLoginProviderSetup(page)
+  await page.getByTestId('provider-option-oauth-file').click()
+  await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('drive-file-input').fill(fileName)
+  await page.getByTestId('google-sign-in-btn').click()
+  await waitForGoogleOAuthSignedIn(page)
+}
+
+/** Mock Google Identity Services token client for e2e (call before navigation). */
+export async function installGoogleOAuthMock(
+  page: Page,
+  accessToken = 'ya29.e2e_stub_access_token',
+) {
+  const gisMockBody = `window.google=window.google||{};window.google.accounts=window.google.accounts||{};window.google.accounts.oauth2={initTokenClient:function(config){return{requestAccessToken:function(){config.callback({access_token:${JSON.stringify(accessToken)},expires_in:3600})}}}};`
+
+  await page.addInitScript((token: string) => {
+    window.google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: (config: {
+            callback: (response: {
+              access_token: string
+              expires_in: number
+            }) => void
+          }) => ({
+            requestAccessToken: () => {
+              config.callback({
+                access_token: token,
+                expires_in: 3600,
+              })
+            },
+          }),
+        },
+      },
+    }
+  }, accessToken)
+  await page.route('https://accounts.google.com/gsi/client', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: gisMockBody,
+    })
+  })
+  await page.route(
+    'https://www.googleapis.com/drive/v3/about**',
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: { emailAddress: 'e2e-user@example.com' },
+        }),
+      })
+    },
+  )
+  await page.evaluate((token: string) => {
+    window.google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: (config: {
+            callback: (response: {
+              access_token: string
+              expires_in: number
+            }) => void
+          }) => ({
+            requestAccessToken: () => {
+              config.callback({
+                access_token: token,
+                expires_in: 3600,
+              })
+            },
+          }),
+        },
+      },
+    }
+  }, accessToken)
 }
 
 export async function waitForVaultUnlocked(
@@ -858,6 +1017,62 @@ export async function connectGithubVault(
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
   )
   await assertGithubConnected(page)
+}
+
+export async function connectGoogleDriveVault(
+  page: Page,
+  accessToken: string,
+  fileName: string,
+  stub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+) {
+  await installGoogleOAuthMock(page, accessToken)
+  if (stub) {
+    await stub.install(page, { fileName })
+  }
+  await page.goto('/')
+  await setupGoogleDriveProvider(page, fileName, accessToken)
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
+  await waitForSyncStubVaultState(
+    stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
+    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
+    { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
+  )
+  await assertGithubConnected(page)
+}
+
+export async function connectGoogleDriveGenesisDevice(
+  page: Page,
+  accessToken: string,
+  fileName: string,
+  stub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+) {
+  await page.goto('/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await connectGoogleDriveVault(page, accessToken, fileName, stub)
+}
+
+export async function connectGoogleDriveJoinerDevice(
+  page: Page,
+  accessToken: string,
+  fileName: string,
+  stub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+) {
+  await assertGenesisVaultOnSyncStub(
+    stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
+  )
+  await installGoogleOAuthMock(page, accessToken)
+  if (stub) {
+    await stub.install(page, { fileName })
+  }
+  await page.goto('/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await setupGoogleDriveProvider(page, fileName, accessToken)
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
+  await waitForJoinEnrollmentDialog(page)
 }
 
 /** Genesis device: fresh browser + GitHub repo → connected vault. */
@@ -1774,8 +1989,40 @@ export async function openOnboardDevicePanel(page: Page) {
 }
 
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
-export async function reconnectGithubVault(page: Page) {
+export async function reconnectSyncVault(page: Page) {
   await unlockGithubVault(page)
+}
+
+/** @deprecated Use {@link reconnectSyncVault}. */
+export const reconnectGithubVault = reconnectSyncVault
+
+/** Add and connect a local sync provider from vault settings (vault must be unlocked). */
+export async function connectGoogleDriveSyncProviderFromSettings(
+  page: Page,
+  fileName: string,
+  accessToken = E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
+  options?: { expectConflict?: boolean },
+) {
+  await installGoogleOAuthMock(page, accessToken)
+  await page.getByTestId('vault-settings-tab').click()
+  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('add-provider-btn').first().click()
+  await page.getByTestId('provider-option-oauth-file').click()
+  await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await page.getByTestId('drive-file-input').fill(fileName)
+  await page.getByTestId('google-sign-in-btn').click()
+  await waitForGoogleOAuthSignedIn(page)
+  await page.getByTestId('connect-provider-btn').click()
+  await waitForVaultOperationsIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
+  if (!options?.expectConflict) {
+    await expect(
+      page.getByTestId('vault-sync-conflict-dialog'),
+    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
+  }
 }
 
 export async function assertVaultReady(page: Page) {
@@ -2082,7 +2329,11 @@ export async function seedExtraOauthFileProviders(
     accountEmail?: string
   }>,
 ) {
-  await page.evaluate((providers) => {
+  const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
+  const storeIdFromVault = vaultYaml.match(/^store_id:\s*(\S+)/m)?.[1]
+
+  await page.evaluate(
+    ({ providers, storeIdFromVault: vaultStoreId }) => {
     return new Promise<void>((resolve, reject) => {
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
@@ -2106,10 +2357,14 @@ export async function seedExtraOauthFileProviders(
                 fileName: string
                 accountEmail?: string
               }
+              storeId?: string
               createdAt: string
             }>
+            activeVaultStoreId?: string
           } | null
           const snapshot = existing ?? { providers: [] }
+          const storeId =
+            snapshot.activeVaultStoreId?.trim() || vaultStoreId || undefined
           for (const provider of providers) {
             snapshot.providers.push({
               id: provider.id,
@@ -2121,6 +2376,7 @@ export async function seedExtraOauthFileProviders(
                 fileName: provider.fileName,
                 accountEmail: provider.accountEmail,
               },
+              storeId,
               createdAt: new Date().toISOString(),
             })
           }
@@ -2136,7 +2392,7 @@ export async function seedExtraOauthFileProviders(
         tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
       }
     })
-  }, extras)
+  }, { providers: extras, storeIdFromVault })
 
   await page.waitForFunction(
     (expectedIds) => {
@@ -2308,6 +2564,17 @@ export const E2E_OAUTH_ONBOARD_PROVIDER = {
   accountEmail: 'e2e-user@example.com',
 }
 
+/** Alias for local stub sync provider used in multi-device / fan-out e2e. */
+export const E2E_SYNC_ONBOARD_PROVIDER = E2E_OAUTH_ONBOARD_PROVIDER
+
+export type E2eOauthSyncProvider = {
+  id: string
+  label: string
+  fileName: string
+  accessToken: string
+  accountEmail?: string
+}
+
 /** Read canonical local vault YAML bytes stored in IndexedDB (active vault). */
 export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -2376,11 +2643,14 @@ export async function waitForLocalVaultState(
 export async function stubGoogleDriveVaultForLocalE2e(
   page: Page,
   opts: { fileName: string; vaultYaml?: string },
+  existingStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
 ) {
-  const stub = createLocalE2eGoogleDriveVaultStub(
-    opts.vaultYaml ?? '',
-    opts.fileName,
-  )
+  const stub =
+    existingStub ??
+    createLocalE2eGoogleDriveVaultStub(opts.vaultYaml ?? '', opts.fileName)
+  if (opts.vaultYaml !== undefined) {
+    stub.setVaultYaml(opts.vaultYaml)
+  }
   await stub.install(page, {
     vaultYaml: opts.vaultYaml,
     fileName: opts.fileName,
@@ -2602,7 +2872,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           })
           return
         }
-        await route.fulfill({ status: 404, body: '{}' })
+        await route.fallback()
       }
 
       await context.route('https://api.github.com/**', handler)
@@ -2611,18 +2881,18 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 }
 
 /** Seed sync provider + unlock a keys-mode local vault for multi-device local e2e. */
-export async function reloadUnlockLocalVaultWithGithubSync(
+export async function reloadUnlockLocalVaultWithSync(
   page: Page,
-  sharedStub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
+  sharedStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
 ) {
-  await seedExtraGithubProviders(page, [E2E_GITHUB_ONBOARD_PROVIDER])
+  await seedExtraOauthFileProviders(page, [E2E_OAUTH_ONBOARD_PROVIDER])
 
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   if (vaultYaml.trim()) {
-    await stubGithubVaultForLocalE2e(
+    await stubGoogleDriveVaultForLocalE2e(
       page,
       {
-        repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+        fileName: E2E_OAUTH_ONBOARD_PROVIDER.fileName,
         vaultYaml,
       },
       sharedStub,
@@ -2632,10 +2902,10 @@ export async function reloadUnlockLocalVaultWithGithubSync(
   await page.reload()
 
   if (vaultYaml.trim()) {
-    await stubGithubVaultForLocalE2e(
+    await stubGoogleDriveVaultForLocalE2e(
       page,
       {
-        repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+        fileName: E2E_OAUTH_ONBOARD_PROVIDER.fileName,
         vaultYaml,
       },
       sharedStub,
@@ -2658,24 +2928,29 @@ export async function reloadUnlockLocalVaultWithGithubSync(
   await waitForVaultSyncIdle(page)
 }
 
-/** Connect a joiner browser to a stubbed GitHub repo (keys-mode join dialog). */
+/** @deprecated Use {@link reloadUnlockLocalVaultWithSync}. */
+export const reloadUnlockLocalVaultWithGithubSync = reloadUnlockLocalVaultWithSync
+
+/** Connect a joiner browser to a stubbed local sync remote (keys-mode join dialog). */
 export async function connectLocalE2eJoinerDevice(
   page: Page,
-  repoName: string,
+  fileName: string,
+  accessToken = E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
 ) {
+  await installGoogleOAuthMock(page, accessToken)
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
-  await setupGithubProvider(page, 'ghp_test_token', repoName)
+  await setupGoogleDriveProvider(page, fileName, accessToken)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
   await waitForJoinEnrollmentDialog(page)
 }
 
-/** Send a join request against a stubbed GitHub repo (local e2e). */
+/** Send a join request against a stubbed local sync remote (local e2e). */
 export async function sendJoinRequestLocalE2e(
   page: Page,
-  stub: ReturnType<typeof createLocalE2eGithubVaultStub>,
+  stub: { getVaultYaml: () => string },
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
   await waitForVaultOperationsIdle(page)
@@ -2704,7 +2979,7 @@ export async function sendJoinRequestLocalE2e(
 export async function approveJoinLocalE2eFromBanner(
   page: Page,
   deviceId: string,
-  stub: ReturnType<typeof createLocalE2eGithubVaultStub>,
+  stub: { getVaultYaml: () => string },
   expectedMembers: number,
 ) {
   await waitForPendingJoinOnDevice(page, deviceId)
@@ -2776,30 +3051,31 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
   await forceVaultQuiescentForE2e(page)
 }
 
-/** Seed a GitHub sync provider, reload, unlock, and wait for status bar sync count. */
-export async function reloadUnlockWithGithubSync(
+/** Seed a local sync provider, reload, unlock, and wait for status bar sync count. */
+export async function reloadUnlockWithSyncProvider(
   page: Page,
   opts?: {
     password?: string
     entryLabel?: string
-    providers?: Array<{
-      id: string
-      label: string
-      githubRepo: string
-      githubPat: string
-    }>
+    providers?: E2eOauthSyncProvider[]
+    sharedStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   },
 ) {
-  const providers = opts?.providers ?? [E2E_GITHUB_ONBOARD_PROVIDER]
-  await seedExtraGithubProviders(page, providers)
+  const providers = opts?.providers ?? [E2E_OAUTH_ONBOARD_PROVIDER]
+  const sharedStub = opts?.sharedStub
+  await seedExtraOauthFileProviders(page, providers)
 
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   if (vaultYaml.trim()) {
     for (const provider of providers) {
-      await stubGithubVaultForLocalE2e(page, {
-        repoName: provider.githubRepo,
-        vaultYaml,
-      })
+      await stubGoogleDriveVaultForLocalE2e(
+        page,
+        {
+          fileName: provider.fileName,
+          vaultYaml,
+        },
+        sharedStub,
+      )
     }
   }
 
@@ -2807,10 +3083,14 @@ export async function reloadUnlockWithGithubSync(
 
   if (vaultYaml.trim()) {
     for (const provider of providers) {
-      await stubGithubVaultForLocalE2e(page, {
-        repoName: provider.githubRepo,
-        vaultYaml,
-      })
+      await stubGoogleDriveVaultForLocalE2e(
+        page,
+        {
+          fileName: provider.fileName,
+          vaultYaml,
+        },
+        sharedStub,
+      )
     }
   }
 
@@ -2836,10 +3116,14 @@ export async function reloadUnlockWithGithubSync(
   const yamlAfterUnlock = await readLocalVaultYamlFromIdb(page)
   if (yamlAfterUnlock.trim()) {
     for (const provider of providers) {
-      await stubGithubVaultForLocalE2e(page, {
-        repoName: provider.githubRepo,
-        vaultYaml: yamlAfterUnlock,
-      })
+      await stubGoogleDriveVaultForLocalE2e(
+        page,
+        {
+          fileName: provider.fileName,
+          vaultYaml: yamlAfterUnlock,
+        },
+        sharedStub,
+      )
     }
   }
   if (opts?.password) {
@@ -2850,6 +3134,9 @@ export async function reloadUnlockWithGithubSync(
     )
   }
 }
+
+/** @deprecated Use {@link reloadUnlockWithSyncProvider}. */
+export const reloadUnlockWithGithubSync = reloadUnlockWithSyncProvider
 
 /** Wait until the status bar reflects loaded sync providers. */
 export async function waitForLoadedSyncProviders(
@@ -3095,3 +3382,13 @@ export async function assertEnrolledVaultOnGithub(
   assertEnrolledVaultYaml(snapshot, members)
   return snapshot
 }
+
+/** @deprecated Use {@link seedExtraOauthFileProviders}. */
+export const seedExtraSyncProviders = seedExtraOauthFileProviders
+
+/** @deprecated Use {@link stubGoogleDriveVaultForLocalE2e}. */
+export const stubSyncVaultForLocalE2e = stubGoogleDriveVaultForLocalE2e
+
+/** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */
+export const seedSyncProvidersWhileUnlocked =
+  seedOauthFileSyncProvidersWhileUnlocked

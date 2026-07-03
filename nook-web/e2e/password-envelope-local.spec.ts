@@ -5,15 +5,15 @@ import {
   assertVaultReady,
   clearBrowserVault,
   connectLocalVaultLegacy,
-  E2E_GITHUB_ONBOARD_PROVIDER,
+  E2E_SYNC_ONBOARD_PROVIDER,
   expandSettingsSection,
   expectVaultPasswordStatus,
   openStorageSettings,
   readLocalVaultYamlFromIdb,
   revealSecretInRow,
-  seedGithubSyncProvidersWhileUnlocked,
+  seedSyncProvidersWhileUnlocked,
   selectLoginUnlockMethod,
-  stubGithubVaultForLocalE2e,
+  stubSyncVaultForLocalE2e,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   uniqueSecretKey,
@@ -308,22 +308,22 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openStorageSettings(pageA)
     await addVaultPassword(pageA, 'Link test', 'link-pass')
-    await seedGithubSyncProvidersWhileUnlocked(pageA)
+    await seedSyncProvidersWhileUnlocked(pageA)
     const vaultYaml = await readLocalVaultYamlFromIdb(pageA)
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'link-pass')
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
-    await stubGithubVaultForLocalE2e(pageA, {
-      repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+    await stubSyncVaultForLocalE2e(pageA, {
+      fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
       vaultYaml,
     })
 
     // Same browser context shares IndexedDB where the local vault file lives.
     const pageB = await context.newPage()
-    await stubGithubVaultForLocalE2e(pageB, {
-      repoName: E2E_GITHUB_ONBOARD_PROVIDER.githubRepo,
+    await stubSyncVaultForLocalE2e(pageB, {
+      fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
       vaultYaml,
     })
     await pageB.goto(link)

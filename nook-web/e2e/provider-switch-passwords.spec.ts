@@ -10,7 +10,7 @@ import {
   expectVaultPasswordStatus,
   expandSettingsSection,
   openStorageSettings,
-  seedExtraGithubProviders,
+  seedExtraSyncProviders,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
 } from './helpers'
@@ -36,12 +36,14 @@ test.describe('unified vault backup passwords (stub sync)', () => {
     await expectVaultPasswordStatus(page, 1)
 
     await disableLoginAutoUnlock(page)
-    await seedExtraGithubProviders(page, [
+    await seedExtraSyncProviders(page, [
       {
-        id: 'e2e-empty-github',
-        label: 'Empty GitHub',
-        githubRepo: target.repoName,
-        githubPat: target.pat,
+        id: 'e2e-empty-sync',
+        label: 'Empty Drive',
+        fileName: target.repoName,
+        accessToken: target.pat,
+        type: 'oauth-file',
+        oauthPreset: 'google-drive',
       },
     ])
     await page.reload()

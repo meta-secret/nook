@@ -31,7 +31,7 @@ The **same sync spec files** run against different backends. CI swaps providers 
 
 | Env                      | Values                   | Default  |
 | ------------------------ | ------------------------ | -------- |
-| `NOOK_E2E_SYNC_PROVIDER` | `github`, `google-drive` | `github` |
+| `NOOK_E2E_SYNC_PROVIDER` | `local`, `google-drive`, `github` | `local` |
 
 Registry and factories live in `nook-web/e2e/sync-provider.ts`:
 
@@ -39,7 +39,7 @@ Registry and factories live in `nook-web/e2e/sync-provider.ts`:
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
 - **`live/sync.smoke.spec.ts`** — one nightly smoke per matrix row
 
-**Main CI (`e2e`):** defaults to `github` stub provider; add a matrix row with `NOOK_E2E_SYNC_PROVIDER=google-drive` when Drive UI connect is wired.
+**Main CI (`e2e`):** defaults to `local` stub provider (in-memory Google Drive REST mock).
 
 **Nightly (`sync-live`):** matrix in `e2e-nightly.yml`:
 

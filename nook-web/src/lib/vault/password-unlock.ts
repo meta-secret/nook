@@ -392,11 +392,7 @@ export async function issueEnrollmentCode(
             pat: selectedProvider.githubPat?.trim() ?? '',
             repo: selectedProvider.githubRepo?.trim() ?? '',
           }
-        : (() => {
-            throw new Error(
-              'Onboarding QR requires a GitHub sync provider for now.',
-            )
-          })()
+        : { type: 'local' }
     if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
       throw new Error(
         'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',

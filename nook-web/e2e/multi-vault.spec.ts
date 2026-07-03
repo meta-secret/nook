@@ -52,7 +52,7 @@ function parseStoreId(yaml: string): string {
   return match[1]
 }
 
-async function seedScopedGithubProviders(
+async function seedScopedSyncProviders(
   page: import('@playwright/test').Page,
   storeA: string,
   storeB: string,
@@ -72,19 +72,27 @@ async function seedScopedGithubProviders(
             providers: [
               {
                 id: 'provider-a',
-                type: 'github',
-                label: 'GitHub · nook-multi-vault-a',
-                githubRepo: 'nook-multi-vault-a',
-                githubPat: 'ghp_test_token',
+                type: 'oauth-file',
+                label: 'Google Drive · nook-multi-vault-a',
+                oauthFile: {
+                  preset: 'google-drive',
+                  accessToken: 'ya29.e2e_stub_access_token',
+                  fileName: 'nook-multi-vault-a.yaml',
+                  accountEmail: 'e2e-user@example.com',
+                },
                 storeId: storeA,
                 createdAt: new Date().toISOString(),
               },
               {
                 id: 'provider-b',
-                type: 'github',
-                label: 'GitHub · nook-multi-vault-b',
-                githubRepo: 'nook-multi-vault-b',
-                githubPat: 'ghp_test_token',
+                type: 'oauth-file',
+                label: 'Google Drive · nook-multi-vault-b',
+                oauthFile: {
+                  preset: 'google-drive',
+                  accessToken: 'ya29.e2e_stub_access_token',
+                  fileName: 'nook-multi-vault-b.yaml',
+                  accountEmail: 'e2e-user@example.com',
+                },
                 storeId: storeB,
                 createdAt: new Date().toISOString(),
               },
@@ -180,9 +188,9 @@ test.describe('multi-vault on one browser profile', () => {
     activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 
-    await seedScopedGithubProviders(page, storeA, storeB)
+    await seedScopedSyncProviders(page, storeA, storeB)
     await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('settings-provider-github')).toBeVisible()
+    await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-a',
     )
