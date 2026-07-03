@@ -36,7 +36,10 @@ export function appPath(path: string): string {
   return `${base}${normalized}`
 }
 
-function stripBasePath(pathname: string): string {
+/** Diagnostic application-log viewer route (`/logs`). */
+export const LOGS_PATH = '/logs'
+
+export function stripBasePath(pathname: string): string {
   const base = import.meta.env.BASE_URL
   if (base !== '/' && pathname.startsWith(base)) {
     const rest = pathname.slice(base.length)
@@ -53,4 +56,10 @@ export function getLegalPageFromPath(pathname: string): LegalPageId | null {
 
 export function legalPageForId(id: LegalPageId): LegalPage {
   return LEGAL_PAGES[id]
+}
+
+/** True when the current location resolves to the `/logs` diagnostic page. */
+export function isLogsPath(pathname: string): boolean {
+  const normalized = stripBasePath(pathname).replace(/\/$/, '') || '/'
+  return normalized === LOGS_PATH
 }

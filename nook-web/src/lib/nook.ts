@@ -13,9 +13,10 @@ import {
   generateId as wasmGenerateId,
   generateSecretId as wasmGenerateSecretId,
 } from './nook-wasm/nook_wasm'
-import { createLogger } from '$lib/log'
+import { createLogger, initWasmLogging } from '$lib/log'
 
 await initNookWasm()
+initWasmLogging()
 
 export type {
   NookJoinRequest,
@@ -57,6 +58,7 @@ export type VaultSyncAccessStatus =
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
     await initNookWasm()
+    initWasmLogging()
     const manager = new NookVaultManagerClass()
     drainWasmStatusIntoLog(manager)
     return manager

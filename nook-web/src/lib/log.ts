@@ -1,28 +1,33 @@
 /**
- * Leveled application logger persisted in IndexedDB.
+ * Thin web-side shim over the WASM-owned logger (`nook-wasm/src/logger.rs`).
  *
- * Every entry is appended to the `nook_logs` database (ring buffer, newest
- * ~LOG_MAX_ENTRIES kept) regardless of console level, so post-mortem debugging
- * (e2e failures, user reports) can always read the full debug stream without
- * re-running with extra instrumentation.
+ * The logger itself — level gating, IndexedDB persistence (rexie, `nook_logs`
+ * ring buffer), console echo — lives in WASM. This module only:
+ * - forwards `createLogger(scope).info(…)` calls to the `nookLog` binding,
+ * - resolves the initial level from `localStorage.nook_log_level` /
+ *   `VITE_LOG_LEVEL` and pushes it into WASM,
+ * - drives the periodic flush of the write-behind queue,
+ * - exposes `window.__nookLog` for devtools / e2e / the `/logs` page.
  *
- * Console echo is gated by the active level:
- * - `localStorage.nook_log_level` (runtime override, e.g. from devtools/e2e)
- * - `VITE_LOG_LEVEL` (build-time default)
- * - fallback: `info`
+ * Persistence is level-gated: only entries at or above the active level are
+ * stored. For a deeper post-mortem, lower the level (`debug`/`trace`) and
+ * reproduce — nothing below the threshold is kept.
  *
- * Global handle: `window.__nookLog` — `setLevel`, `dump`, `clear`.
+ * Calls made before WASM is initialised are queued and replayed by
+ * {@link initWasmLogging} (invoked once from `$lib/nook`).
  */
 
-export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace'
+import {
+  nookLog,
+  nookLogClear,
+  nookLogCount,
+  nookLogDump,
+  nookLogFlush,
+  nookLogGetLevel,
+  nookLogSetLevel,
+} from './nook-wasm/nook_wasm'
 
-const LEVEL_RANK: Record<LogLevel, number> = {
-  error: 0,
-  warn: 1,
-  info: 2,
-  debug: 3,
-  trace: 4,
-}
+export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace'
 
 export type LogEntry = {
   ts: string
@@ -32,24 +37,34 @@ export type LogEntry = {
   data?: string
 }
 
-const LOG_DB_NAME = 'nook_logs'
-const LOG_STORE = 'logs'
-const LOG_MAX_ENTRIES = 5000
-/** Trim overhead so we don't run a delete pass on every append. */
-const LOG_TRIM_SLACK = 500
+const LOG_LEVELS: readonly LogLevel[] = [
+  'error',
+  'warn',
+  'info',
+  'debug',
+  'trace',
+]
+
+/** How long to run the write-behind flush loop between IndexedDB writes. */
+const FLUSH_INTERVAL_MS = 250
+/** Cap the pre-init replay queue so early crash loops can't grow unbounded. */
+const PRE_INIT_QUEUE_MAX = 1000
+
+type PendingRecord = {
+  level: LogLevel
+  scope: string
+  message: string
+  data?: string
+}
+
+let wasmReady = false
+let flushTimer: ReturnType<typeof setInterval> | null = null
+let flushing = false
+const preInitQueue: PendingRecord[] = []
 
 function parseLevel(raw: string | null | undefined): LogLevel | null {
   const value = raw?.trim().toLowerCase()
-  if (
-    value === 'error' ||
-    value === 'warn' ||
-    value === 'info' ||
-    value === 'debug' ||
-    value === 'trace'
-  ) {
-    return value
-  }
-  return null
+  return LOG_LEVELS.includes(value as LogLevel) ? (value as LogLevel) : null
 }
 
 function initialLevel(): LogLevel {
@@ -62,98 +77,6 @@ function initialLevel(): LogLevel {
       ? parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | undefined)
       : null
   return env ?? 'info'
-}
-
-let activeLevel: LogLevel = initialLevel()
-
-function openLogDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(LOG_DB_NAME, 1)
-    request.onupgradeneeded = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains(LOG_STORE)) {
-        db.createObjectStore(LOG_STORE, { autoIncrement: true })
-      }
-    }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
-}
-
-let dbPromise: Promise<IDBDatabase> | null = null
-function logDb(): Promise<IDBDatabase> {
-  dbPromise ??= openLogDb().catch((error) => {
-    dbPromise = null
-    throw error
-  })
-  return dbPromise
-}
-
-/** Write-behind queue — appends never block or throw into callers. */
-let pending: LogEntry[] = []
-let flushScheduled = false
-let approxCount = 0
-
-async function flushPending(): Promise<void> {
-  flushScheduled = false
-  const batch = pending
-  pending = []
-  if (batch.length === 0) return
-  try {
-    const db = await logDb()
-    const tx = db.transaction(LOG_STORE, 'readwrite')
-    const store = tx.objectStore(LOG_STORE)
-    for (const entry of batch) {
-      store.add(entry)
-    }
-    approxCount += batch.length
-    if (approxCount > LOG_MAX_ENTRIES + LOG_TRIM_SLACK) {
-      await trimOldest(store)
-    }
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-      tx.onabort = () => reject(tx.error)
-    })
-  } catch {
-    // Logging must never break the app; drop the batch on storage errors.
-  }
-}
-
-async function trimOldest(store: IDBObjectStore): Promise<void> {
-  const count = await requestAsPromise(store.count())
-  approxCount = count
-  const excess = count - LOG_MAX_ENTRIES
-  if (excess <= 0) return
-  await new Promise<void>((resolve) => {
-    let deleted = 0
-    const cursorReq = store.openCursor()
-    cursorReq.onsuccess = () => {
-      const cursor = cursorReq.result
-      if (!cursor || deleted >= excess) {
-        resolve()
-        return
-      }
-      cursor.delete()
-      deleted += 1
-      cursor.continue()
-    }
-    cursorReq.onerror = () => resolve()
-  })
-  approxCount -= excess
-}
-
-function requestAsPromise<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-  })
-}
-
-function scheduleFlush() {
-  if (flushScheduled) return
-  flushScheduled = true
-  setTimeout(() => void flushPending(), 250)
 }
 
 function serializeData(data: unknown): string | undefined {
@@ -171,22 +94,17 @@ function record(
   message: string,
   data?: unknown,
 ) {
-  const entry: LogEntry = {
-    ts: new Date().toISOString(),
-    level,
-    scope,
-    message,
-    data: serializeData(data),
+  const serialized = serializeData(data)
+  if (!wasmReady) {
+    if (preInitQueue.length < PRE_INIT_QUEUE_MAX) {
+      preInitQueue.push({ level, scope, message, data: serialized })
+    }
+    return
   }
-  pending.push(entry)
-  scheduleFlush()
-
-  if (LEVEL_RANK[level] <= LEVEL_RANK[activeLevel]) {
-    const line = `[${scope}] ${message}`
-    const args = entry.data === undefined ? [line] : [line, entry.data]
-    if (level === 'error') console.error(...args)
-    else if (level === 'warn') console.warn(...args)
-    else console.log(...args)
+  try {
+    nookLog(level, scope, message, serialized ?? undefined)
+  } catch {
+    // Logging must never break the app.
   }
 }
 
@@ -209,46 +127,87 @@ export function createLogger(scope: string): ScopedLogger {
 }
 
 export function setLogLevel(level: LogLevel) {
-  activeLevel = level
   try {
     localStorage.setItem('nook_log_level', level)
   } catch {
-    // Storage may be unavailable (private mode); keep the in-memory level.
+    // Storage may be unavailable (private mode); keep the WASM-side level.
+  }
+  if (wasmReady) {
+    nookLogSetLevel(level)
   }
 }
 
 export function getLogLevel(): LogLevel {
-  return activeLevel
+  if (wasmReady) {
+    return parseLevel(nookLogGetLevel()) ?? 'info'
+  }
+  return initialLevel()
 }
 
-/** Read persisted entries (oldest first), optionally filtered by minimum level. */
+/** Read persisted entries (oldest first), optionally filtered/paginated. */
 export async function dumpLogs(options?: {
   minLevel?: LogLevel
   limit?: number
+  offset?: number
 }): Promise<LogEntry[]> {
-  await flushPending()
-  const db = await logDb()
-  const tx = db.transaction(LOG_STORE, 'readonly')
-  const store = tx.objectStore(LOG_STORE)
-  const all = await requestAsPromise(store.getAll())
-  const maxRank = LEVEL_RANK[options?.minLevel ?? 'trace']
-  const filtered = (all as LogEntry[]).filter(
-    (entry) => LEVEL_RANK[entry.level] <= maxRank,
-  )
-  const limit = options?.limit ?? filtered.length
-  return filtered.slice(-limit)
+  if (!wasmReady) return []
+  const entries = (await nookLogDump(
+    options?.minLevel ?? undefined,
+    options?.limit ?? undefined,
+    options?.offset ?? undefined,
+  )) as LogEntry[]
+  return entries ?? []
+}
+
+/** Total number of persisted log entries. */
+export async function logCount(): Promise<number> {
+  if (!wasmReady) return 0
+  return nookLogCount()
 }
 
 export async function clearLogs(): Promise<void> {
-  pending = []
-  const db = await logDb()
-  const tx = db.transaction(LOG_STORE, 'readwrite')
-  tx.objectStore(LOG_STORE).clear()
-  approxCount = 0
-  await new Promise<void>((resolve) => {
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => resolve()
-  })
+  if (!wasmReady) return
+  await nookLogClear()
+}
+
+/**
+ * Wire the WASM logger once the engine is initialised: push the resolved
+ * level, replay queued entries, and start the write-behind flush loop.
+ * Idempotent — safe to call on every `getVaultManager()`.
+ */
+export function initWasmLogging() {
+  nookLogSetLevel(initialLevel())
+  wasmReady = true
+
+  if (preInitQueue.length > 0) {
+    const queued = preInitQueue.splice(0, preInitQueue.length)
+    for (const entry of queued) {
+      try {
+        nookLog(
+          entry.level,
+          entry.scope,
+          entry.message,
+          entry.data ?? undefined,
+        )
+      } catch {
+        // Ignore — a broken early log must not block startup.
+      }
+    }
+  }
+
+  if (!flushTimer) {
+    flushTimer = setInterval(() => {
+      if (flushing) return
+      flushing = true
+      void nookLogFlush()
+        .catch(() => {
+          // Drop the batch on storage errors; logging must never break the app.
+        })
+        .finally(() => {
+          flushing = false
+        })
+    }, FLUSH_INTERVAL_MS)
+  }
 }
 
 declare global {
@@ -257,6 +216,7 @@ declare global {
       setLevel: typeof setLogLevel
       getLevel: typeof getLogLevel
       dump: typeof dumpLogs
+      count: typeof logCount
       clear: typeof clearLogs
     }
   }
@@ -267,6 +227,7 @@ if (typeof window !== 'undefined') {
     setLevel: setLogLevel,
     getLevel: getLogLevel,
     dump: dumpLogs,
+    count: logCount,
     clear: clearLogs,
   }
 }

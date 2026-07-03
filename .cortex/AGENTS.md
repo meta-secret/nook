@@ -39,6 +39,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ## 5. Technology Cheat Sheets (`references/`)
 * [references/rust-wasm.md](references/rust-wasm.md) — Rust-Wasm binding conventions.
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
+* [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, e2e auto-dump).
 
 ## 6. Workflows (`workflows/`)
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local validation → push when ready → monitor → full local loop on failure → merge). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
