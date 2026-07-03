@@ -77,7 +77,6 @@ test.describe('onboard provider picker', () => {
 
     await seedGithubSyncProvidersWhileUnlocked(page)
     await page.getByTestId('vault-onboard-tab').click()
-    await expect(page.getByTestId('onboard-provider-list')).toBeVisible()
     await expect(page.getByTestId('onboard-wizard-generate-step')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toBeVisible()
     await expect(page.getByTestId('onboard-device-submit')).toBeEnabled({
@@ -121,6 +120,10 @@ test.describe('onboard provider picker', () => {
     await addVaultPassword(page, 'Onboard picker', 'picker-pass-1')
 
     await page.getByTestId('vault-onboard-tab').click()
+    await page
+      .getByTestId('onboard-wizard-sync-step')
+      .getByRole('button')
+      .click()
     const providerList = page.getByTestId('onboard-provider-list')
     await expect(providerList).toBeVisible()
 
