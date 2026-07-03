@@ -2287,7 +2287,10 @@ export async function stubGoogleDriveVaultForLocalE2e(
     opts.vaultYaml ?? '',
     opts.fileName,
   )
-  await stub.install(page, { vaultYaml: opts.vaultYaml, fileName: opts.fileName })
+  await stub.install(page, {
+    vaultYaml: opts.vaultYaml,
+    fileName: opts.fileName,
+  })
 }
 
 /** Stub GitHub REST responses so local e2e can exercise sync-provider enrollment. */
