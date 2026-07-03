@@ -215,6 +215,12 @@ test.describe('vault password envelope (local)', () => {
 
     await openOnboardDevicePanel(page)
     const linkInput = await submitOnboardEnrollmentCode(page, 'hunter2-secure')
+    await expect(
+      page
+        .getByTestId('onboard-wizard-generate-step')
+        .getByRole('button')
+        .first(),
+    ).toHaveAttribute('aria-expanded', 'false')
     await expect(linkInput).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

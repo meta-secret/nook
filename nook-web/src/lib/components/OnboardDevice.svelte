@@ -189,6 +189,12 @@
   )
 
   $effect(() => {
+    if (enrollmentCode) {
+      passwordStepOpen = false
+      syncStepOpen = false
+      generateStepOpen = false
+      return
+    }
     if (!hasPasswords) {
       passwordStepOpen = true
       syncStepOpen = false
