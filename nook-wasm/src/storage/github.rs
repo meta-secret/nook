@@ -11,12 +11,7 @@
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
-fn log_github_api_failure(
-    operation: &str,
-    repo: &str,
-    path: &str,
-    status: reqwest::StatusCode,
-) {
+fn log_github_api_failure(operation: &str, repo: &str, path: &str, status: reqwest::StatusCode) {
     tracing::warn!(
         scope = "github",
         operation,

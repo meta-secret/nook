@@ -1701,8 +1701,9 @@ mod tests {
         assert!(state.members.is_empty());
 
         let records = state.to_stored_records();
-        let repaired =
-            ensure_self_in_roster(&records, &identity, &keys.members_key).unwrap().unwrap();
+        let repaired = ensure_self_in_roster(&records, &identity, &keys.members_key)
+            .unwrap()
+            .unwrap();
         apply_member_records(&mut state, &repaired);
         let roster = resolve_member_roster(&state.to_stored_records(), &keys.members_key).unwrap();
         assert_eq!(roster.len(), 1);
