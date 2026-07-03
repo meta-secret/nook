@@ -1,12 +1,10 @@
 import { expect, test } from './fixtures'
 import {
-  addVaultPassword,
   clearBrowserVault,
   connectLocalVaultLegacy,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   forceVaultQuiescentForE2e,
   openOnboardDevicePanel,
-  openStorageSettings,
   seedExtraGithubProviders,
   seedGithubSyncProvidersWhileUnlocked,
   UI_TIMEOUT_MS,
@@ -116,10 +114,9 @@ test.describe('onboard provider picker', () => {
     await forceVaultQuiescentForE2e(page)
     await waitForLoadedSyncProviders(page, 2)
 
-    await openStorageSettings(page)
-    await addVaultPassword(page, 'Onboard picker', 'picker-pass-1')
+    await openOnboardDevicePanel(page)
+    await createOnboardPasswordInline(page)
 
-    await page.getByTestId('vault-onboard-tab').click()
     await page
       .getByTestId('onboard-wizard-sync-step')
       .getByRole('button')
