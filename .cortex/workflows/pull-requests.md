@@ -28,7 +28,7 @@ flowchart TD
   B --> E[3 Push + open PR when ready]
   E --> F[4 Monitor PR CI]
   F --> G{All checks green?}
-  G -->|no| H[5 Read logs + fix]
+  G -->|no| H[5 Read app logs + fix]
   H --> FULL[6 task ci:pr locally until green]
   FULL --> PUSH[7 Push + monitor]
   PUSH --> G
@@ -140,9 +140,12 @@ gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name
 ### 6. Fix loop on failure
 
 1. Read the failed job log: `gh run view <run-id> --log-failed`
-2. Fix the root cause.
-3. **Run full local PR CI and repeat until green:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
-4. Commit, push, return to step 5.
+2. For **e2e failures**, read persisted app logs first: Playwright attachment
+   `nook-app-logs.json`, local `fetchAppLogs(page)` / `/app-logs`, or
+   `dumpNookLogs(page)`. See [logging.md](../references/logging.md).
+3. Fix the root cause.
+4. **Run full local PR CI and repeat until green:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
+5. Commit, push, return to step 5.
 
 If the failure was obviously fmt/lint-only, `task format:check` + the relevant lint/test subset can unblock a quick fix — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
 

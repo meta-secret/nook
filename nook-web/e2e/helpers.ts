@@ -25,6 +25,36 @@ import {
   GITHUB_VAULT_PATH,
 } from './github-api'
 
+const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
+
+function buildAppLogsUrl(options?: {
+  minLevel?: string
+  limit?: number
+  offset?: number
+}): string {
+  const params = new URLSearchParams()
+  if (options?.minLevel) params.set('minLevel', options.minLevel)
+  if (options?.limit !== undefined) params.set('limit', String(options.limit))
+  if (options?.offset !== undefined)
+    params.set('offset', String(options.offset))
+  const qs = params.toString()
+  return qs ? `/app-logs?${qs}` : '/app-logs'
+}
+
+type AppLogsResponse = {
+  meta: {
+    schema: typeof APP_LOGS_SCHEMA
+    generatedAt: string
+    activeLevel: string
+    minLevel: string
+    limit: number
+    offset: number
+    returned: number
+    total: number
+  }
+  entries: NookLogEntry[]
+}
+
 export {
   cleanupAllRegisteredE2eGithubRepos,
   cleanupE2eGithubRepo,
@@ -1145,6 +1175,35 @@ function printNookLogEntries(label: string, entries: NookLogEntry[]) {
 }
 
 /**
+ * Fetch persisted app logs via the `/app-logs` JSON export route.
+ * Prefer this over ad-hoc `page.evaluate` when debugging e2e failures.
+ */
+export async function fetchAppLogs(
+  page: Page,
+  options?: {
+    minLevel?: string
+    limit?: number
+    offset?: number
+  },
+): Promise<AppLogsResponse> {
+  const url = buildAppLogsUrl(options)
+  await page.goto(url)
+  const json = page.getByTestId('app-logs-json')
+  await expect(json).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  const text = await json.textContent()
+  if (!text) {
+    throw new Error('`/app-logs` returned an empty JSON body')
+  }
+  const payload = JSON.parse(text) as AppLogsResponse
+  if (payload.meta?.schema !== APP_LOGS_SCHEMA) {
+    throw new Error(
+      `Unexpected /app-logs schema: ${String(payload.meta?.schema)}`,
+    )
+  }
+  return payload
+}
+
+/**
  * Print the app's persisted IndexedDB debug log (`window.__nookLog`) to the
  * test output. The WASM logger persists everything at or above the active
  * level, so lower the level (e.g. `VITE_LOG_LEVEL=debug`) to capture more.
@@ -1182,8 +1241,21 @@ export async function captureNookLogsOnFailure(
     const entries = await readNookLogEntries(page, 500)
     if (!entries || entries.length === 0) return
     printNookLogEntries(`nook-logs] [${testInfo.title}`, entries)
+    const payload: AppLogsResponse = {
+      meta: {
+        schema: APP_LOGS_SCHEMA,
+        generatedAt: new Date().toISOString(),
+        activeLevel: 'info',
+        minLevel: 'trace',
+        limit: 500,
+        offset: 0,
+        returned: entries.length,
+        total: entries.length,
+      },
+      entries,
+    }
     await testInfo.attach('nook-app-logs.json', {
-      body: JSON.stringify(entries, null, 2),
+      body: JSON.stringify(payload, null, 2),
       contentType: 'application/json',
     })
   } catch {

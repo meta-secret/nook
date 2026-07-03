@@ -26,7 +26,9 @@ Default agent flow:
 2. **Validate locally before push** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
 3. **Push when ready** — commit, push, and open the PR only after local gates pass.
 4. **Monitor remote CI** — watch checks on the PR.
-5. **On any remote failure** — read logs, fix locally (prefer single-spec e2e while debugging), run `task ci:pr` until green, then push again.
+5. **On any remote failure** — read **app logs** (`nook-app-logs.json` attachment,
+   `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
+   debugging) → run `task ci:pr` until green → push again.
 6. **Merge** — squash merge only when **every** remote check is green.
 
 Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.
@@ -40,7 +42,9 @@ Never push twice in a row after a remote red build without a passing `task ci:pr
 4. **Local validation** — Run `task check` (or a scoped subset) and relevant e2e before push. Prefer local Docker (cached images) over remote CI for iteration. During debug, run specs one at a time with `E2E_SPEC=… task web:test:e2e:file`.
 5. **Push and open PR** — Commit, push, and open the PR **only when local checks pass** and the change is ready. Remote CI validates a clean environment — it is not the first test pass.
 6. **Monitor CI** — Watch remote checks until every required job finishes.
-7. **Fix loop on failure** — If CI fails: read logs → fix → run `task ci:pr` locally → fix → re-run `task ci:pr` until green → commit → push → monitor again.
+7. **Fix loop on failure** — If CI fails: read **app logs** (Playwright
+   `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) → fix → run `task ci:pr`
+   locally → fix → re-run `task ci:pr` until green → commit → push → monitor again.
 8. **Repeat** — Return to step 7 until every remote check is green.
 9. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
 
@@ -54,7 +58,7 @@ flowchart TD
   PU --> PR[6 Monitor CI]
   PR --> G{All checks green?}
   G -->|yes| M[9 Squash merge]
-  G -->|no| FIX[7 Read logs + fix]
+  G -->|no| FIX[7 Read app logs + fix]
   FIX --> FULL[Run task ci:pr locally until green]
   FULL --> PUSH[Push + monitor]
   PUSH --> G
@@ -122,7 +126,9 @@ Add `task web:test:e2e` or `task ci:pr` before the first push when the change to
 **Mandatory before every push that follows a red remote build:**
 
 ```bash
-gh run view <run-id> --log-failed   # diagnose
+gh run view <run-id> --log-failed   # CI job output
+# For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
+# E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
 task ci:pr                          # full PR mirror
 # fix, re-run task ci:pr until green, then commit and push
 gh pr checks <number> --watch
@@ -176,6 +182,8 @@ When [`main.yml`](../../.github/workflows/main.yml) or [`e2e-nightly.yml`](../..
 - **Never stop after push.** Monitor CI through merge or explicit handoff.
 - **Prefer local Docker over remote CI for iteration** — cached images, faster feedback; push only when locally ready.
 - **During e2e debug, run one spec at a time** (`E2E_SPEC=… task web:test:e2e:file`) — do not re-run the full suite after every fix.
+- **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call
+  `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never push after remote failure without a green `task ci:pr` locally** (unless the failure was trivial fmt/lint and you verified with the matching subset).
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Duration report** on every completed implementation task. See [pull-requests.md §8](pull-requests.md#8-task-completion-report).

@@ -1,5 +1,6 @@
 import privacyPolicyMd from '../../../docs/privacy-policy.md?raw'
 import termsOfServiceMd from '../../../docs/terms-of-service.md?raw'
+import { stripBasePath } from '$lib/routes'
 
 export type LegalPageId = 'privacy' | 'terms'
 
@@ -39,14 +40,7 @@ export function appPath(path: string): string {
 /** Diagnostic application-log viewer route (`/logs`). */
 export const LOGS_PATH = '/logs'
 
-export function stripBasePath(pathname: string): string {
-  const base = import.meta.env.BASE_URL
-  if (base !== '/' && pathname.startsWith(base)) {
-    const rest = pathname.slice(base.length)
-    return rest ? `/${rest.replace(/^\//, '')}` : '/'
-  }
-  return pathname
-}
+export { stripBasePath } from '$lib/routes'
 
 /** Resolve `/privacy` or `/terms` from the current location pathname. */
 export function getLegalPageFromPath(pathname: string): LegalPageId | null {

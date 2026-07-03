@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures'
-import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
+import { createLocalVaultOnLogin, fetchAppLogs, UI_TIMEOUT_MS } from './helpers'
 
 type NookLogWindow = Window & {
   __nookLog?: { dump: () => Promise<unknown> }
@@ -49,5 +49,33 @@ test.describe('application logs page', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('logs-count')).not.toContainText('0 stored')
+  })
+
+  test('exports persisted entries as JSON from /app-logs', async ({ page }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem('nook_log_level', 'debug'),
+    )
+
+    await page.goto('/')
+    await createLocalVaultOnLogin(page)
+
+    await page.evaluate(
+      () => (window as NookLogWindow).__nookLog?.dump() ?? null,
+    )
+
+    const payload = await fetchAppLogs(page, {
+      minLevel: 'trace',
+      limit: 100,
+    })
+
+    expect(payload.meta.schema).toBe('nook.app-logs.v1')
+    expect(payload.meta.returned).toBeGreaterThan(0)
+    expect(payload.entries.length).toBeGreaterThan(0)
+    expect(payload.entries[0]).toMatchObject({
+      ts: expect.any(String),
+      level: expect.any(String),
+      scope: expect.any(String),
+      message: expect.any(String),
+    })
   })
 })
