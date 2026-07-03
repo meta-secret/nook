@@ -22,23 +22,6 @@ tasks:
         TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" TOOLCHAIN_PUSH=1
         {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push'
 
-  docker:push:cache:
-    desc: Publish only the :buildcache layers to GHCR (any branch / PR — no :latest image overwrite).
-    # PUSH_TOOLCHAIN is re-declared here (not just on the docker:push:cache:ci wrapper): go-task does
-    # NOT propagate a parent task's `env:` into a called subtask, so we source it from the ambient
-    # var so the gate below sees it regardless of caller.
-    env:
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
-      PUSH_TOOLCHAIN: '{{.PUSH_TOOLCHAIN}}'
-    cmds:
-      # Keeps the shared layer cache fresh from PRs so local + CI builds on any branch pull warm
-      # layers. TOOLCHAIN_PUSH enables cache-to; the target has no :latest tag, so it is safe from
-      # feature branches. Best-effort: never fail CI if the cache push is rejected.
-      - >-
-        sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" TOOLCHAIN_PUSH=1
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-cache || echo "warn: cache push skipped/failed"'
-
   docker:task:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-web/Dockerfile).

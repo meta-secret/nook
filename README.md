@@ -272,12 +272,12 @@ nook-web:local                                # nook-web image (base + your sour
 image so it reflects current source; buildx reuses the toolchain base + GHCR `:buildcache`, so
 only the small source layer rebuilds.
 
-**The GHCR cache is pull-always, push-CI-only.** Every build — including local — pulls the shared
+**The GHCR cache is pull-always, push-main-only.** Every build — including local — pulls the shared
 `:buildcache`/`:latest` layers (`cache-from`), so a fresh checkout reuses whatever CI already
 compiled instead of a cold recompile of the entire dep graph. Run `docker login ghcr.io` once so
 local pulls authenticate (a miss just falls back to a cold build — the registry is cache, never a
-build dependency). Publishing is CI-only: PRs push the `:buildcache` layers, and main pushes the
-verified base image. Local never pushes.
+build dependency). Main CI publishes the verified base image + cache after green builds. PR CI and
+local dev never push.
 
 All `docker run` invocations use `--platform linux/amd64`
 (Mac included). Rust `target/` lives at the default `/meta-secret/nook/target` inside the image
@@ -293,8 +293,7 @@ once so local pulls authenticate):
 task check   # or task web:dev — pulls the shared cache automatically
 ```
 
-Publishing the shared cache is handled by CI (PRs push `:buildcache`, main pushes the base image).
-You normally never push from a workstation.
+Publishing the shared cache is handled by main CI only (`ci:main:publish`). You normally never push from a workstation.
 
 After changing Rust dependencies in any `Cargo.toml`, commit the updated lockfile:
 

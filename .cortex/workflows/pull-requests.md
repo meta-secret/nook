@@ -81,7 +81,7 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 task ci:pr    # prepare → verify ‖ web build → full stub e2e
 ```
 
-Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then commit and push. This matches what `pr.yml` runs (`task ci:pr:publish` minus toolchain push and Cloudflare deploy).
+Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then commit and push. This matches what `pr.yml` runs (minus Cloudflare deploy).
 
 | When                            | Command                                 | Why                                                        |
 | ------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
@@ -125,7 +125,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, refreshes the buildcache, then deploys a Cloudflare preview.
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, then deploys a Cloudflare preview. Toolchain publish runs on main only (`ci:main:publish`).
 
 ### 5. Monitor CI until green
 

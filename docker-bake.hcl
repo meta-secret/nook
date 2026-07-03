@@ -72,9 +72,8 @@ target "toolchain" {
   output   = ["type=docker"]
 }
 
-// Cache-only publish (any branch / PR): push just the :buildcache layers, no :latest image tag.
-// Safe to run from feature branches — it never overwrites the canonical base image, but keeps the
-// shared layer cache fresh so LOCAL and CI builds on any branch pull warm layers. Gated on PUSH.
+// Cache-only publish (manual / legacy): push just the :buildcache layers, no :latest image tag.
+// CI uses toolchain-push on main only; this target is not invoked by Taskfile workflows.
 target "toolchain-cache" {
   inherits = ["_toolchain-common"]
   output   = ["type=cacheonly"]

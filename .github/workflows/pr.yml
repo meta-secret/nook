@@ -1,8 +1,6 @@
 # Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
-# Toolchain :buildcache publish starts in the background on the same runner after verify (warm
-# buildx cache from ci:pr) while deploy runs; best-effort wait at the end does not fail the PR.
-# PRs publish only the :buildcache layers (keeps local + CI warm); the :latest base IMAGE is pushed
-# on main only (ci:main:publish). PR and main CI run full stub e2e; nightly runs sync-live.
+# Toolchain publish runs on main only (ci:main:publish). PR and main CI run full stub e2e;
+# nightly runs sync-live.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
@@ -13,7 +11,7 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
   pull-requests: write
 
 concurrency:
@@ -38,16 +36,6 @@ jobs:
         run: task ci:pr VITE_BASE=/
         env:
           CI: true
-
-      - name: Publish toolchain buildcache (background)
-        id: cache_push
-        run: |
-          # Same runner as ci:pr — reuses warm buildx cache. Overlaps with deploy + comment.
-          task docker:push:cache:ci > /tmp/nook-cache-push.log 2>&1 &
-          echo $! > /tmp/nook-cache-push.pid
-        env:
-          CI: true
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Deploy to Cloudflare Pages
         id: deploy
@@ -82,15 +70,3 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         run: task docker:task TASK=_comment-preview
-
-      - name: Wait for toolchain buildcache publish
-        if: steps.cache_push.outcome == 'success'
-        continue-on-error: true
-        run: |
-          pid="$(cat /tmp/nook-cache-push.pid)"
-          if wait "$pid"; then
-            echo "Toolchain buildcache publish finished"
-          else
-            echo "::warning::Toolchain buildcache publish failed (non-blocking)"
-            cat /tmp/nook-cache-push.log
-          fi

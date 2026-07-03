@@ -21,12 +21,6 @@ tasks:
     cmds:
       - task: ci:pr:e2e
 
-  ci:pr:publish:
-    desc: PR CI verify, then publish the :buildcache layers to GHCR (no :latest overwrite).
-    cmds:
-      - task: ci:pr
-      - task: docker:push:cache:ci
-
   ci:main:
     desc: Main branch CI — one container for format/verify/build/e2e (source + warm target/ baked in the nook-web image).
     deps:
@@ -110,15 +104,6 @@ tasks:
     # a called subtask, but it does propagate call vars. docker:push maps this var into its own env.
     cmds:
       - task: docker:push
-        vars:
-          PUSH_TOOLCHAIN: "1"
-
-  docker:push:cache:ci:
-    desc: Publish only the :buildcache layers to GHCR (after green PR CI — no :latest overwrite).
-    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
-    # a called subtask, but it does propagate call vars. docker:push:cache maps this var into its env.
-    cmds:
-      - task: docker:push:cache
         vars:
           PUSH_TOOLCHAIN: "1"
 

@@ -14,14 +14,11 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 ```mermaid
 flowchart LR
   PR[Pull request] --> pr_yml[pr.yml]
-  pr_yml --> verify[Verify + e2e]
-  verify --> cache_push[buildcache publish]
-  verify --> preview[Cloudflare preview]
-  cache_push --> ghcr[GHCR :buildcache]
+  pr_yml --> preview[Cloudflare preview]
 
   merge[Squash merge to main] --> main_yml[main.yml]
-  main_yml --> main_verify[Verify + build]
-  main_yml --> e2e_stub[stub e2e — one container]
+  main_yml --> main_verify[Verify + build + e2e]
+  main_yml --> toolchain_push[Push toolchain to GHCR]
   main_yml --> pages[GitHub Pages deploy]
 
   cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
