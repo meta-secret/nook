@@ -132,21 +132,28 @@ test.describe('multi-vault on one browser profile', () => {
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
     const storeA = parseStoreId(vaultAYaml)
 
-    await page.getByTestId('header-lock-vault-btn').click()
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-
+    await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+    await page.getByTestId('vault-switcher-trigger').click()
+    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
+    await expect(page.getByTestId('vault-switcher-count')).toContainText(
+      'One vault on this device',
+    )
+    await page.getByTestId('vault-switcher-create-btn').click()
+    await expect(page.getByTestId('vault-switcher-create-form')).toBeVisible()
     await page.getByTestId('login-vault-name-input').fill('Vault B')
-    await page.getByTestId('login-create-additional-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
+    await page.getByTestId('vault-switcher-create-submit').click()
+    await expect
+      .poll(
+        async () => {
+          const yaml = await readLocalVaultYamlFromIdb(page)
+          return parseStoreId(yaml)
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .not.toBe(storeA)
     const vaultBYaml = await readLocalVaultYamlFromIdb(page)
     const storeB = parseStoreId(vaultBYaml)
-    expect(storeB).not.toEqual(storeA)
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     const registry = await listLocalVaultStoreIds(page)
     expect(registry).toEqual(expect.arrayContaining([storeA, storeB]))

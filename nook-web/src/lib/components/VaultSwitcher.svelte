@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Check, ChevronDown, FolderKey, Plus } from '@lucide/svelte'
+  import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
+  import { Button } from '$lib/components/ui/button'
   import type { LocalVaultEntry } from '$lib/local-vault'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
@@ -7,6 +9,7 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
+  let createOpen = $state(false)
   let root = $state<HTMLDivElement | null>(null)
   let switchingTo = $state<string | null>(null)
 
@@ -52,6 +55,9 @@
   async function toggleOpen() {
     const next = !open
     open = next
+    if (!next) {
+      createOpen = false
+    }
     if (next) {
       await vault.refreshLocalVaultCatalog()
     }
@@ -69,41 +75,42 @@
   }
 
   function createAnotherVault() {
-    open = false
-    vault.lockVault()
+    createOpen = true
+  }
+
+  async function submitCreateVault(label: string) {
+    await vault.createLocalVaultWithDeviceKeys(label)
+    if (!vault.errorMsg) {
+      createOpen = false
+      open = false
+    }
   }
 </script>
 
 {#if vaultCount > 0}
   <div bind:this={root} class="relative min-w-0 max-w-[min(100%,14rem)]">
-    {#if vaultCount > 1}
-      <button
-        type="button"
-        class="{triggerClass} text-left"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        data-testid="vault-switcher-trigger"
-        disabled={isBusy}
-        onclick={() => void toggleOpen()}
-      >
-        <FolderKey class="size-4 shrink-0 text-primary" />
-        <span class="min-w-0 truncate text-foreground">{activeLabel}</span>
-        <ChevronDown
-          class="size-4 shrink-0 transition-transform {open
-            ? 'rotate-180'
-            : ''}"
-        />
-      </button>
-    {:else}
-      <div class={triggerClass} data-testid="vault-switcher-current">
-        <FolderKey class="size-4 shrink-0 text-primary" />
-        <span class="min-w-0 truncate text-foreground">{activeLabel}</span>
-      </div>
-    {/if}
+    <button
+      type="button"
+      class="{triggerClass} text-left"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      data-testid="vault-switcher-trigger"
+      disabled={isBusy}
+      onclick={() => void toggleOpen()}
+    >
+      <FolderKey class="size-4 shrink-0 text-primary" />
+      <span class="min-w-0 truncate text-foreground">{activeLabel}</span>
+      <ChevronDown
+        class="size-4 shrink-0 transition-transform {open
+          ? 'rotate-180'
+          : ''}"
+      />
+    </button>
 
-    {#if open && vaultCount > 1}
+    {#if open}
       <div
-        role="listbox"
+        role="menu"
+        tabindex="-1"
         aria-label={vault.t('vault.switcher_choose')}
         class="absolute left-0 top-full z-50 mt-1.5 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-lg border border-border/60 bg-popover p-2 shadow-lg"
         data-testid="vault-switcher-menu"
@@ -129,8 +136,8 @@
             <li role="presentation">
               <button
                 type="button"
-                role="option"
-                aria-selected={isActive}
+                role="menuitemradio"
+                aria-checked={isActive}
                 class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors {isActive
                   ? 'bg-primary/10 text-foreground'
                   : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'}"
@@ -160,16 +167,48 @@
           {/each}
         </ul>
         <div class="mt-1.5 border-t border-border/50 pt-1.5">
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary transition-colors hover:bg-accent/60"
-            data-testid="vault-switcher-create-btn"
-            disabled={isBusy}
-            onclick={createAnotherVault}
-          >
-            <Plus class="size-4" />
-            {vault.t('vault.switcher_create_new')}
-          </button>
+          {#if createOpen}
+            <div
+              class="space-y-3 px-2 py-1.5"
+              data-testid="vault-switcher-create-form"
+            >
+              <LoginVaultNameForm
+                {vault}
+                isVerifying={vault.isVerifying}
+                isInitializing={vault.isInitializing}
+                testId="vault-switcher-create-submit"
+                submitLabel={vault.t('vault.switcher_create_new')}
+                onCreate={submitCreateVault}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="w-full"
+                disabled={isBusy}
+                onclick={() => {
+                  createOpen = false
+                }}
+              >
+                {vault.t('common.cancel')}
+              </Button>
+            </div>
+          {:else}
+            <button
+              type="button"
+              role="menuitem"
+              class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-primary transition-colors hover:bg-accent/60"
+              data-testid="vault-switcher-create-btn"
+              disabled={isBusy}
+              onclick={(event) => {
+                event.stopPropagation()
+                createAnotherVault()
+              }}
+            >
+              <Plus class="size-4" />
+              {vault.t('vault.switcher_create_new')}
+            </button>
+          {/if}
         </div>
       </div>
     {/if}
