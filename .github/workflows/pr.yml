@@ -54,9 +54,6 @@ jobs:
               },
             });
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2.2.0
-
       - name: Deploy to Cloudflare Pages
         id: deploy
         env:
@@ -86,6 +83,7 @@ jobs:
         if: steps.deploy.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-        run: task ci:pr:comment-preview
+        run: task docker:task TASK=_comment-preview

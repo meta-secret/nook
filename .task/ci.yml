@@ -97,9 +97,12 @@ tasks:
         vars: { TASK: _deploy-preview }
 
   ci:pr:comment-preview:
-    desc: Comment or update Cloudflare preview URL on the PR (runs on host; only needs GITHUB_TOKEN + PR number).
+    desc: Comment or update Cloudflare preview URL on the PR (runs in container; needs GITHUB_TOKEN + PR number).
+    deps:
+      - setup
     cmds:
-      - task: _comment-preview
+      - task: docker:task
+        vars: { TASK: _comment-preview }
 
   docker:push:ci:
     desc: Publish the toolchain base image + cache to GHCR (after green main CI).
