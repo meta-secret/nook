@@ -11,7 +11,8 @@ re-instrumenting the code.
 | Logger core | [`nook-wasm/src/logger.rs`](../../nook-wasm/src/logger.rs) | `tracing` subscriber + reloadable level filter, `IndexedDbLayer` persistence (rexie), dump/flush/clear |
 | Web shim / console authority | [`nook-web/src/lib/log.ts`](../../nook-web/src/lib/log.ts) | `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog` |
 | Viewer | [`nook-web/src/lib/components/LogsPage.svelte`](../../nook-web/src/lib/components/LogsPage.svelte) | `/logs` page: filter, pagination, copy, clear |
-| e2e | [`nook-web/e2e/fixtures.ts`](../../nook-web/e2e/fixtures.ts) | Auto-dump + attach logs on test failure |
+| JSON export | [`nook-web/src/lib/app-logs-api.ts`](../../nook-web/src/lib/app-logs-api.ts), [`AppLogsApiPage.svelte`](../../nook-web/src/lib/components/AppLogsApiPage.svelte) | `/app-logs` — machine-readable JSON export for agents and log pipelines |
+| e2e | [`nook-web/e2e/fixtures.ts`](../../nook-web/e2e/fixtures.ts), [`e2e/helpers.ts`](../../nook-web/e2e/helpers.ts) | Auto-dump + attach logs on test failure; `fetchAppLogs()` via `/app-logs` |
 
 - **Built on `tracing`:** `nook-core` and `nook-wasm` emit structured events via
   `tracing::debug!/info!/warn!/error!` (use a `scope = "…"` field to set the log
@@ -51,8 +52,46 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 
 ## Viewing logs
 
-- **`/logs` page** (works logged-out): filter by minimum level, paginate
-  (Newer/Older, 100/page), **Copy** all as JSON, **Clear**.
+- **`/logs` page** (human UI, works logged-out): filter by minimum level, paginate
+  (Newer/Older, 100/page), **Copy** all as JSON, **Clear**. Good for users and
+  manual inspection at [nokey.sh/logs](https://nokey.sh/logs).
+- **`/app-logs` JSON export** (machine-readable, works logged-out): raw persisted
+  logs in a stable envelope suitable for AI agents, Playwright helpers, and log
+  aggregation. The page body is JSON only — no app chrome.
+
+  Query parameters (all optional):
+
+  | Param | Default | Description |
+  |-------|---------|-------------|
+  | `minLevel` | `trace` | Minimum severity to include (`error` … `trace`) |
+  | `limit` | `500` | Max entries returned (cap `5000`) |
+  | `offset` | `0` | Skip oldest N entries (pagination) |
+
+  Example: `/app-logs?minLevel=debug&limit=1000`
+
+  Response shape (`schema: nook.app-logs.v1`):
+
+  ```json
+  {
+    "meta": {
+      "schema": "nook.app-logs.v1",
+      "generatedAt": "2026-07-02T20:00:00.000Z",
+      "activeLevel": "debug",
+      "minLevel": "debug",
+      "limit": 500,
+      "offset": 0,
+      "returned": 42,
+      "total": 120
+    },
+    "entries": [
+      { "ts": "…", "level": "debug", "scope": "vault", "message": "…", "data": "…" }
+    ]
+  }
+  ```
+
+  Each `entries[]` item matches the IndexedDB store: `{ ts, level, scope, message, data? }`.
+  `data` is an optional JSON string when structured context was logged.
+
 - **Devtools:** `await window.__nookLog.dump({ minLevel: 'trace', limit: 500 })`,
   `window.__nookLog.count()`, `window.__nookLog.clear()`.
 
@@ -73,7 +112,30 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 
 Specs import `test`/`expect` from [`e2e/fixtures.ts`](../../nook-web/e2e/fixtures.ts)
 (not `@playwright/test`). On failure the fixture prints the persisted app logs to
-the test output and attaches `nook-app-logs.json` to the Playwright report.
+the test output and attaches `nook-app-logs.json` (canonical `nook.app-logs.v1`
+envelope) to the Playwright report.
+
+### Agent rule: use app logs for Playwright debug and analysis
+
+**AI agents MUST use persisted application logs** when debugging or analyzing
+Playwright/e2e failures, flaky flows, or vault sync regressions. Do not guess
+from DOM snapshots or screenshot diffs alone.
+
+Preferred order:
+
+1. **Failure attachments** — read `nook-app-logs.json` from the Playwright report
+   (auto-attached by the fixtures on failure).
+2. **`fetchAppLogs(page, { minLevel: 'trace' })`** — navigate to `/app-logs` and
+   parse the JSON body (`data-testid="app-logs-json"`). Use in specs and local
+   debug scripts.
+3. **`dumpNookLogs(page, label)`** — print the last N entries to test output
+   mid-flow without leaving the current page.
+4. **`/logs` UI** — human inspection only; agents should prefer `/app-logs` or
+   the helpers above for structured analysis.
+
+When CI e2e fails, read app logs **before** changing production code. Lower the
+capture level (`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`) when
+the default trail is too thin.
 
 - The **dev** web server sets `VITE_LOG_LEVEL=debug`, so local runs
   (`E2E_SPEC=… task web:test:e2e:file`) capture a useful trail automatically.
@@ -82,6 +144,8 @@ the test output and attaches `nook-app-logs.json` to the Playwright report.
   `await page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`.
 - `dumpNookLogs(page, label)` in [`e2e/helpers.ts`](../../nook-web/e2e/helpers.ts)
   prints logs at any point during a flow.
+- `fetchAppLogs(page, options)` in the same file loads `/app-logs` and returns
+  the parsed `nook.app-logs.v1` payload.
 
 See also: [rust-wasm.md](rust-wasm.md), [bun-svelte.md](bun-svelte.md),
 [../workflows/ci-pipeline.md](../workflows/ci-pipeline.md).

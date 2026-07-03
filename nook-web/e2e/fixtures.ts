@@ -3,8 +3,12 @@
  *
  * Extends the base test with an auto fixture that, on failure, dumps and
  * attaches the app's persisted logs (`window.__nookLog`, backed by the WASM
- * logger). This is the "lightweight auto-dump on failure" — specs get it for
- * free by importing `test`/`expect` from here instead of `@playwright/test`.
+ * logger). Specs get this for free by importing `test`/`expect` from here
+ * instead of `@playwright/test`. Attaches `nook-app-logs.json` (canonical
+ * `nook.app-logs.v1` envelope — agents must read this on failure).
+ *
+ * For mid-flow or explicit export, use `fetchAppLogs(page)` (`/app-logs`) or
+ * `dumpNookLogs(page)` from `./helpers`. See `.cortex/references/logging.md`.
  *
  * To capture more detail for a post-mortem, lower the persistence level and
  * re-run (e.g. `VITE_LOG_LEVEL=debug` for the dev server, or set

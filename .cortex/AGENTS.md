@@ -60,3 +60,8 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
 * For recurring refactor or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
+
+### E2e failures — read app logs first
+* When debugging Playwright/e2e or vault UI flows, **always use persisted app logs**
+  (`nook-app-logs.json`, `fetchAppLogs`, `/app-logs`) — not DOM-only guesses.
+  See [references/logging.md](references/logging.md).

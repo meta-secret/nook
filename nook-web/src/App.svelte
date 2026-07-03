@@ -7,6 +7,7 @@
   import HelpPage from '$lib/components/HelpPage.svelte'
   import LegalDocumentPage from '$lib/components/LegalDocumentPage.svelte'
   import LogsPage from '$lib/components/LogsPage.svelte'
+  import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
@@ -26,6 +27,7 @@
     legalPageForId,
     type LegalPageId,
   } from '$lib/legal-content'
+  import { isAppLogsPath } from '$lib/app-logs-api'
   import type { VaultItemType } from '$lib/nook'
 
   const vault = new VaultState()
@@ -42,10 +44,16 @@
       ? isLogsPath(window.location.pathname)
       : false,
   )
+  let appLogsPage = $state<boolean>(
+    typeof window !== 'undefined'
+      ? isAppLogsPath(window.location.pathname)
+      : false,
+  )
 
   function syncRoute() {
     legalPage = getLegalPageFromPath(window.location.pathname)
     logsPage = isLogsPath(window.location.pathname)
+    appLogsPage = isAppLogsPath(window.location.pathname)
   }
 
   function navigateHome() {
@@ -53,6 +61,7 @@
     history.pushState(null, '', appPath('/'))
     legalPage = null
     logsPage = false
+    appLogsPage = false
   }
 
   onMount(() => {
@@ -133,6 +142,9 @@
   )
 </script>
 
+{#if appLogsPage}
+  <AppLogsApiPage />
+{:else}
 <main
   class="min-h-svh bg-background text-foreground"
   class:dark={colorMode === 'dark'}
@@ -540,3 +552,4 @@
   <div id="apple-sign-in-button" class="sr-only" aria-hidden="true"></div>
   <div id="apple-sign-out-button" class="sr-only" aria-hidden="true"></div>
 </main>
+{/if}
