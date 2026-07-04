@@ -106,9 +106,25 @@ tasks:
       COVERAGE_OUT_DIR: '{{default "coverage/nook-core" .COVERAGE_OUT_DIR}}'
     cmds:
       - >-
-        DOCKER="{{.DOCKER}}" DOCKER_IMAGE="{{.DOCKER_IMAGE}}"
-        COVERAGE_OUT_DIR="{{.COVERAGE_OUT_DIR}}"
-        bash .github/scripts/export-nook-core-coverage.sh
+        bash -c 'set -euo pipefail;
+        out_dir="{{.COVERAGE_OUT_DIR}}";
+        rm -rf "$out_dir";
+        mkdir -p "$out_dir";
+        cid="$({{.DOCKER}} create --platform linux/amd64 --ipc=host -w /meta-secret/nook {{.DOCKER_IMAGE}} bash -c '"'"'set -euo pipefail;
+          out="/tmp/nook-core-coverage";
+          rm -rf "$out";
+          mkdir -p "$out";
+          cargo llvm-cov clean --workspace;
+          cargo llvm-cov nextest --no-report --profile ci -p nook-core;
+          cargo llvm-cov report --summary-only > "$out/summary.txt";
+          cargo llvm-cov report --json --summary-only > "$out/summary.json";
+          cargo llvm-cov report --lcov --output-path "$out/lcov.info";
+          cp nook-core/coverage-floor.json "$out/coverage-floor.json"'"'"'
+        )";
+        cleanup() { {{.DOCKER}} rm -f "$cid" >/dev/null 2>&1 || true; };
+        trap cleanup EXIT;
+        {{.DOCKER}} start -a "$cid";
+        {{.DOCKER}} cp "$cid:/tmp/nook-core-coverage/." "$out_dir/"'
 
   docker:web:dev:
     internal: true
