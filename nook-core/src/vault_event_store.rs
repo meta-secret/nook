@@ -63,7 +63,7 @@ impl LocalEventStore {
             .unwrap_or_default()
     }
 
-    /// Build a causal graph from stored YAML or legacy JSON bytes.
+    /// Build a causal graph from stored YAML bytes.
     pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
         for bytes in self.events.values() {
@@ -236,7 +236,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         union_remote_events(&mut local, &[(id.clone(), bytes)], STORE)?;
@@ -290,7 +290,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         let heads = union_remote_events_and_heads(&mut local, &[(id.clone(), bytes)], STORE)?;
@@ -304,7 +304,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local_a = LocalEventStore::new();
         local_a.put_event(genesis_id.clone(), genesis_bytes.clone());
@@ -327,7 +327,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let real_id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse(
             "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         )?;
@@ -347,7 +347,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let other = genesis_for_store(&signing_key, "store_otherstore1")?;
         let other_id = other.id()?;
-        let bytes = serde_json::to_vec(&other).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&other)?;
 
         assert_eq!(
             remote_event_store_id(&other_id, &bytes)?.as_str(),
@@ -366,7 +366,7 @@ mod tests {
     fn remote_event_store_filter_rejects_id_mismatch() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
         let wrong_id = EventId::parse(
             "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         )?;
@@ -385,7 +385,7 @@ mod tests {
         let mut genesis = genesis(&signing_key)?;
         let event_id = genesis.id()?;
         genesis.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         let err = union_remote_events(&mut local, &[(event_id.clone(), bytes)], STORE).unwrap_err();
@@ -403,10 +403,10 @@ mod tests {
         let stranger_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&root_key)?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
         let child = signed_child(&stranger_key, genesis_id.clone(), "secret_remoteuna1")?;
         let child_id = child.id()?;
-        let child_bytes = serde_json::to_vec(&child).map_err(EventError::from)?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
 
         let mut local = LocalEventStore::new();
         union_remote_events(&mut local, &[(genesis_id, genesis_bytes)], STORE)?;
@@ -425,7 +425,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut device_a = LocalEventStore::new();
         device_a.put_event(genesis_id.clone(), genesis_bytes.clone());

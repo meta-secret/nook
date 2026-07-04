@@ -41,9 +41,7 @@ export function createLocalE2eGoogleDriveVaultStub(
     const eventId = body.match(
       /"event_id"\s*:\s*"sha256:([a-fA-F0-9]{64})"/,
     )?.[1]
-    const nameDigest = body.match(
-      /"name"\s*:\s*"([a-fA-F0-9]{64})\.(?:yaml|event)"/,
-    )?.[1]
+    const nameDigest = body.match(/"name"\s*:\s*"([a-fA-F0-9]{64})\.yaml"/)?.[1]
     const digest = eventId ?? nameDigest
     if (!digest) return null
     const markers = [
@@ -100,9 +98,9 @@ export function createLocalE2eGoogleDriveVaultStub(
           method === 'GET'
         ) {
           const decoded = decodeURIComponent(fullUrl)
-          if (decoded.includes('.yaml') || decoded.includes('.event')) {
+          if (decoded.includes('.yaml')) {
             const digest = decoded.match(
-              /name = '([a-fA-F0-9]{64})\.(?:yaml|event)'/,
+              /name = '([a-fA-F0-9]{64})\.yaml'/,
             )?.[1]
             await route.fulfill({
               status: 200,

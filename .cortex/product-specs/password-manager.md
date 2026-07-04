@@ -17,7 +17,7 @@ keys.
 - **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
 - **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, validation, password generation, and cryptographic operations are encapsulated in Rust (`nook-core` + `nook-wasm`).
 - **Portable Backends:** Support local browser storage (IndexedDB) and remote git-backed repositories (GitHub API) with a unified connection flow.
-- **Age Compatibility:** Secret values are armored age ciphertext. Vault files are human-readable YAML (or legacy JSONL on load).
+- **Age Compatibility:** Secret values are armored age ciphertext. Vault projections and event files are human-readable YAML.
 
 ---
 

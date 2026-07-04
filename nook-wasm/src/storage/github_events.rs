@@ -64,7 +64,7 @@ async fn list_github_event_dir(
         if entry_type == "dir" {
             stack.push(subpath);
         } else if let Some(extension) = std::path::Path::new(name).extension()
-            && (extension.eq_ignore_ascii_case("yaml") || extension.eq_ignore_ascii_case("event"))
+            && extension.eq_ignore_ascii_case("yaml")
             && let Some(stem) = std::path::Path::new(name).file_stem()
             && let Some(digest) = stem.to_str()
             && digest.len() == 64
@@ -80,14 +80,9 @@ pub(crate) async fn fetch_github_event(
     repo: &str,
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
-    for path in [
-        event_id.storage_path(),
-        format!("nook-log/v1/events/{}", event_id.legacy_event_file_name()),
-        event_id.legacy_sharded_storage_path(),
-    ] {
-        if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
-            return Ok(file.content.into_bytes());
-        }
+    let path = event_id.storage_path();
+    if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
+        return Ok(file.content.into_bytes());
     }
     Err(NookError::GitHub(format!(
         "Event file missing at {}",

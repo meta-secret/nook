@@ -16,7 +16,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 |------|----------|----------|
 | **App semver** | `nokey.sh` latest, `v1.nokey.sh` pinned rollback | CI / GitHub Pages |
 | **Projection `schema_version`** | `1` today in `nook-vault.yaml` cache | `nook-core` `vault_format.rs` |
-| **Event `schema_version`** | `2` on signed event bodies (`1` legacy-readable) | `nook-core` `vault_event.rs` |
+| **Event `schema_version`** | `2` on signed YAML event bodies | `nook-core` `vault_event.rs` |
 | **Password envelope `version`** | Crypto wrap inside `password_entries` | `password_envelope.rs` |
 
 ## #52 goal → implementation

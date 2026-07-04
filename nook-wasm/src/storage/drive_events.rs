@@ -8,7 +8,7 @@ const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
 
 pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, NookError> {
     let token = token.trim();
-    let query = "(name contains '.yaml' or name contains '.event') and 'appDataFolder' in parents and trashed=false";
+    let query = "name contains '.yaml' and 'appDataFolder' in parents and trashed=false";
     let url = format!(
         "https://www.googleapis.com/drive/v3/files?q={}&spaces=appDataFolder&fields=nextPageToken,files(id,name)&pageSize=1000",
         urlencoding::encode(query)
@@ -43,9 +43,7 @@ pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, Noo
                 let Some(name) = file.get("name").and_then(|v| v.as_str()) else {
                     continue;
                 };
-                if let Some(digest) = name
-                    .strip_suffix(".yaml")
-                    .or_else(|| name.strip_suffix(".event"))
+                if let Some(digest) = name.strip_suffix(".yaml")
                     && digest.len() == 64
                 {
                     event_ids.push(format!("sha256:{digest}"));
@@ -68,11 +66,8 @@ pub(crate) async fn fetch_drive_event(
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
     let token = token.trim();
-    let mut file_ids =
+    let file_ids =
         lookup_drive_event_file_ids(token, &format!("{}.yaml", event_id.hex_digest())).await?;
-    if file_ids.is_empty() {
-        file_ids = lookup_drive_event_file_ids(token, &event_id.legacy_event_file_name()).await?;
-    }
     if file_ids.is_empty() {
         return Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned()));
     }

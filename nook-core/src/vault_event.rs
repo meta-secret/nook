@@ -263,20 +263,13 @@ pub fn serialize_event_storage_yaml(event: &VaultEvent) -> VaultResult<Vec<u8>> 
     Ok(yaml.into_bytes())
 }
 
-/// Parse a stored event from the current YAML format or legacy JSON bytes.
+/// Parse a stored event from YAML bytes.
 pub fn parse_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
     let text = std::str::from_utf8(bytes).map_err(|e| {
         EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
     })?;
     serde_yaml::from_str(text)
-        .or_else(|yaml_error| {
-            serde_json::from_slice(bytes).map_err(|json_error| {
-                EventError::ParseStoredEvent(format!(
-                    "YAML parse failed: {yaml_error}; JSON fallback failed: {json_error}"
-                ))
-            })
-        })
-        .map_err(Into::into)
+        .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")).into())
 }
 
 /// Parse a remote event and classify errors for provider sync.
