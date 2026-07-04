@@ -90,8 +90,8 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   test output and static analysis, persisted application logs are the **most
   important** remaining signal. When a Playwright spec fails, CI goes red, or a web
   flow misbehaves, agents **must** consult app logs before changing code:
-  Playwright attachment `nook-app-logs.json`, `fetchAppLogs(page)` (`/app-logs`),
-  or `dumpNookLogs(page)`. Human UI: `/logs`. See
+  Playwright attachment `nook-app-logs.json` (attached to every e2e result),
+  `fetchAppLogs(page)` (`/app-logs`), or `dumpNookLogs(page)`. Human UI: `/logs`. See
   [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 - **Do not** re-implement vault rules in TypeScript for testing — if TS needs behavior, expose it from WASM/core first.
 

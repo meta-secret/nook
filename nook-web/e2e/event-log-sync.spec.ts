@@ -11,7 +11,6 @@ import {
   reloadUnlockWithSyncProvider,
   triggerVaultSyncRefresh,
   uniqueSecretKey,
-  waitForPersistedAppLog,
   waitForVaultOperationsIdle,
 } from './helpers'
 import { createE2eStubRepoName, E2E_STUB_PAT } from './sync-stub'
@@ -35,11 +34,12 @@ test.describe('event-log sync then add', () => {
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)
 
-    await waitForPersistedAppLog(page, {
+    const manualSyncMilestone = {
       scope: 'vault-sync',
       level: 'info',
       messageIncludes: 'manual sync started',
-    })
+    }
+    await expectAppLogMilestones(page, [manualSyncMilestone])
 
     const title = uniqueSecretKey('e2e-event-log-note')
     const noteBody = '# Post-sync note\n\nSaved after provider sync.'
@@ -56,6 +56,7 @@ test.describe('event-log sync then add', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toBeVisible()
 
     await expectAppLogMilestones(page, [
+      manualSyncMilestone,
       { scope: 'connect', level: 'info', messageIncludes: 'secret added' },
     ])
   })

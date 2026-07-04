@@ -26,9 +26,10 @@ Default agent flow:
 2. **Validate locally before push** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
 3. **Push when ready** — commit, push, and open the PR only after local gates pass.
 4. **Monitor remote CI** — watch checks on the PR.
-5. **On any remote failure** — read **app logs** (`nook-app-logs.json` attachment,
-   `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
-   debugging) → run `task ci:pr` until green → push again.
+5. **On any remote failure** — read **app logs** (`nook-app-logs.json` is attached
+   to every e2e result; `fetchAppLogs` and `/app-logs` are available locally) →
+   fix locally (prefer single-spec e2e while debugging) → run `task ci:pr` until
+   green → push again.
 6. **Merge** — squash merge only when **every** remote check is green.
 
 Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.

@@ -5,6 +5,7 @@ import {
   type Page,
 } from '@playwright/test'
 import dotenv from 'dotenv'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -29,6 +30,8 @@ import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { installMockPasskeyRuntime } from './passkey-mock'
 
 const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
+const APP_LOGS_ATTACHMENT_LIMIT = 5000
+const APP_LOGS_FAILURE_PRINT_LIMIT = 500
 
 function buildAppLogsUrl(options?: {
   minLevel?: string
@@ -1338,7 +1341,9 @@ type JoinerVaultReadyTarget = {
   pat: string
   repoName: string
   providerId?: string
-  stub?: { install: (page: Page, opts: Record<string, unknown>) => Promise<void> }
+  stub?: {
+    install: (page: Page, opts: Record<string, unknown>) => Promise<void>
+  }
 }
 
 function isOauthFileJoinerTarget(target: JoinerVaultReadyTarget) {
@@ -1518,6 +1523,65 @@ async function readNookLogEntries(
   }, limit)
 }
 
+async function readNookLogSnapshot(
+  page: Page,
+  options?: { minLevel?: string; limit?: number; offset?: number },
+): Promise<AppLogsResponse | null> {
+  const query = {
+    schema: APP_LOGS_SCHEMA,
+    minLevel: options?.minLevel ?? 'trace',
+    limit: options?.limit ?? APP_LOGS_ATTACHMENT_LIMIT,
+    offset: options?.offset ?? 0,
+  }
+  return page.evaluate(async (opts) => {
+    const log = (
+      window as Window & {
+        __nookLog?: {
+          flush: () => Promise<void>
+          getLevel: () => string
+          count: () => Promise<number>
+          dump: (opts?: {
+            minLevel?: string
+            limit?: number
+            offset?: number
+          }) => Promise<
+            {
+              ts: string
+              level: string
+              scope: string
+              message: string
+              data?: string
+            }[]
+          >
+        }
+      }
+    ).__nookLog
+    if (!log) return null
+    await log.flush()
+    const [total, entries] = await Promise.all([
+      log.count(),
+      log.dump({
+        minLevel: opts.minLevel,
+        limit: opts.limit,
+        offset: opts.offset,
+      }),
+    ])
+    return {
+      meta: {
+        schema: opts.schema,
+        generatedAt: new Date().toISOString(),
+        activeLevel: log.getLevel(),
+        minLevel: opts.minLevel,
+        limit: opts.limit,
+        offset: opts.offset,
+        returned: entries.length,
+        total,
+      },
+      entries,
+    }
+  }, query)
+}
+
 function printNookLogEntries(label: string, entries: NookLogEntry[]) {
   console.log(`[${label}] last ${entries.length} app log entries:`)
   for (const entry of entries) {
@@ -1609,9 +1673,23 @@ export async function expectAppLogMilestones(
   }>,
   options?: { limit?: number; timeoutMs?: number },
 ): Promise<void> {
-  for (const milestone of milestones) {
-    await waitForPersistedAppLog(page, milestone, options)
-  }
+  let lastEntries: NookLogEntry[] = []
+  await expect
+    .poll(
+      async () => {
+        await flushNookLogPersistQueue(page)
+        lastEntries =
+          (await readNookLogEntries(page, options?.limit ?? 500)) ?? []
+        return appLogMilestonesAreInOrder(lastEntries, milestones)
+      },
+      { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
+    )
+    .toBe(true)
+
+  expect(
+    appLogMilestonesAreInOrder(lastEntries, milestones),
+    `expected app log milestones in order: ${JSON.stringify(milestones)}`,
+  ).toBe(true)
 }
 
 export function findAppLogEntry(
@@ -1633,6 +1711,45 @@ export function findAppLogEntry(
     }
     return true
   })
+}
+
+function appLogEntryMatches(
+  entry: NookLogEntry,
+  filter: {
+    scope?: string
+    level?: string
+    messageIncludes?: string
+  },
+): boolean {
+  if (filter.scope && entry.scope !== filter.scope) return false
+  if (filter.level && entry.level !== filter.level) return false
+  if (
+    filter.messageIncludes &&
+    !entry.message.includes(filter.messageIncludes)
+  ) {
+    return false
+  }
+  return true
+}
+
+function appLogMilestonesAreInOrder(
+  entries: NookLogEntry[],
+  milestones: Array<{
+    scope?: string
+    level?: string
+    messageIncludes: string
+  }>,
+): boolean {
+  let start = 0
+  for (const milestone of milestones) {
+    const index = entries.findIndex(
+      (entry, offset) =>
+        offset >= start && appLogEntryMatches(entry, milestone),
+    )
+    if (index === -1) return false
+    start = index + 1
+  }
+  return true
 }
 
 export function expectAppLogEntry(
@@ -1731,38 +1848,49 @@ export async function dumpNookLogs(
 }
 
 /**
- * Post-mortem hook for failing tests: print the persisted app logs and attach
- * them to the Playwright report. Wired globally via the {@link file://./fixtures.ts}
- * auto fixture — no per-spec `afterEach` needed. Never throws.
+ * Attach a canonical `/app-logs`-style JSON payload to a Playwright test result.
+ * Prints the same entries only when requested by the caller. Wired globally via
+ * the {@link file://./fixtures.ts} auto fixture — no per-spec `afterEach` needed.
+ * Never throws.
  */
-export async function captureNookLogsOnFailure(
+export async function attachNookLogsForTest(
   page: Page,
   testInfo: import('@playwright/test').TestInfo,
+  options?: { print?: boolean },
 ) {
   try {
-    const entries = await readNookLogEntries(page, 500)
-    if (!entries || entries.length === 0) return
-    printNookLogEntries(`nook-logs] [${testInfo.title}`, entries)
-    const payload: AppLogsResponse = {
-      meta: {
-        schema: APP_LOGS_SCHEMA,
-        generatedAt: new Date().toISOString(),
-        activeLevel: 'info',
-        minLevel: 'trace',
-        limit: 500,
-        offset: 0,
-        returned: entries.length,
-        total: entries.length,
-      },
-      entries,
+    const payload = await readNookLogSnapshot(page, {
+      minLevel: 'trace',
+      limit: APP_LOGS_ATTACHMENT_LIMIT,
+      offset: 0,
+    })
+    if (!payload) return
+    if (options?.print && payload.entries.length > 0) {
+      printNookLogEntries(
+        `nook-logs] [${testInfo.title}`,
+        payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
+      )
     }
+    const body = JSON.stringify(payload, null, 2)
+    const attachmentPath = testInfo.outputPath('nook-app-logs.json')
+    await fs.writeFile(attachmentPath, body)
     await testInfo.attach('nook-app-logs.json', {
-      body: JSON.stringify(payload, null, 2),
+      path: attachmentPath,
       contentType: 'application/json',
     })
   } catch {
     // Post-mortem logging must never fail the run.
   }
+}
+
+/**
+ * Compatibility wrapper for callers that explicitly want failure-style output.
+ */
+export async function captureNookLogsOnFailure(
+  page: Page,
+  testInfo: import('@playwright/test').TestInfo,
+) {
+  await attachNookLogsForTest(page, testInfo, { print: true })
 }
 
 export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
@@ -3571,7 +3699,9 @@ export async function waitForSecretOnDevice(
             const vault = (
               window as Window & {
                 __nookVault?: {
-                  syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
+                  syncFromStorage?: (opts?: {
+                    force?: boolean
+                  }) => Promise<void>
                 }
               }
             ).__nookVault

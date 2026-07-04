@@ -154,7 +154,8 @@ logs are the most important remaining signal.** They record vault session
 lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 
 - **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
-  the CI artifact/report before changing code.
+  the CI artifact/report before changing code. The attachment is created for
+  every e2e result; failures also print the same entries to test output.
 - **Local repro:** `E2E_SPEC=… task web:test:e2e:file`, then `fetchAppLogs(page)`
   or open `/app-logs?minLevel=debug&limit=1000`.
 - **Human inspection:** `/logs` in the running app.

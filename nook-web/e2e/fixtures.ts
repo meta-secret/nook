@@ -1,11 +1,12 @@
 /**
  * Shared Playwright `test` for Nook e2e.
  *
- * Extends the base test with an auto fixture that, on failure, dumps and
- * attaches the app's persisted logs (`window.__nookLog`, backed by the WASM
- * logger). Specs get this for free by importing `test`/`expect` from here
- * instead of `@playwright/test`. Attaches `nook-app-logs.json` (canonical
- * `nook.app-logs.v1` envelope — agents must read this on failure).
+ * Extends the base test with an auto fixture that attaches the app's persisted
+ * logs (`window.__nookLog`, same envelope as `/app-logs`) to every test result.
+ * On failure it also prints the log tail. Specs get this for free by importing
+ * `test`/`expect` from here instead of `@playwright/test`. Attaches
+ * `nook-app-logs.json` (canonical `nook.app-logs.v1` envelope — agents must
+ * read this when diagnosing a test).
  *
  * For mid-flow or explicit export, use `fetchAppLogs(page)` (`/app-logs`) or
  * `dumpNookLogs(page)` from `./helpers`. See `.cortex/references/logging.md`.
@@ -15,24 +16,26 @@
  * `localStorage.nook_log_level` before the flow).
  */
 import { test as base, expect } from '@playwright/test'
-import { captureNookLogsOnFailure } from './helpers'
+import { attachNookLogsForTest } from './helpers'
 import { installMockPasskeyRuntime } from './passkey-mock'
 
-export const test = base.extend<{ nookLogsOnFailure: void }>({
-  nookLogsOnFailure: [
+export const test = base.extend<{ nookAppLogs: void }>({
+  nookAppLogs: [
     async ({ page, context }, use, testInfo) => {
       await context.addInitScript(installMockPasskeyRuntime)
       await use()
-      if (testInfo.status === testInfo.expectedStatus) return
-      // Multi-context specs may leave the default page on about:blank.
-      let url: string
-      try {
-        url = page.url()
-      } catch {
-        return
-      }
-      if (!url || url === 'about:blank') return
-      await captureNookLogsOnFailure(page, testInfo)
+      const targetPage = [page, ...context.pages()].find((candidate) => {
+        try {
+          const url = candidate.url()
+          return !!url && url !== 'about:blank'
+        } catch {
+          return false
+        }
+      })
+      if (!targetPage) return
+      await attachNookLogsForTest(targetPage, testInfo, {
+        print: testInfo.status !== testInfo.expectedStatus,
+      })
     },
     { auto: true },
   ],

@@ -39,7 +39,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ## 5. Technology Cheat Sheets (`references/`)
 * [references/rust-wasm.md](references/rust-wasm.md) — Rust-Wasm binding conventions.
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
-* [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, e2e auto-dump).
+* [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, per-test e2e log attachments).
 
 ## 6. Workflows (`workflows/`)
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local validation → push when ready → monitor → full local loop on failure → merge). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
@@ -66,5 +66,6 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   App logs are the most important source after the first two — vault session, sync,
   and WASM tracing do not appear in clippy or Playwright DOM assertions.
 * When debugging Playwright/e2e, vault UI flows, or red CI, **always consult app logs**
-  (`nook-app-logs.json`, `fetchAppLogs`, `/app-logs`) before changing code.
+  (`nook-app-logs.json` is attached to every Playwright result; `fetchAppLogs`
+  and `/app-logs` are available for local repro) before changing code.
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
