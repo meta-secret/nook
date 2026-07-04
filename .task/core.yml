@@ -89,6 +89,14 @@ tasks:
       - task: docker:task
         vars: { TASK: _rust:coverage:update }
 
+  rust:coverage:export:
+    desc: Export nook-core coverage summary, JSON, and LCOV artifacts from Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:extract:coverage
+        vars: { COVERAGE_OUT_DIR: '{{default "coverage/nook-core" .COVERAGE_OUT_DIR}}' }
+
   rust:lint:
     desc: Lint the Rust workspace in Docker.
     deps:

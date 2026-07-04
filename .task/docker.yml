@@ -100,6 +100,16 @@ tasks:
         trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
         {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-web-extension/dist" nook-web-extension/dist'
 
+  docker:extract:coverage:
+    desc: Copy nook-core coverage artifacts from the sealed Docker image to the host.
+    vars:
+      COVERAGE_OUT_DIR: '{{default "coverage/nook-core" .COVERAGE_OUT_DIR}}'
+    cmds:
+      - >-
+        DOCKER="{{.DOCKER}}" DOCKER_IMAGE="{{.DOCKER_IMAGE}}"
+        COVERAGE_OUT_DIR="{{.COVERAGE_OUT_DIR}}"
+        bash .github/scripts/export-nook-core-coverage.sh
+
   docker:web:dev:
     internal: true
     # The ONLY mounted task: the repo is bind-mounted for Vite hot-reload. node_modules is an
