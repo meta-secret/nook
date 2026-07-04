@@ -2818,6 +2818,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
     },
     getEventFileCount: () => eventFiles.size,
     getEventFilePaths: () => [...eventFiles.keys()],
+    getEventFileContents: () => [...eventFiles.values()],
     async install(
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },

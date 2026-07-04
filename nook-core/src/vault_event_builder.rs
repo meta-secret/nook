@@ -4,6 +4,7 @@ use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::{
     EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+    serialize_event_storage_yaml,
 };
 use crate::vault_ids::{AuthKeyId, SecretId, StoreId};
 use crate::vault_signing::SigningIdentity;
@@ -20,7 +21,7 @@ pub struct AppendEventInput<'a> {
     pub operations: Vec<VaultOperation>,
 }
 
-/// Build and sign a vault event; returns the event and its canonical JSON bytes.
+/// Build and sign a vault event; returns the event and its provider-storage YAML bytes.
 pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEvent, Vec<u8>)> {
     let signing_actor_id = input.signing_identity.actor_id()?;
     if signing_actor_id != *input.actor_id {
@@ -45,7 +46,7 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEven
         operations: input.operations,
     };
     let event = VaultEvent::sign(body, input.signing_identity.signing_key())?;
-    let bytes = serde_json::to_vec(&event).map_err(EventError::from)?;
+    let bytes = serialize_event_storage_yaml(&event)?;
     Ok((event, bytes))
 }
 
@@ -108,9 +109,9 @@ impl ObservedHeads {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::VaultResult;
     use crate::event_canonical::EventId;
     use crate::vault_signing::SigningIdentity;
+    use crate::{VaultResult, parse_event_storage_bytes};
 
     #[test]
     fn parents_from_heads_is_sorted_deduped() -> VaultResult<()> {
@@ -145,8 +146,14 @@ mod tests {
             operations: vec![VaultOperation::VaultCleared],
         })?;
         assert!(!bytes.is_empty());
+        assert!(
+            std::str::from_utf8(&bytes)
+                .expect("event YAML is UTF-8")
+                .starts_with("schema_version:")
+        );
         assert_eq!(event.body.store_id, store_id);
         assert_eq!(event.body.actor_id, actor);
+        assert_eq!(parse_event_storage_bytes(&bytes)?.id()?, event.id()?);
         Ok(())
     }
 

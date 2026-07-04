@@ -17,13 +17,13 @@ pub enum EventError {
     EventBodySerialize(#[source] serde_json::Error),
 
     #[error("failed to serialize event")]
-    EventSerialize(#[source] serde_json::Error),
+    EventSerialize(String),
 
     #[error("failed to parse stored event")]
-    ParseStoredEvent(#[source] serde_json::Error),
+    ParseStoredEvent(String),
 
     #[error("failed to parse remote event")]
-    ParseRemoteEvent(#[source] serde_json::Error),
+    ParseRemoteEvent(String),
 
     #[error("signature must start with ed25519: (got {raw:?})")]
     SignatureMissingPrefix { raw: String },

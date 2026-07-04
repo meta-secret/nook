@@ -249,6 +249,45 @@ impl VaultEvent {
     }
 }
 
+/// Serialize an event for provider/local storage.
+///
+/// Event ids and signatures still use canonical compact JSON body bytes. The
+/// persisted event envelope is pretty YAML so humans can inspect provider files.
+pub fn serialize_event_storage_yaml(event: &VaultEvent) -> VaultResult<Vec<u8>> {
+    let mut yaml =
+        serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
+    if !yaml.ends_with('\n') {
+        yaml.push('\n');
+    }
+    Ok(yaml.into_bytes())
+}
+
+/// Parse a stored event from the current YAML format or legacy JSON bytes.
+pub fn parse_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
+    let text = std::str::from_utf8(bytes).map_err(|e| {
+        EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
+    })?;
+    serde_yaml::from_str(text)
+        .or_else(|yaml_error| {
+            serde_json::from_slice(bytes).map_err(|json_error| {
+                EventError::ParseStoredEvent(format!(
+                    "YAML parse failed: {yaml_error}; JSON fallback failed: {json_error}"
+                ))
+            })
+        })
+        .map_err(Into::into)
+}
+
+/// Parse a remote event and classify errors for provider sync.
+pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
+    parse_event_storage_bytes(bytes).map_err(|error| match error {
+        crate::errors::VaultError::Event(EventError::ParseStoredEvent(message)) => {
+            EventError::ParseRemoteEvent(message).into()
+        }
+        other => other,
+    })
+}
+
 /// Build a genesis import event from encrypted snapshot data.
 pub fn build_genesis_import_event(
     store_id: &StoreId,
@@ -381,5 +420,43 @@ mod tests {
         .unwrap();
         let wrong_store = StoreId::parse("store_otherid0001").unwrap();
         assert!(event.validate_envelope(&wrong_store).is_err());
+    }
+
+    #[test]
+    fn event_storage_is_pretty_yaml_and_roundtrips() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
+        let event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11").unwrap(),
+            &actor(&signing_key),
+            &epoch,
+            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
+            vec![EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_abc12345678"),
+                secret_type: SecretType::Login,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+            }],
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            &signing_key,
+        )
+        .unwrap();
+
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event).unwrap()).unwrap();
+        assert!(yaml.starts_with("schema_version: 2\n"));
+        assert!(yaml.contains("operations:\n- type: vault-imported\n"));
+        assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
+        assert!(yaml.contains("\nsignature: ed25519:"));
+        assert!(yaml.ends_with('\n'));
+        assert!(!yaml.trim_start().starts_with('{'));
+        assert_eq!(
+            parse_event_storage_bytes(yaml.as_bytes())
+                .unwrap()
+                .id()
+                .unwrap(),
+            event.id().unwrap()
+        );
     }
 }

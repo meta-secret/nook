@@ -2,6 +2,7 @@
 
 use crate::NookError;
 use crate::storage::github::{fetch_github_vault, write_github_text_file};
+use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
 use nook_core::EventId;
 
 const EVENT_LOG_ROOT: &str = "nook-log/v1/events";
@@ -62,14 +63,13 @@ async fn list_github_event_dir(
         let subpath = format!("{path}/{name}");
         if entry_type == "dir" {
             stack.push(subpath);
-        } else if std::path::Path::new(name)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("event"))
+        } else if let Some(extension) = std::path::Path::new(name).extension()
+            && (extension.eq_ignore_ascii_case("yaml") || extension.eq_ignore_ascii_case("event"))
+            && let Some(stem) = std::path::Path::new(name).file_stem()
+            && let Some(digest) = stem.to_str()
+            && digest.len() == 64
         {
-            let digest = name.trim_end_matches(".event");
-            if digest.len() == 64 {
-                out.push(format!("sha256:{digest}"));
-            }
+            out.push(format!("sha256:{digest}"));
         }
     }
     Ok(())
@@ -80,15 +80,19 @@ pub(crate) async fn fetch_github_event(
     repo: &str,
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
-    let path = event_id.storage_path();
-    if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
-        Ok(file.content.into_bytes())
-    } else {
-        Err(NookError::GitHub(format!(
-            "Event file missing at {}",
-            event_id.as_str()
-        )))
+    for path in [
+        event_id.storage_path(),
+        format!("nook-log/v1/events/{}", event_id.legacy_event_file_name()),
+        event_id.legacy_sharded_storage_path(),
+    ] {
+        if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
+            return Ok(file.content.into_bytes());
+        }
     }
+    Err(NookError::GitHub(format!(
+        "Event file missing at {}",
+        event_id.as_str()
+    )))
 }
 
 /// Append-only event upload. Retries branch conflicts; never overwrites different content.
@@ -98,9 +102,25 @@ pub(crate) async fn put_github_event_if_absent(
     event_id: &EventId,
     bytes: &[u8],
 ) -> Result<(), NookError> {
+    let expected_event = parse_expected_event_storage_bytes(bytes, event_id, "GitHub")?;
+    match fetch_github_event(pat, repo, event_id).await {
+        Ok(existing)
+            if existing == bytes || event_storage_matches_expected(&existing, &expected_event) =>
+        {
+            return Ok(());
+        }
+        Ok(_) => {
+            return Err(NookError::GitHub(
+                "Event path exists with different content (corruption)".to_owned(),
+            ));
+        }
+        Err(NookError::GitHub(message)) if message.contains("Event file missing") => {}
+        Err(err) => return Err(err),
+    }
+
     let path = event_id.storage_path();
     let content = std::str::from_utf8(bytes)
-        .map_err(|e| NookError::Serialization(format!("Event JSON must be UTF-8: {e}")))?;
+        .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
 
     for attempt in 0..3 {
         match write_github_text_file(pat, repo, &path, content, None).await {
@@ -108,7 +128,10 @@ pub(crate) async fn put_github_event_if_absent(
             Err(NookError::GitHub(message)) if attempt < 2 => {
                 if message.contains("422") || message.contains("409") {
                     if let Ok(Some(existing)) = fetch_github_vault(pat, repo, &path, None).await {
-                        if existing.content.as_bytes() == bytes {
+                        let existing_bytes = existing.content.as_bytes();
+                        if existing_bytes == bytes
+                            || event_storage_matches_expected(existing_bytes, &expected_event)
+                        {
                             return Ok(());
                         }
                         return Err(NookError::GitHub(

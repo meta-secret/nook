@@ -88,6 +88,19 @@ test.describe('event-log sync then add', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(eventFilesBeforeSave)
+    expect(stub.getEventFilePaths()).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^nook-log\/v1\/events\/[a-f0-9]{64}\.yaml$/),
+      ]),
+    )
+    expect(stub.getEventFilePaths()).not.toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^nook-log\/v1\/events\/[a-f0-9]{2}\//),
+      ]),
+    )
+    expect(stub.getEventFileContents()).toEqual(
+      expect.arrayContaining([expect.stringContaining('schema_version:')]),
+    )
     expect(stub.getVaultYaml()).toContain('# e2e remote legacy branch')
   })
 })

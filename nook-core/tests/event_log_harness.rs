@@ -163,7 +163,7 @@ impl EventLogDevice {
             &nook_core::IsoTimestamp::from_trusted(TS.to_owned()),
         )?;
         let id = event.id()?;
-        let bytes = serde_json::to_vec(&event).map_err(nook_core::EventError::from)?;
+        let bytes = nook_core::serialize_event_storage_yaml(&event)?;
         self.session.store.put_event(id.clone(), bytes.clone());
         self.session.store.queue_outbox("github", id.clone(), bytes);
         self.session.set_heads_from_graph()?;

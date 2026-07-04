@@ -136,7 +136,8 @@ pub use vault_epoch_crypto::{
 };
 pub use vault_event::{
     EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    build_genesis_import_event,
+    build_genesis_import_event, parse_event_storage_bytes, parse_remote_event_storage_bytes,
+    serialize_event_storage_yaml,
 };
 pub use vault_event_builder::{
     AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,

@@ -6,6 +6,7 @@
 //! `md5Checksum` / GitHub blob `sha`.
 
 use crate::NookError;
+use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
 use nook_core::EventId;
 use serde::Deserialize;
 use serde_json::json;
@@ -391,12 +392,16 @@ pub(crate) async fn put_icloud_event_if_absent(
 ) -> Result<(), NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let content = std::str::from_utf8(bytes)
-        .map_err(|e| NookError::Serialization(format!("Event JSON must be UTF-8: {e}")))?;
+        .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
+    let expected_event = parse_expected_event_storage_bytes(bytes, event_id, "CloudKit")?;
     let record_name = icloud_event_record_name(event_id);
 
     if let Some(existing) = lookup_record(token.as_ref(), &record_name).await? {
         let existing_content = record_content(&existing).unwrap_or_default();
-        if existing_content.as_bytes() == bytes {
+        let existing_bytes = existing_content.as_bytes();
+        if existing_bytes == bytes
+            || event_storage_matches_expected(existing_bytes, &expected_event)
+        {
             return Ok(());
         }
         return Err(NookError::ICloud(
@@ -437,7 +442,10 @@ pub(crate) async fn put_icloud_event_if_absent(
     if body.contains("serverRecord") || body.contains("ALREADY_EXISTS") {
         if let Some(existing) = lookup_record(token.as_ref(), &record_name).await? {
             let existing_content = record_content(&existing).unwrap_or_default();
-            if existing_content.as_bytes() == bytes {
+            let existing_bytes = existing_content.as_bytes();
+            if existing_bytes == bytes
+                || event_storage_matches_expected(existing_bytes, &expected_event)
+            {
                 return Ok(());
             }
         }

@@ -54,12 +54,25 @@ impl EventId {
         self.0.strip_prefix("sha256:").unwrap_or(&self.0)
     }
 
-    /// Immutable provider path: `nook-log/v1/events/{shard}/{digest}.event`.
+    /// Immutable provider path: `nook-log/v1/events/{digest}.yaml`.
     #[must_use]
     pub fn storage_path(&self) -> String {
         let hex = self.hex_digest();
+        format!("nook-log/v1/events/{hex}.yaml")
+    }
+
+    /// Legacy provider path used by the initial JSON event-log implementation.
+    #[must_use]
+    pub fn legacy_sharded_storage_path(&self) -> String {
+        let hex = self.hex_digest();
         let shard = &hex[..2];
         format!("nook-log/v1/events/{shard}/{hex}.event")
+    }
+
+    /// Legacy flat filename used by non-hierarchical providers.
+    #[must_use]
+    pub fn legacy_event_file_name(&self) -> String {
+        format!("{}.event", self.hex_digest())
     }
 }
 
@@ -240,13 +253,17 @@ mod tests {
     }
 
     #[test]
-    fn storage_path_uses_hash_shard() {
+    fn storage_path_is_flat_yaml_with_legacy_sharded_fallback() {
         let id = EventId::parse(
             "sha256:7a3e99112233445566778899aabbccddeeff00112233445566778899aabbccdd",
         )
         .unwrap();
         assert_eq!(
             id.storage_path(),
+            "nook-log/v1/events/7a3e99112233445566778899aabbccddeeff00112233445566778899aabbccdd.yaml"
+        );
+        assert_eq!(
+            id.legacy_sharded_storage_path(),
             "nook-log/v1/events/7a/7a3e99112233445566778899aabbccddeeff00112233445566778899aabbccdd.event"
         );
     }

@@ -28,7 +28,7 @@ export function createLocalE2eGoogleDriveVaultStub(
       if (digest && key !== digest) continue
       entries.push({
         id: eventFileId(key),
-        name: `${key}.event`,
+        name: `${key}.yaml`,
         md5Checksum: `e2e-event-md5-${key}`,
       })
     }
@@ -42,11 +42,16 @@ export function createLocalE2eGoogleDriveVaultStub(
       /"event_id"\s*:\s*"sha256:([a-fA-F0-9]{64})"/,
     )?.[1]
     const nameDigest = body.match(
-      /"name"\s*:\s*"([a-fA-F0-9]{64})\.event"/,
+      /"name"\s*:\s*"([a-fA-F0-9]{64})\.(?:yaml|event)"/,
     )?.[1]
     const digest = eventId ?? nameDigest
     if (!digest) return null
-    const marker = '\r\nContent-Type: application/json\r\n\r\n'
+    const markers = [
+      '\r\nContent-Type: application/x-yaml\r\n\r\n',
+      '\r\nContent-Type: application/json\r\n\r\n',
+    ]
+    const marker = markers.find((candidate) => body.includes(candidate))
+    if (!marker) return null
     const start = body.indexOf(marker)
     if (start === -1) return null
     const contentStart = start + marker.length
@@ -95,9 +100,9 @@ export function createLocalE2eGoogleDriveVaultStub(
           method === 'GET'
         ) {
           const decoded = decodeURIComponent(fullUrl)
-          if (decoded.includes('.event')) {
+          if (decoded.includes('.yaml') || decoded.includes('.event')) {
             const digest = decoded.match(
-              /name = '([a-fA-F0-9]{64})\.event'/,
+              /name = '([a-fA-F0-9]{64})\.(?:yaml|event)'/,
             )?.[1]
             await route.fulfill({
               status: 200,
@@ -162,7 +167,7 @@ export function createLocalE2eGoogleDriveVaultStub(
               contentType: 'application/json',
               body: JSON.stringify({
                 id: driveFileId,
-                name: `${eventDigest}.event`,
+                name: `${eventDigest}.yaml`,
                 md5Checksum: `e2e-event-md5-${eventDigest}`,
               }),
             })

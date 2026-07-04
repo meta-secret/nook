@@ -2,7 +2,10 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
-use crate::vault_event::VaultEvent;
+use crate::vault_event::{
+    VaultEvent, parse_event_storage_bytes, parse_remote_event_storage_bytes,
+    serialize_event_storage_yaml,
+};
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
 use std::collections::BTreeMap;
 
@@ -19,8 +22,8 @@ impl LocalEventStore {
         Self::default()
     }
 
-    pub fn put_event(&mut self, event_id: EventId, canonical_bytes: Vec<u8>) {
-        self.events.insert(event_id, canonical_bytes);
+    pub fn put_event(&mut self, event_id: EventId, storage_bytes: Vec<u8>) {
+        self.events.insert(event_id, storage_bytes);
     }
 
     #[must_use]
@@ -59,12 +62,11 @@ impl LocalEventStore {
             .unwrap_or_default()
     }
 
-    /// Build a causal graph from stored canonical bytes.
+    /// Build a causal graph from stored YAML or legacy JSON bytes.
     pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
         for bytes in self.events.values() {
-            let event: VaultEvent =
-                serde_json::from_slice(bytes).map_err(EventError::ParseStoredEvent)?;
+            let event = parse_event_storage_bytes(bytes)?;
             let _ = graph.insert(event, store_id)?;
         }
         graph.validate_authorizations()?;
@@ -78,7 +80,7 @@ impl LocalEventStore {
         store_id: &str,
     ) -> VaultResult<(EventId, EventInsertStatus)> {
         let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
-        let bytes = serde_json::to_vec(event).map_err(EventError::EventSerialize)?;
+        let bytes = serialize_event_storage_yaml(event)?;
         if self.events.contains_key(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
@@ -100,8 +102,7 @@ pub fn union_remote_events(
         if local.get_bytes(event_id).is_some() {
             continue;
         }
-        let event: VaultEvent =
-            serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
+        let event = parse_remote_event_storage_bytes(bytes)?;
         if event.id()? != *event_id {
             return Err(EventError::RemoteEventIdMismatch {
                 event_id: event_id.as_str().to_owned(),
@@ -142,7 +143,7 @@ pub fn remote_event_belongs_to_store(
     bytes: &[u8],
     store_id: &str,
 ) -> VaultResult<bool> {
-    let event: VaultEvent = serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
+    let event = parse_remote_event_storage_bytes(bytes)?;
     if event.id()? != *event_id {
         return Err(EventError::RemoteEventIdMismatch {
             event_id: event_id.as_str().to_owned(),

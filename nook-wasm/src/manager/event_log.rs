@@ -161,8 +161,8 @@ impl NookVaultManager {
         )?;
         verify_stored_vault_import(&ctx, &import)?;
         let event_id = import.id()?;
-        let bytes =
-            serde_json::to_vec(&import).map_err(|e| NookError::Serialization(e.to_string()))?;
+        let bytes = nook_core::serialize_event_storage_yaml(&import)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
         self.event_heads = vec![event_id.as_str().to_owned()];
         self.key_epoch = import.body.key_epoch.as_str().to_owned();
@@ -457,8 +457,8 @@ impl NookVaultManager {
             signing.signing_key(),
         )?;
         let event_id = import.id()?;
-        let bytes =
-            serde_json::to_vec(&import).map_err(|e| NookError::Serialization(e.to_string()))?;
+        let bytes = nook_core::serialize_event_storage_yaml(&import)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
         save_event_bytes(&self.store_id, event_id.as_str(), &bytes).await?;
         self.event_heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.store_id, &self.event_heads).await?;
