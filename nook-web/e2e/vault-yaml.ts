@@ -1,6 +1,6 @@
 import { parse as parseYaml } from 'yaml'
 
-/** Parsed shape of nook-vault.yaml (matches nook-core StoredVaultYaml). */
+/** Parsed shape of nook-projection.yaml (matches nook-core StoredVaultYaml). */
 type StoredSecretRecord = {
   id: string
   type: 'login' | 'api-key' | 'seed-phrase' | 'secure-note'

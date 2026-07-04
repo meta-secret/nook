@@ -62,7 +62,7 @@ async fn fetch_remote_vault_yaml_inner(
             let username = fetch_github_username(pat.as_ref()).await?;
             let repo = format!("{username}/{repo_name}");
             ensure_github_repo_exists(pat.as_ref(), &repo).await?;
-            let path = "nook-vault.yaml".to_owned();
+            let path = "nook-projection.yaml".to_owned();
             match fetch_github_vault(pat.as_ref(), &repo, &path, Some(&mut github_root_empty))
                 .await?
             {
@@ -128,7 +128,7 @@ async fn write_remote_vault_yaml_inner(
             let username = fetch_github_username(pat.as_ref()).await?;
             let repo = format!("{username}/{repo_name}");
             ensure_github_repo_exists(pat.as_ref(), &repo).await?;
-            let path = "nook-vault.yaml".to_owned();
+            let path = "nook-projection.yaml".to_owned();
             let sha =
                 write_github_text_file_with_retry(pat.as_ref(), &repo, &path, &content, revision)
                     .await?;

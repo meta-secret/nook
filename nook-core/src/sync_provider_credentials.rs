@@ -137,7 +137,7 @@ mod tests {
                     refresh_token: refresh.map(str::to_owned),
                     expires_at: None,
                     file_id: None,
-                    file_name: Some("nook-vault.yaml".to_owned()),
+                    file_name: Some("nook-projection.yaml".to_owned()),
                     account_email: Some("me@example.com".to_owned()),
                 }),
                 store_id: None,

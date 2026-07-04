@@ -109,7 +109,7 @@ a secure password generator.
 
 ## Vault and trust model
 
-The default on-disk format is `nook-vault.yaml`. A user item has a plaintext envelope
+The default on-disk format is `nook-projection.yaml`. A user item has a plaintext envelope
 and encrypted data:
 
 ```yaml

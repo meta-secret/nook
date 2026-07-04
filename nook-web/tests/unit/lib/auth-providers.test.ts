@@ -54,10 +54,10 @@ describe('providerStorageDetail', () => {
     })
 
     expect(providerStorageDetail(alpha)).toBe(
-      'alpha/nook-vault.yaml · github_pat_11A…',
+      'alpha/nook-projection.yaml · github_pat_11A…',
     )
     expect(providerStorageDetail(beta)).toBe(
-      'beta/nook-vault.yaml · github_pat_22C…',
+      'beta/nook-projection.yaml · github_pat_22C…',
     )
     expect(providerStorageDetail(alpha)).not.toBe(providerStorageDetail(beta))
   })

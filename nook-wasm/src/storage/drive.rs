@@ -1,7 +1,7 @@
 //! Google Drive app-data folder adapter.
 //!
 //! Each vault file lives in the user's hidden `appDataFolder` under a
-//! user-chosen name (default `nook-vault.yaml`). Optimistic concurrency
+//! user-chosen name (default `nook-projection.yaml`). Optimistic concurrency
 //! mirrors GitHub's blob `sha`: we capture `md5Checksum` from metadata and
 //! send `If-Match` on update.
 

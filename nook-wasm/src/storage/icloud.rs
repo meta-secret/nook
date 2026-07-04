@@ -1,7 +1,7 @@
 //! iCloud `CloudKit` private-database adapter.
 //!
 //! Each vault file is stored as a `CloudKit` record in the user's private
-//! database under a user-chosen record name (default `nook-vault.yaml`).
+//! database under a user-chosen record name (default `nook-projection.yaml`).
 //! Optimistic concurrency uses `CloudKit` `recordChangeTag`, mirroring Drive's
 //! `md5Checksum` / GitHub blob `sha`.
 

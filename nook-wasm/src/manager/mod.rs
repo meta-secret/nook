@@ -424,7 +424,7 @@ impl NookVaultManager {
                     self.github_root_empty = false;
                 }
                 self.github_repo = new_repo;
-                self.github_path = "nook-vault.yaml".to_owned();
+                self.github_path = "nook-projection.yaml".to_owned();
                 let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
                 ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
             }

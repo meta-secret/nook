@@ -28,7 +28,7 @@ export interface OAuthFileConfig {
   refreshToken?: string
   expiresAt?: string
   fileId?: string
-  /** Vault file name in Drive app data or CloudKit record name (default `nook-vault.yaml`). */
+  /** Vault file name in Drive app data or CloudKit record name (default `nook-projection.yaml`). */
   fileName?: string
   accountEmail?: string
 }
@@ -250,7 +250,7 @@ export function providerStorageDetail(
     return `${file} · ${account}`
   }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-  return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat, t)}`
+  return `${repo}/nook-projection.yaml · ${maskGithubPat(provider.githubPat, t)}`
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {

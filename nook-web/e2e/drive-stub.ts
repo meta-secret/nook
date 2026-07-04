@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-const DEFAULT_FILE_NAME = 'nook-vault.yaml'
+const DEFAULT_FILE_NAME = 'nook-projection.yaml'
 
 /** In-memory Google Drive appDataFolder stub (Drive v3 REST). */
 export function createLocalE2eGoogleDriveVaultStub(

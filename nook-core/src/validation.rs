@@ -69,7 +69,7 @@ pub fn format_sync_provider_cache_ref(mode: StorageMode, remote_ref: &str, path:
 pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
 pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
-pub const DEFAULT_DRIVE_VAULT_FILE_NAME: &str = "nook-vault.yaml";
+pub const DEFAULT_DRIVE_VAULT_FILE_NAME: &str = "nook-projection.yaml";
 
 /// Separator between optional known Drive file id and vault file name in the
 /// wasm connect `github_repo` argument for `google-drive` mode.
@@ -850,10 +850,10 @@ mod tests {
             )
         );
         assert_eq!(
-            parse_drive_storage_ref("nook-vault.yaml").unwrap(),
+            parse_drive_storage_ref("nook-projection.yaml").unwrap(),
             (
                 String::new(),
-                validate_drive_vault_file_name("nook-vault.yaml").unwrap()
+                validate_drive_vault_file_name("nook-projection.yaml").unwrap()
             )
         );
     }
@@ -863,9 +863,9 @@ mod tests {
         assert_eq!(
             format_drive_storage_ref(
                 "",
-                &validate_drive_vault_file_name("nook-vault.yaml").unwrap()
+                &validate_drive_vault_file_name("nook-projection.yaml").unwrap()
             ),
-            "nook-vault.yaml"
+            "nook-projection.yaml"
         );
         assert_eq!(
             format_drive_storage_ref("abc", &validate_drive_vault_file_name("work.yaml").unwrap()),
@@ -924,8 +924,12 @@ mod tests {
             "local"
         );
         assert_eq!(
-            format_sync_provider_cache_ref(StorageMode::Github, "user/repo", "nook-vault.yaml"),
-            "github:user/repo:nook-vault.yaml"
+            format_sync_provider_cache_ref(
+                StorageMode::Github,
+                "user/repo",
+                "nook-projection.yaml"
+            ),
+            "github:user/repo:nook-projection.yaml"
         );
         assert_eq!(
             format_sync_provider_cache_ref(StorageMode::GoogleDrive, "file-id", ""),

@@ -272,7 +272,7 @@ mod wasm_idb_tests {
                     refresh_token: Some(refresh.to_owned()),
                     expires_at: None,
                     file_id: None,
-                    file_name: Some("nook-vault.yaml".to_owned()),
+                    file_name: Some("nook-projection.yaml".to_owned()),
                     account_email: None,
                 }),
                 store_id: None,
