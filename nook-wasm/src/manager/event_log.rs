@@ -347,7 +347,11 @@ impl NookVaultManager {
                     "Multiple vault event logs found at this provider. Use a dedicated repo or path for one vault.".to_owned(),
                 ));
             }
-            self.store_id = discovered_store_ids.into_iter().next().unwrap_or_default();
+            self.store_id = discovered_store_ids.into_iter().next().ok_or_else(|| {
+                NookError::Database(
+                    "Provider event discovery returned no vault store id.".to_owned(),
+                )
+            })?;
             self.activate_event_log_mode().await?;
             remote_events = fetched
                 .into_iter()
@@ -537,11 +541,9 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         self.append_vault_operations(vec![trigger]).await?;
-        let new_epoch = self
-            .event_heads
-            .last()
-            .cloned()
-            .unwrap_or_else(|| self.key_epoch.clone());
+        let new_epoch = self.event_heads.last().cloned().ok_or_else(|| {
+            NookError::Database("Security epoch rotation did not produce an event head.".to_owned())
+        })?;
         self.key_epoch = new_epoch.clone();
         save_key_epoch(&self.store_id, &self.key_epoch).await?;
 

@@ -142,7 +142,9 @@ different bytes as corruption.
 | `provider_receipts` | Reserved for compact per-provider sync receipts |
 | `vault` | Source projection cache plus local device/signing identity material |
 
-Event-log writes use the separated stores.
+Event-log reads and writes use the separated stores. Event heads, key epochs,
+event bytes, outbox rows, and source projection backups must not be read from
+any other `IndexedDB` object store.
 
 ## Migration
 

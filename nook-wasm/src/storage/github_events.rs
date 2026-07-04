@@ -37,10 +37,9 @@ pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<S
         .map_err(|e| NookError::Serialization(e.to_string()))?;
 
     for entry in entries {
-        let name = entry
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default();
+        let Some(name) = entry.get("name").and_then(|v| v.as_str()) else {
+            continue;
+        };
         if entry.get("type").and_then(|v| v.as_str()) != Some("file") {
             continue;
         }

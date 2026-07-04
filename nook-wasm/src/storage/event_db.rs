@@ -122,10 +122,7 @@ pub(crate) async fn save_signing_seed(seed: &str) -> Result<(), NookError> {
 
 pub(crate) async fn load_heads(store_id: &str) -> Result<Vec<String>, NookError> {
     let key = heads_key(store_id);
-    match store_get(STORE_PROJECTIONS, &key)
-        .await?
-        .or(vault_get(&key).await?)
-    {
+    match store_get(STORE_PROJECTIONS, &key).await? {
         None => Ok(Vec::new()),
         Some(json) => {
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))
@@ -140,26 +137,20 @@ pub(crate) async fn save_heads(store_id: &str, heads: &[String]) -> Result<(), N
 
 pub(crate) async fn load_key_epoch(store_id: &str) -> Result<Option<String>, NookError> {
     let key = epoch_key(store_id);
-    Ok(store_get(STORE_PROJECTIONS, &key)
-        .await?
-        .or(vault_get(&key).await?))
+    store_get(STORE_PROJECTIONS, &key).await
 }
 
 pub(crate) async fn save_key_epoch(store_id: &str, epoch: &str) -> Result<(), NookError> {
     store_put(STORE_PROJECTIONS, &epoch_key(store_id), epoch).await
 }
 
-/// Preserve the pre-migration vault blob byte-for-byte (first write wins).
+/// Preserve the source projection bytes byte-for-byte (first write wins).
 pub(crate) async fn save_source_backup_if_absent(
     store_id: &str,
     content: &str,
 ) -> Result<bool, NookError> {
     let key = source_backup_key(store_id);
-    if store_get(STORE_PROJECTIONS, &key)
-        .await?
-        .or(vault_get(&key).await?)
-        .is_some()
-    {
+    if store_get(STORE_PROJECTIONS, &key).await?.is_some() {
         return Ok(false);
     }
     store_put(STORE_PROJECTIONS, &key, content).await?;
@@ -169,17 +160,12 @@ pub(crate) async fn save_source_backup_if_absent(
 pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventStore, NookError> {
     let mut local = LocalEventStore::new();
     let index_key = format!("event_index:{store_id}");
-    let index_json = store_get(STORE_EVENTS, &index_key)
-        .await?
-        .or(vault_get(&index_key).await?);
-    if let Some(list_json) = index_json {
+    if let Some(list_json) = store_get(STORE_EVENTS, &index_key).await? {
         let ids: Vec<String> = serde_json::from_str(&list_json)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         for raw_id in ids {
             let key = event_key(store_id, &raw_id);
-            if let Some(bytes) = store_get(STORE_EVENTS, &key)
-                .await?
-                .or(vault_get(&key).await?)
+            if let Some(bytes) = store_get(STORE_EVENTS, &key).await?
                 && let Ok(event_id) = EventId::parse(&raw_id)
             {
                 local.put_event(event_id, bytes.into_bytes());
@@ -200,10 +186,7 @@ pub(crate) async fn save_event_bytes(
     store_put(STORE_EVENTS, &key, &value).await?;
 
     let index_key = format!("event_index:{store_id}");
-    let mut ids: Vec<String> = match store_get(STORE_EVENTS, &index_key)
-        .await?
-        .or(vault_get(&index_key).await?)
-    {
+    let mut ids: Vec<String> = match store_get(STORE_EVENTS, &index_key).await? {
         None => Vec::new(),
         Some(json) => {
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
@@ -231,10 +214,7 @@ pub(crate) async fn queue_outbox_entry(
 
 pub(crate) async fn load_outbox(provider_id: &str) -> Result<Vec<(String, Vec<u8>)>, NookError> {
     let index_key = format!("outbox_index:{provider_id}");
-    let entries = match store_get(STORE_OUTBOX, &index_key)
-        .await?
-        .or(vault_get(&index_key).await?)
-    {
+    let entries = match store_get(STORE_OUTBOX, &index_key).await? {
         None => Vec::new(),
         Some(json) => serde_json::from_str::<Vec<String>>(&json)
             .map_err(|e| NookError::Serialization(e.to_string()))?,
@@ -242,10 +222,7 @@ pub(crate) async fn load_outbox(provider_id: &str) -> Result<Vec<(String, Vec<u8
     let mut out = Vec::new();
     for event_id in entries {
         let key = outbox_key(provider_id, &event_id);
-        if let Some(text) = store_get(STORE_OUTBOX, &key)
-            .await?
-            .or(vault_get(&key).await?)
-        {
+        if let Some(text) = store_get(STORE_OUTBOX, &key).await? {
             out.push((event_id, text.into_bytes()));
         }
     }
@@ -257,10 +234,7 @@ pub(crate) async fn append_outbox_index(
     event_id: &str,
 ) -> Result<(), NookError> {
     let index_key = format!("outbox_index:{provider_id}");
-    let mut ids: Vec<String> = match store_get(STORE_OUTBOX, &index_key)
-        .await?
-        .or(vault_get(&index_key).await?)
-    {
+    let mut ids: Vec<String> = match store_get(STORE_OUTBOX, &index_key).await? {
         None => Vec::new(),
         Some(json) => {
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
@@ -281,10 +255,7 @@ pub(crate) async fn remove_outbox_entry(
 ) -> Result<(), NookError> {
     store_put(STORE_OUTBOX, &outbox_key(provider_id, event_id), "").await?;
     let index_key = format!("outbox_index:{provider_id}");
-    if let Some(json) = store_get(STORE_OUTBOX, &index_key)
-        .await?
-        .or(vault_get(&index_key).await?)
-    {
+    if let Some(json) = store_get(STORE_OUTBOX, &index_key).await? {
         let mut ids: Vec<String> =
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?;
         ids.retain(|id| id != event_id);

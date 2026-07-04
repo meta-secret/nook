@@ -127,16 +127,13 @@ async fn lookup_drive_event_file_ids(
         .json()
         .await
         .map_err(|e| NookError::Serialization(e.to_string()))?;
-    Ok(body
-        .get("files")
-        .and_then(|v| v.as_array())
-        .map(|files| {
-            files
-                .iter()
-                .filter_map(|file| file.get("id").and_then(|v| v.as_str()).map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default())
+    let Some(files) = body.get("files").and_then(|v| v.as_array()) else {
+        return Ok(Vec::new());
+    };
+    Ok(files
+        .iter()
+        .filter_map(|file| file.get("id").and_then(|v| v.as_str()).map(str::to_owned))
+        .collect())
 }
 
 async fn download_drive_event_file(
@@ -231,9 +228,9 @@ pub(crate) async fn put_drive_event_if_absent(
         .json()
         .await
         .map_err(|e| NookError::Serialization(e.to_string()))?;
-    Ok(parsed
+    parsed
         .get("id")
         .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_owned())
+        .map(str::to_owned)
+        .ok_or_else(|| NookError::Drive("Drive event create response missing file id.".to_owned()))
 }

@@ -42,16 +42,6 @@ async function readIdbKey(
   )
 }
 
-async function readProjectionIdbKey(
-  page: Page,
-  key: string,
-): Promise<string | null> {
-  return (
-    (await readIdbKey(page, 'projections', key)) ??
-    (await readIdbKey(page, 'vault', key))
-  )
-}
-
 async function clearEventLogState(page: Page, storeId: string) {
   await page.evaluate((sid) => {
     return new Promise<void>((resolve, reject) => {
@@ -69,13 +59,7 @@ async function clearEventLogState(page: Page, storeId: string) {
           return
         }
         const staticKeysByStore: Record<string, string[]> = {
-          vault: [
-            'event_log:mode',
-            `event_heads:${sid}`,
-            `event_epoch:${sid}`,
-            `event_index:${sid}`,
-            `source_backup:${sid}`,
-          ],
+          vault: ['event_log:mode'],
           events: [`event_index:${sid}`],
           projections: [
             `event_heads:${sid}`,
@@ -93,7 +77,7 @@ async function clearEventLogState(page: Page, storeId: string) {
           if (storeName === 'outbox') {
             store.clear()
           }
-          if (storeName === 'vault' || storeName === 'events') {
+          if (storeName === 'events') {
             const all = store.getAllKeys()
             all.onerror = () =>
               reject(all.error ?? new Error('idb key scan failed'))
@@ -146,7 +130,11 @@ test.describe('source vault import to event log', () => {
     })
 
     expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBe('event_log')
-    const backup = await readProjectionIdbKey(page, `source_backup:${storeId}`)
+    const backup = await readIdbKey(
+      page,
+      'projections',
+      `source_backup:${storeId}`,
+    )
     expect(backup?.trim().length ?? 0).toBeGreaterThan(0)
 
     const migratedYaml = await readLocalVaultYamlFromIdb(page)
