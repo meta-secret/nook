@@ -16,7 +16,7 @@ test.describe('authenticated shell height', () => {
     })
   })
 
-  test('keeps consistent height when switching Vault / Onboard / Settings tabs', async ({
+  test('keeps consistent height when switching Vault / Admin / Onboard / Settings tabs', async ({
     page,
   }) => {
     const shell = page.getByTestId('authenticated-shell')
@@ -25,13 +25,18 @@ test.describe('authenticated shell height', () => {
     const vaultHeight = (await shell.boundingBox())?.height ?? 0
     expect(vaultHeight).toBeGreaterThan(0)
 
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    const adminHeight = (await shell.boundingBox())?.height ?? 0
+    expect(adminHeight).toBeCloseTo(vaultHeight, 0)
+
     await page.getByTestId('vault-onboard-tab').click()
     await expect(page.getByTestId('onboard-device-panel')).toBeVisible()
     const onboardHeight = (await shell.boundingBox())?.height ?? 0
     expect(onboardHeight).toBeCloseTo(vaultHeight, 0)
 
     await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('storage-providers-section')).toBeVisible()
+    await expect(page.getByTestId('vault-devices-section')).toBeVisible()
     const settingsHeight = (await shell.boundingBox())?.height ?? 0
     expect(settingsHeight).toBeCloseTo(vaultHeight, 0)
 

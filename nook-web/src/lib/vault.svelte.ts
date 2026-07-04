@@ -80,10 +80,11 @@ export class VaultState {
   translations = $state<Record<string, unknown>>({})
 
   settingsOpen = $state(false)
-  settingsSection = $state<'storage' | 'onboard'>('storage')
-  settingsAccordionSection = $state<
-    'storage' | 'passwords' | 'devices' | 'language' | null
-  >('storage')
+  settingsSection = $state<'storage' | 'onboard' | 'admin'>('storage')
+  settingsAccordionSection = $state<'devices' | 'language' | null>('devices')
+  adminAccordionSection = $state<'vaults' | 'storage' | 'passwords' | null>(
+    'vaults',
+  )
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -881,6 +882,10 @@ export class VaultState {
     return localLoginActions.createLocalVaultWithDeviceKeys(this, label)
   }
 
+  async renameLocalVault(storeId: string, label: string): Promise<void> {
+    return localLoginActions.renameLocalVaultLabel(this, storeId, label)
+  }
+
   async selectVaultForUnlock(storeId: string): Promise<void> {
     return localLoginActions.selectVaultForUnlock(this, storeId)
   }
@@ -928,6 +933,8 @@ export class VaultState {
       return
     }
     this.helpOpen = false
+    this.cancelProviderSetup()
+    this.cancelAddProvider()
     this.isVerifying = true
     try {
       await this.waitForStorageChain()
@@ -1600,19 +1607,34 @@ export class VaultState {
   }
 
   openSettings(
-    section: 'storage' | 'onboard' = 'storage',
-    accordion: 'storage' | 'passwords' | 'devices' | 'language' = 'storage',
+    section: 'storage' | 'onboard' | 'admin' = 'storage',
+    accordion: 'devices' | 'language' = 'devices',
   ) {
     this.helpOpen = false
     this.settingsSection = section
-    if (section !== 'onboard') {
+    if (section === 'storage') {
+      this.cancelProviderSetup()
+      this.cancelAddProvider()
       this.settingsAccordionSection = accordion
     }
     this.settingsOpen = true
     void this.refreshDeviceState()
   }
 
+  openAdmin(accordion: 'vaults' | 'storage' | 'passwords' = 'vaults') {
+    this.helpOpen = false
+    this.cancelProviderSetup()
+    this.cancelAddProvider()
+    this.adminAccordionSection = accordion
+    this.settingsSection = 'admin'
+    this.settingsOpen = true
+    void this.refreshLocalVaultCatalog()
+    void this.refreshDeviceState()
+  }
+
   closeSettings() {
+    this.cancelProviderSetup()
+    this.cancelAddProvider()
     this.settingsOpen = false
   }
 

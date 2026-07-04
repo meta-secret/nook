@@ -9,9 +9,14 @@ import {
   unlockVaultOnLogin,
 } from './helpers'
 
-async function listLocalVaultStoreIds(page: import('@playwright/test').Page) {
+type LocalVaultRegistryEntry = {
+  store_id?: string
+  label?: string
+}
+
+async function listLocalVaultEntries(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
-    return new Promise<string[]>((resolve, reject) => {
+    return new Promise<LocalVaultRegistryEntry[]>((resolve, reject) => {
       const request = indexedDB.open('nook_db', 1)
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
@@ -27,13 +32,9 @@ async function listLocalVaultStoreIds(page: import('@playwright/test').Page) {
             const raw = getReq.result
             const parsed =
               typeof raw === 'string'
-                ? (JSON.parse(raw) as { vaults?: Array<{ store_id?: string }> })
+                ? (JSON.parse(raw) as { vaults?: LocalVaultRegistryEntry[] })
                 : { vaults: [] }
-            resolve(
-              (parsed.vaults ?? [])
-                .map((entry) => entry.store_id ?? '')
-                .filter(Boolean),
-            )
+            resolve(parsed.vaults ?? [])
           } catch (error) {
             reject(error)
           }
@@ -132,27 +133,103 @@ test.describe('multi-vault on one browser profile', () => {
     const vaultAYaml = await readLocalVaultYamlFromIdb(page)
     const storeA = parseStoreId(vaultAYaml)
 
-    await page.getByTestId('header-lock-vault-btn').click()
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-
-    await page.getByTestId('login-vault-name-input').fill('Vault B')
-    await page.getByTestId('login-create-additional-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
+    await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+    await page.getByTestId('vault-switcher-trigger').click()
+    await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
+    await expect(page.getByTestId('vault-switcher-count')).toContainText(
+      'One vault on this device',
+    )
+    await page.getByTestId('vault-switcher-admin-btn').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page.getByTestId('vault-admin-create-input').fill('Vault B')
+    await page.getByTestId('vault-admin-create-btn').click()
+    await expect
+      .poll(
+        async () => {
+          const yaml = await readLocalVaultYamlFromIdb(page)
+          return parseStoreId(yaml)
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .not.toBe(storeA)
     const vaultBYaml = await readLocalVaultYamlFromIdb(page)
     const storeB = parseStoreId(vaultBYaml)
-    expect(storeB).not.toEqual(storeA)
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
-    const registry = await listLocalVaultStoreIds(page)
-    expect(registry).toEqual(expect.arrayContaining([storeA, storeB]))
+    const registry = await listLocalVaultEntries(page)
+    const registryStoreIds = registry.map((entry) => entry.store_id)
+    expect(registryStoreIds).toEqual(expect.arrayContaining([storeA, storeB]))
     expect(registry).toHaveLength(2)
 
     await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await expect(
+      page.locator(
+        '[data-testid="vault-admin-name"][data-store-id="' + storeB + '"]',
+      ),
+    ).toContainText('Vault B')
+    await page
+      .locator(
+        '[data-testid="vault-admin-rename-btn"][data-store-id="' +
+          storeB +
+          '"]',
+      )
+      .click()
+    await page
+      .locator(
+        '[data-testid="vault-admin-name-input"][data-store-id="' +
+          storeB +
+          '"]',
+      )
+      .fill('Vault Bee')
+    await page
+      .locator(
+        '[data-testid="vault-admin-rename-btn"][data-store-id="' +
+          storeB +
+          '"]',
+      )
+      .click()
+    await expect
+      .poll(async () => {
+        const entries = await listLocalVaultEntries(page)
+        return entries.find((entry) => entry.store_id === storeB)?.label
+      })
+      .toBe('Vault Bee')
+    await expect(page.getByTestId('vault-switcher-trigger')).toContainText(
+      'Vault Bee',
+    )
+    await expect(page.getByTestId('vault-admin-vaults-section')).toBeVisible()
+    await expect(page.getByTestId('vault-admin-vault-count')).toContainText(
+      '2 vaults',
+    )
+
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByTestId('add-provider-btn')
+      .click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
+
+    for (let i = 0; i < 2; i += 1) {
+      await page.getByTestId('header-lock-vault-btn').click()
+      await authorizeDeviceProtection(page)
+      await unlockVaultOnLogin(page, { storeId: storeB })
+      await expect(page.getByTestId('vault-panel')).toBeVisible()
+      await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
+      await page.getByTestId('vault-switcher-trigger').click()
+      await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('vault-switcher-menu')).toBeHidden()
+    }
 
     await page.getByTestId('vault-switcher-trigger').click()
     await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
@@ -189,7 +266,13 @@ test.describe('multi-vault on one browser profile', () => {
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
-    await page.getByTestId('vault-settings-tab').click()
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-a',

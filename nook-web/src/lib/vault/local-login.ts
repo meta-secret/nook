@@ -6,7 +6,7 @@ import {
   listLocalVaultEntries,
   prepareCreateNewVaultSlot,
   readActiveVaultStoreId,
-  renameLocalVault,
+  renameLocalVault as renameLocalVaultEntry,
   switchActiveVault,
 } from '$lib/local-vault'
 import { saveAuthProviders } from '$lib/auth-providers'
@@ -102,7 +102,7 @@ export async function createLocalVaultWithDeviceKeys(
     const storeId = requireManagerVaultStoreId(state.manager)
     state.activeVaultStoreId = storeId
     state.manager.setVaultName(trimmedLabel)
-    await renameLocalVault(storeId, trimmedLabel)
+    await renameLocalVaultEntry(storeId, trimmedLabel)
     await refreshLocalVaultCatalog(state)
     state.localLoginPrepared = true
     await state.ensureProviderSaved()
@@ -122,6 +122,37 @@ export async function createLocalVaultWithDeviceKeys(
       e instanceof Error ? e.message : 'Failed to create local vault.'
     log.warn('local vault create failed', { error: message })
     state.errorMsg = message
+  } finally {
+    state.isVerifying = false
+  }
+}
+
+export async function renameLocalVaultLabel(
+  state: VaultState,
+  storeId: string,
+  label: string,
+): Promise<void> {
+  const trimmedStoreId = storeId.trim()
+  const trimmedLabel = label.trim()
+  if (!trimmedStoreId) return
+  if (!trimmedLabel) {
+    state.errorMsg = state.t('login.vault_name_required')
+    return
+  }
+
+  state.errorMsg = ''
+  state.dismissSuccess()
+  state.isVerifying = true
+
+  try {
+    await renameLocalVaultEntry(trimmedStoreId, trimmedLabel)
+    if (trimmedStoreId === state.activeVaultStoreId?.trim()) {
+      state.manager?.setVaultName(trimmedLabel)
+    }
+    await refreshLocalVaultCatalog(state)
+    state.showSuccess(state.t('toasts.vault_renamed'))
+  } catch (e: unknown) {
+    state.errorMsg = e instanceof Error ? e.message : 'Failed to rename vault.'
   } finally {
     state.isVerifying = false
   }

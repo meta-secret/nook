@@ -168,10 +168,11 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
     expect(revealed).toBe(joinerSecretValue)
   })
 
-  test('settings shows storage, passwords, and devices separately from onboarding', async () => {
+  test('admin shows storage and passwords while settings keeps devices separate from onboarding', async () => {
     await openStorageSettings(deviceA)
     await expect(deviceA.getByTestId('storage-providers-section')).toBeVisible()
     await expect(deviceA.getByTestId('vault-unlock-section')).toBeVisible()
+    await deviceA.getByTestId('vault-settings-tab').click()
     await expect(deviceA.getByTestId('vault-devices-section')).toBeVisible()
     await expandSettingsSection(deviceA, 'devices')
     await expect(deviceA.getByTestId('vault-members-list')).toBeVisible()

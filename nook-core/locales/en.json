@@ -8,6 +8,7 @@
     "save": "Save",
     "delete": "Delete",
     "edit": "Edit",
+    "rename": "Rename",
     "active": "Active",
     "remove": "Remove",
     "item": "item",
@@ -26,6 +27,7 @@
   "nav": {
     "vault": "Vault",
     "onboard": "Onboard",
+    "admin": "Admin",
     "settings": "Settings"
   },
   "onboarding": {
@@ -160,7 +162,18 @@
     "switcher_count_on_device": "{count} vaults on this device",
     "switcher_open_badge": "Open",
     "switcher_create_new": "Create another vault",
+    "switcher_import_existing": "Import existing vault",
+    "switcher_manage_vaults": "Manage vaults",
+    "switcher_admin": "Open Admin",
     "switcher_choose": "Switch vault",
+    "create_title": "Create vault",
+    "manage_title": "Manage vaults",
+    "manager_name_label": "Vault name",
+    "admin_title": "Admin",
+    "admin_vaults_title": "Vaults",
+    "admin_vaults_desc": "Create, rename, and switch local vaults on this device.",
+    "admin_vault_count": "{count} vaults on this device",
+    "admin_new_vault_label": "New vault",
     "expand_secret": "Expand secret",
     "collapse_secret": "Collapse secret",
     "types": {
@@ -526,6 +539,7 @@
     "vault_created": "Vault created.",
     "enrolled_connected": "Enrolled and connected to the vault.",
     "local_loaded": "Vault loaded.",
+    "vault_renamed": "Vault renamed.",
     "github_connected": "Connected to GitHub. Encryption key is stored locally in this browser.",
     "google_drive_connected": "Connected to Google Drive. Encryption key is stored locally in this browser.",
     "password_updated": "Vault password updated.",

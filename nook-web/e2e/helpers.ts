@@ -1730,20 +1730,20 @@ export async function expandLoginEnrollmentPanel(page: Page) {
   }
 }
 
-/** Open storage settings (must already be connected). */
+/** Open the admin surface that owns sync providers and passwords. */
 export async function openStorageSettings(page: Page) {
   await keepVaultIdleLockDisabled(page)
   await assertVaultReady(page)
   await waitForVaultOperationsIdle(page)
-  const settingsTab = page.getByTestId('vault-settings-tab')
+  const adminTab = page.getByTestId('vault-admin-tab')
   await expect
     .poll(
       async () => {
         try {
-          await expect(settingsTab).toBeVisible({ timeout: UI_TIMEOUT_MS })
-          await expect(settingsTab).toBeEnabled({ timeout: UI_TIMEOUT_MS })
-          await settingsTab.click({ timeout: UI_TIMEOUT_MS })
-          return await page.getByTestId('storage-settings-panel').isVisible()
+          await expect(adminTab).toBeVisible({ timeout: UI_TIMEOUT_MS })
+          await expect(adminTab).toBeEnabled({ timeout: UI_TIMEOUT_MS })
+          await adminTab.click({ timeout: UI_TIMEOUT_MS })
+          return await page.getByTestId('vault-admin-panel').isVisible()
         } catch {
           return false
         }
@@ -1751,7 +1751,7 @@ export async function openStorageSettings(page: Page) {
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(true)
-  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
+  await expect(page.getByTestId('vault-admin-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('vault-panel')).not.toBeVisible({
@@ -1767,6 +1767,7 @@ export async function connectGithubSyncProviderFromSettings(
   options?: { expectConflict?: boolean },
 ) {
   await openStorageSettings(page)
+  await expandSettingsSection(page, 'storage')
   await page.getByTestId('add-provider-btn').first().click()
   await page.getByTestId('provider-option-github').click()
   await expect(page.getByTestId('github-token-setup')).toBeVisible({
@@ -1796,6 +1797,20 @@ export async function expandSettingsSection(
   page: Page,
   section: SettingsSection,
 ) {
+  const targetTab =
+    section === 'devices'
+      ? page.getByTestId('vault-settings-tab')
+      : page.getByTestId('vault-admin-tab')
+  const targetPanel =
+    section === 'devices'
+      ? page.getByTestId('storage-settings-panel')
+      : page.getByTestId('vault-admin-panel')
+  if (!(await targetPanel.isVisible())) {
+    await targetTab.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(targetPanel).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  }
   const sectionEl = page.getByTestId(SETTINGS_SECTION_TEST_IDS[section])
   await expect(sectionEl).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
   const toggle = sectionEl.getByRole('button').first()
@@ -2023,10 +2038,8 @@ export async function connectGoogleDriveSyncProviderFromSettings(
   options?: { expectConflict?: boolean },
 ) {
   await installGoogleOAuthMock(page, accessToken)
-  await page.getByTestId('vault-settings-tab').click()
-  await expect(page.getByTestId('storage-settings-panel')).toBeVisible({
-    timeout: UI_TIMEOUT_MS,
-  })
+  await openStorageSettings(page)
+  await expandSettingsSection(page, 'storage')
   await page.getByTestId('add-provider-btn').first().click()
   await page.getByTestId('provider-option-oauth-file').click()
   await expect(page.getByTestId('google-oauth-setup')).toBeVisible({
