@@ -139,6 +139,12 @@ Do not make coverage export start a container and rerun `cargo llvm-cov`; PR CI
 exports current and base coverage, so a runtime coverage command would duplicate
 the same Rust tests after the image build.
 
+When PR CI builds the base worktree for comparison, it copies the PR branch's
+coverage plumbing (`nook-core/Dockerfile` and `.task/docker.yml`) into that
+worktree before `task setup`. The measured Rust source still comes from
+`origin/$BASE_REF`, but CI can validate coverage-infra changes in the PR itself
+and avoid falling back to an older base-branch export task.
+
 ## Local vs remote CI
 
 **Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full stub e2e, Cloudflare preview — no toolchain image push). Main pushes the commit-tagged toolchain image after green verify. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
