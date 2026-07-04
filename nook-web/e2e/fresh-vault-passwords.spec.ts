@@ -47,7 +47,7 @@ test.describe('fresh vault password entries (stub sync)', () => {
       providers: [
         {
           id: 'e2e-empty-sync',
-          label: 'Empty Drive',
+          label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
         },

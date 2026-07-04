@@ -109,15 +109,15 @@ test.describe('onboard provider picker', () => {
 
     const providers = [
       {
-        id: 'gd-personal',
-        label: 'Google Drive · personal',
+        id: 'file-personal',
+        label: 'File · personal',
         fileName: 'personal.yaml',
         accessToken: personalToken,
         accountEmail: 'personal@example.com',
       },
       {
-        id: 'gd-work',
-        label: 'Google Drive · work',
+        id: 'file-work',
+        label: 'File · work',
         fileName: 'work.yaml',
         accessToken: workToken,
         accountEmail: 'work@example.com',

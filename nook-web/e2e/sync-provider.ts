@@ -34,9 +34,9 @@ export const E2E_SYNC_PROVIDERS: Record<E2eSyncProviderId, E2eSyncProviderDef> =
     local: {
       id: 'local',
       providerOptionTestId: 'provider-option-oauth-file',
-      liveCredentialEnv: 'NOOK_LOCAL_E2E_ACCESS_TOKEN',
-      stubCredential: 'ya29.e2e_stub_access_token',
-      label: 'Google Drive',
+      liveCredentialEnv: 'NOOK_FILE_E2E_ACCESS_TOKEN',
+      stubCredential: 'ya29.e2e_file_sync_token',
+      label: 'File',
     },
     file: {
       id: 'file',
@@ -75,10 +75,10 @@ function normalizeProviderId(id: E2eSyncProviderId): E2eSyncProviderId {
 function stubBackendId(
   providerId: E2eSyncProviderId,
 ): 'file' | 'google-drive' | 'icloud' | 'github' {
-  if (providerId === 'file') {
+  if (providerId === 'file' || providerId === 'local') {
     return 'file'
   }
-  if (providerId === 'local' || providerId === 'google-drive') {
+  if (providerId === 'google-drive') {
     return 'google-drive'
   }
   if (providerId === 'icloud') {
@@ -89,8 +89,7 @@ function stubBackendId(
 
 /** Which sync backend to exercise — set per CI job via `NOOK_E2E_SYNC_PROVIDER`. */
 export function resolveE2eSyncProvider(): E2eSyncProviderId {
-  const raw =
-    process.env.NOOK_E2E_SYNC_PROVIDER?.trim().toLowerCase() ?? 'file'
+  const raw = process.env.NOOK_E2E_SYNC_PROVIDER?.trim().toLowerCase() ?? 'file'
   if (raw in E2E_SYNC_PROVIDERS) {
     return raw as E2eSyncProviderId
   }
@@ -127,7 +126,7 @@ type OAuthFileStubHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
 
-/** Remote target for stub sync — `pat` is access token, `repoName` is Drive file name. */
+/** Remote target for stub sync — `pat` is access token, `repoName` is the remote file/repo id. */
 export type SyncE2eTarget = {
   providerId: E2eSyncProviderId
   pat: string
@@ -311,7 +310,7 @@ export async function connectSyncGenesisDevice(
       providers: [
         {
           id: 'e2e-genesis-sync',
-          label: 'E2E Drive',
+          label: e2eSyncProviderDef(target.providerId).label,
           fileName: target.repoName,
           accessToken: target.pat,
         },

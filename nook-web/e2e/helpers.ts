@@ -27,6 +27,7 @@ import {
   GITHUB_VAULT_PATH,
 } from './github-api'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 import { installMockPasskeyRuntime } from './passkey-mock'
 
 const APP_LOGS_SCHEMA = 'nook.app-logs.v1' as const
@@ -60,6 +61,10 @@ type AppLogsResponse = {
   }
   entries: NookLogEntry[]
 }
+
+type E2eOauthFileStub =
+  | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+  | ReturnType<typeof createLocalE2eFileSyncVaultStub>
 
 export {
   cleanupAllRegisteredE2eGithubRepos,
@@ -1059,7 +1064,7 @@ export async function connectGoogleDriveVault(
   page: Page,
   accessToken: string,
   fileName: string,
-  stub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+  stub?: E2eOauthFileStub,
 ) {
   await installGoogleOAuthMock(page, accessToken)
   if (stub) {
@@ -1081,7 +1086,7 @@ export async function connectGoogleDriveGenesisDevice(
   page: Page,
   accessToken: string,
   fileName: string,
-  stub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+  stub?: E2eOauthFileStub,
 ) {
   await page.goto('/')
   await clearBrowserVault(page)
@@ -1093,7 +1098,7 @@ export async function connectGoogleDriveJoinerDevice(
   page: Page,
   accessToken: string,
   fileName: string,
-  stub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+  stub?: E2eOauthFileStub,
 ) {
   await assertGenesisVaultOnSyncStub(
     stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
@@ -2815,13 +2820,13 @@ export const E2E_GITHUB_ONBOARD_PROVIDER = {
   githubPat: 'ghp_test_token',
 }
 
-/** Default oauth-file sync provider for PR / IndexedDB-only onboard e2e. */
+/** Default file-backed oauth-file sync provider for PR / IndexedDB-only e2e. */
 export const E2E_OAUTH_ONBOARD_PROVIDER = {
-  id: 'e2e-onboard-oauth',
-  label: 'Google Drive (e2e onboard)',
-  fileName: 'nook-events',
-  accessToken: 'ya29.e2e_stub_access_token',
-  accountEmail: 'e2e-user@example.com',
+  id: 'e2e-onboard-file',
+  label: 'File (e2e onboard)',
+  fileName: 'nook-e2e-onboard',
+  accessToken: 'ya29.e2e_file_sync_token',
+  accountEmail: 'file-sync-e2e@example.com',
 }
 
 /** Alias for local stub sync provider used in multi-device / fan-out e2e. */
@@ -2959,15 +2964,15 @@ export async function waitForLocalVaultState(
   throw new Error(`Timed out waiting for local vault YAML: ${lastError}`)
 }
 
-/** Stub Google Drive REST responses for local oauth-file sync e2e. */
+/** Stub oauth-file REST responses with the file-backed provider by default. */
 export async function stubGoogleDriveVaultForLocalE2e(
   page: Page,
   opts: { fileName: string; vaultYaml?: string },
-  existingStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+  existingStub?: E2eOauthFileStub,
 ) {
   const stub =
     existingStub ??
-    createLocalE2eGoogleDriveVaultStub(opts.vaultYaml ?? '', opts.fileName)
+    createLocalE2eFileSyncVaultStub(opts.vaultYaml ?? '', opts.fileName)
   if (opts.vaultYaml !== undefined) {
     stub.setVaultYaml(opts.vaultYaml)
   }
@@ -3229,7 +3234,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 /** Seed sync provider + unlock a keys-mode local vault for multi-device local e2e. */
 export async function reloadUnlockLocalVaultWithSync(
   page: Page,
-  sharedStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+  sharedStub?: E2eOauthFileStub,
 ) {
   await seedExtraOauthFileProviders(page, [E2E_OAUTH_ONBOARD_PROVIDER])
 
@@ -3395,7 +3400,7 @@ export async function seedGithubSyncProvidersWhileUnlocked(
 export async function seedOauthFileSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_OAUTH_ONBOARD_PROVIDER],
-  sharedStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+  sharedStub?: E2eOauthFileStub,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   await seedExtraOauthFileProviders(page, providers)
@@ -3430,7 +3435,7 @@ export async function reloadUnlockWithSyncProvider(
     password?: string
     entryLabel?: string
     providers?: E2eOauthSyncProvider[]
-    sharedStub?: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+    sharedStub?: E2eOauthFileStub
   },
 ) {
   const providers = opts?.providers ?? [E2E_OAUTH_ONBOARD_PROVIDER]

@@ -24,7 +24,6 @@ import {
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
-import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 test.describe('remote vault recovery (stub sync, local-first)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -46,14 +45,12 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
       providers: [
         {
           id: 'e2e-remote-recovery',
-          label: 'E2E Drive',
+          label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
         },
       ],
-      sharedStub: target.stub as ReturnType<
-        typeof createLocalE2eGoogleDriveVaultStub
-      >,
+      sharedStub: target.stub,
     })
     await waitForLoadedSyncProviders(vaultPage)
   })

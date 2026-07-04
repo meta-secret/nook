@@ -2,7 +2,6 @@ import { expect, test, type Page } from './fixtures'
 import {
   authorizeDeviceProtection,
   connectGoogleDriveSyncProviderFromSettings,
-  createLocalE2eGoogleDriveVaultStub,
   createLocalVaultOnLogin,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -15,6 +14,7 @@ import {
   unlockVaultOnLogin,
   waitForLoadedSyncProviders,
 } from './helpers'
+import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 import type { PendingSyncConflict } from '../src/lib/vault-sync'
 
 function parseStoreId(yaml: string): string {
@@ -62,21 +62,21 @@ test.describe('sync conflict resolution', () => {
     await seedExtraOauthFileProviders(page, [
       {
         id: 'e2e-conflict-sync',
-        label: 'Google Drive (e2e)',
+        label: 'File (e2e)',
         fileName: 'nook-e2e-conflict.yaml',
-        accessToken: 'ya29.e2e_stub_access_token',
+        accessToken: 'ya29.e2e_file_sync_token',
       },
     ])
 
     await stageVaultSyncConflict(page, {
       providerId: 'e2e-conflict-sync',
-      providerLabel: 'Google Drive (e2e)',
+      providerLabel: 'File (e2e)',
       localYaml,
       remoteYaml: `${localYaml.trimEnd()}\n`,
       localVersion: 1,
       remoteVersion: 1,
-      mode: 'google-drive',
-      pat: 'ya29.e2e_stub_access_token',
+      mode: 'oauth-file',
+      pat: 'ya29.e2e_file_sync_token',
       repo: 'nook-e2e-conflict.yaml',
       remoteRevision: 'abc123',
     })
@@ -93,7 +93,7 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(page.getByTestId('app-success')).toContainText(
-      'Vault updated from Google Drive (e2e)',
+      'Vault updated from File (e2e)',
     )
   })
 
@@ -101,7 +101,7 @@ test.describe('sync conflict resolution', () => {
     page,
   }) => {
     const fileName = 'nook-e2e-shared-vault-file.yaml'
-    const stub = createLocalE2eGoogleDriveVaultStub('', fileName)
+    const stub = createLocalE2eFileSyncVaultStub('', fileName)
     await stub.install(page, { fileName })
 
     await page.goto('/')
@@ -119,9 +119,9 @@ test.describe('sync conflict resolution', () => {
       [
         {
           id: 'e2e-shared-sync-a',
-          label: 'Shared Drive A',
+          label: 'Shared File A',
           fileName,
-          accessToken: 'ya29.e2e_stub_access_token',
+          accessToken: 'ya29.e2e_file_sync_token',
         },
       ],
       stub,
@@ -158,7 +158,7 @@ test.describe('sync conflict resolution', () => {
     await connectGoogleDriveSyncProviderFromSettings(
       page,
       fileName,
-      'ya29.e2e_stub_access_token',
+      'ya29.e2e_file_sync_token',
       {
         expectConflict: true,
       },

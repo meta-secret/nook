@@ -40,7 +40,7 @@ test.describe('sync fan-out on save', () => {
     await addSecret(page, key, 'fan-out-test-value')
 
     await expect(page.getByTestId('vault-sync-out-status')).toContainText(
-      /Syncing to Google Drive \(e2e onboard\)|1 sync provider/,
+      /Syncing to File \(e2e onboard\)|1 sync provider/,
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
   })

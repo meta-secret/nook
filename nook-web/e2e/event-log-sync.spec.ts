@@ -4,8 +4,6 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   assertNoVaultError,
   assertVaultReady,
-  connectGithubGenesisDevice,
-  createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
   expectAppLogMilestones,
   reloadUnlockWithSyncProvider,
@@ -13,12 +11,16 @@ import {
   uniqueSecretKey,
   waitForVaultOperationsIdle,
 } from './helpers'
-import { createE2eStubRepoName, E2E_STUB_PAT } from './sync-stub'
+import {
+  connectSyncGenesisDevice,
+  createSyncTarget,
+  installSyncStub,
+} from './sync-provider'
 
 test.describe('event-log sync then add', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('sync-then-add secure note after github provider connect', async ({
+  test('sync-then-add secure note after file provider connect', async ({
     page,
   }) => {
     await page.goto('/')
@@ -61,49 +63,49 @@ test.describe('event-log sync then add', () => {
     ])
   })
 
-  test('saving an event-backed secret appends only events and leaves a stale GitHub vault blob untouched', async ({
+  test('saving an event-backed secret appends only events and leaves a stale remote vault blob untouched', async ({
     page,
   }) => {
-    const stub = createLocalE2eGithubVaultStub()
-    const repoName = createE2eStubRepoName('nook-stale-github')
+    const target = createSyncTarget('', 'nook-stale-file', 'file')
+    const { stub } = target
+    expect(stub).toBeDefined()
 
-    await connectGithubGenesisDevice(page, E2E_STUB_PAT, repoName, stub)
+    await installSyncStub(page, target)
+    await connectSyncGenesisDevice(page, target)
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)
 
-    expect(stub.getVaultYaml()).toBe('')
-    const eventFilesBeforeSave = stub.getEventFileCount()
+    expect(stub!.getVaultYaml()).toBe('')
+    const eventFilesBeforeSave = stub!.getEventFileCount()
     expect(eventFilesBeforeSave).toBeGreaterThan(0)
 
     const staleVaultYaml =
       'schema_version: 1\nstore_id: store_stalee2evnt\nsecrets: []\n# e2e remote stale branch\n'
-    stub.setVaultYaml(staleVaultYaml)
-    const vaultRevisionBeforeSave = stub.getVaultRevision()
+    stub!.setVaultYaml(staleVaultYaml)
 
-    const title = uniqueSecretKey('e2e-stale-github-save')
+    const title = uniqueSecretKey('e2e-stale-file-save')
     await addSecret(page, title, 'event-log-save-value')
 
     await assertNoVaultError(page)
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
     await expect
-      .poll(() => stub.getEventFileCount(), {
+      .poll(() => stub!.getEventFileCount(), {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       .toBeGreaterThan(eventFilesBeforeSave)
-    expect(stub.getEventFilePaths()).toEqual(
+    expect(stub!.getEventFilePaths()).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^nook-log\/v1\/events\/[a-f0-9]{64}\.yaml$/),
       ]),
     )
-    expect(stub.getEventFilePaths()).not.toEqual(
+    expect(stub!.getEventFilePaths()).not.toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^nook-log\/v1\/events\/[a-f0-9]{2}\//),
       ]),
     )
-    expect(stub.getEventFileContents()).toEqual(
+    expect(stub!.getEventFileContents()).toEqual(
       expect.arrayContaining([expect.stringContaining('schema_version:')]),
     )
-    expect(stub.getVaultYaml()).toBe(staleVaultYaml)
-    expect(stub.getVaultRevision()).toBe(vaultRevisionBeforeSave)
+    expect(stub!.getVaultYaml()).toBe(staleVaultYaml)
   })
 })

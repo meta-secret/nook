@@ -89,7 +89,7 @@ test.describe('vault password envelope (stub sync)', () => {
     expect(yaml.secretIds.length).toBeGreaterThanOrEqual(1)
   })
 
-  test('device A issues an enrollment link carrying github credentials', async () => {
+  test('device A issues an enrollment link without plaintext provider credentials', async () => {
     await deviceA.getByTestId('vault-secrets-tab').click()
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
     await deviceA.getByTestId('vault-onboard-tab').click()
@@ -146,7 +146,7 @@ test.describe('vault password envelope (stub sync)', () => {
     await seedExtraOauthFileProviders(deviceB, [
       {
         id: 'e2e-enroll-sync',
-        label: 'E2E Drive',
+        label: 'File',
         fileName: target.repoName,
         accessToken: target.pat,
       },
@@ -193,7 +193,7 @@ test.describe('vault password envelope (stub sync)', () => {
     expect(yaml.joinEntries).toHaveLength(0)
   })
 
-  test('rotating the password rewrites the envelope on github', async () => {
+  test('rotating the password rewrites the envelope on the sync provider', async () => {
     const before = await waitForLocalVaultState(
       deviceA,
       (snapshot) => snapshot.hasPasswordEnvelope,

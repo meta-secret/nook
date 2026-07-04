@@ -5,7 +5,6 @@ import {
   connectLocalE2eJoinerDevice,
   connectLocalVaultLegacy,
   createIsolatedContext,
-  createLocalE2eGoogleDriveVaultStub,
   disableVaultIdleLock,
   E2E_SYNC_ONBOARD_PROVIDER,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -17,6 +16,7 @@ import {
   waitForSyncStubVaultState,
   waitForPendingJoinBanner,
 } from './helpers'
+import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
 test.describe('multi-device local vault with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
@@ -27,7 +27,7 @@ test.describe('multi-device local vault with sync provider', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let stub: ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+  let stub: ReturnType<typeof createLocalE2eFileSyncVaultStub>
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
@@ -40,7 +40,7 @@ test.describe('multi-device local vault with sync provider', () => {
     await assertVaultReady(deviceA)
 
     const genesisYaml = await readLocalVaultYamlFromIdb(deviceA)
-    stub = createLocalE2eGoogleDriveVaultStub(genesisYaml, fileName)
+    stub = createLocalE2eFileSyncVaultStub(genesisYaml, fileName)
     await stub.install(deviceA, { fileName, vaultYaml: genesisYaml })
     await stub.install(deviceB, { fileName, vaultYaml: genesisYaml })
 
