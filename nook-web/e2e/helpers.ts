@@ -2801,14 +2801,20 @@ function listGithubStubDir(
 /** In-memory GitHub vault stub with GET/PUT support for local multi-device e2e. */
 export function createLocalE2eGithubVaultStub(initialYaml = '') {
   let vaultYaml = initialYaml
-  let sha = 'e2e-stub-sha'
+  let revision = 0
+  let sha = 'e2e-stub-sha-0'
   const eventFiles = new Map<string, string>()
   const eventShas = new Map<string, string>()
+  const bumpSha = () => {
+    revision += 1
+    sha = `e2e-stub-sha-${revision}`
+  }
 
   return {
     getVaultYaml: () => vaultYaml,
     setVaultYaml: (yaml: string) => {
       vaultYaml = yaml
+      bumpSha()
     },
     getEventFileCount: () => eventFiles.size,
     getEventFilePaths: () => [...eventFiles.keys()],
@@ -2817,6 +2823,9 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
       opts: { repoName: string; vaultYaml?: string; username?: string },
     ) {
       if (opts.vaultYaml !== undefined) {
+        if (opts.vaultYaml !== vaultYaml) {
+          bumpSha()
+        }
         vaultYaml = opts.vaultYaml
       }
       const owner = opts.username ?? 'e2e-user'
@@ -2877,9 +2886,20 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
               content?: string
               sha?: string
             }
+            const hasExistingVault = vaultYaml.trim().length > 0
+            if (hasExistingVault && body.sha !== sha) {
+              await route.fulfill({
+                status: body.sha ? 409 : 422,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                  message: 'sha does not match current file',
+                }),
+              })
+              return
+            }
             if (body.content) {
               vaultYaml = Buffer.from(body.content, 'base64').toString('utf8')
-              sha = `e2e-stub-sha-${Date.now()}`
+              bumpSha()
             }
             await route.fulfill({
               status: 200,

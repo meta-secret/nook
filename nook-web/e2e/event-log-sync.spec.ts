@@ -1,8 +1,11 @@
 import { expect, test } from './fixtures'
 import {
+  addSecret,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   assertNoVaultError,
   assertVaultReady,
+  connectGithubGenesisDevice,
+  createLocalE2eGithubVaultStub,
   createLocalVaultOnLogin,
   expectAppLogMilestones,
   reloadUnlockWithSyncProvider,
@@ -11,6 +14,7 @@ import {
   waitForPersistedAppLog,
   waitForVaultOperationsIdle,
 } from './helpers'
+import { createE2eStubRepoName, E2E_STUB_PAT } from './sync-stub'
 
 test.describe('event-log sync then add', () => {
   test.describe.configure({ mode: 'serial' })
@@ -54,5 +58,36 @@ test.describe('event-log sync then add', () => {
     await expectAppLogMilestones(page, [
       { scope: 'connect', level: 'info', messageIncludes: 'secret added' },
     ])
+  })
+
+  test('saving an event-backed secret does not overwrite a stale GitHub vault blob', async ({
+    page,
+  }) => {
+    const stub = createLocalE2eGithubVaultStub()
+    const repoName = createE2eStubRepoName('nook-stale-github')
+
+    await connectGithubGenesisDevice(page, E2E_STUB_PAT, repoName, stub)
+    await assertVaultReady(page)
+    await waitForVaultOperationsIdle(page)
+
+    const eventFilesBeforeSave = stub.getEventFileCount()
+    const legacyYamlBeforeRemoteEdit = stub.getVaultYaml()
+    expect(legacyYamlBeforeRemoteEdit.trim().length).toBeGreaterThan(0)
+
+    stub.setVaultYaml(
+      `${legacyYamlBeforeRemoteEdit.trimEnd()}\n# e2e remote legacy branch\n`,
+    )
+
+    const title = uniqueSecretKey('e2e-stale-github-save')
+    await addSecret(page, title, 'event-log-save-value')
+
+    await assertNoVaultError(page)
+    await expect(page.getByTestId('vault-error')).toHaveCount(0)
+    await expect
+      .poll(() => stub.getEventFileCount(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(eventFilesBeforeSave)
+    expect(stub.getVaultYaml()).toContain('# e2e remote legacy branch')
   })
 })

@@ -1368,15 +1368,16 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
+    const eventLogMode = this.isEventLogMode()
     if (this.syncProviders.length === 0) {
-      await this.pushRemoteYamlSnapshotNow()
       await this.flushRemoteEventOutboxNow()
+      await this.pushRemoteYamlSnapshotForLocalSave(undefined, eventLogMode)
       return
     }
     for (const provider of this.syncProviders) {
       if (this.syncBlocked) break
-      await this.pushRemoteYamlSnapshotNow(provider)
       await this.flushRemoteEventOutboxNow(provider)
+      await this.pushRemoteYamlSnapshotForLocalSave(provider, eventLogMode)
     }
   }
 
@@ -1411,6 +1412,32 @@ export class VaultState {
     await this.enqueueStorage(() =>
       this.manager!.pushRemoteVaultYamlSnapshotForProvider(...args),
     )
+  }
+
+  private isEventLogMode(): boolean {
+    try {
+      return this.manager?.eventLogMode() ?? false
+    } catch {
+      return false
+    }
+  }
+
+  private async pushRemoteYamlSnapshotForLocalSave(
+    provider: StorageProvider | undefined,
+    eventLogMode: boolean,
+  ): Promise<void> {
+    if (!eventLogMode) {
+      await this.pushRemoteYamlSnapshotNow(provider)
+      return
+    }
+    try {
+      await this.pushRemoteYamlSnapshotNow(provider)
+    } catch (error) {
+      vaultLog.warn('legacy YAML snapshot push skipped after event-log save', {
+        providerId: provider?.id ?? 'active',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   async applyReconcileResult(
