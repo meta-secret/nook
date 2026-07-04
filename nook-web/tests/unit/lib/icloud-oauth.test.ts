@@ -100,5 +100,19 @@ describe('icloud-oauth', () => {
         accessToken: 'fresh-token',
       })
     })
+
+    it('fails when CloudKit sign-in never completes', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(null)
+      const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await expect(
+        requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
+      ).rejects.toThrow('Apple sign-in did not complete.')
+      expect(whenUserSignsIn).toHaveBeenCalled()
+    })
   })
 })

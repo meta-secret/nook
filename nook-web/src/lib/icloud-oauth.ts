@@ -15,9 +15,14 @@ import {
 const CLOUDKIT_SCRIPT_URL = 'https://cdn.apple-cloudkit.com/ck/2/cloudkit.js'
 const CLOUDKIT_SIGN_IN_BUTTON_ID = 'apple-sign-in-button'
 const CLOUDKIT_SIGN_OUT_BUTTON_ID = 'apple-sign-out-button'
+export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000
 
 export type ICloudOAuthTokens = {
   accessToken: string
+}
+
+type ICloudWebAuthTokenRequestOptions = {
+  signInTimeoutMs?: number
 }
 
 type CloudKitUserIdentity = {
@@ -197,6 +202,12 @@ function cloudKitAuthErrorMessage(error: unknown): string {
   return 'iCloud sign-in failed.'
 }
 
+function cloudKitSignInTimeoutError(): Error {
+  return new Error(
+    'Apple sign-in did not complete. Check that CloudKit allows this site and try again.',
+  )
+}
+
 export async function initICloudAuth(): Promise<void> {
   if (initPromise) {
     return initPromise
@@ -237,17 +248,33 @@ function clickCloudKitSignInButton(): void {
 
 async function waitForCloudKitSignIn(
   container: CloudKitContainer,
+  timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
 ): Promise<void> {
   const signInPromise = container.whenUserSignsIn()
   clickCloudKitSignInButton()
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
   try {
-    await signInPromise
+    await Promise.race([
+      signInPromise,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(cloudKitSignInTimeoutError()),
+          timeoutMs,
+        )
+      }),
+    ])
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId)
+    }
   }
 }
 
-export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
+export async function requestICloudWebAuthToken(
+  options: ICloudWebAuthTokenRequestOptions = {},
+): Promise<ICloudOAuthTokens> {
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
   let userIdentity: CloudKitUserIdentity | null
@@ -261,7 +288,7 @@ export async function requestICloudWebAuthToken(): Promise<ICloudOAuthTokens> {
   }
 
   if (!userIdentity) {
-    await waitForCloudKitSignIn(container)
+    await waitForCloudKitSignIn(container, options.signInTimeoutMs)
   }
 
   const token = readStoredWebAuthToken()
