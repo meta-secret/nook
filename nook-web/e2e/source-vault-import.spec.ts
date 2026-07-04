@@ -74,13 +74,13 @@ async function clearEventLogState(page: Page, storeId: string) {
             `event_heads:${sid}`,
             `event_epoch:${sid}`,
             `event_index:${sid}`,
-            `legacy_backup:${sid}`,
+            `source_backup:${sid}`,
           ],
           events: [`event_index:${sid}`],
           projections: [
             `event_heads:${sid}`,
             `event_epoch:${sid}`,
-            `legacy_backup:${sid}`,
+            `source_backup:${sid}`,
           ],
           outbox: [],
         }
@@ -125,7 +125,7 @@ function parseStoreId(yaml: string): string {
   return match[1]
 }
 
-test.describe('legacy vault migration to event log', () => {
+test.describe('source vault import to event log', () => {
   test('re-import on unlock preserves backup and activates event log', async ({
     page,
   }) => {
@@ -146,7 +146,7 @@ test.describe('legacy vault migration to event log', () => {
     })
 
     expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBe('event_log')
-    const backup = await readProjectionIdbKey(page, `legacy_backup:${storeId}`)
+    const backup = await readProjectionIdbKey(page, `source_backup:${storeId}`)
     expect(backup?.trim().length ?? 0).toBeGreaterThan(0)
 
     const migratedYaml = await readLocalVaultYamlFromIdb(page)

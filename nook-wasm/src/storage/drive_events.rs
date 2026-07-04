@@ -45,6 +45,7 @@ pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, Noo
                 };
                 if let Some(digest) = name.strip_suffix(".yaml")
                     && digest.len() == 64
+                    && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
                 {
                     event_ids.push(format!("sha256:{digest}"));
                 }

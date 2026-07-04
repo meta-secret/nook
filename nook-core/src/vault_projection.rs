@@ -110,7 +110,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultPro
         if event.body.store_id != expected_store {
             return Err(EventError::ProjectionStoreMismatch.into());
         }
-        if event.body.schema_version > VaultEventSchemaVersion::CURRENT {
+        if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
             projection.unresolved_schema = true;
             continue;
         }

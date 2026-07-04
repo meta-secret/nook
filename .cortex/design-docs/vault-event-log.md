@@ -2,7 +2,7 @@
 
 **Status:** Implemented (see [#112](https://github.com/meta-secret/nook/issues/112), PR #118+, PR #181)
 **Supersedes:** scalar `vault_version` whole-blob sync in [unified-vault.md](unified-vault.md)  
-**Migration coordination:** [#52](https://github.com/meta-secret/nook/issues/52) — safe legacy import via `vault-imported` genesis event (not YAML schema v2 cutover)
+**Migration coordination:** [#52](https://github.com/meta-secret/nook/issues/52) — safe projection import via `vault-imported` genesis event (not YAML schema v2 cutover)
 
 ## Decision
 
@@ -122,9 +122,8 @@ that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
 
 Event-log provider sync never writes the materialized `nook-vault.yaml`
-projection. Old whole-blob code remains only for explicit local migration/import
-and recovery of pre-event-log vaults; normal provider fan-out appends YAML event
-files and repairs missing provider events from the local event store.
+projection. Normal provider fan-out appends YAML event files and repairs missing
+provider events from the local event store.
 
 Drive event storage tolerates duplicate app-data files for the same event name:
 fetch downloads all matches, accepts only bytes whose content-derived event id
@@ -139,16 +138,15 @@ different bytes as corruption.
 |-------|---------|
 | `events` | Immutable event bytes and event indexes |
 | `outbox` | Durable per-provider retry queue |
-| `projections` | Projection heads, key-epoch markers, and legacy backup bytes |
+| `projections` | Projection heads, key-epoch markers, and source projection backup bytes |
 | `provider_receipts` | Reserved for compact per-provider sync receipts |
-| `vault` | Legacy YAML/cache plus local device/signing identity material |
+| `vault` | Source projection cache plus local device/signing identity material |
 
-Readers fall back to legacy `vault` keys so existing browsers survive the store
-upgrade, but new event-log writes use the separated stores.
+Event-log writes use the separated stores.
 
 ## Migration
 
-1. Byte-for-byte backup of legacy projection YAML → `legacy_backup:{store_id}` in IndexedDB (first import only).
+1. Byte-for-byte backup of source projection YAML → `source_backup:{store_id}` in IndexedDB (first import only).
 2. `verify_stored_vault_import` — secret id parity before append.
 3. Deterministic `vault-imported` genesis event from `VaultHashContext` (`nook-core/src/vault_import.rs`).
 4. Local append before remote upload (`MIGRATION_START` / `MIGRATION_SUCCESS` status events).
@@ -195,4 +193,4 @@ When adding operations or merge rules, add colocated unit tests **and** extend t
 - [#112](https://github.com/meta-secret/nook/issues/112) — full specification
 - [#12](https://github.com/meta-secret/nook/issues/12) — multi-provider platform
 - [#52](https://github.com/meta-secret/nook/issues/52) — schema versioning
-- [unified-vault.md](unified-vault.md) — current whole-blob model (legacy)
+- [unified-vault.md](unified-vault.md) — superseded whole-blob model

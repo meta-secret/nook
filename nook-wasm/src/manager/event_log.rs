@@ -9,7 +9,7 @@ use crate::storage::drive_events::{
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_legacy_backup_if_absent, save_signing_seed,
+    save_heads, save_key_epoch, save_signing_seed, save_source_backup_if_absent,
     set_event_log_mode,
 };
 use crate::storage::github_events::{
@@ -131,7 +131,7 @@ impl NookVaultManager {
             self.store_id = nook_core::generate_store_id()?.to_string();
         }
         let _ = self.status_tx.send("MIGRATION_START".to_owned());
-        save_legacy_backup_if_absent(&self.store_id, stored_vault).await?;
+        save_source_backup_if_absent(&self.store_id, stored_vault).await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
         let ctx = nook_core::VaultHashContext::from(stored_vault);

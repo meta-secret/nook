@@ -11,22 +11,7 @@ pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<S
     let pat = pat.trim();
     let client = reqwest::Client::new();
     let mut event_ids = Vec::new();
-    let mut stack = vec![EVENT_LOG_ROOT.to_owned()];
-    while let Some(path) = stack.pop() {
-        list_github_event_dir(pat, repo, &path, &client, &mut stack, &mut event_ids).await?;
-    }
-    Ok(event_ids)
-}
-
-async fn list_github_event_dir(
-    pat: &str,
-    repo: &str,
-    path: &str,
-    client: &reqwest::Client,
-    stack: &mut Vec<String>,
-    out: &mut Vec<String>,
-) -> Result<(), NookError> {
-    let url = format!("https://api.github.com/repos/{repo}/contents/{path}");
+    let url = format!("https://api.github.com/repos/{repo}/contents/{EVENT_LOG_ROOT}");
     let response = client
         .get(&url)
         .header("Authorization", format!("Bearer {pat}"))
@@ -37,11 +22,11 @@ async fn list_github_event_dir(
         .await?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Ok(());
+        return Ok(Vec::new());
     }
     if !response.status().is_success() {
         return Err(NookError::GitHub(format!(
-            "Failed to list GitHub path {path}: {}",
+            "Failed to list GitHub path {EVENT_LOG_ROOT}: {}",
             response.status()
         )));
     }
@@ -56,23 +41,20 @@ async fn list_github_event_dir(
             .get("name")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
-        let entry_type = entry
-            .get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default();
-        let subpath = format!("{path}/{name}");
-        if entry_type == "dir" {
-            stack.push(subpath);
-        } else if let Some(extension) = std::path::Path::new(name).extension()
+        if entry.get("type").and_then(|v| v.as_str()) != Some("file") {
+            continue;
+        }
+        if let Some(extension) = std::path::Path::new(name).extension()
             && extension.eq_ignore_ascii_case("yaml")
             && let Some(stem) = std::path::Path::new(name).file_stem()
             && let Some(digest) = stem.to_str()
             && digest.len() == 64
+            && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
-            out.push(format!("sha256:{digest}"));
+            event_ids.push(format!("sha256:{digest}"));
         }
     }
-    Ok(())
+    Ok(event_ids)
 }
 
 pub(crate) async fn fetch_github_event(

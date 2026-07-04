@@ -27,8 +27,8 @@ fn outbox_key(provider_id: &str, event_id: &str) -> String {
     format!("outbox:{provider_id}:{event_id}")
 }
 
-fn legacy_backup_key(store_id: &str) -> String {
-    format!("legacy_backup:{store_id}")
+fn source_backup_key(store_id: &str) -> String {
+    format!("source_backup:{store_id}")
 }
 
 async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
@@ -150,11 +150,11 @@ pub(crate) async fn save_key_epoch(store_id: &str, epoch: &str) -> Result<(), No
 }
 
 /// Preserve the pre-migration vault blob byte-for-byte (first write wins).
-pub(crate) async fn save_legacy_backup_if_absent(
+pub(crate) async fn save_source_backup_if_absent(
     store_id: &str,
     content: &str,
 ) -> Result<bool, NookError> {
-    let key = legacy_backup_key(store_id);
+    let key = source_backup_key(store_id);
     if store_get(STORE_PROJECTIONS, &key)
         .await?
         .or(vault_get(&key).await?)

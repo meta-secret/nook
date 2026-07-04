@@ -3,8 +3,8 @@
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::{
-    VaultEvent, parse_event_storage_bytes, parse_remote_event_storage_bytes,
-    serialize_event_storage_yaml,
+    VaultEvent, VaultEventSchemaVersion, parse_event_storage_bytes,
+    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
 use crate::vault_ids::StoreId;
@@ -154,6 +154,12 @@ pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> VaultResult<St
     if event.id()? != *event_id {
         return Err(EventError::RemoteEventIdMismatch {
             event_id: event_id.as_str().to_owned(),
+        }
+        .into());
+    }
+    if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
+        return Err(EventError::UnsupportedSchemaVersion {
+            version: event.body.schema_version.get(),
         }
         .into());
     }

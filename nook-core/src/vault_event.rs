@@ -22,18 +22,12 @@ use serde_json::{Value, json};
 pub struct VaultEventSchemaVersion(u32);
 
 impl VaultEventSchemaVersion {
-    pub const V1: Self = Self(1);
     pub const V2: Self = Self(2);
     pub const CURRENT: Self = Self::V2;
 
     #[must_use]
     pub const fn get(self) -> u32 {
         self.0
-    }
-
-    #[must_use]
-    pub const fn requires_actor_signature(self) -> bool {
-        self.0 >= Self::V2.0
     }
 }
 
@@ -196,9 +190,6 @@ impl VaultEvent {
     }
 
     pub fn validate_actor_signature(&self) -> VaultResult<()> {
-        if !self.body.schema_version.requires_actor_signature() {
-            return Ok(());
-        }
         let public_key = self
             .body
             .actor_signing_public_key
@@ -219,7 +210,7 @@ impl VaultEvent {
     }
 
     pub fn validate_envelope(&self, expected_store_id: &StoreId) -> VaultResult<EventId> {
-        if self.body.schema_version > VaultEventSchemaVersion::CURRENT {
+        if self.body.schema_version != VaultEventSchemaVersion::CURRENT {
             return Err(EventError::UnsupportedSchemaVersion {
                 version: self.body.schema_version.get(),
             }
@@ -358,6 +349,34 @@ mod tests {
             .verify_signature(&signing_key.verifying_key())
             .unwrap();
         assert!(event.body.parents.is_empty());
+    }
+
+    #[test]
+    fn schema_one_event_is_rejected() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
+        let mut event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11").unwrap(),
+            &actor(&signing_key),
+            &epoch,
+            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
+            vec![],
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            &signing_key,
+        )
+        .unwrap();
+        event.body.schema_version = VaultEventSchemaVersion(1);
+
+        let err = event
+            .validate_envelope(&StoreId::parse("store_testtoken11").unwrap())
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(EventError::UnsupportedSchemaVersion { version: 1 })
+        ));
     }
 
     #[test]
