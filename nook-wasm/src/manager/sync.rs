@@ -61,8 +61,10 @@ impl NookVaultManager {
             return Ok(result);
         }
 
-        let mut vault_file_missing = false;
-        let content = self.fetch_vault_content(&mut vault_file_missing).await?;
+        let mut remote_content_missing = false;
+        let content = self
+            .fetch_vault_content(&mut remote_content_missing)
+            .await?;
 
         if content.trim() == self.last_synced_content.trim() {
             if self.members_key.is_empty() {

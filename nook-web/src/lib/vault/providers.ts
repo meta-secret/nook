@@ -1,11 +1,11 @@
 import type { VaultState } from '$lib/vault.svelte'
 import { generateId, isoTimestamp } from '$lib/nook'
 import {
-  DEFAULT_DRIVE_VAULT_FILE,
+  DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
   findDuplicateSyncProvider,
   loadAuthProviders,
-  loadAuthProvidersWithVaultMigration,
+  loadAuthProvidersWithLocalRow,
   providerDefaultLabel,
   saveAuthProviders,
   type LocalFolderConfig,
@@ -23,11 +23,11 @@ const log = createLogger('vault-providers')
 
 export async function loadProviders(
   state: VaultState,
-  options?: { migrateLegacyVault?: boolean },
+  options?: { ensureLocalRow?: boolean },
 ) {
   const snapshot = await state.enqueueStorage(() =>
-    options?.migrateLegacyVault
-      ? loadAuthProvidersWithVaultMigration(state.manager!)
+    options?.ensureLocalRow
+      ? loadAuthProvidersWithLocalRow(state.manager!)
       : loadAuthProviders(state.manager!),
   )
   state.providers = snapshot.providers.map((p) =>
@@ -88,7 +88,7 @@ export function applyActiveProviderCredentials(state: VaultState) {
     state.oauthFile = syncProvider.oauthFile ?? null
     state.localFolder = null
     state.githubRepo =
-      syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+      syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
   } else if (syncProvider.type === 'local-folder') {
     state.localFolder = syncProvider.localFolder ?? null
     state.githubRepo = DEFAULT_GITHUB_REPO
@@ -136,14 +136,14 @@ export function beginProviderSetup(
   state.storageMode = type
   state.githubPat = ''
   state.githubRepo =
-    type === 'oauth-file' ? DEFAULT_DRIVE_VAULT_FILE : DEFAULT_GITHUB_REPO
+    type === 'oauth-file' ? DEFAULT_DRIVE_BACKUP_NAME : DEFAULT_GITHUB_REPO
   if (type === 'oauth-file') {
     const preset = oauthPreset ?? 'google-drive'
     state.oauthSetupPreset = preset
     state.oauthFile = {
       preset,
       accessToken: '',
-      fileName: DEFAULT_DRIVE_VAULT_FILE,
+      fileName: DEFAULT_DRIVE_BACKUP_NAME,
     }
   } else {
     state.oauthSetupPreset = null
@@ -178,7 +178,7 @@ export function cancelProviderSetup(state: VaultState) {
     state.githubPat = ''
     state.githubRepo =
       setupType === 'oauth-file'
-        ? DEFAULT_DRIVE_VAULT_FILE
+        ? DEFAULT_DRIVE_BACKUP_NAME
         : DEFAULT_GITHUB_REPO
     state.localFolder = null
     state.errorMsg = ''
@@ -214,7 +214,7 @@ export async function removeProvider(
 export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const pat = state.githubPat.trim()
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO
-  const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
+  const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME
   const type = state.loginSetupType ?? state.storageMode
   const isNewSetup = state.loginSetupType !== null
   const vaultStoreId = vaultStoreIdForProviderSave(state)

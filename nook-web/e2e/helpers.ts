@@ -2691,7 +2691,7 @@ export const E2E_GITHUB_ONBOARD_PROVIDER = {
 export const E2E_OAUTH_ONBOARD_PROVIDER = {
   id: 'e2e-onboard-oauth',
   label: 'Google Drive (e2e onboard)',
-  fileName: 'nook-projection.yaml',
+  fileName: 'nook-events',
   accessToken: 'ya29.e2e_stub_access_token',
   accountEmail: 'e2e-user@example.com',
 }
@@ -2962,8 +2962,8 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           const files: Array<{ name: string; path: string; type: string }> = []
           if (vaultYaml.trim().length > 0) {
             files.push({
-              name: 'nook-projection.yaml',
-              path: 'nook-projection.yaml',
+              name: 'nook-events',
+              path: 'nook-events',
               type: 'file',
             })
           }
@@ -2983,7 +2983,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
         }
         if (
           url ===
-          `https://api.github.com/repos/${fullRepo}/contents/nook-projection.yaml`
+          `https://api.github.com/repos/${fullRepo}/contents/nook-events`
         ) {
           if (method === 'PUT') {
             const body = request.postDataJSON() as {

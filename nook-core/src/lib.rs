@@ -111,16 +111,15 @@ pub use sync_provider_store::{
     seed_provider_from_legacy_storage,
 };
 pub use validation::{
-    DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
-    DriveVaultFileName, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
-    LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
-    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
-    filter_secrets, format_drive_storage_ref, format_drive_storage_ref_raw,
-    format_sync_provider_cache_ref, mask_github_pat, parse_drive_storage_ref,
-    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
-    validate_connect, validate_drive_vault_file_name, validate_github_pat,
-    validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
-    validate_storage_mode,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, DriveBackupName,
+    GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget, LocalFolderSyncTarget,
+    OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB,
+    STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget, filter_secrets,
+    format_drive_storage_ref, format_drive_storage_ref_raw, format_sync_provider_cache_ref,
+    mask_github_pat, parse_drive_storage_ref, storage_mode_for_provider,
+    sync_provider_default_label, sync_provider_target_key, validate_connect,
+    validate_drive_backup_name, validate_github_pat, validate_github_repo_name,
+    validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,

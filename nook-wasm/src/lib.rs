@@ -23,9 +23,8 @@ pub use manager::NookVaultManager;
 pub use types::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
     NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
-    NookReconcileVaultBlobsResult, NookRemoteVaultFetch, NookReplacementConflict,
-    NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult, NookSecretFormFields,
-    NookSecurityConflict, NookSyncProviderTarget, NookVaultMember, NookVaultSyncResult,
+    NookReplacementConflict, NookSecretFormFields, NookSecurityConflict, NookSyncProviderTarget,
+    NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -144,10 +143,10 @@ pub fn default_github_repo() -> String {
     nook_core::DEFAULT_GITHUB_REPO_NAME.to_owned()
 }
 
-#[wasm_bindgen(js_name = defaultDriveVaultFile)]
+#[wasm_bindgen(js_name = defaultDriveBackupName)]
 #[must_use]
-pub fn default_drive_vault_file() -> String {
-    nook_core::DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
+pub fn default_drive_backup_name() -> String {
+    nook_core::DEFAULT_DRIVE_BACKUP_NAME.to_owned()
 }
 
 #[wasm_bindgen(js_name = formatDriveStorageRef)]

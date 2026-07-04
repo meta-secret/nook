@@ -30,8 +30,26 @@ impl NookVaultManager {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity()?;
-        let mut vault_file_missing = false;
-        let content = self.fetch_vault_content(&mut vault_file_missing).await?;
+        if self.storage_mode != nook_core::StorageMode::Local {
+            self.sync_events_from_current_provider().await?;
+            if !self.store_id.is_empty() && self.event_log_has_events().await? {
+                let status = nook_core::VaultAccessStatus::from(nook_core::assess_connect_access(
+                    &self.stored_records_snapshot(),
+                    &identity,
+                ))
+                .as_str()
+                .to_owned();
+                let _ = self
+                    .status_tx
+                    .send(format!("ASSESS_{}_{}", self.storage_mode, status));
+                return Ok(status);
+            }
+            return Ok("remote_missing".to_owned());
+        }
+        let mut remote_content_missing = false;
+        let content = self
+            .fetch_vault_content(&mut remote_content_missing)
+            .await?;
 
         if content.trim().is_empty() {
             if self.storage_mode != nook_core::StorageMode::Local {
@@ -53,7 +71,7 @@ impl NookVaultManager {
             self.password_entries.clear();
             self.unlock = nook_core::VaultUnlock::Keys;
             self.last_synced_content.clear();
-            if vault_file_missing && self.storage_mode != nook_core::StorageMode::Local {
+            if remote_content_missing && self.storage_mode != nook_core::StorageMode::Local {
                 if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
                     && !cached.trim().is_empty()
                 {
@@ -133,20 +151,7 @@ impl NookVaultManager {
             .await?;
         let identity = self.ensure_device_identity()?;
 
-        let mut vault_file_missing = false;
-        let content = if self.use_local_cache_for_connect {
-            self.use_local_cache_for_connect = false;
-            let cached = load_vault_local_cache(&self.local_cache_ref())
-                .await?
-                .filter(|value| !value.trim().is_empty())
-                .ok_or_else(|| {
-                    NookError::Database("No local vault copy is available to recover.".to_owned())
-                })?;
-            vault_file_missing = true;
-            cached
-        } else {
-            self.fetch_vault_content(&mut vault_file_missing).await?
-        };
+        let (content, remote_content_missing) = self.load_connect_content().await?;
 
         // First boot for this session — adopt the remote unlock mode so
         // the mode-aware branches below see the right variant.
@@ -212,7 +217,7 @@ impl NookVaultManager {
             }
         }
 
-        if use_genesis || vault_file_missing {
+        if use_genesis || remote_content_missing {
             self.flush_event_outbox().await?;
             let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
         }
@@ -227,6 +232,30 @@ impl NookVaultManager {
             "connect complete"
         );
         Ok(records)
+    }
+
+    async fn load_connect_content(&mut self) -> Result<(String, bool), NookError> {
+        if self.use_local_cache_for_connect {
+            self.use_local_cache_for_connect = false;
+            let cached = load_vault_local_cache(&self.local_cache_ref())
+                .await?
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| {
+                    NookError::Database("No local vault copy is available to recover.".to_owned())
+                })?;
+            return Ok((cached, true));
+        }
+
+        if self.storage_mode != nook_core::StorageMode::Local {
+            self.sync_events_from_current_provider().await?;
+            return Ok((String::new(), false));
+        }
+
+        let mut remote_content_missing = false;
+        let content = self
+            .fetch_vault_content(&mut remote_content_missing)
+            .await?;
+        Ok((content, remote_content_missing))
     }
 
     async fn bootstrap_genesis_connect(

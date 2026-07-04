@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 
-const DEFAULT_FILE_NAME = 'nook-projection.yaml'
+const DEFAULT_FILE_NAME = 'nook-events'
 
 /** In-memory CloudKit private-database stub (CloudKit Web Services REST). */
 export function createLocalE2eICloudVaultStub(

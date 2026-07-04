@@ -652,9 +652,9 @@
     "github_connection_subtitle": "Create a token and choose your repository",
     "create_token_github": "Create token on GitHub",
     "repo_name": "Repository name",
-    "vault_file_desc": "Event log: nook-log/v1/events in this repo under your account.",
-    "drive_file_name": "Vault file name",
-    "drive_vault_file_desc": "Each name is a separate encrypted vault in your Google Drive app data folder.",
+    "event_log_desc": "Event log: nook-log/v1/events in this repo under your account.",
+    "drive_file_name": "Backup name",
+    "drive_event_log_desc": "Event log records are stored as encrypted YAML backups in your Google Drive app data folder.",
     "pat_label": "Personal access token",
     "stored_locally_desc": "Stored in this browser only. Syncs events to username/{repo}/nook-log/v1/events.",
     "local_storage_desc": "Your vault is stored in IndexedDB on this device. No token needed.",
@@ -680,7 +680,7 @@
     "icloud_signing_in": "Opening Apple sign-in…",
     "icloud_signed_in_as": "Signed in as {account}",
     "icloud_tokens_local_desc": "CloudKit web auth tokens stay in this browser only, like a saved GitHub token.",
-    "icloud_vault_file_desc": "Each name is a separate encrypted vault record in your iCloud private database.",
+    "icloud_event_log_desc": "Event log records are stored as encrypted YAML backups in your iCloud private database.",
     "icloud_oauth_unconfigured": "iCloud sign-in is not configured. Set ICLOUD_CONTAINER_ID and ICLOUD_API_TOKEN in icloud-oauth-config.ts."
   },
   "devices_card": {

@@ -69,7 +69,7 @@ pub fn format_sync_provider_cache_ref(mode: StorageMode, remote_ref: &str, path:
 pub const STORAGE_MODE_LOCAL: &str = StorageMode::Local.as_str();
 pub const STORAGE_MODE_GITHUB: &str = StorageMode::Github.as_str();
 pub const DEFAULT_GITHUB_REPO_NAME: &str = "nook";
-pub const DEFAULT_DRIVE_VAULT_FILE_NAME: &str = "nook-projection.yaml";
+pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 
 /// Separator between optional known Drive file id and vault file name in the
 /// wasm connect `github_repo` argument for `google-drive` mode.
@@ -290,11 +290,11 @@ impl AsRef<str> for GithubRepoName {
 
 /// Validated Google Drive app-data vault file name.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DriveVaultFileName(String);
+pub struct DriveBackupName(String);
 
-impl DriveVaultFileName {
+impl DriveBackupName {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        validate_drive_vault_file_name(raw)
+        validate_drive_backup_name(raw)
     }
 
     #[must_use]
@@ -308,13 +308,13 @@ impl DriveVaultFileName {
     }
 }
 
-impl std::fmt::Display for DriveVaultFileName {
+impl std::fmt::Display for DriveBackupName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
     }
 }
 
-impl AsRef<str> for DriveVaultFileName {
+impl AsRef<str> for DriveBackupName {
     fn as_ref(&self) -> &str {
         &self.0
     }
@@ -389,10 +389,10 @@ pub fn validate_github_repo_name(name: &str) -> ValidationResult<GithubRepoName>
 }
 
 /// Validates a Google Drive app-data vault file name. Empty uses
-/// [`DEFAULT_DRIVE_VAULT_FILE_NAME`].
-pub fn validate_drive_vault_file_name(name: &str) -> ValidationResult<DriveVaultFileName> {
+/// [`DEFAULT_DRIVE_BACKUP_NAME`].
+pub fn validate_drive_backup_name(name: &str) -> ValidationResult<DriveBackupName> {
     let file_name = if name.trim().is_empty() {
-        DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()
+        DEFAULT_DRIVE_BACKUP_NAME.to_owned()
     } else {
         name.trim().to_owned()
     };
@@ -408,24 +408,24 @@ pub fn validate_drive_vault_file_name(name: &str) -> ValidationResult<DriveVault
     {
         return Err(ValidationError::DriveFileNameChars);
     }
-    Ok(DriveVaultFileName(file_name))
+    Ok(DriveBackupName(file_name))
 }
 
 /// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
 /// or `fileName` alone when no cached file id exists yet.
-pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveVaultFileName)> {
+pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveBackupName)> {
     if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
         Ok((
             file_id.trim().to_owned(),
-            validate_drive_vault_file_name(file_name)?,
+            validate_drive_backup_name(file_name)?,
         ))
     } else {
-        Ok((String::new(), validate_drive_vault_file_name(value)?))
+        Ok((String::new(), validate_drive_backup_name(value)?))
     }
 }
 
 #[must_use]
-pub fn format_drive_storage_ref(file_id: &str, file_name: &DriveVaultFileName) -> String {
+pub fn format_drive_storage_ref(file_id: &str, file_name: &DriveBackupName) -> String {
     format_drive_storage_ref_raw(file_id, file_name.as_str())
 }
 
@@ -434,7 +434,7 @@ pub fn format_drive_storage_ref_raw(file_id: &str, file_name: &str) -> String {
     let id = file_id.trim();
     let name = file_name.trim();
     let name = if name.is_empty() {
-        DEFAULT_DRIVE_VAULT_FILE_NAME
+        DEFAULT_DRIVE_BACKUP_NAME
     } else {
         name
     };
@@ -492,12 +492,12 @@ pub fn sync_provider_default_label(
             let file = detail
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .unwrap_or(DEFAULT_DRIVE_VAULT_FILE_NAME);
+                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
             let prefix = match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
                 OauthFilePreset::GoogleDrive => "Google Drive",
                 OauthFilePreset::ICloud => "iCloud",
             };
-            if file == DEFAULT_DRIVE_VAULT_FILE_NAME {
+            if file == DEFAULT_DRIVE_BACKUP_NAME {
                 prefix.to_owned()
             } else {
                 format!("{prefix} · {file}")
@@ -532,7 +532,7 @@ pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
         SyncProviderTarget::OauthFile(oauth) => {
             let file_key = non_empty(oauth.file_id.as_ref())
                 .or_else(|| non_empty(oauth.file_name.as_ref()))
-                .unwrap_or(DEFAULT_DRIVE_VAULT_FILE_NAME);
+                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
             let account_key = non_empty(oauth.account_email.as_ref())
                 .or_else(|| non_empty(oauth.access_token.as_ref()))
                 .unwrap_or_default();
@@ -870,19 +870,19 @@ mod tests {
     }
 
     #[test]
-    fn validate_drive_vault_file_name_defaults_and_rejects_invalid() {
+    fn validate_drive_backup_name_defaults_and_rejects_invalid() {
         assert_eq!(
-            validate_drive_vault_file_name("  ").unwrap().as_str(),
-            DEFAULT_DRIVE_VAULT_FILE_NAME
+            validate_drive_backup_name("  ").unwrap().as_str(),
+            DEFAULT_DRIVE_BACKUP_NAME
         );
         assert_eq!(
-            validate_drive_vault_file_name("work-vault.yaml")
+            validate_drive_backup_name("work-vault.yaml")
                 .unwrap()
                 .as_str(),
             "work-vault.yaml"
         );
-        assert!(validate_drive_vault_file_name(".").is_err());
-        assert!(validate_drive_vault_file_name("bad name").is_err());
+        assert!(validate_drive_backup_name(".").is_err());
+        assert!(validate_drive_backup_name("bad name").is_err());
     }
 
     #[test]
@@ -891,14 +891,14 @@ mod tests {
             parse_drive_storage_ref("abc123\twork-vault.yaml").unwrap(),
             (
                 "abc123".to_owned(),
-                validate_drive_vault_file_name("work-vault.yaml").unwrap()
+                validate_drive_backup_name("work-vault.yaml").unwrap()
             )
         );
         assert_eq!(
-            parse_drive_storage_ref("nook-projection.yaml").unwrap(),
+            parse_drive_storage_ref("nook-events").unwrap(),
             (
                 String::new(),
-                validate_drive_vault_file_name("nook-projection.yaml").unwrap()
+                validate_drive_backup_name("nook-events").unwrap()
             )
         );
     }
@@ -906,14 +906,11 @@ mod tests {
     #[test]
     fn format_drive_storage_ref_omits_empty_file_id() {
         assert_eq!(
-            format_drive_storage_ref(
-                "",
-                &validate_drive_vault_file_name("nook-projection.yaml").unwrap()
-            ),
-            "nook-projection.yaml"
+            format_drive_storage_ref("", &validate_drive_backup_name("nook-events").unwrap()),
+            "nook-events"
         );
         assert_eq!(
-            format_drive_storage_ref("abc", &validate_drive_vault_file_name("work.yaml").unwrap()),
+            format_drive_storage_ref("abc", &validate_drive_backup_name("work.yaml").unwrap()),
             "abc\twork.yaml"
         );
     }
@@ -969,12 +966,8 @@ mod tests {
             "local"
         );
         assert_eq!(
-            format_sync_provider_cache_ref(
-                StorageMode::Github,
-                "user/repo",
-                "nook-projection.yaml"
-            ),
-            "github:user/repo:nook-projection.yaml"
+            format_sync_provider_cache_ref(StorageMode::Github, "user/repo", "nook-log/v1/events"),
+            "github:user/repo:nook-log/v1/events"
         );
         assert_eq!(
             format_sync_provider_cache_ref(StorageMode::GoogleDrive, "file-id", ""),

@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, GithubSyncTarget,
-    LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, StorageProviderType,
-    SyncProviderTarget, sync_provider_default_label, sync_provider_target_key,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubSyncTarget, LocalFolderSyncTarget,
+    OauthFilePreset, OauthFileSyncTarget, StorageProviderType, SyncProviderTarget,
+    sync_provider_default_label, sync_provider_target_key,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -241,7 +241,7 @@ pub fn migrate_provider_fields(
                         expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
                         file_id: existing.and_then(|oauth| oauth.file_id.clone()),
                         account_email: existing.and_then(|oauth| oauth.account_email.clone()),
-                        file_name: Some(DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()),
+                        file_name: Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned()),
                     }),
                     local_folder: None,
                     ..provider.clone()
@@ -521,10 +521,7 @@ mod tests {
         let (migrated, changed) = migrate_provider_fields(&snapshot);
         assert!(changed);
         let oauth = migrated.providers[0].oauth_file.as_ref().unwrap();
-        assert_eq!(
-            oauth.file_name.as_deref(),
-            Some(DEFAULT_DRIVE_VAULT_FILE_NAME)
-        );
+        assert_eq!(oauth.file_name.as_deref(), Some(DEFAULT_DRIVE_BACKUP_NAME));
         assert_eq!(oauth.preset, "icloud");
         assert_eq!(oauth.access_token, "tok");
         assert_eq!(oauth.account_email.as_deref(), Some("me@example.com"));

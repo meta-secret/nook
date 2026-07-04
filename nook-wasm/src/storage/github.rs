@@ -22,12 +22,9 @@ fn log_github_api_failure(operation: &str, repo: &str, path: &str, status: reqwe
     );
 }
 
-/// A vault file fetched from GitHub: its UTF-8 contents plus the blob `sha`
-/// the API returned so subsequent writes can submit it for optimistic
-/// concurrency.
+/// A YAML event file fetched from GitHub.
 pub(crate) struct GitHubVaultFile {
     pub(crate) content: String,
-    pub(crate) sha: String,
 }
 
 // -------------------------------------------------------------
@@ -37,7 +34,6 @@ pub(crate) struct GitHubVaultFile {
 #[derive(Deserialize)]
 struct GitHubFileResponse {
     content: String,
-    sha: String,
 }
 
 #[derive(Deserialize)]
@@ -232,7 +228,6 @@ async fn fetch_github_file_at_path(
 
     Ok(Some(GitHubVaultFile {
         content: vault_content,
-        sha: parsed.sha,
     }))
 }
 
@@ -349,40 +344,6 @@ pub(crate) async fn write_github_text_file(
         .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
 
     Ok(parsed.content.sha)
-}
-
-pub(crate) async fn write_github_text_file_with_retry(
-    pat: &str,
-    repo: &str,
-    path: &str,
-    content: &str,
-    mut sha: Option<String>,
-) -> Result<String, NookError> {
-    for attempt in 0..3 {
-        match write_github_text_file(pat, repo, path, content, sha.as_deref()).await {
-            Ok(new_sha) => return Ok(new_sha),
-            Err(NookError::GitHub(message))
-                if attempt < 2 && (message.contains("422") || message.contains("409")) =>
-            {
-                match fetch_github_vault(pat, repo, path, None).await {
-                    Ok(Some(file)) if file.content.trim() == content.trim() => return Ok(file.sha),
-                    Ok(Some(_)) => {
-                        return Err(NookError::GitHub(
-                            "Remote vault changed during write; sync conflict required.".to_owned(),
-                        ));
-                    }
-                    Ok(None) => {
-                        sha = None;
-                    }
-                    Err(_) => {}
-                }
-            }
-            Err(err) => return Err(err),
-        }
-    }
-    Err(NookError::GitHub(
-        "GitHub vault write failed after retries.".to_owned(),
-    ))
 }
 
 fn base64_decode(input: &str) -> Result<Vec<u8>, NookError> {

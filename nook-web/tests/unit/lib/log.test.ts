@@ -30,8 +30,8 @@ describe('sanitizeLogUrl', () => {
   it('removes query strings and hashes', () => {
     expect(
       sanitizeLogUrl(
-        'https://api.github.com/repos/o/r/contents/nook-projection.yaml?token=secret#frag',
+        'https://api.github.com/repos/o/r/contents/nook-events?token=secret#frag',
       ),
-    ).toBe('https://api.github.com/repos/o/r/contents/nook-projection.yaml')
+    ).toBe('https://api.github.com/repos/o/r/contents/nook-events')
   })
 })

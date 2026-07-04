@@ -408,14 +408,6 @@ pub(crate) async fn has_active_local_vault() -> Result<bool, NookError> {
         .is_some_and(|content| !content.trim().is_empty()))
 }
 
-/// Browser-local mirror of the last known vault YAML for a remote storage ref.
-pub(crate) async fn save_vault_local_cache(
-    cache_ref: &str,
-    content: &str,
-) -> Result<(), NookError> {
-    idb_put_string(&vault_cache_key(cache_ref), content).await
-}
-
 pub(crate) async fn load_vault_local_cache(cache_ref: &str) -> Result<Option<String>, NookError> {
     idb_get_string(&vault_cache_key(cache_ref)).await
 }

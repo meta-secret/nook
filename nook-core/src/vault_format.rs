@@ -598,19 +598,16 @@ mod tests {
     #[test]
     fn format_from_path() {
         assert_eq!(
-            VaultFormat::from_path("nook-projection.yaml"),
+            VaultFormat::from_path("nook-events.yaml"),
             VaultFormat::Yaml
         );
         assert_eq!(
-            VaultFormat::from_path("nook-projection.jsonl"),
+            VaultFormat::from_path("nook-events.jsonl"),
             VaultFormat::Jsonl
         );
+        assert_eq!(VaultFormat::from_path("nook-events.yml"), VaultFormat::Yaml);
         assert_eq!(
-            VaultFormat::from_path("nook-projection.yml"),
-            VaultFormat::Yaml
-        );
-        assert_eq!(
-            VaultFormat::from_path("/data/user/nook-projection.yaml"),
+            VaultFormat::from_path("/data/user/nook-events.yaml"),
             VaultFormat::Yaml
         );
     }

@@ -1,8 +1,8 @@
-import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
+import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import {
   deleteAuthProvidersDb as deleteAuthProvidersDbWasm,
   default as initNookWasm,
-  defaultDriveVaultFile,
+  defaultDriveBackupName,
   defaultGithubRepo,
   findDuplicateSyncProvider as findDuplicateSyncProviderWasm,
   formatDriveStorageRef as formatDriveStorageRefCore,
@@ -32,7 +32,7 @@ export interface OAuthFileConfig {
   refreshToken?: string
   expiresAt?: string
   fileId?: string
-  /** Vault file name in Drive app data or CloudKit record name (default `nook-projection.yaml`). */
+  /** Optional Drive/iCloud label retained for account display. */
   fileName?: string
   accountEmail?: string
 }
@@ -78,7 +78,7 @@ interface LoadedAuthProviders {
 }
 
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
-export const DEFAULT_DRIVE_VAULT_FILE = defaultDriveVaultFile()
+export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
 
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
 function toPlain<T>(value: T): T {
@@ -145,12 +145,12 @@ export async function loadAuthProviders(
 }
 
 /** Load providers, then copy a legacy remote vault into local storage once. */
-export async function loadAuthProvidersWithVaultMigration(
+export async function loadAuthProvidersWithLocalRow(
   manager: NookVaultManager,
 ): Promise<AuthProvidersSnapshot> {
   const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders
   const { snapshot: migratedSnapshot, migrated } =
-    await migrateLegacyVaultToLocal(
+    await ensureLocalAuthProviderSnapshot(
       loaded.snapshot,
       loaded.legacyActiveProviderId,
     )
@@ -267,7 +267,7 @@ export function providerStorageDetail(
   }
   if (provider.type === 'oauth-file') {
     const file =
-      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
     const account = maskOAuthAccount(provider.oauthFile, t)
     return `${file} · ${account}`
   }
@@ -278,7 +278,7 @@ export function providerStorageDetail(
     )
   }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-  return `${repo}/nook-projection.yaml · ${maskGithubPat(provider.githubPat, t)}`
+  return `${repo} · ${maskGithubPat(provider.githubPat, t)}`
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {

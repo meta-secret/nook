@@ -644,9 +644,9 @@
     "github_connection_subtitle": "Создайте токен и выберите репозиторий",
     "create_token_github": "Создать токен на GitHub",
     "repo_name": "Имя репозитория",
-    "vault_file_desc": "Журнал событий: nook-log/v1/events в этом репозитории вашего аккаунта.",
-    "drive_file_name": "Имя файла сейфа",
-    "drive_vault_file_desc": "Каждое имя — отдельный зашифрованный сейф в скрытой папке приложения Google Drive.",
+    "event_log_desc": "Журнал событий: nook-log/v1/events в этом репозитории вашего аккаунта.",
+    "drive_file_name": "Имя резервной копии",
+    "drive_event_log_desc": "Записи журнала событий сохраняются как зашифрованные YAML-копии в скрытой папке приложения Google Drive.",
     "pat_label": "Персональный токен доступа",
     "stored_locally_desc": "Хранится только в этом браузере. События синхронизируются в username/{repo}/nook-log/v1/events.",
     "local_storage_desc": "Ваш сейф хранится в IndexedDB на этом устройстве. Токен не требуется.",
@@ -672,7 +672,7 @@
     "icloud_signing_in": "Открываем вход Apple…",
     "icloud_signed_in_as": "Вошли как {account}",
     "icloud_tokens_local_desc": "Токены CloudKit web auth остаются только в этом браузере, как сохранённый токен GitHub.",
-    "icloud_vault_file_desc": "Каждое имя — отдельный зашифрованный сейф в приватной базе iCloud.",
+    "icloud_event_log_desc": "Записи журнала событий сохраняются как зашифрованные YAML-копии в приватной базе iCloud.",
     "icloud_oauth_unconfigured": "Вход через iCloud не настроен. Укажите ICLOUD_CONTAINER_ID и ICLOUD_API_TOKEN в icloud-oauth-config.ts."
   },
   "devices_card": {

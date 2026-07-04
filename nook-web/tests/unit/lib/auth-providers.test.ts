@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
-  DEFAULT_DRIVE_VAULT_FILE,
+  DEFAULT_DRIVE_BACKUP_NAME,
   findDuplicateSyncProvider,
   formatDriveStorageRef,
   maskGithubPat,
@@ -53,12 +53,8 @@ describe('providerStorageDetail', () => {
       githubPat: 'github_pat_22CCCCdddd',
     })
 
-    expect(providerStorageDetail(alpha)).toBe(
-      'alpha/nook-projection.yaml · github_pat_11A…',
-    )
-    expect(providerStorageDetail(beta)).toBe(
-      'beta/nook-projection.yaml · github_pat_22C…',
-    )
+    expect(providerStorageDetail(alpha)).toBe('alpha · github_pat_11A…')
+    expect(providerStorageDetail(beta)).toBe('beta · github_pat_22C…')
     expect(providerStorageDetail(alpha)).not.toBe(providerStorageDetail(beta))
   })
 
@@ -126,8 +122,8 @@ describe('formatDriveStorageRef', () => {
 
   test('omits empty file id for new vaults', () => {
     expect(formatDriveStorageRef(undefined, 'work.yaml')).toBe('work.yaml')
-    expect(formatDriveStorageRef('', DEFAULT_DRIVE_VAULT_FILE)).toBe(
-      DEFAULT_DRIVE_VAULT_FILE,
+    expect(formatDriveStorageRef('', DEFAULT_DRIVE_BACKUP_NAME)).toBe(
+      DEFAULT_DRIVE_BACKUP_NAME,
     )
   })
 
@@ -193,7 +189,7 @@ describe('syncProviderTargetKey', () => {
     const oauthFile = {
       preset: 'google-drive' as const,
       accessToken: 'ya29.alpha',
-      fileName: DEFAULT_DRIVE_VAULT_FILE,
+      fileName: DEFAULT_DRIVE_BACKUP_NAME,
       accountEmail: 'me@example.com',
     }
     const first: StorageProvider = {

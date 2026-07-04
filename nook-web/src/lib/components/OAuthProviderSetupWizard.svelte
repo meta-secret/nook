@@ -4,13 +4,13 @@
   import { Button } from '$lib/components/ui/button'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { OAuthFilePreset } from '$lib/auth-providers'
-  import { DEFAULT_DRIVE_VAULT_FILE } from '$lib/auth-providers'
+  import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
-    githubRepo = $bindable(DEFAULT_DRIVE_VAULT_FILE),
+    githubRepo = $bindable(DEFAULT_DRIVE_BACKUP_NAME),
     idPrefix = 'provider',
     preset = 'google-drive' as OAuthFilePreset,
     isVerifying,
@@ -131,7 +131,7 @@
           id="{idPrefix}-drive-file"
           type="text"
           bind:value={githubRepo}
-          placeholder={DEFAULT_DRIVE_VAULT_FILE}
+          placeholder={DEFAULT_DRIVE_BACKUP_NAME}
           autocomplete="off"
           spellcheck="false"
           data-testid="drive-file-input"
@@ -139,8 +139,8 @@
         />
         <p class="text-[11px] text-muted-foreground text-pretty">
           {isICloud
-            ? vault.t('provider_setup.icloud_vault_file_desc')
-            : vault.t('provider_setup.drive_vault_file_desc')}
+            ? vault.t('provider_setup.icloud_event_log_desc')
+            : vault.t('provider_setup.drive_event_log_desc')}
         </p>
       </div>
 

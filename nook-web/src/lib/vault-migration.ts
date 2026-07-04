@@ -1,42 +1,9 @@
-import {
-  DEFAULT_DRIVE_VAULT_FILE,
-  formatDriveStorageRef,
-  type AuthProvidersSnapshot,
-  type StorageProvider,
-  wasmStorageModeForProvider,
-} from '$lib/auth-providers'
+import type { AuthProvidersSnapshot } from '$lib/auth-providers'
 import { hasLocalVault } from '$lib/local-vault'
 import {
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
   normalizeAuthSnapshot as normalizeAuthSnapshotWasm,
 } from '$lib/nook-wasm/nook_wasm'
-import { fetchRemoteVaultBlob, writeLocalVaultBlob } from '$lib/vault-sync'
-
-function providerRemoteArgs(
-  provider: StorageProvider,
-): [mode: string, pat: string, repo: string] {
-  const mode = wasmStorageModeForProvider(
-    provider.type,
-    provider.oauthFile?.preset,
-  )
-  if (provider.type === 'oauth-file') {
-    const fileName =
-      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
-    return [
-      mode,
-      provider.oauthFile?.accessToken?.trim() ?? '',
-      formatDriveStorageRef(provider.oauthFile?.fileId, fileName),
-    ]
-  }
-  if (provider.type === 'github') {
-    return [
-      mode,
-      provider.githubPat?.trim() ?? '',
-      provider.githubRepo?.trim() || 'nook',
-    ]
-  }
-  return ['local', '', '']
-}
 
 /** Drop deprecated `activeProviderId` from persisted auth snapshots. */
 export function normalizeAuthSnapshot(raw: unknown): {
@@ -62,13 +29,10 @@ export function ensureLocalProviderRow(
   ) as AuthProvidersSnapshot
 }
 
-/**
- * One-time migration: copy the legacy active remote vault into `encrypted_db`
- * and keep remote rows as sync providers only.
- */
-export async function migrateLegacyVaultToLocal(
+/** Ensure auth snapshots always keep a local provider row for this device. */
+export async function ensureLocalAuthProviderSnapshot(
   snapshot: AuthProvidersSnapshot,
-  legacyActiveProviderId: string | null = null,
+  _previousActiveProviderId: string | null = null,
 ): Promise<{ snapshot: AuthProvidersSnapshot; migrated: boolean }> {
   if (await hasLocalVault()) {
     return {
@@ -76,37 +40,5 @@ export async function migrateLegacyVaultToLocal(
       migrated: false,
     }
   }
-
-  const remoteProviders = snapshot.providers.filter(
-    (provider) => provider.type === 'github' || provider.type === 'oauth-file',
-  )
-  if (remoteProviders.length === 0) {
-    return { snapshot, migrated: false }
-  }
-
-  const source =
-    remoteProviders.find(
-      (provider) => provider.id === legacyActiveProviderId,
-    ) ?? remoteProviders[0]!
-
-  try {
-    const [mode, pat, repo] = providerRemoteArgs(source)
-    const remote = await fetchRemoteVaultBlob(mode, pat, repo)
-    if (!remote.content.trim()) {
-      return {
-        snapshot: ensureLocalProviderRow(snapshot),
-        migrated: false,
-      }
-    }
-    await writeLocalVaultBlob(remote.content)
-    return {
-      snapshot: ensureLocalProviderRow(snapshot),
-      migrated: true,
-    }
-  } catch {
-    return {
-      snapshot: ensureLocalProviderRow(snapshot),
-      migrated: false,
-    }
-  }
+  return { snapshot, migrated: false }
 }

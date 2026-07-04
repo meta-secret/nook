@@ -397,7 +397,7 @@ export function defaultOnboardSyncProvider(
   return {
     id: 'e2e-onboard-oauth',
     label: 'Google Drive (e2e onboard)',
-    fileName: 'nook-projection.yaml',
+    fileName: 'nook-events',
     accessToken: E2E_SYNC_PROVIDERS.local.stubCredential,
     type: 'oauth-file' as const,
     oauthPreset: 'google-drive' as const,

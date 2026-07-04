@@ -102,7 +102,7 @@ test.describe('sync provider credential encryption', () => {
             accessToken: access,
             refreshToken: refresh,
             preset: 'google-drive',
-            fileName: 'nook-projection.yaml',
+            fileName: 'nook-events',
             accountEmail: 'me@example.com',
           },
           createdAt: new Date().toISOString(),

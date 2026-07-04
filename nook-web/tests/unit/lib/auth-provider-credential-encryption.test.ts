@@ -164,7 +164,7 @@ describe.sequential(
               preset: 'google-drive',
               accessToken: access,
               refreshToken: refresh,
-              fileName: 'nook-projection.yaml',
+              fileName: 'nook-events',
               accountEmail: 'me@example.com',
             },
             createdAt: '2026-06-24T00:00:00.000Z',
