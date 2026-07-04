@@ -174,8 +174,8 @@ mod tests {
     use crate::event_canonical::Ed25519Signature;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
-        EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
-        VaultOperation, build_genesis_import_event,
+        EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
     };
     use crate::vault_event_graph::EventInsertStatus;
     use crate::vault_ids::{SecretId, StoreId};
@@ -198,8 +198,11 @@ mod tests {
             &EventId::parse(
                 "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             )?,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )

@@ -10,6 +10,7 @@ use crate::vault_epoch::{
 use crate::vault_event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
 use crate::vault_event_graph::EventGraph;
 use crate::vault_ids::{SecretId, StoreId};
+use crate::{PasswordEnvelope, PasswordUnlockEntry};
 use std::collections::BTreeMap;
 
 /// One live or tombstoned secret in the encrypted projection.
@@ -53,6 +54,7 @@ pub struct VaultProjection {
     pub current_epoch: Option<KeyEpoch>,
     pub epoch_history: Vec<EpochRecord>,
     pub secrets: BTreeMap<SecretId, ProjectedSecret>,
+    pub password_entries: Vec<PasswordUnlockEntry>,
     pub replacement_conflicts: BTreeMap<SecretId, SecretReplacementConflict>,
     pub security_conflicts: Vec<SecurityConflict>,
     pub unresolved_schema: bool,
@@ -66,6 +68,7 @@ impl Default for VaultProjection {
             current_epoch: None,
             epoch_history: Vec::new(),
             secrets: BTreeMap::new(),
+            password_entries: Vec::new(),
             replacement_conflicts: BTreeMap::new(),
             security_conflicts: Vec::new(),
             unresolved_schema: false,
@@ -124,7 +127,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultPro
                 &event_id,
                 operation,
                 &mut replacements_by_old,
-            );
+            )?;
         }
 
         if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
@@ -152,10 +155,19 @@ fn apply_operation(
     event_id: &EventId,
     operation: &VaultOperation,
     replacements_by_old: &mut BTreeMap<SecretId, Vec<(EventId, SecretId)>>,
-) {
+) -> VaultResult<()> {
     match operation {
-        VaultOperation::VaultImported { secrets, .. }
-        | VaultOperation::EpochCheckpoint { secrets, .. } => {
+        VaultOperation::VaultImported {
+            secrets,
+            password_entries,
+            ..
+        } => {
+            for secret in secrets {
+                insert_secret(projection, event_id, secret, None);
+            }
+            projection.password_entries.clone_from(password_entries);
+        }
+        VaultOperation::EpochCheckpoint { secrets, .. } => {
             for secret in secrets {
                 insert_secret(projection, event_id, secret, None);
             }
@@ -197,16 +209,48 @@ fn apply_operation(
         VaultOperation::VaultCleared => {
             projection.cleared = true;
             projection.secrets.clear();
+            projection.password_entries.clear();
+        }
+        VaultOperation::PasswordAdded {
+            entry_id,
+            label,
+            created_at,
+            envelope_ciphertext,
+        } => {
+            upsert_password_entry(
+                projection,
+                PasswordUnlockEntry {
+                    id: entry_id.as_str().to_owned(),
+                    label: label.to_owned(),
+                    created_at: created_at.as_str().to_owned(),
+                    envelope: parse_password_envelope(envelope_ciphertext)?,
+                },
+            );
+        }
+        VaultOperation::PasswordRotated {
+            entry_id,
+            envelope_ciphertext,
+        } => {
+            if let Some(entry) = projection
+                .password_entries
+                .iter_mut()
+                .find(|entry| entry.id == entry_id.as_str())
+            {
+                entry.envelope = parse_password_envelope(envelope_ciphertext)?;
+            }
+        }
+        VaultOperation::PasswordRemoved { entry_id } => {
+            projection
+                .password_entries
+                .retain(|entry| entry.id != entry_id.as_str());
         }
         VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
-        | VaultOperation::DeviceRevoked { .. }
-        | VaultOperation::PasswordAdded { .. }
-        | VaultOperation::PasswordRotated { .. }
-        | VaultOperation::PasswordRemoved { .. } => {}
+        | VaultOperation::DeviceRevoked { .. } => {}
     }
+    Ok(())
 }
 
 fn insert_secret(
@@ -224,6 +268,23 @@ fn insert_secret(
             replaced_from,
         },
     );
+}
+
+fn parse_password_envelope(ciphertext: &crate::OpaqueCiphertext) -> VaultResult<PasswordEnvelope> {
+    serde_json::from_str(ciphertext.as_str())
+        .map_err(|err| crate::errors::VaultError::Event(EventError::PasswordEnvelopeParse(err)))
+}
+
+fn upsert_password_entry(projection: &mut VaultProjection, entry: PasswordUnlockEntry) {
+    if let Some(existing) = projection
+        .password_entries
+        .iter_mut()
+        .find(|existing| existing.id == entry.id)
+    {
+        *existing = entry;
+        return;
+    }
+    projection.password_entries.push(entry);
 }
 
 fn detect_replacement_conflicts(
@@ -299,7 +360,7 @@ mod tests {
     use crate::VaultResult;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
-        VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+        GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
     use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
@@ -307,6 +368,7 @@ mod tests {
     use crate::vault_wire::{
         DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex,
     };
+    use crate::{PasswordEnvelope, PasswordUnlockEntry};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -339,6 +401,21 @@ mod tests {
         SecretId::from_vault_record(value)
     }
 
+    fn password_envelope(ciphertext: &str) -> PasswordEnvelope {
+        PasswordEnvelope {
+            version: 1,
+            kdf: "scrypt".to_owned(),
+            work_factor: 10,
+            ciphertext: ciphertext.to_owned(),
+        }
+    }
+
+    fn password_envelope_ciphertext(ciphertext: &str) -> OpaqueCiphertext {
+        OpaqueCiphertext::from_trusted(
+            serde_json::to_string(&password_envelope(ciphertext)).unwrap(),
+        )
+    }
+
     fn genesis_source_hash() -> Sha256Hex {
         Sha256Hex::from_trusted("deadbeef".repeat(8))
     }
@@ -350,8 +427,11 @@ mod tests {
             &store(),
             &actor(signing_key),
             &epoch(),
-            &genesis_source_hash(),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: genesis_source_hash(),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &ts("2026-06-28T00:00:00Z"),
             signing_key,
         )
@@ -491,6 +571,103 @@ mod tests {
             )
             .unwrap();
         assert_projection_permutation_invariant(&graph, STORE).unwrap();
+    }
+
+    #[test]
+    fn genesis_import_materializes_password_entries() -> VaultResult<()> {
+        let signing_key = key();
+        let imported_entry = PasswordUnlockEntry {
+            id: "pwdentry001".to_owned(),
+            label: "Travel recovery".to_owned(),
+            created_at: "2026-06-28T00:00:00Z".to_owned(),
+            envelope: password_envelope("imported"),
+        };
+        let event = build_genesis_import_event(
+            &store(),
+            &actor(&signing_key),
+            &epoch(),
+            GenesisImportPayload {
+                source_content_hash: genesis_source_hash(),
+                secrets: vec![],
+                password_entries: vec![imported_entry.clone()],
+            },
+            &ts("2026-06-28T00:00:00Z"),
+            &signing_key,
+        )?;
+        let mut graph = EventGraph::new();
+        graph.insert(event, STORE)?;
+
+        let projection = project_vault(&graph, STORE)?;
+        assert_eq!(projection.password_entries, vec![imported_entry]);
+        Ok(())
+    }
+
+    #[test]
+    fn password_entry_events_add_rotate_and_remove() -> VaultResult<()> {
+        let signing_key = key();
+        let mut graph = EventGraph::new();
+        let genesis_id = genesis(&mut graph, &signing_key);
+
+        let signed_op = |parents: Vec<EventId>, op: VaultOperation| -> VaultResult<VaultEvent> {
+            let body = VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store(),
+                actor_id: actor(&signing_key),
+                actor_signing_public_key: Some(public_key(&signing_key)),
+                parents,
+                created_at: ts("2026-06-28T00:00:00Z"),
+                key_epoch: epoch(),
+                operations: vec![op],
+            };
+            VaultEvent::sign(body, &signing_key)
+        };
+
+        let add = signed_op(
+            vec![genesis_id],
+            VaultOperation::PasswordAdded {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+                label: "Primary recovery".to_owned(),
+                created_at: ts("2026-06-28T00:00:01Z"),
+                envelope_ciphertext: password_envelope_ciphertext("initial"),
+            },
+        )?;
+        let add_id = add.id()?;
+        graph.insert(add, STORE)?;
+        let projection = project_vault(&graph, STORE)?;
+        assert_eq!(projection.password_entries.len(), 1);
+        assert_eq!(projection.password_entries[0].label, "Primary recovery");
+        assert_eq!(
+            projection.password_entries[0].envelope.ciphertext,
+            "initial"
+        );
+
+        let rotate = signed_op(
+            vec![add_id],
+            VaultOperation::PasswordRotated {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+                envelope_ciphertext: password_envelope_ciphertext("rotated"),
+            },
+        )?;
+        let rotate_id = rotate.id()?;
+        graph.insert(rotate, STORE)?;
+        let projection = project_vault(&graph, STORE)?;
+        assert_eq!(projection.password_entries.len(), 1);
+        assert_eq!(projection.password_entries[0].label, "Primary recovery");
+        assert_eq!(
+            projection.password_entries[0].envelope.ciphertext,
+            "rotated"
+        );
+
+        let remove = signed_op(
+            vec![rotate_id],
+            VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
+            },
+        )?;
+        graph.insert(remove, STORE)?;
+        let projection = project_vault(&graph, STORE)?;
+        assert!(projection.password_entries.is_empty());
+        Ok(())
     }
 
     #[test]

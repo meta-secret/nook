@@ -339,7 +339,7 @@ mod tests {
     use super::*;
     use crate::VaultResult;
     use crate::vault_event::{
-        VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+        GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
     use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
@@ -407,8 +407,11 @@ mod tests {
             &store(),
             &actor(signing_key),
             &epoch(),
-            &genesis_source_hash(),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: genesis_source_hash(),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )

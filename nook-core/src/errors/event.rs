@@ -111,6 +111,9 @@ pub enum EventError {
     #[error("failed to serialize member records")]
     MemberRecordsSerialize(#[source] serde_json::Error),
 
+    #[error("failed to parse password envelope from event")]
+    PasswordEnvelopeParse(#[source] serde_json::Error),
+
     #[error("expected import operation")]
     ExpectedImportOperation,
 
@@ -119,4 +122,7 @@ pub enum EventError {
 
     #[error("import event secret ids do not match source vault")]
     ImportSecretSetMismatch,
+
+    #[error("import event password entries do not match source vault")]
+    ImportPasswordEntriesMismatch,
 }

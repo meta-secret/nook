@@ -1,5 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
+use crate::PasswordUnlockEntry;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
@@ -67,6 +68,7 @@ pub enum VaultOperation {
     VaultImported {
         source_content_hash: Sha256Hex,
         secrets: Vec<EncryptedSecretPayload>,
+        password_entries: Vec<PasswordUnlockEntry>,
     },
     SecretCreated {
         secret: EncryptedSecretPayload,
@@ -109,6 +111,8 @@ pub enum VaultOperation {
     },
     PasswordAdded {
         entry_id: PasswordEntryId,
+        label: String,
+        created_at: IsoTimestamp,
         envelope_ciphertext: OpaqueCiphertext,
     },
     PasswordRotated {
@@ -274,12 +278,17 @@ pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent>
 }
 
 /// Build a genesis import event from encrypted snapshot data.
+pub struct GenesisImportPayload {
+    pub source_content_hash: Sha256Hex,
+    pub secrets: Vec<EncryptedSecretPayload>,
+    pub password_entries: Vec<PasswordUnlockEntry>,
+}
+
 pub fn build_genesis_import_event(
     store_id: &StoreId,
     actor_id: &AuthKeyId,
     key_epoch: &EventId,
-    source_content_hash: &Sha256Hex,
-    secrets: Vec<EncryptedSecretPayload>,
+    payload: GenesisImportPayload,
     created_at: &IsoTimestamp,
     signing_key: &SigningKey,
 ) -> VaultResult<VaultEvent> {
@@ -303,8 +312,9 @@ pub fn build_genesis_import_event(
         created_at: created_at.clone(),
         key_epoch: key_epoch.clone(),
         operations: vec![VaultOperation::VaultImported {
-            source_content_hash: source_content_hash.clone(),
-            secrets,
+            source_content_hash: payload.source_content_hash,
+            secrets: payload.secrets,
+            password_entries: payload.password_entries,
         }],
     };
     VaultEvent::sign(body, signing_key)
@@ -339,8 +349,11 @@ mod tests {
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
             &epoch,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )
@@ -362,8 +375,11 @@ mod tests {
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
             &epoch,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )
@@ -425,8 +441,11 @@ mod tests {
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
             &epoch,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )
@@ -446,12 +465,15 @@ mod tests {
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
             &epoch,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![EncryptedSecretPayload {
-                id: SecretId::from_vault_record("secret_abc12345678"),
-                secret_type: SecretType::Login,
-                ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
-            }],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![EncryptedSecretPayload {
+                    id: SecretId::from_vault_record("secret_abc12345678"),
+                    secret_type: SecretType::Login,
+                    ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                }],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )

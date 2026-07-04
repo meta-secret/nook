@@ -227,6 +227,8 @@ impl NookVaultManager {
         let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
+        self.password_entries = projection.password_entries;
+        self.unlock = nook_core::VaultUnlock::Keys;
         let crypto = self
             .crypto
             .as_ref()
@@ -446,6 +448,7 @@ impl NookVaultManager {
         let mut operations = vec![VaultOperation::VaultImported {
             source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
             secrets: vec![],
+            password_entries: self.password_entries.clone(),
         }];
         if !self.secrets_key.is_empty() && !self.members_key.is_empty() {
             let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;

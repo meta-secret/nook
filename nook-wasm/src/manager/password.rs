@@ -114,13 +114,8 @@ impl NookVaultManager {
             work_factor,
         )?;
 
-        self.password_entries.push(entry);
+        self.password_entries.push(entry.clone());
         self.unlock = nook_core::VaultUnlock::Keys;
-        let entry_id = self
-            .password_entries
-            .last()
-            .map(|e| e.id.clone())
-            .unwrap_or_default();
         let envelope_ciphertext = self
             .password_entries
             .last()
@@ -129,7 +124,9 @@ impl NookVaultManager {
             .map_err(|e| NookError::Serialization(e.to_string()))?
             .unwrap_or_default();
         self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
-            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            entry_id: nook_core::PasswordEntryId::parse(&entry.id)?,
+            label: entry.label,
+            created_at: nook_core::IsoTimestamp::parse(&entry.created_at)?,
             envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
         }])
         .await?;
@@ -246,12 +243,25 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
+        let entry_ids: Vec<String> = self
+            .password_entries
+            .iter()
+            .map(|entry| entry.id.clone())
+            .collect();
         self.password_entries.clear();
         self.ensure_event_log_ready().await?;
-        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
-            entry_id: nook_core::PasswordEntryId::from_trusted(String::new()),
-        })
-        .await?;
+        if let Some(first_id) = entry_ids.first() {
+            self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
+                entry_id: nook_core::PasswordEntryId::parse(first_id)?,
+            })
+            .await?;
+            for entry_id in entry_ids.iter().skip(1) {
+                self.append_vault_operations(vec![nook_core::VaultOperation::PasswordRemoved {
+                    entry_id: nook_core::PasswordEntryId::parse(entry_id)?,
+                }])
+                .await?;
+            }
+        }
         Ok(())
     }
 
