@@ -6,7 +6,7 @@
 
 ## Decision
 
-Replace mutable `nook-vault.yaml` replication with an **immutable, content-addressed event log** synchronized by **set union** across providers. Rebuild the encrypted materialized vault with a **causal DAG** and a **deterministic Nook-specific reducer**.
+Replace mutable projection replication with an **immutable, content-addressed event log** synchronized by **set union** across providers. Rebuild the encrypted materialized vault with a **causal DAG** and a **deterministic Nook-specific reducer**.
 
 Do **not** use:
 
@@ -36,8 +36,8 @@ The immutable event set is authoritative. These are **derived caches only**:
 - plaintext `Database` session;
 - UI arrays.
 
-`nook-vault.yaml` is a browser-local projection/import/export format, not a
-provider sync artifact for event-log vaults.
+Projection YAML is a browser-local import/export format, not a provider sync
+artifact for event-log vaults.
 
 ## Event identity
 
@@ -121,9 +121,9 @@ then repairs the provider by uploading any local event-store events missing from
 that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
 
-Event-log provider sync never writes the materialized `nook-vault.yaml`
-projection. Normal provider fan-out appends YAML event files and repairs missing
-provider events from the local event store.
+Event-log provider sync never writes the materialized projection. Normal
+provider fan-out appends YAML event files and repairs missing provider events
+from the local event store.
 
 Drive event storage tolerates duplicate app-data files for the same event name:
 fetch downloads all matches, accepts only bytes whose content-derived event id
