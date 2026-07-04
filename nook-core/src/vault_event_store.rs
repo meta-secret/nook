@@ -113,6 +113,7 @@ pub fn union_remote_events(
             }
             .into());
         }
+        event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
         local.put_event(event_id.clone(), bytes.clone());
         imported.push(event_id.clone());
     }
@@ -135,23 +136,49 @@ pub fn union_remote_events_and_heads(
         .collect())
 }
 
+/// Validate a remote event's content-addressed id and test whether it belongs to
+/// the active vault. Providers may physically contain events for multiple
+/// vaults; those unrelated events must not poison this vault's projection.
+pub fn remote_event_belongs_to_store(
+    event_id: &EventId,
+    bytes: &[u8],
+    store_id: &str,
+) -> VaultResult<bool> {
+    let event: VaultEvent = serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
+    if event.id()? != *event_id {
+        return Err(EventError::RemoteEventIdMismatch {
+            event_id: event_id.as_str().to_owned(),
+        }
+        .into());
+    }
+    event.validate_actor_signature()?;
+    Ok(event.body.store_id.as_str() == store_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::VaultResult;
+    use crate::event_canonical::Ed25519Signature;
     use crate::vault_event::build_genesis_import_event;
     use crate::vault_event_graph::EventInsertStatus;
-    use crate::vault_ids::{AuthKeyId, StoreId};
+    use crate::vault_ids::StoreId;
+    use crate::vault_signing::SigningIdentity;
     use crate::vault_wire::{IsoTimestamp, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
     fn genesis(signing_key: &SigningKey) -> VaultResult<crate::vault_event::VaultEvent> {
+        genesis_for_store(signing_key, "store_testtoken11")
+    }
+
+    fn genesis_for_store(
+        signing_key: &SigningKey,
+        store_id: &str,
+    ) -> VaultResult<crate::vault_event::VaultEvent> {
         build_genesis_import_event(
-            &StoreId::parse("store_testtoken11")?,
-            &AuthKeyId::parse(
-                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            )?,
+            &StoreId::parse(store_id)?,
+            &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
             &EventId::parse(
                 "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             )?,
@@ -272,6 +299,57 @@ mod tests {
             crate::VaultError::Event(crate::EventError::RemoteEventIdMismatch { .. })
         ));
         assert!(local.get_bytes(&real_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn remote_event_store_filter_skips_other_vaults() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let other = genesis_for_store(&signing_key, "store_otherstore1")?;
+        let other_id = other.id()?;
+        let bytes = serde_json::to_vec(&other).map_err(EventError::from)?;
+
+        assert!(!remote_event_belongs_to_store(&other_id, &bytes, STORE)?);
+        assert!(remote_event_belongs_to_store(
+            &other_id,
+            &bytes,
+            "store_otherstore1"
+        )?);
+        Ok(())
+    }
+
+    #[test]
+    fn remote_event_store_filter_rejects_id_mismatch() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&signing_key)?;
+        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let wrong_id = EventId::parse(
+            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        )?;
+
+        let err = remote_event_belongs_to_store(&wrong_id, &bytes, STORE).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::RemoteEventIdMismatch { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn union_rejects_current_schema_event_with_bad_signature() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let mut genesis = genesis(&signing_key)?;
+        let event_id = genesis.id()?;
+        genesis.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
+        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+
+        let mut local = LocalEventStore::new();
+        let err = union_remote_events(&mut local, &[(event_id.clone(), bytes)], STORE).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::SignatureVerificationFailed)
+        ));
+        assert!(local.get_bytes(&event_id).is_none());
         Ok(())
     }
 

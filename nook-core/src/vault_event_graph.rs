@@ -62,7 +62,7 @@ impl EventGraph {
         &self.quarantined
     }
 
-    /// Insert an event after envelope validation. Signature verification is the caller's duty.
+    /// Insert an event after envelope and current-schema signature validation.
     pub fn insert(
         &mut self,
         event: VaultEvent,
@@ -242,7 +242,8 @@ mod tests {
         build_genesis_import_event,
     };
     use crate::vault_ids::{AuthKeyId, SecretId, StoreId};
-    use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext, Sha256Hex};
+    use crate::vault_signing::SigningIdentity;
+    use crate::vault_wire::{DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -256,9 +257,12 @@ mod tests {
         StoreId::parse("store_testtoken11").unwrap()
     }
 
-    fn actor() -> AuthKeyId {
-        AuthKeyId::parse("key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-            .unwrap()
+    fn actor(signing_key: &SigningKey) -> AuthKeyId {
+        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
+    }
+
+    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
     }
 
     fn epoch() -> EventId {
@@ -278,7 +282,8 @@ mod tests {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
-            actor_id: actor(),
+            actor_id: actor(signing_key),
+            actor_signing_public_key: Some(public_key(signing_key)),
             parents,
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch(),
@@ -296,7 +301,7 @@ mod tests {
     fn genesis_event(signing_key: &SigningKey) -> VaultEvent {
         build_genesis_import_event(
             &store(),
-            &actor(),
+            &actor(signing_key),
             &epoch(),
             &genesis_source_hash(),
             vec![],

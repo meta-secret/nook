@@ -20,7 +20,7 @@ Do **not** use:
 local command
   → signed encrypted event (canonical JSON + Ed25519)
   → IndexedDB event store
-  ↔ set union ↔ GitHub / Drive immutable event files
+  ↔ set union ↔ GitHub / Drive / iCloud immutable event records
   → validate hash, signature, schema, parents
   → causal DAG
   → deterministic encrypted projection
@@ -47,6 +47,11 @@ The immutable event set is authoritative. These are **derived caches only**:
 | Writes | append-only; `put_event_if_absent` |
 | Duplicate identical event | success (idempotent) |
 | Same path, different bytes | quarantine (corruption) |
+
+Current event schema `2` binds each event to `actor_signing_public_key`. The
+actor id must be the SHA-256 digest of that Ed25519 public key, and the event
+signature must verify over the canonical body before a current-schema remote
+event enters the local event set.
 
 ## Canonical encoding
 
@@ -100,13 +105,20 @@ put_event_if_absent(provider, store_id, event_id, bytes)
 
 No `update_event` or `delete_event` in v1.
 
+The active provider adapters are GitHub, Google Drive, and iCloud. During
+outbox flush, the manager first uploads queued events that are absent remotely,
+then repairs the provider by uploading any local event-store events missing from
+that provider. During pull, fetched remote events are hash/signature-validated
+and ignored when their signed body belongs to another `store_id`.
+
 ## Migration
 
 1. Byte-for-byte backup of legacy projection YAML → `legacy_backup:{store_id}` in IndexedDB (first import only).
 2. `verify_stored_vault_import` — secret id parity before append.
 3. Deterministic `vault-imported` genesis event from `VaultHashContext` (`nook-core/src/vault_import.rs`).
 4. Local append before remote upload (`MIGRATION_START` / `MIGRATION_SUCCESS` status events).
-5. Set-union fan-out to all providers.
+5. Set-union fan-out to all providers; later provider flushes repair any local
+   events the provider does not yet have.
 
 See [vault-schema-versioning.md](vault-schema-versioning.md) for #52 goal mapping.
 

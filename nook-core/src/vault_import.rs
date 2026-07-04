@@ -142,6 +142,7 @@ mod tests {
     use crate::VaultResult;
     use crate::database::Database;
     use crate::secret_types::SecretType;
+    use crate::vault_signing::SigningIdentity;
     use crate::{ApiKeySecret, SecretId, SecretValue, generate_store_id};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
@@ -150,9 +151,7 @@ mod tests {
     fn stored_vault_import_is_idempotent_by_content_hash() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let store_id = generate_store_id()?;
-        let actor = AuthKeyId::parse(
-            "key_1111111111111111111111111111111111111111111111111111111111111111",
-        )?;
+        let actor = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let created_at = IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned());
 
         let mut db = Database::new();

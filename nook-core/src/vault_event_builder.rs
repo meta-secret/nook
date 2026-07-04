@@ -22,7 +22,14 @@ pub struct AppendEventInput<'a> {
 
 /// Build and sign a vault event; returns the event and its canonical JSON bytes.
 pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEvent, Vec<u8>)> {
-    input.signing_identity.actor_id()?;
+    let signing_actor_id = input.signing_identity.actor_id()?;
+    if signing_actor_id != *input.actor_id {
+        return Err(EventError::ActorSigningKeyMismatch {
+            actor_id: input.actor_id.as_str().to_owned(),
+            signing_key_actor_id: signing_actor_id.as_str().to_owned(),
+        }
+        .into());
+    }
     let mut parents = input.parents;
     parents.sort();
     parents.dedup();
@@ -31,6 +38,7 @@ pub fn build_signed_event(input: AppendEventInput<'_>) -> VaultResult<(VaultEven
         schema_version: VaultEventSchemaVersion::CURRENT,
         store_id: input.store_id.clone(),
         actor_id: input.actor_id.clone(),
+        actor_signing_public_key: Some(input.signing_identity.public_key()),
         parents,
         created_at: input.created_at.clone(),
         key_epoch: input.key_epoch.clone(),

@@ -7,6 +7,7 @@ use crate::event_canonical::{
 };
 use crate::secret_types::{SecretType, StoredRecordPayload, StoredSecretRecord};
 use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
+use crate::vault_signing::SigningIdentity;
 use crate::vault_wire::{
     AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
     OpaqueCiphertext, PasswordEntryId, Sha256Hex,
@@ -22,11 +23,17 @@ pub struct VaultEventSchemaVersion(u32);
 
 impl VaultEventSchemaVersion {
     pub const V1: Self = Self(1);
-    pub const CURRENT: Self = Self::V1;
+    pub const V2: Self = Self(2);
+    pub const CURRENT: Self = Self::V2;
 
     #[must_use]
     pub const fn get(self) -> u32 {
         self.0
+    }
+
+    #[must_use]
+    pub const fn requires_actor_signature(self) -> bool {
+        self.0 >= Self::V2.0
     }
 }
 
@@ -131,6 +138,8 @@ pub struct VaultEventBody {
     pub schema_version: VaultEventSchemaVersion,
     pub store_id: StoreId,
     pub actor_id: AuthKeyId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_signing_public_key: Option<DeviceSigningPublicKey>,
     pub parents: Vec<EventId>,
     pub created_at: IsoTimestamp,
     pub key_epoch: EventId,
@@ -186,6 +195,29 @@ impl VaultEvent {
         verify_body_signature(&body_bytes, self.signature.as_str(), verifying_key)
     }
 
+    pub fn validate_actor_signature(&self) -> VaultResult<()> {
+        if !self.body.schema_version.requires_actor_signature() {
+            return Ok(());
+        }
+        let public_key = self
+            .body
+            .actor_signing_public_key
+            .as_ref()
+            .filter(|key| !key.is_empty())
+            .ok_or(EventError::MissingActorSigningPublicKey)?;
+        let verifying_key =
+            SigningIdentity::verifying_key_from_public_key_hex(public_key.as_str())?;
+        let signing_key_actor_id = SigningIdentity::actor_id_for_verifying_key(&verifying_key)?;
+        if signing_key_actor_id != self.body.actor_id {
+            return Err(EventError::ActorSigningKeyMismatch {
+                actor_id: self.body.actor_id.as_str().to_owned(),
+                signing_key_actor_id: signing_key_actor_id.as_str().to_owned(),
+            }
+            .into());
+        }
+        self.verify_signature(&verifying_key)
+    }
+
     pub fn validate_envelope(&self, expected_store_id: &StoreId) -> VaultResult<EventId> {
         if self.body.schema_version > VaultEventSchemaVersion::CURRENT {
             return Err(EventError::UnsupportedSchemaVersion {
@@ -212,6 +244,7 @@ impl VaultEvent {
             EventId::parse(parent.as_str())?;
         }
         EventId::parse(self.body.key_epoch.as_str())?;
+        self.validate_actor_signature()?;
         self.id()
     }
 }
@@ -226,10 +259,22 @@ pub fn build_genesis_import_event(
     created_at: &IsoTimestamp,
     signing_key: &SigningKey,
 ) -> VaultResult<VaultEvent> {
+    let signing_actor_id =
+        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
+    if signing_actor_id != *actor_id {
+        return Err(EventError::ActorSigningKeyMismatch {
+            actor_id: actor_id.as_str().to_owned(),
+            signing_key_actor_id: signing_actor_id.as_str().to_owned(),
+        }
+        .into());
+    }
     let body = VaultEventBody {
         schema_version: VaultEventSchemaVersion::CURRENT,
         store_id: store_id.clone(),
         actor_id: actor_id.clone(),
+        actor_signing_public_key: Some(DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing_key.verifying_key().as_bytes(),
+        ))),
         parents: Vec::new(),
         created_at: created_at.clone(),
         key_epoch: key_epoch.clone(),
@@ -251,6 +296,14 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
+    fn actor(signing_key: &SigningKey) -> AuthKeyId {
+        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
+    }
+
+    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
+    }
+
     #[test]
     fn genesis_event_has_no_parents() {
         let signing_key = test_signing_key();
@@ -260,10 +313,7 @@ mod tests {
         .unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
-            &AuthKeyId::parse(
-                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            )
-            .unwrap(),
+            &actor(&signing_key),
             &epoch,
             &Sha256Hex::from_trusted("deadbeef".repeat(8)),
             vec![],
@@ -279,7 +329,7 @@ mod tests {
 
     #[test]
     fn event_id_changes_when_parents_change() {
-        let _signing_key = test_signing_key();
+        let signing_key = test_signing_key();
         let epoch = EventId::parse(
             "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         )
@@ -287,10 +337,8 @@ mod tests {
         let mut body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: StoreId::parse("store_testtoken11").unwrap(),
-            actor_id: AuthKeyId::parse(
-                "key_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-            )
-            .unwrap(),
+            actor_id: actor(&signing_key),
+            actor_signing_public_key: Some(public_key(&signing_key)),
             parents: vec![epoch.clone()],
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch.clone(),
@@ -323,10 +371,7 @@ mod tests {
         .unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
-            &AuthKeyId::parse(
-                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            )
-            .unwrap(),
+            &actor(&signing_key),
             &epoch,
             &Sha256Hex::from_trusted("deadbeef".repeat(8)),
             vec![],

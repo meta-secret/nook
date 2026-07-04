@@ -37,6 +37,23 @@ pub enum EventError {
     #[error("event signature verification failed")]
     SignatureVerificationFailed,
 
+    #[error("current event schema requires actor_signing_public_key")]
+    MissingActorSigningPublicKey,
+
+    #[error("actor signing public key must be 32 bytes")]
+    ActorSigningPublicKeyWrongLength,
+
+    #[error("invalid actor signing public key")]
+    ActorSigningPublicKeyInvalid,
+
+    #[error(
+        "event actor_id {actor_id} does not match signing public key digest {signing_key_actor_id}"
+    )]
+    ActorSigningKeyMismatch {
+        actor_id: String,
+        signing_key_actor_id: String,
+    },
+
     #[error("unsupported event schema version {version}")]
     UnsupportedSchemaVersion { version: u32 },
 

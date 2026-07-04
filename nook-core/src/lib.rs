@@ -144,7 +144,10 @@ pub use vault_event_builder::{
 };
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
-pub use vault_event_store::{LocalEventStore, union_remote_events, union_remote_events_and_heads};
+pub use vault_event_store::{
+    LocalEventStore, remote_event_belongs_to_store, union_remote_events,
+    union_remote_events_and_heads,
+};
 pub use vault_format::{
     VaultFormat, current_vault_schema_version, deserialize_stored,
     deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,

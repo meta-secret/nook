@@ -4,7 +4,7 @@ use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::format_ed25519_signature;
 use crate::format_auth_key_id;
 use crate::vault_ids::AuthKeyId;
-use crate::vault_wire::SigningSeedHex;
+use crate::vault_wire::{DeviceSigningPublicKey, SigningSeedHex};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 
@@ -44,14 +44,41 @@ impl SigningIdentity {
     }
 
     #[must_use]
+    pub fn public_key_hex(&self) -> String {
+        hex::encode(self.verifying_key().as_bytes())
+    }
+
+    #[must_use]
+    pub fn public_key(&self) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(self.public_key_hex())
+    }
+
+    #[must_use]
     pub fn signing_key(&self) -> &SigningKey {
         &self.signing_key
     }
 
+    pub fn actor_id_for_verifying_key(verifying_key: &VerifyingKey) -> VaultResult<AuthKeyId> {
+        let digest = hex::encode(Sha256::digest(verifying_key.as_bytes()));
+        format_auth_key_id(&digest).map_err(Into::into)
+    }
+
+    pub fn verifying_key_from_public_key_hex(raw: &str) -> VaultResult<VerifyingKey> {
+        let bytes = hex::decode(raw.trim()).map_err(EventError::from)?;
+        let array: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| EventError::ActorSigningPublicKeyWrongLength)?;
+        VerifyingKey::from_bytes(&array)
+            .map_err(|_| EventError::ActorSigningPublicKeyInvalid.into())
+    }
+
+    pub fn actor_id_for_public_key_hex(raw: &str) -> VaultResult<AuthKeyId> {
+        Self::actor_id_for_verifying_key(&Self::verifying_key_from_public_key_hex(raw)?)
+    }
+
     /// `key_{sha256_hex}` actor id derived from the Ed25519 public key.
     pub fn actor_id(&self) -> VaultResult<AuthKeyId> {
-        let digest = hex::encode(Sha256::digest(self.verifying_key().as_bytes()));
-        format_auth_key_id(&digest).map_err(Into::into)
+        Self::actor_id_for_verifying_key(&self.verifying_key())
     }
 
     #[must_use]

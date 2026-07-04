@@ -15,6 +15,9 @@ use crate::storage::event_db::{
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
 };
+use crate::storage::icloud::{
+    fetch_icloud_event, list_icloud_event_ids, put_icloud_event_if_absent,
+};
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultOperation,
@@ -22,6 +25,7 @@ use nook_core::{
     project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
     union_remote_events_and_heads, verify_stored_vault_import,
 };
+use std::collections::BTreeSet;
 
 fn iso_timestamp() -> String {
     wasm_iso_timestamp()
@@ -321,25 +325,30 @@ impl NookVaultManager {
             return Ok(());
         }
         let provider_id = self.local_cache_ref();
+        let mut remote_ids = self.list_current_provider_event_ids().await?;
         let pending = load_outbox(&provider_id).await?;
         for (raw_id, bytes) in pending {
             let event_id = EventId::parse(&raw_id)?;
-            match self.storage_mode {
-                nook_core::StorageMode::Github => {
-                    put_github_event_if_absent(
-                        &self.github_pat,
-                        &self.github_repo,
-                        &event_id,
-                        &bytes,
-                    )
+            if !remote_ids.contains(&event_id) {
+                self.put_current_provider_event_if_absent(&event_id, &bytes)
                     .await?;
-                }
-                nook_core::StorageMode::GoogleDrive => {
-                    put_drive_event_if_absent(&self.github_pat, &event_id, &bytes).await?;
-                }
-                nook_core::StorageMode::Local | nook_core::StorageMode::ICloud => {}
+                remote_ids.insert(event_id.clone());
             }
             remove_outbox_entry(&provider_id, &raw_id).await?;
+        }
+
+        if !self.store_id.is_empty() {
+            let local = load_local_event_store(&self.store_id).await?;
+            for event_id in local.event_ids() {
+                if remote_ids.contains(&event_id) {
+                    continue;
+                }
+                if let Some(bytes) = local.get_bytes(&event_id) {
+                    self.put_current_provider_event_if_absent(&event_id, bytes)
+                        .await?;
+                    remote_ids.insert(event_id);
+                }
+            }
         }
         Ok(())
     }
@@ -350,26 +359,14 @@ impl NookVaultManager {
         if self.store_id.is_empty() {
             return Ok(());
         }
-        let remote_ids = match self.storage_mode {
-            nook_core::StorageMode::Github => {
-                list_github_event_ids(&self.github_pat, &self.github_repo).await?
-            }
-            nook_core::StorageMode::GoogleDrive => list_drive_event_ids(&self.github_pat).await?,
-            _ => Vec::new(),
-        };
+        let remote_ids = self.list_current_provider_event_ids().await?;
 
         let mut remote_events = Vec::new();
-        for raw_id in remote_ids {
-            let event_id = EventId::parse(&raw_id)?;
-            let bytes = match self.storage_mode {
-                nook_core::StorageMode::Github => {
-                    fetch_github_event(&self.github_pat, &self.github_repo, &event_id).await?
-                }
-                nook_core::StorageMode::GoogleDrive => {
-                    fetch_drive_event(&self.github_pat, &event_id).await?
-                }
-                _ => continue,
-            };
+        for event_id in remote_ids {
+            let bytes = self.fetch_current_provider_event(&event_id).await?;
+            if !nook_core::remote_event_belongs_to_store(&event_id, &bytes, &self.store_id)? {
+                continue;
+            }
             remote_events.push((event_id, bytes));
         }
 
@@ -385,6 +382,56 @@ impl NookVaultManager {
             self.apply_event_projection_to_session().await?;
         }
         Ok(())
+    }
+
+    async fn list_current_provider_event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
+        let raw_ids = match self.storage_mode {
+            nook_core::StorageMode::Github => {
+                list_github_event_ids(&self.github_pat, &self.github_repo).await?
+            }
+            nook_core::StorageMode::GoogleDrive => list_drive_event_ids(&self.github_pat).await?,
+            nook_core::StorageMode::ICloud => list_icloud_event_ids(&self.github_pat).await?,
+            nook_core::StorageMode::Local => Vec::new(),
+        };
+        raw_ids
+            .into_iter()
+            .map(|raw| EventId::parse(&raw).map_err(NookError::from))
+            .collect()
+    }
+
+    async fn fetch_current_provider_event(&self, event_id: &EventId) -> Result<Vec<u8>, NookError> {
+        match self.storage_mode {
+            nook_core::StorageMode::Github => {
+                fetch_github_event(&self.github_pat, &self.github_repo, event_id).await
+            }
+            nook_core::StorageMode::GoogleDrive => {
+                fetch_drive_event(&self.github_pat, event_id).await
+            }
+            nook_core::StorageMode::ICloud => fetch_icloud_event(&self.github_pat, event_id).await,
+            nook_core::StorageMode::Local => Ok(Vec::new()),
+        }
+    }
+
+    async fn put_current_provider_event_if_absent(
+        &self,
+        event_id: &EventId,
+        bytes: &[u8],
+    ) -> Result<(), NookError> {
+        match self.storage_mode {
+            nook_core::StorageMode::Github => {
+                put_github_event_if_absent(&self.github_pat, &self.github_repo, event_id, bytes)
+                    .await
+            }
+            nook_core::StorageMode::GoogleDrive => {
+                put_drive_event_if_absent(&self.github_pat, event_id, bytes)
+                    .await
+                    .map(|_| ())
+            }
+            nook_core::StorageMode::ICloud => {
+                put_icloud_event_if_absent(&self.github_pat, event_id, bytes).await
+            }
+            nook_core::StorageMode::Local => Ok(()),
+        }
     }
 
     pub(in crate::manager) async fn bootstrap_event_log_genesis(

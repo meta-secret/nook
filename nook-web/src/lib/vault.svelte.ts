@@ -1355,8 +1355,16 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
-    await this.pushRemoteYamlSnapshotNow()
-    await this.flushRemoteEventOutboxNow()
+    if (this.syncProviders.length === 0) {
+      await this.pushRemoteYamlSnapshotNow()
+      await this.flushRemoteEventOutboxNow()
+      return
+    }
+    for (const provider of this.syncProviders) {
+      if (this.syncBlocked) break
+      await this.pushRemoteYamlSnapshotNow(provider)
+      await this.flushRemoteEventOutboxNow(provider)
+    }
   }
 
   scheduleFanOutSyncAfterLocalSave(): void {
@@ -1368,7 +1376,12 @@ export class VaultState {
     void this.pushRemoteYamlSnapshotNow()
   }
 
-  remoteYamlSnapshotStorageArgs(): [string, string, string] | null {
+  remoteYamlSnapshotStorageArgs(
+    provider?: StorageProvider,
+  ): [string, string, string] | null {
+    if (provider) {
+      return this.providerWasmArgs(provider)
+    }
     if (this.syncProviders.length > 0) {
       return this.providerWasmArgs(this.syncProviders[0]!)
     }
@@ -1378,9 +1391,9 @@ export class VaultState {
     return null
   }
 
-  async pushRemoteYamlSnapshotNow(): Promise<void> {
+  async pushRemoteYamlSnapshotNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return
-    const args = this.remoteYamlSnapshotStorageArgs()
+    const args = this.remoteYamlSnapshotStorageArgs(provider)
     if (!args) return
     await this.enqueueStorage(() =>
       this.manager!.pushRemoteVaultYamlSnapshotForProvider(...args),
@@ -1827,9 +1840,9 @@ export class VaultState {
     void this.flushRemoteEventOutboxNow()
   }
 
-  async flushRemoteEventOutboxNow(): Promise<void> {
+  async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return
-    const args = this.remoteYamlSnapshotStorageArgs()
+    const args = this.remoteYamlSnapshotStorageArgs(provider)
     if (!args) return
     try {
       await this.enqueueStorage(() =>

@@ -6,6 +6,7 @@
 //! `md5Checksum` / GitHub blob `sha`.
 
 use crate::NookError;
+use nook_core::EventId;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -22,7 +23,9 @@ const ICLOUD_ENVIRONMENT: &str = match option_env!("NOOK_ICLOUD_ENVIRONMENT") {
     None => "production",
 };
 const ICLOUD_RECORD_TYPE: &str = "NookVault";
+const ICLOUD_EVENT_RECORD_TYPE: &str = "NookVaultEvent";
 const ICLOUD_CONTENT_FIELD: &str = "content";
+const ICLOUD_EVENT_ID_FIELD: &str = "event_id";
 
 pub(crate) struct ICloudVaultFile {
     pub(crate) content: String,
@@ -50,6 +53,8 @@ struct ICloudRecord {
 struct ICloudRecordsResponse {
     #[serde(default)]
     records: Vec<ICloudRecord>,
+    #[serde(rename = "continuationMarker", default)]
+    continuation_marker: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +108,28 @@ fn record_content(record: &ICloudRecord) -> Option<String> {
         .and_then(|field| field.value.clone())
 }
 
+fn record_field(record: &ICloudRecord, field_name: &str) -> Option<String> {
+    record
+        .fields
+        .as_ref()
+        .and_then(|fields| fields.get(field_name))
+        .and_then(|field| field.value.clone())
+}
+
+fn icloud_event_record_name(event_id: &EventId) -> String {
+    format!("nook-event-{}", event_id.hex_digest())
+}
+
+fn event_id_from_record(record: &ICloudRecord) -> Option<String> {
+    record_field(record, ICLOUD_EVENT_ID_FIELD).or_else(|| {
+        record
+            .record_name
+            .strip_prefix("nook-event-")
+            .filter(|digest| digest.len() == 64)
+            .map(|digest| format!("sha256:{digest}"))
+    })
+}
+
 pub(crate) async fn verify_icloud_access(web_auth_token: &str) -> Result<(), NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let client = reqwest::Client::new();
@@ -153,6 +180,13 @@ async fn lookup_vault_record(
         .await
         .map_err(|e| NookError::Serialization(format!("Failed to parse CloudKit lookup: {e}")))?;
     Ok(parsed.records.into_iter().next())
+}
+
+async fn lookup_record(
+    web_auth_token: &str,
+    record_name: &str,
+) -> Result<Option<ICloudRecord>, NookError> {
+    lookup_vault_record(web_auth_token, record_name).await
 }
 
 pub(crate) async fn ensure_icloud_vault_record(
@@ -277,6 +311,150 @@ pub(crate) async fn write_icloud_vault_with_retry(
     Err(NookError::ICloud(
         "Failed to write vault record to iCloud after retries.".to_owned(),
     ))
+}
+
+pub(crate) async fn list_icloud_event_ids(web_auth_token: &str) -> Result<Vec<String>, NookError> {
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+    let client = reqwest::Client::new();
+    let mut event_ids = Vec::new();
+    let mut continuation_marker: Option<String> = None;
+
+    loop {
+        let mut body = json!({
+            "query": {
+                "recordType": ICLOUD_EVENT_RECORD_TYPE,
+            },
+            "resultsLimit": 200,
+        });
+        if let Some(marker) = continuation_marker.as_deref() {
+            body["continuationMarker"] = json!(marker);
+        }
+
+        let mut request = client
+            .post(icloud_database_url("records/query"))
+            .header("Content-Type", "application/json");
+        for (name, value) in icloud_auth_query(token.as_ref()) {
+            request = request.query(&[(name, value)]);
+        }
+        let response = request.json(&body).send().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(icloud_error(status, &body));
+        }
+        let parsed: ICloudRecordsResponse = response.json().await.map_err(|e| {
+            NookError::Serialization(format!("Failed to parse CloudKit event query: {e}"))
+        })?;
+        for record in &parsed.records {
+            if let Some(event_id) = event_id_from_record(record)
+                && EventId::parse(&event_id).is_ok()
+            {
+                event_ids.push(event_id);
+            }
+        }
+        continuation_marker = parsed.continuation_marker;
+        if continuation_marker.is_none() {
+            break;
+        }
+    }
+    event_ids.sort();
+    event_ids.dedup();
+    Ok(event_ids)
+}
+
+pub(crate) async fn fetch_icloud_event(
+    web_auth_token: &str,
+    event_id: &EventId,
+) -> Result<Vec<u8>, NookError> {
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+    let record_name = icloud_event_record_name(event_id);
+    let record = lookup_record(token.as_ref(), &record_name)
+        .await?
+        .ok_or_else(|| {
+            NookError::ICloud(format!("CloudKit event record {record_name} is missing."))
+        })?;
+    let stored_event_id = event_id_from_record(&record).ok_or_else(|| {
+        NookError::ICloud(format!(
+            "CloudKit event record {record_name} does not include an event id."
+        ))
+    })?;
+    if stored_event_id != event_id.as_str() {
+        return Err(NookError::ICloud(format!(
+            "CloudKit event record {record_name} points at {stored_event_id}, expected {}.",
+            event_id.as_str()
+        )));
+    }
+    let content = record_content(&record).ok_or_else(|| {
+        NookError::ICloud(format!(
+            "CloudKit event record {record_name} does not include content."
+        ))
+    })?;
+    Ok(content.into_bytes())
+}
+
+pub(crate) async fn put_icloud_event_if_absent(
+    web_auth_token: &str,
+    event_id: &EventId,
+    bytes: &[u8],
+) -> Result<(), NookError> {
+    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+    let content = std::str::from_utf8(bytes)
+        .map_err(|e| NookError::Serialization(format!("Event JSON must be UTF-8: {e}")))?;
+    let record_name = icloud_event_record_name(event_id);
+
+    if let Some(existing) = lookup_record(token.as_ref(), &record_name).await? {
+        let existing_content = record_content(&existing).unwrap_or_default();
+        if existing_content.as_bytes() == bytes {
+            return Ok(());
+        }
+        return Err(NookError::ICloud(
+            "Event record exists with different content (corruption).".to_owned(),
+        ));
+    }
+
+    let body = json!({
+        "operations": [{
+            "operationType": "create",
+            "record": {
+                "recordType": ICLOUD_EVENT_RECORD_TYPE,
+                "recordName": record_name,
+                "fields": {
+                    ICLOUD_EVENT_ID_FIELD: { "value": event_id.as_str() },
+                    ICLOUD_CONTENT_FIELD: { "value": content }
+                }
+            }
+        }]
+    });
+    let client = reqwest::Client::new();
+    let mut request = client
+        .post(icloud_database_url("records/modify"))
+        .header("Content-Type", "application/json");
+    for (name, value) in icloud_auth_query(token.as_ref()) {
+        request = request.query(&[(name, value)]);
+    }
+    let response = request.json(&body).send().await?;
+    if response.status().is_success() {
+        let _parsed: ICloudModifyResponse = response.json().await.map_err(|e| {
+            NookError::Serialization(format!("Failed to parse CloudKit event create: {e}"))
+        })?;
+        return Ok(());
+    }
+
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if body.contains("serverRecord") || body.contains("ALREADY_EXISTS") {
+        if let Some(existing) = lookup_record(token.as_ref(), &record_name).await? {
+            let existing_content = record_content(&existing).unwrap_or_default();
+            if existing_content.as_bytes() == bytes {
+                return Ok(());
+            }
+        }
+        return Err(NookError::ICloud(
+            "Event record exists with different content (corruption).".to_owned(),
+        ));
+    }
+
+    Err(icloud_error(status, &body))
 }
 
 async fn write_icloud_vault_once(
