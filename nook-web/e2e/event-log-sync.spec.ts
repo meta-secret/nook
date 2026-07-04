@@ -60,7 +60,7 @@ test.describe('event-log sync then add', () => {
     ])
   })
 
-  test('saving an event-backed secret does not overwrite a stale GitHub vault blob', async ({
+  test('saving an event-backed secret appends only events and leaves a stale GitHub vault blob untouched', async ({
     page,
   }) => {
     const stub = createLocalE2eGithubVaultStub()
@@ -70,13 +70,14 @@ test.describe('event-log sync then add', () => {
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)
 
+    expect(stub.getVaultYaml()).toBe('')
     const eventFilesBeforeSave = stub.getEventFileCount()
-    const legacyYamlBeforeRemoteEdit = stub.getVaultYaml()
-    expect(legacyYamlBeforeRemoteEdit.trim().length).toBeGreaterThan(0)
+    expect(eventFilesBeforeSave).toBeGreaterThan(0)
 
-    stub.setVaultYaml(
-      `${legacyYamlBeforeRemoteEdit.trimEnd()}\n# e2e remote legacy branch\n`,
-    )
+    const staleVaultYaml =
+      'schema_version: 1\nstore_id: store_stalee2evnt\nsecrets: []\n# e2e remote stale branch\n'
+    stub.setVaultYaml(staleVaultYaml)
+    const vaultRevisionBeforeSave = stub.getVaultRevision()
 
     const title = uniqueSecretKey('e2e-stale-github-save')
     await addSecret(page, title, 'event-log-save-value')
@@ -101,6 +102,7 @@ test.describe('event-log sync then add', () => {
     expect(stub.getEventFileContents()).toEqual(
       expect.arrayContaining([expect.stringContaining('schema_version:')]),
     )
-    expect(stub.getVaultYaml()).toContain('# e2e remote legacy branch')
+    expect(stub.getVaultYaml()).toBe(staleVaultYaml)
+    expect(stub.getVaultRevision()).toBe(vaultRevisionBeforeSave)
   })
 })

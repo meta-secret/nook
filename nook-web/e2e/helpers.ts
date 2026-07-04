@@ -1007,11 +1007,33 @@ export async function connectGithubVault(
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await waitForGithubVaultState(
-    target,
-    (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
-    { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
-  )
+  if (stub) {
+    await expect
+      .poll(
+        () => {
+          if (stub.getEventFileCount() > 0) return 'event-log'
+          const yaml = stub.getVaultYaml()
+          if (!yaml.trim()) return 'waiting'
+          try {
+            const snapshot = parseVaultYamlSnapshot(yaml)
+            return snapshot.authPkIds.length >= 1 &&
+              snapshot.memberPkIds.length >= 1
+              ? 'vault-yaml'
+              : 'waiting'
+          } catch {
+            return 'waiting'
+          }
+        },
+        { timeout: GITHUB_CONNECT_TIMEOUT_MS },
+      )
+      .not.toBe('waiting')
+  } else {
+    await waitForGithubVaultState(
+      target,
+      (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
+      { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
+    )
+  }
   await assertGithubConnected(page)
 }
 
@@ -2812,6 +2834,7 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
 
   return {
     getVaultYaml: () => vaultYaml,
+    getVaultRevision: () => revision,
     setVaultYaml: (yaml: string) => {
       vaultYaml = yaml
       bumpSha()

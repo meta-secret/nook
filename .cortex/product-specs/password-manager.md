@@ -84,8 +84,8 @@ The WASM session holds a UTF-8 JSONL string (`decrypted_jsonl`). Each line is on
 - **Sorting:** Lines sorted lexicographically by `key`.
 - **Scope:** In-memory only — never written to GitHub or IndexedDB as plaintext.
 
-### B. On-Disk Vault Layout (YAML — default)
-Path: `nook-vault.yaml` (GitHub and IndexedDB `encrypted_db`).
+### B. Local Projection Layout (YAML)
+Path: browser-local `nook-vault.yaml` projection cache (IndexedDB `encrypted_db`).
 
 ```yaml
 vault_version: 1
@@ -100,7 +100,7 @@ secrets:
 ```
 
 - **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../design-docs/secret-store-identity.md).
-- **`vault_version`:** Monotonic revision counter incremented on every save. Used for sync reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
+- **`vault_version`:** Legacy/local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 - **Legacy JSONL on-disk format** is still supported on load (`from_stored_auto` / format detection). New saves always use YAML.
@@ -118,11 +118,11 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 
 ### D. GitHub Repository Adapter
 - **Repository:** `{username}/nook` (auto-created if missing).
-- **File Path:** `nook-vault.yaml`
-- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-vault.yaml`
+- **Event Path:** `nook-log/v1/events/{digest}.yaml`
+- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-log/v1/events/{digest}.yaml`
 - **Authentication:** `Authorization: Bearer {pat}`
-- **Encoding:** File content is UTF-8 YAML; GitHub API stores base64 in transit.
-- **Optimistic concurrency:** Blob SHA cached on load and sent on PUT.
+- **Encoding:** Event content is pretty-printed UTF-8 YAML; GitHub API stores base64 in transit.
+- **Concurrency:** Append-only `put_event_if_absent`; existing identical content is idempotent and different content at the same event id is corruption.
 
 ---
 

@@ -7,6 +7,7 @@ use crate::vault_event::{
     serialize_event_storage_yaml,
 };
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
+use crate::vault_ids::StoreId;
 use std::collections::BTreeMap;
 
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
@@ -143,6 +144,12 @@ pub fn remote_event_belongs_to_store(
     bytes: &[u8],
     store_id: &str,
 ) -> VaultResult<bool> {
+    Ok(remote_event_store_id(event_id, bytes)?.as_str() == store_id)
+}
+
+/// Validate a remote event's content-addressed id and actor signature, then
+/// return the store id declared by the signed body.
+pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> VaultResult<StoreId> {
     let event = parse_remote_event_storage_bytes(bytes)?;
     if event.id()? != *event_id {
         return Err(EventError::RemoteEventIdMismatch {
@@ -151,7 +158,7 @@ pub fn remote_event_belongs_to_store(
         .into());
     }
     event.validate_actor_signature()?;
-    Ok(event.body.store_id.as_str() == store_id)
+    Ok(event.body.store_id)
 }
 
 #[cfg(test)]
@@ -342,6 +349,10 @@ mod tests {
         let other_id = other.id()?;
         let bytes = serde_json::to_vec(&other).map_err(EventError::from)?;
 
+        assert_eq!(
+            remote_event_store_id(&other_id, &bytes)?.as_str(),
+            "store_otherstore1"
+        );
         assert!(!remote_event_belongs_to_store(&other_id, &bytes, STORE)?);
         assert!(remote_event_belongs_to_store(
             &other_id,

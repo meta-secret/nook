@@ -34,6 +34,22 @@ impl NookVaultManager {
         let content = self.fetch_vault_content(&mut vault_file_missing).await?;
 
         if content.trim().is_empty() {
+            if self.storage_mode != nook_core::StorageMode::Local {
+                self.sync_events_from_current_provider().await?;
+                if !self.store_id.is_empty() && self.event_log_has_events().await? {
+                    let status =
+                        nook_core::VaultAccessStatus::from(nook_core::assess_connect_access(
+                            &self.stored_records_snapshot(),
+                            &identity,
+                        ))
+                        .as_str()
+                        .to_owned();
+                    let _ = self
+                        .status_tx
+                        .send(format!("ASSESS_{}_{}", self.storage_mode, status));
+                    return Ok(status);
+                }
+            }
             self.password_entries.clear();
             self.unlock = nook_core::VaultUnlock::Keys;
             self.last_synced_content.clear();
@@ -138,17 +154,20 @@ impl NookVaultManager {
             self.capture_vault_unlock(&content);
         }
 
-        let use_genesis = content_requires_genesis(&content, force_genesis)?;
+        let event_log_only_remote = self
+            .discover_event_log_only_remote(force_genesis, &content)
+            .await?;
+
+        let use_genesis = if event_log_only_remote {
+            false
+        } else {
+            content_requires_genesis(&content, force_genesis)?
+        };
 
         if use_genesis {
-            self.initialize_genesis_vault(&identity)?;
-            if self.store_id.is_empty() {
-                self.store_id = nook_core::generate_store_id()?.to_string();
-            }
-            self.bootstrap_event_log_genesis().await?;
-            self.maybe_sync_self_into_roster(&identity)?;
-            self.event_log_mode = true;
-            self.persist_projection_cache().await?;
+            self.bootstrap_genesis_connect(&identity).await?;
+        } else if event_log_only_remote {
+            self.connect_event_log_only_remote(&identity).await?;
         } else if !content.trim().is_empty() {
             if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
                 self.event_log_mode = true;
@@ -195,9 +214,6 @@ impl NookVaultManager {
 
         if use_genesis || vault_file_missing {
             self.flush_event_outbox().await?;
-            // Event-log mode still needs an initial YAML snapshot on the remote
-            // provider for assess/connect and legacy sync readers.
-            self.push_remote_vault_yaml_snapshot().await?;
             let _ = self.status_tx.send("GITHUB_INIT_SUCCESS".to_owned());
         }
 
@@ -211,6 +227,60 @@ impl NookVaultManager {
             "connect complete"
         );
         Ok(records)
+    }
+
+    async fn bootstrap_genesis_connect(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<(), NookError> {
+        self.initialize_genesis_vault(identity)?;
+        if self.store_id.is_empty() {
+            self.store_id = nook_core::generate_store_id()?.to_string();
+        }
+        self.bootstrap_event_log_genesis().await?;
+        self.maybe_sync_self_into_roster(identity)?;
+        self.event_log_mode = true;
+        self.persist_projection_cache().await?;
+        Ok(())
+    }
+
+    async fn discover_event_log_only_remote(
+        &mut self,
+        force_genesis: bool,
+        content: &str,
+    ) -> Result<bool, NookError> {
+        if force_genesis
+            || !content.trim().is_empty()
+            || self.storage_mode == nook_core::StorageMode::Local
+        {
+            return Ok(false);
+        }
+        self.sync_events_from_current_provider().await?;
+        Ok(!self.store_id.is_empty() && self.event_log_has_events().await?)
+    }
+
+    async fn connect_event_log_only_remote(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<(), NookError> {
+        let records = self.stored_records_snapshot();
+        if let Some(message) = nook_core::explain_connect_blocked(&records, identity) {
+            return Err(NookError::Database(message));
+        }
+        let projection = self.serialize_current_projection_yaml()?;
+        let LoadedVault {
+            jsonl,
+            meta,
+            secrets_key,
+            members_key,
+        } = load_stored_vault(&projection, identity)?;
+        self.apply_vault_keys(&secrets_key, &members_key)?;
+        self.decrypted_jsonl = jsonl;
+        self.meta = meta;
+        self.apply_event_projection_to_session().await?;
+        self.persist_projection_cache().await?;
+        let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
+        Ok(())
     }
 
     fn initialize_genesis_vault(

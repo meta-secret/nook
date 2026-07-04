@@ -36,14 +36,15 @@ The immutable event set is authoritative. These are **derived caches only**:
 - plaintext `Database` session;
 - UI arrays.
 
-`nook-vault.yaml` becomes a legacy import/export and recovery format.
+`nook-vault.yaml` is a browser-local projection/import/export format, not a
+provider sync artifact for event-log vaults.
 
 ## Event identity
 
 | Property | Rule |
 |----------|------|
 | Event ID | SHA-256 of canonical body bytes (`sha256:{hex}`) |
-| Remote path | `nook-log/v1/events/{shard}/{digest}.event` |
+| Remote path | `nook-log/v1/events/{digest}.yaml` |
 | Writes | append-only; `put_event_if_absent` |
 | Duplicate identical event | success (idempotent) |
 | Same path, different bytes | quarantine (corruption) |
@@ -120,12 +121,10 @@ then repairs the provider by uploading any local event-store events missing from
 that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
 
-Legacy whole-blob provider writes are retained only as compatibility/recovery
-paths. Their optimistic-lock retry paths never refresh a provider revision and
-blindly resend stale content: GitHub, Drive, and iCloud now refetch on write
-conflict, accept idempotent identical content, and otherwise report an explicit
-sync conflict. Provider metadata also remembers the last common blob content
-hash so divergent scalar-version branches cannot be auto-selected as "newer."
+Event-log provider sync never writes the materialized `nook-vault.yaml`
+projection. Old whole-blob code remains only for explicit local migration/import
+and recovery of pre-event-log vaults; normal provider fan-out appends YAML event
+files and repairs missing provider events from the local event store.
 
 Drive event storage tolerates duplicate app-data files for the same event name:
 fetch downloads all matches, accepts only bytes whose content-derived event id
@@ -169,7 +168,7 @@ See [vault-schema-versioning.md](vault-schema-versioning.md) for #52 goal mappin
 | 4 | GitHub / Drive event adapters |
 | 5 | WASM manager + UI |
 | 6 | User migration |
-| 7 | Legacy write removal — **done** (event log is the only write path; YAML is projection cache only) |
+| 7 | Provider projection removal — **done** (event log is the only provider write path; YAML is local/import material only) |
 
 ## Testing requirements
 

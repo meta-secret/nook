@@ -1368,16 +1368,13 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
-    const eventLogMode = this.isEventLogMode()
     if (this.syncProviders.length === 0) {
       await this.flushRemoteEventOutboxNow()
-      await this.pushRemoteYamlSnapshotForLocalSave(undefined, eventLogMode)
       return
     }
     for (const provider of this.syncProviders) {
       if (this.syncBlocked) break
       await this.flushRemoteEventOutboxNow(provider)
-      await this.pushRemoteYamlSnapshotForLocalSave(provider, eventLogMode)
     }
   }
 
@@ -1385,12 +1382,7 @@ export class VaultState {
     void this.runFanOutSyncAfterLocalSave()
   }
 
-  /** Fire-and-forget YAML projection for providers that still read nook-vault.yaml. */
-  scheduleRemoteYamlSnapshotPush(): void {
-    void this.pushRemoteYamlSnapshotNow()
-  }
-
-  remoteYamlSnapshotStorageArgs(
+  remoteEventProviderArgs(
     provider?: StorageProvider,
   ): [string, string, string] | null {
     if (provider) {
@@ -1403,41 +1395,6 @@ export class VaultState {
       return this.wasmStorageArgs()
     }
     return null
-  }
-
-  async pushRemoteYamlSnapshotNow(provider?: StorageProvider): Promise<void> {
-    if (!this.manager) return
-    const args = this.remoteYamlSnapshotStorageArgs(provider)
-    if (!args) return
-    await this.enqueueStorage(() =>
-      this.manager!.pushRemoteVaultYamlSnapshotForProvider(...args),
-    )
-  }
-
-  private isEventLogMode(): boolean {
-    try {
-      return this.manager?.eventLogMode() ?? false
-    } catch {
-      return false
-    }
-  }
-
-  private async pushRemoteYamlSnapshotForLocalSave(
-    provider: StorageProvider | undefined,
-    eventLogMode: boolean,
-  ): Promise<void> {
-    if (!eventLogMode) {
-      await this.pushRemoteYamlSnapshotNow(provider)
-      return
-    }
-    try {
-      await this.pushRemoteYamlSnapshotNow(provider)
-    } catch (error) {
-      vaultLog.warn('legacy YAML snapshot push skipped after event-log save', {
-        providerId: provider?.id ?? 'active',
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
   }
 
   async applyReconcileResult(
@@ -1753,7 +1710,7 @@ export class VaultState {
     return multiDeviceActions.refreshDeviceState(this)
   }
 
-  /** Merge remote YAML join rows into the session (manual sync + provider poll). */
+  /** Refresh event-log joins from providers (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
     return multiDeviceActions.refreshPendingJoinsFromProviders(this)
   }
@@ -1908,14 +1865,17 @@ export class VaultState {
 
   async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return
-    const args = this.remoteYamlSnapshotStorageArgs(provider)
+    const args = this.remoteEventProviderArgs(provider)
     if (!args) return
     try {
       await this.enqueueStorage(() =>
         this.manager!.flushEventOutboxForProvider(...args),
       )
-    } catch {
-      // Best-effort — YAML snapshot push carries the legacy projection.
+    } catch (error) {
+      vaultLog.warn('event outbox flush skipped', {
+        providerId: provider?.id ?? 'active',
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

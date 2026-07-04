@@ -81,10 +81,10 @@ pub use multi_device::{
     is_join_stored_record, is_members_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
     member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
-    merge_remote_yaml_user_secrets, parse_auth_envelopes, parse_join_request,
-    pending_join_for_device, rename_vault_member, replace_member_records, resolve_dec, resolve_dek,
-    resolve_member_roster, resolve_members_key, resolve_secrets_key, revoke_vault_member,
-    roster_add_member, user_stored_records, vault_has_multi_device_records,
+    parse_auth_envelopes, parse_join_request, pending_join_for_device, rename_vault_member,
+    replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
+    resolve_secrets_key, revoke_vault_member, roster_add_member, user_stored_records,
+    vault_has_multi_device_records,
 };
 
 pub use event_canonical::{
@@ -146,7 +146,7 @@ pub use vault_event_builder::{
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
 pub use vault_event_store::{
-    LocalEventStore, remote_event_belongs_to_store, union_remote_events,
+    LocalEventStore, remote_event_belongs_to_store, remote_event_store_id, union_remote_events,
     union_remote_events_and_heads,
 };
 pub use vault_format::{

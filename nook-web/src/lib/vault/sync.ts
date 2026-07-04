@@ -495,20 +495,8 @@ export async function syncProviderById(
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)
       if (remote.missing || !remote.content.trim()) {
         await state.enqueueStorage(() =>
-          state.manager!.pushRemoteVaultYamlSnapshotForProvider(
-            mode,
-            pat,
-            repo,
-          ),
+          state.manager!.flushEventOutboxForProvider(mode, pat, repo),
         )
-        const localYaml = await readLocalVaultBlob()
-        if (localYaml.trim()) {
-          await state.updateProviderSyncMetadata(
-            providerId,
-            localYaml,
-            remote.revision,
-          )
-        }
         if (!options?.quiet) {
           state.showSuccess(state.t('auth_storage.sync_pushed'))
         }

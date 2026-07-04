@@ -233,10 +233,11 @@ impl VaultEvent {
             .into());
         }
         if self.body.parents.is_empty()
-            && !matches!(
-                self.body.operations.as_slice(),
-                [VaultOperation::VaultImported { .. }]
-            )
+            && !self
+                .body
+                .operations
+                .iter()
+                .any(|operation| matches!(operation, VaultOperation::VaultImported { .. }))
         {
             return Err(EventError::MissingEventParents.into());
         }

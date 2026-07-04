@@ -153,31 +153,6 @@ impl NookVaultManager {
         Ok(self.get_records()?)
     }
 
-    #[wasm_bindgen(js_name = pushRemoteVaultYamlSnapshot)]
-    pub async fn push_remote_vault_yaml_snapshot_js(&mut self) -> Result<(), JsError> {
-        self.push_remote_vault_yaml_snapshot()
-            .await
-            .map_err(Into::into)
-    }
-
-    #[wasm_bindgen(js_name = pushRemoteVaultYamlSnapshotForProvider)]
-    pub async fn push_remote_vault_yaml_snapshot_for_provider(
-        &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<(), JsError> {
-        let password_entries = self.password_entries.clone();
-        let unlock = self.unlock.clone();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
-        self.password_entries = password_entries;
-        self.unlock = unlock;
-        self.push_remote_vault_yaml_snapshot()
-            .await
-            .map_err(Into::into)
-    }
-
     #[wasm_bindgen(js_name = mergeRemoteJoinsFromProvider)]
     pub async fn merge_remote_joins_from_provider(
         &mut self,
@@ -188,7 +163,7 @@ impl NookVaultManager {
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let _ = self.merge_remote_yaml_joins_from_storage().await?;
+        self.sync_events_from_current_provider().await?;
         if restore_local {
             self.prepare_storage("local", "", "").await?;
         }
@@ -222,7 +197,6 @@ impl NookVaultManager {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
-        let _ = self.merge_remote_yaml_joins_from_storage().await?;
         self.flush_event_outbox().await?;
         Ok(())
     }

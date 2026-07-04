@@ -31,23 +31,6 @@ fn iso_timestamp() -> String {
     wasm_iso_timestamp()
 }
 
-fn vault_operations_need_remote_yaml_snapshot(operations: &[VaultOperation]) -> bool {
-    operations.iter().any(|operation| {
-        matches!(
-            operation,
-            VaultOperation::JoinRequested { .. }
-                | VaultOperation::JoinApproved { .. }
-                | VaultOperation::JoinDenied { .. }
-                | VaultOperation::MemberRenamed { .. }
-                | VaultOperation::DeviceRevoked { .. }
-                | VaultOperation::PasswordAdded { .. }
-                | VaultOperation::PasswordRotated { .. }
-                | VaultOperation::PasswordRemoved { .. }
-                | VaultOperation::VaultImported { .. }
-        )
-    })
-}
-
 impl NookVaultManager {
     pub(in crate::manager) async fn ensure_event_log_mode(&mut self) -> Result<bool, NookError> {
         if self.event_log_mode {
@@ -258,25 +241,6 @@ impl NookVaultManager {
         Ok(())
     }
 
-    /// Secret ids the local event log has tombstoned (deleted).
-    ///
-    /// Used to stop a background YAML pull from resurrecting a just-deleted
-    /// secret before this device's own delete push reaches the remote snapshot.
-    pub(in crate::manager) async fn locally_deleted_secret_ids(
-        &self,
-    ) -> Result<std::collections::BTreeSet<nook_core::SecretId>, NookError> {
-        let store = load_local_event_store(&self.store_id).await?;
-        let graph = store.load_graph(&self.store_id)?;
-        let projection = project_vault(&graph, &self.store_id)?;
-        let mut deleted = std::collections::BTreeSet::new();
-        for (id, secret) in &projection.secrets {
-            if !secret.is_live(&graph) {
-                deleted.insert(id.clone());
-            }
-        }
-        Ok(deleted)
-    }
-
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.meta.to_stored_records();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
@@ -362,18 +326,42 @@ impl NookVaultManager {
     pub(in crate::manager) async fn sync_events_from_current_provider(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.store_id.is_empty() {
-            return Ok(());
-        }
         let remote_ids = self.list_current_provider_event_ids().await?;
 
         let mut remote_events = Vec::new();
-        for event_id in remote_ids {
-            let bytes = self.fetch_current_provider_event(&event_id).await?;
-            if !nook_core::remote_event_belongs_to_store(&event_id, &bytes, &self.store_id)? {
-                continue;
+        if self.store_id.is_empty() {
+            let mut discovered_store_ids = BTreeSet::new();
+            let mut fetched = Vec::new();
+            for event_id in remote_ids {
+                let bytes = self.fetch_current_provider_event(&event_id).await?;
+                let store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
+                let store_id = store_id.as_str().to_owned();
+                discovered_store_ids.insert(store_id.clone());
+                fetched.push((event_id, bytes, store_id));
             }
-            remote_events.push((event_id, bytes));
+            if discovered_store_ids.is_empty() {
+                return Ok(());
+            }
+            if discovered_store_ids.len() > 1 {
+                return Err(NookError::Database(
+                    "Multiple vault event logs found at this provider. Use a dedicated repo or path for one vault.".to_owned(),
+                ));
+            }
+            self.store_id = discovered_store_ids.into_iter().next().unwrap_or_default();
+            self.activate_event_log_mode().await?;
+            remote_events = fetched
+                .into_iter()
+                .filter(|(_, _, store_id)| store_id == &self.store_id)
+                .map(|(event_id, bytes, _)| (event_id, bytes))
+                .collect();
+        } else {
+            for event_id in remote_ids {
+                let bytes = self.fetch_current_provider_event(&event_id).await?;
+                if !nook_core::remote_event_belongs_to_store(&event_id, &bytes, &self.store_id)? {
+                    continue;
+                }
+                remote_events.push((event_id, bytes));
+            }
         }
 
         let mut local = load_local_event_store(&self.store_id).await?;
@@ -384,9 +372,12 @@ impl NookVaultManager {
 
         self.event_heads = heads.clone();
         save_heads(&self.store_id, &heads).await?;
+        let graph = local.load_graph(&self.store_id)?;
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.meta)?;
         if self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
         }
+        self.persist_projection_cache().await?;
         Ok(())
     }
 
@@ -447,15 +438,41 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
         let key_epoch = self.ensure_key_epoch().await?;
-        let import = nook_core::build_genesis_import_event(
-            &nook_core::StoreId::parse(&self.store_id)?,
-            &actor_id,
-            &EventId::parse(&key_epoch)?,
-            &nook_core::Sha256Hex::from_trusted("0".repeat(64)),
-            vec![],
-            &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
-            signing.signing_key(),
-        )?;
+        let identity = self.device_identity()?;
+        let mut operations = vec![VaultOperation::VaultImported {
+            source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+            secrets: vec![],
+        }];
+        if !self.secrets_key.is_empty() && !self.members_key.is_empty() {
+            let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
+            let members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
+            let auth_record =
+                nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
+            let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+            operations.push(VaultOperation::JoinApproved {
+                device_id: identity.device_id().clone(),
+                encryption_public_key: identity.public_key(),
+                signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+                    signing.signing_key().verifying_key().as_bytes(),
+                )),
+                label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            });
+        }
+        let body = nook_core::VaultEventBody {
+            schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
+            store_id: nook_core::StoreId::parse(&self.store_id)?,
+            actor_id,
+            actor_signing_public_key: Some(nook_core::DeviceSigningPublicKey::from_trusted(
+                hex::encode(signing.signing_key().verifying_key().as_bytes()),
+            )),
+            parents: Vec::new(),
+            created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
+            key_epoch: EventId::parse(&key_epoch)?,
+            operations,
+        };
+        let import = nook_core::VaultEvent::sign(body, signing.signing_key())?;
         let event_id = import.id()?;
         let bytes = nook_core::serialize_event_storage_yaml(&import)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
@@ -472,15 +489,11 @@ impl NookVaultManager {
         operations: Vec<VaultOperation>,
     ) -> Result<(), NookError> {
         self.ensure_event_log_ready().await?;
-        let needs_yaml = vault_operations_need_remote_yaml_snapshot(&operations);
         if operations.is_empty() {
             self.persist_projection_cache().await?;
             self.flush_sync_event_outbox().await?;
         } else {
             self.append_vault_operations(operations).await?;
-        }
-        if needs_yaml && self.storage_mode != nook_core::StorageMode::Local {
-            self.push_remote_vault_yaml_snapshot().await?;
         }
         Ok(())
     }

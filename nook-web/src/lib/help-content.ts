@@ -11,15 +11,17 @@ export type HelpSection = {
 /** Mermaid source for the local-first vault model (rendered in Help). */
 export const HELP_ARCHITECTURE_DIAGRAM = `flowchart TB
   subgraph device["This browser (working copy)"]
-    V[nook-vault.yaml]
+    V[Local encrypted projection]
+    E[Event store]
     K[Device keys unlock]
   end
   subgraph sync["Sync providers (replicas)"]
-    G[GitHub]
-    D[Google Drive]
+    G[nook-log/v1/events]
+    D[Provider event files]
   end
-  V <-->|version-based sync| G
-  V <-->|version-based sync| D
+  E <-->|set union| G
+  E <-->|set union| D
+  E --> V
   K --> V`
 
 export const HELP_SECTIONS: HelpSection[] = [
@@ -52,7 +54,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: 'sync',
     title: 'Sync providers',
     summary:
-      'Connect GitHub or Google Drive to push and pull the same vault file — credentials move ciphertext only.',
+      'Connect GitHub or Google Drive to push and pull immutable vault events — credentials move ciphertext only.',
     bullets: [
       'Add sync providers in Settings. Local storage stays the canonical copy.',
       'Use Sync now or Sync all to reconcile with a provider manually.',
@@ -63,12 +65,11 @@ export const HELP_SECTIONS: HelpSection[] = [
   {
     id: 'conflicts',
     title: 'Sync conflicts',
-    summary:
-      'Event-log vaults merge by appending immutable events. Legacy scalar conflicts can still appear for old copies.',
+    summary: 'Event-log vaults merge by appending immutable events.',
     bullets: [
       'New vaults use an append-only event log — concurrent edits on different devices usually merge automatically.',
-      'The local YAML file is a projection cache only; providers sync event files under nook-log/v1/events/.',
-      'If you still see a version conflict dialog, two whole-vault YAML copies diverged at the same vault_version — pick Keep local or Keep remote.',
+      'The local YAML projection cache stays in this browser; providers sync event files under nook-log/v1/events/.',
+      'When concurrent replacements touch the same secret, Nook keeps the candidates until you choose the version to keep.',
       'After resolution, sync continues normally to all providers.',
     ],
   },
@@ -103,7 +104,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     bullets: [
       'Each browser creates a public/private keypair; private keys never leave the device.',
       'Secrets are typed YAML records encrypted independently with age.',
-      'Sync providers store nook-vault.yaml — an encrypted bundle, not plaintext secrets.',
+      'Sync providers store pretty-printed YAML event files, not plaintext secrets or mutable vault snapshots.',
       'Decrypted secrets exist only in the active browser session.',
     ],
   },

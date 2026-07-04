@@ -29,7 +29,7 @@ export async function requestVaultAccess(state: VaultState) {
     if (state.localVaultPresent && state.syncProviders.length > 0) {
       state.scheduleFanOutSyncAfterLocalSave()
     } else {
-      state.scheduleRemoteYamlSnapshotPush()
+      state.scheduleRemoteEventOutboxFlush()
     }
     state.showSuccess(state.t('login.join_request_sent'))
     log.info('join request sent', { deviceId: state.deviceId })
@@ -51,7 +51,6 @@ export async function approveJoin(state: VaultState, joinDeviceId: string) {
       state.manager!.approve_join_request(joinDeviceId),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
-    await state.pushRemoteYamlSnapshotNow()
     await state.flushRemoteEventOutboxNow()
     await state.hydrateMultiDeviceState()
     state.pendingJoins = state.pendingJoins.filter(
@@ -157,7 +156,7 @@ export async function confirmJoinRequest(state: VaultState) {
   state.isVerifying = true
   try {
     const storageArgs =
-      state.remoteYamlSnapshotStorageArgs() ?? state.wasmStorageArgs()
+      state.remoteEventProviderArgs() ?? state.wasmStorageArgs()
     await state.enqueueStorage(() =>
       state.manager!.request_vault_access(...storageArgs, isoTimestamp()),
     )

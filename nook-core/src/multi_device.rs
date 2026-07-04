@@ -11,7 +11,7 @@ use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 
 /// Symmetric vault key (32-byte random hex).
@@ -484,48 +484,6 @@ pub fn merge_remote_join_records(state: &mut VaultMetaState, fresh_records: &[St
     }
 }
 
-/// Merge user secret rows from a remote YAML projection cache into the session.
-///
-/// Event-log vaults treat `nook-log/` as authoritative for ordering, but the YAML
-/// projection is still pushed after every save and may hold ciphertext for events
-/// another device has not yet fetched (or whose parents never reached the remote log).
-///
-/// `deleted_ids` carries secret ids that the local event log has tombstoned. A
-/// background pull can otherwise resurrect a just-deleted secret: the local
-/// projection dropped it, but the remote YAML snapshot still lists it until our
-/// own delete push lands. Ids are generated per write, so a legitimate re-add
-/// uses a fresh id and is unaffected by this skip.
-pub fn merge_remote_yaml_user_secrets(
-    state: &mut VaultMetaState,
-    fresh_records: &[StoredSecretRecord],
-    deleted_ids: &BTreeSet<SecretId>,
-) -> bool {
-    let mut changed = false;
-    for record in user_stored_records(fresh_records) {
-        if deleted_ids.contains(&record.key) {
-            continue;
-        }
-        let unchanged = state
-            .secrets
-            .get(&record.key)
-            .is_some_and(|(_, existing)| existing == &record.value);
-        if unchanged {
-            continue;
-        }
-        // Only known-typed rows enter the typed `secrets` map; an untyped
-        // remote row (shouldn't happen on any current write path) is dropped
-        // rather than silently defaulting its type, matching the strict
-        // typing this state now enforces.
-        if let Some(secret_type) = record.secret_type {
-            state
-                .secrets
-                .insert(record.key.clone(), (secret_type, record.value.clone()));
-            changed = true;
-        }
-    }
-    changed
-}
-
 #[must_use]
 pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
     records.iter().any(is_auth_stored_record)
@@ -820,8 +778,24 @@ pub fn apply_vault_meta_operation(
                 },
             );
         }
-        VaultOperation::JoinDenied { device_id }
-        | VaultOperation::JoinApproved { device_id, .. } => {
+        VaultOperation::JoinApproved {
+            device_id,
+            encryption_public_key,
+            secrets_key_ciphertext,
+            members_key_ciphertext,
+            ..
+        } => {
+            state.joins.remove(device_id);
+            let auth_id = dec_auth_id_from_public_key(encryption_public_key)?;
+            state.auth.insert(
+                auth_id,
+                AuthEnvelopes {
+                    secrets_key: secrets_key_ciphertext.clone(),
+                    members_key: members_key_ciphertext.clone(),
+                },
+            );
+        }
+        VaultOperation::JoinDenied { device_id } => {
             state.joins.remove(device_id);
         }
         VaultOperation::VaultImported { .. }
@@ -1560,57 +1534,6 @@ mod tests {
     }
 
     #[test]
-    fn merge_remote_yaml_user_secrets_adds_missing_rows() {
-        let keys = generate_vault_keys().unwrap();
-        let (genesis, armored_records) = genesis_vault(&keys);
-        let mut state = VaultMetaState::from_stored_records(&armored_records);
-        let remote_secret = StoredSecretRecord {
-            key: SecretId::from_vault_record("secret_remote"),
-            secret_type: Some(SecretType::ApiKey),
-            value: StoredRecordPayload::from_trusted("armored-remote".to_owned()),
-        };
-        let no_deletes = BTreeSet::new();
-        let changed = merge_remote_yaml_user_secrets(
-            &mut state,
-            std::slice::from_ref(&remote_secret),
-            &no_deletes,
-        );
-        assert!(changed);
-        assert_eq!(
-            state
-                .secrets
-                .get(&SecretId::from_vault_record("secret_remote")),
-            Some(&(
-                SecretType::ApiKey,
-                StoredRecordPayload::from_trusted("armored-remote".to_owned())
-            ))
-        );
-        let unchanged = merge_remote_yaml_user_secrets(
-            &mut state,
-            std::slice::from_ref(&remote_secret),
-            &no_deletes,
-        );
-        assert!(!unchanged);
-
-        // A tombstoned id in the remote projection must not be resurrected.
-        let deleted: BTreeSet<SecretId> =
-            std::iter::once(SecretId::from_vault_record("secret_remote")).collect();
-        let mut fresh_state = VaultMetaState::from_stored_records(&armored_records);
-        let skipped = merge_remote_yaml_user_secrets(
-            &mut fresh_state,
-            std::slice::from_ref(&remote_secret),
-            &deleted,
-        );
-        assert!(!skipped);
-        assert!(
-            !fresh_state
-                .secrets
-                .contains_key(&SecretId::from_vault_record("secret_remote"))
-        );
-        let _ = genesis;
-    }
-
-    #[test]
     fn assess_connect_access_when_enrolled() {
         let keys = generate_vault_keys().unwrap();
         let (genesis, records) = genesis_vault(&keys);
@@ -1650,6 +1573,7 @@ mod tests {
         )
         .unwrap();
         assert!(!state.joins.contains_key(joiner.device_id()));
+        assert!(state.auth.contains_key(&joiner.auth_id()));
 
         apply_vault_meta_operation(&mut state, &join_requested, "2026-06-21T00:00:00Z").unwrap();
         apply_vault_meta_operation(
