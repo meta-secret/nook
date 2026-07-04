@@ -82,7 +82,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          git fetch origin "$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
+          git fetch origin "+$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
           git worktree prune
           rm -rf ../nook-base-coverage
           git worktree add --detach ../nook-base-coverage "origin/$BASE_REF"
@@ -94,7 +94,11 @@ jobs:
             cd ../nook-base-coverage
             task setup VITE_BASE=/
           )
-          COVERAGE_OUT_DIR="$PWD/coverage/base" bash .github/scripts/export-nook-core-coverage.sh
+          base_coverage_out="$PWD/coverage/base"
+          (
+            cd ../nook-base-coverage
+            task docker:extract:coverage COVERAGE_OUT_DIR="$base_coverage_out"
+          )
 
       - name: Summarize nook-core coverage
         id: coverage
