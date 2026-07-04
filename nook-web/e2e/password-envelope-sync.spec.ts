@@ -216,7 +216,7 @@ test.describe('vault password envelope (stub sync)', () => {
   })
 
   test('removing the backup password leaves device-key unlock intact', async () => {
-    if (!(await deviceA.getByTestId('storage-settings-panel').isVisible())) {
+    if (!(await deviceA.getByTestId('vault-admin-panel').isVisible())) {
       await openStorageSettings(deviceA)
     }
     await waitForGithubVaultState(

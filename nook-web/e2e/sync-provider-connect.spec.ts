@@ -15,7 +15,13 @@ test.describe('sync provider settings', () => {
 
     await reloadUnlockWithSyncProvider(page)
 
-    await page.getByTestId('vault-settings-tab').click()
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(
       page.getByTestId('sync-provider-e2e-onboard-oauth'),

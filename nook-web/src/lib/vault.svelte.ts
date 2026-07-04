@@ -81,9 +81,10 @@ export class VaultState {
 
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard' | 'admin'>('storage')
-  settingsAccordionSection = $state<
-    'storage' | 'passwords' | 'devices' | 'language' | null
-  >('storage')
+  settingsAccordionSection = $state<'devices' | 'language' | null>('devices')
+  adminAccordionSection = $state<'vaults' | 'storage' | 'passwords' | null>(
+    'vaults',
+  )
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
@@ -1607,21 +1608,24 @@ export class VaultState {
 
   openSettings(
     section: 'storage' | 'onboard' | 'admin' = 'storage',
-    accordion: 'storage' | 'passwords' | 'devices' | 'language' = 'storage',
+    accordion: 'devices' | 'language' = 'devices',
   ) {
     this.helpOpen = false
     this.settingsSection = section
     if (section === 'storage') {
+      this.cancelProviderSetup()
+      this.cancelAddProvider()
       this.settingsAccordionSection = accordion
     }
     this.settingsOpen = true
     void this.refreshDeviceState()
   }
 
-  openAdmin() {
+  openAdmin(accordion: 'vaults' | 'storage' | 'passwords' = 'vaults') {
     this.helpOpen = false
     this.cancelProviderSetup()
     this.cancelAddProvider()
+    this.adminAccordionSection = accordion
     this.settingsSection = 'admin'
     this.settingsOpen = true
     void this.refreshLocalVaultCatalog()

@@ -204,8 +204,13 @@ test.describe('multi-vault on one browser profile', () => {
       '2 vaults',
     )
 
-    await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
     await page
       .getByTestId('storage-providers-section')
       .getByTestId('add-provider-btn')
@@ -261,7 +266,13 @@ test.describe('multi-vault on one browser profile', () => {
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 
     await seedScopedSyncProviders(page, storeA, storeB)
-    await page.getByTestId('vault-settings-tab').click()
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'nook-multi-vault-a',

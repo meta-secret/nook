@@ -149,7 +149,13 @@ test.describe('vault connect flow', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
-    await page.getByTestId('vault-settings-tab').click()
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
     await page.getByTestId('add-provider-btn').click()
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -233,7 +239,13 @@ test.describe('vault connect flow', () => {
     })
 
     await dismissSyncConflictIfVisible(page)
-    await page.getByTestId('vault-settings-tab').click()
+    await page.getByTestId('vault-admin-tab').click()
+    await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
+    await page
+      .getByTestId('storage-providers-section')
+      .getByRole('button')
+      .first()
+      .click()
     const driveProvider = page.getByTestId('settings-provider-oauth-file')
     await expect(driveProvider).toBeVisible()
 

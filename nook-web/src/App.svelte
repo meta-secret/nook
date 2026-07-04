@@ -346,14 +346,41 @@
               {#if vault.syncProviders.length === 0}
                 <LocalOnlyVaultWarningBanner
                   {vault}
-                  onAddSyncProvider={() => vault.openAdmin()}
+                  onAddSyncProvider={() => vault.openAdmin('storage')}
                 />
               {/if}
               {#if vault.settingsOpen && vault.settingsSection === 'admin'}
                 <VaultAdmin
                   {vault}
+                  bind:activeSection={vault.adminAccordionSection}
+                  syncProviders={vault.syncProviders}
+                  syncingProviderId={vault.syncingProviderId}
+                  isAuthenticated={vault.isAuthenticated}
                   isVerifying={vault.isVerifying}
                   isInitializing={vault.isInitializing}
+                  addProviderOpen={vault.addProviderOpen}
+                  bind:setupType={vault.loginSetupType}
+                  bind:githubPat={vault.githubPat}
+                  bind:githubRepo={vault.githubRepo}
+                  passwordEntries={vault.passwordEntries}
+                  isPasswordBusy={vault.isPasswordBusy}
+                  passwordError={vault.passwordError}
+                  enrollmentCode={vault.enrollmentCode}
+                  onReconnect={handleSettingsReconnect}
+                  onSyncProvider={(id) => vault.syncProviderById(id)}
+                  onBeginAddProvider={() => vault.beginAddProvider()}
+                  onCancelAddProvider={() => vault.cancelAddProvider()}
+                  onBeginSetup={(type, preset) =>
+                    vault.beginProviderSetup(type, preset)}
+                  onCancelSetup={() => vault.cancelProviderSetup()}
+                  onRemoveProvider={(id) => vault.removeProvider(id)}
+                  onAddPassword={(label, pw) =>
+                    vault.addVaultPassword(label, pw)}
+                  onUpdatePassword={(id, pw) =>
+                    vault.updateVaultPasswordEntry(id, pw)}
+                  onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
+                  onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
+                  onClearCode={() => vault.clearEnrollmentCode()}
                 />
               {:else if vault.settingsOpen && vault.settingsSection === 'onboard'}
                 <OnboardDevice
@@ -385,40 +412,13 @@
                 <VaultSettingsAccordion
                   {vault}
                   bind:accordionSection={vault.settingsAccordionSection}
-                  syncProviders={vault.syncProviders}
-                  syncingProviderId={vault.syncingProviderId}
-                  isAuthenticated={vault.isAuthenticated}
                   isVerifying={vault.isVerifying}
                   isSaving={vault.isSaving}
-                  isInitializing={vault.isInitializing}
-                  addProviderOpen={vault.addProviderOpen}
-                  bind:setupType={vault.loginSetupType}
-                  bind:githubPat={vault.githubPat}
-                  bind:githubRepo={vault.githubRepo}
-                  passwordEntries={vault.passwordEntries}
-                  isPasswordBusy={vault.isPasswordBusy}
-                  passwordError={vault.passwordError}
-                  enrollmentCode={vault.enrollmentCode}
                   deviceId={vault.deviceId}
                   devicePublicKey={vault.devicePublicKey}
                   pendingJoins={vault.pendingJoins}
                   vaultMembers={vault.vaultMembers}
                   hasPasswordEnvelope={vault.hasPasswordEnvelope}
-                  onReconnect={handleSettingsReconnect}
-                  onSyncProvider={(id) => vault.syncProviderById(id)}
-                  onBeginAddProvider={() => vault.beginAddProvider()}
-                  onCancelAddProvider={() => vault.cancelAddProvider()}
-                  onBeginSetup={(type, preset) =>
-                    vault.beginProviderSetup(type, preset)}
-                  onCancelSetup={() => vault.cancelProviderSetup()}
-                  onRemoveProvider={(id) => vault.removeProvider(id)}
-                  onAddPassword={(label, pw) =>
-                    vault.addVaultPassword(label, pw)}
-                  onUpdatePassword={(id, pw) =>
-                    vault.updateVaultPasswordEntry(id, pw)}
-                  onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
-                  onIssueCode={(id, pw) => vault.issueEnrollmentCode(id, pw)}
-                  onClearCode={() => vault.clearEnrollmentCode()}
                   onApproveJoin={(id) => vault.approveJoin(id)}
                   onDenyJoin={(id) => vault.denyJoin(id)}
                   onRenameDevice={(id, label) => vault.renameDevice(id, label)}

@@ -1,63 +1,21 @@
 <script lang="ts">
-  import {
-    CheckCircle2,
-    Laptop,
-    Lock,
-    ShieldCheck,
-    Globe,
-  } from '@lucide/svelte'
+  import { Laptop, Globe } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
-  import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultDevicesCard from '$lib/components/settings/VaultDevicesCard.svelte'
-  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import type { JoinRequest, VaultMember } from '$lib/nook'
-  import type {
-    OAuthFilePreset,
-    StorageProvider,
-    StorageProviderType,
-  } from '$lib/auth-providers'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
-  export type VaultSettingsAccordionSection =
-    | 'storage'
-    | 'passwords'
-    | 'devices'
-    | 'language'
+  export type VaultSettingsAccordionSection = 'devices' | 'language'
 
   let {
     vault,
-    syncProviders,
-    syncingProviderId = null,
-    isAuthenticated,
     isVerifying,
     isSaving,
-    isInitializing,
-    addProviderOpen = false,
-    setupType = $bindable(null as StorageProviderType | null),
-    githubPat = $bindable(''),
-    githubRepo = $bindable(''),
-    passwordEntries,
-    isPasswordBusy,
-    passwordError,
-    enrollmentCode,
     deviceId,
     devicePublicKey,
     pendingJoins,
     vaultMembers,
     hasPasswordEnvelope = false,
-    onReconnect,
-    onSyncProvider,
-    onBeginAddProvider,
-    onCancelAddProvider,
-    onBeginSetup,
-    onCancelSetup,
-    onRemoveProvider,
-    onAddPassword,
-    onUpdatePassword,
-    onRemovePassword,
-    onIssueCode,
-    onClearCode,
     onApproveJoin,
     onDenyJoin,
     onRenameDevice,
@@ -65,43 +23,13 @@
     accordionSection = $bindable(null as VaultSettingsAccordionSection | null),
   }: {
     vault: VaultState
-    syncProviders: StorageProvider[]
-    syncingProviderId?: string | null
-    isAuthenticated: boolean
     isVerifying: boolean
     isSaving: boolean
-    isInitializing: boolean
-    addProviderOpen?: boolean
-    setupType?: StorageProviderType | null
-    githubPat: string
-    githubRepo: string
-    passwordEntries: VaultPasswordEntrySummary[]
-    isPasswordBusy: boolean
-    passwordError: string
-    enrollmentCode: string
     deviceId: string
     devicePublicKey: string
     pendingJoins: JoinRequest[]
     vaultMembers: VaultMember[]
     hasPasswordEnvelope?: boolean
-    onReconnect: () => void | Promise<void>
-    onSyncProvider?: (id: string) => void | Promise<void>
-    onBeginAddProvider?: () => void
-    onCancelAddProvider?: () => void
-    onBeginSetup: (
-      type: StorageProviderType,
-      oauthPreset?: OAuthFilePreset,
-    ) => void
-    onCancelSetup: () => void
-    onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (label: string, password: string) => void | Promise<void>
-    onUpdatePassword: (
-      entryId: string,
-      password: string,
-    ) => void | Promise<void>
-    onRemovePassword: (entryId: string) => void | Promise<void>
-    onIssueCode: (entryId: string, password: string) => Promise<string | void>
-    onClearCode: () => void
     onApproveJoin: (deviceId: string) => void | Promise<void>
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
@@ -109,93 +37,10 @@
     accordionSection?: VaultSettingsAccordionSection | null
   } = $props()
 
-  const hasPasswords = $derived(passwordEntries.length > 0)
   const hasDevices = $derived(vaultMembers.length > 0)
 </script>
 
 <div class="space-y-2" data-testid="storage-settings-panel">
-  <SettingsAccordionSection
-    title={vault.t('settings.storage')}
-    subtitle={vault.t('settings.storage_desc')}
-    section="storage"
-    bind:activeSection={accordionSection}
-    testId="storage-providers-section"
-  >
-    {#snippet badge()}
-      {#if isAuthenticated}
-        <span
-          class="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500"
-          data-testid="connected-badge"
-        >
-          <CheckCircle2 class="size-3" />
-          {vault.t('settings.vault_unlocked')}
-        </span>
-      {/if}
-    {/snippet}
-    <AuthStorage
-      {vault}
-      embedded
-      {syncProviders}
-      {syncingProviderId}
-      {isVerifying}
-      {isInitializing}
-      {addProviderOpen}
-      bind:setupType
-      bind:githubPat
-      bind:githubRepo
-      {onReconnect}
-      {onSyncProvider}
-      {onBeginAddProvider}
-      {onCancelAddProvider}
-      {onBeginSetup}
-      {onCancelSetup}
-      {onRemoveProvider}
-    />
-  </SettingsAccordionSection>
-
-  <SettingsAccordionSection
-    title={vault.t('settings.passwords')}
-    subtitle={vault.t('settings.passwords_desc')}
-    section="passwords"
-    bind:activeSection={accordionSection}
-    testId="vault-unlock-section"
-  >
-    {#snippet badge()}
-      <span
-        class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium {hasPasswords
-          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-          : 'border-border bg-muted/40 text-muted-foreground'}"
-        data-testid="vault-password-status"
-      >
-        {#if hasPasswords}
-          <ShieldCheck class="size-3" />
-          {passwordEntries.length === 1
-            ? vault.t('settings.password_count_singular')
-            : vault.t('settings.password_count_plural', {
-                count: String(passwordEntries.length),
-              })}
-        {:else}
-          <Lock class="size-3" />
-          {vault.t('settings.no_passwords')}
-        {/if}
-      </span>
-    {/snippet}
-    <VaultPasswordCard
-      {vault}
-      embedded
-      {passwordEntries}
-      isBusy={isPasswordBusy}
-      {passwordError}
-      {enrollmentCode}
-      {onAddPassword}
-      {onUpdatePassword}
-      {onRemovePassword}
-      {onIssueCode}
-      {onClearCode}
-      allowIssueCode={false}
-    />
-  </SettingsAccordionSection>
-
   <SettingsAccordionSection
     title={vault.t('settings.devices')}
     subtitle={vault.t('settings.devices_desc')}
