@@ -4,8 +4,10 @@ import {
   readLocalVaultYaml,
   readVaultVersion,
   reconcileVaultBlobs,
+  reconcileVaultBlobsWithCommon,
   resolveVaultConflictKeepLocal,
   resolveVaultConflictKeepRemote,
+  vaultContentHash,
   writeLocalVaultYaml,
   writeRemoteVaultYaml,
 } from './nook-wasm/nook_wasm'
@@ -75,11 +77,17 @@ export function attemptReconcileVaultSyncBlobs(
   localYaml: string,
   remoteYaml: string,
   remoteRevision: string | null,
+  lastCommonContentHash?: string | null,
 ): ReconcileVaultAttempt {
   try {
     return {
       status: 'ok',
-      result: reconcileVaultSyncBlobs(localYaml, remoteYaml, remoteRevision),
+      result: reconcileVaultSyncBlobs(
+        localYaml,
+        remoteYaml,
+        remoteRevision,
+        lastCommonContentHash,
+      ),
     }
   } catch (error: unknown) {
     const mismatch = parseVaultStoreIdMismatch(error)
@@ -120,14 +128,26 @@ export function reconcileVaultSyncBlobs(
   localYaml: string,
   remoteYaml: string,
   remoteRevision: string | null,
+  lastCommonContentHash?: string | null,
 ): ReconcileVaultResult {
-  const raw = reconcileVaultBlobs(localYaml, remoteYaml, remoteRevision)
+  const raw = lastCommonContentHash
+    ? reconcileVaultBlobsWithCommon(
+        localYaml,
+        remoteYaml,
+        remoteRevision,
+        lastCommonContentHash,
+      )
+    : reconcileVaultBlobs(localYaml, remoteYaml, remoteRevision)
   return {
     action: raw.action as VaultSyncAction,
     localYaml: raw.localYaml,
     remoteYaml: raw.remoteYaml,
     remoteRevision: raw.remoteRevision ?? null,
   }
+}
+
+export function vaultBlobContentHash(yaml: string): string {
+  return vaultContentHash(yaml)
 }
 
 export function resolveVaultSyncConflictKeepLocal(

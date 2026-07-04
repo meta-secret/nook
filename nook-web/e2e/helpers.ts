@@ -2124,7 +2124,7 @@ export async function deleteAllVaultLocalCaches(page: Page) {
   await page.evaluate(
     () =>
       new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db', 1)
+        const request = indexedDB.open('nook_db')
         request.onerror = () =>
           reject(request.error ?? new Error('idb open failed'))
         request.onsuccess = () => {
@@ -2613,7 +2613,7 @@ export type E2eOauthSyncProvider = {
 export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
   return page.evaluate(() => {
     return new Promise<string>((resolve, reject) => {
-      const request = indexedDB.open('nook_db', 1)
+      const request = indexedDB.open('nook_db')
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
       request.onsuccess = () => {
@@ -2665,7 +2665,7 @@ export async function seedLocalVaultYamlForEnrollment(
   await page.evaluate(
     ({ content, storeId: id }) => {
       return new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_db', 1)
+        const request = indexedDB.open('nook_db')
         request.onerror = () =>
           reject(request.error ?? new Error('idb open failed'))
         request.onupgradeneeded = () => {
@@ -3321,7 +3321,7 @@ export async function addSecret(
         }
       ).__nookVault
       const idbYaml = await new Promise<string>((resolve) => {
-        const request = indexedDB.open('nook_db', 1)
+        const request = indexedDB.open('nook_db')
         request.onerror = () => resolve(`idb-open-error:${request.error}`)
         request.onsuccess = () => {
           const db = request.result

@@ -58,6 +58,8 @@ pub struct StorageProviderData {
     pub last_synced_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_sync_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_common_content_hash: Option<String>,
     pub created_at: String,
 }
 
@@ -270,6 +272,7 @@ pub fn ensure_local_provider_row(
         last_synced_version: None,
         last_synced_at: None,
         last_sync_revision: None,
+        last_common_content_hash: None,
         created_at: created_at.to_owned(),
     };
     let mut providers = Vec::with_capacity(snapshot.providers.len() + 1);
@@ -320,6 +323,7 @@ pub fn seed_provider_from_legacy_storage(
         last_synced_version: None,
         last_synced_at: None,
         last_sync_revision: None,
+        last_common_content_hash: None,
         created_at: created_at.to_owned(),
     };
     Some(AuthProvidersSnapshotData {
@@ -345,6 +349,7 @@ mod tests {
             last_synced_version: None,
             last_synced_at: None,
             last_sync_revision: None,
+            last_common_content_hash: None,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
     }
@@ -449,6 +454,7 @@ mod tests {
                 last_synced_version: None,
                 last_synced_at: None,
                 last_sync_revision: None,
+                last_common_content_hash: None,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: None,
@@ -504,6 +510,7 @@ mod tests {
                 last_synced_version: None,
                 last_synced_at: None,
                 last_sync_revision: None,
+                last_common_content_hash: None,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: Some("vault-1".to_owned()),

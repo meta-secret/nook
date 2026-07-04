@@ -1,6 +1,6 @@
 # Vault Event Log
 
-**Status:** Implemented (see [#112](https://github.com/meta-secret/nook/issues/112), PR #118+)  
+**Status:** Implemented (see [#112](https://github.com/meta-secret/nook/issues/112), PR #118+, PR #181)
 **Supersedes:** scalar `vault_version` whole-blob sync in [unified-vault.md](unified-vault.md)  
 **Migration coordination:** [#52](https://github.com/meta-secret/nook/issues/52) — safe legacy import via `vault-imported` genesis event (not YAML schema v2 cutover)
 
@@ -51,7 +51,10 @@ The immutable event set is authoritative. These are **derived caches only**:
 Current event schema `2` binds each event to `actor_signing_public_key`. The
 actor id must be the SHA-256 digest of that Ed25519 public key, and the event
 signature must verify over the canonical body before a current-schema remote
-event enters the local event set.
+event enters the local event set. Non-genesis events are also checked against
+the event's causal past: an actor is accepted only if it is the import root, was
+introduced by a causally prior `join-approved`, or is publishing its own
+self-signed `join-requested` event.
 
 ## Canonical encoding
 
@@ -85,15 +88,21 @@ The reducer (`nook-core/src/vault_projection.rs`) must yield the same result for
 | `secret-deleted` | Tombstone when delete is causal descendant of create |
 | `secret-replaced` | Atomic tombstone + new record |
 | Concurrent replacements | Both new records live; conflict group on old id |
+| `secret-conflict-resolved` | Tombstones rejected candidates and causally clears the conflict |
 | Independent concurrent adds | Both preserved |
-| `device-revoked` / password rotate/remove | Starts new **key epoch** (Phase 2 crypto) |
-| Concurrent security epochs | Security conflict — fail closed |
+| `device-revoked` / password rotate/remove | Starts new **key epoch** with fresh vault keys and checkpoint |
+| Concurrent security epochs | Security conflict — fail closed; local edits are blocked until all devices sync/recover |
 
 ## Key epochs
 
-Password rotation, password removal, and device revocation must rotate `secrets_key` / `members_key` so append-only history cannot resurrect access. Epoch identity is the rotation **event id**, not a global integer.
+Password rotation, password removal, and device revocation rotate
+`secrets_key` / `members_key` so append-only history cannot resurrect access.
+Epoch identity is the rotation **event id**, not a global integer.
 
-Phase 1 defines epoch metadata and conflict detection (`nook-core/src/vault_epoch.rs`). Wrapping and checkpoint re-encryption land in Phase 2.
+The implemented epoch path creates fresh vault keys, re-encrypts live secrets,
+rewraps auth/member metadata for remaining authorized entries, and appends an
+immutable `epoch-checkpoint`. Concurrent security rotations are detected in the
+projection, surfaced through WASM/UI, and fail closed for further local edits.
 
 ## Provider interface (target)
 
@@ -110,6 +119,33 @@ outbox flush, the manager first uploads queued events that are absent remotely,
 then repairs the provider by uploading any local event-store events missing from
 that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
+
+Legacy whole-blob provider writes are retained only as compatibility/recovery
+paths. Their optimistic-lock retry paths never refresh a provider revision and
+blindly resend stale content: GitHub, Drive, and iCloud now refetch on write
+conflict, accept idempotent identical content, and otherwise report an explicit
+sync conflict. Provider metadata also remembers the last common blob content
+hash so divergent scalar-version branches cannot be auto-selected as "newer."
+
+Drive event storage tolerates duplicate app-data files for the same event name:
+fetch downloads all matches, accepts only bytes whose content-derived event id
+matches the requested id, treats identical duplicates as one event, and reports
+different bytes as corruption.
+
+## IndexedDB storage
+
+`nook_db` version `2` separates event-log state into dedicated object stores:
+
+| Store | Purpose |
+|-------|---------|
+| `events` | Immutable event bytes and event indexes |
+| `outbox` | Durable per-provider retry queue |
+| `projections` | Projection heads, key-epoch markers, and legacy backup bytes |
+| `provider_receipts` | Reserved for compact per-provider sync receipts |
+| `vault` | Legacy YAML/cache plus local device/signing identity material |
+
+Readers fall back to legacy `vault` keys so existing browsers survive the store
+upgrade, but new event-log writes use the separated stores.
 
 ## Migration
 

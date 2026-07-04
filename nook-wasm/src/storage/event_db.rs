@@ -6,6 +6,10 @@ use nook_core::{EventId, LocalEventStore};
 const EVENT_LOG_MODE_KEY: &str = "event_log:mode";
 const SIGNING_SEED_KEY: &str = "signing_seed";
 const EVENT_LOG_ACTIVE: &str = "event_log";
+const STORE_VAULT: &str = "vault";
+const STORE_EVENTS: &str = "events";
+const STORE_PROJECTIONS: &str = "projections";
+const STORE_OUTBOX: &str = "outbox";
 
 fn event_key(store_id: &str, event_id: &str) -> String {
     format!("event:{store_id}:{event_id}")
@@ -28,17 +32,29 @@ fn legacy_backup_key(store_id: &str) -> String {
 }
 
 async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
-    let rexie = rexie::Rexie::builder("nook_db")
-        .version(1)
-        .add_object_store(rexie::ObjectStore::new("vault"))
+    store_get(STORE_VAULT, key).await
+}
+
+async fn open_nook_db() -> Result<rexie::Rexie, NookError> {
+    rexie::Rexie::builder("nook_db")
+        .version(2)
+        .add_object_store(rexie::ObjectStore::new(STORE_VAULT))
+        .add_object_store(rexie::ObjectStore::new(STORE_EVENTS))
+        .add_object_store(rexie::ObjectStore::new(STORE_PROJECTIONS))
+        .add_object_store(rexie::ObjectStore::new("provider_receipts"))
+        .add_object_store(rexie::ObjectStore::new(STORE_OUTBOX))
         .build()
         .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))?;
+        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))
+}
+
+async fn store_get(store_name: &str, key: &str) -> Result<Option<String>, NookError> {
+    let rexie = open_nook_db().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .transaction(&[store_name], rexie::TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
-        .store("vault")
+        .store(store_name)
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
     let js_key = serde_wasm_bindgen::to_value(key)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
@@ -59,34 +75,17 @@ async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
     }
 }
 
-async fn store_get_string(store: &rexie::Store, key: &str) -> Result<Option<String>, NookError> {
-    let js_key = serde_wasm_bindgen::to_value(key)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let value = store
-        .get(js_key)
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?;
-    match value {
-        None => Ok(None),
-        Some(val) if val.is_undefined() || val.is_null() => Ok(None),
-        Some(val) => serde_wasm_bindgen::from_value(val)
-            .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))
-            .map(Some),
-    }
+async fn vault_put(key: &str, value: &str) -> Result<(), NookError> {
+    store_put(STORE_VAULT, key, value).await
 }
 
-async fn vault_put(key: &str, value: &str) -> Result<(), NookError> {
-    let rexie = rexie::Rexie::builder("nook_db")
-        .version(1)
-        .add_object_store(rexie::ObjectStore::new("vault"))
-        .build()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))?;
+async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookError> {
+    let rexie = open_nook_db().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
-        .store("vault")
+        .store(store_name)
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
     let js_key = serde_wasm_bindgen::to_value(key)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
@@ -122,7 +121,11 @@ pub(crate) async fn save_signing_seed(seed: &str) -> Result<(), NookError> {
 }
 
 pub(crate) async fn load_heads(store_id: &str) -> Result<Vec<String>, NookError> {
-    match vault_get(&heads_key(store_id)).await? {
+    let key = heads_key(store_id);
+    match store_get(STORE_PROJECTIONS, &key)
+        .await?
+        .or(vault_get(&key).await?)
+    {
         None => Ok(Vec::new()),
         Some(json) => {
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))
@@ -132,15 +135,18 @@ pub(crate) async fn load_heads(store_id: &str) -> Result<Vec<String>, NookError>
 
 pub(crate) async fn save_heads(store_id: &str, heads: &[String]) -> Result<(), NookError> {
     let json = serde_json::to_string(heads).map_err(|e| NookError::Serialization(e.to_string()))?;
-    vault_put(&heads_key(store_id), &json).await
+    store_put(STORE_PROJECTIONS, &heads_key(store_id), &json).await
 }
 
 pub(crate) async fn load_key_epoch(store_id: &str) -> Result<Option<String>, NookError> {
-    vault_get(&epoch_key(store_id)).await
+    let key = epoch_key(store_id);
+    Ok(store_get(STORE_PROJECTIONS, &key)
+        .await?
+        .or(vault_get(&key).await?))
 }
 
 pub(crate) async fn save_key_epoch(store_id: &str, epoch: &str) -> Result<(), NookError> {
-    vault_put(&epoch_key(store_id), epoch).await
+    store_put(STORE_PROJECTIONS, &epoch_key(store_id), epoch).await
 }
 
 /// Preserve the pre-migration vault blob byte-for-byte (first write wins).
@@ -149,58 +155,37 @@ pub(crate) async fn save_legacy_backup_if_absent(
     content: &str,
 ) -> Result<bool, NookError> {
     let key = legacy_backup_key(store_id);
-    if vault_get(&key).await?.is_some() {
+    if store_get(STORE_PROJECTIONS, &key)
+        .await?
+        .or(vault_get(&key).await?)
+        .is_some()
+    {
         return Ok(false);
     }
-    vault_put(&key, content).await?;
+    store_put(STORE_PROJECTIONS, &key, content).await?;
     Ok(true)
 }
 
 pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventStore, NookError> {
-    let rexie = rexie::Rexie::builder("nook_db")
-        .version(1)
-        .add_object_store(rexie::ObjectStore::new("vault"))
-        .build()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))?;
-    let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
-        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
-    let store = transaction
-        .store("vault")
-        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
-
-    let prefix = format!("event:{store_id}:");
     let mut local = LocalEventStore::new();
-
-    // Rexie doesn't support prefix scan cleanly — iterate known ids from the index key.
-    if let Some(list_json) = store_get_string(&store, &format!("event_index:{store_id}")).await? {
+    let index_key = format!("event_index:{store_id}");
+    let index_json = store_get(STORE_EVENTS, &index_key)
+        .await?
+        .or(vault_get(&index_key).await?);
+    if let Some(list_json) = index_json {
         let ids: Vec<String> = serde_json::from_str(&list_json)
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         for raw_id in ids {
             let key = event_key(store_id, &raw_id);
-            let js_key = serde_wasm_bindgen::to_value(&key)
-                .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-            if let Some(val) = store
-                .get(js_key)
-                .await
-                .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?
-                && !val.is_undefined()
-                && !val.is_null()
+            if let Some(bytes) = store_get(STORE_EVENTS, &key)
+                .await?
+                .or(vault_get(&key).await?)
+                && let Ok(event_id) = EventId::parse(&raw_id)
             {
-                let bytes: String = serde_wasm_bindgen::from_value(val)
-                    .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
-                if let Ok(event_id) = EventId::parse(&raw_id) {
-                    local.put_event(event_id, bytes.into_bytes());
-                }
+                local.put_event(event_id, bytes.into_bytes());
             }
         }
     }
-    let _ = prefix; // reserved for future cursor API
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
     Ok(local)
 }
 
@@ -212,9 +197,13 @@ pub(crate) async fn save_event_bytes(
     let key = event_key(store_id, event_id);
     let value = String::from_utf8(bytes.to_vec())
         .map_err(|e| NookError::Serialization(format!("Event bytes not UTF-8: {e}")))?;
-    vault_put(&key, &value).await?;
+    store_put(STORE_EVENTS, &key, &value).await?;
 
-    let mut ids: Vec<String> = match vault_get(&format!("event_index:{store_id}")).await? {
+    let index_key = format!("event_index:{store_id}");
+    let mut ids: Vec<String> = match store_get(STORE_EVENTS, &index_key)
+        .await?
+        .or(vault_get(&index_key).await?)
+    {
         None => Vec::new(),
         Some(json) => {
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
@@ -225,7 +214,7 @@ pub(crate) async fn save_event_bytes(
         ids.sort();
         let json =
             serde_json::to_string(&ids).map_err(|e| NookError::Serialization(e.to_string()))?;
-        vault_put(&format!("event_index:{store_id}"), &json).await?;
+        store_put(STORE_EVENTS, &index_key, &json).await?;
     }
     Ok(())
 }
@@ -237,51 +226,29 @@ pub(crate) async fn queue_outbox_entry(
 ) -> Result<(), NookError> {
     let value = String::from_utf8(bytes.to_vec())
         .map_err(|e| NookError::Serialization(format!("Event bytes not UTF-8: {e}")))?;
-    vault_put(&outbox_key(provider_id, event_id), &value).await
+    store_put(STORE_OUTBOX, &outbox_key(provider_id, event_id), &value).await
 }
 
 pub(crate) async fn load_outbox(provider_id: &str) -> Result<Vec<(String, Vec<u8>)>, NookError> {
-    let rexie = rexie::Rexie::builder("nook_db")
-        .version(1)
-        .add_object_store(rexie::ObjectStore::new("vault"))
-        .build()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))?;
-    let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
-        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
-    let store = transaction
-        .store("vault")
-        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
-
-    let prefix = format!("outbox:{provider_id}:");
     let index_key = format!("outbox_index:{provider_id}");
-    let entries = match store_get_string(&store, &index_key).await? {
+    let entries = match store_get(STORE_OUTBOX, &index_key)
+        .await?
+        .or(vault_get(&index_key).await?)
+    {
         None => Vec::new(),
         Some(json) => serde_json::from_str::<Vec<String>>(&json)
             .map_err(|e| NookError::Serialization(e.to_string()))?,
     };
     let mut out = Vec::new();
     for event_id in entries {
-        let key = format!("{prefix}{event_id}");
-        let js_key = serde_wasm_bindgen::to_value(&key)
-            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-        if let Some(val) = store
-            .get(js_key)
-            .await
-            .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?
-            && !val.is_undefined()
-            && !val.is_null()
+        let key = outbox_key(provider_id, &event_id);
+        if let Some(text) = store_get(STORE_OUTBOX, &key)
+            .await?
+            .or(vault_get(&key).await?)
         {
-            let text: String = serde_wasm_bindgen::from_value(val)
-                .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
             out.push((event_id, text.into_bytes()));
         }
     }
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
     Ok(out)
 }
 
@@ -290,7 +257,10 @@ pub(crate) async fn append_outbox_index(
     event_id: &str,
 ) -> Result<(), NookError> {
     let index_key = format!("outbox_index:{provider_id}");
-    let mut ids: Vec<String> = match vault_get(&index_key).await? {
+    let mut ids: Vec<String> = match store_get(STORE_OUTBOX, &index_key)
+        .await?
+        .or(vault_get(&index_key).await?)
+    {
         None => Vec::new(),
         Some(json) => {
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?
@@ -300,7 +270,7 @@ pub(crate) async fn append_outbox_index(
         ids.push(event_id.to_owned());
         let json =
             serde_json::to_string(&ids).map_err(|e| NookError::Serialization(e.to_string()))?;
-        vault_put(&index_key, &json).await?;
+        store_put(STORE_OUTBOX, &index_key, &json).await?;
     }
     Ok(())
 }
@@ -309,15 +279,18 @@ pub(crate) async fn remove_outbox_entry(
     provider_id: &str,
     event_id: &str,
 ) -> Result<(), NookError> {
-    vault_put(&outbox_key(provider_id, event_id), "").await?;
+    store_put(STORE_OUTBOX, &outbox_key(provider_id, event_id), "").await?;
     let index_key = format!("outbox_index:{provider_id}");
-    if let Some(json) = vault_get(&index_key).await? {
+    if let Some(json) = store_get(STORE_OUTBOX, &index_key)
+        .await?
+        .or(vault_get(&index_key).await?)
+    {
         let mut ids: Vec<String> =
             serde_json::from_str(&json).map_err(|e| NookError::Serialization(e.to_string()))?;
         ids.retain(|id| id != event_id);
         let json =
             serde_json::to_string(&ids).map_err(|e| NookError::Serialization(e.to_string()))?;
-        vault_put(&index_key, &json).await?;
+        store_put(STORE_OUTBOX, &index_key, &json).await?;
     }
     Ok(())
 }

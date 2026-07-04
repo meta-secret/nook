@@ -277,40 +277,32 @@ pub(crate) async fn write_icloud_vault_with_retry(
 ) -> Result<(String, String), NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
     let resolved_name = ensure_icloud_vault_record(web_auth_token, record_name).await?;
-    let mut current_revision = revision;
 
-    for attempt in 0..3 {
-        match write_icloud_vault_once(
-            token.as_ref(),
-            &resolved_name,
-            content,
-            current_revision.clone(),
-        )
-        .await
+    match write_icloud_vault_once(token.as_ref(), &resolved_name, content, revision).await {
+        Ok(new_revision) => Ok((resolved_name, new_revision)),
+        Err(NookError::ICloud(msg))
+            if msg.contains("CHANGE_TOKEN") || msg.contains("serverRecord") =>
         {
-            Ok(new_revision) => return Ok((resolved_name, new_revision)),
-            Err(NookError::ICloud(msg))
-                if msg.contains("CHANGE_TOKEN") || msg.contains("serverRecord") =>
-            {
-                if attempt == 2 {
-                    return Err(NookError::ICloud(msg));
-                }
-                let record = lookup_vault_record(token.as_ref(), &resolved_name)
-                    .await?
-                    .ok_or_else(|| {
-                        NookError::ICloud(format!(
-                            "CloudKit record {resolved_name} missing during retry."
-                        ))
-                    })?;
-                current_revision = record.record_change_tag;
+            let record = lookup_vault_record(token.as_ref(), &resolved_name)
+                .await?
+                .ok_or_else(|| {
+                    NookError::ICloud(format!(
+                        "CloudKit record {resolved_name} missing during retry."
+                    ))
+                })?;
+            let remote_revision = record
+                .record_change_tag
+                .clone()
+                .unwrap_or(record.record_name.clone());
+            if record_content(&record).unwrap_or_default().trim() == content.trim() {
+                return Ok((resolved_name, remote_revision));
             }
-            Err(err) => return Err(err),
+            Err(NookError::ICloud(
+                "Remote vault changed during write; sync conflict required.".to_owned(),
+            ))
         }
+        Err(err) => Err(err),
     }
-
-    Err(NookError::ICloud(
-        "Failed to write vault record to iCloud after retries.".to_owned(),
-    ))
 }
 
 pub(crate) async fn list_icloud_event_ids(web_auth_token: &str) -> Result<Vec<String>, NookError> {

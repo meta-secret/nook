@@ -1,6 +1,7 @@
 use crate::errors::{AgeCryptoError, MultiDeviceError, MultiDeviceResult};
 use crate::vault_wire::{
-    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, SymmetricKey,
+    AgeArmoredCiphertext, DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey,
+    SymmetricKey,
 };
 use crate::{
     AuthKeyId, CompactToken, DeviceId, SecretId, SecretType, StoredRecordPayload,
@@ -345,6 +346,8 @@ impl VaultMetaState {
 pub struct JoinRequest {
     pub device_id: DeviceId,
     pub public_key: DevicePublicKey,
+    #[serde(default, skip_serializing_if = "DeviceSigningPublicKey::is_empty")]
+    pub signing_public_key: DeviceSigningPublicKey,
     pub requested_at: String,
 }
 
@@ -804,6 +807,7 @@ pub fn apply_vault_meta_operation(
         VaultOperation::JoinRequested {
             device_id,
             encryption_public_key,
+            signing_public_key,
             ..
         } => {
             state.joins.insert(
@@ -811,6 +815,7 @@ pub fn apply_vault_meta_operation(
                 JoinRequest {
                     device_id: device_id.clone(),
                     public_key: encryption_public_key.clone(),
+                    signing_public_key: signing_public_key.clone(),
                     requested_at: requested_at.to_owned(),
                 },
             );
@@ -858,9 +863,22 @@ pub fn create_join_request_record(
     identity: &DeviceIdentity,
     requested_at: &str,
 ) -> MultiDeviceResult<StoredSecretRecord> {
+    create_join_request_record_with_signing_key(
+        identity,
+        requested_at,
+        &DeviceSigningPublicKey::from_trusted(String::new()),
+    )
+}
+
+pub fn create_join_request_record_with_signing_key(
+    identity: &DeviceIdentity,
+    requested_at: &str,
+    signing_public_key: &DeviceSigningPublicKey,
+) -> MultiDeviceResult<StoredSecretRecord> {
     let request = JoinRequest {
         device_id: identity.device_id().to_owned(),
         public_key: identity.public_key(),
+        signing_public_key: signing_public_key.clone(),
         requested_at: requested_at.to_owned(),
     };
     Ok(StoredSecretRecord {

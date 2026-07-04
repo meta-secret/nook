@@ -718,3 +718,53 @@ pub(crate) fn replacement_conflicts_to_vec(
         })
         .collect()
 }
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookSecurityConflict {
+    events_json: String,
+    reasons_json: String,
+}
+
+#[wasm_bindgen]
+impl NookSecurityConflict {
+    #[wasm_bindgen(getter, js_name = eventsJson)]
+    pub fn events_json(&self) -> String {
+        self.events_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = reasonsJson)]
+    pub fn reasons_json(&self) -> String {
+        self.reasons_json.clone()
+    }
+}
+
+pub(crate) fn security_conflicts_to_vec(
+    conflicts: Vec<nook_core::SecurityConflict>,
+) -> Result<Vec<NookSecurityConflict>, NookError> {
+    conflicts
+        .into_iter()
+        .map(|conflict| {
+            let events_json = serde_json::to_string(
+                &conflict
+                    .events
+                    .iter()
+                    .map(|event| event.as_str().to_owned())
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+            let reasons_json = serde_json::to_string(
+                &conflict
+                    .reasons
+                    .iter()
+                    .map(|reason| reason.as_str())
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+            Ok(NookSecurityConflict {
+                events_json,
+                reasons_json,
+            })
+        })
+        .collect()
+}

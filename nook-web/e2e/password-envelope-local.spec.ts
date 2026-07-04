@@ -101,7 +101,7 @@ test.describe('vault password envelope (local)', () => {
     await page.evaluate(
       () =>
         new Promise<void>((resolve, reject) => {
-          const request = indexedDB.open('nook_db', 1)
+          const request = indexedDB.open('nook_db')
           request.onerror = () =>
             reject(request.error ?? new Error('idb open failed'))
           request.onsuccess = () => {

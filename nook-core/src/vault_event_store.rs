@@ -67,6 +67,7 @@ impl LocalEventStore {
                 serde_json::from_slice(bytes).map_err(EventError::ParseStoredEvent)?;
             let _ = graph.insert(event, store_id)?;
         }
+        graph.validate_authorizations()?;
         Ok(graph)
     }
 
@@ -81,15 +82,9 @@ impl LocalEventStore {
         if self.events.contains_key(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
+        let mut graph = self.load_graph(store_id)?;
+        let status = graph.insert(event.clone(), store_id)?;
         self.put_event(event_id.clone(), bytes);
-        let graph = self.load_graph(store_id)?;
-        let status = if graph.pending_events().is_empty() {
-            EventInsertStatus::Applied
-        } else {
-            EventInsertStatus::Pending(
-                crate::vault_event_graph::EventPendingReason::MissingParents(vec![]),
-            )
-        };
         Ok((event_id, status))
     }
 }
@@ -114,6 +109,9 @@ pub fn union_remote_events(
             .into());
         }
         event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
+        let mut candidate = local.clone();
+        candidate.put_event(event_id.clone(), bytes.clone());
+        let _ = candidate.load_graph(store_id)?;
         local.put_event(event_id.clone(), bytes.clone());
         imported.push(event_id.clone());
     }
@@ -160,11 +158,15 @@ mod tests {
     use super::*;
     use crate::VaultResult;
     use crate::event_canonical::Ed25519Signature;
-    use crate::vault_event::build_genesis_import_event;
+    use crate::secret_types::SecretType;
+    use crate::vault_event::{
+        EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+        VaultOperation, build_genesis_import_event,
+    };
     use crate::vault_event_graph::EventInsertStatus;
-    use crate::vault_ids::StoreId;
+    use crate::vault_ids::{SecretId, StoreId};
     use crate::vault_signing::SigningIdentity;
-    use crate::vault_wire::{IsoTimestamp, Sha256Hex};
+    use crate::vault_wire::{DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -190,6 +192,36 @@ mod tests {
     }
 
     const STORE: &str = "store_testtoken11";
+
+    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
+    }
+
+    fn signed_child(
+        signing_key: &SigningKey,
+        parent: EventId,
+        secret_id: &str,
+    ) -> VaultResult<VaultEvent> {
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: StoreId::parse(STORE)?,
+            actor_id: SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
+            actor_signing_public_key: Some(public_key(signing_key)),
+            parents: vec![parent],
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: EventId::parse(
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )?,
+            operations: vec![VaultOperation::SecretCreated {
+                secret: EncryptedSecretPayload {
+                    id: SecretId::from_vault_record(secret_id),
+                    secret_type: SecretType::ApiKey,
+                    ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                },
+            }],
+        };
+        VaultEvent::sign(body, signing_key)
+    }
 
     #[test]
     fn union_imports_missing_events() -> VaultResult<()> {
@@ -350,6 +382,29 @@ mod tests {
             crate::VaultError::Event(crate::EventError::SignatureVerificationFailed)
         ));
         assert!(local.get_bytes(&event_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn union_rejects_unapproved_actor_event() -> VaultResult<()> {
+        let root_key = SigningKey::generate(&mut OsRng);
+        let stranger_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let child = signed_child(&stranger_key, genesis_id.clone(), "secret_remoteuna1")?;
+        let child_id = child.id()?;
+        let child_bytes = serde_json::to_vec(&child).map_err(EventError::from)?;
+
+        let mut local = LocalEventStore::new();
+        union_remote_events(&mut local, &[(genesis_id, genesis_bytes)], STORE)?;
+        let err =
+            union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::UnauthorizedActor { .. })
+        ));
+        assert!(local.get_bytes(&child_id).is_none());
         Ok(())
     }
 

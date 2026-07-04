@@ -25,7 +25,7 @@ pub use types::{
     NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
     NookReconcileVaultBlobsResult, NookRemoteVaultFetch, NookReplacementConflict,
     NookResolveConflictKeepLocalResult, NookResolveConflictKeepRemoteResult, NookSecretFormFields,
-    NookSyncProviderTarget, NookVaultMember, NookVaultSyncResult,
+    NookSecurityConflict, NookSyncProviderTarget, NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;

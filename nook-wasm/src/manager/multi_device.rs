@@ -71,21 +71,24 @@ impl NookVaultManager {
             identity.device_id(),
         ));
         records.retain(|record| record.key != join_key);
-        records.push(nook_core::create_join_request_record(
+        let signing = self.ensure_signing_identity().await?;
+        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing.verifying_key().as_bytes(),
+        ));
+        records.push(nook_core::create_join_request_record_with_signing_key(
             &identity,
             &requested_at,
+            &signing_pk,
         )?);
 
         self.meta = nook_core::VaultMetaState::from_stored_records(&records);
         let can_decrypt =
             self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok();
         if can_decrypt {
-            let signing = self.ensure_signing_identity().await?;
-            let signing_pk = hex::encode(signing.verifying_key().as_bytes());
             self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
                 device_id: identity.device_id().clone(),
                 encryption_public_key: identity.public_key().clone(),
-                signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
+                signing_public_key: signing_pk,
                 label: nook_core::MemberLabel::from_trusted(String::new()),
             }])
             .await?;
@@ -155,14 +158,20 @@ impl NookVaultManager {
     /// Device B publishes a join request record with its public key.
     pub async fn create_join_request(&mut self, requested_at: String) -> Result<(), JsError> {
         let identity = self.device_identity()?;
-        let record = nook_core::create_join_request_record(&identity, &requested_at)?;
-        self.meta.apply_record(&record);
         let signing = self.ensure_signing_identity().await?;
-        let signing_pk = hex::encode(signing.verifying_key().as_bytes());
+        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing.verifying_key().as_bytes(),
+        ));
+        let record = nook_core::create_join_request_record_with_signing_key(
+            &identity,
+            &requested_at,
+            &signing_pk,
+        )?;
+        self.meta.apply_record(&record);
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key().clone(),
-            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
+            signing_public_key: signing_pk,
             label: nook_core::MemberLabel::from_trusted(String::new()),
         }])
         .await?;
@@ -199,7 +208,7 @@ impl NookVaultManager {
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
             device_id: join.device_id.clone(),
             encryption_public_key: join.public_key.clone(),
-            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(String::new()),
+            signing_public_key: join.signing_public_key.clone(),
             label: nook_core::MemberLabel::from_trusted(String::new()),
             secrets_key_ciphertext: envelopes.secrets_key.clone(),
             members_key_ciphertext: envelopes.members_key.clone(),

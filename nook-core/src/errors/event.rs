@@ -54,6 +54,9 @@ pub enum EventError {
         signing_key_actor_id: String,
     },
 
+    #[error("event actor {actor_id} was not authorized in causal history")]
+    UnauthorizedActor { actor_id: String },
+
     #[error("unsupported event schema version {version}")]
     UnsupportedSchemaVersion { version: u32 },
 

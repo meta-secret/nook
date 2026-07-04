@@ -7,57 +7,103 @@ import {
   unlockVaultOnLogin,
 } from './helpers'
 
-async function readVaultIdbKey(
+async function readIdbKey(
+  page: Page,
+  storeName: string,
+  key: string,
+): Promise<string | null> {
+  return page.evaluate(
+    ({ storeName, idbKey }) => {
+      return new Promise<string | null>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () =>
+          reject(request.error ?? new Error('idb open failed'))
+        request.onsuccess = () => {
+          const db = request.result
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.close()
+            resolve(null)
+            return
+          }
+          const tx = db.transaction(storeName, 'readonly')
+          const store = tx.objectStore(storeName)
+          const getReq = store.get(idbKey)
+          getReq.onerror = () =>
+            reject(getReq.error ?? new Error('idb read failed'))
+          getReq.onsuccess = () => {
+            const value = getReq.result
+            resolve(value == null ? null : String(value))
+          }
+          tx.oncomplete = () => db.close()
+        }
+      })
+    },
+    { storeName, idbKey: key },
+  )
+}
+
+async function readProjectionIdbKey(
   page: Page,
   key: string,
 ): Promise<string | null> {
-  return page.evaluate((idbKey) => {
-    return new Promise<string | null>((resolve, reject) => {
-      const request = indexedDB.open('nook_db', 1)
-      request.onerror = () =>
-        reject(request.error ?? new Error('idb open failed'))
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction('vault', 'readonly')
-        const store = tx.objectStore('vault')
-        const getReq = store.get(idbKey)
-        getReq.onerror = () =>
-          reject(getReq.error ?? new Error('idb read failed'))
-        getReq.onsuccess = () => {
-          const value = getReq.result
-          resolve(value == null ? null : String(value))
-        }
-        tx.oncomplete = () => db.close()
-      }
-    })
-  }, key)
+  return (
+    (await readIdbKey(page, 'projections', key)) ??
+    (await readIdbKey(page, 'vault', key))
+  )
 }
 
 async function clearEventLogState(page: Page, storeId: string) {
   await page.evaluate((sid) => {
     return new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('nook_db', 1)
+      const request = indexedDB.open('nook_db')
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
       request.onsuccess = () => {
         const db = request.result
-        const tx = db.transaction('vault', 'readwrite')
-        const store = tx.objectStore('vault')
-        const keysToDelete = [
-          'event_log:mode',
-          `event_heads:${sid}`,
-          `event_epoch:${sid}`,
-          `event_index:${sid}`,
-        ]
-        for (const key of keysToDelete) {
-          store.delete(key)
+        const stores = ['vault', 'events', 'projections', 'outbox'].filter(
+          (name) => db.objectStoreNames.contains(name),
+        )
+        if (stores.length === 0) {
+          db.close()
+          resolve()
+          return
         }
-        const all = store.getAllKeys()
-        all.onsuccess = () => {
-          for (const key of all.result) {
-            const name = String(key)
-            if (name.startsWith(`event:${sid}:`)) {
-              store.delete(key)
+        const staticKeysByStore: Record<string, string[]> = {
+          vault: [
+            'event_log:mode',
+            `event_heads:${sid}`,
+            `event_epoch:${sid}`,
+            `event_index:${sid}`,
+            `legacy_backup:${sid}`,
+          ],
+          events: [`event_index:${sid}`],
+          projections: [
+            `event_heads:${sid}`,
+            `event_epoch:${sid}`,
+            `legacy_backup:${sid}`,
+          ],
+          outbox: [],
+        }
+        const tx = db.transaction(stores, 'readwrite')
+        for (const storeName of stores) {
+          const store = tx.objectStore(storeName)
+          for (const key of staticKeysByStore[storeName] ?? []) {
+            store.delete(key)
+          }
+          if (storeName === 'outbox') {
+            store.clear()
+          }
+          if (storeName === 'vault' || storeName === 'events') {
+            const all = store.getAllKeys()
+            all.onerror = () =>
+              reject(all.error ?? new Error('idb key scan failed'))
+            all.onsuccess = () => {
+              for (const key of all.result) {
+                const name = String(key)
+                if (name.startsWith(`event:${sid}:`)) {
+                  store.delete(key)
+                }
+              }
             }
           }
         }
@@ -91,7 +137,7 @@ test.describe('legacy vault migration to event log', () => {
 
     await page.getByTestId('header-lock-vault-btn').click()
     await clearEventLogState(page, storeId)
-    expect(await readVaultIdbKey(page, 'event_log:mode')).toBeNull()
+    expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBeNull()
 
     await authorizeDeviceProtection(page)
     await unlockVaultOnLogin(page)
@@ -99,8 +145,8 @@ test.describe('legacy vault migration to event log', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    expect(await readVaultIdbKey(page, 'event_log:mode')).toBe('event_log')
-    const backup = await readVaultIdbKey(page, `legacy_backup:${storeId}`)
+    expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBe('event_log')
+    const backup = await readProjectionIdbKey(page, `legacy_backup:${storeId}`)
     expect(backup?.trim().length ?? 0).toBeGreaterThan(0)
 
     const migratedYaml = await readLocalVaultYamlFromIdb(page)

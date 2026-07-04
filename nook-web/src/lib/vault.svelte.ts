@@ -46,6 +46,7 @@ import {
   readLocalVaultBlob,
   readVaultVersionFromBlob,
   resolveVaultSyncIntervalMs,
+  vaultBlobContentHash,
   writeLocalVaultBlob,
   writeRemoteVaultBlob,
   type PendingSyncConflict,
@@ -147,11 +148,19 @@ export class VaultState {
   replacementConflicts = $state<
     Array<{ oldSecretId: string; candidatesJson: string }>
   >([])
+  /** Concurrent key-epoch rotations; local writes fail closed while present. */
+  securityConflicts = $state<
+    Array<{ eventsJson: string; reasonsJson: string }>
+  >([])
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | null>(null)
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== null
+  }
+
+  get editsBlocked(): boolean {
+    return this.syncBlocked || this.securityConflicts.length > 0
   }
 
   get deviceProtectionReady(): boolean {
@@ -409,11 +418,15 @@ export class VaultState {
     options?: { providerId?: string; quiet?: boolean }
   }): Promise<'ok' | 'conflict'> {
     const { localYaml, remote, mode, pat, repo, options } = ctx
+    const stagedProvider = options?.providerId
+      ? this.providers.find((p) => p.id === options.providerId)
+      : null
 
     const attempt = attemptReconcileVaultSyncBlobs(
       localYaml,
       remote.content,
       remote.revision,
+      stagedProvider?.lastCommonContentHash,
     )
     if (attempt.status === 'store_id_mismatch') {
       await this.stageVaultSyncConflict({
@@ -1441,6 +1454,8 @@ export class VaultState {
           freshLocal,
           remote.content,
           remote.revision,
+          this.providers.find((p) => p.id === providerId)
+            ?.lastCommonContentHash,
         )
         if (retry.status === 'store_id_mismatch') {
           await this.stageVaultSyncConflict({
@@ -1521,6 +1536,7 @@ export class VaultState {
             lastSyncedAt: isoTimestamp(),
             lastSyncedVersion: version || p.lastSyncedVersion,
             lastSyncRevision: revision ?? p.lastSyncRevision,
+            lastCommonContentHash: vaultBlobContentHash(yaml),
             storeId: managerStoreId || p.storeId,
           }
         : p,
@@ -1531,6 +1547,29 @@ export class VaultState {
 
   async refreshReplacementConflicts(): Promise<void> {
     return syncActions.refreshReplacementConflicts(this)
+  }
+
+  async resolveReplacementConflict(
+    oldSecretId: string,
+    chosenSecretId: string,
+  ): Promise<void> {
+    if (!this.manager || this.isSaving) return
+    this.isSaving = true
+    this.errorMsg = ''
+    try {
+      const raw = await this.enqueueStorage(() =>
+        this.manager!.resolveProjectionConflict(oldSecretId, chosenSecretId),
+      )
+      this.secrets = raw as NookSecretRecord[]
+      await this.refreshReplacementConflicts()
+      this.scheduleFanOutSyncAfterLocalSave()
+      this.showSuccess('Secret conflict resolved.')
+    } catch (error: unknown) {
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Could not resolve conflict.'
+    } finally {
+      this.isSaving = false
+    }
   }
 
   async stageVaultSyncConflict(

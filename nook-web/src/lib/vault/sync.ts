@@ -190,22 +190,33 @@ export async function refreshReplacementConflicts(
 ): Promise<void> {
   if (!state.manager) {
     state.replacementConflicts = []
+    state.securityConflicts = []
     return
   }
   // These borrow the wasm manager (`&mut self`); route them through the storage
   // chain so they never alias an in-flight foreground op (e.g. a delete), which
   // would trigger a wasm-bindgen recursive-borrow hang/panic.
-  const conflicts = await state.enqueueStorage(() => {
+  const [conflicts, securityConflicts] = await state.enqueueStorage(() => {
     if (!state.manager!.eventLogMode()) {
-      return [] as Awaited<
-        ReturnType<typeof state.manager.listProjectionConflicts>
-      >
+      return [
+        [] as Awaited<ReturnType<typeof state.manager.listProjectionConflicts>>,
+        [] as Awaited<
+          ReturnType<typeof state.manager.listProjectionSecurityConflicts>
+        >,
+      ] as const
     }
-    return state.manager!.listProjectionConflicts()
+    return Promise.all([
+      state.manager!.listProjectionConflicts(),
+      state.manager!.listProjectionSecurityConflicts(),
+    ])
   })
   state.replacementConflicts = conflicts.map((conflict) => ({
     oldSecretId: conflict.oldSecretId,
     candidatesJson: conflict.candidatesJson,
+  }))
+  state.securityConflicts = securityConflicts.map((conflict) => ({
+    eventsJson: conflict.eventsJson,
+    reasonsJson: conflict.reasonsJson,
   }))
 }
 

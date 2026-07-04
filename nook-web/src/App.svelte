@@ -60,6 +60,29 @@
     appLogsPage = isAppLogsPath(window.location.pathname)
   }
 
+  function conflictCandidates(
+    candidatesJson: string,
+  ): Array<{ eventId: string; secretId: string }> {
+    try {
+      const parsed = JSON.parse(candidatesJson) as Array<[string, string]>
+      return parsed.map(([eventId, secretId]) => ({ eventId, secretId }))
+    } catch {
+      return []
+    }
+  }
+
+  function shortId(id: string): string {
+    return id.length > 18 ? `${id.slice(0, 18)}...` : id
+  }
+
+  function conflictReasons(reasonsJson: string): string {
+    try {
+      return (JSON.parse(reasonsJson) as string[]).join(', ')
+    } catch {
+      return 'key epoch rotation'
+    }
+  }
+
   function navigateHome() {
     vault.closeHelp()
     history.pushState(null, '', appPath('/'))
@@ -440,7 +463,7 @@
                   <SecretVault
                     {vault}
                     isSaving={vault.isSaving}
-                    syncBlocked={vault.syncBlocked}
+                    syncBlocked={vault.editsBlocked}
                     secrets={vault.secrets}
                     onAddModeChange={(open, type = null) => {
                       secretsAddOpen = open
@@ -587,13 +610,49 @@
 
     {#if vault.replacementConflicts.length > 0}
       <div
-        class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl rounded-lg border border-amber-500/40 bg-amber-950/90 p-4 text-sm text-amber-50 shadow-lg"
+        class={`fixed left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-amber-500/40 bg-amber-950/95 p-4 text-sm text-amber-50 shadow-lg ${
+          vault.securityConflicts.length > 0 ? 'bottom-32' : 'bottom-4'
+        }`}
       >
         <p class="font-medium">Secret sync conflicts need resolution</p>
-        <p class="mt-1 text-amber-100/80">
-          {vault.replacementConflicts.length} secret(s) were replaced concurrently
-          on different devices. Review candidates in Settings after syncing.
-        </p>
+        <div class="mt-3 space-y-3">
+          {#each vault.replacementConflicts as conflict (conflict.oldSecretId)}
+            <div class="rounded border border-amber-400/30 p-3">
+              <p class="text-amber-100">
+                Original: {shortId(conflict.oldSecretId)}
+              </p>
+              <div class="mt-2 flex flex-wrap gap-2">
+                {#each conflictCandidates(conflict.candidatesJson) as candidate (candidate.secretId)}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={vault.isSaving}
+                    onclick={() =>
+                      vault.resolveReplacementConflict(
+                        conflict.oldSecretId,
+                        candidate.secretId,
+                      )}
+                  >
+                    Keep {shortId(candidate.secretId)}
+                  </Button>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    {#if vault.securityConflicts.length > 0}
+      <div
+        class="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-red-500/50 bg-red-950/95 p-4 text-sm text-red-50 shadow-lg"
+      >
+        <p class="font-medium">Security conflict detected</p>
+        <div class="mt-2 space-y-2 text-red-100">
+          {#each vault.securityConflicts as conflict (conflict.eventsJson)}
+            <p>{conflictReasons(conflict.reasonsJson)}</p>
+          {/each}
+        </div>
       </div>
     {/if}
 

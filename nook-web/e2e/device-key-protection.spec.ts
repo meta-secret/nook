@@ -33,7 +33,7 @@ test.describe('passkey device-key protection', () => {
     const persisted = await page.evaluate(
       () =>
         new Promise<{ wrapped: string | undefined }>((resolve, reject) => {
-          const request = indexedDB.open('nook_db', 1)
+          const request = indexedDB.open('nook_db')
           request.onerror = () => reject(request.error)
           request.onsuccess = () => {
             const db = request.result
@@ -116,7 +116,7 @@ test.describe('passkey device-key protection', () => {
       () =>
         new Promise<{ wrapped: unknown; registry: unknown }>(
           (resolve, reject) => {
-            const request = indexedDB.open('nook_db', 1)
+            const request = indexedDB.open('nook_db')
             request.onerror = () => reject(request.error)
             request.onsuccess = () => {
               const db = request.result

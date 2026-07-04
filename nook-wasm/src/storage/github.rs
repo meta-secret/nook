@@ -364,8 +364,17 @@ pub(crate) async fn write_github_text_file_with_retry(
             Err(NookError::GitHub(message))
                 if attempt < 2 && (message.contains("422") || message.contains("409")) =>
             {
-                if let Ok(Some(file)) = fetch_github_vault(pat, repo, path, None).await {
-                    sha = Some(file.sha);
+                match fetch_github_vault(pat, repo, path, None).await {
+                    Ok(Some(file)) if file.content.trim() == content.trim() => return Ok(file.sha),
+                    Ok(Some(_)) => {
+                        return Err(NookError::GitHub(
+                            "Remote vault changed during write; sync conflict required.".to_owned(),
+                        ));
+                    }
+                    Ok(None) => {
+                        sha = None;
+                    }
+                    Err(_) => {}
                 }
             }
             Err(err) => return Err(err),

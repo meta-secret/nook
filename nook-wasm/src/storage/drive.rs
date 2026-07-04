@@ -243,32 +243,22 @@ pub(crate) async fn write_drive_vault_with_retry(
 ) -> Result<(String, String), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
     let resolved_id = ensure_drive_vault_file(access_token, file_id, file_name).await?;
-    let mut current_revision = revision;
 
-    for attempt in 0..3 {
-        match write_drive_vault_once(
-            token.as_ref(),
-            &resolved_id,
-            content,
-            current_revision.clone(),
-        )
-        .await
-        {
-            Ok(new_revision) => return Ok((resolved_id, new_revision)),
-            Err(NookError::Drive(msg)) if msg.contains("412") || msg.contains("Precondition") => {
-                if attempt == 2 {
-                    return Err(NookError::Drive(msg));
-                }
-                let meta = fetch_file_metadata(token.as_ref(), &resolved_id).await?;
-                current_revision = meta.md5_checksum.or(Some(meta.id));
+    match write_drive_vault_once(token.as_ref(), &resolved_id, content, revision).await {
+        Ok(new_revision) => Ok((resolved_id, new_revision)),
+        Err(NookError::Drive(msg)) if msg.contains("412") || msg.contains("Precondition") => {
+            let current_content = read_file_content(token.as_ref(), &resolved_id).await?;
+            let meta = fetch_file_metadata(token.as_ref(), &resolved_id).await?;
+            let remote_revision = meta.md5_checksum.or(Some(meta.id));
+            if current_content.trim() == content.trim() {
+                return Ok((resolved_id, remote_revision.unwrap_or_default()));
             }
-            Err(err) => return Err(err),
+            Err(NookError::Drive(
+                "Remote vault changed during write; sync conflict required.".to_owned(),
+            ))
         }
+        Err(err) => Err(err),
     }
-
-    Err(NookError::Drive(
-        "Failed to write vault file to Google Drive after retries.".to_owned(),
-    ))
 }
 
 async fn write_drive_vault_once(

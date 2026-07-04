@@ -1,7 +1,9 @@
 //! Google Drive immutable event file adapter.
 
 use crate::NookError;
-use nook_core::EventId;
+use nook_core::{EventId, VaultEvent};
+
+const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
 
 pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, NookError> {
     let token = token.trim();
@@ -88,13 +90,50 @@ pub(crate) async fn fetch_drive_event(
         .json()
         .await
         .map_err(|e| NookError::Serialization(e.to_string()))?;
-    let file_id = body
+    let file_ids: Vec<String> = body
         .get("files")
         .and_then(|v| v.as_array())
-        .and_then(|files| files.first())
-        .and_then(|file| file.get("id"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| NookError::Drive("Drive event file missing.".to_owned()))?;
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(|file| file.get("id").and_then(|v| v.as_str()).map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    if file_ids.is_empty() {
+        return Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned()));
+    }
+
+    let mut accepted: Option<Vec<u8>> = None;
+    for file_id in file_ids {
+        let bytes = download_drive_event_file(&client, token, &file_id).await?;
+        let event: VaultEvent = serde_json::from_slice(&bytes)
+            .map_err(|e| NookError::Serialization(format!("Drive event parse: {e}")))?;
+        if event.id()? != *event_id {
+            continue;
+        }
+        if let Some(existing) = &accepted {
+            if existing != &bytes {
+                return Err(NookError::Drive(
+                    "Drive duplicate event files contain different bytes.".to_owned(),
+                ));
+            }
+        } else {
+            accepted = Some(bytes);
+        }
+    }
+    accepted.ok_or_else(|| {
+        NookError::Drive(
+            "Drive event file name exists but no file content matches the requested id.".to_owned(),
+        )
+    })
+}
+
+async fn download_drive_event_file(
+    client: &reqwest::Client,
+    token: &str,
+    file_id: &str,
+) -> Result<Vec<u8>, NookError> {
     let download_url = format!("https://www.googleapis.com/drive/v3/files/{file_id}?alt=media");
     let download = client
         .get(&download_url)
@@ -120,6 +159,16 @@ pub(crate) async fn put_drive_event_if_absent(
     bytes: &[u8],
 ) -> Result<String, NookError> {
     let token = token.trim();
+    match fetch_drive_event(token, event_id).await {
+        Ok(existing) if existing == bytes => return Ok(String::new()),
+        Ok(_) => {
+            return Err(NookError::Drive(
+                "Drive event path already exists with different bytes.".to_owned(),
+            ));
+        }
+        Err(NookError::Drive(message)) if message == DRIVE_EVENT_MISSING => {}
+        Err(err) => return Err(err),
+    }
     let file_name = format!("{}.event", event_id.hex_digest());
     let metadata = serde_json::json!({
         "name": file_name,

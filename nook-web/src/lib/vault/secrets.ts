@@ -182,8 +182,11 @@ export async function handleAddSecret(
   data: string,
 ) {
   if (!state.manager) return
-  if (state.syncBlocked) {
-    state.errorMsg = state.t('auth_storage.sync_blocked_edits')
+  if (state.editsBlocked) {
+    state.errorMsg =
+      state.securityConflicts.length > 0
+        ? 'Security conflict detected. Sync from all devices before editing.'
+        : state.t('auth_storage.sync_blocked_edits')
     return
   }
   state.errorMsg = ''
@@ -215,8 +218,11 @@ export async function handleAddSecret(
 
 export async function handleDeleteSecret(state: VaultState, id: string) {
   if (!state.manager) return
-  if (state.syncBlocked) {
-    state.errorMsg = state.t('auth_storage.sync_blocked_edits')
+  if (state.editsBlocked) {
+    state.errorMsg =
+      state.securityConflicts.length > 0
+        ? 'Security conflict detected. Sync from all devices before editing.'
+        : state.t('auth_storage.sync_blocked_edits')
     return
   }
   state.errorMsg = ''
@@ -257,8 +263,11 @@ export async function handleReplaceSecret(
   data: string,
 ) {
   if (!state.manager) return
-  if (state.syncBlocked) {
-    state.errorMsg = state.t('auth_storage.sync_blocked_edits')
+  if (state.editsBlocked) {
+    state.errorMsg =
+      state.securityConflicts.length > 0
+        ? 'Security conflict detected. Sync from all devices before editing.'
+        : state.t('auth_storage.sync_blocked_edits')
     return
   }
   state.errorMsg = ''

@@ -754,6 +754,7 @@ not-json
         let join_request = JoinRequest {
             device_id: joiner.device_id().clone(),
             public_key: joiner.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::default(),
             requested_at: "2026-01-01T00:00:00Z".to_owned(),
         };
         let join_id = join_request.device_id.as_str();

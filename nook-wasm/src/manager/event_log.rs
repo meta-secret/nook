@@ -50,7 +50,13 @@ fn vault_operations_need_remote_yaml_snapshot(operations: &[VaultOperation]) -> 
 
 impl NookVaultManager {
     pub(in crate::manager) async fn ensure_event_log_mode(&mut self) -> Result<bool, NookError> {
-        if self.event_log_mode || is_event_log_mode().await? {
+        if self.event_log_mode {
+            if !is_event_log_mode().await? {
+                set_event_log_mode().await?;
+            }
+            return Ok(true);
+        }
+        if is_event_log_mode().await? {
             self.event_log_mode = true;
             return Ok(true);
         }
@@ -62,7 +68,7 @@ impl NookVaultManager {
     /// Idempotent when the log already exists. Otherwise imports the current
     /// session projection or bootstraps a genesis event before any write.
     pub(in crate::manager) async fn ensure_event_log_ready(&mut self) -> Result<(), NookError> {
-        if self.ensure_event_log_mode().await? {
+        if self.ensure_event_log_mode().await? && self.event_log_has_events().await? {
             return Ok(());
         }
         if self.event_log_has_events().await? {

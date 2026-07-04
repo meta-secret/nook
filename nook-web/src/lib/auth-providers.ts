@@ -49,6 +49,8 @@ export interface StorageProvider {
   lastSyncedAt?: string
   /** Remote revision token (GitHub sha, Drive revisionId) for the next write. */
   lastSyncRevision?: string
+  /** SHA-256 of the last vault blob both local and this provider shared. */
+  lastCommonContentHash?: string
   createdAt: string
 }
 

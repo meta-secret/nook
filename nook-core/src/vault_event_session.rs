@@ -70,7 +70,7 @@ impl VaultEventSession {
             operations,
         })?;
         let event_id = event.id()?;
-        self.store.put_event(event_id.clone(), bytes.clone());
+        let _ = self.store.append_event(&event, &self.store_id)?;
         self.heads = vec![event_id.as_str().to_owned()];
         if let Some(provider) = provider_id {
             self.store.queue_outbox(provider, event_id.clone(), bytes);

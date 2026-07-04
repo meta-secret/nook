@@ -17,7 +17,7 @@ type LocalVaultRegistryEntry = {
 async function listLocalVaultEntries(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
     return new Promise<LocalVaultRegistryEntry[]>((resolve, reject) => {
-      const request = indexedDB.open('nook_db', 1)
+      const request = indexedDB.open('nook_db')
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
       request.onsuccess = () => {

@@ -241,6 +241,14 @@ impl NookVaultManager {
             .map_err(Into::into)
     }
 
+    #[wasm_bindgen(js_name = listProjectionSecurityConflicts)]
+    pub async fn list_projection_security_conflicts(
+        &self,
+    ) -> Result<Vec<crate::NookSecurityConflict>, JsError> {
+        let projection = self.load_projection_conflicts().await?;
+        crate::types::security_conflicts_to_vec(projection.security_conflicts).map_err(Into::into)
+    }
+
     // Delete a secret
     pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
@@ -266,5 +274,45 @@ impl NookVaultManager {
             "secret deleted"
         );
         Ok(records)
+    }
+
+    #[wasm_bindgen(js_name = resolveProjectionConflict)]
+    pub async fn resolve_projection_conflict(
+        &mut self,
+        old_secret_id: String,
+        chosen_secret_id: String,
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
+        let old_id = nook_core::validate_secret_id(&old_secret_id)?;
+        let chosen_id = nook_core::validate_secret_id(&chosen_secret_id)?;
+        let projection = self.load_projection_conflicts().await?;
+        let conflict = projection
+            .replacement_conflicts
+            .get(&old_id)
+            .ok_or_else(|| {
+                NookError::Database("Secret replacement conflict not found.".to_owned())
+            })?;
+        if !conflict
+            .candidates
+            .values()
+            .any(|secret_id| secret_id == &chosen_id)
+        {
+            return Err(NookError::Database(
+                "Chosen secret is not part of this replacement conflict.".to_owned(),
+            )
+            .into());
+        }
+        let rejected_secret_ids = conflict
+            .candidates
+            .values()
+            .filter(|secret_id| *secret_id != &chosen_id)
+            .cloned()
+            .collect();
+        self.append_vault_operations(vec![nook_core::VaultOperation::SecretConflictResolved {
+            old_id,
+            chosen_secret_id: chosen_id,
+            rejected_secret_ids,
+        }])
+        .await?;
+        Ok(self.get_records()?)
     }
 }

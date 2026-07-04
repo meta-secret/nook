@@ -23,8 +23,8 @@ use crate::{
     NookResolveConflictKeepRemoteResult,
 };
 use nook_core::{
-    MemoryVaultStore, reconcile_vault_stores, resolve_conflict_keep_local,
-    resolve_conflict_keep_remote,
+    MemoryVaultStore, reconcile_vault_stores, reconcile_vault_stores_with_common,
+    resolve_conflict_keep_local, resolve_conflict_keep_remote,
 };
 use wasm_bindgen::prelude::*;
 
@@ -201,6 +201,37 @@ pub fn reconcile_vault_blobs(
         remote.blob().to_owned(),
         remote.revision().map(str::to_owned),
     ))
+}
+
+/// Compare local vs remote YAML with a remembered common content hash, apply the
+/// sync action in memory, and return post-reconcile blobs.
+#[wasm_bindgen(js_name = reconcileVaultBlobsWithCommon)]
+pub fn reconcile_vault_blobs_with_common(
+    local_yaml: String,
+    remote_yaml: String,
+    remote_revision: Option<String>,
+    last_common_content_hash: Option<String>,
+) -> Result<NookReconcileVaultBlobsResult, JsError> {
+    let mut local = MemoryVaultStore::with_blob(local_yaml);
+    let mut remote = remote_memory_store(remote_yaml, remote_revision);
+    let last_common_content_hash = last_common_content_hash.filter(|hash| !hash.is_empty());
+    let action = reconcile_vault_stores_with_common(
+        &mut local,
+        &mut remote,
+        last_common_content_hash.as_deref(),
+    )
+    .map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(NookReconcileVaultBlobsResult::new(
+        action.label().to_owned(),
+        local.blob().to_owned(),
+        remote.blob().to_owned(),
+        remote.revision().map(str::to_owned),
+    ))
+}
+
+#[wasm_bindgen(js_name = vaultContentHash)]
+pub fn vault_content_hash(content: &str) -> String {
+    nook_core::vault_content_hash(content)
 }
 
 /// User chose "keep local" — return the remote blob content to write to storage.
