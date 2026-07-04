@@ -1,6 +1,5 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
-use crate::PasswordUnlockEntry;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
@@ -13,6 +12,7 @@ use crate::vault_wire::{
     AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
     OpaqueCiphertext, PasswordEntryId, Sha256Hex,
 };
+use crate::{PasswordEnvelope, PasswordUnlockEntry};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -113,11 +113,11 @@ pub enum VaultOperation {
         entry_id: PasswordEntryId,
         label: String,
         created_at: IsoTimestamp,
-        envelope_ciphertext: OpaqueCiphertext,
+        envelope: PasswordEnvelope,
     },
     PasswordRotated {
         entry_id: PasswordEntryId,
-        envelope_ciphertext: OpaqueCiphertext,
+        envelope: PasswordEnvelope,
     },
     PasswordRemoved {
         entry_id: PasswordEntryId,
@@ -493,5 +493,45 @@ mod tests {
                 .unwrap(),
             event.id().unwrap()
         );
+    }
+
+    #[test]
+    fn password_envelope_event_storage_is_yaml_map() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse(
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: StoreId::parse("store_testtoken11").unwrap(),
+            actor_id: actor(&signing_key),
+            actor_signing_public_key: Some(public_key(&signing_key)),
+            parents: vec![epoch.clone()],
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: epoch,
+            operations: vec![VaultOperation::PasswordAdded {
+                entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+                label: "Recovery".to_owned(),
+                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:01Z".to_owned()),
+                envelope: PasswordEnvelope {
+                    version: 1,
+                    kdf: "scrypt".to_owned(),
+                    work_factor: 18,
+                    ciphertext: "age-ciphertext".to_owned(),
+                },
+            }],
+        };
+        let event = VaultEvent::sign(body, &signing_key).unwrap();
+
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event).unwrap()).unwrap();
+        assert!(yaml.contains("  envelope:\n"));
+        assert!(yaml.contains("    version: 1\n"));
+        assert!(yaml.contains("    kdf: scrypt\n"));
+        assert!(yaml.contains("    work_factor: 18\n"));
+        assert!(yaml.contains("    ciphertext: age-ciphertext\n"));
+        assert!(!yaml.contains("envelope_"));
+        assert!(!yaml.contains('{'));
+        assert_eq!(parse_event_storage_bytes(yaml.as_bytes()).unwrap(), event);
     }
 }

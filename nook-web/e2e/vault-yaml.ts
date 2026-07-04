@@ -75,7 +75,7 @@ type VaultEventOperation = {
   entry_id?: string
   label?: string
   created_at?: string
-  envelope_ciphertext?: string
+  envelope?: PasswordEnvelopeYaml
   password_entries?: PasswordEntryYaml[]
 }
 
@@ -173,13 +173,8 @@ function eventSecretToStored(
   }
 }
 
-function parsePasswordEventEnvelope(ciphertext?: string): PasswordEnvelopeYaml {
-  if (!ciphertext) return {}
-  try {
-    return parseYaml(ciphertext) as PasswordEnvelopeYaml
-  } catch {
-    return { ciphertext }
-  }
+function passwordEventEnvelope(envelope?: PasswordEnvelopeYaml): PasswordEnvelopeYaml {
+  return envelope ?? {}
 }
 
 function sortEventYamls(eventYamls: string[]): VaultEventYaml[] {
@@ -278,9 +273,7 @@ export function parseVaultEventLogSnapshot(
             passwordEntries.set(operation.entry_id, {
               id: operation.entry_id,
               label: operation.label,
-              envelope: parsePasswordEventEnvelope(
-                operation.envelope_ciphertext,
-              ),
+              envelope: passwordEventEnvelope(operation.envelope),
             })
           }
           break
@@ -290,9 +283,7 @@ export function parseVaultEventLogSnapshot(
             passwordEntries.set(operation.entry_id, {
               id: operation.entry_id,
               label: existing?.label,
-              envelope: parsePasswordEventEnvelope(
-                operation.envelope_ciphertext,
-              ),
+              envelope: passwordEventEnvelope(operation.envelope),
             })
           }
           break

@@ -117,18 +117,11 @@ impl NookVaultManager {
 
         self.password_entries.push(entry.clone());
         self.unlock = nook_core::VaultUnlock::Keys;
-        let envelope_ciphertext = self
-            .password_entries
-            .last()
-            .map(|e| serde_json::to_string(&e.envelope))
-            .transpose()
-            .map_err(|e| NookError::Serialization(e.to_string()))?
-            .unwrap_or_default();
         self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
             entry_id: nook_core::PasswordEntryId::parse(&entry.id)?,
             label: entry.label,
             created_at: nook_core::IsoTimestamp::parse(&entry.created_at)?,
-            envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
+            envelope: entry.envelope,
         }])
         .await?;
         Ok(())
@@ -197,20 +190,16 @@ impl NookVaultManager {
                 work_factor,
             )?;
         }
-        let envelope_ciphertext = self
+        let envelope = self
             .password_entries
             .iter()
             .find(|entry| entry.id == entry_id)
-            .map(|entry| {
-                serde_json::to_string(&entry.envelope)
-                    .map_err(|e| NookError::Serialization(e.to_string()))
-            })
-            .transpose()?
-            .unwrap_or_default();
+            .map(|entry| entry.envelope.clone())
+            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
         self.ensure_event_log_ready().await?;
         self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
             entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
-            envelope_ciphertext: nook_core::OpaqueCiphertext::from_trusted(envelope_ciphertext),
+            envelope,
         })
         .await?;
         let rotated_keys = nook_core::VaultKeys {

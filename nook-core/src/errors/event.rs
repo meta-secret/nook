@@ -111,9 +111,6 @@ pub enum EventError {
     #[error("failed to serialize member records")]
     MemberRecordsSerialize(#[source] serde_json::Error),
 
-    #[error("failed to parse password envelope from event")]
-    PasswordEnvelopeParse(#[source] serde_json::Error),
-
     #[error("expected import operation")]
     ExpectedImportOperation,
 

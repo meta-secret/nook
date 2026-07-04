@@ -1,5 +1,6 @@
 //! Deterministic encrypted vault projection from the causal event log.
 
+use crate::PasswordUnlockEntry;
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::secret_types::StoredSecretRecord;
@@ -10,7 +11,6 @@ use crate::vault_epoch::{
 use crate::vault_event::{EncryptedSecretPayload, VaultEventSchemaVersion, VaultOperation};
 use crate::vault_event_graph::EventGraph;
 use crate::vault_ids::{SecretId, StoreId};
-use crate::{PasswordEnvelope, PasswordUnlockEntry};
 use std::collections::BTreeMap;
 
 /// One live or tombstoned secret in the encrypted projection.
@@ -127,7 +127,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> VaultResult<VaultPro
                 &event_id,
                 operation,
                 &mut replacements_by_old,
-            )?;
+            );
         }
 
         if let Ok(epoch_id) = EventId::parse(event.body.key_epoch.as_str()) {
@@ -155,7 +155,7 @@ fn apply_operation(
     event_id: &EventId,
     operation: &VaultOperation,
     replacements_by_old: &mut BTreeMap<SecretId, Vec<(EventId, SecretId)>>,
-) -> VaultResult<()> {
+) {
     match operation {
         VaultOperation::VaultImported {
             secrets,
@@ -215,7 +215,7 @@ fn apply_operation(
             entry_id,
             label,
             created_at,
-            envelope_ciphertext,
+            envelope,
         } => {
             upsert_password_entry(
                 projection,
@@ -223,20 +223,17 @@ fn apply_operation(
                     id: entry_id.as_str().to_owned(),
                     label: label.to_owned(),
                     created_at: created_at.as_str().to_owned(),
-                    envelope: parse_password_envelope(envelope_ciphertext)?,
+                    envelope: envelope.clone(),
                 },
             );
         }
-        VaultOperation::PasswordRotated {
-            entry_id,
-            envelope_ciphertext,
-        } => {
+        VaultOperation::PasswordRotated { entry_id, envelope } => {
             if let Some(entry) = projection
                 .password_entries
                 .iter_mut()
                 .find(|entry| entry.id == entry_id.as_str())
             {
-                entry.envelope = parse_password_envelope(envelope_ciphertext)?;
+                entry.envelope.clone_from(envelope);
             }
         }
         VaultOperation::PasswordRemoved { entry_id } => {
@@ -250,7 +247,6 @@ fn apply_operation(
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::DeviceRevoked { .. } => {}
     }
-    Ok(())
 }
 
 fn insert_secret(
@@ -268,11 +264,6 @@ fn insert_secret(
             replaced_from,
         },
     );
-}
-
-fn parse_password_envelope(ciphertext: &crate::OpaqueCiphertext) -> VaultResult<PasswordEnvelope> {
-    serde_json::from_str(ciphertext.as_str())
-        .map_err(|err| crate::errors::VaultError::Event(EventError::PasswordEnvelopeParse(err)))
 }
 
 fn upsert_password_entry(projection: &mut VaultProjection, entry: PasswordUnlockEntry) {
@@ -357,6 +348,8 @@ pub fn assert_projection_permutation_invariant(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::PasswordEnvelope;
+    use crate::PasswordUnlockEntry;
     use crate::VaultResult;
     use crate::secret_types::SecretType;
     use crate::vault_event::{
@@ -368,7 +361,6 @@ mod tests {
     use crate::vault_wire::{
         DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, PasswordEntryId, Sha256Hex,
     };
-    use crate::{PasswordEnvelope, PasswordUnlockEntry};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -410,10 +402,8 @@ mod tests {
         }
     }
 
-    fn password_envelope_ciphertext(ciphertext: &str) -> OpaqueCiphertext {
-        OpaqueCiphertext::from_trusted(
-            serde_json::to_string(&password_envelope(ciphertext)).unwrap(),
-        )
+    fn password_envelope_fixture(ciphertext: &str) -> PasswordEnvelope {
+        password_envelope(ciphertext)
     }
 
     fn genesis_source_hash() -> Sha256Hex {
@@ -628,7 +618,7 @@ mod tests {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
                 label: "Primary recovery".to_owned(),
                 created_at: ts("2026-06-28T00:00:01Z"),
-                envelope_ciphertext: password_envelope_ciphertext("initial"),
+                envelope: password_envelope_fixture("initial"),
             },
         )?;
         let add_id = add.id()?;
@@ -645,7 +635,7 @@ mod tests {
             vec![add_id],
             VaultOperation::PasswordRotated {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
-                envelope_ciphertext: password_envelope_ciphertext("rotated"),
+                envelope: password_envelope_fixture("rotated"),
             },
         )?;
         let rotate_id = rotate.id()?;
@@ -824,9 +814,7 @@ mod tests {
             vec![genesis_id],
             VaultOperation::PasswordRotated {
                 entry_id: PasswordEntryId::parse("pwdentry001").unwrap(),
-                envelope_ciphertext: OpaqueCiphertext::from_trusted(
-                    r#"{"version":1,"kdf":"scrypt","work_factor":18,"ciphertext":"x"}"#.to_owned(),
-                ),
+                envelope: password_envelope_fixture("x"),
             },
         )?;
         graph.insert(revoke, STORE)?;
