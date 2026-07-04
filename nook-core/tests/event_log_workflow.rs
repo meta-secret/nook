@@ -428,6 +428,47 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
 }
 
 #[test]
+fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultResult<()> {
+    let root = EventLogDevice::genesis("root")?;
+    let mut local = EventLogDevice::replica_of(&root)?;
+    let mut remote_device = EventLogDevice::replica_of(&root)?;
+    let mut providers: ProviderBuckets =
+        HashMap::from([("github".to_owned(), nook_core::LocalEventStore::new())]);
+
+    for (id, bytes) in root.remote_events() {
+        providers
+            .get_mut("github")
+            .ok_or(EventError::MissingProviderBucket)?
+            .put_event(id, bytes);
+    }
+    union_device_from_providers(&mut local, &providers)?;
+    union_device_from_providers(&mut remote_device, &providers)?;
+
+    let shared_head = root.session.heads[0].clone();
+    local.session.heads = vec![shared_head.clone()];
+    local.append_secret("secret_localflush1", "local draft")?;
+
+    remote_device.session.heads = vec![shared_head];
+    remote_device.append_secret("secret_remotewrite", "remote draft")?;
+    push_device_outbox(&mut remote_device, &mut providers)?;
+
+    // This is the event-log equivalent of saving after the provider changed:
+    // flushing a new immutable event must not overwrite the remote event.
+    push_device_outbox(&mut local, &mut providers)?;
+
+    let mut reloaded = EventLogDevice::replica_of(&root)?;
+    union_device_from_providers(&mut reloaded, &providers)?;
+    let graph = reloaded.session.store.load_graph(reloaded.store_id())?;
+    let live = reloaded.project()?.live_secrets(&graph);
+
+    assert!(live.contains_key("secret_localflush1"));
+    assert!(live.contains_key("secret_remotewrite"));
+    assert_eq!(live.len(), 2);
+    assert_eq!(graph.heads().len(), 2);
+    Ok(())
+}
+
+#[test]
 fn three_device_decentralized_convergence() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     let mut b = EventLogDevice::replica_of(&a)?;

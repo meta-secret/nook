@@ -182,8 +182,8 @@ pub use vault_sync::{
 };
 pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_sync};
 pub use vault_sync_store::{
-    MemoryVaultStore, fan_out_sync, reconcile_vault_stores, reconcile_vault_stores_with_common,
-    resolve_conflict_keep_local, resolve_conflict_keep_remote,
+    MemoryVaultStore, RevisionGuardedWrite, fan_out_sync, reconcile_vault_stores,
+    reconcile_vault_stores_with_common, resolve_conflict_keep_local, resolve_conflict_keep_remote,
 };
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,

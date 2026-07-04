@@ -4,10 +4,10 @@
 //! sync providers — no browser or network required.
 
 use nook_core::{
-    MemoryVaultStore, SecretId, StoredRecordPayload, StoredSecretRecord, VaultSyncAction,
-    VaultUnlock, compare_vault_sync, fan_out_sync, read_vault_store_id, read_vault_version,
-    reconcile_vault_stores, resolve_conflict_keep_local, resolve_conflict_keep_remote,
-    serialize_stored_yaml_with_unlock,
+    MemoryVaultStore, RevisionGuardedWrite, SecretId, StoredRecordPayload, StoredSecretRecord,
+    VaultSyncAction, VaultSyncError, VaultUnlock, compare_vault_sync, fan_out_sync,
+    read_vault_store_id, read_vault_version, reconcile_vault_stores, resolve_conflict_keep_local,
+    resolve_conflict_keep_remote, serialize_stored_yaml_with_unlock,
 };
 use std::collections::HashMap;
 
@@ -85,6 +85,42 @@ fn same_version_divergence_surfaces_conflict_without_mutating_stores() {
     assert_eq!(action, VaultSyncAction::Conflict);
     assert_eq!(local.blob(), local_blob);
     assert_eq!(remote.blob(), remote_blob);
+}
+
+#[test]
+fn stale_revision_write_reports_remote_changed_without_overwriting() {
+    let local_save_blob = sample_yaml(3, "local-save");
+    let concurrent_remote_blob = sample_yaml(3, "remote-save");
+    let mut remote =
+        MemoryVaultStore::with_blob_and_revision(concurrent_remote_blob.clone(), "rev-2");
+
+    let result = remote.write_if_revision_matches_or_same_content(&local_save_blob, Some("rev-1"));
+
+    assert!(matches!(
+        result,
+        Err(VaultSyncError::RemoteChangedDuringWrite)
+    ));
+    assert_eq!(remote.blob(), concurrent_remote_blob);
+    assert_eq!(remote.revision(), Some("rev-2"));
+}
+
+#[test]
+fn stale_revision_write_is_idempotent_when_remote_already_has_same_blob() {
+    let local_save_blob = sample_yaml(3, "same-save");
+    let mut remote = MemoryVaultStore::with_blob_and_revision(local_save_blob.clone(), "rev-2");
+
+    let result = remote
+        .write_if_revision_matches_or_same_content(&local_save_blob, Some("rev-1"))
+        .unwrap();
+
+    assert_eq!(
+        result,
+        RevisionGuardedWrite::AlreadyPresent {
+            revision: Some("rev-2".to_owned())
+        }
+    );
+    assert_eq!(remote.blob(), local_save_blob);
+    assert_eq!(remote.revision(), Some("rev-2"));
 }
 
 #[test]

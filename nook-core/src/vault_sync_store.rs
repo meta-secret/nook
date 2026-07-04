@@ -18,6 +18,12 @@ pub struct MemoryVaultStore {
     revision: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RevisionGuardedWrite {
+    Written { revision: String },
+    AlreadyPresent { revision: Option<String> },
+}
+
 impl MemoryVaultStore {
     #[must_use]
     pub fn new() -> Self {
@@ -61,6 +67,33 @@ impl MemoryVaultStore {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.blob.trim().is_empty()
+    }
+
+    /// Provider-style guarded write.
+    ///
+    /// GitHub SHA, Drive revision, and `CloudKit` change-tag writes all have the
+    /// same race: the caller proposes content against a remembered revision,
+    /// then the provider may reject because the remote changed first. If the
+    /// fetched remote already equals the proposed content the retry is
+    /// idempotent; otherwise the caller must surface a sync conflict.
+    pub fn write_if_revision_matches_or_same_content(
+        &mut self,
+        content: impl Into<String>,
+        expected_revision: Option<&str>,
+    ) -> VaultSyncResult<RevisionGuardedWrite> {
+        let content = content.into();
+        if self.blob.trim() == content.trim() {
+            return Ok(RevisionGuardedWrite::AlreadyPresent {
+                revision: self.revision.clone(),
+            });
+        }
+        if self.revision.as_deref() != expected_revision {
+            return Err(VaultSyncError::RemoteChangedDuringWrite);
+        }
+        self.blob = content;
+        let next = next_revision(self.revision.as_deref());
+        self.revision = Some(next.clone());
+        Ok(RevisionGuardedWrite::Written { revision: next })
     }
 }
 
