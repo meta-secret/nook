@@ -78,7 +78,7 @@ export async function migrateLegacyVaultToLocal(
   }
 
   const remoteProviders = snapshot.providers.filter(
-    (provider) => provider.type !== 'local',
+    (provider) => provider.type === 'github' || provider.type === 'oauth-file',
   )
   if (remoteProviders.length === 0) {
     return { snapshot, migrated: false }

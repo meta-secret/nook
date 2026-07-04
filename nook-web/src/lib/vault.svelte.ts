@@ -20,11 +20,16 @@ import {
   providerDefaultLabel,
   saveAuthProviders,
   wasmStorageModeForProvider,
+  type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
+import {
+  chooseLocalFolderBackupDirectory,
+  syncLocalFolderProvider,
+} from '$lib/local-folder-sync'
 import {
   getBrowserAppLocale,
   parseAppLocale,
@@ -106,6 +111,7 @@ export class VaultState {
   githubPat = $state('')
   githubRepo = $state(DEFAULT_GITHUB_REPO)
   oauthFile = $state<OAuthFileConfig | null>(null)
+  localFolder = $state<LocalFolderConfig | null>(null)
   oauthSetupPreset = $state<OAuthFilePreset | null>(null)
   googleOAuthBusy = $state(false)
   icloudOAuthBusy = $state(false)
@@ -492,6 +498,9 @@ export class VaultState {
     if (this.storageMode === 'oauth-file') {
       return Boolean(this.oauthFile?.accessToken?.trim())
     }
+    if (this.storageMode === 'local-folder') {
+      return Boolean(this.localFolder?.handleId?.trim())
+    }
     return true
   }
 
@@ -516,6 +525,10 @@ export class VaultState {
 
   async signInWithICloud(): Promise<void> {
     return oauthActions.signInWithICloud(this)
+  }
+
+  async chooseLocalFolderBackupDirectory(): Promise<void> {
+    this.localFolder = await chooseLocalFolderBackupDirectory()
   }
 
   dismissSuccess() {
@@ -603,6 +616,9 @@ export class VaultState {
         provider.oauthFile?.accessToken?.trim() ?? '',
         formatDriveStorageRef(provider.oauthFile?.fileId, fileName),
       ]
+    }
+    if (provider.type === 'local-folder') {
+      return ['local', '', '']
     }
     if (provider.type === 'github') {
       return [
@@ -740,6 +756,7 @@ export class VaultState {
       this.storageMode = 'local'
       this.githubPat = ''
       this.oauthFile = null
+      this.localFolder = null
     } else {
       this.applyActiveProviderCredentials()
     }
@@ -858,6 +875,7 @@ export class VaultState {
       this.providersLoaded = false
       this.githubPat = ''
       this.oauthFile = null
+      this.localFolder = null
       this.storageMode = 'local'
       this.showSuccess(this.t('device_protection.recovery_complete'))
     } catch (error) {
@@ -1244,6 +1262,10 @@ export class VaultState {
     const mergedJoins: JoinRequest[] = []
     try {
       for (const provider of this.syncProviders) {
+        if (provider.type === 'local-folder') {
+          await syncLocalFolderProvider(this, provider)
+          continue
+        }
         const [mode, pat, repo] = this.providerWasmArgs(provider)
         const joins = (await this.enqueueStorage(() =>
           this.manager!.mergeRemoteJoinsFromProvider(mode, pat, repo),
@@ -1385,8 +1407,14 @@ export class VaultState {
   remoteEventProviderArgs(
     provider?: StorageProvider,
   ): [string, string, string] | null {
+    if (provider?.type === 'local-folder') {
+      return null
+    }
     if (provider) {
       return this.providerWasmArgs(provider)
+    }
+    if (this.syncProviders[0]?.type === 'local-folder') {
+      return null
     }
     if (this.syncProviders.length > 0) {
       return this.providerWasmArgs(this.syncProviders[0]!)
@@ -1783,6 +1811,7 @@ export class VaultState {
       this.storageMode = 'local'
       this.githubPat = ''
       this.oauthFile = null
+      this.localFolder = null
     }
   }
 
@@ -1865,6 +1894,23 @@ export class VaultState {
 
   async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return
+    const folderProvider =
+      provider?.type === 'local-folder'
+        ? provider
+        : !provider && this.syncProviders[0]?.type === 'local-folder'
+          ? this.syncProviders[0]
+          : null
+    if (folderProvider) {
+      try {
+        await syncLocalFolderProvider(this, folderProvider)
+      } catch (error) {
+        vaultLog.warn('local backup sync skipped', {
+          providerId: folderProvider.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+      return
+    }
     const args = this.remoteEventProviderArgs(provider)
     if (!args) return
     try {

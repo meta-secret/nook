@@ -18,7 +18,11 @@ import {
 
 await initNookWasm()
 
-export type StorageProviderType = 'local' | 'github' | 'oauth-file'
+export type StorageProviderType =
+  | 'local'
+  | 'local-folder'
+  | 'github'
+  | 'oauth-file'
 
 export type OAuthFilePreset = 'google-drive' | 'icloud'
 
@@ -33,6 +37,11 @@ export interface OAuthFileConfig {
   accountEmail?: string
 }
 
+export interface LocalFolderConfig {
+  directoryName?: string
+  handleId?: string
+}
+
 export interface StorageProvider {
   id: string
   type: StorageProviderType
@@ -41,6 +50,7 @@ export interface StorageProvider {
   /** GitHub repository name (not owner/name). Defaults to `nook`. */
   githubRepo?: string
   oauthFile?: OAuthFileConfig
+  localFolder?: LocalFolderConfig
   /** Logical secret-store id — same across provider replicas of one vault. */
   storeId?: string
   /** Monotonic vault_version after last successful sync to this provider. */
@@ -82,6 +92,11 @@ export function syncProviderTargetKey(
   const target =
     provider.type === 'local'
       ? NookSyncProviderTarget.local()
+      : provider.type === 'local-folder'
+        ? NookSyncProviderTarget.localFolder(
+            provider.localFolder?.directoryName ?? null,
+            provider.localFolder?.handleId ?? null,
+          )
       : provider.type === 'github'
         ? NookSyncProviderTarget.github(
             provider.githubRepo ?? null,
@@ -180,6 +195,13 @@ export function localizeProviderLabel(
   if (label === 'GitHub') {
     return t('provider_picker.github')
   }
+  if (label === 'Local backup') {
+    return t('provider_picker.local_folder')
+  }
+  if (label.startsWith('Local backup · ')) {
+    const directory = label.slice('Local backup · '.length)
+    return `${t('provider_picker.local_folder')} · ${directory}`
+  }
   if (label.startsWith('Google Drive · ')) {
     const file = label.slice('Google Drive · '.length)
     return `${t('provider_picker.google_drive')} · ${file}`
@@ -248,6 +270,12 @@ export function providerStorageDetail(
       provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
     const account = maskOAuthAccount(provider.oauthFile, t)
     return `${file} · ${account}`
+  }
+  if (provider.type === 'local-folder') {
+    return (
+      provider.localFolder?.directoryName?.trim() ||
+      (t ? t('auth_storage.local_folder_needs_reconnect') : 'Choose folder')
+    )
   }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
   return `${repo}/nook-projection.yaml · ${maskGithubPat(provider.githubPat, t)}`

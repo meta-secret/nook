@@ -20,7 +20,8 @@ tasks:
       - >-
         sh -c 'out=nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm;
         stamp=nook-web/src/lib/nook-wasm/.wasm-source-sha256;
-        current="$(find nook-wasm/src nook-core/src -type f -name "*.rs" -print0 \
+        current="$(find nook-wasm/src nook-core/src nook-core/locales \
+          \( -name "*.rs" -o -name "*.json" \) -print0 \
           | LC_ALL=C sort -z \
           | xargs -0 sha256sum \
           | sha256sum \

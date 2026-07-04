@@ -11,6 +11,7 @@
   import QRCode from 'qrcode'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
+  import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import ProviderPicker from '$lib/components/ProviderPicker.svelte'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
@@ -481,6 +482,15 @@
                 {vault}
                 bind:githubPat
                 bind:githubRepo
+                idPrefix="onboard"
+                {isVerifying}
+                {isInitializing}
+                {onCancelSetup}
+                onConnect={onConnectProvider}
+              />
+            {:else if setupType === 'local-folder'}
+              <LocalFolderProviderSetupWizard
+                {vault}
                 idPrefix="onboard"
                 {isVerifying}
                 {isInitializing}

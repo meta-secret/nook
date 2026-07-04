@@ -84,7 +84,7 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
     await addSecret(vaultPage, key, value, target)
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
-    await installSyncStub(vaultPage, target, target.stub?.getVaultYaml())
+    await installSyncStub(vaultPage, target)
     await reconnectSyncVault(vaultPage)
     await assertVaultReady(vaultPage)
 

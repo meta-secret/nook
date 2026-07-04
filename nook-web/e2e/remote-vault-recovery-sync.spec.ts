@@ -21,10 +21,10 @@ import {
   createSyncTarget,
   installSyncStub,
   resetSyncRemote,
+  waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
 import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
-import { parseVaultYamlSnapshot } from './vault-yaml'
 
 test.describe('remote vault recovery (stub sync, local-first)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -103,9 +103,12 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
             await vault?.manualSync?.()
           })
           await waitForVaultOperationsIdle(vaultPage)
-          const yaml = target.stub?.getVaultYaml() ?? ''
-          if (!yaml.trim()) return 0
-          return parseVaultYamlSnapshot(yaml).secretIds.length
+          const snapshot = await waitForSyncRemoteState(
+            target,
+            (state) => state.secretIds.length >= 1,
+            { timeoutMs: 1_000 },
+          ).catch(() => null)
+          return snapshot?.secretIds.length ?? 0
         },
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )

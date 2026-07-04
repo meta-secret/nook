@@ -5,6 +5,7 @@ import {
   generateSecretId,
 } from '$lib/nook'
 import { createLogger } from '$lib/log'
+import { syncLocalFolderProvider } from '$lib/local-folder-sync'
 
 const log = createLogger('connect')
 
@@ -31,6 +32,17 @@ export async function loadDb(state: VaultState) {
   try {
     await state.initDeviceIdentity()
     await state.ensureOAuthTokensFresh()
+
+    if (!state.isAuthenticated && state.loginSetupType === 'local-folder') {
+      const saved = await state.ensureProviderSaved()
+      if (!saved) return
+      const provider =
+        state.syncProviders[state.syncProviders.length - 1] ??
+        state.providers[state.providers.length - 1]
+      if (provider?.type === 'local-folder') {
+        await syncLocalFolderProvider(state, provider)
+      }
+    }
 
     if (!state.isAuthenticated && state.syncProviders.length > 0) {
       await state.syncProviderById(state.syncProviders[0]!.id, { quiet: true })
@@ -151,6 +163,8 @@ export async function loadDb(state: VaultState) {
     await state.hydrateMultiDeviceState()
     if (state.storageMode === 'local') {
       state.showSuccess(state.t('toasts.local_loaded'))
+    } else if (state.storageMode === 'local-folder') {
+      state.showSuccess(state.t('toasts.local_folder_connected'))
     } else if (state.storageMode === 'oauth-file') {
       state.showSuccess(state.t('toasts.google_drive_connected'))
     } else {

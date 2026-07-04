@@ -12,6 +12,7 @@ import {
   assertGenesisVaultYaml,
   assertJoinPendingYaml,
   joinCountFromYaml,
+  parseVaultEventLogSnapshot,
   parseVaultYamlSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
@@ -562,37 +563,51 @@ export async function triggerVaultSyncRefresh(page: Page) {
 
 /** Wait until in-memory sync stub has the expected vault state. */
 export async function waitForSyncStubVaultState(
-  stub: { getVaultYaml: () => string },
+  stub: { getEventFileContents: () => string[] },
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
   const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
-  let lastError = 'stub vault empty'
+  let lastError = 'stub event log empty'
 
   while (Date.now() < deadline) {
-    const yaml = stub.getVaultYaml()
-    if (yaml.trim()) {
+    const events = stub.getEventFileContents()
+    if (events.length > 0) {
       try {
-        const snapshot = parseVaultYamlSnapshot(yaml)
+        const snapshot = parseVaultEventLogSnapshot(events)
         if (predicate(snapshot)) {
           return snapshot
         }
         lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
       } catch (error) {
         lastError =
-          error instanceof Error ? error.message : 'invalid stub vault yaml'
+          error instanceof Error ? error.message : 'invalid stub event log'
       }
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for stub vault YAML: ${lastError}`)
+  throw new Error(`Timed out waiting for stub event log: ${lastError}`)
+}
+
+async function flushRemoteEventsToSyncProviders(page: Page) {
+  await page.evaluate(async () => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          runFanOutSyncAfterLocalSave?: () => Promise<void>
+        }
+      }
+    ).__nookVault
+    await vault?.runFanOutSyncAfterLocalSave?.()
+  })
+  await waitForVaultOperationsIdle(page)
 }
 
 export async function assertGenesisVaultOnSyncStub(stub: {
-  getVaultYaml: () => string
+  getEventFileContents: () => string[]
 }) {
   const snapshot = await waitForSyncStubVaultState(
     stub,
@@ -1319,7 +1334,25 @@ async function refreshGithubVaultOnLoginGate(page: Page) {
   await waitForVaultOperationsIdle(page)
 }
 
-async function tryGithubVaultConnect(page: Page, target: GithubE2eTarget) {
+type JoinerVaultReadyTarget = {
+  pat: string
+  repoName: string
+  providerId?: string
+  stub?: { install: (page: Page, opts: Record<string, unknown>) => Promise<void> }
+}
+
+function isOauthFileJoinerTarget(target: JoinerVaultReadyTarget) {
+  return (
+    target.providerId === 'file' ||
+    target.providerId === 'local' ||
+    target.providerId === 'google-drive'
+  )
+}
+
+async function tryGithubVaultConnect(
+  page: Page,
+  target: JoinerVaultReadyTarget,
+) {
   await refreshGithubVaultOnLoginGate(page)
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
@@ -1350,6 +1383,41 @@ async function tryGithubVaultConnect(page: Page, target: GithubE2eTarget) {
   await waitForVaultOperationsIdle(page)
 }
 
+async function tryOauthFileVaultConnect(
+  page: Page,
+  target: JoinerVaultReadyTarget,
+) {
+  await refreshGithubVaultOnLoginGate(page)
+  await dismissSyncConflictIfVisible(page)
+  await dismissJoinEnrollmentDialog(page)
+
+  const quickConnect = page.getByTestId('connect-provider-btn').first()
+  if (await quickConnect.isVisible()) {
+    if (await quickConnect.isEnabled()) {
+      await quickConnect.click()
+      await waitForVaultOperationsIdle(page)
+    }
+    return
+  }
+
+  await installGoogleOAuthMock(page, target.pat)
+  await setupGoogleDriveProvider(page, target.repoName)
+  const connectButton = await waitForEngine(page)
+  await connectButton.click()
+  await waitForVaultOperationsIdle(page)
+}
+
+async function tryJoinerVaultConnect(
+  page: Page,
+  target: JoinerVaultReadyTarget,
+) {
+  if (isOauthFileJoinerTarget(target)) {
+    await tryOauthFileVaultConnect(page, target)
+    return
+  }
+  await tryGithubVaultConnect(page, target)
+}
+
 /**
  * Keep the e2e idle lock (2.5s) suppressed across unlocks.
  *
@@ -1373,10 +1441,18 @@ export async function keepVaultIdleLockDisabled(page: Page) {
 
 export async function waitForJoinerVaultReady(
   page: Page,
-  target: GithubE2eTarget,
+  target: JoinerVaultReadyTarget,
 ) {
   if (target.stub) {
-    await target.stub.install(page, { repoName: target.repoName })
+    await target.stub.install(
+      page,
+      isOauthFileJoinerTarget(target)
+        ? { fileName: target.repoName }
+        : { repoName: target.repoName },
+    )
+  }
+  if (isOauthFileJoinerTarget(target)) {
+    await installGoogleOAuthMock(page, target.pat)
   }
   await keepVaultIdleLockDisabled(page)
   try {
@@ -1392,7 +1468,7 @@ export async function waitForJoinerVaultReady(
           ) {
             return true
           }
-          await tryGithubVaultConnect(page, target)
+          await tryJoinerVaultConnect(page, target)
           return (
             (await page.getByTestId('vault-panel').isVisible()) ||
             (await page.getByTestId('secret-row').count()) > 0
@@ -2842,6 +2918,10 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
     getEventFileCount: () => eventFiles.size,
     getEventFilePaths: () => [...eventFiles.keys()],
     getEventFileContents: () => [...eventFiles.values()],
+    clearEventFiles: () => {
+      eventFiles.clear()
+      eventShas.clear()
+    },
     async install(
       page: Page,
       opts: { repoName: string; vaultYaml?: string; username?: string },
@@ -3064,6 +3144,15 @@ export async function reloadUnlockLocalVaultWithSync(
   await forceVaultQuiescentForE2e(page)
   await waitForLoadedSyncProviders(page)
   await waitForVaultSyncIdle(page)
+  if (sharedStub) {
+    await flushRemoteEventsToSyncProviders(page)
+    await expect
+      .poll(() => sharedStub.getEventFileCount(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(0)
+    sharedStub.setVaultYaml('')
+  }
 }
 
 /** @deprecated Use {@link reloadUnlockLocalVaultWithSync}. */
@@ -3089,19 +3178,24 @@ export async function connectLocalE2eJoinerDevice(
 /** Send a join request against a stubbed local sync remote (local e2e). */
 export async function sendJoinRequestLocalE2e(
   page: Page,
-  stub: { getVaultYaml: () => string },
+  stub: { getEventFileContents: () => string[] },
 ) {
   await page.getByTestId('join-enrollment-confirm').click()
   await waitForVaultOperationsIdle(page)
   await waitForStorageChainIdle(page, ENROLLMENT_UNLOCK_TIMEOUT_MS)
 
   await expect
-    .poll(() => joinCountFromYaml(stub.getVaultYaml()), {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    .poll(
+      () =>
+        parseVaultEventLogSnapshot(stub.getEventFileContents()).joinEntries
+          .length,
+      {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      },
+    )
     .toBeGreaterThanOrEqual(1)
 
-  const snapshot = parseVaultYamlSnapshot(stub.getVaultYaml())
+  const snapshot = parseVaultEventLogSnapshot(stub.getEventFileContents())
   assertJoinPendingYaml(snapshot)
   const join = snapshot.joinEntries[0]!
 
@@ -3118,7 +3212,7 @@ export async function sendJoinRequestLocalE2e(
 export async function approveJoinLocalE2eFromBanner(
   page: Page,
   deviceId: string,
-  stub: { getVaultYaml: () => string },
+  stub: { getEventFileContents: () => string[] },
   expectedMembers: number,
 ) {
   await waitForPendingJoinOnDevice(page, deviceId)
@@ -3126,12 +3220,18 @@ export async function approveJoinLocalE2eFromBanner(
   await row.getByTestId('approve-join-btn').click()
   await expect
     .poll(
-      () => parseVaultYamlSnapshot(stub.getVaultYaml()).memberPkIds.length,
+      () =>
+        parseVaultEventLogSnapshot(stub.getEventFileContents()).memberPkIds
+          .length,
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     .toBe(expectedMembers)
   await expect
-    .poll(() => parseVaultYamlSnapshot(stub.getVaultYaml()).joinEntries.length)
+    .poll(
+      () =>
+        parseVaultEventLogSnapshot(stub.getEventFileContents()).joinEntries
+          .length,
+    )
     .toBe(0)
   await expect(row).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
 }
@@ -3256,19 +3356,14 @@ export async function reloadUnlockWithSyncProvider(
   await forceVaultQuiescentForE2e(page)
   await waitForLoadedSyncProviders(page)
   await waitForVaultSyncIdle(page)
-
-  const yamlAfterUnlock = await readLocalVaultYamlFromIdb(page)
-  if (yamlAfterUnlock.trim()) {
-    for (const provider of providers) {
-      await stubGoogleDriveVaultForLocalE2e(
-        page,
-        {
-          fileName: provider.fileName,
-          vaultYaml: yamlAfterUnlock,
-        },
-        sharedStub,
-      )
-    }
+  if (sharedStub) {
+    await flushRemoteEventsToSyncProviders(page)
+    await expect
+      .poll(() => sharedStub.getEventFileCount(), {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      .toBeGreaterThan(0)
+    sharedStub.setVaultYaml('')
   }
   if (opts?.password) {
     await waitForStableLocalVaultState(
@@ -3302,8 +3397,10 @@ export async function waitForLoadedSyncProviders(
 
 async function syncSecretCount(target: GithubE2eTarget): Promise<number> {
   if (target.stub) {
-    const yaml = target.stub.getVaultYaml()
-    return yaml.trim() ? parseVaultYamlSnapshot(yaml).secretIds.length : 0
+    const events = target.stub.getEventFileContents()
+    return events.length > 0
+      ? parseVaultEventLogSnapshot(events).secretIds.length
+      : 0
   }
   const yaml = await fetchGithubVaultYaml(target.pat, target.repoName)
   return parseVaultYamlSnapshot(yaml ?? 'secrets: []').secretIds.length
@@ -3447,16 +3544,40 @@ export async function waitForSecretOnDevice(
     .poll(
       async () => {
         if (await row.isVisible()) return true
-        await page.evaluate(async () => {
-          const vault = (
-            window as Window & {
-              __nookVault?: {
-                syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
+        if (github) {
+          try {
+            await triggerVaultSyncRefresh(page)
+          } catch {
+            await page.evaluate(async () => {
+              const vault = (
+                window as Window & {
+                  __nookVault?: {
+                    manualSync?: () => Promise<void>
+                    syncFromStorage?: (opts?: {
+                      force?: boolean
+                    }) => Promise<void>
+                  }
+                }
+              ).__nookVault
+              if (vault?.manualSync) {
+                await vault.manualSync()
+              } else {
+                await vault?.syncFromStorage?.({ force: true })
               }
-            }
-          ).__nookVault
-          await vault?.syncFromStorage?.({ force: true })
-        })
+            })
+          }
+        } else {
+          await page.evaluate(async () => {
+            const vault = (
+              window as Window & {
+                __nookVault?: {
+                  syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
+                }
+              }
+            ).__nookVault
+            await vault?.syncFromStorage?.({ force: true })
+          })
+        }
         await waitForVaultOperationsIdle(page)
         return row.isVisible()
       },

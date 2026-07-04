@@ -105,20 +105,22 @@ pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials, seal_provider_credentials,
 };
 pub use sync_provider_store::{
-    AuthProvidersSnapshotData, NormalizedAuthSnapshot, OAuthFileConfigData, StorageProviderData,
-    ensure_local_provider_row, find_duplicate_sync_provider, migrate_provider_fields,
-    normalize_auth_snapshot, provider_target_key, seed_provider_from_legacy_storage,
+    AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
+    StorageProviderData, ensure_local_provider_row, find_duplicate_sync_provider,
+    migrate_provider_fields, normalize_auth_snapshot, provider_target_key,
+    seed_provider_from_legacy_storage,
 };
 pub use validation::{
     DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
     DriveVaultFileName, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
-    OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB,
-    STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget, filter_secrets,
-    format_drive_storage_ref, format_drive_storage_ref_raw, format_sync_provider_cache_ref,
-    mask_github_pat, parse_drive_storage_ref, storage_mode_for_provider,
-    sync_provider_default_label, sync_provider_target_key, validate_connect,
-    validate_drive_vault_file_name, validate_github_pat, validate_github_repo_name,
-    validate_oauth_access_token, validate_secret_data, validate_storage_mode,
+    LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
+    STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
+    filter_secrets, format_drive_storage_ref, format_drive_storage_ref_raw,
+    format_sync_provider_cache_ref, mask_github_pat, parse_drive_storage_ref,
+    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
+    validate_connect, validate_drive_vault_file_name, validate_github_pat,
+    validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
+    validate_storage_mode,
 };
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,

@@ -269,6 +269,17 @@ impl NookSyncProviderTarget {
         Self(nook_core::SyncProviderTarget::Local)
     }
 
+    #[wasm_bindgen(js_name = localFolder)]
+    #[must_use]
+    pub fn local_folder(directory_name: Option<String>, handle_id: Option<String>) -> Self {
+        Self(nook_core::SyncProviderTarget::LocalFolder(
+            nook_core::LocalFolderSyncTarget {
+                directory_name,
+                handle_id,
+            },
+        ))
+    }
+
     #[wasm_bindgen(js_name = github)]
     #[must_use]
     pub fn github(repo: Option<String>, pat: Option<String>) -> Self {
@@ -308,6 +319,12 @@ impl NookSyncProviderTarget {
     #[must_use]
     pub fn is_local(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::Local)
+    }
+
+    #[wasm_bindgen(js_name = isLocalFolder)]
+    #[must_use]
+    pub fn is_local_folder(&self) -> bool {
+        matches!(self.0, nook_core::SyncProviderTarget::LocalFolder(_))
     }
 
     #[wasm_bindgen(js_name = isGithub)]

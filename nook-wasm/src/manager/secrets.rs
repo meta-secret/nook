@@ -5,8 +5,8 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::records_to_vec;
-use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, JsValue};
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -199,6 +199,23 @@ impl NookVaultManager {
         self.sync_events_from_current_provider().await?;
         self.flush_event_outbox().await?;
         Ok(())
+    }
+
+    #[wasm_bindgen(js_name = exportEventLogRecords)]
+    pub async fn export_event_log_records_js(&self) -> Result<JsValue, JsError> {
+        let records = self.export_event_log_records().await?;
+        serde_wasm_bindgen::to_value(&records).map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = syncExternalEventLogRecords)]
+    pub async fn sync_external_event_log_records_js(
+        &mut self,
+        records: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let records =
+            serde_wasm_bindgen::from_value(records).map_err(|e| JsError::new(&e.to_string()))?;
+        let merged = self.sync_external_event_log_records(records).await?;
+        serde_wasm_bindgen::to_value(&merged).map_err(|e| JsError::new(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = eventLogMode)]

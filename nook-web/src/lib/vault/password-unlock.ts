@@ -385,6 +385,11 @@ export async function issueEnrollmentCode(
         'Choose a cloud sync provider — local vault is already on state device.',
       )
     }
+    if (selectedProvider.type === 'local-folder') {
+      throw new Error(
+        'Local backup folders cannot be embedded in enrollment codes. Choose a cloud provider or have the other browser choose the same folder.',
+      )
+    }
     const provider: EnrollmentProvider =
       selectedProvider.type === 'github'
         ? {

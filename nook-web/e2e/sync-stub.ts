@@ -4,7 +4,10 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   type GithubE2eTarget,
 } from './helpers'
-import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from './vault-yaml'
+import {
+  parseVaultEventLogSnapshot,
+  type VaultYamlSnapshot,
+} from './vault-yaml'
 
 /** Fake PAT accepted by Playwright route stubs — never hits api.github.com. */
 export const E2E_STUB_PAT = 'ghp_test_token'
@@ -35,6 +38,7 @@ export function createStubSyncTarget(
 
 export function resetStubVault(target: StubSyncTarget) {
   target.stub.setVaultYaml('')
+  target.stub.clearEventFiles()
 }
 
 export async function installStubOnPage(
@@ -58,7 +62,7 @@ export async function installStubOnPages(
   }
 }
 
-/** Poll in-memory stub YAML (mirrors waitForGithubVaultState without API calls). */
+/** Poll in-memory provider events (mirrors waitForGithubVaultState without API calls). */
 export async function waitForStubVaultState(
   target: StubSyncTarget,
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
@@ -68,24 +72,24 @@ export async function waitForStubVaultState(
   // Pure in-memory read (no network, no page round-trip) — poll fast.
   const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
-  let lastError = 'stub vault empty'
+  let lastError = 'stub event log empty'
 
   while (Date.now() < deadline) {
-    const yaml = target.stub.getVaultYaml()
-    if (yaml.trim()) {
+    const events = target.stub.getEventFileContents()
+    if (events.length > 0) {
       try {
-        const snapshot = parseVaultYamlSnapshot(yaml)
+        const snapshot = parseVaultEventLogSnapshot(events)
         if (predicate(snapshot)) {
           return snapshot
         }
         lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
       } catch (error) {
         lastError =
-          error instanceof Error ? error.message : 'invalid stub vault yaml'
+          error instanceof Error ? error.message : 'invalid stub event log'
       }
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for stub vault YAML: ${lastError}`)
+  throw new Error(`Timed out waiting for stub event log: ${lastError}`)
 }

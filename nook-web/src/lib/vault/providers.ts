@@ -8,11 +8,13 @@ import {
   loadAuthProvidersWithVaultMigration,
   providerDefaultLabel,
   saveAuthProviders,
+  type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
+import { removeLocalFolderHandle } from '$lib/local-folder-sync'
 import { ensureLocalProviderRow } from '$lib/vault-migration'
 import { createLogger } from '$lib/log'
 import { vaultStoreIdForProviderSave } from '$lib/vault-store-id'
@@ -46,6 +48,7 @@ export function applyActiveProviderCredentials(state: VaultState) {
     state.storageMode = 'local'
     state.githubPat = ''
     state.oauthFile = null
+    state.localFolder = null
     return
   }
 
@@ -56,6 +59,9 @@ export function applyActiveProviderCredentials(state: VaultState) {
     }
     if (state.loginSetupType !== 'oauth-file') {
       state.oauthFile = null
+    }
+    if (state.loginSetupType !== 'local-folder') {
+      state.localFolder = null
     }
     return
   }
@@ -80,11 +86,17 @@ export function applyActiveProviderCredentials(state: VaultState) {
   state.githubPat = syncProvider.githubPat ?? ''
   if (syncProvider.type === 'oauth-file') {
     state.oauthFile = syncProvider.oauthFile ?? null
+    state.localFolder = null
     state.githubRepo =
       syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+  } else if (syncProvider.type === 'local-folder') {
+    state.localFolder = syncProvider.localFolder ?? null
+    state.githubRepo = DEFAULT_GITHUB_REPO
+    state.oauthFile = null
   } else {
     state.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
     state.oauthFile = null
+    state.localFolder = null
   }
 }
 
@@ -137,6 +149,7 @@ export function beginProviderSetup(
     state.oauthSetupPreset = null
     state.oauthFile = null
   }
+  state.localFolder = null
   state.errorMsg = ''
   state.dismissSuccess()
   log.debug('provider setup started', { type, oauthPreset })
@@ -167,6 +180,7 @@ export function cancelProviderSetup(state: VaultState) {
       setupType === 'oauth-file'
         ? DEFAULT_DRIVE_VAULT_FILE
         : DEFAULT_GITHUB_REPO
+    state.localFolder = null
     state.errorMsg = ''
     return
   }
@@ -183,6 +197,7 @@ export async function removeProvider(
   const target = state.providers.find((p) => p.id === id)
   if (!target || target.type === 'local') return
 
+  await removeLocalFolderHandle(target)
   state.providers = state.providers.filter((p) => p.id !== id)
 
   if (state.providers.length === 0 && state.isAuthenticated) {
@@ -217,12 +232,23 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           fileName: driveFile,
         }
       : undefined
+  const localFolderSnapshot: LocalFolderConfig | undefined =
+    type === 'local-folder'
+      ? {
+          directoryName: state.localFolder?.directoryName,
+          handleId: state.localFolder?.handleId,
+        }
+      : undefined
 
   const isExplicitAdd =
     state.addProviderOpen ||
     (state.isAuthenticated && state.loginSetupType !== null)
 
   if (isNewSetup && type !== 'local') {
+    if (type === 'local-folder' && !localFolderSnapshot?.handleId) {
+      state.errorMsg = state.t('auth_storage.local_folder_choose_err')
+      return false
+    }
     const provider: StorageProvider = {
       id: generateId(),
       type,
@@ -232,12 +258,15 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           ? repo
           : type === 'oauth-file'
             ? driveFile
+            : type === 'local-folder'
+              ? localFolderSnapshot?.directoryName
             : undefined,
         oauthPreset,
       ),
       githubPat: type === 'github' ? pat : undefined,
       githubRepo: type === 'github' ? repo : undefined,
       oauthFile: oauthSnapshot,
+      localFolder: localFolderSnapshot,
       storeId: vaultStoreId,
       createdAt: isoTimestamp(),
     }

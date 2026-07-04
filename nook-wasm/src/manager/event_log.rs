@@ -25,10 +25,26 @@ use nook_core::{
     project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
     union_remote_events_and_heads, verify_stored_vault_import,
 };
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 fn iso_timestamp() -> String {
     wasm_iso_timestamp()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::manager) struct ExternalEventLogRecord {
+    pub event_id: String,
+    pub yaml: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(in crate::manager) struct EventLogStorageRecord {
+    pub event_id: String,
+    pub path: String,
+    pub yaml: String,
 }
 
 impl NookVaultManager {
@@ -385,6 +401,106 @@ impl NookVaultManager {
         }
         self.persist_projection_cache().await?;
         Ok(())
+    }
+
+    fn export_event_records_from_store(
+        store: &nook_core::LocalEventStore,
+    ) -> Result<Vec<EventLogStorageRecord>, NookError> {
+        let mut records = Vec::new();
+        for event_id in store.event_ids() {
+            let bytes = store.get_bytes(&event_id).ok_or_else(|| {
+                NookError::Database(format!("Event {} missing from local store.", event_id))
+            })?;
+            let yaml = String::from_utf8(bytes.to_vec())
+                .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
+            records.push(EventLogStorageRecord {
+                event_id: event_id.as_str().to_owned(),
+                path: event_id.storage_path(),
+                yaml,
+            });
+        }
+        Ok(records)
+    }
+
+    pub(in crate::manager) async fn export_event_log_records(
+        &self,
+    ) -> Result<Vec<EventLogStorageRecord>, NookError> {
+        if self.store_id.is_empty() {
+            return Ok(Vec::new());
+        }
+        let store = load_local_event_store(&self.store_id).await?;
+        Self::export_event_records_from_store(&store)
+    }
+
+    pub(in crate::manager) async fn sync_external_event_log_records(
+        &mut self,
+        records: Vec<ExternalEventLogRecord>,
+    ) -> Result<Vec<EventLogStorageRecord>, NookError> {
+        let parsed_records: Vec<(EventId, Vec<u8>)> = records
+            .into_iter()
+            .map(|record| {
+                let event_id = EventId::parse(&record.event_id)?;
+                Ok((event_id, record.yaml.into_bytes()))
+            })
+            .collect::<Result<_, nook_core::VaultError>>()?;
+
+        let mut remote_events = Vec::new();
+        if self.store_id.is_empty() {
+            let mut discovered_store_ids = BTreeSet::new();
+            let mut fetched = Vec::new();
+            for (event_id, bytes) in parsed_records {
+                let store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
+                let store_id = store_id.as_str().to_owned();
+                discovered_store_ids.insert(store_id.clone());
+                fetched.push((event_id, bytes, store_id));
+            }
+            if discovered_store_ids.is_empty() {
+                return self.export_event_log_records().await;
+            }
+            if discovered_store_ids.len() > 1 {
+                return Err(NookError::Database(
+                    "Multiple vault event logs found in this backup folder. Use a dedicated folder for one vault."
+                        .to_owned(),
+                ));
+            }
+            self.store_id = discovered_store_ids.into_iter().next().ok_or_else(|| {
+                NookError::Database(
+                    "Backup folder event discovery returned no vault store id.".to_owned(),
+                )
+            })?;
+            self.activate_event_log_mode().await?;
+            remote_events = fetched
+                .into_iter()
+                .filter(|(_, _, store_id)| store_id == &self.store_id)
+                .map(|(event_id, bytes, _)| (event_id, bytes))
+                .collect();
+        } else {
+            for (event_id, bytes) in parsed_records {
+                if !nook_core::remote_event_belongs_to_store(&event_id, &bytes, &self.store_id)? {
+                    continue;
+                }
+                remote_events.push((event_id, bytes));
+            }
+        }
+
+        if !self.store_id.is_empty() {
+            let mut local = load_local_event_store(&self.store_id).await?;
+            let heads = union_remote_events_and_heads(&mut local, &remote_events, &self.store_id)?;
+            for (event_id, bytes) in &remote_events {
+                save_event_bytes(&self.store_id, event_id.as_str(), bytes).await?;
+            }
+
+            self.event_heads = heads.clone();
+            save_heads(&self.store_id, &heads).await?;
+            let graph = local.load_graph(&self.store_id)?;
+            nook_core::materialize_vault_meta_from_graph(&graph, &mut self.meta)?;
+            if self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
+                self.apply_event_projection_to_session().await?;
+            }
+            self.persist_projection_cache().await?;
+        }
+
+        self.export_event_log_records().await
     }
 
     async fn list_current_provider_event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {

@@ -1,36 +1,89 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from '@playwright/test'
 
-const DEFAULT_FILE_NAME = 'nook-projection.yaml'
+const DEFAULT_FILE_NAME = 'nook-e2e-file-sync'
+const EVENT_LOG_DIR = path.join('nook-log', 'v1', 'events')
 
-/** In-memory Google Drive appDataFolder stub (Drive v3 REST). */
-export function createLocalE2eGoogleDriveVaultStub(
+function toPosixPath(value: string) {
+  return value.split(path.sep).join('/')
+}
+
+function sha256FileNameFromPath(filePath: string) {
+  const name = path.basename(filePath)
+  return /^[a-f0-9]{64}\.yaml$/i.test(name) ? name : null
+}
+
+/** File-backed e2e sync remote. The browser still uses the OAuth-file code path;
+ * Playwright serves those provider calls from a real temp directory.
+ */
+export function createLocalE2eFileSyncVaultStub(
   initialYaml = '',
   fileName = DEFAULT_FILE_NAME,
+  rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nook-e2e-file-sync-')),
 ) {
   let vaultYaml = initialYaml
   let vaultFileExists = initialYaml.trim().length > 0
-  let fileId = `e2e-drive-file-${fileName.replace(/\W/g, '-')}`
-  let md5Checksum = 'e2e-stub-md5'
-  const eventFiles = new Map<string, string>()
+  let fileId = `e2e-file-vault-${fileName.replace(/\W/g, '-')}`
+  let md5Checksum = 'e2e-file-stub-md5'
+  const offlinePages = new WeakSet<Page>()
+
+  function eventsDir() {
+    return path.join(rootDir, EVENT_LOG_DIR)
+  }
+
+  function ensureEventsDir() {
+    fs.mkdirSync(eventsDir(), { recursive: true })
+  }
+
+  function eventPath(digest: string) {
+    return path.join(eventsDir(), `${digest.toLowerCase()}.yaml`)
+  }
 
   function eventFileId(digest: string) {
-    return `e2e-drive-event-${digest}`
+    return `e2e-file-event-${digest}`
   }
 
   function eventDigestFromFileId(id: string) {
-    return id.startsWith('e2e-drive-event-')
-      ? id.slice('e2e-drive-event-'.length)
+    return id.startsWith('e2e-file-event-')
+      ? id.slice('e2e-file-event-'.length)
       : null
+  }
+
+  function eventDigests() {
+    ensureEventsDir()
+    return fs
+      .readdirSync(eventsDir())
+      .filter((name) => /^[a-f0-9]{64}\.yaml$/i.test(name))
+      .map((name) => name.slice(0, -'.yaml'.length).toLowerCase())
+      .sort()
+  }
+
+  function readEvent(digest: string) {
+    const file = eventPath(digest)
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null
+  }
+
+  function writeEvent(digest: string, content: string) {
+    ensureEventsDir()
+    const file = eventPath(digest)
+    if (fs.existsSync(file)) {
+      const existing = fs.readFileSync(file, 'utf8')
+      return existing === content
+    }
+    fs.writeFileSync(file, content, 'utf8')
+    return true
   }
 
   function eventListEntries(digest?: string) {
     const entries: Array<{ id: string; name: string; md5Checksum: string }> = []
-    for (const key of eventFiles.keys()) {
+    for (const key of eventDigests()) {
       if (digest && key !== digest) continue
       entries.push({
         id: eventFileId(key),
         name: `${key}.yaml`,
-        md5Checksum: `e2e-event-md5-${key}`,
+        md5Checksum: `e2e-file-event-md5-${key}`,
       })
     }
     return entries
@@ -61,36 +114,64 @@ export function createLocalE2eGoogleDriveVaultStub(
   }
 
   return {
+    getRootDir: () => rootDir,
     getVaultYaml: () => vaultYaml,
     setVaultYaml: (yaml: string) => {
       vaultYaml = yaml
       vaultFileExists = true
       if (!fileId) {
-        fileId = `e2e-drive-file-${fileName.replace(/\W/g, '-')}`
+        fileId = `e2e-file-vault-${fileName.replace(/\W/g, '-')}`
       }
     },
-    getEventFileCount: () => eventFiles.size,
-    getEventFileContents: () => [...eventFiles.values()],
+    getEventFileCount: () => eventDigests().length,
+    getEventFilePaths: () =>
+      eventDigests().map((digest) =>
+        toPosixPath(path.join(EVENT_LOG_DIR, `${digest}.yaml`)),
+      ),
+    getEventFileContents: () =>
+      eventDigests()
+        .map((digest) => readEvent(digest))
+        .filter((content): content is string => content !== null),
     clearEventFiles: () => {
-      eventFiles.clear()
+      if (!fs.existsSync(eventsDir())) return
+      for (const name of fs.readdirSync(eventsDir())) {
+        if (sha256FileNameFromPath(name)) {
+          fs.unlinkSync(path.join(eventsDir(), name))
+        }
+      }
+    },
+    partitionPage: (page: Page) => {
+      offlinePages.add(page)
+    },
+    healPage: (page: Page) => {
+      offlinePages.delete(page)
     },
     getFileName: () => fileName,
     async install(
       page: Page,
       opts?: { vaultYaml?: string; fileName?: string },
     ) {
+      if (opts?.fileName) {
+        fileName = opts.fileName
+      }
       if (opts?.vaultYaml !== undefined) {
         vaultYaml = opts.vaultYaml
         vaultFileExists = true
         if (!fileId) {
-          fileId = `e2e-drive-file-${fileName.replace(/\W/g, '-')}`
+          fileId = `e2e-file-vault-${fileName.replace(/\W/g, '-')}`
         }
-      }
-      if (opts?.fileName) {
-        fileName = opts.fileName
       }
 
       await page.route('https://www.googleapis.com/**', async (route) => {
+        if (offlinePages.has(page)) {
+          await route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'e2e file provider partitioned' }),
+          })
+          return
+        }
+
         const request = route.request()
         const url = request.url().split('?')[0]!
         const method = request.method()
@@ -101,7 +182,7 @@ export function createLocalE2eGoogleDriveVaultStub(
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              user: { emailAddress: 'e2e-user@example.com' },
+              user: { emailAddress: 'file-sync-e2e@example.com' },
             }),
           })
           return
@@ -125,11 +206,12 @@ export function createLocalE2eGoogleDriveVaultStub(
             })
             return
           }
-          const files = vaultFileExists ? [{ id: fileId, md5Checksum }] : []
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ files }),
+            body: JSON.stringify({
+              files: vaultFileExists ? [{ id: fileId, md5Checksum }] : [],
+            }),
           })
           return
         }
@@ -142,14 +224,14 @@ export function createLocalE2eGoogleDriveVaultStub(
         if (driveFileId && fullUrl.includes('alt=media')) {
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
-            const content = eventFiles.get(eventDigest)
-            if (content === undefined) {
+            const content = readEvent(eventDigest)
+            if (content === null) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
             await route.fulfill({
               status: 200,
-              contentType: 'application/json',
+              contentType: 'application/x-yaml',
               body: content,
             })
             return
@@ -170,7 +252,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         if (driveFileId && method === 'GET') {
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
-            if (!eventFiles.has(eventDigest)) {
+            if (readEvent(eventDigest) === null) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
@@ -180,7 +262,7 @@ export function createLocalE2eGoogleDriveVaultStub(
               body: JSON.stringify({
                 id: driveFileId,
                 name: `${eventDigest}.yaml`,
-                md5Checksum: `e2e-event-md5-${eventDigest}`,
+                md5Checksum: `e2e-file-event-md5-${eventDigest}`,
               }),
             })
             return
@@ -204,7 +286,10 @@ export function createLocalE2eGoogleDriveVaultStub(
         ) {
           const event = parseEventMultipart(request.postData() ?? '')
           if (event) {
-            eventFiles.set(event.digest, event.content)
+            if (!writeEvent(event.digest, event.content)) {
+              await route.fulfill({ status: 409, body: '{}' })
+              return
+            }
             await route.fulfill({
               status: 200,
               contentType: 'application/json',
@@ -213,8 +298,8 @@ export function createLocalE2eGoogleDriveVaultStub(
             return
           }
           vaultFileExists = true
-          fileId = `e2e-drive-file-${Date.now()}`
-          md5Checksum = `e2e-stub-md5-${Date.now()}`
+          fileId = `e2e-file-vault-${Date.now()}`
+          md5Checksum = `e2e-file-stub-md5-${Date.now()}`
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
@@ -237,7 +322,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           vaultFileExists = true
           if (body) {
             vaultYaml = body
-            md5Checksum = `e2e-stub-md5-${Date.now()}`
+            md5Checksum = `e2e-file-stub-md5-${Date.now()}`
           }
           await route.fulfill({
             status: 200,

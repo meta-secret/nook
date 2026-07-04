@@ -12,6 +12,7 @@ import {
 } from '$lib/vault-sync'
 import { importVaultAsNewLocalCopy } from '$lib/local-vault'
 import * as localLoginActions from '$lib/vault/local-login'
+import { syncLocalFolderProvider } from '$lib/local-folder-sync'
 
 const log = createLogger('vault-sync')
 
@@ -92,11 +93,16 @@ export async function syncFromStorage(
   if (!state.isAuthenticated && state.syncProviders.length > 0) {
     state.isSyncing = true
     try {
-      const [mode, pat, repo] = state.providerWasmArgs(state.syncProviders[0]!)
-      const raw = await state.enqueueStorage(() =>
-        state.manager!.sync_vault_from_storage(mode, pat, repo),
-      )
-      state.applyVaultSyncResult(raw)
+      const provider = state.syncProviders[0]!
+      if (provider.type === 'local-folder') {
+        await syncLocalFolderProvider(state, provider)
+      } else {
+        const [mode, pat, repo] = state.providerWasmArgs(provider)
+        const raw = await state.enqueueStorage(() =>
+          state.manager!.sync_vault_from_storage(mode, pat, repo),
+        )
+        state.applyVaultSyncResult(raw)
+      }
       await state.refreshSecretsFromSession()
       state.lastSyncedAt = new SvelteDate()
     } catch (error) {
@@ -490,6 +496,14 @@ export async function syncProviderById(
     quiet: options?.quiet ?? false,
   })
   try {
+    if (provider.type === 'local-folder') {
+      await syncLocalFolderProvider(state, provider)
+      await state.refreshSecretsFromSession()
+      await state.refreshReplacementConflicts()
+      log.debug('provider sync finished', { providerId, type: provider.type })
+      return
+    }
+
     const [mode, pat, repo] = state.providerWasmArgs(provider)
     if (state.isAuthenticated && state.localVaultPresent) {
       const remote = await fetchRemoteVaultBlob(mode, pat, repo)

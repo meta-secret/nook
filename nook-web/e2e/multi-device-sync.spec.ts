@@ -22,7 +22,7 @@ import {
   waitForSecretOnDevice,
   waitForVaultOperationsIdle,
 } from './helpers'
-import { parseVaultYamlSnapshot, assertGenesisVaultYaml } from './vault-yaml'
+import { assertGenesisVaultYaml } from './vault-yaml'
 import {
   createSyncTarget,
   installSyncStubOnPages,
@@ -223,10 +223,9 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
     await approveJoinFromSettings(deviceA, join.deviceId, target, 2)
 
     const enrolledYaml = await assertEnrolledVaultOnGithub(target, 2)
-    const parsed = parseVaultYamlSnapshot(enrolledYaml.raw)
-    expect(parsed.joinEntries).toHaveLength(0)
-    expect(parsed.authPkIds).toHaveLength(2)
-    expect(parsed.memberPkIds).toHaveLength(2)
+    expect(enrolledYaml.joinEntries).toHaveLength(0)
+    expect(enrolledYaml.authPkIds).toHaveLength(2)
+    expect(enrolledYaml.memberPkIds).toHaveLength(2)
 
     await waitForJoinerVaultReady(deviceB, target)
     await assertVaultReady(deviceB)

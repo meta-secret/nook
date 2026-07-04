@@ -1,12 +1,21 @@
 import type { Page } from '@playwright/test'
 import { expect } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
+import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 import { createLocalE2eICloudVaultStub } from './icloud-stub'
 import { createE2eStubRepoName } from './sync-stub'
-import { parseVaultYamlSnapshot, type VaultYamlSnapshot } from './vault-yaml'
+import {
+  parseVaultEventLogSnapshot,
+  type VaultYamlSnapshot,
+} from './vault-yaml'
 
-/** In-memory stub sync — default for all stub e2e (no GitHub). */
-export type E2eSyncProviderId = 'local' | 'google-drive' | 'icloud' | 'github'
+/** Stub sync backends for e2e (no live cloud unless explicitly selected). */
+export type E2eSyncProviderId =
+  | 'file'
+  | 'local'
+  | 'google-drive'
+  | 'icloud'
+  | 'github'
 
 export type E2eSyncProviderDef = {
   id: E2eSyncProviderId
@@ -28,6 +37,13 @@ export const E2E_SYNC_PROVIDERS: Record<E2eSyncProviderId, E2eSyncProviderDef> =
       liveCredentialEnv: 'NOOK_LOCAL_E2E_ACCESS_TOKEN',
       stubCredential: 'ya29.e2e_stub_access_token',
       label: 'Google Drive',
+    },
+    file: {
+      id: 'file',
+      providerOptionTestId: 'provider-option-oauth-file',
+      liveCredentialEnv: 'NOOK_FILE_E2E_ACCESS_TOKEN',
+      stubCredential: 'ya29.e2e_file_sync_token',
+      label: 'File',
     },
     'google-drive': {
       id: 'google-drive',
@@ -58,7 +74,10 @@ function normalizeProviderId(id: E2eSyncProviderId): E2eSyncProviderId {
 
 function stubBackendId(
   providerId: E2eSyncProviderId,
-): 'google-drive' | 'icloud' | 'github' {
+): 'file' | 'google-drive' | 'icloud' | 'github' {
+  if (providerId === 'file') {
+    return 'file'
+  }
   if (providerId === 'local' || providerId === 'google-drive') {
     return 'google-drive'
   }
@@ -71,7 +90,7 @@ function stubBackendId(
 /** Which sync backend to exercise — set per CI job via `NOOK_E2E_SYNC_PROVIDER`. */
 export function resolveE2eSyncProvider(): E2eSyncProviderId {
   const raw =
-    process.env.NOOK_E2E_SYNC_PROVIDER?.trim().toLowerCase() ?? 'local'
+    process.env.NOOK_E2E_SYNC_PROVIDER?.trim().toLowerCase() ?? 'file'
   if (raw in E2E_SYNC_PROVIDERS) {
     return raw as E2eSyncProviderId
   }
@@ -101,7 +120,12 @@ export function hasLiveSyncCredential(
 
 export type SyncStubHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+  | ReturnType<typeof createLocalE2eFileSyncVaultStub>
   | ReturnType<typeof createLocalE2eICloudVaultStub>
+
+type OAuthFileStubHandle =
+  | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
+  | ReturnType<typeof createLocalE2eFileSyncVaultStub>
 
 /** Remote target for stub sync — `pat` is access token, `repoName` is Drive file name. */
 export type SyncE2eTarget = {
@@ -117,6 +141,9 @@ function createStubHandle(
   remoteId: string,
 ): SyncStubHandle {
   const backend = stubBackendId(providerId)
+  if (backend === 'file') {
+    return createLocalE2eFileSyncVaultStub(initialYaml, remoteId)
+  }
   if (backend === 'icloud') {
     return createLocalE2eICloudVaultStub(initialYaml, remoteId)
   }
@@ -146,6 +173,12 @@ export async function installSyncStub(
   vaultYaml?: string,
 ) {
   const backend = stubBackendId(target.providerId)
+  if (backend === 'file') {
+    await (
+      target.stub as ReturnType<typeof createLocalE2eFileSyncVaultStub>
+    ).install(page, { fileName: target.repoName, vaultYaml })
+    return
+  }
   if (backend === 'icloud') {
     await (
       target.stub as ReturnType<typeof createLocalE2eICloudVaultStub>
@@ -169,6 +202,7 @@ export async function installSyncStubOnPages(
 
 export function resetSyncRemote(target: SyncE2eTarget) {
   target.stub?.setVaultYaml('')
+  target.stub?.clearEventFiles()
 }
 
 export async function waitForSyncRemoteState(
@@ -179,26 +213,26 @@ export async function waitForSyncRemoteState(
   const timeoutMs = options?.timeoutMs ?? 30_000
   const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
-  let lastError = 'stub vault empty'
+  let lastError = 'stub event log empty'
 
   while (Date.now() < deadline) {
-    const yaml = target.stub?.getVaultYaml() ?? ''
-    if (yaml.trim()) {
+    const events = target.stub?.getEventFileContents() ?? []
+    if (events.length > 0) {
       try {
-        const snapshot = parseVaultYamlSnapshot(yaml)
+        const snapshot = parseVaultEventLogSnapshot(events)
         if (predicate(snapshot)) {
           return snapshot
         }
         lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
       } catch (error) {
         lastError =
-          error instanceof Error ? error.message : 'invalid stub vault yaml'
+          error instanceof Error ? error.message : 'invalid stub event log'
       }
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for stub vault YAML: ${lastError}`)
+  throw new Error(`Timed out waiting for stub event log: ${lastError}`)
 }
 
 async function sleep(ms: number) {
@@ -207,13 +241,13 @@ async function sleep(ms: number) {
 
 export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
   const backend = stubBackendId(target.providerId)
-  if (backend === 'google-drive') {
+  if (backend === 'google-drive' || backend === 'file') {
     const { connectGoogleDriveVault } = await import('./helpers')
     await connectGoogleDriveVault(
       page,
       target.pat,
       target.repoName,
-      target.stub as ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+      target.stub as OAuthFileStubHandle,
     )
     return
   }
@@ -237,7 +271,7 @@ export async function connectSyncGenesisDevice(
   target: SyncE2eTarget,
 ) {
   const backend = stubBackendId(target.providerId)
-  if (backend === 'google-drive') {
+  if (backend === 'google-drive' || backend === 'file') {
     const {
       clearBrowserVault,
       connectLocalVaultLegacy,
@@ -265,9 +299,7 @@ export async function connectSyncGenesisDevice(
     }
     await assertVaultReady(page)
     const genesisYaml = await readLocalVaultYamlFromIdb(page)
-    const stub = target.stub as ReturnType<
-      typeof createLocalE2eGoogleDriveVaultStub
-    >
+    const stub = target.stub as OAuthFileStubHandle
     if (stub) {
       stub.setVaultYaml(genesisYaml)
       await stub.install(page, {
@@ -310,10 +342,8 @@ export async function connectSyncJoinerDevice(
   target: SyncE2eTarget,
 ) {
   const backend = stubBackendId(target.providerId)
-  if (backend === 'google-drive') {
-    const stub = target.stub as ReturnType<
-      typeof createLocalE2eGoogleDriveVaultStub
-    >
+  if (backend === 'google-drive' || backend === 'file') {
+    const stub = target.stub as OAuthFileStubHandle
     const { assertGenesisVaultOnSyncStub, connectLocalE2eJoinerDevice } =
       await import('./helpers')
     await assertGenesisVaultOnSyncStub(stub)
@@ -343,6 +373,16 @@ export function defaultOnboardSyncProvider(
   providerId: E2eSyncProviderId = resolveE2eSyncProvider(),
 ) {
   const backend = stubBackendId(providerId)
+  if (backend === 'file') {
+    return {
+      id: 'e2e-onboard-file',
+      label: 'File (e2e onboard)',
+      fileName: 'nook-e2e-onboard',
+      accessToken: E2E_SYNC_PROVIDERS.file.stubCredential,
+      type: 'oauth-file' as const,
+      oauthPreset: 'google-drive' as const,
+    }
+  }
   if (backend === 'github') {
     return {
       id: 'e2e-onboard-github',

@@ -37,6 +37,12 @@ export function createLocalE2eICloudVaultStub(
     setVaultYaml: (yaml: string) => {
       vaultYaml = yaml
     },
+    getEventFileCount: () => eventRecords.size,
+    getEventFileContents: () =>
+      [...eventRecords.values()].map((event) => event.content),
+    clearEventFiles: () => {
+      eventRecords.clear()
+    },
     getFileName: () => fileName,
     async install(
       page: Page,

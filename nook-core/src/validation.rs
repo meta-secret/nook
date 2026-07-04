@@ -78,6 +78,7 @@ pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StorageProviderType {
     Local,
+    LocalFolder,
     Github,
     OauthFile,
 }
@@ -87,6 +88,7 @@ impl StorageProviderType {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Local => "local",
+            Self::LocalFolder => "local-folder",
             Self::Github => "github",
             Self::OauthFile => "oauth-file",
         }
@@ -95,6 +97,7 @@ impl StorageProviderType {
     pub fn parse(value: &str) -> Result<Self, ValidationError> {
         match value {
             "local" => Ok(Self::Local),
+            "local-folder" => Ok(Self::LocalFolder),
             "github" => Ok(Self::Github),
             "oauth-file" => Ok(Self::OauthFile),
             other => Err(ValidationError::UnknownStorageMode {
@@ -158,6 +161,13 @@ pub struct OauthFileSyncTarget {
     pub access_token: Option<String>,
 }
 
+/// Browser File System Access sync target identity.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LocalFolderSyncTarget {
+    pub directory_name: Option<String>,
+    pub handle_id: Option<String>,
+}
+
 /// Storage/sync provider identity, one variant per provider kind.
 ///
 /// `MissingOauthFileConfig` models an `oauth-file` provider row whose OAuth
@@ -165,6 +175,7 @@ pub struct OauthFileSyncTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncProviderTarget {
     Local,
+    LocalFolder(LocalFolderSyncTarget),
     Github(GithubSyncTarget),
     OauthFile(OauthFileSyncTarget),
     MissingOauthFileConfig,
@@ -440,7 +451,7 @@ pub fn storage_mode_for_provider(
     oauth_preset: Option<OauthFilePreset>,
 ) -> StorageMode {
     match provider_type {
-        StorageProviderType::Local => StorageMode::Local,
+        StorageProviderType::Local | StorageProviderType::LocalFolder => StorageMode::Local,
         StorageProviderType::Github => StorageMode::Github,
         StorageProviderType::OauthFile => {
             match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
@@ -459,6 +470,13 @@ pub fn sync_provider_default_label(
 ) -> String {
     match provider_type {
         StorageProviderType::Local => "This device".to_owned(),
+        StorageProviderType::LocalFolder => {
+            let directory = detail.map(str::trim).filter(|value| !value.is_empty());
+            directory.map_or_else(
+                || "Local backup".to_owned(),
+                |directory| format!("Local backup · {directory}"),
+            )
+        }
         StorageProviderType::Github => {
             let repo = detail
                 .map(str::trim)
@@ -498,6 +516,12 @@ pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
 
     match target {
         SyncProviderTarget::Local => Some("local".to_owned()),
+        SyncProviderTarget::LocalFolder(folder) => {
+            let key = non_empty(folder.handle_id.as_ref())
+                .or_else(|| non_empty(folder.directory_name.as_ref()))
+                .unwrap_or("unselected");
+            Some(format!("local-folder:{key}"))
+        }
         SyncProviderTarget::Github(github) => {
             let repo = non_empty(github.repo.as_ref())
                 .unwrap_or(DEFAULT_GITHUB_REPO_NAME)
@@ -648,6 +672,10 @@ mod tests {
             StorageMode::Local
         );
         assert_eq!(
+            storage_mode_for_provider(StorageProviderType::LocalFolder, None),
+            StorageMode::Local
+        );
+        assert_eq!(
             storage_mode_for_provider(StorageProviderType::Github, None),
             StorageMode::Github
         );
@@ -669,6 +697,14 @@ mod tests {
         assert_eq!(
             sync_provider_default_label(StorageProviderType::Local, None, None),
             "This device"
+        );
+        assert_eq!(
+            sync_provider_default_label(
+                StorageProviderType::LocalFolder,
+                Some("Nook Backup"),
+                None,
+            ),
+            "Local backup · Nook Backup"
         );
         assert_eq!(
             sync_provider_default_label(StorageProviderType::Github, Some("team-vault"), None),
@@ -738,6 +774,15 @@ mod tests {
         assert_ne!(
             sync_provider_target_key(&drive_by_id),
             sync_provider_target_key(&drive_by_name)
+        );
+
+        let folder = SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
+            directory_name: Some("Nook Backup".to_owned()),
+            handle_id: Some("folder-1".to_owned()),
+        });
+        assert_eq!(
+            sync_provider_target_key(&folder),
+            Some("local-folder:folder-1".to_owned())
         );
 
         assert_eq!(

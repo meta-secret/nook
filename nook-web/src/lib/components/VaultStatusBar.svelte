@@ -90,6 +90,10 @@
             ? vault
               ? vault.t('provider_picker.google_drive')
               : 'Google Drive'
+            : storageMode === 'local-folder'
+              ? vault
+                ? vault.t('provider_picker.local_folder')
+                : 'Local backup'
             : vault
               ? vault.t('provider_picker.this_device')
               : 'This device'),
@@ -116,7 +120,12 @@
   })
 
   const showRefresh = $derived(
-    Boolean(onRefresh && (isAuthenticatedVault || storageMode === 'github')),
+    Boolean(
+      onRefresh &&
+        (isAuthenticatedVault ||
+          storageMode === 'github' ||
+          storageMode === 'local-folder'),
+    ),
   )
 </script>
 

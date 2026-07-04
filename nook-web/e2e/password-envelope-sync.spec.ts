@@ -13,6 +13,7 @@ import {
   rotateVaultPassword,
   seedExtraOauthFileProviders,
   seedLocalVaultYamlForEnrollment,
+  readLocalVaultYamlFromIdb,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   UI_TIMEOUT_MS,
@@ -122,9 +123,9 @@ test.describe('vault password envelope (stub sync)', () => {
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')
 
-    const remoteYaml = target.stub?.getVaultYaml() ?? ''
-    expect(remoteYaml.trim().length).toBeGreaterThan(0)
-    await installSyncStub(deviceB, target, remoteYaml)
+    const enrollmentYaml = await readLocalVaultYamlFromIdb(deviceA)
+    expect(enrollmentYaml.trim().length).toBeGreaterThan(0)
+    await installSyncStub(deviceB, target)
 
     await deviceB.goto('/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
@@ -141,7 +142,7 @@ test.describe('vault password envelope (stub sync)', () => {
         ),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await seedLocalVaultYamlForEnrollment(deviceB, remoteYaml)
+    await seedLocalVaultYamlForEnrollment(deviceB, enrollmentYaml)
     await seedExtraOauthFileProviders(deviceB, [
       {
         id: 'e2e-enroll-sync',
