@@ -176,17 +176,22 @@ For each active, non-outdated PR review item:
    the touched surface warrants it.
 5. Push the fix.
 6. Leave a short GitHub reply that states what changed, what validation ran, or
-   why no code change was needed. Reply on the review thread when one exists;
-   otherwise reply on the PR timeline and reference the review item, URL, or
-   CodeRabbit `cr-comment` id.
+   why no code change was needed. The reply must target the particular review
+   thread or comment item. Reply on the review thread when one exists. If the
+   item is only present inside a PR timeline/summary comment and GitHub does not
+   provide a threaded reply API for that item, leave a targeted PR timeline reply
+   that references the exact CodeRabbit comment URL plus the item title/file and
+   `cr-comment` id.
 7. Resolve the GitHub conversation only after the reply is posted, and only when
    the item has a resolvable review thread.
 
 Do not silently resolve review conversations or ignore actionable summary
 comments. The PR history must show how each item was handled.
-For CodeRabbit review summaries without resolvable threads, leave a PR timeline
-comment that lists the summary items reviewed and their outcome before final
-handoff.
+Do not use a broad/general audit comment as a substitute for replying to the
+particular comment item. For CodeRabbit review summaries without resolvable
+threads, leave targeted PR timeline replies for each actionable item or tightly
+grouped set of items from the same CodeRabbit summary comment, each referencing
+the original comment URL and item identifiers.
 
 ### 6. Fix loop on failure
 

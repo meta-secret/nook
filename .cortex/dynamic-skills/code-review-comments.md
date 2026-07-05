@@ -29,7 +29,9 @@ the item has a resolvable review thread, resolve it only after the reply is
 posted. If the item appears only in a PR timeline/summary comment, reply on the
 PR timeline and reference the item, URL, or CodeRabbit `cr-comment` id.
 CodeRabbit's automatic status text is useful context, but it does not satisfy the
-agent-reply requirement.
+agent-reply requirement. A broad PR audit comment also does not satisfy the
+requirement; the reply must target the particular review thread, comment, or
+summary item.
 
 ## Scope
 
@@ -61,12 +63,17 @@ Does not apply to:
 - Before: query only unresolved review threads and miss CodeRabbit's "outside
   diff range comments" section in a PR timeline comment.
 - After: inspect CodeRabbit issue comments too, add each actionable summary item
-  to the checklist, fix or explain it, then reply on the PR timeline if no
-  review thread exists.
+  to the checklist, fix or explain it, then reply with the exact CodeRabbit
+  comment URL and `cr-comment` id if no review thread exists.
 - Before: rely on CodeRabbit's appended "addressed in commit" marker and resolve
   the thread without saying anything.
 - After: leave an agent reply with the addressing commit and validation, then
   resolve the thread.
+- Before: leave one generic "CodeRabbit reply audit" PR comment summarizing all
+  review surfaces.
+- After: reply to each specific review thread, or for unthreaded summary items
+  leave targeted PR comments that identify the original CodeRabbit comment URL,
+  file/item title, and `cr-comment` id.
 
 ## Application Checklist
 
@@ -83,10 +90,13 @@ Does not apply to:
       changes.
 - [ ] Push the fix or rationale commit when code/docs changed.
 - [ ] Leave a GitHub reply explaining the fix, validation, or no-change
-      rationale: on the review thread when one exists, otherwise on the PR
-      timeline referencing the review item, URL, or CodeRabbit `cr-comment` id.
+      rationale: on the review thread when one exists, otherwise as a targeted
+      PR timeline reply referencing the exact review item, original comment URL,
+      file/item title, and CodeRabbit `cr-comment` id.
 - [ ] For CodeRabbit review summaries that do not create resolvable threads,
-      leave a PR timeline audit comment listing the reviewed items and outcomes.
+      leave targeted PR timeline replies for the specific actionable item or a
+      tightly grouped set from the same CodeRabbit summary comment. Do not use a
+      broad/general audit comment as the reply.
 - [ ] Resolve the GitHub conversation only after the agent's reply is visible
       when the item has a resolvable thread.
 - [ ] Re-query unresolved review threads and CodeRabbit timeline comments before

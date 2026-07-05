@@ -23,5 +23,7 @@ thread or PR timeline, then resolve the conversation only when a resolvable
 thread exists and the agent's reply is visible. Do not silently resolve review
 conversations or ignore actionable summary comments. CodeRabbit's automatic
 "addressed in commit" marker does not count as the agent's own reply; for
-unthreaded CodeRabbit review summaries, leave a PR timeline audit comment with
-the reviewed item outcomes.
+unthreaded CodeRabbit review summaries, leave targeted PR timeline replies that
+reference the original CodeRabbit comment URL, file/item title, and `cr-comment`
+id. Do not use a broad/general audit comment as a substitute for replying to the
+particular comment item.
