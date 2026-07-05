@@ -174,48 +174,26 @@ impl NookVaultManager {
             )
             .into());
         }
-        let keys = nook_core::VaultKeys {
-            secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
-            members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
-        };
-        {
-            let target = self
-                .password_entries
-                .iter_mut()
-                .find(|entry| entry.id == entry_id)
-                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-            target.envelope = nook_core::attach_password_envelope_with_work_factor(
-                &keys,
-                &password,
-                work_factor,
-            )?;
-        }
-        let envelope = self
+        if !self
             .password_entries
             .iter()
-            .find(|entry| entry.id == entry_id)
-            .map(|entry| entry.envelope.clone())
-            .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-        self.ensure_event_log_ready().await?;
-        self.rotate_security_epoch(nook_core::VaultOperation::PasswordRotated {
-            entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
-            envelope,
-        })
-        .await?;
-        let rotated_keys = nook_core::VaultKeys {
-            secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
-            members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
-        };
+            .any(|entry| entry.id == entry_id)
+        {
+            return Err(NookError::Database("Password entry not found.".to_owned()).into());
+        }
+        let envelope = self
+            .rotate_password_security_epoch(
+                nook_core::PasswordEntryId::parse(&entry_id)?,
+                &password,
+                work_factor,
+            )
+            .await?;
         let target = self
             .password_entries
             .iter_mut()
             .find(|entry| entry.id == entry_id)
             .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-        target.envelope = nook_core::attach_password_envelope_with_work_factor(
-            &rotated_keys,
-            &password,
-            work_factor,
-        )?;
+        target.envelope = envelope;
         self.persist_vault_change(vec![]).await?;
         Ok(())
     }

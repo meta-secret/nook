@@ -702,6 +702,64 @@ impl NookVaultManager {
         Ok(())
     }
 
+    pub(in crate::manager) async fn rotate_password_security_epoch(
+        &mut self,
+        entry_id: nook_core::PasswordEntryId,
+        password: &str,
+        work_factor: u8,
+    ) -> Result<nook_core::PasswordEnvelope, NookError> {
+        self.activate_event_log_mode().await?;
+
+        let old_secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
+        let old_members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
+        let records_snapshot = self.stored_records_snapshot();
+        let user_records: Vec<nook_core::StoredSecretRecord> = records_snapshot
+            .iter()
+            .filter(|record| !nook_core::is_vault_meta_record(record))
+            .cloned()
+            .collect();
+        let (new_keys, secrets) =
+            nook_core::rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
+        let envelope =
+            nook_core::attach_password_envelope_with_work_factor(&new_keys, password, work_factor)?;
+
+        self.append_vault_operations(vec![VaultOperation::PasswordRotated {
+            entry_id,
+            envelope: envelope.clone(),
+        }])
+        .await?;
+        let new_epoch = self.event_heads.last().cloned().ok_or_else(|| {
+            NookError::Database("Security epoch rotation did not produce an event head.".to_owned())
+        })?;
+        self.key_epoch = new_epoch.clone();
+        save_key_epoch(&self.store_id, &self.key_epoch).await?;
+
+        let members_checkpoint_hash = members_checkpoint_hash_from_roster(
+            &records_snapshot,
+            &old_members_key,
+            &new_keys.members_key,
+        )?;
+        self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
+        self.rewrap_device_meta_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
+        for payload in &secrets {
+            self.meta.secrets.insert(
+                payload.id.clone(),
+                (
+                    payload.secret_type,
+                    nook_core::StoredRecordPayload::from_trusted(
+                        payload.ciphertext.as_str().to_owned(),
+                    ),
+                ),
+            );
+        }
+        self.append_vault_operations(vec![VaultOperation::EpochCheckpoint {
+            secrets,
+            members_checkpoint_hash,
+        }])
+        .await?;
+        Ok(envelope)
+    }
+
     pub(in crate::manager) async fn load_projection_conflicts(
         &self,
     ) -> Result<nook_core::VaultProjection, NookError> {

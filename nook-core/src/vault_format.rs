@@ -827,14 +827,17 @@ not-json
     #[test]
     fn yaml_password_entries_roundtrip_with_keys_unlock() {
         use crate::{
-            attach_password_envelope, multi_device::VaultKeys, resolve_keys_from_password,
+            attach_password_envelope_with_work_factor, multi_device::VaultKeys,
+            resolve_keys_from_password,
         };
 
         let keys = VaultKeys {
             secrets_key: crate::SymmetricKey::parse(&"d".repeat(64)).unwrap(),
             members_key: crate::SymmetricKey::parse(&"e".repeat(64)).unwrap(),
         };
-        let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
+        let envelope =
+            attach_password_envelope_with_work_factor(&keys, "correct horse battery staple", 10)
+                .unwrap();
         let entry = PasswordUnlockEntry {
             id: "pw-1".to_owned(),
             label: "test password".to_owned(),

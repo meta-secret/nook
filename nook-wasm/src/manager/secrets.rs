@@ -161,11 +161,12 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
         if restore_local {
-            self.prepare_storage("local", "", "").await?;
+            self.prepare_storage_preserving_vault_metadata("local", "", "")
+                .await?;
         }
         Ok(self.pending_joins()?)
     }
@@ -178,11 +179,12 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<(), JsError> {
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.flush_event_outbox().await?;
         if restore_local {
-            self.prepare_storage("local", "", "").await?;
+            self.prepare_storage_preserving_vault_metadata("local", "", "")
+                .await?;
         }
         Ok(())
     }
@@ -194,7 +196,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
         self.flush_event_outbox().await?;

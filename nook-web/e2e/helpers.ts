@@ -2089,9 +2089,15 @@ export async function rotateVaultPassword(page: Page, password: string) {
   await page.getByTestId('vault-password-input').fill(password)
   await page.getByTestId('vault-password-confirm').fill(password)
   await page.getByTestId('submit-vault-password').click()
-  await expect(page.getByTestId('app-success')).toContainText(/password/i, {
+  const success = page.getByTestId('app-success')
+  const error = page.getByTestId('vault-password-error')
+  await expect(success.or(error)).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  if (await error.isVisible()) {
+    throw new Error(`Password rotation failed: ${await error.innerText()}`)
+  }
+  await expect(success).toContainText(/password/i)
   await expectVaultPasswordStatus(page, 1, {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

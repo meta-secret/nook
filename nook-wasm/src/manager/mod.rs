@@ -464,6 +464,23 @@ impl NookVaultManager {
         Ok(())
     }
 
+    pub(in crate::manager) async fn prepare_storage_preserving_vault_metadata(
+        &mut self,
+        storage_mode: &str,
+        github_pat: &str,
+        github_repo_name: &str,
+    ) -> Result<(), NookError> {
+        let password_entries = self.password_entries.clone();
+        let unlock = self.unlock.clone();
+        let vault_name = self.vault_name.clone();
+        self.prepare_storage(storage_mode, github_pat, github_repo_name)
+            .await?;
+        self.password_entries = password_entries;
+        self.unlock = unlock;
+        self.vault_name = vault_name;
+        Ok(())
+    }
+
     pub(in crate::manager) fn ensure_device_identity(
         &mut self,
     ) -> Result<nook_core::DeviceIdentity, NookError> {
