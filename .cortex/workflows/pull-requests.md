@@ -148,6 +148,9 @@ Agents must leave their own GitHub reply explaining the fix, validation, or
 no-change rationale before resolving any PR comment or review conversation. Do
 not resolve comments silently. CodeRabbit's automatic "addressed in commit ..."
 text does not count as the agent's reply.
+For CodeRabbit threads, do not manually resolve after replying. CodeRabbit can
+mark/close the conversation after it accepts the targeted reply; wait for that
+and re-query the thread state instead of forcing resolution.
 
 Inspect both CodeRabbit surfaces:
 
@@ -182,8 +185,12 @@ For each active, non-outdated PR review item:
    provide a threaded reply API for that item, leave a targeted PR timeline reply
    that references the exact CodeRabbit comment URL plus the item title/file and
    `cr-comment` id.
-7. Resolve the GitHub conversation only after the reply is posted, and only when
-   the item has a resolvable review thread.
+7. For CodeRabbit threads, wait for CodeRabbit's addressed/closing reply and
+   re-query the thread state. Do not call `resolveReviewThread` yourself unless
+   the user explicitly asks you to override CodeRabbit's handling.
+8. For human or non-CodeRabbit review threads, resolve the GitHub conversation
+   only after the targeted reply is posted and only when resolution is the
+   correct next action.
 
 Do not silently resolve review conversations or ignore actionable summary
 comments. The PR history must show how each item was handled.

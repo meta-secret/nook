@@ -78,7 +78,8 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   also posts actionable items outside normal code review threads, including PR timeline/summary comments,
   outside-diff-range sections, and nitpicks; inspect those surfaces too. CodeRabbit's automatic "addressed"
   marker does not count as the agent's own reply. Replies must target the specific comment/item; a broad PR
-  audit comment is not a substitute. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
+  audit comment is not a substitute. For CodeRabbit threads, do not manually resolve after replying; wait
+  for CodeRabbit to mark/close the thread, then re-query. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality
 * If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of

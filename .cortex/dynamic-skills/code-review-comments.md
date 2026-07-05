@@ -5,7 +5,9 @@
 Make PR review-comment handling auditable: every active actionable item from a
 human reviewer, CodeRabbit, or another automated reviewer must be verified, fixed
 or explicitly invalidated, and replied to on GitHub. Agents must leave their own
-reply before resolving any PR comment or review conversation.
+reply before resolving any PR comment or review conversation. For CodeRabbit
+threads, agents must not manually resolve after replying; wait for CodeRabbit to
+mark/close the thread, then re-query.
 
 ## Problem Pattern
 
@@ -25,9 +27,12 @@ and PR timeline/summary comments. For each active, non-outdated actionable item,
 verify the finding against current code, use reviewer-provided AI-agent prompts
 as review context, make the minimal correct fix or write down why no change is
 needed, validate locally, push the result, and leave a concise GitHub reply. If
-the item has a resolvable review thread, resolve it only after the reply is
-posted. If the item appears only in a PR timeline/summary comment, reply on the
-PR timeline and reference the item, URL, or CodeRabbit `cr-comment` id.
+the item is a CodeRabbit review thread, wait for CodeRabbit to mark it addressed
+or close it after the targeted reply; do not call `resolveReviewThread` manually.
+For human or non-CodeRabbit threads, resolve only after the targeted reply is
+posted and resolution is the correct next action. If the item appears only in a
+PR timeline/summary comment, reply on the PR timeline and reference the item,
+URL, or CodeRabbit `cr-comment` id.
 CodeRabbit's automatic status text is useful context, but it does not satisfy the
 agent-reply requirement. A broad PR audit comment also does not satisfy the
 requirement; the reply must target the particular review thread, comment, or
@@ -55,8 +60,10 @@ Does not apply to:
 ## Examples
 
 - Before: fix code, push, call `resolveReviewThread`, no agent reply.
-- After: fix code, push, reply "Fixed by moving the parser check into Rust and
-  validated with `cargo test -p nook-core parser_conflict`.", then resolve.
+- After: fix code, push, reply to the specific thread: "Fixed by moving the
+  parser check into Rust and validated with `cargo test -p nook-core parser_conflict`."
+  If it is a CodeRabbit thread, wait for CodeRabbit to mark/close it; for human
+  review threads, resolve only after the reply when appropriate.
 - Before: resolve an outdated formatting comment because it looks obsolete.
 - After: reply "This was addressed by commit `<sha>`; current file is
   formatter-clean.", then resolve.
@@ -68,7 +75,7 @@ Does not apply to:
 - Before: rely on CodeRabbit's appended "addressed in commit" marker and resolve
   the thread without saying anything.
 - After: leave an agent reply with the addressing commit and validation, then
-  resolve the thread.
+  wait for CodeRabbit's addressed/closing reply and re-query the thread.
 - Before: leave one generic "CodeRabbit reply audit" PR comment summarizing all
   review surfaces.
 - After: reply to each specific review thread, or for unthreaded summary items
@@ -97,8 +104,11 @@ Does not apply to:
       leave targeted PR timeline replies for the specific actionable item or a
       tightly grouped set from the same CodeRabbit summary comment. Do not use a
       broad/general audit comment as the reply.
-- [ ] Resolve the GitHub conversation only after the agent's reply is visible
-      when the item has a resolvable thread.
+- [ ] For CodeRabbit review threads, do not manually resolve; wait for
+      CodeRabbit's addressed/closing reply and re-query the thread state.
+- [ ] For human or non-CodeRabbit review threads, resolve the GitHub
+      conversation only after the agent's targeted reply is visible and
+      resolution is the correct next action.
 - [ ] Re-query unresolved review threads and CodeRabbit timeline comments before
       final handoff.
 
