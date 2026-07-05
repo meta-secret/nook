@@ -72,11 +72,13 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 ### Code review comments
-* When a PR has CodeRabbit review comments, treat every active, non-outdated thread as required work.
-  Build a checklist from the review threads, verify each finding against current code, use CodeRabbit's
-  provided AI-agent prompt as review context, make the minimal correct fix or document why the finding is
-  no longer valid, validate locally, push the fix, leave a short GitHub reply on the thread, and only then
-  resolve the GitHub thread. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
+* When a PR has CodeRabbit feedback, inspect both inline review threads and PR timeline/summary comments.
+  CodeRabbit can post actionable items outside normal code review threads, including outside-diff-range
+  and nitpick sections. Treat every active, non-outdated actionable item as required work. Build a checklist,
+  verify each finding against current code, use CodeRabbit's provided AI-agent prompt as review context,
+  make the minimal correct fix or document why the finding is no longer valid, validate locally, push the
+  fix, leave a short GitHub reply, and resolve the GitHub thread only when a resolvable thread exists. See
+  [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality
 * If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of
