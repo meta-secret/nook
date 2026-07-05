@@ -95,12 +95,14 @@ test.describe('event-log sync then add', () => {
       .toBeGreaterThan(eventFilesBeforeSave)
     expect(stub!.getEventFilePaths()).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^nook-log\/v1\/events\/[a-f0-9]{64}\.yaml$/),
+        expect.stringMatching(
+          /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/,
+        ),
       ]),
     )
     expect(stub!.getEventFilePaths()).not.toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^nook-log\/v1\/events\/[a-f0-9]{2}\//),
+        expect.stringMatching(/^nook-log\/v1\/events\/[^/]+\//),
       ]),
     )
     expect(stub!.getEventFileContents()).toEqual(

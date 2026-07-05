@@ -118,8 +118,8 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 
 ### D. GitHub Repository Adapter
 - **Repository:** `{username}/nook` (auto-created if missing).
-- **Event Path:** `nook-log/v1/events/{digest}.yaml`
-- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-log/v1/events/{digest}.yaml`
+- **Event Path:** `nook-log/v1/events/{base64url_sha256_digest}.yaml`
+- **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-log/v1/events/{base64url_sha256_digest}.yaml`
 - **Authentication:** `Authorization: Bearer {pat}`
 - **Encoding:** Event content is pretty-printed UTF-8 YAML; GitHub API stores base64 in transit.
 - **Concurrency:** Append-only `put_event_if_absent`; existing identical content is idempotent and different content at the same event id is corruption.

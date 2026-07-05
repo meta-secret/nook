@@ -98,7 +98,10 @@ pub struct KeyEpochId(EventId);
 impl KeyEpochId {
     #[must_use]
     pub fn from_content_hash(content_hash: &str) -> Self {
-        Self(EventId::from_trusted(format!("sha256:{content_hash}")))
+        Self(
+            EventId::from_sha256_hex(content_hash)
+                .expect("source content hash is a valid SHA-256 digest"),
+        )
     }
 
     #[must_use]

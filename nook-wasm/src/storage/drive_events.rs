@@ -5,6 +5,14 @@ use crate::storage::{event_storage_matches_expected, parse_expected_event_storag
 use nook_core::{EventId, VaultEvent, parse_remote_event_storage_bytes};
 
 const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
+const SHA256_BASE64URL_LEN: usize = 43;
+
+fn is_sha256_base64url_digest(digest: &str) -> bool {
+    digest.len() == SHA256_BASE64URL_LEN
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
 
 pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, NookError> {
     let token = token.trim();
@@ -44,10 +52,9 @@ pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, Noo
                     continue;
                 };
                 if let Some(digest) = name.strip_suffix(".yaml")
-                    && digest.len() == 64
-                    && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    && is_sha256_base64url_digest(digest)
                 {
-                    event_ids.push(format!("sha256:{digest}"));
+                    event_ids.push(format!("sha256u:{digest}"));
                 }
             }
         }
@@ -68,7 +75,7 @@ pub(crate) async fn fetch_drive_event(
 ) -> Result<Vec<u8>, NookError> {
     let token = token.trim();
     let file_ids =
-        lookup_drive_event_file_ids(token, &format!("{}.yaml", event_id.hex_digest())).await?;
+        lookup_drive_event_file_ids(token, &format!("{}.yaml", event_id.encoded_digest())).await?;
     if file_ids.is_empty() {
         return Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned()));
     }
@@ -181,7 +188,7 @@ pub(crate) async fn put_drive_event_if_absent(
         Err(NookError::Drive(message)) if message == DRIVE_EVENT_MISSING => {}
         Err(err) => return Err(err),
     }
-    let file_name = format!("{}.yaml", event_id.hex_digest());
+    let file_name = format!("{}.yaml", event_id.encoded_digest());
     let metadata = serde_json::json!({
         "name": file_name,
         "parents": ["appDataFolder"],

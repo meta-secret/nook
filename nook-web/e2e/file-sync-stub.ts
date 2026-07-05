@@ -5,6 +5,8 @@ import type { Page } from '@playwright/test'
 
 const DEFAULT_FILE_NAME = 'nook-e2e-file-sync'
 const EVENT_LOG_DIR = path.join('nook-log', 'v1', 'events')
+const EVENT_DIGEST_PATTERN = '[A-Za-z0-9_-]{43}'
+const EVENT_FILE_NAME_PATTERN = new RegExp(`^(${EVENT_DIGEST_PATTERN})\\.yaml$`)
 
 function toPosixPath(value: string) {
   return value.split(path.sep).join('/')
@@ -12,7 +14,7 @@ function toPosixPath(value: string) {
 
 function sha256FileNameFromPath(filePath: string) {
   const name = path.basename(filePath)
-  return /^[a-f0-9]{64}\.yaml$/i.test(name) ? name : null
+  return EVENT_FILE_NAME_PATTERN.test(name) ? name : null
 }
 
 /** File-backed e2e sync remote. The browser still uses the OAuth-file code path;
@@ -38,7 +40,7 @@ export function createLocalE2eFileSyncVaultStub(
   }
 
   function eventPath(digest: string) {
-    return path.join(eventsDir(), `${digest.toLowerCase()}.yaml`)
+    return path.join(eventsDir(), `${digest}.yaml`)
   }
 
   function eventFileId(digest: string) {
@@ -55,8 +57,8 @@ export function createLocalE2eFileSyncVaultStub(
     ensureEventsDir()
     return fs
       .readdirSync(eventsDir())
-      .filter((name) => /^[a-f0-9]{64}\.yaml$/i.test(name))
-      .map((name) => name.slice(0, -'.yaml'.length).toLowerCase())
+      .filter((name) => EVENT_FILE_NAME_PATTERN.test(name))
+      .map((name) => name.slice(0, -'.yaml'.length))
       .sort()
   }
 
@@ -93,9 +95,11 @@ export function createLocalE2eFileSyncVaultStub(
     body: string,
   ): { digest: string; content: string } | null {
     const eventId = body.match(
-      /"event_id"\s*:\s*"sha256:([a-fA-F0-9]{64})"/,
+      new RegExp(`"event_id"\\s*:\\s*"sha256u:(${EVENT_DIGEST_PATTERN})"`),
     )?.[1]
-    const nameDigest = body.match(/"name"\s*:\s*"([a-fA-F0-9]{64})\.yaml"/)?.[1]
+    const nameDigest = body.match(
+      new RegExp(`"name"\\s*:\\s*"(${EVENT_DIGEST_PATTERN})\\.yaml"`),
+    )?.[1]
     const digest = eventId ?? nameDigest
     if (!digest) return null
     const markers = [
@@ -110,7 +114,7 @@ export function createLocalE2eFileSyncVaultStub(
     const end = body.indexOf('\r\n--nook_event_boundary--', contentStart)
     const content =
       end === -1 ? body.slice(contentStart) : body.slice(contentStart, end)
-    return { digest: digest.toLowerCase(), content }
+    return { digest, content }
   }
 
   return {
@@ -194,14 +198,14 @@ export function createLocalE2eFileSyncVaultStub(
         ) {
           const decoded = decodeURIComponent(fullUrl)
           const eventDigest = decoded.match(
-            /name\s*=\s*'([a-fA-F0-9]{64})\.yaml'/,
+            new RegExp(`name\\s*=\\s*'(${EVENT_DIGEST_PATTERN})\\.yaml'`),
           )?.[1]
           if (decoded.includes("name contains '.yaml'") || eventDigest) {
             await route.fulfill({
               status: 200,
               contentType: 'application/json',
               body: JSON.stringify({
-                files: eventListEntries(eventDigest?.toLowerCase()),
+                files: eventListEntries(eventDigest),
               }),
             })
             return

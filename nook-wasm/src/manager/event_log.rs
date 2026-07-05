@@ -128,10 +128,10 @@ impl NookVaultManager {
             self.key_epoch = epoch;
             return Ok(self.key_epoch.clone());
         }
-        let epoch = format!(
-            "sha256:{}",
-            nook_core::sha256_hex(self.store_id.as_bytes()).as_str()
-        );
+        let epoch = nook_core::EventId::from_sha256_hex(
+            nook_core::sha256_hex(self.store_id.as_bytes()).as_str(),
+        )?
+        .into_inner();
         self.key_epoch = epoch;
         if !self.store_id.is_empty() {
             save_key_epoch(&self.store_id, &self.key_epoch).await?;

@@ -15,7 +15,7 @@ export function createLocalE2eICloudVaultStub(
   >()
 
   function eventRecordName(eventId: string) {
-    return `nook-event-${eventId.replace(/^sha256:/, '')}`
+    return `nook-event-${eventId.replace(/^sha256u:/, '')}`
   }
 
   function eventRecord(recordName: string) {

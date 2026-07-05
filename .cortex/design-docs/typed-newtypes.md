@@ -19,7 +19,7 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 | `SecretId` | `vault_ids` | `secret_{token}` or legacy human label |
 | `AuthKeyId` | `vault_ids` | `key_{sha256_hex}` actor / auth row |
 | `DeviceId` | `vault_ids` | 16-hex device fingerprint |
-| `EventId` | `event_canonical` | `sha256:{hex}` content-addressed event |
+| `EventId` | `event_canonical` | `sha256u:{base64url_no_pad}` content-addressed event |
 | `KeyEpoch` | `vault_epoch` | wraps `EventId` — epoch protecting payloads |
 | `Ed25519Signature` | `event_canonical` | `ed25519:{hex}` event signature |
 | `Sha256Hex` | `vault_wire` | bare 64-hex digest (content hash, checkpoint) |

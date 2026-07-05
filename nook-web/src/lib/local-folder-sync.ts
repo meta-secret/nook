@@ -5,6 +5,9 @@ import { readLocalVaultBlob } from '$lib/vault-sync'
 const DB_NAME = 'nook_file_sync'
 const STORE_NAME = 'directory_handles'
 const EVENT_LOG_PARTS = ['nook-log', 'v1', 'events'] as const
+const EVENT_DIGEST_PATTERN = '[A-Za-z0-9_-]{43}'
+const EVENT_FILE_NAME_PATTERN = new RegExp(`^(${EVENT_DIGEST_PATTERN})\\.yaml$`)
+const EVENT_ID_PATTERN = new RegExp(`^sha256u:(${EVENT_DIGEST_PATTERN})$`)
 
 type PermissionStateValue = 'granted' | 'denied' | 'prompt'
 
@@ -215,16 +218,16 @@ async function eventDirectory(
 }
 
 function eventIdFromFileName(name: string): string | null {
-  const digest = name.match(/^([a-f0-9]{64})\.yaml$/i)?.[1]
-  return digest ? `sha256:${digest.toLowerCase()}` : null
+  const digest = name.match(EVENT_FILE_NAME_PATTERN)?.[1]
+  return digest ? `sha256u:${digest}` : null
 }
 
 function eventFileName(record: EventLogStorageRecord): string {
-  const digest = record.eventId.match(/^sha256:([a-f0-9]{64})$/i)?.[1]
+  const digest = record.eventId.match(EVENT_ID_PATTERN)?.[1]
   if (!digest) {
     throw new Error(`Invalid event id: ${record.eventId}`)
   }
-  return `${digest.toLowerCase()}.yaml`
+  return `${digest}.yaml`
 }
 
 async function eventFileEntries(
@@ -262,7 +265,7 @@ export async function readLocalFolderEventRecords(
     const file = await fileHandle.getFile()
     records.push({
       eventId,
-      path: `nook-log/v1/events/${name.toLowerCase()}`,
+      path: `nook-log/v1/events/${name}`,
       yaml: await file.text(),
     })
   }

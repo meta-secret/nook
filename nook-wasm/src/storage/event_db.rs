@@ -394,7 +394,7 @@ mod tests {
         );
         assert_eq!(
             legacy_event_log_target_store(
-                "event:store_abc:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "event:store_abc:sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
             ),
             Some(STORE_EVENTS)
         );
@@ -403,7 +403,9 @@ mod tests {
             Some(STORE_EVENTS)
         );
         assert_eq!(
-            legacy_event_log_target_store("outbox:provider:sha256:abc"),
+            legacy_event_log_target_store(
+                "outbox:provider:sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+            ),
             Some(STORE_OUTBOX)
         );
         assert_eq!(

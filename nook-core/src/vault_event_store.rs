@@ -208,9 +208,7 @@ mod tests {
         build_genesis_import_event(
             &StoreId::parse(store_id)?,
             &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
-            &EventId::parse(
-                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            )?,
+            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![],
@@ -239,9 +237,7 @@ mod tests {
             actor_signing_public_key: Some(public_key(signing_key)),
             parents: vec![parent],
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            key_epoch: EventId::parse(
-                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            )?,
+            key_epoch: EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
             operations: vec![VaultOperation::SecretCreated {
                 secret: EncryptedSecretPayload {
                     id: SecretId::from_vault_record(secret_id),
@@ -281,9 +277,7 @@ mod tests {
     #[test]
     fn outbox_queue_and_dequeue() -> VaultResult<()> {
         let mut local = LocalEventStore::new();
-        let id = EventId::parse(
-            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        )?;
+        let id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let bytes = b"event-bytes".to_vec();
         local.queue_outbox("github", id.clone(), bytes.clone());
         assert_eq!(local.pending_outbox("github").len(), 1);
@@ -350,9 +344,7 @@ mod tests {
         let genesis = genesis(&signing_key)?;
         let real_id = genesis.id()?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
-        let wrong_id = EventId::parse(
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        )?;
+        let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let mut local = LocalEventStore::new();
         let err = union_remote_events(&mut local, &[(wrong_id, bytes)], STORE).unwrap_err();
@@ -389,9 +381,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let bytes = serialize_event_storage_yaml(&genesis)?;
-        let wrong_id = EventId::parse(
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        )?;
+        let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let err = remote_event_belongs_to_store(&wrong_id, &bytes, STORE).unwrap_err();
         assert!(matches!(

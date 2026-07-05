@@ -43,7 +43,7 @@ artifact for event-log vaults.
 
 | Property | Rule |
 |----------|------|
-| Event ID | SHA-256 of canonical body bytes (`sha256:{hex}`) |
+| Event ID | SHA-256 of canonical body bytes (`sha256u:{base64url_no_pad}`) |
 | Remote path | `nook-log/v1/events/{digest}.yaml` |
 | Writes | append-only; `put_event_if_absent` |
 | Duplicate identical event | success (idempotent) |

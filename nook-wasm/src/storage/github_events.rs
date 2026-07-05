@@ -7,6 +7,14 @@ use nook_core::EventId;
 use serde::Deserialize;
 
 const EVENT_LOG_ROOT: &str = "nook-log/v1/events";
+const SHA256_BASE64URL_LEN: usize = 43;
+
+fn is_sha256_base64url_digest(digest: &str) -> bool {
+    digest.len() == SHA256_BASE64URL_LEN
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
 
 #[derive(Deserialize)]
 struct GitHubRepoResponse {
@@ -34,10 +42,9 @@ fn event_id_from_tree_path(path: &str) -> Option<String> {
         && extension.eq_ignore_ascii_case("yaml")
         && let Some(stem) = std::path::Path::new(name).file_stem()
         && let Some(digest) = stem.to_str()
-        && digest.len() == 64
-        && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && is_sha256_base64url_digest(digest)
     {
-        return Some(format!("sha256:{digest}"));
+        return Some(format!("sha256u:{digest}"));
     }
     None
 }
@@ -188,10 +195,10 @@ mod tests {
 
     #[test]
     fn tree_path_filter_accepts_only_flat_event_yaml_files() {
-        let digest = "a".repeat(64);
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
             event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.yaml")),
-            Some(format!("sha256:{digest}"))
+            Some(format!("sha256u:{digest}"))
         );
         assert_eq!(
             event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/aa/{digest}.yaml")),
@@ -202,9 +209,7 @@ mod tests {
             None
         );
         assert_eq!(
-            event_id_from_tree_path(
-                "other/path/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.yaml"
-            ),
+            event_id_from_tree_path("other/path/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"),
             None
         );
     }

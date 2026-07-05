@@ -341,10 +341,7 @@ mod tests {
     #[test]
     fn genesis_event_has_no_parents() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
@@ -367,10 +364,7 @@ mod tests {
     #[test]
     fn schema_one_event_is_rejected() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let mut event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
@@ -398,10 +392,7 @@ mod tests {
     #[test]
     fn event_id_changes_when_parents_change() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw").unwrap();
         let mut body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: StoreId::parse("store_testtoken11").unwrap(),
@@ -419,12 +410,8 @@ mod tests {
             }],
         };
         let id_a = body.event_id().unwrap();
-        body.parents.push(
-            EventId::parse(
-                "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-            )
-            .unwrap(),
-        );
+        body.parents
+            .push(EventId::parse("sha256u:7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u4").unwrap());
         body.parents.sort();
         let id_b = body.event_id().unwrap();
         assert_ne!(id_a, id_b);
@@ -433,10 +420,7 @@ mod tests {
     #[test]
     fn validate_envelope_rejects_wrong_store() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
@@ -457,10 +441,7 @@ mod tests {
     #[test]
     fn event_storage_is_pretty_yaml_and_roundtrips() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
             &actor(&signing_key),
@@ -498,10 +479,7 @@ mod tests {
     #[test]
     fn password_envelope_event_storage_is_yaml_map() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: StoreId::parse("store_testtoken11").unwrap(),

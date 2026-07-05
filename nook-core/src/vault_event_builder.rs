@@ -115,12 +115,8 @@ mod tests {
 
     #[test]
     fn parents_from_heads_is_sorted_deduped() -> VaultResult<()> {
-        let a = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let b = EventId::parse(
-            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        )?;
+        let a = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let b = EventId::parse("sha256u:u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s")?;
         let parents = parents_from_heads(&[b.clone(), a.clone(), a]);
         assert_eq!(parents.len(), 2);
         assert!(parents[0] < parents[1]);
@@ -132,9 +128,7 @@ mod tests {
         let (signing, _) = SigningIdentity::generate()?;
         let actor = signing.actor_id()?;
         let store_id = StoreId::parse("store_testtoken11")?;
-        let epoch = EventId::parse(
-            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        )?;
+        let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let created_at = IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned());
         let (event, bytes) = build_signed_event(AppendEventInput {
             store_id: &store_id,
@@ -168,12 +162,8 @@ mod tests {
 
     #[test]
     fn observed_heads_deduplicates_sorted() -> VaultResult<()> {
-        let a = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )?;
-        let b = EventId::parse(
-            "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        )?;
+        let a = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let b = EventId::parse("sha256u:u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7s")?;
         let heads = ObservedHeads::parse(&[
             b.as_str().to_owned(),
             a.as_str().to_owned(),

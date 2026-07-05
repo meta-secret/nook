@@ -39,7 +39,9 @@ async function setSecurityConflict(page: Page, present: boolean) {
     vault.securityConflicts = enabled
       ? [
           {
-            eventsJson: JSON.stringify(['sha256:e2e-security-conflict']),
+            eventsJson: JSON.stringify([
+              'sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo',
+            ]),
             reasonsJson: JSON.stringify(['key epoch rotation']),
           },
         ]

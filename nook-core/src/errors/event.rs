@@ -4,10 +4,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum EventError {
-    #[error("event id must start with sha256: (got {raw:?})")]
+    #[error("event id must start with sha256u: (got {raw:?})")]
     EventIdMissingPrefix { raw: String },
 
-    #[error("event id digest must be 64 hex chars (got {hex:?})")]
+    #[error("event id digest must be 43 base64url chars (got {hex:?})")]
     EventIdInvalidDigest { hex: String },
 
     #[error("failed to serialize JSON")]

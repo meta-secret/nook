@@ -154,7 +154,9 @@ test.describe('local folder backup provider', () => {
           )
           return records.filter(
             (record) =>
-              /^nook-log\/v1\/events\/[a-f0-9]{64}\.yaml$/.test(record.path) &&
+              /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(
+                record.path,
+              ) &&
               record.content.includes('schema_version:') &&
               record.content.includes('operations:'),
           ).length

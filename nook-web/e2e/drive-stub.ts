@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 
 const DEFAULT_FILE_NAME = 'nook-events'
+const EVENT_DIGEST_PATTERN = '[A-Za-z0-9_-]{43}'
 
 /** In-memory Google Drive appDataFolder stub (Drive v3 REST). */
 export function createLocalE2eGoogleDriveVaultStub(
@@ -40,9 +41,11 @@ export function createLocalE2eGoogleDriveVaultStub(
     body: string,
   ): { digest: string; content: string } | null {
     const eventId = body.match(
-      /"event_id"\s*:\s*"sha256:([a-fA-F0-9]{64})"/,
+      new RegExp(`"event_id"\\s*:\\s*"sha256u:(${EVENT_DIGEST_PATTERN})"`),
     )?.[1]
-    const nameDigest = body.match(/"name"\s*:\s*"([a-fA-F0-9]{64})\.yaml"/)?.[1]
+    const nameDigest = body.match(
+      new RegExp(`"name"\\s*:\\s*"(${EVENT_DIGEST_PATTERN})\\.yaml"`),
+    )?.[1]
     const digest = eventId ?? nameDigest
     if (!digest) return null
     const markers = [
@@ -57,7 +60,7 @@ export function createLocalE2eGoogleDriveVaultStub(
     const end = body.indexOf('\r\n--nook_event_boundary--', contentStart)
     const content =
       end === -1 ? body.slice(contentStart) : body.slice(contentStart, end)
-    return { digest: digest.toLowerCase(), content }
+    return { digest, content }
   }
 
   return {
@@ -113,14 +116,14 @@ export function createLocalE2eGoogleDriveVaultStub(
         ) {
           const decoded = decodeURIComponent(fullUrl)
           const eventDigest = decoded.match(
-            /name\s*=\s*'([a-fA-F0-9]{64})\.yaml'/,
+            new RegExp(`name\\s*=\\s*'(${EVENT_DIGEST_PATTERN})\\.yaml'`),
           )?.[1]
           if (decoded.includes("name contains '.yaml'") || eventDigest) {
             await route.fulfill({
               status: 200,
               contentType: 'application/json',
               body: JSON.stringify({
-                files: eventListEntries(eventDigest?.toLowerCase()),
+                files: eventListEntries(eventDigest),
               }),
             })
             return

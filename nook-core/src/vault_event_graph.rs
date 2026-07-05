@@ -419,8 +419,7 @@ mod tests {
     }
 
     fn epoch() -> EventId {
-        EventId::parse("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            .unwrap()
+        EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap()
     }
 
     fn genesis_source_hash() -> Sha256Hex {

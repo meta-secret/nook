@@ -21,6 +21,14 @@ const ICLOUD_ENVIRONMENT: &str = match option_env!("NOOK_ICLOUD_ENVIRONMENT") {
 const ICLOUD_EVENT_RECORD_TYPE: &str = "NookVaultEvent";
 const ICLOUD_CONTENT_FIELD: &str = "content";
 const ICLOUD_EVENT_ID_FIELD: &str = "event_id";
+const SHA256_BASE64URL_LEN: usize = 43;
+
+fn is_sha256_base64url_digest(digest: &str) -> bool {
+    digest.len() == SHA256_BASE64URL_LEN
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
 
 #[derive(Deserialize)]
 struct ICloudFieldValue {
@@ -97,7 +105,7 @@ fn record_field(record: &ICloudRecord, field_name: &str) -> Option<String> {
 }
 
 fn icloud_event_record_name(event_id: &EventId) -> String {
-    format!("nook-event-{}", event_id.hex_digest())
+    format!("nook-event-{}", event_id.encoded_digest())
 }
 
 fn event_id_from_record(record: &ICloudRecord) -> Option<String> {
@@ -105,8 +113,8 @@ fn event_id_from_record(record: &ICloudRecord) -> Option<String> {
         record
             .record_name
             .strip_prefix("nook-event-")
-            .filter(|digest| digest.len() == 64)
-            .map(|digest| format!("sha256:{digest}"))
+            .filter(|digest| is_sha256_base64url_digest(digest))
+            .map(|digest| format!("sha256u:{digest}"))
     })
 }
 
