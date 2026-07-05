@@ -139,9 +139,14 @@ gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name
 
 ### 5.1. Address review comments
 
-CodeRabbit feedback is part of the PR gate. Follow
+Actionable PR feedback is part of the PR gate, whether it comes from a human
+reviewer, CodeRabbit, or another automated reviewer. Follow
 [code-review-comments.md](../dynamic-skills/code-review-comments.md) for the full
 checklist.
+
+Agents must leave their own GitHub reply explaining the fix, validation, or
+no-change rationale before resolving any PR comment or review conversation. Do
+not resolve comments silently.
 
 Inspect both CodeRabbit surfaces:
 
@@ -159,11 +164,11 @@ items too.
 Use the GitHub review-thread GraphQL query from the agent's CodeRabbit workflow
 to inspect unresolved inline conversations.
 
-For each active, non-outdated CodeRabbit item:
+For each active, non-outdated PR review item:
 
 1. Build a checklist item from the thread or summary item, including the
-   file/line when available, finding, and CodeRabbit's AI-agent prompt when
-   present.
+   file/line when available, finding, and any reviewer-provided AI-agent prompt
+   when present.
 2. Verify the finding against current code before editing.
 3. Make the minimal correct fix, or document why the finding no longer applies.
 4. Validate locally with the smallest relevant check, then broader checks when
@@ -171,12 +176,12 @@ For each active, non-outdated CodeRabbit item:
 5. Push the fix.
 6. Leave a short GitHub reply that states what changed, what validation ran, or
    why no code change was needed. Reply on the review thread when one exists;
-   otherwise reply on the PR timeline and reference the CodeRabbit item.
+   otherwise reply on the PR timeline and reference the review item.
 7. Resolve the GitHub conversation only after the reply is posted, and only when
    the item has a resolvable review thread.
 
-Do not silently resolve review conversations or ignore actionable CodeRabbit
-summary comments. The PR history must show how each item was handled.
+Do not silently resolve review conversations or ignore actionable summary
+comments. The PR history must show how each item was handled.
 
 ### 6. Fix loop on failure
 

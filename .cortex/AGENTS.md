@@ -71,13 +71,12 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   and `/app-logs` are available for local repro) before changing code.
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 
-### Code review comments
-* When a PR has CodeRabbit feedback, inspect both inline review threads and PR timeline/summary comments.
-  CodeRabbit can post actionable items outside normal code review threads, including outside-diff-range
-  and nitpick sections. Treat every active, non-outdated actionable item as required work. Build a checklist,
-  verify each finding against current code, use CodeRabbit's provided AI-agent prompt as review context,
-  make the minimal correct fix or document why the finding is no longer valid, validate locally, push the
-  fix, leave a short GitHub reply, and resolve the GitHub thread only when a resolvable thread exists. See
+### PR review comments
+* When a PR has actionable review feedback from a human, CodeRabbit, or another automated reviewer, treat
+  every active, non-outdated item as required work. An agent must leave its own GitHub reply explaining the
+  fix, validation, or no-change rationale before resolving any PR comment or review conversation. CodeRabbit
+  also posts actionable items outside normal code review threads, including PR timeline/summary comments,
+  outside-diff-range sections, and nitpicks; inspect those surfaces too. See
   [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality
