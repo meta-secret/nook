@@ -6,16 +6,12 @@ import {
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  seedExtraOauthFileProviders,
   seedOauthFileSyncProvidersWhileUnlocked,
-  stubGoogleDriveVaultForLocalE2e,
   triggerVaultSyncRefresh,
   UI_TIMEOUT_MS,
-  unlockVaultOnLogin,
   waitForLoadedSyncProviders,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
-import type { PendingSyncConflict } from '../src/lib/vault-sync'
 
 function parseStoreId(yaml: string): string {
   const match = yaml.match(/^store_id:\s*(\S+)/m)
@@ -25,25 +21,34 @@ function parseStoreId(yaml: string): string {
   return match[1]
 }
 
-async function stageVaultSyncConflict(
-  page: Page,
-  conflict: PendingSyncConflict,
-) {
-  await page.evaluate((payload) => {
+async function setSecurityConflict(page: Page, present: boolean) {
+  await page.evaluate((enabled) => {
     const vault = (
       window as Window & {
-        __nookVault?: { stageSyncConflict: (c: PendingSyncConflict) => void }
+        __nookVault?: {
+          securityConflicts: Array<{
+            eventsJson: string
+            reasonsJson: string
+          }>
+        }
       }
     ).__nookVault
     if (!vault) {
       throw new Error('__nookVault is not exposed (dev build required).')
     }
-    vault.stageSyncConflict(payload)
-  }, conflict)
+    vault.securityConflicts = enabled
+      ? [
+          {
+            eventsJson: JSON.stringify(['sha256:e2e-security-conflict']),
+            reasonsJson: JSON.stringify(['key epoch rotation']),
+          },
+        ]
+      : []
+  }, present)
 }
 
 test.describe('sync conflict resolution', () => {
-  test('blocks secret edits and resolves by keeping remote copy', async ({
+  test('blocks secret edits while an event-log security conflict is present', async ({
     page,
   }) => {
     await page.goto('/')
@@ -52,52 +57,20 @@ test.describe('sync conflict resolution', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    const localYaml = await readLocalVaultYamlFromIdb(page)
-    expect(localYaml.trim().length).toBeGreaterThan(0)
+    await setSecurityConflict(page, true)
 
-    await stubGoogleDriveVaultForLocalE2e(page, {
-      fileName: 'nook-e2e-conflict.yaml',
-      vaultYaml: localYaml,
-    })
-    await seedExtraOauthFileProviders(page, [
-      {
-        id: 'e2e-conflict-sync',
-        label: 'File (e2e)',
-        fileName: 'nook-e2e-conflict.yaml',
-        accessToken: 'ya29.e2e_file_sync_token',
-      },
-    ])
-
-    await stageVaultSyncConflict(page, {
-      providerId: 'e2e-conflict-sync',
-      providerLabel: 'File (e2e)',
-      localYaml,
-      remoteYaml: `${localYaml.trimEnd()}\n`,
-      localVersion: 1,
-      remoteVersion: 1,
-      mode: 'oauth-file',
-      pat: 'ya29.e2e_file_sync_token',
-      repo: 'nook-e2e-conflict.yaml',
-      remoteRevision: 'abc123',
-    })
-
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible()
-    await expect(page.getByTestId('vault-sync-conflict-banner')).toBeVisible()
+    await expect(page.getByText('Security conflict detected')).toBeVisible()
+    await expect(page.getByText('key epoch rotation')).toBeVisible()
     await expect(page.getByTestId('add-secret-btn')).toBeDisabled()
 
-    await page.getByTestId('sync-conflict-keep-remote-btn').click()
-    await expect(
-      page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await setSecurityConflict(page, false)
+    await expect(page.getByText('Security conflict detected')).toHaveCount(0)
     await expect(page.getByTestId('add-secret-btn')).toBeEnabled({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('app-success')).toContainText(
-      'Vault updated from File (e2e)',
-    )
   })
 
-  test('resolves store_id conflict when second vault uses the same drive file', async ({
+  test('ignores a stale legacy vault blob when connecting an event-log provider to a second vault', async ({
     page,
   }) => {
     const fileName = 'nook-e2e-shared-vault-file.yaml'
@@ -164,33 +137,13 @@ test.describe('sync conflict resolution', () => {
       },
     )
 
-    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(
-      page.getByTestId('sync-conflict-import-new-vault-btn'),
-    ).toBeVisible()
-
-    await page.getByTestId('sync-conflict-keep-local-btn').click()
     await expect(
       page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    ).not.toBeVisible({ timeout: UI_TIMEOUT_MS })
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    expect(parseStoreId(stub.getVaultYaml())).toEqual(storeB)
-
-    await page.getByTestId('vault-secrets-tab').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
-    await page.getByTestId('header-lock-vault-btn').click()
-    await authorizeDeviceProtection(page)
-    await unlockVaultOnLogin(page, { storeId: storeB })
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    expect(parseStoreId(stub.getVaultYaml())).toEqual(storeA)
     expect(parseStoreId(await readLocalVaultYamlFromIdb(page))).toEqual(storeB)
   })
 })
