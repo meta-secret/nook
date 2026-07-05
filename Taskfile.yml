@@ -71,4 +71,15 @@ tasks:
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
       VITE_BASE: '{{.VITE_BASE}}'
     cmds:
-      - '{{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-web'
+      # buildx bake can flake when parallel targets load the same Dockerfile (e.g. builder-deps +
+      # builder-debug both use nook-core/Dockerfile) — retry before failing CI on a transient parse error.
+      - >-
+        bash -c 'set -euo pipefail;
+        for attempt in 1 2 3; do
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-web; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task setup: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'
