@@ -15,7 +15,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 | Axis | Examples | Owned by |
 |------|----------|----------|
 | **App semver** | `nokey.sh` latest, `v1.nokey.sh` pinned rollback | CI / GitHub Pages |
-| **Projection `schema_version`** | `1` today in `nook-vault.yaml` cache | `nook-core` `vault_format.rs` |
+| **Projection `schema_version`** | `1` today in `nook-projection.yaml` cache | `nook-core` `vault_format.rs` |
 | **Event `schema_version`** | `2` on signed YAML event bodies | `nook-core` `vault_event.rs` |
 | **Password envelope `version`** | Crypto wrap inside `password_entries` | `password_envelope.rs` |
 
@@ -24,7 +24,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 | #52 goal | Status | How |
 |----------|--------|-----|
 | Explicit `schema_version` in vault YAML | **Done** | Top-level field on projection cache; missing → `1` |
-| Copy-on-upgrade, never destroy only copy | **Done (event path)** | `source_backup:{store_id}` in IndexedDB on first import; remote `nook-vault.yaml` no longer overwritten |
+| Copy-on-upgrade, never destroy only copy | **Done (event path)** | `source_backup:{store_id}` in IndexedDB on first import; remote projection artifacts are no longer overwritten |
 | Active-vault pointer (`nook-vault.meta.yaml`) | **Superseded** | Event-log heads + set union across providers |
 | Verification before cutover | **Done** | `verify_stored_vault_import` compares secret ids before append |
 | Lazy migration on connect | **Done** | `import_stored_vault_to_event_log` → `vault-imported` genesis event |
@@ -46,7 +46,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 6. Projection cache rewritten with schema_version: 1
 ```
 
-Remote `nook-vault.yaml` (if present) is **read-only** for import; writes go to
+Remote projection YAML (if present) is **read-only** for import; writes go to
 the provider's append-only event log (`nook-log/v1/events/...` on file-backed
 providers, `NookVaultEvent` records on iCloud) only.
 

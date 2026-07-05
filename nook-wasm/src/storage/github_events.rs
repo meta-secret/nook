@@ -4,16 +4,51 @@ use crate::NookError;
 use crate::storage::github::{fetch_github_vault, write_github_text_file};
 use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
 use nook_core::EventId;
+use serde::Deserialize;
 
 const EVENT_LOG_ROOT: &str = "nook-log/v1/events";
+
+#[derive(Deserialize)]
+struct GitHubRepoResponse {
+    default_branch: String,
+}
+
+#[derive(Deserialize)]
+struct GitTreeResponse {
+    tree: Vec<GitTreeEntry>,
+    truncated: bool,
+}
+
+#[derive(Deserialize)]
+struct GitTreeEntry {
+    path: String,
+    #[serde(rename = "type")]
+    entry_type: String,
+}
+
+fn event_id_from_tree_path(path: &str) -> Option<String> {
+    let name = path
+        .strip_prefix(&format!("{EVENT_LOG_ROOT}/"))
+        .filter(|relative| !relative.contains('/'))?;
+    if let Some(extension) = std::path::Path::new(name).extension()
+        && extension.eq_ignore_ascii_case("yaml")
+        && let Some(stem) = std::path::Path::new(name).file_stem()
+        && let Some(digest) = stem.to_str()
+        && digest.len() == 64
+        && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Some(format!("sha256:{digest}"));
+    }
+    None
+}
 
 pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<String>, NookError> {
     let pat = pat.trim();
     let client = reqwest::Client::new();
     let mut event_ids = Vec::new();
-    let url = format!("https://api.github.com/repos/{repo}/contents/{EVENT_LOG_ROOT}");
-    let response = client
-        .get(&url)
+
+    let repo_response = client
+        .get(format!("https://api.github.com/repos/{repo}"))
         .header("Authorization", format!("Bearer {pat}"))
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
@@ -21,36 +56,57 @@ pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<S
         .send()
         .await?;
 
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
+    if repo_response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(Vec::new());
     }
-    if !response.status().is_success() {
+    if !repo_response.status().is_success() {
         return Err(NookError::GitHub(format!(
-            "Failed to list GitHub path {EVENT_LOG_ROOT}: {}",
-            response.status()
+            "Failed to read GitHub repository {repo}: {}",
+            repo_response.status()
         )));
     }
 
-    let entries: Vec<serde_json::Value> = response
+    let repo_info: GitHubRepoResponse = repo_response
         .json()
         .await
         .map_err(|e| NookError::Serialization(e.to_string()))?;
+    let branch = urlencoding::encode(&repo_info.default_branch);
+    let tree_url = format!("https://api.github.com/repos/{repo}/git/trees/{branch}?recursive=1");
+    let tree_response = client
+        .get(&tree_url)
+        .header("Authorization", format!("Bearer {pat}"))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "nook-wasm")
+        .send()
+        .await?;
 
-    for entry in entries {
-        let Some(name) = entry.get("name").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        if entry.get("type").and_then(|v| v.as_str()) != Some("file") {
+    if tree_response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(Vec::new());
+    }
+    if !tree_response.status().is_success() {
+        return Err(NookError::GitHub(format!(
+            "Failed to list GitHub tree for {EVENT_LOG_ROOT}: {}",
+            tree_response.status()
+        )));
+    }
+
+    let tree: GitTreeResponse = tree_response
+        .json()
+        .await
+        .map_err(|e| NookError::Serialization(e.to_string()))?;
+    if tree.truncated {
+        return Err(NookError::GitHub(
+            "GitHub event tree listing was truncated; sync would be incomplete.".to_owned(),
+        ));
+    }
+
+    for entry in tree.tree {
+        if entry.entry_type != "blob" {
             continue;
         }
-        if let Some(extension) = std::path::Path::new(name).extension()
-            && extension.eq_ignore_ascii_case("yaml")
-            && let Some(stem) = std::path::Path::new(name).file_stem()
-            && let Some(digest) = stem.to_str()
-            && digest.len() == 64
-            && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
-            event_ids.push(format!("sha256:{digest}"));
+        if let Some(event_id) = event_id_from_tree_path(&entry.path) {
+            event_ids.push(event_id);
         }
     }
     Ok(event_ids)
@@ -124,4 +180,32 @@ pub(crate) async fn put_github_event_if_absent(
     Err(NookError::GitHub(
         "GitHub event upload failed after retries.".to_owned(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tree_path_filter_accepts_only_flat_event_yaml_files() {
+        let digest = "a".repeat(64);
+        assert_eq!(
+            event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.yaml")),
+            Some(format!("sha256:{digest}"))
+        );
+        assert_eq!(
+            event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/aa/{digest}.yaml")),
+            None
+        );
+        assert_eq!(
+            event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.json")),
+            None
+        );
+        assert_eq!(
+            event_id_from_tree_path(
+                "other/path/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.yaml"
+            ),
+            None
+        );
+    }
 }

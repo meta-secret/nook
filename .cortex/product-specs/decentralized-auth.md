@@ -1,6 +1,6 @@
 # Multi-Device Decentralized Auth Specification
 
-Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries. **Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata. The immutable event log (`nook-log/v1/events/`) is the provider source of truth; `nook-vault.yaml` is only the local projection/import format.
+Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries. **Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata. The immutable event log (`nook-log/v1/events/`) is the provider source of truth; `nook-projection.yaml` is only the local projection/import format.
 
 **Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §4 (storage table), §3 (connect flow).
 

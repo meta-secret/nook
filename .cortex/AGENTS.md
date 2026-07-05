@@ -69,3 +69,9 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   (`nook-app-logs.json` is attached to every Playwright result; `fetchAppLogs`
   and `/app-logs` are available for local repro) before changing code.
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
+
+### Code review comments
+* When a PR has CodeRabbit review comments, treat every active, non-outdated thread as required work.
+  Build a checklist from the review threads, verify each finding against current code, use CodeRabbit's
+  provided AI-agent prompt as review context, make the minimal correct fix or document why the finding is
+  no longer valid, validate locally, and resolve the GitHub thread after the fix is pushed.

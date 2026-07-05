@@ -3086,7 +3086,28 @@ export function createLocalE2eGithubVaultStub(initialYaml = '') {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ id: 1, name: opts.repoName, private: true }),
+            body: JSON.stringify({
+              id: 1,
+              name: opts.repoName,
+              private: true,
+              default_branch: 'main',
+            }),
+          })
+          return
+        }
+        if (
+          url.startsWith(`https://api.github.com/repos/${fullRepo}/git/trees/`)
+        ) {
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              tree: Array.from(eventFiles.keys()).map((path) => ({
+                path,
+                type: 'blob',
+              })),
+              truncated: false,
+            }),
           })
           return
         }

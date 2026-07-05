@@ -27,6 +27,10 @@ impl LocalEventStore {
         self.events.insert(event_id, storage_bytes);
     }
 
+    pub fn remove_event(&mut self, event_id: &EventId) {
+        self.events.remove(event_id);
+    }
+
     #[must_use]
     pub fn get_bytes(&self, event_id: &EventId) -> Option<&[u8]> {
         self.events.get(event_id).map(Vec::as_slice)
@@ -70,7 +74,6 @@ impl LocalEventStore {
             let event = parse_event_storage_bytes(bytes)?;
             let _ = graph.insert(event, store_id)?;
         }
-        graph.validate_authorizations()?;
         Ok(graph)
     }
 
@@ -87,7 +90,9 @@ impl LocalEventStore {
         }
         let mut graph = self.load_graph(store_id)?;
         let status = graph.insert(event.clone(), store_id)?;
-        self.put_event(event_id.clone(), bytes);
+        if !matches!(status, EventInsertStatus::Quarantined(_)) {
+            self.put_event(event_id.clone(), bytes);
+        }
         Ok((event_id, status))
     }
 }
@@ -113,7 +118,15 @@ pub fn union_remote_events(
         event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
         let mut candidate = local.clone();
         candidate.put_event(event_id.clone(), bytes.clone());
-        let _ = candidate.load_graph(store_id)?;
+        let graph = candidate.load_graph(store_id)?;
+        for quarantined_id in graph.quarantined().keys() {
+            candidate.remove_event(quarantined_id);
+        }
+        if graph.quarantined().contains_key(event_id) {
+            *local = candidate;
+            continue;
+        }
+        *local = candidate;
         local.put_event(event_id.clone(), bytes.clone());
         imported.push(event_id.clone());
     }
@@ -407,7 +420,7 @@ mod tests {
     }
 
     #[test]
-    fn union_rejects_unapproved_actor_event() -> VaultResult<()> {
+    fn union_skips_unapproved_actor_event() -> VaultResult<()> {
         let root_key = SigningKey::generate(&mut OsRng);
         let stranger_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&root_key)?;
@@ -419,13 +432,33 @@ mod tests {
 
         let mut local = LocalEventStore::new();
         union_remote_events(&mut local, &[(genesis_id, genesis_bytes)], STORE)?;
-        let err =
-            union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE).unwrap_err();
-        assert!(matches!(
-            err,
-            crate::VaultError::Event(crate::EventError::UnauthorizedActor { .. })
-        ));
+        let imported = union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE)?;
+        assert!(imported.is_empty());
+        assert!(local.load_graph(STORE)?.quarantined().is_empty());
         assert!(local.get_bytes(&child_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn union_removes_pending_event_that_becomes_unauthorized() -> VaultResult<()> {
+        let root_key = SigningKey::generate(&mut OsRng);
+        let stranger_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let child = signed_child(&stranger_key, genesis_id.clone(), "secret_pendingbad1")?;
+        let child_id = child.id()?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
+
+        let mut local = LocalEventStore::new();
+        let imported = union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE)?;
+        assert_eq!(imported, vec![child_id.clone()]);
+        assert!(local.get_bytes(&child_id).is_some());
+
+        union_remote_events(&mut local, &[(genesis_id.clone(), genesis_bytes)], STORE)?;
+        assert!(local.get_bytes(&genesis_id).is_some());
+        assert!(local.get_bytes(&child_id).is_none());
+        assert!(local.load_graph(STORE)?.quarantined().is_empty());
         Ok(())
     }
 

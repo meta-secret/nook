@@ -22,7 +22,7 @@ Previously each saved **storage provider** could point at a **separate vault fil
 ```mermaid
 flowchart TB
   subgraph vault["Vault (store_id)"]
-    V[nook-vault.yaml]
+    V[nook-projection.yaml]
   end
   subgraph local["Browser"]
     L[nook_db.encrypted_db — local cache]

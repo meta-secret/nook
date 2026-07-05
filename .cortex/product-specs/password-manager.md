@@ -85,7 +85,7 @@ The WASM session holds a UTF-8 JSONL string (`decrypted_jsonl`). Each line is on
 - **Scope:** In-memory only — never written to GitHub or IndexedDB as plaintext.
 
 ### B. Local Projection Layout (YAML)
-Path: browser-local `nook-vault.yaml` projection cache (IndexedDB `encrypted_db`).
+Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `encrypted_db`).
 
 ```yaml
 vault_version: 1

@@ -10,6 +10,8 @@ const STORE_VAULT: &str = "vault";
 const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
 const STORE_OUTBOX: &str = "outbox";
+const EVENT_LOG_V2_MIGRATION_KEY: &str = "event_log:v2_migrated";
+const EVENT_LOG_V2_MIGRATION_DONE: &str = "done";
 
 fn event_key(store_id: &str, event_id: &str) -> String {
     format!("event:{store_id}:{event_id}")
@@ -36,7 +38,7 @@ async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
 }
 
 async fn open_nook_db() -> Result<rexie::Rexie, NookError> {
-    rexie::Rexie::builder("nook_db")
+    let rexie = rexie::Rexie::builder("nook_db")
         .version(2)
         .add_object_store(rexie::ObjectStore::new(STORE_VAULT))
         .add_object_store(rexie::ObjectStore::new(STORE_EVENTS))
@@ -45,7 +47,113 @@ async fn open_nook_db() -> Result<rexie::Rexie, NookError> {
         .add_object_store(rexie::ObjectStore::new(STORE_OUTBOX))
         .build()
         .await
-        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))
+        .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))?;
+    migrate_legacy_event_log_state(&rexie).await?;
+    Ok(rexie)
+}
+
+fn legacy_event_log_target_store(key: &str) -> Option<&'static str> {
+    if key.starts_with("event_heads:")
+        || key.starts_with("event_epoch:")
+        || key.starts_with("source_backup:")
+    {
+        return Some(STORE_PROJECTIONS);
+    }
+    if key.starts_with("event_index:") || key.starts_with("event:") {
+        return Some(STORE_EVENTS);
+    }
+    if key.starts_with("outbox_index:") || key.starts_with("outbox:") {
+        return Some(STORE_OUTBOX);
+    }
+    None
+}
+
+async fn migrate_legacy_event_log_state(rexie: &rexie::Rexie) -> Result<(), NookError> {
+    let transaction = rexie
+        .transaction(
+            &[STORE_VAULT, STORE_EVENTS, STORE_PROJECTIONS, STORE_OUTBOX],
+            rexie::TransactionMode::ReadWrite,
+        )
+        .map_err(|e| NookError::IndexedDb(format!("Migration transaction error: {e:?}")))?;
+    let vault = transaction
+        .store(STORE_VAULT)
+        .map_err(|e| NookError::IndexedDb(format!("Migration vault store error: {e:?}")))?;
+    let marker_key = serde_wasm_bindgen::to_value(EVENT_LOG_V2_MIGRATION_KEY)
+        .map_err(|e| NookError::IndexedDb(format!("Migration key serialization error: {e:?}")))?;
+    if let Some(marker) = vault
+        .get(marker_key.clone())
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Migration marker read error: {e:?}")))?
+        && serde_wasm_bindgen::from_value::<String>(marker)
+            .ok()
+            .as_deref()
+            == Some(EVENT_LOG_V2_MIGRATION_DONE)
+    {
+        transaction.done().await.map_err(|e| {
+            NookError::IndexedDb(format!("Migration transaction done error: {e:?}"))
+        })?;
+        return Ok(());
+    }
+
+    let events = transaction
+        .store(STORE_EVENTS)
+        .map_err(|e| NookError::IndexedDb(format!("Migration events store error: {e:?}")))?;
+    let projections = transaction
+        .store(STORE_PROJECTIONS)
+        .map_err(|e| NookError::IndexedDb(format!("Migration projections store error: {e:?}")))?;
+    let outbox = transaction
+        .store(STORE_OUTBOX)
+        .map_err(|e| NookError::IndexedDb(format!("Migration outbox store error: {e:?}")))?;
+
+    for (raw_key, raw_value) in vault
+        .scan(None, None, None, None)
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Migration vault scan error: {e:?}")))?
+    {
+        let Ok(key) = serde_wasm_bindgen::from_value::<String>(raw_key) else {
+            continue;
+        };
+        let Some(target_store) = legacy_event_log_target_store(&key) else {
+            continue;
+        };
+        let Ok(value) = serde_wasm_bindgen::from_value::<String>(raw_value) else {
+            continue;
+        };
+        let target = match target_store {
+            STORE_EVENTS => &events,
+            STORE_PROJECTIONS => &projections,
+            STORE_OUTBOX => &outbox,
+            _ => continue,
+        };
+        let js_key = serde_wasm_bindgen::to_value(&key).map_err(|e| {
+            NookError::IndexedDb(format!("Migration key serialization error: {e:?}"))
+        })?;
+        if target
+            .get(js_key.clone())
+            .await
+            .map_err(|e| NookError::IndexedDb(format!("Migration target read error: {e:?}")))?
+            .is_none()
+        {
+            let js_value = serde_wasm_bindgen::to_value(&value).map_err(|e| {
+                NookError::IndexedDb(format!("Migration value serialization error: {e:?}"))
+            })?;
+            target.put(&js_value, Some(&js_key)).await.map_err(|e| {
+                NookError::IndexedDb(format!("Migration target write error: {e:?}"))
+            })?;
+        }
+    }
+
+    let marker_value = serde_wasm_bindgen::to_value(EVENT_LOG_V2_MIGRATION_DONE)
+        .map_err(|e| NookError::IndexedDb(format!("Migration value serialization error: {e:?}")))?;
+    vault
+        .put(&marker_value, Some(&marker_key))
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Migration marker write error: {e:?}")))?;
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Migration transaction done error: {e:?}")))?;
+    Ok(())
 }
 
 async fn store_get(store_name: &str, key: &str) -> Result<Option<String>, NookError> {
@@ -264,4 +372,44 @@ pub(crate) async fn remove_outbox_entry(
         store_put(STORE_OUTBOX, &index_key, &json).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_event_log_keys_route_to_v2_stores() {
+        assert_eq!(
+            legacy_event_log_target_store("event_heads:store_abc"),
+            Some(STORE_PROJECTIONS)
+        );
+        assert_eq!(
+            legacy_event_log_target_store("event_epoch:store_abc"),
+            Some(STORE_PROJECTIONS)
+        );
+        assert_eq!(
+            legacy_event_log_target_store("source_backup:store_abc"),
+            Some(STORE_PROJECTIONS)
+        );
+        assert_eq!(
+            legacy_event_log_target_store(
+                "event:store_abc:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            ),
+            Some(STORE_EVENTS)
+        );
+        assert_eq!(
+            legacy_event_log_target_store("event_index:store_abc"),
+            Some(STORE_EVENTS)
+        );
+        assert_eq!(
+            legacy_event_log_target_store("outbox:provider:sha256:abc"),
+            Some(STORE_OUTBOX)
+        );
+        assert_eq!(
+            legacy_event_log_target_store("outbox_index:provider"),
+            Some(STORE_OUTBOX)
+        );
+        assert_eq!(legacy_event_log_target_store("encrypted_db"), None);
+    }
 }

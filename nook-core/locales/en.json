@@ -436,6 +436,7 @@
     "sync_conflict_store_id_banner": "Different vault on {provider} — choose which copy to keep.",
     "sync_conflict_import_new_vault": "Import as new vault",
     "sync_conflict_imported_vault": "Imported vault from {provider}. Unlock it from the vault picker.",
+    "security_conflict_edits": "Security conflict detected. Sync from all devices before editing.",
     "sync_blocked_edits": "Resolve the sync conflict before changing secrets.",
     "sync_failed": "Sync failed for this provider.",
     "duplicate_sync_provider": "This sync provider is already connected with the same storage target.",

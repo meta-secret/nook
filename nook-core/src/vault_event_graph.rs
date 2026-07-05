@@ -1,6 +1,6 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
-use crate::errors::{EventError, VaultResult};
+use crate::errors::{EventError, VaultError, VaultResult};
 use crate::event_canonical::EventId;
 use crate::vault_event::{VaultEvent, VaultOperation};
 use crate::vault_ids::AuthKeyId;
@@ -95,13 +95,17 @@ impl EventGraph {
 
         if !missing_parents.is_empty() || !self.event_ancestors_present(&event) {
             self.events.insert(event_id, event);
+            self.quarantine_rejected_applicable_events()?;
             return Ok(EventInsertStatus::Pending(
                 EventPendingReason::MissingParents(missing_parents),
             ));
         }
 
-        self.validate_event_actor_authorized(&event)?;
-        self.events.insert(event_id, event);
+        self.events.insert(event_id.clone(), event);
+        self.quarantine_rejected_applicable_events()?;
+        if let Some(reason) = self.quarantined.get(&event_id) {
+            return Ok(EventInsertStatus::Quarantined(reason.clone()));
+        }
         Ok(EventInsertStatus::Applied)
     }
 
@@ -109,8 +113,11 @@ impl EventGraph {
     #[must_use]
     pub fn applicable_events(&self) -> Vec<&VaultEvent> {
         self.events
-            .values()
-            .filter(|event| self.event_ancestors_present(event))
+            .iter()
+            .filter(|(id, event)| {
+                !self.quarantined.contains_key(*id) && self.event_ancestors_present(event)
+            })
+            .map(|(_, event)| event)
             .collect()
     }
 
@@ -130,14 +137,17 @@ impl EventGraph {
     #[must_use]
     pub fn heads(&self) -> Vec<EventId> {
         let mut referenced = BTreeSet::new();
-        for event in self.events.values() {
+        for (id, event) in &self.events {
+            if self.quarantined.contains_key(id) {
+                continue;
+            }
             for parent in &event.body.parents {
                 referenced.insert(parent.clone());
             }
         }
         self.events
             .keys()
-            .filter(|id| !referenced.contains(*id))
+            .filter(|id| !self.quarantined.contains_key(*id) && !referenced.contains(*id))
             .cloned()
             .collect()
     }
@@ -250,6 +260,45 @@ impl EventGraph {
             actor_id: event.body.actor_id.as_str().to_owned(),
         }
         .into())
+    }
+
+    fn quarantine_rejected_applicable_events(&mut self) -> VaultResult<()> {
+        loop {
+            let mut changed = false;
+            let ids = self.events.keys().cloned().collect::<Vec<_>>();
+            for id in ids {
+                if self.quarantined.contains_key(&id) {
+                    continue;
+                }
+                let event = self.events.get(&id).expect("event id from map");
+                if !self.event_ancestors_present(event) {
+                    continue;
+                }
+                let reason = if event
+                    .body
+                    .parents
+                    .iter()
+                    .any(|parent| self.quarantined.contains_key(parent))
+                {
+                    Some("Ancestor event was rejected".to_owned())
+                } else {
+                    match self.validate_event_actor_authorized(event) {
+                        Ok(()) => None,
+                        Err(VaultError::Event(EventError::UnauthorizedActor { actor_id })) => Some(
+                            format!("Event actor {actor_id} was not authorized in causal history"),
+                        ),
+                        Err(err) => return Err(err),
+                    }
+                };
+                if let Some(reason) = reason {
+                    self.quarantined.insert(id, reason);
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Ok(());
+            }
+        }
     }
 
     fn event_ancestors_present(&self, event: &VaultEvent) -> bool {
@@ -495,6 +544,37 @@ mod tests {
     }
 
     #[test]
+    fn unauthorized_pending_event_is_quarantined_when_parent_arrives() -> VaultResult<()> {
+        let root_key = signing_key();
+        let stranger_key = signing_key();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+
+        let child = signed_child(
+            vec![genesis_id.clone()],
+            "secret_badpending1",
+            &stranger_key,
+        );
+        let child_id = child.id()?;
+
+        let mut graph = EventGraph::new();
+        assert!(matches!(
+            graph.insert(child, STORE_STR)?,
+            EventInsertStatus::Pending(_)
+        ));
+        assert_eq!(graph.pending_events().len(), 1);
+
+        assert_eq!(
+            graph.insert(genesis, STORE_STR)?,
+            EventInsertStatus::Applied
+        );
+        assert!(graph.pending_events().is_empty());
+        assert!(graph.quarantined().contains_key(&child_id));
+        assert_eq!(graph.topological_order()?, vec![genesis_id]);
+        Ok(())
+    }
+
+    #[test]
     fn duplicate_insert_returns_duplicate_status() -> VaultResult<()> {
         let key = signing_key();
         let store_str = STORE_STR;
@@ -590,11 +670,12 @@ mod tests {
         graph.insert(genesis, STORE_STR)?;
 
         let stranger_event = signed_child(vec![genesis_id], "secret_unauth0001", &stranger_key);
-        let err = graph.insert(stranger_event, STORE_STR).unwrap_err();
+        let stranger_id = stranger_event.id()?;
         assert!(matches!(
-            err,
-            crate::VaultError::Event(crate::EventError::UnauthorizedActor { .. })
+            graph.insert(stranger_event, STORE_STR)?,
+            EventInsertStatus::Quarantined(_)
         ));
+        assert!(graph.quarantined().contains_key(&stranger_id));
         Ok(())
     }
 
