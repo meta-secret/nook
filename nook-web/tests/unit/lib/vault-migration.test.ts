@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
+import initNookWasm from '$lib/nook-wasm/nook_wasm'
 import { normalizeAuthSnapshot } from '$lib/vault-migration'
 
 describe('normalizeAuthSnapshot', () => {
+  beforeAll(async () => {
+    await initNookWasm()
+  })
+
   it('handles missing IndexedDB value without throwing', () => {
     const result = normalizeAuthSnapshot(undefined)
     expect(result.snapshot).toEqual({ providers: [] })
