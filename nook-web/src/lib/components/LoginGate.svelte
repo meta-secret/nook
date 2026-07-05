@@ -218,7 +218,7 @@
                     ? 'GitHub'
                     : setupType === 'local-folder'
                       ? vault.t('provider_picker.local_folder')
-                    : vault.t('onboarding.local_storage'),
+                      : vault.t('onboarding.local_storage'),
               })}
             {:else if addProviderOpen}
               {vault.t('onboarding.add_provider')}

@@ -32,7 +32,6 @@ export function ensureLocalProviderRow(
 /** Ensure auth snapshots always keep a local provider row for this device. */
 export async function ensureLocalAuthProviderSnapshot(
   snapshot: AuthProvidersSnapshot,
-  _previousActiveProviderId: string | null = null,
 ): Promise<{ snapshot: AuthProvidersSnapshot; migrated: boolean }> {
   if (await hasLocalVault()) {
     return {

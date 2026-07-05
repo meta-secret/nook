@@ -129,7 +129,7 @@
                     ? vault.t('provider_picker.google_drive')
                     : setupType === 'local-folder'
                       ? vault.t('provider_picker.local_folder')
-                    : vault.t('auth_storage.this_device'),
+                      : vault.t('auth_storage.this_device'),
             })}
           {:else}
             {vault.t('settings.add_sync_provider')}

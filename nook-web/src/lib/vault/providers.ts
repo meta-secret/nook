@@ -260,7 +260,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
             ? driveFile
             : type === 'local-folder'
               ? localFolderSnapshot?.directoryName
-            : undefined,
+              : undefined,
         oauthPreset,
       ),
       githubPat: type === 'github' ? pat : undefined,

@@ -97,20 +97,20 @@ export function syncProviderTargetKey(
             provider.localFolder?.directoryName ?? null,
             provider.localFolder?.handleId ?? null,
           )
-      : provider.type === 'github'
-        ? NookSyncProviderTarget.github(
-            provider.githubRepo ?? null,
-            provider.githubPat ?? null,
-          )
-        : provider.oauthFile
-          ? NookSyncProviderTarget.oauthFile(
-              provider.oauthFile.preset,
-              provider.oauthFile.fileId ?? null,
-              provider.oauthFile.fileName ?? null,
-              provider.oauthFile.accountEmail ?? null,
-              provider.oauthFile.accessToken ?? null,
+        : provider.type === 'github'
+          ? NookSyncProviderTarget.github(
+              provider.githubRepo ?? null,
+              provider.githubPat ?? null,
             )
-          : NookSyncProviderTarget.missingOauthFileConfig()
+          : provider.oauthFile
+            ? NookSyncProviderTarget.oauthFile(
+                provider.oauthFile.preset,
+                provider.oauthFile.fileId ?? null,
+                provider.oauthFile.fileName ?? null,
+                provider.oauthFile.accountEmail ?? null,
+                provider.oauthFile.accessToken ?? null,
+              )
+            : NookSyncProviderTarget.missingOauthFileConfig()
   try {
     return syncProviderTargetKeyCore(target) ?? null
   } finally {
@@ -150,10 +150,7 @@ export async function loadAuthProvidersWithLocalRow(
 ): Promise<AuthProvidersSnapshot> {
   const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders
   const { snapshot: migratedSnapshot, migrated } =
-    await ensureLocalAuthProviderSnapshot(
-      loaded.snapshot,
-      loaded.legacyActiveProviderId,
-    )
+    await ensureLocalAuthProviderSnapshot(loaded.snapshot)
   if (
     migrated ||
     migratedSnapshot.providers.length !== loaded.snapshot.providers.length

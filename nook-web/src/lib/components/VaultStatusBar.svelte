@@ -94,9 +94,9 @@
               ? vault
                 ? vault.t('provider_picker.local_folder')
                 : 'Local backup'
-            : vault
-              ? vault.t('provider_picker.this_device')
-              : 'This device'),
+              : vault
+                ? vault.t('provider_picker.this_device')
+                : 'This device'),
   )
 
   const syncDetail = $derived.by(() => {
@@ -122,9 +122,9 @@
   const showRefresh = $derived(
     Boolean(
       onRefresh &&
-        (isAuthenticatedVault ||
-          storageMode === 'github' ||
-          storageMode === 'local-folder'),
+      (isAuthenticatedVault ||
+        storageMode === 'github' ||
+        storageMode === 'local-folder'),
     ),
   )
 </script>

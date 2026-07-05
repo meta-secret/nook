@@ -92,7 +92,9 @@ async function installLocalFolderPickerMock(page: Page) {
         for (const [name, dir] of this.directories.entries()) {
           records.push(...dir.snapshot(`${prefix}${name}/`))
         }
-        return records.sort((left, right) => left.path.localeCompare(right.path))
+        return records.sort((left, right) =>
+          left.path.localeCompare(right.path),
+        )
       }
     }
 
@@ -137,25 +139,28 @@ test.describe('local folder backup provider', () => {
     await addSecret(page, key, 'folder-backup-value')
 
     await expect
-      .poll(async () => {
-        const records = await page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __nookE2eLocalFolderSnapshot?: () => Array<{
-                  path: string
-                  content: string
-                }>
-              }
-            ).__nookE2eLocalFolderSnapshot?.() ?? [],
-        )
-        return records.filter(
-          (record) =>
-            /^nook-log\/v1\/events\/[a-f0-9]{64}\.yaml$/.test(record.path) &&
-            record.content.includes('schema_version:') &&
-            record.content.includes('operations:'),
-        ).length
-      }, { timeout: 30_000 })
+      .poll(
+        async () => {
+          const records = await page.evaluate(
+            () =>
+              (
+                window as Window & {
+                  __nookE2eLocalFolderSnapshot?: () => Array<{
+                    path: string
+                    content: string
+                  }>
+                }
+              ).__nookE2eLocalFolderSnapshot?.() ?? [],
+          )
+          return records.filter(
+            (record) =>
+              /^nook-log\/v1\/events\/[a-f0-9]{64}\.yaml$/.test(record.path) &&
+              record.content.includes('schema_version:') &&
+              record.content.includes('operations:'),
+          ).length
+        },
+        { timeout: 30_000 },
+      )
       .toBeGreaterThan(0)
   })
 })

@@ -73,7 +73,8 @@ function openHandleDb(): Promise<IDBDatabase> {
       request.result.createObjectStore(STORE_NAME, { keyPath: 'id' })
     }
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('IDB open failed'))
+    request.onerror = () =>
+      reject(request.error ?? new Error('IDB open failed'))
   })
 }
 
@@ -116,10 +117,9 @@ async function loadDirectoryHandle(
   const memory = memoryHandles.get(handleId)
   if (memory) return memory
   try {
-    const row = await withHandleStore<{ handle?: LocalDirectoryHandle } | undefined>(
-      'readonly',
-      (store) => store.get(handleId),
-    )
+    const row = await withHandleStore<
+      { handle?: LocalDirectoryHandle } | undefined
+    >('readonly', (store) => store.get(handleId))
     return row?.handle ?? null
   } catch {
     return null
@@ -266,7 +266,9 @@ export async function readLocalFolderEventRecords(
       yaml: await file.text(),
     })
   }
-  return records.sort((left, right) => left.eventId.localeCompare(right.eventId))
+  return records.sort((left, right) =>
+    left.eventId.localeCompare(right.eventId),
+  )
 }
 
 export async function writeLocalFolderEventRecords(
@@ -278,16 +280,15 @@ export async function writeLocalFolderEventRecords(
   if (!dir) return
   for (const record of records) {
     const name = eventFileName(record)
-    let existing: LocalFileHandle | null = null
-    try {
-      existing = await dir.getFileHandle(name, { create: false })
-    } catch {
-      existing = null
-    }
+    const existing = await dir
+      .getFileHandle(name, { create: false })
+      .catch(() => null)
     if (existing) {
       const current = await (await existing.getFile()).text()
       if (current !== record.yaml) {
-        throw new Error(`Backup event ${record.eventId} already exists with different content.`)
+        throw new Error(
+          `Backup event ${record.eventId} already exists with different content.`,
+        )
       }
       continue
     }

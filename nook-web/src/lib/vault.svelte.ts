@@ -45,11 +45,9 @@ import type { LocalVaultEntry } from '$lib/local-vault'
 import { createLogger } from '$lib/log'
 import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import {
-  readLocalVaultBlob,
   readVaultVersionFromBlob,
   resolveVaultSyncIntervalMs,
   vaultBlobContentHash,
-  writeLocalVaultBlob,
   type PendingSyncConflict,
 } from '$lib/vault-sync'
 import {
@@ -357,7 +355,7 @@ export class VaultState {
     providerId?: string
     quiet?: boolean
   }): Promise<'ok' | 'conflict' | 'skip'> {
-    const _options = options
+    void options
     return this.stagedRemoteStorageArgs() ? 'ok' : 'skip'
   }
 

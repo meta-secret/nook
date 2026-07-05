@@ -173,7 +173,9 @@ function eventSecretToStored(
   }
 }
 
-function passwordEventEnvelope(envelope?: PasswordEnvelopeYaml): PasswordEnvelopeYaml {
+function passwordEventEnvelope(
+  envelope?: PasswordEnvelopeYaml,
+): PasswordEnvelopeYaml {
   return envelope ?? {}
 }
 
