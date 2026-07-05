@@ -13,9 +13,10 @@ Agents sometimes inspect only inline review threads and miss PR timeline/summary
 comments, including CodeRabbit outside-diff-range comments, nitpicks, and
 collapsed "actionable comments posted" sections. Agents also sometimes fix a PR
 comment in code and resolve the conversation without leaving their own reply, or
-resolve stale-looking comments without documenting why they no longer apply. That
-hides review reasoning from the PR timeline and makes later agents re-discover
-the same context.
+resolve stale-looking comments without documenting why they no longer apply.
+Agents may also mistake CodeRabbit's automatic "addressed in commit" marker for
+their own required reply. That hides review reasoning from the PR timeline and
+makes later agents re-discover the same context.
 
 ## Preferred Pattern
 
@@ -26,7 +27,9 @@ as review context, make the minimal correct fix or write down why no change is
 needed, validate locally, push the result, and leave a concise GitHub reply. If
 the item has a resolvable review thread, resolve it only after the reply is
 posted. If the item appears only in a PR timeline/summary comment, reply on the
-PR timeline and reference the item.
+PR timeline and reference the item, URL, or CodeRabbit `cr-comment` id.
+CodeRabbit's automatic status text is useful context, but it does not satisfy the
+agent-reply requirement.
 
 ## Scope
 
@@ -60,6 +63,10 @@ Does not apply to:
 - After: inspect CodeRabbit issue comments too, add each actionable summary item
   to the checklist, fix or explain it, then reply on the PR timeline if no
   review thread exists.
+- Before: rely on CodeRabbit's appended "addressed in commit" marker and resolve
+  the thread without saying anything.
+- After: leave an agent reply with the addressing commit and validation, then
+  resolve the thread.
 
 ## Application Checklist
 
@@ -77,7 +84,9 @@ Does not apply to:
 - [ ] Push the fix or rationale commit when code/docs changed.
 - [ ] Leave a GitHub reply explaining the fix, validation, or no-change
       rationale: on the review thread when one exists, otherwise on the PR
-      timeline referencing the CodeRabbit item.
+      timeline referencing the review item, URL, or CodeRabbit `cr-comment` id.
+- [ ] For CodeRabbit review summaries that do not create resolvable threads,
+      leave a PR timeline audit comment listing the reviewed items and outcomes.
 - [ ] Resolve the GitHub conversation only after the agent's reply is visible
       when the item has a resolvable thread.
 - [ ] Re-query unresolved review threads and CodeRabbit timeline comments before

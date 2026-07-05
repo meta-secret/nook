@@ -21,4 +21,7 @@ context, make the minimal correct fix or document why no code change is needed,
 validate locally, push any change, leave a concise GitHub reply on the review
 thread or PR timeline, then resolve the conversation only when a resolvable
 thread exists and the agent's reply is visible. Do not silently resolve review
-conversations or ignore actionable summary comments.
+conversations or ignore actionable summary comments. CodeRabbit's automatic
+"addressed in commit" marker does not count as the agent's own reply; for
+unthreaded CodeRabbit review summaries, leave a PR timeline audit comment with
+the reviewed item outcomes.

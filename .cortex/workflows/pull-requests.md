@@ -146,7 +146,8 @@ checklist.
 
 Agents must leave their own GitHub reply explaining the fix, validation, or
 no-change rationale before resolving any PR comment or review conversation. Do
-not resolve comments silently.
+not resolve comments silently. CodeRabbit's automatic "addressed in commit ..."
+text does not count as the agent's reply.
 
 Inspect both CodeRabbit surfaces:
 
@@ -176,12 +177,16 @@ For each active, non-outdated PR review item:
 5. Push the fix.
 6. Leave a short GitHub reply that states what changed, what validation ran, or
    why no code change was needed. Reply on the review thread when one exists;
-   otherwise reply on the PR timeline and reference the review item.
+   otherwise reply on the PR timeline and reference the review item, URL, or
+   CodeRabbit `cr-comment` id.
 7. Resolve the GitHub conversation only after the reply is posted, and only when
    the item has a resolvable review thread.
 
 Do not silently resolve review conversations or ignore actionable summary
 comments. The PR history must show how each item was handled.
+For CodeRabbit review summaries without resolvable threads, leave a PR timeline
+comment that lists the summary items reviewed and their outcome before final
+handoff.
 
 ### 6. Fix loop on failure
 
