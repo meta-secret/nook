@@ -137,6 +137,28 @@ gh pr checks <number> --watch          # blocks until done
 gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
 ```
 
+### 5.1. Address review comments
+
+CodeRabbit review threads are part of the PR gate. Follow
+[code-review-comments.md](../dynamic-skills/code-review-comments.md) for the
+full checklist.
+
+For each active, non-outdated CodeRabbit thread:
+
+1. Build a checklist item from the thread, including the file/line, finding,
+   and CodeRabbit's AI-agent prompt when present.
+2. Verify the finding against current code before editing.
+3. Make the minimal correct fix, or document why the finding no longer applies.
+4. Validate locally with the smallest relevant check, then broader checks when
+   the touched surface warrants it.
+5. Push the fix.
+6. Leave a short GitHub reply on that review thread that states what changed,
+   what validation ran, or why no code change was needed.
+7. Resolve the GitHub conversation only after the reply is posted.
+
+Do not silently resolve review conversations. The PR history must show how each
+comment was handled.
+
 ### 6. Fix loop on failure
 
 Investigation order: **test output** → **static analysis** → **app logs** (most

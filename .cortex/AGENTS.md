@@ -74,4 +74,5 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * When a PR has CodeRabbit review comments, treat every active, non-outdated thread as required work.
   Build a checklist from the review threads, verify each finding against current code, use CodeRabbit's
   provided AI-agent prompt as review context, make the minimal correct fix or document why the finding is
-  no longer valid, validate locally, and resolve the GitHub thread after the fix is pushed.
+  no longer valid, validate locally, push the fix, leave a short GitHub reply on the thread, and only then
+  resolve the GitHub thread. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
