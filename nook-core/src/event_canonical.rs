@@ -65,7 +65,6 @@ impl EventId {
         Self(value)
     }
 
-    #[must_use]
     pub fn from_sha256_hex(hex_digest: &str) -> VaultResult<Self> {
         let bytes = hex::decode(hex_digest).map_err(EventError::from)?;
         let bytes: [u8; SHA256_BYTES_LEN] =
