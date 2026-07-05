@@ -60,7 +60,13 @@ COPY .config .config
 RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov compiles + runs the
 # nook-core tests with instrumentation and enforces the committed line floor via --fail-under-lines
-# (read from nook-core/coverage-floor.json). If coverage drops below the floor the build fails. This
-# also warms the coverage-instrumented target/, so any later `task rust:coverage` is a cache hit.
+# (read from nook-core/coverage-floor.json). If coverage drops below the floor the build fails. The
+# same run also bakes the coverage artifacts that PR CI copies out later; export must not rerun the
+# Rust tests.
 RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
-    && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only --fail-under-lines "$FLOOR"
+    && mkdir -p /opt/nook/coverage/nook-core \
+    && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only --fail-under-lines "$FLOOR" \
+    && cargo llvm-cov report --summary-only > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json
