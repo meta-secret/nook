@@ -46,6 +46,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Capture user-explained codebase lessons as reusable `.cortex/dynamic-skills/` skill cards and optional Cursor project skills.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
+* [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates, **testing pyramid** (Rust ~99% domain coverage), and release.
@@ -76,3 +77,10 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   provided AI-agent prompt as review context, make the minimal correct fix or document why the finding is
   no longer valid, validate locally, push the fix, leave a short GitHub reply on the thread, and only then
   resolve the GitHub thread. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
+
+### Deferred or out-of-scope functionality
+* If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of
+  scope for the current PR, the agent must not silently drop it. First inspect existing GitHub issues,
+  then update the existing aggregate issue or create one, and attach/create focused sub-issues for the
+  missing work. See [workflows/issues.md](workflows/issues.md) and
+  [dynamic-skills/issue-scope-management.md](dynamic-skills/issue-scope-management.md).

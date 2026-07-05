@@ -8,6 +8,7 @@ so related knowledge stays consolidated.
 |---|---|---|
 | [code-review-comments.md](code-review-comments.md) | Make CodeRabbit review handling auditable: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.cursor/skills/code-review-comments/SKILL.md`](../../.cursor/skills/code-review-comments/SKILL.md) |
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional Cursor project skills | [`.cursor/skills/dynamic-skill/SKILL.md`](../../.cursor/skills/dynamic-skill/SKILL.md) |
+| [issue-scope-management.md](issue-scope-management.md) | Manage deferred, risky, or too-large work through existing issues, aggregate parent issues, and focused sub-issues without disrupting other agents | [`.cursor/skills/issue-scope-management/SKILL.md`](../../.cursor/skills/issue-scope-management/SKILL.md) |
 | [rust-typescript-code-separation.md](rust-typescript-code-separation.md) | Keep app/domain data shapes in Rust and reserve TypeScript for UI presentation state and browser glue; model sum types as enums and treat `Option<T>` as a missing enum | |
 
 ## How To Add One

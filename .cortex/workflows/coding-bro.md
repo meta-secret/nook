@@ -51,6 +51,9 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 1. **Fetch repository** — Sync with remote before branching.
 2. **Branch from `origin/main`** — Never commit on `main`. Create a feature branch for the work.
 3. **Implement** — Make the requested change. Follow [rules.md](../rules.md) and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md).
+   If part of the requested functionality is too large, risky, blocked, or out
+   of scope, follow [issues.md](issues.md) before handoff: update or create the
+   aggregate GitHub issue and focused sub-issues for the missing work.
 4. **Local validation** — Run `task check` (or a scoped subset) and relevant e2e before push. Prefer local Docker (cached images) over remote CI for iteration. During debug, run specs one at a time with `E2E_SPEC=… task web:test:e2e:file`.
 5. **Push and open PR** — Commit, push, and open the PR **only when local checks pass** and the change is ready. Remote CI validates a clean environment — it is not the first test pass.
 6. **Monitor CI** — Watch remote checks until every required job finishes.
@@ -198,10 +201,14 @@ When [`main.yml`](../../.github/workflows/main.yml) or [`e2e-nightly.yml`](../..
   `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never push after remote failure without a green `task ci:pr` locally** (unless the failure was trivial fmt/lint and you verified with the matching subset).
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
+- **Never hide deferred scope** — if requested functionality is not fully
+  implemented because it is large, risky, blocked, or out of scope, manage it in
+  GitHub issues first. See [issues.md](issues.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §8](pull-requests.md#8-task-completion-report).
 
 ## Related docs
 
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
+- [issues.md](issues.md) — aggregate issue and sub-issue management for deferred scope
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)
