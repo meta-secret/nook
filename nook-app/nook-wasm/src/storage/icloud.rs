@@ -51,22 +51,9 @@ struct ICloudRecordsResponse {
     continuation_marker: Option<String>,
 }
 
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct ICloudUserResponse {
-    #[serde(rename = "userRecordName", default)]
-    user_record_name: Option<String>,
-}
-
 fn icloud_database_url(path: &str) -> String {
     format!(
         "https://api.apple-cloudkit.com/database/1/{ICLOUD_CONTAINER_ID}/{ICLOUD_ENVIRONMENT}/private/{path}"
-    )
-}
-
-fn icloud_user_url(path: &str) -> String {
-    format!(
-        "https://api.apple-cloudkit.com/user/1/{ICLOUD_CONTAINER_ID}/{ICLOUD_ENVIRONMENT}/{path}"
     )
 }
 
@@ -116,31 +103,6 @@ fn event_id_from_record(record: &ICloudRecord) -> Option<String> {
             .filter(|digest| is_sha256_base64url_digest(digest))
             .map(|digest| format!("sha256u:{digest}"))
     })
-}
-
-pub(crate) async fn verify_icloud_access(web_auth_token: &str) -> Result<(), NookError> {
-    let token = nook_core::validate_oauth_access_token(web_auth_token)?;
-    let client = reqwest::Client::new();
-    let mut request = client.get(icloud_user_url("users/current"));
-    for (name, value) in icloud_auth_query(token.as_ref()) {
-        request = request.query(&[(name, value)]);
-    }
-    let response = request.send().await?;
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-        return Err(NookError::ICloud(
-            "iCloud rejected the web auth token (401). Sign in again.".to_owned(),
-        ));
-    }
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(icloud_error(status, &body));
-    }
-    let _parsed: ICloudUserResponse = response
-        .json()
-        .await
-        .map_err(|e| NookError::Serialization(format!("Failed to parse CloudKit user: {e}")))?;
-    Ok(())
 }
 
 async fn lookup_vault_record(

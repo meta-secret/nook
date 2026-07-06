@@ -11,7 +11,6 @@ import {
 } from '$lib/google-oauth'
 import {
   ensureValidICloudOAuthFileConfig,
-  fetchICloudAccountEmail,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
   prepareICloudSignInControl,
@@ -134,7 +133,6 @@ async function applyICloudOAuthTokens(
   state: VaultState,
   tokens: ICloudOAuthTokens,
 ): Promise<void> {
-  const account = await fetchICloudAccountEmail()
   state.loginSetupType = 'oauth-file'
   if (!state.addProviderOpen) {
     state.storageMode = 'oauth-file'
@@ -148,7 +146,7 @@ async function applyICloudOAuthTokens(
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
       DEFAULT_DRIVE_BACKUP_NAME,
-    accountEmail: account,
+    accountEmail: tokens.accountName,
   })
   state.githubPat = ''
   state.githubRepo =

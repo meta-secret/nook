@@ -23,13 +23,14 @@ describe('icloud-oauth', () => {
     expect(
       oauthTokensToICloudConfig({
         accessToken: 'ck-web-auth-token',
+        accountName: 'Apple User',
       }),
     ).toEqual({
       preset: 'icloud',
       accessToken: 'ck-web-auth-token',
       fileId: undefined,
       fileName: undefined,
-      accountEmail: undefined,
+      accountEmail: 'Apple User',
       refreshToken: undefined,
       expiresAt: undefined,
     })
@@ -89,17 +90,45 @@ describe('icloud-oauth', () => {
 
       const pending = requestICloudWebAuthToken()
       await vi.waitFor(() => {
+        expect(window.CloudKit!.configure).toHaveBeenCalled()
         expect(whenUserSignsIn).toHaveBeenCalled()
       })
 
-      sessionStorage.setItem(
-        `nook.icloud.webAuthToken.${ICLOUD_CONTAINER_ID}`,
-        JSON.stringify('fresh-token'),
-      )
-      resolveSignIn({ lookupInfo: {} })
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'fresh-token',
+      })
+      resolveSignIn({
+        nameComponents: { givenName: 'Fresh', familyName: 'User' },
+      })
 
       await expect(pending).resolves.toEqual({
         accessToken: 'fresh-token',
+        accountName: 'Fresh User',
+      })
+    })
+
+    it('resolves from the CloudKit token store when the sign-in callback hangs', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 100 })
+      await vi.waitFor(() => {
+        expect(window.CloudKit!.configure).toHaveBeenCalled()
+        expect(whenUserSignsIn).toHaveBeenCalled()
+      })
+
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'store-token',
+      })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'store-token',
       })
     })
 
@@ -127,10 +156,10 @@ describe('icloud-oauth', () => {
       expect(setUpAuth).toHaveBeenCalledTimes(1)
       expect(whenUserSignsIn).toHaveBeenCalledOnce()
 
-      sessionStorage.setItem(
-        `nook.icloud.webAuthToken.${ICLOUD_CONTAINER_ID}`,
-        JSON.stringify('fresh-token'),
-      )
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'fresh-token',
+      })
       resolveSignIn({ lookupInfo: {} })
 
       await expect(pending).resolves.toEqual({

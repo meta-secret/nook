@@ -31,7 +31,6 @@ use crate::conversion::{pending_joins_to_vec, vault_members_to_vec};
 use crate::storage::{
     drive::verify_drive_access,
     github::{ensure_github_repo_exists, fetch_github_username},
-    icloud::verify_icloud_access,
     indexed_db::load_from_indexed_db,
 };
 use crate::types::records_to_vec;
@@ -502,8 +501,6 @@ impl NookVaultManager {
                 let (_known_revision, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
                 self.storage.remote_path = file_name.to_string();
-                let _ = self.status.tx.send("ICLOUD_VERIFY".to_owned());
-                verify_icloud_access(&self.storage.access_token).await?;
                 self.storage.remote_ref = file_name.to_string();
             }
         }
