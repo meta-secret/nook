@@ -29,8 +29,8 @@
     onReplaceSecret,
     onGeneratePassword,
     onCancel,
-    initialItem = null,
-    selectedType = $bindable(null as VaultItemType | null),
+    initialItem = undefined,
+    selectedType = $bindable<VaultItemType | undefined>(undefined),
   }: {
     vault: VaultState
     isSaving: boolean
@@ -52,11 +52,11 @@
       symbols: boolean,
     ) => string
     onCancel: () => void
-    initialItem?: NookSecretRecord | null
-    selectedType?: VaultItemType | null
+    initialItem?: NookSecretRecord | undefined
+    selectedType?: VaultItemType | undefined
   } = $props()
 
-  const isEditMode = $derived(initialItem !== null)
+  const isEditMode = $derived(initialItem !== undefined)
 
   let showPasswordOptions = $state(false)
   let showPasswordValue = $state(false)
@@ -152,7 +152,7 @@
   }
 
   function resetForm() {
-    selectedType = null
+    selectedType = undefined
     websiteUrl = ''
     username = ''
     password = ''
@@ -227,7 +227,7 @@
   )
 </script>
 
-{#if selectedType === null && !isEditMode}
+{#if selectedType === undefined && !isEditMode}
   <div class="space-y-5">
     <div class="space-y-1">
       <h3 class="text-base font-semibold text-foreground">
@@ -328,7 +328,7 @@
           <button
             type="button"
             class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            onclick={() => (selectedType = null)}
+            onclick={() => (selectedType = undefined)}
           >
             <ArrowLeft class="size-3.5" />
             {vault.t('add_secret.change_type')}

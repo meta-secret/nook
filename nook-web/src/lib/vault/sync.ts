@@ -64,9 +64,9 @@ export function startVaultSync(state: VaultState) {
 }
 
 export function stopVaultSync(state: VaultState) {
-  if (state.syncTimer !== null) {
+  if (state.syncTimer !== undefined) {
     clearInterval(state.syncTimer)
-    state.syncTimer = null
+    state.syncTimer = undefined
     log.debug('vault sync timer stopped')
   }
 }
@@ -264,11 +264,11 @@ export async function resolveSyncConflictImportRemote(
 
   state.isVerifying = true
   state.errorMsg = ''
-  let providerId: string | null
+  let providerId: string | undefined
   try {
     const importedStoreId = await importLocalVaultBlob(
       conflict.remoteYaml,
-      conflict.providerLabel ?? null,
+      conflict.providerLabel ?? undefined,
     )
     state.activeVaultStoreId = importedStoreId
     state.selectedLoginVaultStoreId = importedStoreId
@@ -294,7 +294,7 @@ export async function resolveSyncConflictImportRemote(
   } catch (e: unknown) {
     state.errorMsg =
       e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
-    providerId = null
+    providerId = undefined
   } finally {
     state.isVerifying = false
   }
@@ -444,7 +444,7 @@ export async function syncProviderById(
     await state.updateProviderSyncMetadata(
       providerId,
       await readLocalVaultBlob(),
-      null,
+      undefined,
     )
     log.debug('provider sync finished', { providerId, type: provider.type })
     return
@@ -459,7 +459,7 @@ export async function syncProviderById(
       await state.hydrateMultiDeviceState()
     }
     if (state.syncingProviderId === providerId) {
-      state.syncingProviderId = null
+      state.syncingProviderId = undefined
     }
   }
 }

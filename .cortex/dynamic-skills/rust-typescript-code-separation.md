@@ -153,7 +153,7 @@ pub struct NookEnrollmentProvider {
 Before: TypeScript computes provider identity or storage-mode rules.
 
 ```ts
-export function syncProviderTargetKey(provider: StorageProvider): string | null {
+export function syncProviderTargetKey(provider: StorageProvider): string | undefined {
   if (provider.type === 'github') {
     return `github:${provider.githubRepo?.toLowerCase()}:${provider.githubPat}`
   }
@@ -165,6 +165,10 @@ After: Rust owns provider rules (`StorageProviderType`, `OauthFilePreset`,
 `SyncProviderTarget`, labels, Drive refs, storage-mode mapping) and wasm exports
 thin helpers. TypeScript may keep the browser IndexedDB snapshot shape, but
 calls wasm for the app/domain decision.
+
+Authored TypeScript/Svelte must use `undefined`, not `null`, for absence. When a
+browser or generated wasm API returns `null`, normalize it at the boundary with
+`?? undefined` before it reaches app state.
 
 ### Model sum types as an enum-of-structs, wrap it for wasm
 

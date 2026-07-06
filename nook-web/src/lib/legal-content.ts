@@ -43,9 +43,11 @@ export const LOGS_PATH = '/logs'
 export { stripBasePath } from '$lib/routes'
 
 /** Resolve `/privacy` or `/terms` from the current location pathname. */
-export function getLegalPageFromPath(pathname: string): LegalPageId | null {
+export function getLegalPageFromPath(
+  pathname: string,
+): LegalPageId | undefined {
   const normalized = stripBasePath(pathname).replace(/\/$/, '') || '/'
-  return LEGAL_PATHS.get(normalized) ?? null
+  return LEGAL_PATHS.get(normalized) ?? undefined
 }
 
 export function legalPageForId(id: LegalPageId): LegalPage {

@@ -12,10 +12,10 @@
 
   let {
     vault,
-    vaultEntry = null as NookLocalVaultEntry | null,
+    vaultEntry = undefined as NookLocalVaultEntry | undefined,
     hasMultipleVaults = false,
     passwordEntries = [] as NookPasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(null as string | null),
+    selectedPasswordEntryId = $bindable(undefined as string | undefined),
     isVerifying,
     isInitializing,
     isUnlocking = false,
@@ -26,10 +26,10 @@
     onImportFromSync,
   }: {
     vault: VaultState
-    vaultEntry?: NookLocalVaultEntry | null
+    vaultEntry?: NookLocalVaultEntry | undefined
     hasMultipleVaults?: boolean
     passwordEntries?: NookPasswordEntrySummary[]
-    selectedPasswordEntryId?: string | null
+    selectedPasswordEntryId?: string | undefined
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean

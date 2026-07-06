@@ -10,15 +10,15 @@ describe('locale', () => {
   test('parseAppLocale accepts only supported values', () => {
     expect(parseAppLocale('en')).toBe('en')
     expect(parseAppLocale('ru')).toBe('ru')
-    expect(parseAppLocale('de')).toBeNull()
-    expect(parseAppLocale(null)).toBeNull()
+    expect(parseAppLocale('de')).toBeUndefined()
+    expect(parseAppLocale(undefined)).toBeUndefined()
   })
 
   test('resolveAppLocaleFromTag maps BCP 47 tags', () => {
     expect(resolveAppLocaleFromTag('ru-RU')).toBe('ru')
     expect(resolveAppLocaleFromTag('ru_BY')).toBe('ru')
     expect(resolveAppLocaleFromTag('en-GB')).toBe('en')
-    expect(resolveAppLocaleFromTag('de-DE')).toBeNull()
+    expect(resolveAppLocaleFromTag('de-DE')).toBeUndefined()
   })
 
   test('resolveAppLocaleFromTags respects preference order', () => {

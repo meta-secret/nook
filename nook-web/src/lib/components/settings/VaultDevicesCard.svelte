@@ -40,10 +40,10 @@
     onRevokeDevice: (authId: string) => void | Promise<void>
   } = $props()
 
-  let detailsAuthId = $state<string | null>(null)
-  let renameAuthId = $state<string | null>(null)
+  let detailsAuthId = $state<string | undefined>(undefined)
+  let renameAuthId = $state<string | undefined>(undefined)
   let renameLabel = $state('')
-  let revokeAuthId = $state<string | null>(null)
+  let revokeAuthId = $state<string | undefined>(undefined)
 
   const sortedMembers = $derived(
     [...vaultMembers].sort((a, b) => {
@@ -101,12 +101,12 @@
   function beginRename(member: VaultMember) {
     renameAuthId = member.authId
     renameLabel = member.label.trim()
-    revokeAuthId = null
+    revokeAuthId = undefined
   }
 
   async function saveRename(member: VaultMember) {
     await onRenameDevice(member.authId, renameLabel)
-    renameAuthId = null
+    renameAuthId = undefined
     renameLabel = ''
   }
 
@@ -312,7 +312,7 @@
                     disabled={isBusy}
                     aria-label={vault.t('devices_card.cancel_rename')}
                     onclick={() => {
-                      renameAuthId = null
+                      renameAuthId = undefined
                       renameLabel = ''
                     }}
                   >
@@ -341,7 +341,7 @@
                     aria-label={vault.t('devices_card.revoke_device')}
                     onclick={() => {
                       revokeAuthId = member.authId
-                      renameAuthId = null
+                      renameAuthId = undefined
                     }}
                   >
                     <ShieldOff class="size-3.5" />
@@ -357,7 +357,9 @@
                   data-testid="device-details-toggle"
                   onclick={() =>
                     (detailsAuthId =
-                      detailsAuthId === member.authId ? null : member.authId)}
+                      detailsAuthId === member.authId
+                        ? undefined
+                        : member.authId)}
                 >
                   <ChevronDown
                     class="size-3.5 transition-transform {detailsAuthId ===
@@ -390,7 +392,7 @@
                       class="h-8 border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive"
                       disabled={isBusy}
                       data-testid="device-revoke-cancel"
-                      onclick={() => (revokeAuthId = null)}
+                      onclick={() => (revokeAuthId = undefined)}
                     >
                       {vault.t('devices_card.cancel')}
                     </Button>

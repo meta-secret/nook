@@ -61,19 +61,19 @@ export function createVaultIdleSessionTracker(options: {
   onExpire: () => void
   onWarning?: () => void
 }): VaultIdleSessionTracker {
-  let expireTimer: ReturnType<typeof setTimeout> | null = null
-  let warningTimer: ReturnType<typeof setTimeout> | null = null
+  let expireTimer: ReturnType<typeof setTimeout> | undefined = undefined
+  let warningTimer: ReturnType<typeof setTimeout> | undefined = undefined
   let warningShown = false
   let started = false
 
   const clearTimers = () => {
-    if (expireTimer !== null) {
+    if (expireTimer !== undefined) {
       clearTimeout(expireTimer)
-      expireTimer = null
+      expireTimer = undefined
     }
-    if (warningTimer !== null) {
+    if (warningTimer !== undefined) {
       clearTimeout(warningTimer)
-      warningTimer = null
+      warningTimer = undefined
     }
   }
 
@@ -82,7 +82,7 @@ export function createVaultIdleSessionTracker(options: {
     warningShown = false
 
     expireTimer = setTimeout(() => {
-      expireTimer = null
+      expireTimer = undefined
       options.onExpire()
     }, options.timeoutMs)
 
@@ -93,7 +93,7 @@ export function createVaultIdleSessionTracker(options: {
     ) {
       const warningDelay = options.timeoutMs - options.warningMs
       warningTimer = setTimeout(() => {
-        warningTimer = null
+        warningTimer = undefined
         if (warningShown) return
         warningShown = true
         options.onWarning?.()

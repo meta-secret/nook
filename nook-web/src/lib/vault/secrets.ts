@@ -49,7 +49,7 @@ export async function loadDb(state: VaultState) {
     }
 
     let accessStatus = await state.assessVaultConnectStatus()
-    let connectArgsOverride: [string, string, string] | null = null
+    let connectArgsOverride: [string, string, string] | undefined = undefined
     log.debug('loadDb assess', {
       accessStatus,
       localVaultPresent: state.localVaultPresent,

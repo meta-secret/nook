@@ -39,7 +39,7 @@ function base64Url(bytes: Uint8Array): string {
 function prfOutput(
   credential: CredentialWithPrf,
   requireEnabled = false,
-): Uint8Array | null {
+): Uint8Array | undefined {
   const prf = credential.getClientExtensionResults().prf
   if (requireEnabled && prf?.enabled !== true) {
     throw new Error(
@@ -47,7 +47,7 @@ function prfOutput(
     )
   }
   const first = prf?.results?.first
-  if (!first) return null
+  if (!first) return undefined
   const bytes = ArrayBuffer.isView(first)
     ? new Uint8Array(first.buffer, first.byteOffset, first.byteLength)
     : new Uint8Array(first)
@@ -77,7 +77,7 @@ async function evaluatePrf(
         },
       },
     },
-  } as CredentialRequestOptions)) as CredentialWithPrf | null
+  } as CredentialRequestOptions)) as CredentialWithPrf | undefined
 
   if (!credential) throw new Error('Passkey authorization was cancelled.')
   const output = prfOutput(credential)
@@ -98,7 +98,7 @@ export async function setupDeviceProtection(
   const setup = await manager.beginDeviceProtection()
   const userHandle = new Uint8Array(setup.userHandle)
   const input = new Uint8Array(setup.prfInput)
-  let output: Uint8Array | null = null
+  let output: Uint8Array | undefined = undefined
   try {
     const credential = (await navigator.credentials.create({
       publicKey: {
@@ -119,7 +119,7 @@ export async function setupDeviceProtection(
           prf: { eval: { first: input } },
         },
       },
-    } as CredentialCreationOptions)) as CredentialWithPrf | null
+    } as CredentialCreationOptions)) as CredentialWithPrf | undefined
 
     if (!credential) throw new Error('Passkey creation was cancelled.')
     output = prfOutput(credential, true)
@@ -147,7 +147,7 @@ export async function unlockDeviceProtection(
   const options = await manager.passkeyUnlockOptions()
   const credentialId = new Uint8Array(options.credentialId)
   const input = new Uint8Array(options.prfInput)
-  let output: Uint8Array | null = null
+  let output: Uint8Array | undefined = undefined
   try {
     output = await evaluatePrf(credentialId, input)
     await manager.unlockDeviceIdentity(output)

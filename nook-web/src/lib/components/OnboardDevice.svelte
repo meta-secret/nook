@@ -44,7 +44,7 @@
     isVerifying,
     isInitializing,
     addProviderOpen = false,
-    setupType = $bindable(null as StorageProviderType | null),
+    setupType = $bindable(undefined as StorageProviderType | undefined),
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     onIssueCode,
@@ -65,7 +65,7 @@
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | null
+    setupType?: StorageProviderType | undefined
     githubPat: string
     githubRepo: string
     onIssueCode: (
@@ -87,11 +87,11 @@
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const hasSyncProviders = $derived(syncProviders.length > 0)
-  const showSetup = $derived(setupType !== null)
+  const showSetup = $derived(setupType !== undefined)
   const addingProvider = $derived(addProviderOpen || showSetup)
 
-  let providerId = $state<string | null>(null)
-  let passwordEntryId = $state<string | null>(null)
+  let providerId = $state<string | undefined>(undefined)
+  let passwordEntryId = $state<string | undefined>(undefined)
   let passwordInput = $state('')
   let localError = $state('')
   let isGenerating = $state(false)
@@ -107,7 +107,7 @@
 
   const effectiveProviderId = $derived.by(() => {
     if (
-      providerId !== null &&
+      providerId !== undefined &&
       syncProviders.some((provider) => provider.id === providerId)
     ) {
       return providerId
@@ -116,7 +116,7 @@
   })
   const effectivePasswordEntryId = $derived.by(() => {
     if (
-      passwordEntryId !== null &&
+      passwordEntryId !== undefined &&
       passwordEntries.some((entry) => entry.id === passwordEntryId)
     ) {
       return passwordEntryId
@@ -125,13 +125,13 @@
   })
   const selectedProvider = $derived(
     syncProviders.find((provider) => provider.id === effectiveProviderId) ??
-      null,
+      undefined,
   )
   const selectedPassword = $derived(
     passwordEntries.find((entry) => entry.id === effectivePasswordEntryId) ??
-      null,
+      undefined,
   )
-  const hasPasswordSelection = $derived(selectedPassword !== null)
+  const hasPasswordSelection = $derived(selectedPassword !== undefined)
   const wizardReady = $derived(hasPasswordSelection && hasSyncProviders)
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',

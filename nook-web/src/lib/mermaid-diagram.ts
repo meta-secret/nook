@@ -2,7 +2,7 @@
 
 export type MermaidTheme = 'light' | 'dark'
 
-let mermaidModule: typeof import('mermaid') | null = null
+let mermaidModule: typeof import('mermaid') | undefined = undefined
 
 async function loadMermaid() {
   if (!mermaidModule) {

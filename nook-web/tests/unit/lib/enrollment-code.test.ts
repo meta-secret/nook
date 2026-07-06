@@ -95,6 +95,6 @@ describe('enrollment payloads', () => {
     await expect(decryptEnrollmentPayload(malformed, 'pw')).rejects.toThrow(
       'Invalid enrollment code.',
     )
-    expect(peekEnrollmentEntryId(malformed)).toBeNull()
+    expect(peekEnrollmentEntryId(malformed)).toBeUndefined()
   })
 })

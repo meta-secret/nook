@@ -14,7 +14,7 @@
     vault,
     storageMode = 'local' as StorageProviderType,
     githubRepo = '',
-    lastSyncedAt = null as Date | null,
+    lastSyncedAt = undefined as Date | undefined,
     isSyncing = false,
     successMsg = '',
     errorMsg = '',
@@ -32,7 +32,7 @@
     vault?: VaultState
     storageMode?: StorageProviderType
     githubRepo?: string
-    lastSyncedAt?: Date | null
+    lastSyncedAt?: Date | undefined
     isSyncing?: boolean
     successMsg?: string
     errorMsg?: string
@@ -57,7 +57,7 @@
     return () => clearInterval(timer)
   })
 
-  function formatLastSync(at: Date | null): string {
+  function formatLastSync(at: Date | undefined): string {
     if (!at) return vault ? vault.t('status_bar.not_yet') : 'not yet'
     const secs = Math.max(0, Math.floor((now - at.getTime()) / 1000))
     if (secs < 5) return vault ? vault.t('status_bar.just_now') : 'just now'

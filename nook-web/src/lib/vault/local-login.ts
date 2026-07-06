@@ -31,8 +31,8 @@ export async function prepareLocalLogin(state: VaultState): Promise<void> {
   log.debug('preparing local login gate')
   state.storageMode = 'local'
   state.githubPat = ''
-  state.oauthFile = null
-  state.localFolder = null
+  state.oauthFile = undefined
+  state.localFolder = undefined
   await state.refreshPasswordEntriesList()
   state.localLoginPrepared = true
 }
@@ -83,8 +83,8 @@ export async function createLocalVaultWithDeviceKeys(
   state.dismissSuccess()
   state.storageMode = 'local'
   state.githubPat = ''
-  state.oauthFile = null
-  state.localFolder = null
+  state.oauthFile = undefined
+  state.localFolder = undefined
   state.isVerifying = true
 
   try {
@@ -179,8 +179,8 @@ export async function createLocalVault(
   state.dismissSuccess()
   state.storageMode = 'local'
   state.githubPat = ''
-  state.oauthFile = null
-  state.localFolder = null
+  state.oauthFile = undefined
+  state.localFolder = undefined
   state.isVerifying = true
 
   try {

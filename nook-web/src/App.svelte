@@ -38,10 +38,10 @@
   type ColorMode = 'light' | 'dark'
   const THEME_STORAGE_KEY = 'nook_color_mode'
   let colorMode = $state<ColorMode>('dark')
-  let legalPage = $state<LegalPageId | null>(
+  let legalPage = $state<LegalPageId | undefined>(
     typeof window !== 'undefined'
       ? getLegalPageFromPath(window.location.pathname)
-      : null,
+      : undefined,
   )
   let logsPage = $state<boolean>(
     typeof window !== 'undefined'
@@ -85,8 +85,8 @@
 
   function navigateHome() {
     vault.closeHelp()
-    history.pushState(null, '', appPath('/'))
-    legalPage = null
+    history.pushState(undefined, '', appPath('/'))
+    legalPage = undefined
     logsPage = false
     appLogsPage = false
   }
@@ -173,7 +173,7 @@
   )
   const appVersion = '0.1.0'
   let secretsAddOpen = $state(false)
-  let secretsAddFormType = $state<VaultItemType | null>(null)
+  let secretsAddFormType = $state<VaultItemType | undefined>(undefined)
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen && secretsAddFormType === 'secure-note',
   )
@@ -465,7 +465,7 @@
                     isSaving={vault.isSaving}
                     editsBlocked={vault.editsBlocked}
                     secrets={vault.secrets}
-                    onAddModeChange={(open, type = null) => {
+                    onAddModeChange={(open, type = undefined) => {
                       secretsAddOpen = open
                       secretsAddFormType = type
                     }}

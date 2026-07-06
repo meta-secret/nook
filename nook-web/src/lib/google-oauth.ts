@@ -44,9 +44,10 @@ declare global {
   }
 }
 
-let tokenClient: TokenClient | null = null
-let pendingResolve: ((response: GoogleTokenResponse) => void) | null = null
-let initPromise: Promise<void> | null = null
+let tokenClient: TokenClient | undefined = undefined
+let pendingResolve: ((response: GoogleTokenResponse) => void) | undefined =
+  undefined
+let initPromise: Promise<void> | undefined = undefined
 
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim())
@@ -101,7 +102,7 @@ export async function initGoogleAuth(): Promise<void> {
       scope: DRIVE_APPDATA_SCOPE,
       callback: (response) => {
         pendingResolve?.(response)
-        pendingResolve = null
+        pendingResolve = undefined
       },
     })
   })()

@@ -6,8 +6,8 @@
     type AppLogsResponse,
   } from '$lib/app-logs-api'
 
-  let payload = $state<AppLogsResponse | null>(null)
-  let error = $state<string | null>(null)
+  let payload = $state<AppLogsResponse | undefined>(undefined)
+  let error = $state<string | undefined>(undefined)
 
   onMount(() => {
     document.title = 'Nook app logs (JSON)'
@@ -29,9 +29,13 @@
 </svelte:head>
 
 {#if error}
-  <pre data-testid="app-logs-error">{JSON.stringify({ error }, null, 2)}</pre>
+  <pre data-testid="app-logs-error">{JSON.stringify(
+      { error },
+      undefined,
+      2,
+    )}</pre>
 {:else if payload}
-  <pre data-testid="app-logs-json">{JSON.stringify(payload, null, 2)}</pre>
+  <pre data-testid="app-logs-json">{JSON.stringify(payload, undefined, 2)}</pre>
 {:else}
   <pre data-testid="app-logs-loading">{JSON.stringify({ loading: true })}</pre>
 {/if}

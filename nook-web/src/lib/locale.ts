@@ -1,21 +1,21 @@
 export type AppLocale = 'en' | 'ru'
 
 export function parseAppLocale(
-  value: string | null | undefined,
-): AppLocale | null {
+  value: string | undefined,
+): AppLocale | undefined {
   if (value === 'en' || value === 'ru') return value
-  return null
+  return undefined
 }
 
 /** Map a BCP 47 language tag to a supported app locale, if any. */
-export function resolveAppLocaleFromTag(tag: string): AppLocale | null {
+export function resolveAppLocaleFromTag(tag: string): AppLocale | undefined {
   const normalized = tag.trim().toLowerCase().replaceAll('_', '-')
-  if (!normalized) return null
+  if (!normalized) return undefined
 
   const language = normalized.split('-')[0]
   if (language === 'ru') return 'ru'
   if (language === 'en') return 'en'
-  return null
+  return undefined
 }
 
 /** Pick the first supported locale from the browser's preferred language list. */

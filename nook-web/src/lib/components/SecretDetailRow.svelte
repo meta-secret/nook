@@ -35,7 +35,7 @@
     index: number
     expanded: boolean
     revealSecrets: Record<string, boolean>
-    copiedKey: string | null
+    copiedKey: string | undefined
     onToggleExpand: (id: string) => void
     onToggleReveal: (id: string) => void
     onEditItem: (item: NookSecretRecord) => void

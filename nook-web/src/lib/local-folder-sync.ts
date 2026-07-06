@@ -116,16 +116,16 @@ async function storeDirectoryHandle(
 
 async function loadDirectoryHandle(
   handleId: string,
-): Promise<LocalDirectoryHandle | null> {
+): Promise<LocalDirectoryHandle | undefined> {
   const memory = memoryHandles.get(handleId)
   if (memory) return memory
   try {
     const row = await withHandleStore<
       { handle?: LocalDirectoryHandle } | undefined
     >('readonly', (store) => store.get(handleId))
-    return row?.handle ?? null
+    return row?.handle ?? undefined
   } catch {
-    return null
+    return undefined
   }
 }
 
@@ -196,30 +196,30 @@ async function childDirectory(
   parent: LocalDirectoryHandle,
   name: string,
   create: boolean,
-): Promise<LocalDirectoryHandle | null> {
+): Promise<LocalDirectoryHandle | undefined> {
   try {
     return await parent.getDirectoryHandle(name, { create })
   } catch {
     if (create) throw new Error(`Could not open backup folder: ${name}`)
-    return null
+    return undefined
   }
 }
 
 async function eventDirectory(
   root: LocalDirectoryHandle,
   create: boolean,
-): Promise<LocalDirectoryHandle | null> {
-  let current: LocalDirectoryHandle | null = root
+): Promise<LocalDirectoryHandle | undefined> {
+  let current: LocalDirectoryHandle | undefined = root
   for (const part of EVENT_LOG_PARTS) {
-    if (!current) return null
+    if (!current) return undefined
     current = await childDirectory(current, part, create)
   }
   return current
 }
 
-function eventIdFromFileName(name: string): string | null {
+function eventIdFromFileName(name: string): string | undefined {
   const digest = name.match(EVENT_FILE_NAME_PATTERN)?.[1]
-  return digest ? `sha256u:${digest}` : null
+  return digest ? `sha256u:${digest}` : undefined
 }
 
 function eventFileName(record: EventLogStorageRecord): string {
@@ -285,7 +285,7 @@ export async function writeLocalFolderEventRecords(
     const name = eventFileName(record)
     const existing = await dir
       .getFileHandle(name, { create: false })
-      .catch(() => null)
+      .catch(() => undefined)
     if (existing) {
       const current = await (await existing.getFile()).text()
       if (current !== record.yaml) {
@@ -313,6 +313,6 @@ export async function syncLocalFolderProvider(
   await writeLocalFolderEventRecords(provider, merged)
   const localYaml = await readLocalVaultBlob().catch(() => '')
   if (localYaml.trim()) {
-    await state.updateProviderSyncMetadata(provider.id, localYaml, null)
+    await state.updateProviderSyncMetadata(provider.id, localYaml, undefined)
   }
 }

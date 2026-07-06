@@ -73,12 +73,12 @@ describe('icloud-oauth', () => {
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
 
-    it('waits for CloudKit sign-in when setUpAuth returns null', async () => {
+    it('waits for CloudKit sign-in when setUpAuth returns undefined', async () => {
       let resolveSignIn: (value: unknown) => void = () => {}
       const signInPromise = new Promise((resolve) => {
         resolveSignIn = resolve
       })
-      const setUpAuth = vi.fn().mockResolvedValue(null)
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
       const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
       vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
         setUpAuth,
@@ -102,7 +102,7 @@ describe('icloud-oauth', () => {
     })
 
     it('fails when CloudKit sign-in never completes', async () => {
-      const setUpAuth = vi.fn().mockResolvedValue(null)
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
       vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
         setUpAuth,

@@ -83,7 +83,7 @@ export const githubPat = process.env.NOOK_GITHUB_PAT?.trim() ?? ''
 /** Legacy default for docs; GitHub e2e suites use {@link createE2eGithubRepoName}. */
 export const DEFAULT_GITHUB_REPO = 'nook'
 
-let cachedE2eGithubRepoName: string | null = null
+let cachedE2eGithubRepoName: string | undefined = undefined
 
 /**
  * One GitHub repo per Playwright container/run. CI sets NOOK_GITHUB_E2E_REPO per
@@ -652,17 +652,17 @@ export async function clearBrowserVault(page: Page) {
           pending -= 1
           if (pending === 0) resolve()
         }
-        const onError = (err: DOMException | null) =>
+        const onError = (err: DOMException | undefined) =>
           reject(err ?? new Error('IndexedDB delete failed'))
 
         const vaultDb = indexedDB.deleteDatabase('nook_db')
         vaultDb.onsuccess = done
-        vaultDb.onerror = () => onError(vaultDb.error)
+        vaultDb.onerror = () => onError(vaultDb.error ?? undefined)
         vaultDb.onblocked = done
 
         const authDb = indexedDB.deleteDatabase('nook_auth')
         authDb.onsuccess = done
-        authDb.onerror = () => onError(authDb.error)
+        authDb.onerror = () => onError(authDb.error ?? undefined)
         authDb.onblocked = done
       }),
   )
@@ -716,7 +716,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
           stopVaultSync?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | null
+          syncingProviderId?: string | undefined
           isPasswordBusy?: boolean
         }
       }
@@ -725,7 +725,7 @@ export async function forceVaultSyncQuiescentForE2e(page: Page) {
     vault.stopVaultSync?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
-    vault.syncingProviderId = null
+    vault.syncingProviderId = undefined
     vault.isPasswordBusy = false
   })
 }
@@ -740,7 +740,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
           stopIdleSessionTracking?: () => void
           isSyncing?: boolean
           isFanOutSyncing?: boolean
-          syncingProviderId?: string | null
+          syncingProviderId?: string | undefined
           isPasswordBusy?: boolean
         }
       }
@@ -750,7 +750,7 @@ export async function forceVaultQuiescentForE2e(page: Page) {
     vault.stopIdleSessionTracking?.()
     vault.isSyncing = false
     vault.isFanOutSyncing = false
-    vault.syncingProviderId = null
+    vault.syncingProviderId = undefined
     vault.isPasswordBusy = false
   })
 }
@@ -806,7 +806,7 @@ export async function waitForVaultOperationsIdle(
                 isSaving?: boolean
                 isSyncing?: boolean
                 isFanOutSyncing?: boolean
-                syncingProviderId?: string | null
+                syncingProviderId?: string | undefined
                 isPasswordBusy?: boolean
               }
             }
@@ -883,12 +883,12 @@ async function setupGithubProvider(page: Page, pat: string, repoName: string) {
   await page.getByTestId('github-pat-input').fill(pat)
 }
 
-async function readGoogleOAuthError(page: Page): Promise<string | null> {
+async function readGoogleOAuthError(page: Page): Promise<string | undefined> {
   const error = page.getByTestId('google-oauth-error')
   if (!(await error.isVisible())) {
-    return null
+    return undefined
   }
-  return (await error.textContent())?.trim() || null
+  return ((await error.textContent()) ?? undefined)?.trim() || undefined
 }
 
 async function waitForGoogleOAuthSignedIn(page: Page) {
@@ -1502,11 +1502,11 @@ type NookLogEntry = {
   data?: string
 }
 
-/** Read persisted app log entries (`window.__nookLog`) from the page, or null. */
+/** Read persisted app log entries (`window.__nookLog`) from the page, or undefined. */
 async function readNookLogEntries(
   page: Page,
   limit: number,
-): Promise<NookLogEntry[] | null> {
+): Promise<NookLogEntry[] | undefined> {
   return page.evaluate(async (lim) => {
     const log = (
       window as Window & {
@@ -1523,7 +1523,7 @@ async function readNookLogEntries(
         }
       }
     ).__nookLog
-    if (!log) return null
+    if (!log) return undefined
     return log.dump({ limit: lim })
   }, limit)
 }
@@ -1531,7 +1531,7 @@ async function readNookLogEntries(
 async function readNookLogSnapshot(
   page: Page,
   options?: { minLevel?: string; limit?: number; offset?: number },
-): Promise<AppLogsResponse | null> {
+): Promise<AppLogsResponse | undefined> {
   const query = {
     schema: APP_LOGS_SCHEMA,
     minLevel: options?.minLevel ?? 'trace',
@@ -1561,7 +1561,7 @@ async function readNookLogSnapshot(
         }
       }
     ).__nookLog
-    if (!log) return null
+    if (!log) return undefined
     await log.flush()
     const [total, entries] = await Promise.all([
       log.count(),
@@ -1626,11 +1626,11 @@ export async function fetchAppLogs(
   return payload
 }
 
-/** Read persisted app log entries (`window.__nookLog`) from the page, or null. */
+/** Read persisted app log entries (`window.__nookLog`) from the page, or undefined. */
 export async function readPersistedAppLogs(
   page: Page,
   limit = 500,
-): Promise<NookLogEntry[] | null> {
+): Promise<NookLogEntry[] | undefined> {
   return readNookLogEntries(page, limit)
 }
 
@@ -1660,11 +1660,11 @@ export async function waitForPersistedAppLog(
         await flushNookLogPersistQueue(page)
         const entries = await readNookLogEntries(page, options?.limit ?? 500)
         found = findAppLogEntry(entries ?? [], filter)
-        return found ?? null
+        return found ?? undefined
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
-    .not.toBeNull()
+    .not.toBeUndefined()
   return found!
 }
 
@@ -1775,7 +1775,7 @@ export function expectAppLogEntry(
   return entry!
 }
 
-function parseLogsPageStoredCount(text: string | null): number {
+function parseLogsPageStoredCount(text: string | undefined): number {
   const match = text?.match(/(\d+) stored/)
   return match ? Number(match[1]) : 0
 }
@@ -1792,13 +1792,13 @@ export async function waitForLogsPageStoredCount(
       async () => {
         await page.getByTestId('logs-refresh-btn').click()
         count = parseLogsPageStoredCount(
-          await page.getByTestId('logs-count').textContent(),
+          (await page.getByTestId('logs-count').textContent()) ?? undefined,
         )
-        return predicate(count) ? count : null
+        return predicate(count) ? count : undefined
       },
       { timeout: options?.timeoutMs ?? UI_TIMEOUT_MS * 2 },
     )
-    .not.toBeNull()
+    .not.toBeUndefined()
   return count
 }
 
@@ -1818,13 +1818,13 @@ export async function expectLogsPageEmpty(page: Page): Promise<void> {
       async () => {
         const emptyVisible = await page.getByTestId('logs-empty').isVisible()
         const count = parseLogsPageStoredCount(
-          await page.getByTestId('logs-count').textContent(),
+          (await page.getByTestId('logs-count').textContent()) ?? undefined,
         )
-        return emptyVisible && count === 0 ? count : null
+        return emptyVisible && count === 0 ? count : undefined
       },
       { timeout: UI_TIMEOUT_MS * 2 },
     )
-    .not.toBeNull()
+    .not.toBeUndefined()
 }
 
 /**
@@ -1876,7 +1876,7 @@ export async function attachNookLogsForTest(
         payload.entries.slice(-APP_LOGS_FAILURE_PRINT_LIMIT),
       )
     }
-    const body = JSON.stringify(payload, null, 2)
+    const body = JSON.stringify(payload, undefined, 2)
     const attachmentPath = testInfo.outputPath('nook-app-logs.json')
     await fs.writeFile(attachmentPath, body)
     await testInfo.attach('nook-app-logs.json', {
@@ -2523,16 +2523,18 @@ export async function seedExtraGithubProviders(
         getReq.onerror = () =>
           reject(getReq.error ?? new Error('idb read failed'))
         getReq.onsuccess = () => {
-          const existing = getReq.result as {
-            providers: Array<{
-              id: string
-              type: string
-              label: string
-              githubRepo?: string
-              githubPat?: string
-              createdAt: string
-            }>
-          } | null
+          const existing = getReq.result as
+            | {
+                providers: Array<{
+                  id: string
+                  type: string
+                  label: string
+                  githubRepo?: string
+                  githubPat?: string
+                  createdAt: string
+                }>
+              }
+            | undefined
           const snapshot = existing ?? { providers: [] }
           for (const provider of providers) {
             snapshot.providers.push({
@@ -2570,9 +2572,11 @@ export async function seedExtraGithubProviders(
           const getReq = store.get('providers')
           getReq.onerror = () => resolve(false)
           getReq.onsuccess = () => {
-            const snapshot = getReq.result as {
-              providers?: Array<{ id: string; type: string }>
-            } | null
+            const snapshot = getReq.result as
+              | {
+                  providers?: Array<{ id: string; type: string }>
+                }
+              | undefined
             const ids = new Set(snapshot?.providers?.map((p) => p.id) ?? [])
             resolve(expectedIds.every((id) => ids.has(id)))
           }
@@ -2615,22 +2619,24 @@ export async function seedExtraOauthFileProviders(
           getReq.onerror = () =>
             reject(getReq.error ?? new Error('idb read failed'))
           getReq.onsuccess = () => {
-            const existing = getReq.result as {
-              providers: Array<{
-                id: string
-                type: string
-                label: string
-                oauthFile?: {
-                  preset: string
-                  accessToken: string
-                  fileName: string
-                  accountEmail?: string
+            const existing = getReq.result as
+              | {
+                  providers: Array<{
+                    id: string
+                    type: string
+                    label: string
+                    oauthFile?: {
+                      preset: string
+                      accessToken: string
+                      fileName: string
+                      accountEmail?: string
+                    }
+                    storeId?: string
+                    createdAt: string
+                  }>
+                  activeVaultStoreId?: string
                 }
-                storeId?: string
-                createdAt: string
-              }>
-              activeVaultStoreId?: string
-            } | null
+              | undefined
             const snapshot = existing ?? { providers: [] }
             const storeId =
               snapshot.activeVaultStoreId?.trim() || vaultStoreId || undefined
@@ -2677,9 +2683,11 @@ export async function seedExtraOauthFileProviders(
           const getReq = store.get('providers')
           getReq.onerror = () => resolve(false)
           getReq.onsuccess = () => {
-            const snapshot = getReq.result as {
-              providers?: Array<{ id: string; type: string }>
-            } | null
+            const snapshot = getReq.result as
+              | {
+                  providers?: Array<{ id: string; type: string }>
+                }
+              | undefined
             const ids = new Set(snapshot?.providers?.map((p) => p.id) ?? [])
             resolve(expectedIds.every((id) => ids.has(id)))
           }
@@ -3636,13 +3644,13 @@ export async function addSecret(
         }
       })
       return {
-        secrets: vault?.secrets?.length ?? null,
-        storageMode: vault?.storageMode ?? null,
-        localVaultPresent: vault?.localVaultPresent ?? null,
-        syncProviders: vault?.syncProviders?.length ?? null,
-        isSaving: vault?.isSaving ?? null,
-        isSyncing: vault?.isSyncing ?? null,
-        errorMsg: vault?.errorMsg ?? null,
+        secrets: vault?.secrets?.length ?? undefined,
+        storageMode: vault?.storageMode ?? undefined,
+        localVaultPresent: vault?.localVaultPresent ?? undefined,
+        syncProviders: vault?.syncProviders?.length ?? undefined,
+        isSaving: vault?.isSaving ?? undefined,
+        isSyncing: vault?.isSyncing ?? undefined,
+        errorMsg: vault?.errorMsg ?? undefined,
         localYamlHasKey: idbYaml.includes(expectedKey),
         localYamlSecretCount:
           idbYaml.match(/\n\s*-\s+id:\s+secret_/g)?.length ?? 0,

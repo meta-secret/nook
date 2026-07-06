@@ -40,6 +40,14 @@ This document defines the strict development standards, architectural boundaries
 
 ## 3. Svelte 5 & TypeScript UI Standards
 
+- **No `null` in authored TypeScript/Svelte:** Authored `nook-web/src` code must
+  not use `null` as a value, state sentinel, return type, parameter type, or
+  default prop value. Use `undefined` for absent values and model meaningful
+  UI/domain states with discriminated unions or Rust/WASM-owned enums. Browser
+  APIs that return `null` must be normalized at the boundary with
+  `?? undefined`; do not let nullable values flow through app code. Generated
+  WASM bindings may mention `null` because wasm-bindgen emits those types; do
+  not hand-edit generated files.
 - **Reactive State Encapsulation:**
   - Keep components thin and stateless where possible.
   - Store application-wide reactive state and side-effect handlers (e.g. configuration loads, storage fetches, updates) in Svelte 5 state classes defined in `.svelte.ts` files.

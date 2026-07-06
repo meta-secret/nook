@@ -8,12 +8,12 @@ import {
 /** Drop deprecated `activeProviderId` from persisted auth snapshots. */
 export function normalizeAuthSnapshot(raw: unknown): {
   snapshot: AuthProvidersSnapshot
-  legacyActiveProviderId: string | null
+  legacyActiveProviderId: string | undefined
   changed: boolean
 } {
   return normalizeAuthSnapshotWasm(raw) as {
     snapshot: AuthProvidersSnapshot
-    legacyActiveProviderId: string | null
+    legacyActiveProviderId: string | undefined
     changed: boolean
   }
 }

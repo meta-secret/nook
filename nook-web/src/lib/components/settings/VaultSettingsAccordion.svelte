@@ -20,7 +20,9 @@
     onDenyJoin,
     onRenameDevice,
     onRevokeDevice,
-    accordionSection = $bindable(null as VaultSettingsAccordionSection | null),
+    accordionSection = $bindable(
+      undefined as VaultSettingsAccordionSection | undefined,
+    ),
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -34,7 +36,7 @@
     onDenyJoin: (deviceId: string) => void | Promise<void>
     onRenameDevice: (authId: string, label: string) => void | Promise<void>
     onRevokeDevice: (authId: string) => void | Promise<void>
-    accordionSection?: VaultSettingsAccordionSection | null
+    accordionSection?: VaultSettingsAccordionSection | undefined
   } = $props()
 
   const hasDevices = $derived(vaultMembers.length > 0)

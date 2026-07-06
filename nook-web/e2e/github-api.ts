@@ -111,7 +111,7 @@ export async function githubRepoContext(
 export async function fetchGithubVaultYaml(
   pat: string,
   repoName: string,
-): Promise<string | null> {
+): Promise<string | undefined> {
   const { headers, repo } = await githubRepoContext(pat, repoName)
   const url = `https://api.github.com/repos/${repo}/contents/${GITHUB_VAULT_PATH}`
   const etagKey = `${pat}:${repoName}`
@@ -121,12 +121,12 @@ export async function fetchGithubVaultYaml(
   })
 
   if (res.status === 304) {
-    return vaultContentCache.get(etagKey) ?? null
+    return vaultContentCache.get(etagKey) ?? undefined
   }
   if (res.status === 404) {
     vaultEtagCache.delete(etagKey)
     vaultContentCache.delete(etagKey)
-    return null
+    return undefined
   }
 
   const nextEtag = res.headers.get('etag')

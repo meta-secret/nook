@@ -65,7 +65,7 @@
   }
 
   let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<string | null>(null)
+  let activeEntryId = $state<string | undefined>(undefined)
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -75,11 +75,11 @@
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const activeEntry = $derived(
-    passwordEntries.find((entry) => entry.id === activeEntryId) ?? null,
+    passwordEntries.find((entry) => entry.id === activeEntryId) ?? undefined,
   )
 
   const issuedAt = $derived.by(() => {
-    if (!enrollmentCode) return null
+    if (!enrollmentCode) return undefined
     return peekEnrollmentIssuedAt(enrollmentCode)
   })
   const enrollmentLink = $derived.by(() =>
@@ -112,7 +112,7 @@
     return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
   })
 
-  function openPanel(target: Panel, entryId: string | null = null) {
+  function openPanel(target: Panel, entryId: string | undefined = undefined) {
     panel = target
     activeEntryId = entryId
     labelInput = ''
@@ -124,7 +124,7 @@
 
   function closePanel() {
     panel = 'idle'
-    activeEntryId = null
+    activeEntryId = undefined
     labelInput = ''
     passwordInput = ''
     confirmInput = ''

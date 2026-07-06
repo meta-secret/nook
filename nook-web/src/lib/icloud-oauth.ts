@@ -39,7 +39,7 @@ type CloudKitContainer = {
   setUpAuth: (options?: {
     grabAuthToken?: boolean
     persist?: boolean
-  }) => Promise<CloudKitUserIdentity | null>
+  }) => Promise<CloudKitUserIdentity | undefined>
   whenUserSignsIn: () => Promise<CloudKitUserIdentity>
 }
 
@@ -72,7 +72,7 @@ const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = 'nook.icloud.webAuthToken.'
 const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
   putToken(containerIdentifier, authToken) {
     const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`
-    if (authToken == null) {
+    if (authToken == undefined) {
       sessionStorage.removeItem(key)
       return
     }
@@ -83,12 +83,12 @@ const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
       `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`,
     )
     if (!raw) {
-      return null
+      return undefined
     }
     try {
       return JSON.parse(raw) as unknown
     } catch {
-      return null
+      return undefined
     }
   },
 }
@@ -99,11 +99,11 @@ declare global {
   }
 }
 
-let initPromise: Promise<void> | null = null
+let initPromise: Promise<void> | undefined = undefined
 
 /** @internal Clears module singletons between unit tests. */
 export function resetICloudAuthStateForTests(): void {
-  initPromise = null
+  initPromise = undefined
 }
 
 export function isICloudOAuthConfigured(): boolean {
@@ -164,7 +164,7 @@ function normalizeWebAuthToken(stored: unknown): string | undefined {
   if (typeof stored === 'string' && stored.trim()) {
     return stored.trim()
   }
-  if (typeof stored === 'object' && stored !== null) {
+  if (stored != undefined && typeof stored === 'object') {
     const record = stored as Record<string, unknown>
     for (const key of ['token', 'ckWebAuthToken', 'value']) {
       const candidate = record[key]
@@ -190,7 +190,7 @@ function cloudKitAuthErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
   }
-  if (typeof error === 'object' && error !== null) {
+  if (error != undefined && typeof error === 'object') {
     const authError = error as CloudKitAuthError
     if (authError._reason?.trim()) {
       return authError._reason.trim()
@@ -252,7 +252,7 @@ async function waitForCloudKitSignIn(
 ): Promise<void> {
   const signInPromise = container.whenUserSignsIn()
   clickCloudKitSignInButton()
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
   try {
     await Promise.race([
       signInPromise,
@@ -266,7 +266,7 @@ async function waitForCloudKitSignIn(
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   } finally {
-    if (timeoutId !== null) {
+    if (timeoutId !== undefined) {
       clearTimeout(timeoutId)
     }
   }
@@ -277,7 +277,7 @@ export async function requestICloudWebAuthToken(
 ): Promise<ICloudOAuthTokens> {
   await initICloudAuth()
   const container = window.CloudKit!.getDefaultContainer()
-  let userIdentity: CloudKitUserIdentity | null
+  let userIdentity: CloudKitUserIdentity | undefined
   try {
     userIdentity = await container.setUpAuth({
       grabAuthToken: true,

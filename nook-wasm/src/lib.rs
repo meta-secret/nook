@@ -310,11 +310,8 @@ pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
 /// Returns `{ snapshot, legacyActiveProviderId, changed }`; `snapshot` carries
 /// decrypted credentials for in-memory sync use, and `legacyActiveProviderId`
 /// drives the one-time remote-vault copy that still lives in the web layer.
-/// Serialize with `None` mapped to JS `null` (not `undefined`) so optional
-/// fields without `skip_serializing_if` (e.g. `legacyActiveProviderId`) keep the
-/// nullable contract the web layer expects.
-fn to_js_nullable<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
-    value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true))
+fn to_js_value<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
+    serde_wasm_bindgen::to_value(value)
 }
 
 #[wasm_bindgen(js_name = loadAuthProviders)]
@@ -323,7 +320,7 @@ pub async fn load_auth_providers(
 ) -> Result<JsValue, wasm_bindgen::JsError> {
     let identity = manager.device_identity()?;
     let normalized = crate::storage::auth_providers::load_auth_providers(&identity).await?;
-    Ok(to_js_nullable(&normalized)?)
+    Ok(to_js_value(&normalized)?)
 }
 
 /// Seal credential fields with the device key and persist the snapshot to the
@@ -356,7 +353,7 @@ pub fn normalize_auth_snapshot(raw: JsValue) -> Result<JsValue, wasm_bindgen::Js
         serde_wasm_bindgen::from_value(raw)?
     };
     let normalized = nook_core::normalize_auth_snapshot(&value);
-    Ok(to_js_nullable(&normalized)?)
+    Ok(to_js_value(&normalized)?)
 }
 
 /// Find an existing provider whose sync target matches `candidate`, optionally

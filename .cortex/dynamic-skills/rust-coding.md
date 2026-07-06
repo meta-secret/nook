@@ -44,6 +44,9 @@ When you see `Option<T>`, ask:
 - Before adding a new struct or enum, search for an equivalent core type. Reuse
   the canonical type instead of duplicating DTOs across `nook-core` and
   `nook-wasm`; WASM wrappers should delegate to core types when possible.
+- Authored TypeScript/Svelte uses `undefined`, never `null`, for absence. Rust
+  and WASM helpers should make it easy for TS to pass plain objects or omitted
+  values instead of forcing TS to construct nullable shim objects.
 
 ## Examples
 

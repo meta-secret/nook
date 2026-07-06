@@ -8,7 +8,7 @@
   let {
     vault,
     passwordEntries = [] as NookPasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(null as string | null),
+    selectedPasswordEntryId = $bindable(undefined as string | undefined),
     isVerifying,
     isInitializing,
     isUnlocking = false,
@@ -19,7 +19,7 @@
   }: {
     vault: VaultState
     passwordEntries?: NookPasswordEntrySummary[]
-    selectedPasswordEntryId?: string | null
+    selectedPasswordEntryId?: string | undefined
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean

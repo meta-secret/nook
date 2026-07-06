@@ -20,7 +20,7 @@ export function createLocalE2eICloudVaultStub(
 
   function eventRecord(recordName: string) {
     const event = eventRecords.get(recordName)
-    if (!event) return null
+    if (!event) return undefined
     return {
       recordName,
       recordType: 'NookVaultEvent',

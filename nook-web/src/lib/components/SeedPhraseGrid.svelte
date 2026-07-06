@@ -30,14 +30,14 @@
 
   let wordCount = $state<MnemonicLength>(12)
   let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
-  let wordlist = $state<Set<string> | null>(null)
+  let wordlist = $state<Set<string> | undefined>(undefined)
   let loading = $state(true)
-  let loadError = $state<string | null>(null)
+  let loadError = $state<string | undefined>(undefined)
   let syncingFromCells = $state(false)
-  let focusedIndex = $state<number | null>(null)
+  let focusedIndex = $state<number | undefined>(undefined)
   let suggestionIndex = $state(0)
-  let inputRefs = $state<Array<HTMLInputElement | null>>([])
-  let checksumValid = $state<boolean | null>(null)
+  let inputRefs = $state<Array<HTMLInputElement | undefined>>([])
+  let checksumValid = $state<boolean | undefined>(undefined)
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
@@ -53,7 +53,7 @@
   )
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex === null || !wordlist) return []
+    if (readonly || focusedIndex === undefined || !wordlist) return []
     const prefix = cells[focusedIndex]?.trim().toLowerCase() ?? ''
     if (!prefix || prefix.includes(' ')) return []
     if (wordlist.has(prefix)) return []
@@ -100,7 +100,7 @@
     }
     cells = next
     syncValueFromCells()
-    focusedIndex = null
+    focusedIndex = undefined
     focusCell(Math.min(startIndex + words.length, wordCount - 1))
   }
 
@@ -115,8 +115,8 @@
     cells = Array.from({ length: 24 }, () => '')
     wordCount = 12
     value = ''
-    checksumValid = null
-    focusedIndex = null
+    checksumValid = undefined
+    focusedIndex = undefined
     suggestionIndex = 0
     focusCell(0)
   }
@@ -148,7 +148,7 @@
 
   function selectSuggestion(word: string, index: number) {
     setCellValue(index, word)
-    focusedIndex = null
+    focusedIndex = undefined
     suggestionIndex = 0
     focusCell(index + 1)
   }
@@ -185,7 +185,7 @@
     }
 
     if (event.key === 'Escape') {
-      focusedIndex = null
+      focusedIndex = undefined
       suggestionIndex = 0
     }
   }
@@ -203,7 +203,7 @@
 
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
-      checksumValid = null
+      checksumValid = undefined
       valid = false
       return
     }
@@ -217,7 +217,7 @@
   $effect(() => {
     let cancelled = false
     loading = true
-    loadError = null
+    loadError = undefined
 
     void loadBip39Wordlist()
       .then((set) => {
@@ -346,7 +346,7 @@
                 ) {
                   return
                 }
-                if (focusedIndex === index) focusedIndex = null
+                if (focusedIndex === index) focusedIndex = undefined
               })
             }}
             onkeydown={(event) => onCellKeyDown(index, event)}

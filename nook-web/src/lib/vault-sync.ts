@@ -22,7 +22,7 @@ export type PendingSyncConflict = {
   mode: string
   pat: string
   repo: string
-  remoteRevision: string | null
+  remoteRevision: string | undefined
   /** Same version but different ciphertext, or different vault store_id values. */
   kind?: 'content' | 'store_id'
   localStoreId?: string

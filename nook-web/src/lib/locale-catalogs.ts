@@ -44,10 +44,10 @@ export function mergeTranslationCatalogs(
   for (const [key, value] of Object.entries(overlay)) {
     const existing = merged[key]
     if (
-      value !== null &&
+      value != undefined &&
       typeof value === 'object' &&
       !Array.isArray(value) &&
-      existing !== null &&
+      existing != undefined &&
       typeof existing === 'object' &&
       !Array.isArray(existing)
     ) {

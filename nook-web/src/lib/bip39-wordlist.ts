@@ -13,10 +13,10 @@ await initNookWasm()
 
 export type MnemonicLength = 12 | 24
 
-let cachedWordlist: Set<string> | null = null
+let cachedWordlist: Set<string> | undefined = undefined
 
 export function clearBip39WordlistCache() {
-  cachedWordlist = null
+  cachedWordlist = undefined
 }
 
 export async function loadBip39Wordlist(force = false): Promise<Set<string>> {
@@ -33,9 +33,9 @@ export function joinMnemonicWords(words: string[]): string {
   return joinBip39WordsCore(words)
 }
 
-export function inferMnemonicLength(text: string): MnemonicLength | null {
+export function inferMnemonicLength(text: string): MnemonicLength | undefined {
   const inferred = inferBip39MnemonicLengthCore(text)
-  return inferred === 12 || inferred === 24 ? inferred : null
+  return inferred === 12 || inferred === 24 ? inferred : undefined
 }
 
 export function isKnownBip39Word(word: string, wordlist: Set<string>): boolean {

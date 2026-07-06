@@ -31,10 +31,10 @@
     isVerifying,
     isInitializing,
     syncProviders,
-    syncingProviderId = null,
+    syncingProviderId = undefined,
     isAuthenticated,
     addProviderOpen = false,
-    setupType = $bindable(null as StorageProviderType | null),
+    setupType = $bindable(undefined as StorageProviderType | undefined),
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     passwordEntries,
@@ -54,17 +54,17 @@
     onIssueCode,
     onClearCode,
     activeSection = $bindable(
-      null as 'vaults' | 'storage' | 'passwords' | null,
+      undefined as 'vaults' | 'storage' | 'passwords' | undefined,
     ),
   }: {
     vault: VaultState
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | null
+    syncingProviderId?: string | undefined
     isAuthenticated: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | null
+    setupType?: StorageProviderType | undefined
     githubPat: string
     githubRepo: string
     passwordEntries: NookPasswordEntrySummary[]
@@ -89,16 +89,16 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
-    activeSection?: 'vaults' | 'storage' | 'passwords' | null
+    activeSection?: 'vaults' | 'storage' | 'passwords' | undefined
   } = $props()
 
   let newVaultName = $state('')
   let drafts = $state<Record<string, string>>({})
   let draftSeed = $state('')
   let creating = $state(false)
-  let editingStoreId = $state<string | null>(null)
-  let renamingStoreId = $state<string | null>(null)
-  let switchingTo = $state<string | null>(null)
+  let editingStoreId = $state<string | undefined>(undefined)
+  let renamingStoreId = $state<string | undefined>(undefined)
+  let switchingTo = $state<string | undefined>(undefined)
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
@@ -108,8 +108,8 @@
       isInitializing ||
       vault.isVerifying ||
       creating ||
-      renamingStoreId !== null ||
-      switchingTo !== null,
+      renamingStoreId !== undefined ||
+      switchingTo !== undefined,
   )
 
   function buildDrafts() {
@@ -154,7 +154,7 @@
   function cancelRename(entry: NookLocalVaultEntry) {
     setDraft(entry, vaultDisplayLabel(entry, vault.t))
     if (editingStoreId === entry.storeId) {
-      editingStoreId = null
+      editingStoreId = undefined
     }
   }
 
@@ -178,10 +178,10 @@
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry))
       if (!vault.errorMsg) {
-        editingStoreId = null
+        editingStoreId = undefined
       }
     } finally {
-      renamingStoreId = null
+      renamingStoreId = undefined
     }
   }
 
@@ -191,7 +191,7 @@
     try {
       await vault.switchToVault(entry.storeId)
     } finally {
-      switchingTo = null
+      switchingTo = undefined
     }
   }
 </script>

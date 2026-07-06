@@ -12,15 +12,15 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let root = $state<HTMLDivElement | null>(null)
-  let switchingTo = $state<string | null>(null)
+  let root = $state<HTMLDivElement | undefined>(undefined)
+  let switchingTo = $state<string | undefined>(undefined)
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
   const activeVault = $derived(
     vaults.find((entry) => entry.storeId === activeStoreId) ??
       vaults[0] ??
-      null,
+      undefined,
   )
   const activeLabel = $derived(
     activeVault
@@ -29,7 +29,7 @@
   )
   const vaultCount = $derived(vaults.length)
   const isBusy = $derived(
-    vault.isVerifying || vault.isInitializing || switchingTo !== null,
+    vault.isVerifying || vault.isInitializing || switchingTo !== undefined,
   )
 
   const triggerClass =
@@ -78,7 +78,7 @@
     try {
       await vault.switchToVault(entry.storeId)
     } finally {
-      switchingTo = null
+      switchingTo = undefined
     }
   }
 
