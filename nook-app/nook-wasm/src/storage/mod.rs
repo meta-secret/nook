@@ -15,6 +15,8 @@ pub(crate) mod github;
 pub(crate) mod github_events;
 pub(crate) mod icloud;
 pub(crate) mod indexed_db;
+pub(crate) mod local_folder;
+pub(crate) mod session;
 
 pub(crate) fn parse_expected_event_storage_bytes(
     bytes: &[u8],

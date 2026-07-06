@@ -5,7 +5,7 @@ import {
   generateSecretId,
 } from '$lib/nook'
 import { createLogger } from '$lib/log'
-import { syncLocalFolderProvider } from '$lib/local-folder-sync'
+import { syncLocalFolderProvider } from '$lib/vault/sync'
 
 const log = createLogger('connect')
 

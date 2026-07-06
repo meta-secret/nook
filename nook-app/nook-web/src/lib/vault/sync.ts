@@ -1,12 +1,56 @@
-import { VaultState } from '$lib/vault.svelte'
+import type { VaultState } from '$lib/vault.svelte'
 import { SvelteDate } from 'svelte/reactivity'
 import { createLogger } from '$lib/log'
-import { readLocalVaultBlob, type PendingSyncConflict } from '$lib/vault-sync'
-import { importLocalVaultBlob } from '$lib/nook-wasm/nook_wasm'
+import {
+  importLocalVaultBlob,
+  readLocalVaultYaml,
+  type NookPendingSyncConflict,
+} from '$lib/nook-wasm/nook_wasm'
+import type { StorageProvider } from '$lib/auth-providers'
 import * as localLoginActions from '$lib/vault/local-login'
-import { syncLocalFolderProvider } from '$lib/local-folder-sync'
 
 const log = createLogger('vault-sync')
+const DEFAULT_VAULT_SYNC_INTERVAL_MS = 60_000
+
+/** Pending user choice when local and remote vaults diverge. */
+export type PendingSyncConflict = NookPendingSyncConflict
+
+async function readLocalVaultBlob(): Promise<string> {
+  return readLocalVaultYaml()
+}
+
+type SyncConflictLabelState = {
+  pendingSyncConflict: PendingSyncConflict | undefined
+  t(key: string, values?: Record<string, string>): string
+}
+
+export function syncConflictLabel(state: SyncConflictLabelState): string {
+  const conflict = state.pendingSyncConflict
+  if (!conflict) return ''
+  const key =
+    conflict.kind === 'store_id'
+      ? 'auth_storage.sync_conflict_store_id_banner'
+      : 'auth_storage.sync_conflict_banner'
+  return state.t(key, { provider: conflict.providerLabel })
+}
+
+/** Background pull interval - production always uses 60s; fast sync is dev/e2e only. */
+export function resolveVaultSyncIntervalMs(env: {
+  DEV?: boolean
+  VITE_E2E_EXPOSE_VAULT?: string
+  VITE_VAULT_SYNC_INTERVAL_MS?: string
+}): number {
+  const allowFastSync = env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
+  if (!allowFastSync) {
+    return DEFAULT_VAULT_SYNC_INTERVAL_MS
+  }
+  const raw = env.VITE_VAULT_SYNC_INTERVAL_MS
+  const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
+  if (Number.isFinite(parsed) && parsed >= 250) {
+    return parsed
+  }
+  return DEFAULT_VAULT_SYNC_INTERVAL_MS
+}
 
 function syncError(context: string, error: unknown) {
   log.warn(`${context} failed`, {
@@ -15,8 +59,29 @@ function syncError(context: string, error: unknown) {
   })
 }
 
+export async function syncLocalFolderProvider(
+  state: VaultState,
+  provider: StorageProvider,
+): Promise<void> {
+  const manager = state.manager
+  if (!manager) {
+    throw new Error('Vault manager is not initialized.')
+  }
+  const handleId = provider.localFolder?.handleId
+  if (!handleId) {
+    throw new Error('Choose a local backup folder before syncing.')
+  }
+  const localYaml = (await state.enqueueStorage(() =>
+    manager.syncLocalFolderProvider(handleId),
+  )) as string
+  if (localYaml.trim()) {
+    await state.updateProviderSyncMetadata(provider.id, localYaml, undefined)
+  }
+}
+
 export function startVaultSync(state: VaultState) {
   state.stopVaultSync()
+  const intervalMs = resolveVaultSyncIntervalMs(import.meta.env)
   const needsRemoteUpdates =
     state.isAuthenticated ||
     state.joinEnrollmentPrompt !== 'none' ||
@@ -28,7 +93,7 @@ export function startVaultSync(state: VaultState) {
   log.info('vault sync timer started', {
     authenticated: state.isAuthenticated,
     providers: state.syncProviders.length,
-    intervalMs: VaultState.syncIntervalMs(),
+    intervalMs,
   })
   if (state.isAuthenticated) {
     void state.syncFromStorage()
@@ -60,7 +125,7 @@ export function startVaultSync(state: VaultState) {
       return
     }
     void state.syncFromStorage()
-  }, VaultState.syncIntervalMs())
+  }, intervalMs)
 }
 
 export function stopVaultSync(state: VaultState) {

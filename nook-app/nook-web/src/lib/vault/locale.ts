@@ -3,6 +3,7 @@ import type { AppLocale } from '$lib/locale'
 import {
   loadTranslationCatalogFromWasm,
   resolveTranslationCatalog,
+  type TranslationCatalog,
 } from '$lib/locale-catalogs'
 
 export async function updateLocale(
@@ -17,7 +18,7 @@ export async function updateLocale(
   }
 
   const preferWasm = options?.preferWasm ?? Boolean(state.manager)
-  let wasmCatalog: Record<string, unknown> | undefined
+  let wasmCatalog: TranslationCatalog | undefined
   if (preferWasm) {
     try {
       wasmCatalog = await loadTranslationCatalogFromWasm(newLocale)

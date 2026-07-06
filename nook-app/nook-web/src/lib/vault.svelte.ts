@@ -10,14 +10,19 @@ import {
 import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
 import {
+  chooseLocalFolderBackupDirectory,
   hasActiveLocalVault,
   hasLocalVault,
+  isVaultSessionLocked,
+  NookPendingSyncConflict,
+  readVaultVersion,
   setActiveVault,
+  setVaultSessionLocked,
+  vaultContentHash,
   type NookLocalVaultEntry,
   type NookPasswordEntrySummary,
   type NookVaultManager,
 } from '$lib/nook-wasm/nook_wasm'
-import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
@@ -33,23 +38,18 @@ import {
   type StorageProviderType,
 } from '$lib/auth-providers'
 import {
-  chooseLocalFolderBackupDirectory,
-  syncLocalFolderProvider,
-} from '$lib/local-folder-sync'
-import {
   getBrowserAppLocale,
   parseAppLocale,
   type AppLocale,
 } from '$lib/locale'
-import { TRANSLATION_CATALOGS, lookupTranslation } from '$lib/locale-catalogs'
+import {
+  getTranslationCatalog,
+  translateFromCatalog,
+  type TranslationCatalog,
+} from '$lib/locale-catalogs'
 import { createLogger } from '$lib/log'
 import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
-import {
-  readVaultVersionFromBlob,
-  resolveVaultSyncIntervalMs,
-  vaultBlobContentHash,
-  type PendingSyncConflict,
-} from '$lib/vault-sync'
+import type { PendingSyncConflict } from '$lib/vault/sync'
 import {
   createVaultIdleSessionTracker,
   resolveVaultIdleTimeoutMs,
@@ -74,9 +74,23 @@ import * as lifecycleActions from '$lib/vault/lifecycle'
 
 const vaultLog = createLogger('vault')
 
+type PendingSyncConflictDraft = {
+  providerId: string
+  providerLabel: string
+  localYaml: string
+  remoteYaml: string
+  mode: string
+  pat: string
+  repo: string
+  remoteRevision?: string
+  kind?: string
+  localStoreId?: string
+  remoteStoreId?: string
+}
+
 export class VaultState {
   locale = $state<AppLocale>('en')
-  translations = $state<Record<string, unknown>>({})
+  translations = $state<TranslationCatalog>(getTranslationCatalog('en'))
 
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard' | 'admin'>('storage')
@@ -160,6 +174,10 @@ export class VaultState {
     return this.pendingSyncConflict !== undefined
   }
 
+  get syncConflictLabel(): string {
+    return syncActions.syncConflictLabel(this)
+  }
+
   get editsBlocked(): boolean {
     return this.syncBlocked || this.securityConflicts.length > 0
   }
@@ -216,7 +234,7 @@ export class VaultState {
 
   /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
   static syncIntervalMs(): number {
-    return resolveVaultSyncIntervalMs(import.meta.env)
+    return syncActions.resolveVaultSyncIntervalMs(import.meta.env)
   }
 
   successDismissTimer: ReturnType<typeof setTimeout> | undefined = undefined
@@ -398,7 +416,11 @@ export class VaultState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<void> {
-    this.localFolder = await chooseLocalFolderBackupDirectory()
+    const folder = await chooseLocalFolderBackupDirectory()
+    this.localFolder = {
+      directoryName: folder.directoryName,
+      handleId: folder.handleId,
+    }
   }
 
   dismissSuccess() {
@@ -529,14 +551,7 @@ export class VaultState {
   }
 
   t = (key: string, replacements?: Record<string, string>): string => {
-    const val =
-      lookupTranslation(this.translations, key) ??
-      lookupTranslation(TRANSLATION_CATALOGS[this.locale], key) ??
-      lookupTranslation(TRANSLATION_CATALOGS.en, key)
-    if (val === undefined) {
-      return key
-    }
-    let text = String(val)
+    let text = translateFromCatalog(this.translations, this.locale, key)
     if (replacements) {
       for (const [k, v] of Object.entries(replacements)) {
         text = text.replace(`{${k}}`, v)
@@ -1137,7 +1152,7 @@ export class VaultState {
     try {
       for (const provider of this.syncProviders) {
         if (provider.type === 'local-folder') {
-          await syncLocalFolderProvider(this, provider)
+          await syncActions.syncLocalFolderProvider(this, provider)
           continue
         }
         const [mode, pat, repo] = this.providerWasmArgs(provider)
@@ -1304,7 +1319,7 @@ export class VaultState {
     yaml: string,
     revision: string | undefined,
   ): Promise<void> {
-    const version = await readVaultVersionFromBlob(yaml)
+    const version = Number(readVaultVersion(yaml))
     // `vaultStoreId` borrows the wasm manager; read it through the storage chain
     // so it can't alias an in-flight `&mut self` op (recursive-borrow hang).
     const managerStoreId = this.manager
@@ -1317,7 +1332,7 @@ export class VaultState {
             lastSyncedAt: isoTimestamp(),
             lastSyncedVersion: version || p.lastSyncedVersion,
             lastSyncRevision: revision ?? p.lastSyncRevision,
-            lastCommonContentHash: vaultBlobContentHash(yaml),
+            lastCommonContentHash: vaultContentHash(yaml),
             storeId: managerStoreId || p.storeId,
           }
         : p,
@@ -1354,20 +1369,25 @@ export class VaultState {
   }
 
   async stageVaultSyncConflict(
-    conflict: Omit<
-      PendingSyncConflict,
-      'localVersion' | 'remoteVersion' | 'kind'
-    > &
-      Pick<PendingSyncConflict, 'kind' | 'localStoreId' | 'remoteStoreId'>,
+    conflict: PendingSyncConflictDraft,
   ): Promise<void> {
-    const localVersion = await readVaultVersionFromBlob(conflict.localYaml)
-    const remoteVersion = await readVaultVersionFromBlob(conflict.remoteYaml)
-    this.pendingSyncConflict = {
-      ...conflict,
-      kind: conflict.kind ?? 'content',
+    const localVersion = Number(readVaultVersion(conflict.localYaml))
+    const remoteVersion = Number(readVaultVersion(conflict.remoteYaml))
+    this.pendingSyncConflict = new NookPendingSyncConflict(
+      conflict.providerId,
+      conflict.providerLabel,
+      conflict.localYaml,
+      conflict.remoteYaml,
       localVersion,
       remoteVersion,
-    }
+      conflict.mode,
+      conflict.pat,
+      conflict.repo,
+      conflict.remoteRevision,
+      conflict.kind,
+      conflict.localStoreId,
+      conflict.remoteStoreId,
+    )
     this.errorMsg = ''
   }
 
@@ -1671,7 +1691,7 @@ export class VaultState {
           : undefined
     if (folderProvider) {
       try {
-        await syncLocalFolderProvider(this, folderProvider)
+        await syncActions.syncLocalFolderProvider(this, folderProvider)
       } catch (error) {
         vaultLog.warn('local backup sync skipped', {
           providerId: folderProvider.id,

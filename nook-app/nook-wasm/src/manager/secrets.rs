@@ -236,6 +236,16 @@ impl NookVaultManager {
         serde_wasm_bindgen::to_value(&merged).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    #[wasm_bindgen(js_name = syncLocalFolderProvider)]
+    pub async fn sync_local_folder_provider_js(
+        &mut self,
+        handle_id: &str,
+    ) -> Result<String, JsError> {
+        self.sync_local_folder_provider(handle_id)
+            .await
+            .map_err(Into::into)
+    }
+
     #[wasm_bindgen(js_name = eventLogMode)]
     pub fn event_log_mode(&self) -> bool {
         self.event_log.enabled

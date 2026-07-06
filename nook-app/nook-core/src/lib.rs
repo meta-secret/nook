@@ -46,7 +46,11 @@ pub use errors::{
     PasswordError, SecretPayloadError, SessionError, ValidationError, VaultCryptoError,
     VaultEpochError, VaultError, VaultFormatError, VaultResult, VaultSyncError,
 };
-pub use i18n::{get_translation_catalog, translate};
+pub use i18n::{
+    get_translation_catalog, lookup_translation, merge_translation_catalogs, parse_app_locale,
+    resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_translation_catalog,
+    translate, translate_from_catalog,
+};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,

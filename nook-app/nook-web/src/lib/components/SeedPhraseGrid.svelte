@@ -2,16 +2,16 @@
   import { Check } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import {
-    inferMnemonicLength,
+    inferBip39MnemonicLength,
+    isBip39WordSequenceValid,
     isKnownBip39Word,
-    isMnemonicValid,
-    joinMnemonicWords,
-    loadBip39Wordlist,
-    parseMnemonicWords,
+    joinBip39Words,
+    parseBip39Words,
     suggestBip39Words,
-    type MnemonicLength,
-  } from '$lib/bip39-wordlist'
-  import { validateBip39Mnemonic } from '$lib/nook-wasm/nook_wasm'
+    validateBip39Mnemonic,
+  } from '$lib/nook-wasm/nook_wasm'
+
+  type MnemonicLength = 12 | 24
 
   let {
     vault,
@@ -30,9 +30,6 @@
 
   let wordCount = $state<MnemonicLength>(12)
   let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
-  let wordlist = $state<Set<string> | undefined>(undefined)
-  let loading = $state(true)
-  let loadError = $state<string | undefined>(undefined)
   let syncingFromCells = $state(false)
   let focusedIndex = $state<number | undefined>(undefined)
   let suggestionIndex = $state(0)
@@ -41,9 +38,7 @@
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
-  const perWordValid = $derived(
-    Boolean(wordlist && isMnemonicValid(value, wordlist, wordCount)),
-  )
+  const perWordValid = $derived(isBip39WordSequenceValid(value, wordCount))
   const allWordsFilled = $derived(
     activeCells.every((word) => word.trim().length > 0),
   )
@@ -53,18 +48,18 @@
   )
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex === undefined || !wordlist) return []
+    if (readonly || focusedIndex === undefined) return []
     const prefix = cells[focusedIndex]?.trim().toLowerCase() ?? ''
     if (!prefix || prefix.includes(' ')) return []
-    if (wordlist.has(prefix)) return []
-    return suggestBip39Words(prefix, wordlist)
+    if (isKnownBip39Word(prefix)) return []
+    return suggestBip39Words(prefix, 8)
   })
 
   function applyValueToCells(seed: string) {
-    const inferred = inferMnemonicLength(seed)
-    if (inferred) wordCount = inferred
+    const inferred = inferBip39MnemonicLength(seed)
+    if (inferred === 12 || inferred === 24) wordCount = inferred
 
-    const words = parseMnemonicWords(seed)
+    const words = parseBip39Words(seed)
     const next = Array.from({ length: 24 }, () => '')
     for (let index = 0; index < words.length && index < 24; index += 1) {
       next[index] = words[index] ?? ''
@@ -74,14 +69,14 @@
 
   function syncValueFromCells() {
     syncingFromCells = true
-    value = joinMnemonicWords(cells.slice(0, wordCount))
+    value = joinBip39Words(cells.slice(0, wordCount))
     queueMicrotask(() => {
       syncingFromCells = false
     })
   }
 
   function applyPastedMnemonic(text: string, startIndex = 0) {
-    const words = parseMnemonicWords(text)
+    const words = parseBip39Words(text)
     if (words.length === 0) return
 
     if (words.length === 24) {
@@ -192,8 +187,8 @@
 
   function cellInvalid(index: number): boolean {
     const word = cells[index]?.trim()
-    if (!word || !wordlist) return false
-    return !isKnownBip39Word(word, wordlist)
+    if (!word) return false
+    return !isKnownBip39Word(word)
   }
 
   $effect(() => {
@@ -213,43 +208,10 @@
     checksumValid = ok
     valid = ok
   })
-
-  $effect(() => {
-    let cancelled = false
-    loading = true
-    loadError = undefined
-
-    void loadBip39Wordlist()
-      .then((set) => {
-        if (cancelled) return
-        wordlist = set
-        loading = false
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return
-        loadError =
-          error instanceof Error
-            ? error.message
-            : vault.t('add_secret.seed_wordlist_error')
-        loading = false
-      })
-
-    return () => {
-      cancelled = true
-    }
-  })
 </script>
 
 <div class="space-y-3" data-testid="seed-phrase-grid">
-  {#if loading}
-    <p class="text-xs text-muted-foreground">
-      {vault.t('add_secret.seed_wordlist_loading')}
-    </p>
-  {:else if loadError}
-    <p class="text-xs text-destructive" data-testid="seed-wordlist-error">
-      {vault.t('add_secret.seed_wordlist_error')}
-    </p>
-  {:else if !readonly}
+  {#if !readonly}
     <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"

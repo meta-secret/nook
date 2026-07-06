@@ -4,7 +4,7 @@
 //! The browser stores an [`AuthProvidersSnapshotData`] in the `nook_auth`
 //! `IndexedDB` database. All shaping of that data lives here so it is unit-tested
 //! in Rust; `nook-wasm` owns the `IndexedDB` I/O and device-key sealing, and the
-//! web layer keeps only the wire type declarations plus i18n presentation.
+//! web layer keeps only thin call adapters plus i18n presentation.
 
 use serde::{Deserialize, Serialize};
 

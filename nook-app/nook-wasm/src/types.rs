@@ -5,6 +5,59 @@ use crate::NookSecretRecord;
 use crate::NookVaultManager;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+#[wasm_bindgen(typescript_custom_section)]
+const AUTH_PROVIDER_TYPES: &'static str = r#"
+export type NookStorageProviderType =
+  | 'local'
+  | 'local-folder'
+  | 'github'
+  | 'oauth-file';
+
+export type NookOAuthFilePreset = 'google-drive' | 'icloud';
+
+export interface NookOAuthFileConfig {
+  preset: NookOAuthFilePreset;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: string;
+  fileId?: string;
+  fileName?: string;
+  accountEmail?: string;
+}
+
+export interface NookLocalFolderProviderConfig {
+  directoryName?: string;
+  handleId?: string;
+}
+
+export interface NookStorageProvider {
+  id: string;
+  type: NookStorageProviderType;
+  label: string;
+  githubPat?: string;
+  githubRepo?: string;
+  oauthFile?: NookOAuthFileConfig;
+  localFolder?: NookLocalFolderProviderConfig;
+  storeId?: string;
+  lastSyncedVersion?: number;
+  lastSyncedAt?: string;
+  lastSyncRevision?: string;
+  lastCommonContentHash?: string;
+  createdAt: string;
+}
+
+export interface NookAuthProvidersSnapshot {
+  providers: NookStorageProvider[];
+  activeVaultStoreId?: string;
+}
+
+export interface NookLoadedAuthProviders {
+  snapshot: NookAuthProvidersSnapshot;
+  legacyActiveProviderId?: string;
+  changed: boolean;
+}
+"#;
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookPasskeySetup {
@@ -335,10 +388,6 @@ impl NookSyncProviderTarget {
     pub fn is_oauth_file(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::OauthFile(_))
     }
-
-    pub(crate) fn as_core(&self) -> &nook_core::SyncProviderTarget {
-        &self.0
-    }
 }
 
 impl From<nook_core::SyncProviderTarget> for NookSyncProviderTarget {
@@ -572,6 +621,134 @@ pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVa
         .into_iter()
         .map(NookVaultMember::from_core)
         .collect()
+}
+
+/// Pending browser sync resolution state.
+///
+/// The comparison comes from core, but this object also carries the provider
+/// handle needed to resume the paused web storage operation.
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookPendingSyncConflict {
+    provider_id: String,
+    provider_label: String,
+    local_yaml: String,
+    remote_yaml: String,
+    local_version: f64,
+    remote_version: f64,
+    mode: String,
+    pat: String,
+    repo: String,
+    remote_revision: Option<String>,
+    kind: String,
+    local_store_id: Option<String>,
+    remote_store_id: Option<String>,
+}
+
+#[wasm_bindgen]
+impl NookPendingSyncConflict {
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        provider_id: String,
+        provider_label: String,
+        local_yaml: String,
+        remote_yaml: String,
+        local_version: f64,
+        remote_version: f64,
+        mode: String,
+        pat: String,
+        repo: String,
+        remote_revision: Option<String>,
+        kind: Option<String>,
+        local_store_id: Option<String>,
+        remote_store_id: Option<String>,
+    ) -> Self {
+        Self {
+            provider_id,
+            provider_label,
+            local_yaml,
+            remote_yaml,
+            local_version,
+            remote_version,
+            mode,
+            pat,
+            repo,
+            remote_revision,
+            kind: if kind.unwrap_or_default() == "store_id" {
+                "store_id".to_owned()
+            } else {
+                "content".to_owned()
+            },
+            local_store_id,
+            remote_store_id,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = providerId)]
+    pub fn provider_id(&self) -> String {
+        self.provider_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = providerLabel)]
+    pub fn provider_label(&self) -> String {
+        self.provider_label.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = localYaml)]
+    pub fn local_yaml(&self) -> String {
+        self.local_yaml.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = remoteYaml)]
+    pub fn remote_yaml(&self) -> String {
+        self.remote_yaml.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = localVersion)]
+    pub fn local_version(&self) -> f64 {
+        self.local_version
+    }
+
+    #[wasm_bindgen(getter, js_name = remoteVersion)]
+    pub fn remote_version(&self) -> f64 {
+        self.remote_version
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn mode(&self) -> String {
+        self.mode.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn pat(&self) -> String {
+        self.pat.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn repo(&self) -> String {
+        self.repo.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = remoteRevision)]
+    pub fn remote_revision(&self) -> Option<String> {
+        self.remote_revision.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = localStoreId)]
+    pub fn local_store_id(&self) -> Option<String> {
+        self.local_store_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = remoteStoreId)]
+    pub fn remote_store_id(&self) -> Option<String> {
+        self.remote_store_id.clone()
+    }
 }
 
 #[wasm_bindgen]

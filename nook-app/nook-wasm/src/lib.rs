@@ -20,10 +20,11 @@ mod sync_io;
 mod types;
 
 pub use manager::NookVaultManager;
+pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
     NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
     NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
-    NookReplacementConflict, NookSecretFormFields, NookSecurityConflict, NookSyncProviderTarget,
+    NookPendingSyncConflict, NookReplacementConflict, NookSecretFormFields, NookSecurityConflict,
     NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
@@ -68,10 +69,92 @@ pub fn translate_key(locale: &str, key: &str) -> String {
     nook_core::translate(locale, key)
 }
 
+#[wasm_bindgen(js_name = parseAppLocale)]
+#[must_use]
+pub fn parse_app_locale(value: &str) -> Option<String> {
+    nook_core::parse_app_locale(value).map(str::to_owned)
+}
+
+#[wasm_bindgen(js_name = resolveAppLocaleFromTag)]
+#[must_use]
+pub fn resolve_app_locale_from_tag(tag: &str) -> Option<String> {
+    nook_core::resolve_app_locale_from_tag(tag).map(str::to_owned)
+}
+
+#[wasm_bindgen(js_name = resolveAppLocaleFromTags)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
+    nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
+}
+
 #[wasm_bindgen]
 #[must_use]
 pub fn get_translation_catalog(locale: &str) -> String {
     nook_core::get_translation_catalog(locale).to_owned()
+}
+
+#[wasm_bindgen(js_name = lookupTranslation)]
+#[must_use]
+pub fn lookup_translation(catalog_json: &str, key: &str) -> Option<String> {
+    nook_core::lookup_translation(catalog_json, key)
+}
+
+#[wasm_bindgen(js_name = translateFromCatalog)]
+#[must_use]
+pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
+    nook_core::translate_from_catalog(catalog_json, locale, key)
+}
+
+#[wasm_bindgen(js_name = mergeTranslationCatalogs)]
+pub fn merge_translation_catalogs(
+    base_json: &str,
+    overlay_json: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    nook_core::merge_translation_catalogs(base_json, overlay_json).map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = resolveTranslationCatalog)]
+#[must_use]
+pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: Option<String>) -> String {
+    match wasm_catalog_json {
+        Some(wasm_catalog) => nook_core::resolve_translation_catalog(locale, Some(&wasm_catalog)),
+        None => nook_core::resolve_translation_catalog(locale, None),
+    }
+}
+
+#[wasm_bindgen(js_name = isVaultSessionLocked)]
+#[must_use]
+pub fn is_vault_session_locked() -> bool {
+    storage::session::is_vault_session_locked()
+}
+
+#[wasm_bindgen(js_name = setVaultSessionLocked)]
+pub fn set_vault_session_locked(locked: bool) {
+    storage::session::set_vault_session_locked(locked);
+}
+
+#[wasm_bindgen(js_name = isLocalFolderBackupSupported)]
+#[must_use]
+pub fn is_local_folder_backup_supported() -> bool {
+    storage::local_folder::is_local_folder_backup_supported()
+}
+
+#[wasm_bindgen(js_name = chooseLocalFolderBackupDirectory)]
+pub async fn choose_local_folder_backup_directory()
+-> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
+    storage::local_folder::choose_local_folder_backup_directory()
+        .await
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = removeLocalFolderHandle)]
+pub async fn remove_local_folder_handle(
+    handle_id: Option<String>,
+) -> Result<(), wasm_bindgen::JsError> {
+    storage::local_folder::remove_local_folder_handle(handle_id)
+        .await
+        .map_err(Into::into)
 }
 
 #[wasm_bindgen(js_name = validateBip39Mnemonic)]
@@ -232,20 +315,6 @@ pub fn provider_default_label(
         detail.as_deref(),
         oauth_preset,
     ))
-}
-
-#[wasm_bindgen(js_name = syncProviderTargetKey)]
-#[must_use]
-pub fn sync_provider_target_key(target: &NookSyncProviderTarget) -> Option<String> {
-    nook_core::sync_provider_target_key(target.as_core())
-}
-
-#[wasm_bindgen(js_name = syncProviderTargetKeyForProvider)]
-pub fn sync_provider_target_key_for_provider(
-    provider: JsValue,
-) -> Result<Option<String>, wasm_bindgen::JsError> {
-    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
-    Ok(nook_core::provider_target_key(&provider))
 }
 
 /// Masked GitHub PAT hint for provider lists. `None` means no token is saved;

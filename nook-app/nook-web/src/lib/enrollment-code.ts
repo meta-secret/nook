@@ -11,12 +11,7 @@
  */
 
 import {
-  NookEnrollmentIssueInput,
-  NookEnrollmentProvider,
-  StorageProviderType,
   default as initNookWasm,
-  decryptEnrollmentPayload as decryptEnrollmentPayloadCore,
-  encryptEnrollmentPayload as encryptEnrollmentPayloadCore,
   peekEnrollmentEntryId as peekEnrollmentEntryIdCore,
   peekEnrollmentEntryLabel as peekEnrollmentEntryLabelCore,
   peekEnrollmentIssuedAt as peekEnrollmentIssuedAtCore,
@@ -24,39 +19,7 @@ import {
 
 await initNookWasm()
 
-export type EnrollmentProvider =
-  | { type: 'local' }
-  | {
-      type: 'github'
-      pat: string
-      repo: string
-    }
-
-export type EnrollmentIssueInput = {
-  provider: EnrollmentProvider
-  entry_id: string
-  issued_at: string
-}
-
-export type DecryptedEnrollmentPayload = {
-  provider: EnrollmentProvider
-  entry_id: string
-  issued_at: string
-}
-
 const ENROLLMENT_HASH_PREFIX = '#enroll='
-
-export async function encryptEnrollmentPayload(
-  payload: EnrollmentIssueInput,
-  password: string,
-  entryLabel = '',
-): Promise<string> {
-  return encryptEnrollmentPayloadCore(
-    toWasmIssueInput(payload),
-    password,
-    entryLabel,
-  )
-}
 
 export function peekEnrollmentIssuedAt(code: string): string | undefined {
   const normalized = normalizeEnrollmentCode(code)
@@ -163,49 +126,4 @@ export function consumeEnrollmentFromLocation(): string | undefined {
 
   history.replaceState(undefined, '', `${url.pathname}${url.search}${url.hash}`)
   return normalizeEnrollmentCode(raw)
-}
-
-export async function decryptEnrollmentPayload(
-  code: string,
-  password: string,
-): Promise<DecryptedEnrollmentPayload> {
-  const decrypted = decryptEnrollmentPayloadCore(
-    normalizeEnrollmentCode(code),
-    password,
-  )
-  return {
-    provider: fromWasmProvider(decrypted.provider),
-    entry_id: decrypted.entryId,
-    issued_at: decrypted.issuedAt,
-  }
-}
-
-function toWasmIssueInput(
-  payload: EnrollmentIssueInput,
-): NookEnrollmentIssueInput {
-  return new NookEnrollmentIssueInput(
-    toWasmProvider(payload.provider),
-    payload.entry_id,
-    payload.issued_at,
-  )
-}
-
-function toWasmProvider(provider: EnrollmentProvider): NookEnrollmentProvider {
-  if (provider.type === 'github') {
-    return NookEnrollmentProvider.github(provider.repo, provider.pat)
-  }
-  return NookEnrollmentProvider.local()
-}
-
-function fromWasmProvider(
-  provider: NookEnrollmentProvider,
-): EnrollmentProvider {
-  if (provider.type === StorageProviderType.Github) {
-    return {
-      type: 'github',
-      pat: provider.githubPat ?? '',
-      repo: provider.githubRepo ?? '',
-    }
-  }
-  return { type: 'local' }
 }

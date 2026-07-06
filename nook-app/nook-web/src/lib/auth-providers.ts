@@ -10,71 +10,26 @@ import {
   maskGithubPatHint as maskGithubPatHintCore,
   providerDefaultLabel as providerDefaultLabelCore,
   saveAuthProviders as saveAuthProvidersWasm,
-  syncProviderTargetKeyForProvider as syncProviderTargetKeyForProviderCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
+  type NookAuthProvidersSnapshot,
+  type NookLoadedAuthProviders,
+  type NookLocalFolderProviderConfig,
+  type NookOAuthFileConfig,
+  type NookOAuthFilePreset,
+  type NookStorageProvider,
+  type NookStorageProviderType,
   type NookVaultManager,
 } from './nook-wasm/nook_wasm'
 
 await initNookWasm()
 
-export type StorageProviderType =
-  | 'local'
-  | 'local-folder'
-  | 'github'
-  | 'oauth-file'
-
-export type OAuthFilePreset = 'google-drive' | 'icloud'
-
-export interface OAuthFileConfig {
-  preset: OAuthFilePreset
-  accessToken: string
-  refreshToken?: string
-  expiresAt?: string
-  fileId?: string
-  /** Optional Drive/iCloud label retained for account display. */
-  fileName?: string
-  accountEmail?: string
-}
-
-export interface LocalFolderConfig {
-  directoryName?: string
-  handleId?: string
-}
-
-export interface StorageProvider {
-  id: string
-  type: StorageProviderType
-  label: string
-  githubPat?: string
-  /** GitHub repository name (not owner/name). Defaults to `nook`. */
-  githubRepo?: string
-  oauthFile?: OAuthFileConfig
-  localFolder?: LocalFolderConfig
-  /** Logical secret-store id — same across provider replicas of one vault. */
-  storeId?: string
-  /** Monotonic vault_version after last successful sync to this provider. */
-  lastSyncedVersion?: number
-  /** ISO timestamp of last successful sync. */
-  lastSyncedAt?: string
-  /** Remote revision token (GitHub sha, Drive revisionId) for the next write. */
-  lastSyncRevision?: string
-  /** SHA-256 of the last vault blob both local and this provider shared. */
-  lastCommonContentHash?: string
-  createdAt: string
-}
-
-export interface AuthProvidersSnapshot {
-  providers: StorageProvider[]
-  /** Active vault store_id — providers are scoped to this vault. */
-  activeVaultStoreId?: string
-}
-
-/** Shape returned by the wasm `loadAuthProviders` pipeline. */
-interface LoadedAuthProviders {
-  snapshot: AuthProvidersSnapshot
-  legacyActiveProviderId: string | undefined
-  changed: boolean
-}
+export type StorageProviderType = NookStorageProviderType
+export type OAuthFilePreset = NookOAuthFilePreset
+export type OAuthFileConfig = NookOAuthFileConfig
+export type LocalFolderConfig = NookLocalFolderProviderConfig
+export type StorageProvider = NookStorageProvider
+export type AuthProvidersSnapshot = NookAuthProvidersSnapshot
+type LoadedAuthProviders = NookLoadedAuthProviders
 
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
@@ -82,13 +37,6 @@ export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
 function toPlain<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
-}
-
-/** Canonical identity for a sync target — two providers with the same key are duplicates. */
-export function syncProviderTargetKey(
-  provider: StorageProvider,
-): string | undefined {
-  return syncProviderTargetKeyForProviderCore(toPlain(provider)) ?? undefined
 }
 
 export function findDuplicateSyncProvider(

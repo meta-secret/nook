@@ -1,29 +1,36 @@
 import { describe, expect, test } from 'vitest'
 import {
   buildEnrollmentLink,
-  decryptEnrollmentPayload,
-  encryptEnrollmentPayload,
   normalizeEnrollmentCode,
   peekEnrollmentEntryId,
   peekEnrollmentEntryLabel,
   peekEnrollmentIssuedAt,
-  type EnrollmentIssueInput,
 } from '$lib/enrollment-code'
+import {
+  NookEnrollmentIssueInput,
+  NookEnrollmentProvider,
+  StorageProviderType,
+  default as initNookWasm,
+  decryptEnrollmentPayload,
+  encryptEnrollmentPayload,
+} from '$lib/nook-wasm/nook_wasm'
 
-const samplePayload: EnrollmentIssueInput = {
-  provider: { type: 'local' },
-  entry_id: 'entry-local',
-  issued_at: '2026-06-23T12:00:00Z',
+await initNookWasm()
+
+function samplePayload(): NookEnrollmentIssueInput {
+  return new NookEnrollmentIssueInput(
+    NookEnrollmentProvider.local(),
+    'entry-local',
+    '2026-06-23T12:00:00Z',
+  )
 }
 
-const githubPayload: EnrollmentIssueInput = {
-  provider: {
-    type: 'github',
-    pat: 'github_pat_11AAAAbbbbCCCC',
-    repo: 'team-vault',
-  },
-  entry_id: 'entry-1',
-  issued_at: '2026-06-23T12:00:00Z',
+function githubPayload(): NookEnrollmentIssueInput {
+  return new NookEnrollmentIssueInput(
+    NookEnrollmentProvider.github('team-vault', 'github_pat_11AAAAbbbbCCCC'),
+    'entry-1',
+    '2026-06-23T12:00:00Z',
+  )
 }
 
 function decodeOuterJson(code: string): Record<string, unknown> {
@@ -36,19 +43,19 @@ function decodeOuterJson(code: string): Record<string, unknown> {
 
 describe('enrollment-code links', () => {
   test('buildEnrollmentLink wraps the raw code in a hash URL', async () => {
-    const code = await encryptEnrollmentPayload(samplePayload, 'hunter2')
+    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
     expect(buildEnrollmentLink(code, 'https://nook.example')).toBe(
       `https://nook.example/#enroll=${encodeURIComponent(code)}`,
     )
   })
 
   test('normalizeEnrollmentCode accepts raw base64url codes', async () => {
-    const code = await encryptEnrollmentPayload(samplePayload, 'hunter2')
+    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
     expect(normalizeEnrollmentCode(code)).toBe(code)
   })
 
   test('normalizeEnrollmentCode extracts codes from hash links', async () => {
-    const code = await encryptEnrollmentPayload(samplePayload, 'hunter2')
+    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
     const link = buildEnrollmentLink(code, 'https://nook.example')
     expect(normalizeEnrollmentCode(link)).toBe(code)
   })
@@ -56,8 +63,8 @@ describe('enrollment-code links', () => {
 
 describe('enrollment payloads', () => {
   test('encrypts provider creds and exposes entry_id without the password', async () => {
-    const code = await encryptEnrollmentPayload(
-      githubPayload,
+    const code = encryptEnrollmentPayload(
+      githubPayload(),
       'vault-pass-99',
       'Work laptop',
     )
@@ -72,17 +79,17 @@ describe('enrollment payloads', () => {
     expect(outer.entry_id).toBe('entry-1')
     expect(outer.ct).toBeTruthy()
 
-    const decrypted = await decryptEnrollmentPayload(code, 'vault-pass-99')
-    expect(decrypted).toEqual({
-      provider: githubPayload.provider,
-      entry_id: 'entry-1',
-      issued_at: '2026-06-23T12:00:00Z',
-    })
+    const decrypted = decryptEnrollmentPayload(code, 'vault-pass-99')
+    expect(decrypted.entryId).toBe('entry-1')
+    expect(decrypted.issuedAt).toBe('2026-06-23T12:00:00Z')
+    expect(decrypted.provider.type).toBe(StorageProviderType.Github)
+    expect(decrypted.provider.githubPat).toBe('github_pat_11AAAAbbbbCCCC')
+    expect(decrypted.provider.githubRepo).toBe('team-vault')
   })
 
   test('rejects wrong vault passwords', async () => {
-    const code = await encryptEnrollmentPayload(samplePayload, 'hunter2')
-    await expect(decryptEnrollmentPayload(code, 'wrong-pass')).rejects.toThrow(
+    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
+    expect(() => decryptEnrollmentPayload(code, 'wrong-pass')).toThrow(
       'Vault password does not decrypt this enrollment code.',
     )
   })
@@ -92,7 +99,7 @@ describe('enrollment payloads', () => {
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '')
-    await expect(decryptEnrollmentPayload(malformed, 'pw')).rejects.toThrow(
+    expect(() => decryptEnrollmentPayload(malformed, 'pw')).toThrow(
       'Invalid enrollment code.',
     )
     expect(peekEnrollmentEntryId(malformed)).toBeUndefined()

@@ -1,5 +1,5 @@
 import type { VaultState } from '$lib/vault.svelte'
-import { setVaultSessionLocked } from '$lib/vault-session'
+import { setVaultSessionLocked } from '$lib/nook-wasm/nook_wasm'
 import { createLogger } from '$lib/log'
 
 const log = createLogger('vault-session')

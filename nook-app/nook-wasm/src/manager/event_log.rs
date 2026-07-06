@@ -18,7 +18,10 @@ use crate::storage::github_events::{
 use crate::storage::icloud::{
     fetch_icloud_event, list_icloud_event_ids, put_icloud_event_if_absent,
 };
-use crate::storage::indexed_db::save_to_indexed_db;
+use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
+use crate::storage::local_folder::{
+    LocalFolderEventWrite, read_local_folder_event_files, write_local_folder_event_files,
+};
 use nook_core::{
     AppendEventInput, EventId, SigningIdentity, VaultEvent, VaultOperation,
     apply_user_records_to_armored_session, build_signed_event, members_checkpoint_hash_from_roster,
@@ -564,6 +567,41 @@ impl NookVaultManager {
         }
 
         self.export_event_log_records().await
+    }
+
+    pub(in crate::manager) async fn sync_local_folder_provider(
+        &mut self,
+        handle_id: &str,
+    ) -> Result<String, NookError> {
+        let remote_records = read_local_folder_event_files(handle_id)
+            .await?
+            .into_iter()
+            .map(|file| {
+                Self::parse_event_log_storage_record(&file.event_id, &file.path, &file.content).map(
+                    |record| ExternalEventLogRecord {
+                        event_id: record.event_id,
+                        event: record.event,
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let remote_event_ids = remote_records
+            .iter()
+            .map(|record| record.event_id.clone())
+            .collect::<BTreeSet<_>>();
+        let merged = self.sync_external_event_log_records(remote_records).await?;
+        let writes = merged
+            .iter()
+            .filter(|record| !remote_event_ids.contains(&record.event_id))
+            .map(|record| {
+                Ok(LocalFolderEventWrite {
+                    event_id: record.event_id.clone(),
+                    content: Self::serialize_event_log_storage_record(record)?,
+                })
+            })
+            .collect::<Result<Vec<_>, NookError>>()?;
+        write_local_folder_event_files(handle_id, &writes).await?;
+        Ok(load_from_indexed_db().await?.unwrap_or_default())
     }
 
     async fn list_current_provider_event_ids(&self) -> Result<BTreeSet<EventId>, NookError> {
