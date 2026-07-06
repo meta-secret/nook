@@ -1,0 +1,96 @@
+version: '3'
+
+vars:
+  REPO_ROOT:
+    sh: git rev-parse --show-toplevel
+  APP_ROOT: '{{.REPO_ROOT}}/nook-app'
+  WEB_ROOT: '{{.APP_ROOT}}/nook-web'
+  EXTENSION_ROOT: '{{.APP_ROOT}}/nook-web-extension'
+  DOCKER: '{{default "docker" .DOCKER}}'
+  # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that, with the
+  # containerd image store, the build result is written STRAIGHT into the image store — no 9 GB
+  # tarball export + `docker load`. Warm builds only write the small changed source/dist layers;
+  # unchanged deps/target layers already live in the store. Do NOT point this at a
+  # `docker-container` builder: that driver forces a full-image re-export on every build.
+  #
+  # buildx auto-creates a docker-driver builder named after the active docker context, so
+  # `docker context show` yields the right builder everywhere: `desktop-linux` on Docker Desktop,
+  # `default` on plain Linux/CI. Override by exporting BUILDX_BUILDER.
+  BUILDX_BUILDER:
+    sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
+  # The sealed nook-web image is always loaded locally as nook-web:local (both dev and CI).
+  DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
+  TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
+  GIT_COMMIT_ID:
+    sh: cd "{{.REPO_ROOT}}" && git rev-parse HEAD
+  # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
+  NOOK_BAKE_FILES: >-
+    --allow=fs.read={{.REPO_ROOT}}
+    -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/docker/base.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-wasm/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-web/docker-bake.hcl
+    --set '*.context={{.REPO_ROOT}}'
+  # ci sets TOOLCHAIN_REGISTRY so bake reuses GHCR :buildcache; dev builds locally.
+  NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
+  VITE_BASE: '{{default "/" .VITE_BASE}}'
+  VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
+
+includes:
+  docker:
+    taskfile: .task/docker.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+  ci:
+    taskfile: .task/ci.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+  core:
+    taskfile: .task/core.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+  wasm:
+    taskfile: .task/wasm.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+  web:
+    taskfile: .task/web.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+  extension:
+    taskfile: .task/extension.yml
+    dir: '{{.REPO_ROOT}}'
+    flatten: true
+
+tasks:
+  default:
+    desc: Build every project.
+    cmds:
+      - task: build
+
+  setup:
+    desc: Build the linux/amd64 nook-web image (source-in-image; pulls the GHCR toolchain base as cache).
+    dir: '{{.REPO_ROOT}}'
+    # Always rebuild: the sealed image must reflect current source. TOOLCHAIN_REGISTRY is ALWAYS
+    # wired so buildx pulls the shared toolchain base + :buildcache (cache-from) — local dev and CI
+    # alike — so a fresh checkout reuses CI's warm dep/target layers instead of a cold recompile.
+    # setup never sets TOOLCHAIN_PUSH, so it only pulls; publishing is CI-only (docker:push).
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      VITE_BASE: '{{.VITE_BASE}}'
+    cmds:
+      # buildx bake can flake when parallel targets load the same Dockerfile (e.g. builder-deps +
+      # builder-debug both use nook-app/nook-core/Dockerfile) — retry before failing CI on a transient parse error.
+      - >-
+        bash -c 'set -euo pipefail;
+        for attempt in 1 2 3; do
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-web; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task setup: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'

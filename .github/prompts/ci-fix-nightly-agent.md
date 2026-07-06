@@ -33,11 +33,11 @@ Live e2e requires `NOOK_GITHUB_PAT` and a disposable `NOOK_GITHUB_E2E_REPO` (alr
      ```
    - **Sync-live e2e failure only** (most common for this workflow):
      ```bash
-     cp -a nook-web/dist nook-web/dist-prod
+     cp -a nook-app/nook-web/dist nook-app/nook-web/dist-prod
      task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
      task web:e2e:restore-prod-dist
      ```
-     Always run `task web:e2e:restore-prod-dist` after e2e — it removes `nook-web/dist-prod`.
+     Always run `task web:e2e:restore-prod-dist` after e2e — it removes `nook-app/nook-web/dist-prod`.
    - **Full nightly scope** (when unsure which stage failed):
      ```bash
      task ci:nightly:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000

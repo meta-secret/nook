@@ -76,7 +76,7 @@ Lock is the safe “step away from this browser” action — analogous to loggi
 | Lock / switch | Clears session; vault chooser when multiple vaults exist |
 | `store_id` mismatch | **Import as new vault** in sync conflict dialog |
 
-Legacy `encrypted_db` migrates to `vault:{store_id}` on first load. Code: `nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
+Legacy `encrypted_db` migrates to `vault:{store_id}` on first load. Code: `nook-app/nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
 
 ---
 

@@ -64,7 +64,7 @@ Does not apply to:
 
 - Before: fix code, push, call `resolveReviewThread`, no agent reply.
 - After: fix code, push, reply to the specific thread: "Fixed by moving the
-  parser check into Rust and validated with `cargo test -p nook-core parser_conflict`."
+  parser check into Rust and validated with `cd nook-app && cargo test -p nook-core parser_conflict`."
   If it is a CodeRabbit thread, wait for CodeRabbit to mark/close it; for human
   review threads, resolve only after the reply when appropriate.
 - Before: resolve an outdated formatting comment because it looks obsolete.

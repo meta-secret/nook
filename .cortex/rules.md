@@ -40,7 +40,7 @@ This document defines the strict development standards, architectural boundaries
 
 ## 3. Svelte 5 & TypeScript UI Standards
 
-- **No `null` in authored TypeScript/Svelte:** Authored `nook-web/src` code must
+- **No `null` in authored TypeScript/Svelte:** Authored `nook-app/nook-web/src` code must
   not use `null` as a value, state sentinel, return type, parameter type, or
   default prop value. Use `undefined` for absent values and model meaningful
   UI/domain states with discriminated unions or Rust/WASM-owned enums. Browser
@@ -68,9 +68,9 @@ This document defines the strict development standards, architectural boundaries
 
 | Layer                         | Target                                                                            | Where                                                        |
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-core/src/**` `#[cfg(test)]`, `nook-core/tests/*.rs`    |
-| **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
-| **E2e (Playwright)**          | Critical UI smoke only — unlock, save, sync stub, conflict UX                     | `nook-web/e2e/`                                              |
+| **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-app/nook-core/src/**` `#[cfg(test)]`, `nook-app/nook-core/tests/*.rs`    |
+| **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-app/nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
+| **E2e (Playwright)**          | Critical UI smoke only — unlock, save, sync stub, conflict UX                     | `nook-app/nook-web/e2e/`                                              |
 
 When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
 
@@ -80,7 +80,7 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 
 | Artifact                        | Purpose                                                                                                                               |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-core/coverage-floor.json` | Minimum **line** coverage % (currently **90**)                                                                                        |
+| `nook-app/nook-core/coverage-floor.json` | Minimum **line** coverage % (currently **90**)                                                                                        |
 | `task rust:coverage:check`      | CI/local gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check`, `task ci:pr`) |
 | `task rust:coverage`            | Report only (no threshold check)                                                                                                      |
 | `task rust:coverage:update`     | Optional — rewrite floor file to measured % (user approval only)                                                                      |
@@ -94,10 +94,10 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 
 Fast iteration without coverage instrumentation: `task rust:test` (nextest only).
 
-- **Vault domain logic:** Add or update tests in `nook-core` (`task rust:test` / `cargo nextest run -p nook-core --profile ci`). Prefer colocated module unit tests for pure functions; use `tests/event_log_workflow.rs` and siblings for multi-device / provider scenarios.
+- **Vault domain logic:** Add or update tests in `nook-core` (`task rust:test` / `cd nook-app && cargo nextest run -p nook-core --profile ci`). Prefer colocated module unit tests for pure functions; use `tests/event_log_workflow.rs` and siblings for multi-device / provider scenarios.
 - **Complex sync cases:** Event-sourcing merge (causal DAG, not scalar vector clocks), concurrent append, out-of-order delivery, join heads, replacement/security conflicts — must have dedicated Rust tests. See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
 - **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `StoreId`, `DevicePublicKey`, …) over raw `String` / `u32` in `nook-core` domain APIs. A bare `String` does not carry meaning; the compiler cannot catch swapped arguments. Use serde-transparent wrappers so wire JSON stays unchanged. Version fields (`VaultEventSchemaVersion`, …) must be newtypes — the app keeps multiple schema versions and each struct must declare which version it speaks. Full inventory: [design-docs/typed-newtypes.md](design-docs/typed-newtypes.md). WASM getters may still return `String`; parse before calling core. No type-state for its own sake.
-- **UI / integration:** Playwright e2e in `nook-web/e2e/` — `task web:test:e2e` on PR and main CI (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
+- **UI / integration:** Playwright e2e in `nook-app/nook-web/e2e/` — `task web:test:e2e` on PR and main CI (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
 - **Debugging / troubleshooting / CI verification — always check app logs:** After
   test output and static analysis, persisted application logs are the **most
   important** remaining signal. When a Playwright spec fails, CI goes red, or a web

@@ -9,7 +9,7 @@
 ## 2. Dev Server and Build
 
 - Start Vite dev server: `task web:dev` (Docker; port 5173).
-- Build the production assets: `task web:build` (outputs to `nook-web/dist/`).
+- Build the production assets: `task web:build` (outputs to `nook-app/nook-web/dist/`).
 - The Svelte config is located in `svelte.config.js` and Vite config in `vite.config.ts`.
 
 ### Blank page after WASM changes
@@ -21,7 +21,7 @@ still serving a **stale cached transform** from before `wasm-pack` ran.
 
 ```bash
 docker ps --filter publish=5173 -q | xargs docker stop
-rm -rf nook-web/node_modules/.vite
+rm -rf nook-app/nook-web/node_modules/.vite
 task web:dev
 ```
 
@@ -33,6 +33,6 @@ After `task wasm:build` or any `nook-wasm` / `nook-core` change, restart
 - **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
 - Full stub Playwright (`e2e` project): `task web:test:e2e` — all stub specs including sync; runs on PR and main CI.
 - Fast subset Playwright (`e2e-pr` project): `task web:test:e2e:pr` — manual/debug-only subset for vault CRUD, login, legal pages (no sync HTTP).
-- Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-web/.env.test.local`.
+- Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
 - Prefer local Docker (cached images) over GitHub Actions for e2e iteration; push only when local gates pass. See [workflows/coding-bro.md](../workflows/coding-bro.md).

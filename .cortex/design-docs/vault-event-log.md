@@ -65,7 +65,7 @@ Events are hashed and signed over **canonical JSON**:
 - array order preserved (`parents` sorted before signing);
 - `created_at` is audit/UI only — never used for merge correctness.
 
-Implementation: `nook-core/src/event_canonical.rs`.
+Implementation: `nook-app/nook-core/src/event_canonical.rs`.
 
 ## Causal model
 
@@ -77,11 +77,11 @@ Each event lists all locally observed heads in `parents`. Therefore:
 
 Unknown-parent events stay **pending** until dependencies arrive.
 
-Implementation: `nook-core/src/vault_event_graph.rs`.
+Implementation: `nook-app/nook-core/src/vault_event_graph.rs`.
 
 ## Domain projection
 
-The reducer (`nook-core/src/vault_projection.rs`) must yield the same result for every permutation of the same valid event set.
+The reducer (`nook-app/nook-core/src/vault_projection.rs`) must yield the same result for every permutation of the same valid event set.
 
 | Operation | Semantics |
 |-----------|-----------|
@@ -150,7 +150,7 @@ any other `IndexedDB` object store.
 
 1. Byte-for-byte backup of source projection YAML → `source_backup:{store_id}` in IndexedDB (first import only).
 2. `verify_stored_vault_import` — secret id parity before append.
-3. Deterministic `vault-imported` genesis event from `VaultHashContext` (`nook-core/src/vault_import.rs`).
+3. Deterministic `vault-imported` genesis event from `VaultHashContext` (`nook-app/nook-core/src/vault_import.rs`).
 4. Local append before remote upload (`MIGRATION_START` / `MIGRATION_SUCCESS` status events).
 5. Set-union fan-out to all providers; later provider flushes repair any local
    events the provider does not yet have.
@@ -188,7 +188,7 @@ These behaviors must be covered by **Rust tests** (~99% of sync correctness). E2
 
 When adding operations or merge rules, add colocated unit tests **and** extend the harness scenarios if multi-device behavior changes.
 
-**Coverage:** `task rust:coverage:check` enforces a **90%** line floor (`nook-core/coverage-floor.json`). Event-log modules (`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority for test additions when changing sync semantics or when coverage drops below 90%.
+**Coverage:** `task rust:coverage:check` enforces a **90%** line floor (`nook-app/nook-core/coverage-floor.json`). Event-log modules (`vault_event_graph`, `vault_projection`, `vault_event_store`) are high-priority for test additions when changing sync semantics or when coverage drops below 90%.
 
 ## Related
 

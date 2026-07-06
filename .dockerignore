@@ -1,10 +1,11 @@
 .git
 .cortex
 target
+nook-app/target
 node_modules
 dist
-nook-web/node_modules
-nook-web/dist
-nook-web/src/lib/nook-wasm
-nook-web-extension/dist
+nook-app/nook-web/node_modules
+nook-app/nook-web/dist
+nook-app/nook-web/src/lib/nook-wasm
+nook-app/nook-web-extension/dist
 .DS_Store

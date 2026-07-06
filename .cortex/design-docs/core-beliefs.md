@@ -17,7 +17,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Predictable Structure**: Each package has a strict layer of responsibility. We enforce a one-way dependency flow: `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI). Any cross-layer leakage is disallowed.
 
 ## 4. Centralize Tooling behind a Single Command Surface
-* **Task runner as the API**: We use `Taskfile.yml` as the single interface for all development tasks. Agents do not run raw compiler, bundler, or environment commands. They call `task setup`, `task check`, `task build`, or `task web:dev`.
+* **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml` and `nook-app/.task/`. Agents do not run raw compiler, bundler, or environment commands. They call `task setup`, `task check`, `task build`, or `task web:dev`.
 * **Containerized Toolchain**: All compiles, tests, and package installs run inside Docker to ensure environment parity between the host machine and GitHub Actions CI.
 
 ## 5. Pay Down Tech Debt Continuously
@@ -38,7 +38,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
 * **~99% of functional coverage belongs in Rust unit and integration tests** (`nook-core`). Event sourcing, decentralized set-union sync, causal DAG merge, projection replay, epoch conflicts, and crypto must be proven there — not inferred from Playwright.
 * **E2e validates thin UI paths** (unlock, save, stub sync, conflict screens). Treat e2e failures as integration regressions; treat missing Rust tests for new domain behavior as a coverage gap to fix immediately.
-* **Line coverage threshold:** `task rust:coverage:check` enforces a **90%** line floor (`nook-core/coverage-floor.json`). Below 90%, agents add Rust tests in the same task. Above 90%, prioritize behavioral tests over chasing every line.
+* **Line coverage threshold:** `task rust:coverage:check` enforces a **90%** line floor (`nook-app/nook-core/coverage-floor.json`). Below 90%, agents add Rust tests in the same task. Above 90%, prioritize behavioral tests over chasing every line.
 * **Prefer type-safe domain APIs** (newtypes, type-state markers at boundaries) when they prevent invalid states without obscuring the code. Simplicity wins over pattern theatrics.
 
 ## 10. Grow Cortex Dynamically

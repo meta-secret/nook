@@ -36,9 +36,10 @@ tasks:
     deps:
       - ci-agent:prepare
     env:
-      REPO_ROOT: '{{.ROOT_DIR}}'
-      VITE_BASE: '{{.VITE_BASE}}'
-      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      REPO_ROOT:
+        sh: git rev-parse --show-toplevel
+      VITE_BASE: '{{default "/" .VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - node {{.CI_AGENT_DIR}}/dist/main/main.js agent
 
@@ -48,8 +49,9 @@ tasks:
       - ci-agent:prepare
       - setup
     env:
-      REPO_ROOT: '{{.ROOT_DIR}}'
-      VITE_BASE: '{{.VITE_BASE}}'
-      VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      REPO_ROOT:
+        sh: git rev-parse --show-toplevel
+      VITE_BASE: '{{default "/" .VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - node {{.CI_AGENT_DIR}}/dist/main/main.js fix

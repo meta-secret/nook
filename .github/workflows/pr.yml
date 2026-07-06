@@ -131,10 +131,8 @@ jobs:
             git worktree remove --force ../nook-base-coverage >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          # Measure base source coverage with this PR's coverage plumbing. That lets CI verify
-          # Dockerfile/task changes in the PR itself instead of running base's older export task.
-          cp nook-core/Dockerfile ../nook-base-coverage/nook-core/Dockerfile
-          cp .task/docker.yml ../nook-base-coverage/.task/docker.yml
+          # Measure base source coverage in the base worktree's own layout. The PR image above
+          # already verifies this branch's current Dockerfile/task plumbing.
           (
             cd ../nook-base-coverage
             task setup VITE_BASE=/

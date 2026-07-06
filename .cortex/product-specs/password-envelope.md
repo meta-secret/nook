@@ -115,7 +115,7 @@ password_entries:
   the next write emits the current schema.
 - Uses the **same `age` crate already in `nook-core`** —
   `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
-  decryption (see `nook-core/src/vault_crypto.rs`). No new crypto
+  decryption (see `nook-app/nook-core/src/vault_crypto.rs`). No new crypto
   dependency, no separate scrypt crate, fully `wasm32-unknown-unknown`
   compatible. The salt and work factor are embedded in the age header,
   so the `kdf` / `work_factor` YAML hints are redundant — kept only for

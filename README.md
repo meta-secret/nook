@@ -1,7 +1,7 @@
 # Nook
 
 <p align="center">
-  <img src="nook-web/public/nook-logo-dark-transparent.png" alt="Nook logo" width="240">
+  <img src="nook-app/nook-web/public/nook-logo-dark-transparent.png" alt="Nook logo" width="240">
 </p>
 
 [GitHub repository](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
@@ -183,7 +183,7 @@ it does not become the authority that can decrypt it.
 
 ## Architecture
 
-The monorepo has a strict one-way dependency flow:
+App code lives under `nook-app/`. The app packages keep a strict one-way dependency flow:
 
 ```text
 nook-web  →  nook-wasm  →  nook-core
@@ -220,8 +220,10 @@ Prerequisites:
 - Docker with Buildx
 - [Task](https://taskfile.dev/)
 
-The Taskfile is the command surface for the repository; Rust, Bun, wasm-pack, and
-other build tools run inside the project container.
+The root `Taskfile.yml` is the repository entrypoint. App-specific commands live
+in `nook-app/Taskfile.yml` and `nook-app/.task/`, and are flattened into the root
+Taskfile so commands work from the repo root or from `nook-app/`. Rust, Bun,
+wasm-pack, and other build tools run inside the project container.
 
 ```sh
 task web:dev
@@ -249,7 +251,7 @@ task web:test:e2e          # complete Playwright suite; GitHub PAT required
 ```
 
 GitHub end-to-end tests read `NOOK_GITHUB_PAT` from the environment or
-`nook-web/.env.test.local`; see `nook-web/.env.test.example`. Test repositories are
+`nook-app/nook-web/.env.test.local`; see `nook-app/nook-web/.env.test.example`. Test repositories are
 cleaned up automatically.
 
 Architecture changes should begin in the lowest appropriate layer. Portable domain
@@ -282,7 +284,7 @@ build dependency). Main CI publishes the verified base image + cache after green
 local dev never push.
 
 All `docker run` invocations use `--platform linux/amd64`
-(Mac included). Rust `target/` lives at the default `/meta-secret/nook/target` inside the image
+(Mac included). Rust `target/` lives at the default `/meta-secret/nook/nook-app/target` inside the image
 (baked warm; no bind mount to shadow it). Write tasks (`task format`, `task rust:coverage:update`)
 print a `git diff` to apply on the host (`task format | git apply`). **Do not use Docker named
 volumes** — GitHub Actions does not persist them between jobs. See
@@ -300,8 +302,8 @@ Publishing the shared cache is handled by main CI only (`ci:main:publish`). You 
 After changing Rust dependencies in any `Cargo.toml`, commit the updated lockfile:
 
 ```sh
-cargo generate-lockfile   # or let the next docker build refresh it
-git add Cargo.lock
+cd nook-app && cargo generate-lockfile   # or let the next docker build refresh it
+git add nook-app/Cargo.lock
 ```
 
 ## License
