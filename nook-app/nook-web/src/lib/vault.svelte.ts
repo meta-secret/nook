@@ -15,6 +15,7 @@ import {
   hasActiveLocalVault,
   hasLocalVault,
   hasRemoteCredentials as wasmHasRemoteCredentials,
+  isLocalFolderBackupSupported,
   isVaultSessionLocked,
   NookBrowserLocale,
   NookClientRunModeUtil,
@@ -145,6 +146,9 @@ export class VaultState {
   githubRepo = $state(DEFAULT_GITHUB_REPO)
   oauthFile = $state<OAuthFileConfig | undefined>(undefined)
   localFolder = $state<LocalFolderConfig | undefined>(undefined)
+  localFolderBackupSupported = $state(
+    typeof window !== 'undefined' && isLocalFolderBackupSupported(),
+  )
   oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined)
   googleOAuthBusy = $state(false)
   icloudOAuthBusy = $state(false)
@@ -431,11 +435,20 @@ export class VaultState {
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<void> {
+    this.refreshLocalFolderBackupSupport()
+    if (!this.localFolderBackupSupported) {
+      throw new Error(this.t('provider_setup.local_folder_unsupported_browser'))
+    }
     const folder = await chooseLocalFolderBackupDirectory()
     this.localFolder = {
       directoryName: folder.directoryName,
       handleId: folder.handleId,
     }
+  }
+
+  refreshLocalFolderBackupSupport(): void {
+    this.localFolderBackupSupported =
+      typeof window !== 'undefined' && isLocalFolderBackupSupported()
   }
 
   dismissSuccess() {
