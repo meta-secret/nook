@@ -44,6 +44,7 @@ const PR_SPECS = [
 /** Sync provider flows via in-memory REST stubs (unlimited isolated repos). */
 const SYNC_STUB_SPECS = [
   'file-sync-provider.spec.ts',
+  'onboarding-file-provider.spec.ts',
   'sync-fanout.spec.ts',
   'multi-device-local.spec.ts',
   'sync-vault.spec.ts',

@@ -7,6 +7,8 @@ import {
   type EnrollmentIssueInput,
   type EnrollmentProvider,
 } from '$lib/enrollment-code'
+import type { StorageProvider } from '$lib/auth-providers'
+import { hasActiveLocalVault } from '$lib/nook-wasm/nook_wasm'
 
 const log = createLogger('vault-password')
 
@@ -204,6 +206,53 @@ export function clearEnrollmentCode(state: VaultState) {
   state.activeEnrollmentEntryId = undefined
 }
 
+function applySavedEnrollmentProvider(
+  state: VaultState,
+  provider: StorageProvider | undefined,
+) {
+  if (!provider || provider.type === 'local') {
+    state.storageMode = 'local'
+    state.loginSetupType = 'local'
+    return
+  }
+
+  state.storageMode = provider.type
+  state.loginSetupType = undefined
+  if (provider.type === 'github') {
+    state.githubPat = provider.githubPat ?? ''
+    state.githubRepo = provider.githubRepo ?? ''
+    state.oauthFile = undefined
+    state.localFolder = undefined
+    return
+  }
+  if (provider.type === 'oauth-file') {
+    state.oauthFile = provider.oauthFile ?? undefined
+    state.githubPat = ''
+    state.githubRepo = provider.oauthFile?.fileName ?? state.githubRepo
+    state.localFolder = undefined
+    return
+  }
+
+  state.localFolder = provider.localFolder ?? undefined
+  state.githubPat = ''
+  state.oauthFile = undefined
+}
+
+async function localVaultHasPasswordEntries(
+  state: VaultState,
+): Promise<boolean> {
+  if (!state.manager) return false
+  if (!state.localVaultPresent && !(await hasActiveLocalVault())) return false
+  try {
+    const entries = await state.enqueueStorage(() =>
+      state.manager!.fetchVaultPasswordEntries('local', '', ''),
+    )
+    return entries.length > 0
+  } catch {
+    return false
+  }
+}
+
 export async function connectWithEnrollmentCode(
   state: VaultState,
   code: string,
@@ -227,21 +276,36 @@ export async function connectWithEnrollmentCode(
       throw new Error('Enter the vault password for state onboarding QR.')
     }
 
+    let enrollmentStorageArgs: [string, string, string]
     if (payload.provider.type === 'github') {
       state.storageMode = 'github'
       state.githubPat = payload.provider.pat
       state.githubRepo = payload.provider.repo
       state.loginSetupType = 'github'
+      enrollmentStorageArgs = [
+        'github',
+        payload.provider.pat,
+        payload.provider.repo,
+      ]
     } else {
-      state.storageMode = 'local'
-      state.loginSetupType = 'local'
+      await state.loadProviders()
+      const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state)
+      const provider = hasLocalPasswordEntries
+        ? undefined
+        : (state.syncProviders[0] ??
+          state.providers.find((candidate) => candidate.type !== 'local'))
+      applySavedEnrollmentProvider(state, provider)
+      enrollmentStorageArgs =
+        provider && provider.type !== 'local'
+          ? state.providerWasmArgs(provider)
+          : ['local', '', '']
     }
 
     await state.initDeviceIdentity()
 
     const rawRecords = (await state.enqueueStorage(() =>
       state.manager!.connectWithPassword(
-        ...state.wasmStorageArgs(),
+        ...enrollmentStorageArgs,
         entryId,
         unlockPassword,
       ),
