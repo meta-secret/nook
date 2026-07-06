@@ -6,7 +6,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, web build, Cloudflare preview                             | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, build, **full stub e2e**, Pages deploy, push toolchain            | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
@@ -15,6 +15,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 flowchart LR
   PR[Pull request] --> pr_yml[pr.yml]
   pr_yml --> preview[Cloudflare preview]
+  pr_yml --> pr_deployment[github-pages deployment status]
 
   merge[Squash merge to main] --> main_yml[main.yml]
   main_yml --> main_verify[Verify + build + e2e]
@@ -147,7 +148,7 @@ and avoid falling back to an older base-branch export task.
 
 ## Local vs remote CI
 
-**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full stub e2e, Cloudflare preview — no toolchain image push). Main pushes the commit-tagged toolchain image after green verify. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
+**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full stub e2e, Cloudflare preview, and a successful `github-pages` deployment status for the PR head SHA — no toolchain image push). Main pushes the commit-tagged toolchain image after green verify. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
 
 **Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Push only when local gates pass and the change is ready.
 
@@ -191,7 +192,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NOOK_GITHUB_PAT`                                   | sync-live e2e **and** ci-fix PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
-| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy                                                                                                                                                   |
+| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; PR CI then records that preview as a successful `github-pages` GitHub deployment for ruleset enforcement                                         |
 | `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core coverage comment                                                                                                             |
 | `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml)                                                                                                                            |
 
