@@ -144,10 +144,7 @@ export function wasmStorageModeForProvider(
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ): string {
-  return wasmStorageModeForProviderCore(
-    type,
-    oauthPreset ?? null,
-  )
+  return wasmStorageModeForProviderCore(type, oauthPreset ?? null)
 }
 
 export function providerDefaultLabel(
@@ -155,11 +152,7 @@ export function providerDefaultLabel(
   detail?: string,
   oauthPreset: OAuthFilePreset = 'google-drive',
 ): string {
-  return providerDefaultLabelCore(
-    type,
-    detail ?? null,
-    oauthPreset,
-  )
+  return providerDefaultLabelCore(type, detail ?? null, oauthPreset)
 }
 
 export function localizeProviderLabel(
