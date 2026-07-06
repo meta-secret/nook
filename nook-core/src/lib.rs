@@ -4,42 +4,26 @@
     clippy::uninlined_format_args
 )]
 
-mod bip39;
-mod database;
-mod device_key_protection;
-mod enrollment;
+mod auth;
+mod crypto;
 mod errors;
-mod event_canonical;
 mod i18n;
-mod multi_device;
-mod password;
-mod password_envelope;
-mod secret_types;
-mod secret_view;
-mod session;
-mod sync_provider_credentials;
-mod sync_provider_store;
-mod validation;
-mod vault_connect;
-mod vault_crypto;
-mod vault_epoch;
-mod vault_epoch_crypto;
-mod vault_event;
-mod vault_event_builder;
-mod vault_event_graph;
-mod vault_event_session;
-mod vault_event_store;
-mod vault_format;
-mod vault_ids;
-mod vault_import;
-mod vault_projection;
-mod vault_session;
-mod vault_session_cache;
-mod vault_signing;
-mod vault_sync;
-mod vault_sync_session;
-mod vault_sync_store;
-mod vault_wire;
+mod secrets;
+mod sync;
+mod vault;
+
+pub(crate) use auth::{device_key_protection, enrollment, multi_device, password_envelope};
+pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
+pub(crate) use secrets::{bip39, password, secret_types, secret_view, session};
+pub(crate) use sync::{
+    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
+    vault_sync_store,
+};
+pub(crate) use vault::{
+    database, vault_connect, vault_epoch, vault_event, vault_event_builder, vault_event_graph,
+    vault_event_session, vault_event_store, vault_format, vault_ids, vault_import,
+    vault_projection, vault_session, vault_session_cache, vault_wire,
+};
 
 pub use bip39::{
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,

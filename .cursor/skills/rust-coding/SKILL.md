@@ -16,3 +16,8 @@ provider/storage tags, ids, or secret keys when a core newtype or enum can
 represent them. Parse persisted/browser strings into typed Rust values as early
 as possible, serialize back only at I/O or JS boundaries, and reuse core types
 instead of duplicating structs/enums in WASM wrappers.
+
+Keep `nook-core` organized under domain module groups (`auth`, `crypto`,
+`secrets`, `sync`, `vault`). New domain files should go into the owning group;
+root `lib.rs` is the public export surface and internal compatibility alias
+surface, not a place to keep growing a flat source directory.

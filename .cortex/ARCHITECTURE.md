@@ -41,15 +41,12 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ### A. `nook-core` (The Domain Core)
 
-- **`multi_device`:** `secrets_key` + `members_key`, device identity, join/approve/enroll; YAML `auth:` / `joins:` / `members:` sections.
-- **`device_key_protection`:** WebAuthn-PRF input/output validation, HKDF-SHA256 key derivation, and AES-256-GCM wrapping of the X25519 device identity.
-- **`Database`:** In-memory JSONL session (sorted KV records); user secrets only at rest in session.
-- **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load; `vault_version` monotonic counter.
-- **`vault_sync`:** Version-based local/remote reconciliation (`compare_vault_sync`).
-- **`vault_crypto`:** Session-scoped age encrypt/decrypt with cached scrypt identity/recipient.
-- **`secret_types` / `secret_view`:** Typed secret payloads, YAML parse/serialize, display/search helpers shared across hosts.
-- **`validation`:** Storage mode, PAT, secret field validation; label search filter.
-- **`password`:** CSPRNG password generation via `getrandom`.
+- **`src/auth/`:** Device identity protection, enrollment, multi-device roster/auth records, and password unlock envelopes.
+- **`src/crypto/`:** Canonical event signing/hashing, vault encryption, key-epoch re-encryption, and signing identity helpers.
+- **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
+- **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
+- **`src/vault/`:** In-memory database, vault formats, ids/newtypes, event log, projection, import, connect, and session-cache workflows.
+- **Root exports:** `nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
 ### B. `nook-wasm` (The Bridge Layer)
