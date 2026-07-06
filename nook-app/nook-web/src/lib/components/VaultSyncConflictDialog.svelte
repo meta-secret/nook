@@ -8,7 +8,7 @@
     CardHeader,
     CardTitle,
   } from '$lib/components/ui/card'
-  import type { PendingSyncConflict } from '$lib/vault-sync'
+  import type { PendingSyncConflict } from '$lib/vault/sync'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {

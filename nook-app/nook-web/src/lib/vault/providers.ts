@@ -8,18 +8,33 @@ import {
   loadAuthProvidersWithLocalRow,
   providerDefaultLabel,
   saveAuthProviders,
+  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
-import { removeLocalFolderHandle } from '$lib/local-folder-sync'
-import { ensureLocalProviderRow } from '$lib/vault-migration'
+import {
+  ensureLocalProviderRow as ensureLocalProviderRowWasm,
+  removeLocalFolderHandle,
+} from '$lib/nook-wasm/nook_wasm'
 import { createLogger } from '$lib/log'
-import { vaultStoreIdForProviderSave } from '$lib/vault-store-id'
 
 const log = createLogger('vault-providers')
+
+/** Store id for persisting a sync provider row before or after wasm connect. */
+function vaultStoreIdForProviderSave(state: VaultState): string | undefined {
+  const fromManager = state.manager?.vaultStoreId.trim()
+  if (fromManager) {
+    return fromManager
+  }
+  return (
+    state.activeVaultStoreId?.trim() ||
+    state.selectedLoginVaultStoreId?.trim() ||
+    undefined
+  )
+}
 
 export async function loadProviders(
   state: VaultState,
@@ -197,7 +212,7 @@ export async function removeProvider(
   const target = state.providers.find((p) => p.id === id)
   if (!target || target.type === 'local') return
 
-  await removeLocalFolderHandle(target)
+  await removeLocalFolderHandle(target.localFolder?.handleId)
   state.providers = state.providers.filter((p) => p.id !== id)
 
   if (state.providers.length === 0 && state.isAuthenticated) {
@@ -297,13 +312,16 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         : provider,
     )
   } else {
-    state.providers = ensureLocalProviderRow(
-      {
-        providers: state.providers,
-        activeVaultStoreId: state.activeVaultStoreId ?? undefined,
-      },
-      vaultStoreId,
-    ).providers
+    const snapshot = ensureLocalProviderRowWasm(
+      JSON.parse(
+        JSON.stringify({
+          providers: state.providers,
+          activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+        }),
+      ),
+      vaultStoreId ?? undefined,
+    ) as AuthProvidersSnapshot
+    state.providers = snapshot.providers
   }
 
   if (state.storageMode === 'oauth-file' && state.oauthFile?.fileId) {

@@ -154,6 +154,27 @@ gh pr checks <number> --watch          # blocks until done
 gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
 ```
 
+Before treating a PR as mergeable, verify the branch is not stale against
+`origin/main`. GitHub can show green checks while still blocking the merge with
+an "Update branch" requirement or a missing active deployment because the green
+run belongs to an older base. Fetch `main`, compare divergence, and update the
+PR branch when it is behind:
+
+```bash
+git fetch origin main
+git rev-list --left-right --count HEAD...origin/main
+gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRollup
+```
+
+If the branch is behind `origin/main`, merge the base branch into the PR branch,
+push, then re-watch CI and deployment status from the new head SHA:
+
+```bash
+git merge origin/main --no-edit
+git push origin HEAD
+gh pr checks <number> --watch
+```
+
 ### 6.1. Address review comments
 
 Actionable PR feedback is part of the PR gate, whether it comes from a human
@@ -213,7 +234,8 @@ If the failure was obviously fmt/lint-only, `task format:check` + the relevant l
 
 ### 8. Merge and finish
 
-When **all PR checks pass** and the user asked you to merge (or the task implies merge-on-green):
+When **all PR checks pass**, the branch is current with `origin/main`, and the
+user asked you to merge (or the task implies merge-on-green):
 
 ```bash
 gh pr merge <number> --squash

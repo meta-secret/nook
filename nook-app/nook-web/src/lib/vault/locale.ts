@@ -1,13 +1,15 @@
 import type { VaultState } from '$lib/vault.svelte'
-import type { AppLocale } from '$lib/locale'
+import type { NookAppLocale } from '$lib/nook-wasm/nook_wasm'
 import {
-  loadTranslationCatalogFromWasm,
+  get_translation_catalog as getTranslationCatalog,
   resolveTranslationCatalog,
-} from '$lib/locale-catalogs'
+} from '$lib/nook-wasm/nook_wasm'
+
+type TranslationCatalog = string
 
 export async function updateLocale(
   state: VaultState,
-  newLocale: AppLocale,
+  newLocale: NookAppLocale,
   options?: { preferWasm?: boolean },
 ): Promise<void> {
   state.locale = newLocale
@@ -17,10 +19,10 @@ export async function updateLocale(
   }
 
   const preferWasm = options?.preferWasm ?? Boolean(state.manager)
-  let wasmCatalog: Record<string, unknown> | undefined
+  let wasmCatalog: TranslationCatalog | undefined
   if (preferWasm) {
     try {
-      wasmCatalog = await loadTranslationCatalogFromWasm(newLocale)
+      wasmCatalog = getTranslationCatalog(newLocale)
     } catch {
       // Fall back to the bundled JSON catalogs only.
     }

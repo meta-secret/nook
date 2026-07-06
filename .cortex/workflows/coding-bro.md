@@ -30,7 +30,9 @@ Default agent flow:
 6. **On any remote failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
    debugging) → run `task ci:pr` until green → push again.
-7. **Merge** — squash merge only when **every** remote check is green.
+7. **Merge** — before merging, verify the PR branch is not stale against
+   `origin/main`; update it and re-watch CI if needed. Squash merge only when
+   **every** remote check is green on the updated branch.
 
 Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.
 
@@ -57,7 +59,13 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 4. **CodeRabbit review when useful** — For nontrivial agent-authored code, run `coderabbit review --agent --type uncommitted` before final validation. Fix valid high-severity findings and do not let CodeRabbit override `.cortex`, tests, or repo architecture. See [coderabbit.md](coderabbit.md).
 5. **Local validation** — Run `task check` (or a scoped subset) and relevant e2e before push. Prefer local Docker (cached images) over remote CI for iteration. During debug, run specs one at a time with `E2E_SPEC=… task web:test:e2e:file`.
 6. **Push and open PR** — Commit, push, and open the PR **only when local checks pass** and the change is ready. Remote CI validates a clean environment — it is not the first test pass.
-7. **Monitor CI and PR review** — Watch remote checks until every required job finishes. If an agent pushes new commits and CodeRabbit's GitHub-side review needs a refresh, post `@coderabbitai review` (focused) or `@coderabbitai full review` (large rewrite).
+7. **Monitor CI and PR review** — Watch remote checks until every required job
+   finishes. If an agent pushes new commits and CodeRabbit's GitHub-side review
+   needs a refresh, post `@coderabbitai review` (focused) or `@coderabbitai full
+   review` (large rewrite). Before merging, fetch `origin/main` and verify
+   GitHub does not mark the PR branch stale/out-of-date; if it is stale, merge
+   `origin/main` into the PR branch, push, and re-watch the refreshed
+   checks/deployment gate.
 8. **Fix loop on failure** — If CI fails: read **app logs** (Playwright
    `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) → fix → run `task ci:pr`
    locally → fix → re-run `task ci:pr` until green → commit → push → monitor again.
@@ -190,6 +198,20 @@ Push only after local checks pass and the change is ready — include scoped e2e
 ```bash
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
+gh pr checks <number> --watch
+```
+
+Before merge, verify the PR branch is current with the base branch. A green
+check set on an out-of-date branch is not enough: GitHub may still block merge
+or required deployments until `main` has been merged into the PR branch.
+
+```bash
+git fetch origin main
+git rev-list --left-right --count HEAD...origin/main
+gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRollup
+# If the branch is behind origin/main:
+git merge origin/main --no-edit
+git push origin HEAD
 gh pr checks <number> --watch
 ```
 

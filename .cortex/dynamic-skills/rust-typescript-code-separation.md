@@ -32,10 +32,16 @@ Put app/domain types in Rust first:
   a core enum into a string field in `nook-wasm` merely because the enum lives in
   `nook-core`; export the core enum with `#[wasm_bindgen]` and use it directly.
 - Use `nook-wasm` for bridge concerns: wasm exports, session manager methods,
-  IndexedDB/GitHub/browser I/O, and conversions between JS calls and core
-  types.
+  durable browser storage/provider I/O, and conversions between JS calls and core
+  types. Prefer established Rust browser abstraction crates (`gloo-storage`,
+  `gloo-file`, `rexie`, `reqwest`) over direct `web-sys`/`js-sys` calls. If a
+  direct Web API call is unavoidable, keep it in a narrow adapter module and do
+  not let that style spread into domain/session policy.
 - Keep `nook-web` focused on Svelte rendering, form state, component props,
-  labels, and calling typed wasm APIs.
+  labels, DOM events, timers, Vite/browser environment flags, and calling typed
+  wasm APIs. The closer behavior is to browser lifecycle glue (`document`
+  listeners, `setTimeout`, viewport/URL state), the more strongly it belongs in
+  TypeScript/Svelte rather than Rust/WASM.
 
 ## Scope
 
@@ -53,7 +59,9 @@ Does not apply to:
   fields, labels, or browser-only URL/DOM helpers.
 - Code that requires browser APIs, IndexedDB, GitHub REST I/O, Web Crypto APIs,
   or session manager state; those belong in `nook-wasm` or `nook-web`, with only
-  their portable schema delegated to core.
+  their portable schema delegated to core. Keep browser lifecycle glue in
+  `nook-web`; keep durable storage/provider adapters in `nook-wasm` when Rust has
+  a stable abstraction crate for the API.
 
 ## Examples
 

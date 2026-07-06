@@ -30,7 +30,7 @@
   import {
     peekEnrollmentEntryId,
     peekEnrollmentEntryLabel,
-  } from '$lib/enrollment-code'
+  } from '$lib/nook-wasm/nook_wasm'
 
   let {
     vault,

@@ -18,7 +18,6 @@
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
   } from '$lib/nook-wasm/nook_wasm'
-  import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
   import type {
     OAuthFilePreset,
@@ -115,7 +114,9 @@
   function buildDrafts() {
     const next: Record<string, string> = {}
     for (const entry of vaults) {
-      next[entry.storeId] = vaultDisplayLabel(entry, vault.t)
+      next[entry.storeId] = entry.displayLabel(
+        vault.t('login.vault_picker_unnamed'),
+      )
     }
     drafts = next
   }
@@ -131,7 +132,10 @@
   })
 
   function draftFor(entry: NookLocalVaultEntry) {
-    return drafts[entry.storeId] ?? vaultDisplayLabel(entry, vault.t)
+    return (
+      drafts[entry.storeId] ??
+      entry.displayLabel(vault.t('login.vault_picker_unnamed'))
+    )
   }
 
   function setDraft(entry: NookLocalVaultEntry, value: string) {
@@ -141,18 +145,20 @@
   function canSave(entry: NookLocalVaultEntry) {
     const draft = draftFor(entry).trim()
     return (
-      !isBusy && draft.length > 0 && draft !== vaultDisplayLabel(entry, vault.t)
+      !isBusy &&
+      draft.length > 0 &&
+      draft !== entry.displayLabel(vault.t('login.vault_picker_unnamed'))
     )
   }
 
   function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
-    setDraft(entry, vaultDisplayLabel(entry, vault.t))
+    setDraft(entry, entry.displayLabel(vault.t('login.vault_picker_unnamed')))
     editingStoreId = entry.storeId
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
-    setDraft(entry, vaultDisplayLabel(entry, vault.t))
+    setDraft(entry, entry.displayLabel(vault.t('login.vault_picker_unnamed')))
     if (editingStoreId === entry.storeId) {
       editingStoreId = undefined
     }
@@ -312,7 +318,7 @@
                   data-store-id={entry.storeId}
                 >
                   <span class="truncate text-sm font-medium text-foreground">
-                    {vaultDisplayLabel(entry, vault.t)}
+                    {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
                   </span>
                 </div>
               {/if}

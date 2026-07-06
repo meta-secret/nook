@@ -9,11 +9,20 @@ import {
   prepareNewLocalVaultSlot,
   setActiveVault,
   setLocalVaultLabel,
+  type NookVaultManager,
 } from '$lib/nook-wasm/nook_wasm'
 import { saveAuthProviders } from '$lib/auth-providers'
-import { requireManagerVaultStoreId } from '$lib/vault-store-id'
 
 const log = createLogger('vault-local')
+
+/** Every connected vault must have a non-empty `store_id` in its YAML session. */
+export function requireManagerVaultStoreId(manager: NookVaultManager): string {
+  const storeId = manager.vaultStoreId.trim()
+  if (!storeId) {
+    throw new Error('Vault is missing store_id after connect.')
+  }
+  return storeId
+}
 
 export async function refreshLocalVaultCatalog(
   state: VaultState,

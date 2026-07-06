@@ -17,10 +17,7 @@
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import { Button } from '$lib/components/ui/button'
-  import {
-    buildEnrollmentLink,
-    peekEnrollmentIssuedAt,
-  } from '$lib/enrollment-code'
+  import { buildEnrollmentLink } from '$lib/enrollment-code'
   import {
     localizeProviderLabel,
     providerStorageDetail,
@@ -30,6 +27,7 @@
   } from '$lib/auth-providers'
   import {
     isVaultPasswordLongEnough,
+    peekEnrollmentIssuedAt,
     type NookPasswordEntrySummary,
   } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'

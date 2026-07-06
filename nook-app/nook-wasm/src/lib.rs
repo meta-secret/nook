@@ -20,11 +20,14 @@ mod sync_io;
 mod types;
 
 pub use manager::NookVaultManager;
+pub use storage::local_folder::NookLocalFolderConfig;
 pub use types::{
-    NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput, NookEnrollmentProvider,
-    NookJoinRequest, NookPasskeySetup, NookPasskeyUnlockOptions, NookPasswordEntrySummary,
-    NookReplacementConflict, NookSecretFormFields, NookSecurityConflict, NookSyncProviderTarget,
-    NookVaultMember, NookVaultSyncResult,
+    NookBrowserLocale, NookClientRunMode, NookClientRunModeUtil, NookDecryptedEnrollmentPayload,
+    NookEnrollmentIssueInput, NookEnrollmentProvider, NookJoinRequest, NookPasskeySetup,
+    NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
+    NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecurityConflict,
+    NookStorageConnectArgs, NookStorageProviderKind, NookStorageProviderTypeUtil, NookVaultMember,
+    NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -68,10 +71,93 @@ pub fn translate_key(locale: &str, key: &str) -> String {
     nook_core::translate(locale, key)
 }
 
+#[wasm_bindgen(js_name = parseAppLocale)]
+#[allow(clippy::needless_pass_by_value)]
+#[must_use]
+pub fn parse_app_locale(value: Option<String>) -> Option<String> {
+    nook_core::parse_app_locale(value.as_deref()?).map(str::to_owned)
+}
+
+#[wasm_bindgen(js_name = resolveAppLocaleFromTag)]
+#[must_use]
+pub fn resolve_app_locale_from_tag(tag: &str) -> Option<String> {
+    nook_core::resolve_app_locale_from_tag(tag).map(str::to_owned)
+}
+
+#[wasm_bindgen(js_name = resolveAppLocaleFromTags)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn resolve_app_locale_from_tags(tags: Vec<String>) -> String {
+    nook_core::resolve_app_locale_from_tags(tags.iter().map(String::as_str)).to_owned()
+}
+
 #[wasm_bindgen]
 #[must_use]
 pub fn get_translation_catalog(locale: &str) -> String {
     nook_core::get_translation_catalog(locale).to_owned()
+}
+
+#[wasm_bindgen(js_name = lookupTranslation)]
+#[must_use]
+pub fn lookup_translation(catalog_json: &str, key: &str) -> Option<String> {
+    nook_core::lookup_translation(catalog_json, key)
+}
+
+#[wasm_bindgen(js_name = translateFromCatalog)]
+#[must_use]
+pub fn translate_from_catalog(catalog_json: &str, locale: &str, key: &str) -> String {
+    nook_core::translate_from_catalog(catalog_json, locale, key)
+}
+
+#[wasm_bindgen(js_name = mergeTranslationCatalogs)]
+pub fn merge_translation_catalogs(
+    base_json: &str,
+    overlay_json: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    nook_core::merge_translation_catalogs(base_json, overlay_json).map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = resolveTranslationCatalog)]
+#[must_use]
+pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: Option<String>) -> String {
+    match wasm_catalog_json {
+        Some(wasm_catalog) => nook_core::resolve_translation_catalog(locale, Some(&wasm_catalog)),
+        None => nook_core::resolve_translation_catalog(locale, None),
+    }
+}
+
+#[wasm_bindgen(js_name = isVaultSessionLocked)]
+#[must_use]
+pub fn is_vault_session_locked() -> bool {
+    storage::session::is_vault_session_locked()
+}
+
+#[wasm_bindgen(js_name = setVaultSessionLocked)]
+pub fn set_vault_session_locked(locked: bool) {
+    storage::session::set_vault_session_locked(locked);
+}
+
+#[wasm_bindgen(js_name = isLocalFolderBackupSupported)]
+#[must_use]
+pub fn is_local_folder_backup_supported() -> bool {
+    storage::local_folder::is_local_folder_backup_supported()
+}
+
+#[wasm_bindgen(js_name = chooseLocalFolderBackupDirectory)]
+pub async fn choose_local_folder_backup_directory()
+-> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
+    storage::local_folder::choose_local_folder_backup_directory()
+        .await
+        .map_err(Into::into)
+}
+
+#[wasm_bindgen(js_name = removeLocalFolderHandle)]
+pub async fn remove_local_folder_handle(
+    handle_id: Option<String>,
+) -> Result<(), wasm_bindgen::JsError> {
+    storage::local_folder::remove_local_folder_handle(handle_id)
+        .await
+        .map_err(Into::into)
 }
 
 #[wasm_bindgen(js_name = validateBip39Mnemonic)]
@@ -234,18 +320,142 @@ pub fn provider_default_label(
     ))
 }
 
-#[wasm_bindgen(js_name = syncProviderTargetKey)]
-#[must_use]
-pub fn sync_provider_target_key(target: &NookSyncProviderTarget) -> Option<String> {
-    nook_core::sync_provider_target_key(target.as_core())
+#[wasm_bindgen(js_name = stagedProviderLabel)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn staged_provider_label(
+    provider_type: &str,
+    github_repo: Option<String>,
+    oauth_file_name: Option<String>,
+    oauth_file_preset: Option<String>,
+    oauth_setup_preset: Option<String>,
+) -> Result<String, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_file_preset = oauth_file_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
+    let oauth_setup_preset = oauth_setup_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
+    Ok(nook_core::staged_provider_default_label(
+        provider_type,
+        github_repo.as_deref(),
+        oauth_file_name.as_deref(),
+        oauth_file_preset,
+        oauth_setup_preset,
+    ))
 }
 
-#[wasm_bindgen(js_name = syncProviderTargetKeyForProvider)]
-pub fn sync_provider_target_key_for_provider(
+#[wasm_bindgen(js_name = hasRemoteCredentials)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn has_remote_credentials(
+    provider_type: &str,
+    github_pat: Option<String>,
+    oauth_access_token: Option<String>,
+    local_folder_handle_id: Option<String>,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    Ok(nook_core::has_provider_credentials(
+        provider_type,
+        github_pat.as_deref(),
+        oauth_access_token.as_deref(),
+        local_folder_handle_id.as_deref(),
+    ))
+}
+
+#[wasm_bindgen(js_name = providerStorageDetail)]
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+pub fn provider_storage_detail(
     provider: JsValue,
-) -> Result<Option<String>, wasm_bindgen::JsError> {
+    this_device_desc: String,
+    no_token_saved: String,
+    google_signed_in: String,
+    icloud_signed_in: String,
+    google_not_signed_in: String,
+    icloud_not_signed_in: String,
+    local_folder_needs_reconnect: String,
+) -> Result<String, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
-    Ok(nook_core::provider_target_key(&provider))
+    let labels = nook_core::ProviderStorageDetailLabels {
+        this_device_desc,
+        no_token_saved,
+        google_signed_in,
+        icloud_signed_in,
+        google_not_signed_in,
+        icloud_not_signed_in,
+        local_folder_needs_reconnect,
+    };
+    Ok(nook_core::provider_storage_detail(&provider, &labels)?)
+}
+
+#[wasm_bindgen(js_name = localizeProviderLabel)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn localize_provider_label(
+    label: &str,
+    this_device: String,
+    github: String,
+    local_folder: String,
+    google_drive: String,
+    icloud: String,
+) -> String {
+    let labels = nook_core::ProviderLabelLabels {
+        this_device,
+        github,
+        local_folder,
+        google_drive,
+        icloud,
+    };
+    nook_core::localize_provider_label(label, &labels)
+}
+
+#[wasm_bindgen(js_name = providerWasmArgs)]
+pub fn provider_wasm_args(
+    provider: JsValue,
+) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    Ok(nook_core::storage_args_for_provider(&provider)?.into())
+}
+
+#[wasm_bindgen(js_name = wasmStorageArgs)]
+#[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+pub fn wasm_storage_args(
+    local_vault_present: bool,
+    is_authenticated: bool,
+    sync_provider: JsValue,
+    provider_type: &str,
+    github_pat: Option<String>,
+    github_repo: Option<String>,
+    oauth_preset: Option<String>,
+    oauth_access_token: Option<String>,
+    oauth_file_id: Option<String>,
+    oauth_file_name: Option<String>,
+) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
+    let sync_provider = if sync_provider.is_undefined() || sync_provider.is_null() {
+        None
+    } else {
+        Some(serde_wasm_bindgen::from_value::<
+            nook_core::StorageProviderData,
+        >(sync_provider)?)
+    };
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_preset = oauth_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
+    Ok(nook_core::vault_storage_args(
+        local_vault_present,
+        is_authenticated,
+        sync_provider.as_ref(),
+        provider_type,
+        github_pat.as_deref(),
+        github_repo.as_deref(),
+        oauth_preset,
+        oauth_access_token.as_deref(),
+        oauth_file_id.as_deref(),
+        oauth_file_name.as_deref(),
+    )?
+    .into())
 }
 
 /// Masked GitHub PAT hint for provider lists. `None` means no token is saved;
@@ -279,27 +489,43 @@ pub fn decrypt_enrollment_payload(
     code: &str,
     password: &str,
 ) -> Result<NookDecryptedEnrollmentPayload, wasm_bindgen::JsError> {
+    let code = nook_core::normalize_enrollment_code(code);
     Ok(NookDecryptedEnrollmentPayload::from_core(
-        nook_core::decrypt_enrollment_payload(code, password)?,
+        nook_core::decrypt_enrollment_payload(&code, password)?,
     ))
+}
+
+#[wasm_bindgen(js_name = buildEnrollmentLink)]
+#[must_use]
+pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
+    nook_core::build_enrollment_link(code, base_url)
+}
+
+#[wasm_bindgen(js_name = normalizeEnrollmentCode)]
+#[must_use]
+pub fn normalize_enrollment_code(code: &str) -> String {
+    nook_core::normalize_enrollment_code(code)
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryId)]
 #[must_use]
 pub fn peek_enrollment_entry_id(code: &str) -> Option<String> {
-    nook_core::peek_enrollment_entry_id(code)
+    let code = nook_core::normalize_enrollment_code(code);
+    nook_core::peek_enrollment_entry_id(&code)
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentEntryLabel)]
 #[must_use]
 pub fn peek_enrollment_entry_label(code: &str) -> Option<String> {
-    nook_core::peek_enrollment_entry_label(code)
+    let code = nook_core::normalize_enrollment_code(code);
+    nook_core::peek_enrollment_entry_label(&code)
 }
 
 #[wasm_bindgen(js_name = peekEnrollmentIssuedAt)]
 #[must_use]
 pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
-    nook_core::peek_enrollment_issued_at(code)
+    let code = nook_core::normalize_enrollment_code(code);
+    nook_core::peek_enrollment_issued_at(&code)
 }
 
 /// Load the persisted sync-provider snapshot from the `nook_auth` `IndexedDB`
@@ -393,6 +619,37 @@ pub fn ensure_local_provider_row(
     Ok(serde_wasm_bindgen::to_value(&next)?)
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalAuthProviderSnapshot {
+    snapshot: nook_core::AuthProvidersSnapshotData,
+    migrated: bool,
+}
+
+/// Ensure auth snapshots always keep a local provider row when this browser has
+/// a local vault. Returns the updated snapshot plus whether a row was added.
+#[wasm_bindgen(js_name = ensureLocalAuthProviderSnapshot)]
+#[allow(clippy::needless_pass_by_value)]
+pub async fn ensure_local_auth_provider_snapshot(
+    snapshot: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let snapshot: nook_core::AuthProvidersSnapshotData = serde_wasm_bindgen::from_value(snapshot)?;
+    if !crate::storage::indexed_db::has_local_vault().await? {
+        return Ok(to_js_value(&LocalAuthProviderSnapshot {
+            snapshot,
+            migrated: false,
+        })?);
+    }
+    let new_id = nook_core::generate_id()?.to_string();
+    let created_at: String = js_sys::Date::new_0().to_iso_string().into();
+    let (snapshot, migrated) =
+        nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
+    Ok(to_js_value(&LocalAuthProviderSnapshot {
+        snapshot,
+        migrated,
+    })?)
+}
+
 #[wasm_bindgen(js_name = hasLocalVault)]
 pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
     Ok(crate::storage::indexed_db::has_local_vault().await?)
@@ -421,6 +678,16 @@ impl NookLocalVaultEntry {
     #[wasm_bindgen(getter)]
     pub fn label(&self) -> String {
         self.label.clone()
+    }
+
+    #[wasm_bindgen(js_name = displayLabel)]
+    pub fn display_label(&self, fallback_label: &str) -> String {
+        let label = self.label.trim();
+        if label.is_empty() {
+            fallback_label.to_owned()
+        } else {
+            label.to_owned()
+        }
     }
 
     #[wasm_bindgen(getter, js_name = lastUnlockedAt)]

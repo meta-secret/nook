@@ -24,6 +24,7 @@ pbkdf2 = { version = "0.13.0", features = ["sha2"] }
 tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }
 zeroize = "1.9.0"
 wasm-bindgen = "0.2.125"
+percent-encoding = "2.3.2"
 
 [dev-dependencies]
 rand_core = "0.6"

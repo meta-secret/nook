@@ -1,51 +1,56 @@
-import { describe, expect, test } from 'vitest'
-import {
-  createVaultIdleSessionTracker,
-  resolveVaultIdleTimeoutMs,
-  resolveVaultIdleWarningMs,
-} from '$lib/vault-idle-session'
+import { beforeAll, describe, expect, test } from 'vitest'
+import initNookWasm, {
+  NookClientRunModeUtil,
+  NookRuntimeConfig,
+} from '$lib/nook-wasm/nook_wasm'
+import { createVaultIdleSessionTracker } from '$lib/vault-idle-session'
+
+beforeAll(async () => {
+  await initNookWasm()
+})
 
 describe('resolveVaultIdleTimeoutMs', () => {
   test('production build uses five minute default', () => {
-    expect(resolveVaultIdleTimeoutMs({})).toBe(5 * 60_000)
-    expect(
-      resolveVaultIdleTimeoutMs({
-        VITE_VAULT_IDLE_TIMEOUT_MS: '1000',
-      }),
-    ).toBe(5 * 60_000)
+    const config = new NookRuntimeConfig(
+      NookClientRunModeUtil.parse('production'),
+      false,
+    )
+    expect(config.resolveVaultIdleTimeoutMs()).toBe(5 * 60_000)
+    expect(config.resolveVaultIdleTimeoutMs('1000')).toBe(5 * 60_000)
   })
 
   test('e2e build honors VITE_VAULT_IDLE_TIMEOUT_MS', () => {
-    expect(
-      resolveVaultIdleTimeoutMs({
-        VITE_E2E_EXPOSE_VAULT: 'true',
-        VITE_VAULT_IDLE_TIMEOUT_MS: '2500',
-      }),
-    ).toBe(2500)
+    const config = new NookRuntimeConfig(
+      NookClientRunModeUtil.parse('production'),
+      true,
+    )
+    expect(config.resolveVaultIdleTimeoutMs('2500')).toBe(2500)
   })
 
   test('rejects values below minimum in dev/e2e', () => {
-    expect(
-      resolveVaultIdleTimeoutMs({
-        DEV: true,
-        VITE_VAULT_IDLE_TIMEOUT_MS: '100',
-      }),
-    ).toBe(5 * 60_000)
+    const config = new NookRuntimeConfig(
+      NookClientRunModeUtil.parse('development'),
+      false,
+    )
+    expect(config.resolveVaultIdleTimeoutMs('100')).toBe(5 * 60_000)
   })
 })
 
 describe('resolveVaultIdleWarningMs', () => {
   test('production build uses thirty second warning', () => {
-    expect(resolveVaultIdleWarningMs({})).toBe(30_000)
+    const config = new NookRuntimeConfig(
+      NookClientRunModeUtil.parse('prod'),
+      false,
+    )
+    expect(config.resolveVaultIdleWarningMs()).toBe(30_000)
   })
 
   test('e2e can disable warning', () => {
-    expect(
-      resolveVaultIdleWarningMs({
-        VITE_E2E_EXPOSE_VAULT: 'true',
-        VITE_VAULT_IDLE_WARNING_MS: '0',
-      }),
-    ).toBe(0)
+    const config = new NookRuntimeConfig(
+      NookClientRunModeUtil.parse('prod'),
+      true,
+    )
+    expect(config.resolveVaultIdleWarningMs('0')).toBe(0)
   })
 })
 

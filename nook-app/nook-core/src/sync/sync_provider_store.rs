@@ -4,13 +4,15 @@
 //! The browser stores an [`AuthProvidersSnapshotData`] in the `nook_auth`
 //! `IndexedDB` database. All shaping of that data lives here so it is unit-tested
 //! in Rust; `nook-wasm` owns the `IndexedDB` I/O and device-key sealing, and the
-//! web layer keeps only the wire type declarations plus i18n presentation.
+//! web layer keeps only thin call adapters plus i18n presentation.
 
 use serde::{Deserialize, Serialize};
 
+use crate::errors::ValidationResult;
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubSyncTarget, LocalFolderSyncTarget,
-    OauthFilePreset, OauthFileSyncTarget, StorageProviderType, SyncProviderTarget,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
+    LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, StorageMode, StorageProviderType,
+    SyncProviderTarget, format_drive_storage_ref_raw, mask_github_pat, storage_mode_for_provider,
     sync_provider_default_label, sync_provider_target_key,
 };
 
@@ -95,11 +97,248 @@ pub struct NormalizedAuthSnapshot {
     pub changed: bool,
 }
 
+/// Positional connect arguments expected by the current wasm manager boundary:
+/// storage mode, credential/token, and remote reference/repo.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StorageConnectArgs {
+    pub mode: String,
+    pub pat: String,
+    pub repo: String,
+}
+
+impl StorageConnectArgs {
+    #[must_use]
+    pub fn local() -> Self {
+        Self {
+            mode: StorageMode::Local.as_str().to_owned(),
+            pat: String::new(),
+            repo: String::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderStorageDetailLabels {
+    pub this_device_desc: String,
+    pub no_token_saved: String,
+    pub google_signed_in: String,
+    pub icloud_signed_in: String,
+    pub google_not_signed_in: String,
+    pub icloud_not_signed_in: String,
+    pub local_folder_needs_reconnect: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProviderLabelLabels {
+    pub this_device: String,
+    pub github: String,
+    pub local_folder: String,
+    pub google_drive: String,
+    pub icloud: String,
+}
+
 fn non_empty(value: Option<&str>) -> Option<String> {
     value
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
+}
+
+fn parse_oauth_preset(raw: Option<&str>) -> ValidationResult<Option<OauthFilePreset>> {
+    raw.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(OauthFilePreset::parse)
+        .transpose()
+}
+
+/// Derive connect args from a configured persisted provider row.
+///
+/// Local-folder rows are browser-side backup targets, so manager sync still uses
+/// the local encrypted vault cache for the main connect boundary.
+pub fn storage_args_for_provider(
+    provider: &StorageProviderData,
+) -> ValidationResult<StorageConnectArgs> {
+    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    let oauth_preset = parse_oauth_preset(
+        provider
+            .oauth_file
+            .as_ref()
+            .map(|oauth| oauth.preset.as_str()),
+    )?;
+    let mode = storage_mode_for_provider(provider_type, oauth_preset)
+        .as_str()
+        .to_owned();
+    match provider_type {
+        StorageProviderType::Local | StorageProviderType::LocalFolder => {
+            Ok(StorageConnectArgs::local())
+        }
+        StorageProviderType::Github => Ok(StorageConnectArgs {
+            mode,
+            pat: non_empty(provider.github_pat.as_deref()).unwrap_or_default(),
+            repo: non_empty(provider.github_repo.as_deref())
+                .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
+        }),
+        StorageProviderType::OauthFile => {
+            let oauth = provider.oauth_file.as_ref();
+            let file_name = oauth
+                .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
+                .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
+            Ok(StorageConnectArgs {
+                mode,
+                pat: oauth
+                    .and_then(|oauth| non_empty(Some(oauth.access_token.as_str())))
+                    .unwrap_or_default(),
+                repo: format_drive_storage_ref_raw(
+                    oauth
+                        .and_then(|oauth| oauth.file_id.as_deref())
+                        .unwrap_or_default(),
+                    &file_name,
+                ),
+            })
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[must_use]
+pub fn draft_storage_args(
+    provider_type: StorageProviderType,
+    github_pat: Option<&str>,
+    github_repo: Option<&str>,
+    oauth_preset: Option<OauthFilePreset>,
+    oauth_access_token: Option<&str>,
+    oauth_file_id: Option<&str>,
+    oauth_file_name: Option<&str>,
+) -> StorageConnectArgs {
+    let mode = storage_mode_for_provider(provider_type, oauth_preset)
+        .as_str()
+        .to_owned();
+    if provider_type == StorageProviderType::OauthFile {
+        let file_name = non_empty(oauth_file_name)
+            .or_else(|| non_empty(github_repo))
+            .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
+        return StorageConnectArgs {
+            mode,
+            pat: non_empty(oauth_access_token).unwrap_or_default(),
+            repo: format_drive_storage_ref_raw(oauth_file_id.unwrap_or_default(), &file_name),
+        };
+    }
+    StorageConnectArgs {
+        mode,
+        pat: github_pat.unwrap_or_default().to_owned(),
+        repo: github_repo.unwrap_or_default().to_owned(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn vault_storage_args(
+    local_vault_present: bool,
+    is_authenticated: bool,
+    sync_provider: Option<&StorageProviderData>,
+    provider_type: StorageProviderType,
+    github_pat: Option<&str>,
+    github_repo: Option<&str>,
+    oauth_preset: Option<OauthFilePreset>,
+    oauth_access_token: Option<&str>,
+    oauth_file_id: Option<&str>,
+    oauth_file_name: Option<&str>,
+) -> ValidationResult<StorageConnectArgs> {
+    if local_vault_present {
+        return Ok(StorageConnectArgs::local());
+    }
+    if is_authenticated && let Some(provider) = sync_provider {
+        return storage_args_for_provider(provider);
+    }
+    Ok(draft_storage_args(
+        provider_type,
+        github_pat,
+        github_repo,
+        oauth_preset,
+        oauth_access_token,
+        oauth_file_id,
+        oauth_file_name,
+    ))
+}
+
+pub fn provider_storage_detail(
+    provider: &StorageProviderData,
+    labels: &ProviderStorageDetailLabels,
+) -> ValidationResult<String> {
+    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    match provider_type {
+        StorageProviderType::Local => Ok(labels.this_device_desc.clone()),
+        StorageProviderType::LocalFolder => Ok(provider
+            .local_folder
+            .as_ref()
+            .and_then(|folder| non_empty(folder.directory_name.as_deref()))
+            .unwrap_or_else(|| labels.local_folder_needs_reconnect.clone())),
+        StorageProviderType::OauthFile => {
+            let oauth = provider.oauth_file.as_ref();
+            let preset = parse_oauth_preset(oauth.map(|oauth| oauth.preset.as_str()))?
+                .unwrap_or(OauthFilePreset::GoogleDrive);
+            let file = oauth
+                .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
+                .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
+            let account = match oauth {
+                Some(oauth) => match non_empty(oauth.account_email.as_deref()) {
+                    Some(email) => email,
+                    None if non_empty(Some(oauth.access_token.as_str())).is_some() => {
+                        match preset {
+                            OauthFilePreset::ICloud => labels.icloud_signed_in.clone(),
+                            OauthFilePreset::GoogleDrive => labels.google_signed_in.clone(),
+                        }
+                    }
+                    None => match preset {
+                        OauthFilePreset::ICloud => labels.icloud_not_signed_in.clone(),
+                        OauthFilePreset::GoogleDrive => labels.google_not_signed_in.clone(),
+                    },
+                },
+                None => labels.google_not_signed_in.clone(),
+            };
+            Ok(format!("{file} · {account}"))
+        }
+        StorageProviderType::Github => {
+            let repo = non_empty(provider.github_repo.as_deref())
+                .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned());
+            let pat = match mask_github_pat(provider.github_pat.as_deref().unwrap_or_default()) {
+                GithubPatMask::Hint(hint) => hint,
+                GithubPatMask::NoToken => labels.no_token_saved.clone(),
+            };
+            Ok(format!("{repo} · {pat}"))
+        }
+    }
+}
+
+#[must_use]
+pub fn localize_provider_label(label: &str, labels: &ProviderLabelLabels) -> String {
+    if label == "This device" {
+        return labels.this_device.clone();
+    }
+    if label == "GitHub" {
+        return labels.github.clone();
+    }
+    if label == "Local backup" {
+        return labels.local_folder.clone();
+    }
+    if let Some(directory) = label.strip_prefix("Local backup · ") {
+        return format!("{} · {directory}", labels.local_folder);
+    }
+    if let Some(file) = label.strip_prefix("Google Drive · ") {
+        return format!("{} · {file}", labels.google_drive);
+    }
+    if label == "Google Drive" {
+        return labels.google_drive.clone();
+    }
+    if let Some(file) = label.strip_prefix("iCloud · ") {
+        return format!("{} · {file}", labels.icloud);
+    }
+    if label == "iCloud" {
+        return labels.icloud.clone();
+    }
+    if let Some(repo) = label.strip_prefix("GitHub · ") {
+        return format!("{} · {repo}", labels.github);
+    }
+    label.to_owned()
 }
 
 /// Sync-target identity for one provider. Rows without enough captured
@@ -406,6 +645,57 @@ mod tests {
         }
     }
 
+    fn oauth_provider(
+        id: &str,
+        preset: &str,
+        file_id: Option<&str>,
+        file_name: &str,
+    ) -> StorageProviderData {
+        StorageProviderData {
+            id: id.to_owned(),
+            provider_type: "oauth-file".to_owned(),
+            label: "Google Drive".to_owned(),
+            github_pat: None,
+            github_repo: None,
+            oauth_file: Some(OAuthFileConfigData {
+                preset: preset.to_owned(),
+                access_token: " token ".to_owned(),
+                file_id: file_id.map(str::to_owned),
+                file_name: Some(file_name.to_owned()),
+                ..OAuthFileConfigData::default()
+            }),
+            local_folder: None,
+            store_id: None,
+            last_synced_version: None,
+            last_synced_at: None,
+            last_sync_revision: None,
+            last_common_content_hash: None,
+            created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+        }
+    }
+
+    fn detail_labels() -> ProviderStorageDetailLabels {
+        ProviderStorageDetailLabels {
+            this_device_desc: "This device desc".to_owned(),
+            no_token_saved: "No token saved".to_owned(),
+            google_signed_in: "Signed in with Google".to_owned(),
+            icloud_signed_in: "Signed in with iCloud".to_owned(),
+            google_not_signed_in: "Not signed in".to_owned(),
+            icloud_not_signed_in: "Not signed in with iCloud".to_owned(),
+            local_folder_needs_reconnect: "Choose folder".to_owned(),
+        }
+    }
+
+    fn provider_label_labels() -> ProviderLabelLabels {
+        ProviderLabelLabels {
+            this_device: "This device localized".to_owned(),
+            github: "GitHub localized".to_owned(),
+            local_folder: "Local folder localized".to_owned(),
+            google_drive: "Google Drive localized".to_owned(),
+            icloud: "iCloud localized".to_owned(),
+        }
+    }
+
     #[test]
     fn normalize_handles_missing_value() {
         let result = normalize_auth_snapshot(&serde_json::Value::Null);
@@ -487,6 +777,249 @@ mod tests {
         assert_eq!(
             found.map(|provider| provider.id).as_deref(),
             Some("folder-a")
+        );
+    }
+
+    #[test]
+    fn storage_args_for_configured_provider_rows_match_wasm_connect_contract() {
+        assert_eq!(
+            storage_args_for_provider(&github_provider("gh", " team-vault ", " pat ")).unwrap(),
+            StorageConnectArgs {
+                mode: "github".to_owned(),
+                pat: "pat".to_owned(),
+                repo: "team-vault".to_owned(),
+            }
+        );
+        assert_eq!(
+            storage_args_for_provider(&oauth_provider(
+                "drive",
+                "google-drive",
+                Some(" file-1 "),
+                " events "
+            ))
+            .unwrap(),
+            StorageConnectArgs {
+                mode: "google-drive".to_owned(),
+                pat: "token".to_owned(),
+                repo: "file-1\tevents".to_owned(),
+            }
+        );
+        assert_eq!(
+            storage_args_for_provider(&local_folder_provider("folder", "handle-1")).unwrap(),
+            StorageConnectArgs::local()
+        );
+    }
+
+    #[test]
+    fn provider_storage_detail_matches_provider_rows() {
+        let labels = detail_labels();
+        assert_eq!(
+            provider_storage_detail(
+                &StorageProviderData {
+                    id: "local".to_owned(),
+                    provider_type: "local".to_owned(),
+                    label: "This device".to_owned(),
+                    github_pat: None,
+                    github_repo: None,
+                    oauth_file: None,
+                    local_folder: None,
+                    store_id: None,
+                    last_synced_version: None,
+                    last_synced_at: None,
+                    last_sync_revision: None,
+                    last_common_content_hash: None,
+                    created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+                },
+                &labels,
+            )
+            .unwrap(),
+            "This device desc"
+        );
+        assert_eq!(
+            provider_storage_detail(
+                &github_provider("gh", " team-vault ", " github_pat_11AAAAbbbbCCCC "),
+                &labels,
+            )
+            .unwrap(),
+            "team-vault · github_pat_11A…"
+        );
+        assert_eq!(
+            provider_storage_detail(
+                &StorageProviderData {
+                    github_pat: Some(" ".to_owned()),
+                    github_repo: Some(" ".to_owned()),
+                    ..github_provider("gh", "team-vault", "github_pat_11AAAAbbbbCCCC")
+                },
+                &labels,
+            )
+            .unwrap(),
+            "nook · No token saved"
+        );
+        assert_eq!(
+            provider_storage_detail(&local_folder_provider("folder", "handle-1"), &labels).unwrap(),
+            "Nook Backup"
+        );
+        assert_eq!(
+            provider_storage_detail(
+                &StorageProviderData {
+                    local_folder: None,
+                    ..local_folder_provider("folder", "handle-1")
+                },
+                &labels,
+            )
+            .unwrap(),
+            "Choose folder"
+        );
+        assert_eq!(
+            provider_storage_detail(
+                &StorageProviderData {
+                    oauth_file: Some(OAuthFileConfigData {
+                        account_email: Some("person@example.com".to_owned()),
+                        ..oauth_provider("drive", "google-drive", None, " events ")
+                            .oauth_file
+                            .unwrap()
+                    }),
+                    ..oauth_provider("drive", "google-drive", None, " events ")
+                },
+                &labels,
+            )
+            .unwrap(),
+            "events · person@example.com"
+        );
+        assert_eq!(
+            provider_storage_detail(&oauth_provider("icloud", "icloud", None, " "), &labels)
+                .unwrap(),
+            format!("{DEFAULT_DRIVE_BACKUP_NAME} · Signed in with iCloud")
+        );
+    }
+
+    #[test]
+    fn localize_provider_label_preserves_provider_detail_suffixes() {
+        let labels = provider_label_labels();
+        assert_eq!(
+            localize_provider_label("This device", &labels),
+            "This device localized"
+        );
+        assert_eq!(
+            localize_provider_label("GitHub", &labels),
+            "GitHub localized"
+        );
+        assert_eq!(
+            localize_provider_label("GitHub · team-vault", &labels),
+            "GitHub localized · team-vault"
+        );
+        assert_eq!(
+            localize_provider_label("Local backup · Nook Backup", &labels),
+            "Local folder localized · Nook Backup"
+        );
+        assert_eq!(
+            localize_provider_label("Google Drive · work.yaml", &labels),
+            "Google Drive localized · work.yaml"
+        );
+        assert_eq!(
+            localize_provider_label("iCloud · home.yaml", &labels),
+            "iCloud localized · home.yaml"
+        );
+        assert_eq!(
+            localize_provider_label("Custom provider", &labels),
+            "Custom provider"
+        );
+    }
+
+    #[test]
+    fn draft_storage_args_preserve_legacy_local_and_oauth_fallbacks() {
+        assert_eq!(
+            draft_storage_args(
+                StorageProviderType::Local,
+                Some("draft-pat"),
+                Some("draft-repo"),
+                None,
+                None,
+                None,
+                None,
+            ),
+            StorageConnectArgs {
+                mode: "local".to_owned(),
+                pat: "draft-pat".to_owned(),
+                repo: "draft-repo".to_owned(),
+            }
+        );
+        assert_eq!(
+            draft_storage_args(
+                StorageProviderType::OauthFile,
+                None,
+                Some(" repo-fallback "),
+                Some(OauthFilePreset::ICloud),
+                Some(" token "),
+                Some(" file-id "),
+                Some(" "),
+            ),
+            StorageConnectArgs {
+                mode: "icloud".to_owned(),
+                pat: "token".to_owned(),
+                repo: "file-id\trepo-fallback".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn vault_storage_args_prefers_local_cache_then_authenticated_provider() {
+        let provider = github_provider("gh", "team-vault", "pat");
+        assert_eq!(
+            vault_storage_args(
+                true,
+                true,
+                Some(&provider),
+                StorageProviderType::Github,
+                Some("draft-pat"),
+                Some("draft-repo"),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            StorageConnectArgs::local()
+        );
+        assert_eq!(
+            vault_storage_args(
+                false,
+                true,
+                Some(&provider),
+                StorageProviderType::Github,
+                Some("draft-pat"),
+                Some("draft-repo"),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            StorageConnectArgs {
+                mode: "github".to_owned(),
+                pat: "pat".to_owned(),
+                repo: "team-vault".to_owned(),
+            }
+        );
+        assert_eq!(
+            vault_storage_args(
+                false,
+                false,
+                Some(&provider),
+                StorageProviderType::Github,
+                Some("draft-pat"),
+                Some("draft-repo"),
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap(),
+            StorageConnectArgs {
+                mode: "github".to_owned(),
+                pat: "draft-pat".to_owned(),
+                repo: "draft-repo".to_owned(),
+            }
         );
     }
 

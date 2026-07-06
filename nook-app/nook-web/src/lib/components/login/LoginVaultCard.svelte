@@ -1,7 +1,6 @@
 <script lang="ts">
   import { FolderKey } from '@lucide/svelte'
   import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
-  import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -33,7 +32,7 @@
   />
   <span class="min-w-0 space-y-0.5">
     <span class="block text-sm font-semibold text-foreground">
-      {vaultDisplayLabel(entry, vault.t)}
+      {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
     </span>
     <span class="block truncate font-mono text-xs text-muted-foreground">
       {entry.storeId}

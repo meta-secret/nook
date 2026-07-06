@@ -2,7 +2,6 @@ import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import { prepareNewLocalVaultSlot } from '$lib/nook-wasm/nook_wasm'
-import { requireManagerVaultStoreId } from '$lib/vault-store-id'
 import * as localLoginActions from '$lib/vault/local-login'
 
 const log = createLogger('vault-lifecycle')
@@ -60,7 +59,9 @@ export async function createFreshVault(state: VaultState) {
     })
     state.secrets = rawRecords
     state.markVaultUnlocked()
-    state.activeVaultStoreId = requireManagerVaultStoreId(state.manager)
+    state.activeVaultStoreId = localLoginActions.requireManagerVaultStoreId(
+      state.manager,
+    )
     await localLoginActions.refreshLocalVaultCatalog(state)
     await state.ensureProviderSaved()
     await state.syncActiveVaultStoreIdToAuth()

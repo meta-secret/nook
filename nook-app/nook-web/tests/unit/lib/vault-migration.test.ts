@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import initNookWasm from '$lib/nook-wasm/nook_wasm'
-import { normalizeAuthSnapshot } from '$lib/vault-migration'
+import initNookWasm, { normalizeAuthSnapshot } from '$lib/nook-wasm/nook_wasm'
 
 describe('normalizeAuthSnapshot', () => {
   beforeAll(async () => {

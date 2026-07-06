@@ -2,13 +2,14 @@ import { VaultState } from '$lib/vault.svelte'
 import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import {
+  NookEnrollmentIssueInput,
+  NookEnrollmentProvider,
+  StorageProviderType,
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
-  type EnrollmentIssueInput,
-  type EnrollmentProvider,
-} from '$lib/enrollment-code'
+  hasActiveLocalVault,
+} from '$lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '$lib/auth-providers'
-import { hasActiveLocalVault } from '$lib/nook-wasm/nook_wasm'
 
 const log = createLogger('vault-password')
 
@@ -42,7 +43,7 @@ export async function addVaultPassword(
       const trimmedLabel = label.trim()
       const e2eManager = manager as typeof manager & E2ePasswordManager
       if (
-        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        state.runtimeConfig.e2eExposeVault &&
         e2eManager.addVaultPasswordForE2e
       ) {
         return e2eManager.addVaultPasswordForE2e(trimmedLabel, password)
@@ -83,7 +84,7 @@ export async function updateVaultPasswordEntry(
     await state.enqueueStorage(() => {
       const e2eManager = manager as typeof manager & E2ePasswordManager
       if (
-        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        state.runtimeConfig.e2eExposeVault &&
         e2eManager.updateVaultPasswordEntryForE2e
       ) {
         return e2eManager.updateVaultPasswordEntryForE2e(entryId, password)
@@ -266,8 +267,8 @@ export async function connectWithEnrollmentCode(
   state.dismissSuccess()
   state.isVerifying = true
   try {
-    const payload = await decryptEnrollmentPayload(code, password)
-    const entryId = payload.entry_id.trim()
+    const payload = decryptEnrollmentPayload(code, password)
+    const entryId = payload.entryId.trim()
     const unlockPassword = password.trim()
     if (!entryId) {
       throw new Error('Enrollment code is missing a vault password entry id.')
@@ -277,16 +278,14 @@ export async function connectWithEnrollmentCode(
     }
 
     let enrollmentStorageArgs: [string, string, string]
-    if (payload.provider.type === 'github') {
+    if (payload.provider.type === StorageProviderType.Github) {
+      const githubPat = payload.provider.githubPat ?? ''
+      const githubRepo = payload.provider.githubRepo ?? ''
       state.storageMode = 'github'
-      state.githubPat = payload.provider.pat
-      state.githubRepo = payload.provider.repo
+      state.githubPat = githubPat
+      state.githubRepo = githubRepo
       state.loginSetupType = 'github'
-      enrollmentStorageArgs = [
-        'github',
-        payload.provider.pat,
-        payload.provider.repo,
-      ]
+      enrollmentStorageArgs = ['github', githubPat, githubRepo]
     } else {
       await state.loadProviders()
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state)
@@ -410,26 +409,24 @@ export async function issueEnrollmentCode(
         'Local backup folders cannot be embedded in enrollment codes. Choose a cloud provider or have the other browser choose the same folder.',
       )
     }
-    const provider: EnrollmentProvider =
-      selectedProvider.type === 'github'
-        ? {
-            type: 'github',
-            pat: selectedProvider.githubPat?.trim() ?? '',
-            repo: selectedProvider.githubRepo?.trim() ?? '',
-          }
-        : { type: 'local' }
-    if (provider.type === 'github' && (!provider.pat || !provider.repo)) {
+    const githubPat = selectedProvider.githubPat?.trim() ?? ''
+    const githubRepo = selectedProvider.githubRepo?.trim() ?? ''
+    if (selectedProvider.type === 'github' && (!githubPat || !githubRepo)) {
       throw new Error(
         'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
       )
     }
-    const payload: EnrollmentIssueInput = {
+    const provider =
+      selectedProvider.type === 'github'
+        ? NookEnrollmentProvider.github(githubRepo, githubPat)
+        : NookEnrollmentProvider.local()
+    const payload = new NookEnrollmentIssueInput(
       provider,
-      entry_id: entryId,
-      issued_at: isoTimestamp(),
-    }
+      entryId,
+      isoTimestamp(),
+    )
     const selectedPassword = state.passwordEntries.find((e) => e.id === entryId)
-    const code = await encryptEnrollmentPayload(
+    const code = encryptEnrollmentPayload(
       payload,
       password,
       selectedPassword?.label ?? '',
