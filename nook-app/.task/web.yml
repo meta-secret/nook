@@ -46,7 +46,7 @@ tasks:
         vars: { TASK: _web:test }
 
   web:test:e2e:
-    desc: Run full stub Playwright e2e in Docker (e2e project; no PAT).
+    desc: Run full local-provider Playwright e2e in Docker (e2e project; no PAT).
     deps:
       - setup
     cmds:
@@ -54,7 +54,7 @@ tasks:
         vars: { TASK: _web:test:e2e }
 
   web:test:e2e:parallel:
-    desc: Full stub Playwright e2e in Docker when wasm/dist already built (ci:pr/main).
+    desc: Full local-provider Playwright e2e in Docker when wasm/dist already built (ci:pr/main).
     deps:
       - setup
     cmds:
@@ -88,7 +88,7 @@ tasks:
         vars: { TASK: _web:test:e2e:pr:parallel }
 
   web:test:e2e:sync-stub:
-    desc: Alias for web:test:e2e (full stub suite in Docker).
+    desc: Legacy alias for web:test:e2e (full local-provider suite in Docker).
     cmds:
       - task: web:test:e2e
 
@@ -340,7 +340,7 @@ tasks:
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:sync-stub:
-    desc: Alias for _web:test:e2e stub run (build + full e2e project).
+    desc: Legacy alias for _web:test:e2e (build + full local-provider project).
     deps:
       - _wasm:build
     env:

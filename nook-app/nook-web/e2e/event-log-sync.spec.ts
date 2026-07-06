@@ -14,7 +14,7 @@ import {
 import {
   connectSyncGenesisDevice,
   createSyncTarget,
-  installSyncStub,
+  installSyncRemote,
 } from './sync-provider'
 
 test.describe('event-log sync then add', () => {
@@ -70,7 +70,7 @@ test.describe('event-log sync then add', () => {
     const { stub } = target
     expect(stub).toBeDefined()
 
-    await installSyncStub(page, target)
+    await installSyncRemote(page, target)
     await connectSyncGenesisDevice(page, target)
     await assertVaultReady(page)
     await waitForVaultOperationsIdle(page)

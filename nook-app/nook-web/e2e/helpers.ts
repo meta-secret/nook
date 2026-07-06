@@ -569,19 +569,19 @@ export async function triggerVaultSyncRefresh(page: Page) {
   await waitForVaultOperationsIdle(page)
 }
 
-/** Wait until in-memory sync stub has the expected vault state. */
-export async function waitForSyncStubVaultState(
-  stub: { getEventFileContents: () => string[] },
+/** Wait until the e2e sync remote has the expected vault state. */
+export async function waitForSyncRemoteVaultState(
+  remote: { getEventFileContents: () => string[] },
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
   options?: { timeoutMs?: number; intervalMs?: number; page?: Page },
 ): Promise<VaultYamlSnapshot> {
   const timeoutMs = options?.timeoutMs ?? ENROLLMENT_UNLOCK_TIMEOUT_MS
   const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
-  let lastError = 'stub event log empty'
+  let lastError = 'remote event log empty'
 
   while (Date.now() < deadline) {
-    const events = stub.getEventFileContents()
+    const events = remote.getEventFileContents()
     if (events.length > 0) {
       try {
         const snapshot = parseVaultEventLogSnapshot(events)
@@ -591,13 +591,13 @@ export async function waitForSyncStubVaultState(
         lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
       } catch (error) {
         lastError =
-          error instanceof Error ? error.message : 'invalid stub event log'
+          error instanceof Error ? error.message : 'invalid remote event log'
       }
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for stub event log: ${lastError}`)
+  throw new Error(`Timed out waiting for remote event log: ${lastError}`)
 }
 
 async function flushRemoteEventsToSyncProviders(page: Page) {
@@ -614,18 +614,18 @@ async function flushRemoteEventsToSyncProviders(page: Page) {
   await waitForVaultOperationsIdle(page)
 }
 
-export async function assertGenesisVaultOnSyncStub(stub: {
+export async function assertGenesisVaultOnSyncRemote(remote: {
   getEventFileContents: () => string[]
 }) {
-  const snapshot = await waitForSyncStubVaultState(
-    stub,
+  const snapshot = await waitForSyncRemoteVaultState(
+    remote,
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
   )
   assertGenesisVaultYaml(snapshot)
   return snapshot
 }
 
-/** Wait until sync target has the expected vault state (stub or live GitHub). */
+/** Wait until sync target has the expected vault state (local e2e remote or live GitHub). */
 export async function waitForGithubVaultState(
   target: GithubE2eTarget,
   predicate: (snapshot: VaultYamlSnapshot) => boolean,
@@ -1074,7 +1074,7 @@ export async function connectGoogleDriveVault(
   await setupGoogleDriveProvider(page, fileName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
-  await waitForSyncStubVaultState(
+  await waitForSyncRemoteVaultState(
     stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
     (yaml) => yaml.authPkIds.length >= 1 && yaml.memberPkIds.length >= 1,
     { page, timeoutMs: GITHUB_CONNECT_TIMEOUT_MS },
@@ -1100,7 +1100,7 @@ export async function connectGoogleDriveJoinerDevice(
   fileName: string,
   stub?: E2eOauthFileStub,
 ) {
-  await assertGenesisVaultOnSyncStub(
+  await assertGenesisVaultOnSyncRemote(
     stub ?? createLocalE2eGoogleDriveVaultStub('', fileName),
   )
   await installGoogleOAuthMock(page, accessToken)
@@ -2843,7 +2843,7 @@ export const E2E_OAUTH_ONBOARD_PROVIDER = {
   accountEmail: 'file-sync-e2e@example.com',
 }
 
-/** Alias for local stub sync provider used in multi-device / fan-out e2e. */
+/** Alias for local sync provider used in multi-device / fan-out e2e. */
 export const E2E_SYNC_ONBOARD_PROVIDER = E2E_OAUTH_ONBOARD_PROVIDER
 
 export type E2eOauthSyncProvider = {
@@ -2978,8 +2978,8 @@ export async function waitForLocalVaultState(
   throw new Error(`Timed out waiting for local vault YAML: ${lastError}`)
 }
 
-/** Stub oauth-file REST responses with the file-backed provider by default. */
-export async function stubGoogleDriveVaultForLocalE2e(
+/** Install oauth-file REST responses with the file-backed provider by default. */
+export async function installOauthFileRemoteForLocalE2e(
   page: Page,
   opts: { fileName: string; vaultYaml?: string },
   existingStub?: E2eOauthFileStub,
@@ -3275,7 +3275,7 @@ export async function reloadUnlockLocalVaultWithSync(
 
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   if (vaultYaml.trim()) {
-    await stubGoogleDriveVaultForLocalE2e(
+    await installOauthFileRemoteForLocalE2e(
       page,
       {
         fileName: E2E_OAUTH_ONBOARD_PROVIDER.fileName,
@@ -3288,7 +3288,7 @@ export async function reloadUnlockLocalVaultWithSync(
   await page.reload()
 
   if (vaultYaml.trim()) {
-    await stubGoogleDriveVaultForLocalE2e(
+    await installOauthFileRemoteForLocalE2e(
       page,
       {
         fileName: E2E_OAUTH_ONBOARD_PROVIDER.fileName,
@@ -3440,7 +3440,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   await seedExtraOauthFileProviders(page, providers)
   for (const provider of providers) {
-    await stubGoogleDriveVaultForLocalE2e(
+    await installOauthFileRemoteForLocalE2e(
       page,
       {
         fileName: provider.fileName,
@@ -3480,7 +3480,7 @@ export async function reloadUnlockWithSyncProvider(
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   if (vaultYaml.trim()) {
     for (const provider of providers) {
-      await stubGoogleDriveVaultForLocalE2e(
+      await installOauthFileRemoteForLocalE2e(
         page,
         {
           fileName: provider.fileName,
@@ -3495,7 +3495,7 @@ export async function reloadUnlockWithSyncProvider(
 
   if (vaultYaml.trim()) {
     for (const provider of providers) {
-      await stubGoogleDriveVaultForLocalE2e(
+      await installOauthFileRemoteForLocalE2e(
         page,
         {
           fileName: provider.fileName,
@@ -3820,9 +3820,6 @@ export async function assertEnrolledVaultOnGithub(
 
 /** @deprecated Use {@link seedExtraOauthFileProviders}. */
 export const seedExtraSyncProviders = seedExtraOauthFileProviders
-
-/** @deprecated Use {@link stubGoogleDriveVaultForLocalE2e}. */
-export const stubSyncVaultForLocalE2e = stubGoogleDriveVaultForLocalE2e
 
 /** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */
 export const seedSyncProvidersWhileUnlocked =

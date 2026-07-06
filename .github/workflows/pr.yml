@@ -1,5 +1,5 @@
 # Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
-# Toolchain publish runs on main only (ci:main:publish). PR and main CI run full stub e2e;
+# Toolchain publish runs on main only (ci:main:publish). PR and main CI run full local-provider e2e;
 # nightly runs sync-live.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 

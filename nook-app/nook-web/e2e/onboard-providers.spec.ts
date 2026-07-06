@@ -7,7 +7,7 @@ import {
   openOnboardDevicePanel,
   seedExtraOauthFileProviders,
   seedOauthFileSyncProvidersWhileUnlocked,
-  stubGoogleDriveVaultForLocalE2e,
+  installOauthFileRemoteForLocalE2e,
   UI_TIMEOUT_MS,
   waitForLoadedSyncProviders,
   readLocalVaultYamlFromIdb,
@@ -127,7 +127,7 @@ test.describe('onboard provider picker', () => {
     await seedExtraOauthFileProviders(page, providers)
     const vaultYaml = await readLocalVaultYamlFromIdb(page)
     for (const provider of providers) {
-      await stubGoogleDriveVaultForLocalE2e(page, {
+      await installOauthFileRemoteForLocalE2e(page, {
         fileName: provider.fileName,
         vaultYaml,
       })

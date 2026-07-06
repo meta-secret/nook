@@ -9,11 +9,11 @@ import {
   openStorageSettings,
   readLocalVaultYamlFromIdb,
   reloadUnlockWithSyncProvider,
-  stubGoogleDriveVaultForLocalE2e,
+  installOauthFileRemoteForLocalE2e,
 } from './helpers'
-import { createSyncTarget, installSyncStub } from './sync-provider'
+import { createSyncTarget, installSyncRemote } from './sync-provider'
 
-test.describe('fresh vault password entries (stub sync)', () => {
+test.describe('fresh vault password entries with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
 
   const target = createSyncTarget('', 'fresh-pw')
@@ -21,7 +21,7 @@ test.describe('fresh vault password entries (stub sync)', () => {
   test('local backup passwords persist after adding a local sync provider', async ({
     page,
   }) => {
-    await installSyncStub(page, target)
+    await installSyncRemote(page, target)
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
@@ -39,7 +39,7 @@ test.describe('fresh vault password entries (stub sync)', () => {
 
     await disableLoginAutoUnlock(page)
     const vaultYaml = await readLocalVaultYamlFromIdb(page)
-    await stubGoogleDriveVaultForLocalE2e(page, {
+    await installOauthFileRemoteForLocalE2e(page, {
       fileName: target.repoName,
       vaultYaml,
     })

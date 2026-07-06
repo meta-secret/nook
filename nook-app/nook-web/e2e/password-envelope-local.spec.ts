@@ -13,7 +13,7 @@ import {
   revealSecretInRow,
   seedSyncProvidersWhileUnlocked,
   selectLoginUnlockMethod,
-  stubSyncVaultForLocalE2e,
+  installOauthFileRemoteForLocalE2e,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   uniqueSecretKey,
@@ -314,14 +314,14 @@ test.describe('enrollment link deep link (local)', () => {
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
-    await stubSyncVaultForLocalE2e(pageA, {
+    await installOauthFileRemoteForLocalE2e(pageA, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
       vaultYaml,
     })
 
     // Same browser context shares IndexedDB where the local vault file lives.
     const pageB = await context.newPage()
-    await stubSyncVaultForLocalE2e(pageB, {
+    await installOauthFileRemoteForLocalE2e(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
       vaultYaml,
     })

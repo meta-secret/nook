@@ -140,7 +140,7 @@ E2E_SPEC=e2e/multi-device-local.spec.ts task web:test:e2e:file
 After single-spec fixes pass, run the relevant project or full PR mirror once before pushing:
 
 ```bash
-task web:test:e2e                # full stub e2e project
+task web:test:e2e                # full local-provider e2e project
 task ci:pr                       # full PR mirror; mandatory after a prior CI failure
 ```
 

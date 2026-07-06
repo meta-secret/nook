@@ -37,7 +37,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only
 * **~99% of functional coverage belongs in Rust unit and integration tests** (`nook-core`). Event sourcing, decentralized set-union sync, causal DAG merge, projection replay, epoch conflicts, and crypto must be proven there — not inferred from Playwright.
-* **E2e validates thin UI paths** (unlock, save, stub sync, conflict screens). Treat e2e failures as integration regressions; treat missing Rust tests for new domain behavior as a coverage gap to fix immediately.
+* **E2e validates thin UI paths** (unlock, save, provider sync, conflict screens). Treat e2e failures as integration regressions; treat missing Rust tests for new domain behavior as a coverage gap to fix immediately.
 * **Line coverage threshold:** `task rust:coverage:check` enforces a **90%** line floor (`nook-app/nook-core/coverage-floor.json`). Below 90%, agents add Rust tests in the same task. Above 90%, prioritize behavioral tests over chasing every line.
 * **Prefer type-safe domain APIs** (newtypes, type-state markers at boundaries) when they prevent invalid states without obscuring the code. Simplicity wins over pattern theatrics.
 

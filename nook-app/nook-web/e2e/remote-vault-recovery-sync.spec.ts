@@ -19,13 +19,13 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
-  installSyncStub,
+  installSyncRemote,
   resetSyncRemote,
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
 
-test.describe('remote vault recovery (stub sync, local-first)', () => {
+test.describe('remote vault recovery (local-first sync)', () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
@@ -35,7 +35,7 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     target = createSyncTarget('', 'remote-recovery')
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
-    await installSyncStub(vaultPage, target)
+    await installSyncRemote(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
@@ -67,7 +67,7 @@ test.describe('remote vault recovery (stub sync, local-first)', () => {
     resetSyncRemote(target)
 
     await vaultPage.reload()
-    await installSyncStub(vaultPage, target)
+    await installSyncRemote(vaultPage, target)
 
     await expect(vaultPage.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,

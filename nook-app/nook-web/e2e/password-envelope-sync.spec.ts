@@ -26,14 +26,14 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
-  installSyncStub,
-  installSyncStubOnPages,
+  installSyncRemote,
+  installSyncRemoteOnPages,
   connectSyncGenesisDevice,
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
 
-test.describe('vault password envelope (stub sync)', () => {
+test.describe('vault password envelope with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(180_000)
 
@@ -56,7 +56,7 @@ test.describe('vault password envelope (stub sync)', () => {
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
 
-    await installSyncStubOnPages([deviceA, deviceB], target)
+    await installSyncRemoteOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
     await addSecret(deviceA, sharedSecretKey, sharedSecretValue, target)
     await waitForSyncRemoteState(target, (yaml) => yaml.secretIds.length >= 1)
@@ -125,7 +125,7 @@ test.describe('vault password envelope (stub sync)', () => {
 
     const enrollmentYaml = await readLocalVaultYamlFromIdb(deviceA)
     expect(enrollmentYaml.trim().length).toBeGreaterThan(0)
-    await installSyncStub(deviceB, target)
+    await installSyncRemote(deviceB, target)
 
     await deviceB.goto('/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
