@@ -263,7 +263,7 @@ impl NookVaultManager {
         let _ = self.status.tx.send("DELETE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
-        self.vault.database.remove(&id);
+        self.vault.database.remove_and_zeroize(&id);
         self.vault.meta.secrets.remove(&id);
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
             secret_id: id.clone(),

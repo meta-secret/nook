@@ -78,7 +78,18 @@ impl Database {
         self.records.remove(key)
     }
 
+    pub fn remove_and_zeroize(&mut self, key: &SecretId) -> bool {
+        let Some(mut record) = self.records.remove(key) else {
+            return false;
+        };
+        record.zeroize_plaintext();
+        true
+    }
+
     pub fn clear(&mut self) {
+        for record in self.records.values_mut() {
+            record.zeroize_plaintext();
+        }
         self.records.clear();
     }
 

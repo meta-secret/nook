@@ -97,7 +97,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ### Add Secret (incremental save)
 
-```
+```text
 [Svelte] → add_secret(key, value)
          → validate_secret_label, validate_secret_value
          → update typed Database session

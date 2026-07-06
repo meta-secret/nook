@@ -39,7 +39,7 @@ pub fn replace_secret(
     }
 
     let typed_value = SecretValue::from_yaml_str(input.secret_type, input.data_yaml)?;
-    db.remove(&old_id);
+    db.remove_and_zeroize(&old_id);
     db.insert(new_id.clone(), typed_value);
 
     state.secrets.remove(&old_id);
