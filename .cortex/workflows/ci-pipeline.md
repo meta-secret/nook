@@ -10,6 +10,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, build, **full stub e2e**, Pages deploy, push toolchain            | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
+| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
 
 ```mermaid
 flowchart LR
@@ -24,6 +25,9 @@ flowchart LR
 
   cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
   nightly --> e2e_live[sync-live e2e]
+
+  cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
+  cleanup --> docker_prune["docker system prune --volumes"]
 ```
 
 ## Provider selection (`NOOK_E2E_SYNC_PROVIDER`)
@@ -172,6 +176,14 @@ After targeted fixes pass, run the relevant project or full PR mirror once befor
 3. **After any remote CI failure** — read test output and static-analysis errors,
    then **persisted app logs** (see below), fix locally (prefer single-spec e2e
    while iterating), run `task ci:pr` until green, then push again.
+
+## Runner cleanup
+
+[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) runs daily on
+the self-hosted `nook` runner label and can also be triggered manually. It runs
+`docker system prune --force --volumes` to reclaim unused containers, networks,
+build cache, dangling images, and anonymous volumes without touching the Docker
+daemon itself.
 
 ### CI verification — always check app logs
 
