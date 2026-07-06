@@ -15,7 +15,7 @@ import {
 import {
   createSyncTarget,
   e2eSyncProviderDef,
-  installSyncStub,
+  installSyncRemote,
   resolveE2eSyncProvider,
   type SyncE2eTarget,
 } from './sync-provider'
@@ -23,7 +23,7 @@ import {
 const providerId = resolveE2eSyncProvider()
 const providerLabel = e2eSyncProviderDef(providerId).label
 
-test.describe(`${providerLabel} vault (stub sync)`, () => {
+test.describe(`${providerLabel} vault`, () => {
   test.describe.configure({ mode: 'serial' })
 
   let vaultPage: Page
@@ -33,7 +33,7 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
     target = createSyncTarget('', 'sync-vault')
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
-    await installSyncStub(vaultPage, target)
+    await installSyncRemote(vaultPage, target)
     await vaultPage.goto('/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
@@ -81,7 +81,7 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
     await addSecret(vaultPage, key, value, target)
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
-    await installSyncStub(vaultPage, target)
+    await installSyncRemote(vaultPage, target)
     await reconnectSyncVault(vaultPage)
     await assertVaultReady(vaultPage)
 

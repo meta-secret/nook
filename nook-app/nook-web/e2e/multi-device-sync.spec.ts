@@ -25,7 +25,7 @@ import {
 import { assertGenesisVaultYaml } from './vault-yaml'
 import {
   createSyncTarget,
-  installSyncStubOnPages,
+  installSyncRemoteOnPages,
   connectSyncGenesisDevice,
   connectSyncJoinerDevice,
   e2eSyncProviderDef,
@@ -36,10 +36,10 @@ import {
 
 const providerLabel = e2eSyncProviderDef(resolveE2eSyncProvider()).label
 
-// One worker per file — nested describes share stub timing and must not overlap.
+// One worker per file — nested describes share the same remote timing and must not overlap.
 test.describe.configure({ mode: 'serial' })
 
-test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
+test.describe(`multi-device ${providerLabel} vault`, () => {
   test.setTimeout(120_000)
 
   let deviceA: Page
@@ -63,7 +63,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
     deviceB = await contextB.newPage()
     await disableVaultIdleLock(deviceB)
 
-    await installSyncStubOnPages([deviceA, deviceB], target)
+    await installSyncRemoteOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
     await disableVaultIdleLock(deviceA)
     await disableVaultIdleLock(deviceA)
@@ -181,7 +181,7 @@ test.describe(`multi-device ${providerLabel} vault (stub sync)`, () => {
   })
 })
 
-test.describe(`multi-device approve from settings (${providerLabel} stub sync)`, () => {
+test.describe(`multi-device approve from settings (${providerLabel})`, () => {
   test.setTimeout(120_000)
 
   let deviceA: Page
@@ -200,7 +200,7 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
     deviceB = await contextB.newPage()
     await disableVaultIdleLock(deviceB)
 
-    await installSyncStubOnPages([deviceA, deviceB], target)
+    await installSyncRemoteOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
     await disableVaultIdleLock(deviceA)
   })
@@ -232,7 +232,7 @@ test.describe(`multi-device approve from settings (${providerLabel} stub sync)`,
   })
 })
 
-test.describe(`multi-device join background sync (${providerLabel} stub sync)`, () => {
+test.describe(`multi-device join background sync (${providerLabel})`, () => {
   test.setTimeout(120_000)
 
   let deviceA: Page
@@ -251,7 +251,7 @@ test.describe(`multi-device join background sync (${providerLabel} stub sync)`, 
     deviceB = await contextB.newPage()
     await disableVaultIdleLock(deviceB)
 
-    await installSyncStubOnPages([deviceA, deviceB], target)
+    await installSyncRemoteOnPages([deviceA, deviceB], target)
     await connectSyncGenesisDevice(deviceA, target)
     await disableVaultIdleLock(deviceA)
   })

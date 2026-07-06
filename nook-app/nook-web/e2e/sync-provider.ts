@@ -4,13 +4,13 @@ import { expect } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 import { createLocalE2eICloudVaultStub } from './icloud-stub'
-import { createE2eStubRepoName } from './sync-stub'
+import { createE2eRemoteName } from './sync-stub'
 import {
   parseVaultEventLogSnapshot,
   type VaultYamlSnapshot,
 } from './vault-yaml'
 
-/** Stub sync backends for e2e (no live cloud unless explicitly selected). */
+/** Sync backends for e2e (no live cloud unless explicitly selected). */
 export type E2eSyncProviderId =
   | 'file'
   | 'local'
@@ -24,7 +24,7 @@ export type E2eSyncProviderDef = {
   providerOptionTestId: string
   /** Env var holding live credentials (PAT / OAuth access token). */
   liveCredentialEnv: string
-  /** Fake credential for stub mode (never leaves the test runner). */
+  /** Test credential for local e2e mode (never leaves the test runner). */
   stubCredential: string
   /** Human label in status bar / settings copy. */
   label: string
@@ -118,30 +118,30 @@ export function hasLiveSyncCredential(
   return liveSyncCredential(id).length > 0
 }
 
-export type SyncStubHandle =
+export type SyncRemoteHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
   | ReturnType<typeof createLocalE2eICloudVaultStub>
   | ReturnType<typeof createLocalE2eGithubVaultStub>
 
-type OAuthFileStubHandle =
+type OAuthFileRemoteHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
-type GithubStubHandle = ReturnType<typeof createLocalE2eGithubVaultStub>
+type GithubRemoteHandle = ReturnType<typeof createLocalE2eGithubVaultStub>
 
-/** Remote target for stub sync — `pat` is access token, `repoName` is the remote file/repo id. */
+/** Remote target for e2e sync — `pat` is access token, `repoName` is the remote file/repo id. */
 export type SyncE2eTarget = {
   providerId: E2eSyncProviderId
   pat: string
   repoName: string
-  stub?: SyncStubHandle
+  stub?: SyncRemoteHandle
 }
 
 function createStubHandle(
   providerId: E2eSyncProviderId,
   initialYaml: string,
   remoteId: string,
-): SyncStubHandle {
+): SyncRemoteHandle {
   const backend = stubBackendId(providerId)
   if (backend === 'file') {
     return createLocalE2eFileSyncVaultStub(initialYaml, remoteId)
@@ -159,7 +159,7 @@ export function createSyncTarget(
   providerId: E2eSyncProviderId = resolveE2eSyncProvider(),
 ): SyncE2eTarget {
   const def = e2eSyncProviderDef(providerId)
-  const remoteId = createE2eStubRepoName(prefix ?? providerId)
+  const remoteId = createE2eRemoteName(prefix ?? providerId)
   const stub = createStubHandle(providerId, initialYaml, remoteId)
   return {
     providerId,
@@ -169,7 +169,7 @@ export function createSyncTarget(
   }
 }
 
-export async function installSyncStub(
+export async function installSyncRemote(
   page: Page,
   target: SyncE2eTarget,
   vaultYaml?: string,
@@ -192,13 +192,13 @@ export async function installSyncStub(
   ).install(page, { fileName: target.repoName, vaultYaml })
 }
 
-export async function installSyncStubOnPages(
+export async function installSyncRemoteOnPages(
   pages: Page[],
   target: SyncE2eTarget,
   vaultYaml?: string,
 ) {
   for (const page of pages) {
-    await installSyncStub(page, target, vaultYaml)
+    await installSyncRemote(page, target, vaultYaml)
   }
 }
 
@@ -215,7 +215,7 @@ export async function waitForSyncRemoteState(
   const timeoutMs = options?.timeoutMs ?? 30_000
   const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
-  let lastError = 'stub event log empty'
+  let lastError = 'remote event log empty'
 
   while (Date.now() < deadline) {
     const events = target.stub?.getEventFileContents() ?? []
@@ -228,13 +228,13 @@ export async function waitForSyncRemoteState(
         lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
       } catch (error) {
         lastError =
-          error instanceof Error ? error.message : 'invalid stub event log'
+          error instanceof Error ? error.message : 'invalid remote event log'
       }
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for stub event log: ${lastError}`)
+  throw new Error(`Timed out waiting for remote event log: ${lastError}`)
 }
 
 async function sleep(ms: number) {
@@ -249,7 +249,7 @@ export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
       page,
       target.pat,
       target.repoName,
-      target.stub as OAuthFileStubHandle,
+      target.stub as OAuthFileRemoteHandle,
     )
     return
   }
@@ -259,7 +259,7 @@ export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
       page,
       target.pat,
       target.repoName,
-      target.stub as GithubStubHandle,
+      target.stub as GithubRemoteHandle,
     )
     return
   }
@@ -301,10 +301,10 @@ export async function connectSyncGenesisDevice(
     }
     await assertVaultReady(page)
     const genesisYaml = await readLocalVaultYamlFromIdb(page)
-    const stub = target.stub as OAuthFileStubHandle
-    if (stub) {
-      stub.setVaultYaml(genesisYaml)
-      await stub.install(page, {
+    const remote = target.stub as OAuthFileRemoteHandle
+    if (remote) {
+      remote.setVaultYaml(genesisYaml)
+      await remote.install(page, {
         fileName: target.repoName,
         vaultYaml: genesisYaml,
       })
@@ -318,7 +318,7 @@ export async function connectSyncGenesisDevice(
           accessToken: target.pat,
         },
       ],
-      sharedStub: stub,
+      sharedStub: remote,
     })
     await triggerVaultSyncRefresh(page)
     await disableVaultIdleLock(page)
@@ -345,12 +345,12 @@ export async function connectSyncJoinerDevice(
 ) {
   const backend = stubBackendId(target.providerId)
   if (backend === 'google-drive' || backend === 'file') {
-    const stub = target.stub as OAuthFileStubHandle
-    const { assertGenesisVaultOnSyncStub, connectLocalE2eJoinerDevice } =
+    const remote = target.stub as OAuthFileRemoteHandle
+    const { assertGenesisVaultOnSyncRemote, connectLocalE2eJoinerDevice } =
       await import('./helpers')
-    await assertGenesisVaultOnSyncStub(stub)
-    if (stub) {
-      await stub.install(page, { fileName: target.repoName })
+    await assertGenesisVaultOnSyncRemote(remote)
+    if (remote) {
+      await remote.install(page, { fileName: target.repoName })
     }
     await connectLocalE2eJoinerDevice(page, target.repoName, target.pat)
     return

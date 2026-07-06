@@ -95,7 +95,7 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 **Full PR CI mirror** — run before push when web/vault flows change; **mandatory after any remote CI failure**, before the next push:
 
 ```bash
-task ci:pr    # prepare → verify ‖ web build → full stub e2e
+task ci:pr    # prepare → verify ‖ web build → full local-provider e2e
 ```
 
 Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then commit and push. This matches what `pr.yml` runs (minus Cloudflare deploy).
@@ -104,14 +104,14 @@ Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then
 | ------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
 | While debugging e2e             | `E2E_SPEC=… task web:test:e2e:file`     | Fast feedback — one spec, not the full suite               |
 | Before push / open PR           | `task check` (+ scoped e2e when needed) | Cached local Docker; **must finish before push**           |
-| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr`     | Full stub e2e or PR mirror locally before push             |
+| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr`     | Full local-provider e2e or PR mirror locally before push   |
 | After **any** remote CI failure | `task ci:pr` until green                | Full PR gates locally; **must finish before the fix push** |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 4. Local e2e (debug and pre-push validation)
 
-PR CI runs the full stub-backed **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` before pushing changes that touch:
+PR CI runs the full local-provider **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` before pushing changes that touch:
 
 - vault sync, join, or enrollment flows
 - login / unlock / password envelope UI
@@ -123,10 +123,10 @@ PR CI runs the full stub-backed **e2e** Playwright project. Use a single spec wh
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-**Before push — full stub project or PR mirror:**
+**Before push — full local-provider project or PR mirror:**
 
 ```bash
-task web:test:e2e          # full stub e2e project in Docker
+task web:test:e2e          # full local-provider e2e project in Docker
 # or, after task check already built wasm + dist:
 task web:test:e2e:parallel
 ```
@@ -142,7 +142,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full local-provider e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
 
 ### 6. Monitor CI and review until green
 
@@ -219,7 +219,7 @@ When **all PR checks pass** and the user asked you to merge (or the task implies
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full stub **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
+After merge, `main.yml` runs full local-provider **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
 ### 9. Task completion report
 

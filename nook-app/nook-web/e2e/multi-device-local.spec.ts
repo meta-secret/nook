@@ -13,7 +13,7 @@ import {
   reloadUnlockLocalVaultWithSync,
   sendJoinRequestLocalE2e,
   triggerVaultSyncRefresh,
-  waitForSyncStubVaultState,
+  waitForSyncRemoteVaultState,
   waitForPendingJoinBanner,
 } from './helpers'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -50,7 +50,7 @@ test.describe('multi-device local vault with sync provider', () => {
       /just now|s ago/,
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await waitForSyncStubVaultState(
+    await waitForSyncRemoteVaultState(
       stub,
       (snapshot) =>
         snapshot.authPkIds.length >= 1 && snapshot.memberPkIds.length >= 1,
@@ -70,7 +70,7 @@ test.describe('multi-device local vault with sync provider', () => {
 
     expect(join.deviceId).toMatch(/^[a-f0-9]{16}$/)
     expect(join.publicKey).toMatch(/^age1/)
-    await waitForSyncStubVaultState(
+    await waitForSyncRemoteVaultState(
       stub,
       (snapshot) => snapshot.joinEntries.length === 1,
     )
@@ -78,7 +78,7 @@ test.describe('multi-device local vault with sync provider', () => {
 
   test('genesis device sees pending join after sync refresh', async () => {
     const join = (
-      await waitForSyncStubVaultState(
+      await waitForSyncRemoteVaultState(
         stub,
         (snapshot) => snapshot.joinEntries.length === 1,
       )
@@ -109,7 +109,7 @@ test.describe('multi-device local vault with sync provider', () => {
     await expect
       .poll(
         () =>
-          waitForSyncStubVaultState(
+          waitForSyncRemoteVaultState(
             stub,
             (snapshot) => snapshot.joinEntries.length >= 1,
             { timeoutMs: 1_000 },
@@ -165,12 +165,12 @@ test.describe('multi-device local vault with sync provider', () => {
 async function parseJoinFromStub(stub: {
   getEventFileContents: () => string[]
 }) {
-  const snapshot = await waitForSyncStubVaultState(
+  const snapshot = await waitForSyncRemoteVaultState(
     stub,
     (state) => state.joinEntries.length > 0,
   )
   if (snapshot.joinEntries.length === 0) {
-    throw new Error('Expected a pending join entry in stub event log')
+    throw new Error('Expected a pending join entry in remote event log')
   }
   return snapshot.joinEntries[0]!
 }

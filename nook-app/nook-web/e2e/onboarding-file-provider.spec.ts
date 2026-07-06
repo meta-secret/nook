@@ -23,7 +23,7 @@ import {
 } from './helpers'
 import {
   createSyncTarget,
-  installSyncStub,
+  installSyncRemote,
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
@@ -109,7 +109,7 @@ async function connectCleanBrowserToFileProvider(
   target: SyncE2eTarget,
 ) {
   await installGoogleOAuthMock(page, target.pat)
-  await installSyncStub(page, target)
+  await installSyncRemote(page, target)
   await page.goto('/')
   await clearBrowserVault(page)
   await page.reload()
