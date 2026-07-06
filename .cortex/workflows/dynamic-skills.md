@@ -3,12 +3,21 @@
 Use this workflow when the user explains a codebase-specific mistake, invariant,
 or refactor pattern that should become durable agent knowledge.
 
+`.cortex/dynamic-skills/` is the canonical repository-local skill directory for
+Nook agents. The name "dynamic skills" means these skills are captured and
+updated dynamically from durable project feedback; it does not mean optional,
+temporary, or lower-priority guidance. Do not create a second top-level skill
+registry unless this directory is renamed everywhere in `.cortex` and all mirror
+links are updated in the same change.
+
 Dynamic skills turn concrete feedback into reusable guidance:
 
 1. A **skill card** in [`.cortex/dynamic-skills/`](../dynamic-skills/) is the
-   source of truth for the pattern.
+   source of truth for the pattern. Every durable repo-specific agent skill
+   belongs here.
 2. An optional **Cursor project skill** in [`.cursor/skills/`](../../.cursor/skills/)
-   makes that pattern invokable by name.
+   makes that pattern invokable by name. Cursor skills are mirrors, not the
+   canonical copy.
 3. The registry at [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md)
    lists every available skill card and whether it has an executable skill.
 
@@ -64,7 +73,8 @@ from the user's example and surrounding code.
 
 When applying a skill to code:
 
-1. Read the skill card and linked project skill.
+1. Use [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md) to find
+   the matching skill card, then read that card and any linked project skill.
 2. Search for candidate code by behavior and exact symbols.
 3. Refactor only the requested scope unless the skill card explicitly defines a
    broader migration.

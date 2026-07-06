@@ -1,4 +1,5 @@
 import type { StorageProvider, LocalFolderConfig } from '$lib/auth-providers'
+import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
 import type { VaultState } from '$lib/vault.svelte'
 import { readLocalVaultBlob } from '$lib/vault-sync'
 
@@ -55,8 +56,8 @@ type DirectoryPickerWindow = Window & {
 
 export type EventLogStorageRecord = {
   eventId: string
-  path?: string
-  yaml: string
+  path: string
+  event: unknown
 }
 
 const memoryHandles = new Map<string, LocalDirectoryHandle>()
@@ -116,16 +117,16 @@ async function storeDirectoryHandle(
 
 async function loadDirectoryHandle(
   handleId: string,
-): Promise<LocalDirectoryHandle | null> {
+): Promise<LocalDirectoryHandle | undefined> {
   const memory = memoryHandles.get(handleId)
   if (memory) return memory
   try {
     const row = await withHandleStore<
       { handle?: LocalDirectoryHandle } | undefined
     >('readonly', (store) => store.get(handleId))
-    return row?.handle ?? null
+    return row?.handle ?? undefined
   } catch {
-    return null
+    return undefined
   }
 }
 
@@ -196,30 +197,30 @@ async function childDirectory(
   parent: LocalDirectoryHandle,
   name: string,
   create: boolean,
-): Promise<LocalDirectoryHandle | null> {
+): Promise<LocalDirectoryHandle | undefined> {
   try {
     return await parent.getDirectoryHandle(name, { create })
   } catch {
     if (create) throw new Error(`Could not open backup folder: ${name}`)
-    return null
+    return undefined
   }
 }
 
 async function eventDirectory(
   root: LocalDirectoryHandle,
   create: boolean,
-): Promise<LocalDirectoryHandle | null> {
-  let current: LocalDirectoryHandle | null = root
+): Promise<LocalDirectoryHandle | undefined> {
+  let current: LocalDirectoryHandle | undefined = root
   for (const part of EVENT_LOG_PARTS) {
-    if (!current) return null
+    if (!current) return undefined
     current = await childDirectory(current, part, create)
   }
   return current
 }
 
-function eventIdFromFileName(name: string): string | null {
+function eventIdFromFileName(name: string): string | undefined {
   const digest = name.match(EVENT_FILE_NAME_PATTERN)?.[1]
-  return digest ? `sha256u:${digest}` : null
+  return digest ? `sha256u:${digest}` : undefined
 }
 
 function eventFileName(record: EventLogStorageRecord): string {
@@ -254,6 +255,7 @@ async function eventFileEntries(
 
 export async function readLocalFolderEventRecords(
   provider: StorageProvider,
+  manager: NookVaultManager,
 ): Promise<EventLogStorageRecord[]> {
   const root = await providerDirectoryHandle(provider)
   const dir = await eventDirectory(root, false)
@@ -263,11 +265,12 @@ export async function readLocalFolderEventRecords(
     const eventId = eventIdFromFileName(name)
     if (!eventId) continue
     const file = await fileHandle.getFile()
-    records.push({
+    const record = manager.parseEventLogStorageRecord(
       eventId,
-      path: `nook-log/v1/events/${name}`,
-      yaml: await file.text(),
-    })
+      `nook-log/v1/events/${name}`,
+      await file.text(),
+    ) as EventLogStorageRecord
+    records.push(record)
   }
   return records.sort((left, right) =>
     left.eventId.localeCompare(right.eventId),
@@ -276,6 +279,7 @@ export async function readLocalFolderEventRecords(
 
 export async function writeLocalFolderEventRecords(
   provider: StorageProvider,
+  manager: NookVaultManager,
   records: EventLogStorageRecord[],
 ): Promise<void> {
   const root = await providerDirectoryHandle(provider)
@@ -283,12 +287,13 @@ export async function writeLocalFolderEventRecords(
   if (!dir) return
   for (const record of records) {
     const name = eventFileName(record)
+    const content = manager.serializeEventLogStorageRecord(record)
     const existing = await dir
       .getFileHandle(name, { create: false })
-      .catch(() => null)
+      .catch(() => undefined)
     if (existing) {
       const current = await (await existing.getFile()).text()
-      if (current !== record.yaml) {
+      if (current !== content) {
         throw new Error(
           `Backup event ${record.eventId} already exists with different content.`,
         )
@@ -297,7 +302,7 @@ export async function writeLocalFolderEventRecords(
     }
     const file = await dir.getFileHandle(name, { create: true })
     const writable = await file.createWritable()
-    await writable.write(record.yaml)
+    await writable.write(content)
     await writable.close()
   }
 }
@@ -306,13 +311,17 @@ export async function syncLocalFolderProvider(
   state: VaultState,
   provider: StorageProvider,
 ): Promise<void> {
-  const remoteRecords = await readLocalFolderEventRecords(provider)
+  const manager = state.manager
+  if (!manager) {
+    throw new Error('Vault manager is not initialized.')
+  }
+  const remoteRecords = await readLocalFolderEventRecords(provider, manager)
   const merged = (await state.enqueueStorage(() =>
-    state.manager!.syncExternalEventLogRecords(remoteRecords),
+    manager.syncExternalEventLogRecords(remoteRecords),
   )) as EventLogStorageRecord[]
-  await writeLocalFolderEventRecords(provider, merged)
+  await writeLocalFolderEventRecords(provider, manager, merged)
   const localYaml = await readLocalVaultBlob().catch(() => '')
   if (localYaml.trim()) {
-    await state.updateProviderSyncMetadata(provider.id, localYaml, null)
+    await state.updateProviderSyncMetadata(provider.id, localYaml, undefined)
   }
 }

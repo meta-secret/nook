@@ -114,7 +114,7 @@ export async function removeVaultPasswordEntry(
     await state.refreshPasswordEntriesList()
     if (state.activeEnrollmentEntryId === entryId) {
       state.enrollmentCode = ''
-      state.activeEnrollmentEntryId = null
+      state.activeEnrollmentEntryId = undefined
     }
     state.showSuccess(state.t('toasts.password_removed'))
     await state.runFanOutSyncAfterLocalSave()
@@ -201,7 +201,7 @@ export async function unlockWithPassword(
 
 export function clearEnrollmentCode(state: VaultState) {
   state.enrollmentCode = ''
-  state.activeEnrollmentEntryId = null
+  state.activeEnrollmentEntryId = undefined
 }
 
 export async function connectWithEnrollmentCode(

@@ -11,9 +11,7 @@ use wasm_bindgen::{JsError, JsValue};
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn filter_secrets(&self, query: &str) -> Result<Vec<NookSecretRecord>, JsError> {
-        let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
-        let db = nook_core::Database::from_jsonl(&jsonl)?;
-        let filtered = nook_core::filter_secrets(&db.list(), query);
+        let filtered = nook_core::filter_secrets(&self.vault.database.list(), query);
         records_to_vec(filtered).map_err(Into::into)
     }
 
@@ -30,7 +28,8 @@ impl NookVaultManager {
     // Expose status channel stream to Svelte client
     pub async fn next_status(&self) -> Result<String, JsError> {
         let msg = self
-            .status_rx
+            .status
+            .rx
             .recv_async()
             .await
             .map_err(|e| NookError::Channel(format!("Receive error: {}", e)))?;
@@ -45,7 +44,7 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = drainStatusLog)]
     pub fn drain_status_log(&self) -> Vec<String> {
         let mut messages = Vec::new();
-        while let Ok(message) = self.status_rx.try_recv() {
+        while let Ok(message) = self.status.rx.try_recv() {
             messages.push(message);
         }
         messages
@@ -59,25 +58,22 @@ impl NookVaultManager {
         secret_type: String,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status_tx.send("ADD_SECRET_START".to_owned());
+        let _ = self.status.tx.send("ADD_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
-        let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
-        let mut db = nook_core::Database::from_jsonl(&jsonl)?;
-        db.insert(id.clone(), typed_value);
-        let new_jsonl = db.to_jsonl()?;
-        self.decrypted_jsonl = new_jsonl.into_inner();
+        self.vault.database.insert(id.clone(), typed_value);
 
         let armored = self
+            .vault
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?
             .encrypt_value(&data)?;
         let ciphertext = armored.as_str().to_owned();
-        self.meta.secrets.insert(
+        self.vault.meta.secrets.insert(
             id.clone(),
             (
                 secret_type,
@@ -89,7 +85,7 @@ impl NookVaultManager {
             secret: nook_core::encrypted_secret_from_armored(&id, secret_type, &ciphertext),
         }])
         .await?;
-        let _ = self.status_tx.send("READY".to_owned());
+        let _ = self.status.tx.send("READY".to_owned());
         let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",
@@ -110,18 +106,17 @@ impl NookVaultManager {
         secret_type: String,
         data: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status_tx.send("REPLACE_SECRET_START".to_owned());
+        let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let crypto = self
+            .vault
             .crypto
             .as_ref()
             .ok_or_else(|| NookError::Encryption("Vault crypto not initialized.".to_owned()))?;
-        let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
-        let mut db = nook_core::Database::from_jsonl(&jsonl)?;
         nook_core::replace_secret(
-            &mut db,
-            &mut self.meta,
+            &mut self.vault.database,
+            &mut self.vault.meta,
             crypto,
             &nook_core::ReplaceSecretInput {
                 old_id: &old_id,
@@ -130,11 +125,11 @@ impl NookVaultManager {
                 data_yaml: &data,
             },
         )?;
-        self.decrypted_jsonl = db.to_jsonl()?.into_inner();
 
         let validated_new = nook_core::validate_secret_id(&new_id)?;
         let validated_old = nook_core::validate_secret_id(&old_id)?;
         let ciphertext = self
+            .vault
             .meta
             .secrets
             .get(&validated_new)
@@ -149,7 +144,7 @@ impl NookVaultManager {
             ),
         }])
         .await?;
-        let _ = self.status_tx.send("READY".to_owned());
+        let _ = self.status.tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }
 
@@ -160,7 +155,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
-        let restore_local = self.storage_mode == nook_core::StorageMode::Local;
+        let restore_local = self.storage.mode == nook_core::StorageMode::Local;
         self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
@@ -178,7 +173,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<(), JsError> {
-        let restore_local = self.storage_mode == nook_core::StorageMode::Local;
+        let restore_local = self.storage.mode == nook_core::StorageMode::Local;
         self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.flush_event_outbox().await?;
@@ -209,6 +204,27 @@ impl NookVaultManager {
         serde_wasm_bindgen::to_value(&records).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    #[wasm_bindgen(js_name = parseEventLogStorageRecord)]
+    pub fn parse_event_log_storage_record_js(
+        &self,
+        event_id: &str,
+        path: &str,
+        content: &str,
+    ) -> Result<JsValue, JsError> {
+        let record = Self::parse_event_log_storage_record(event_id, path, content)?;
+        serde_wasm_bindgen::to_value(&record).map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = serializeEventLogStorageRecord)]
+    pub fn serialize_event_log_storage_record_js(
+        &self,
+        record: JsValue,
+    ) -> Result<String, JsError> {
+        let record =
+            serde_wasm_bindgen::from_value(record).map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(Self::serialize_event_log_storage_record(&record)?)
+    }
+
     #[wasm_bindgen(js_name = syncExternalEventLogRecords)]
     pub async fn sync_external_event_log_records_js(
         &mut self,
@@ -222,7 +238,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = eventLogMode)]
     pub fn event_log_mode(&self) -> bool {
-        self.event_log_mode
+        self.event_log.enabled
     }
 
     #[wasm_bindgen(js_name = listProjectionConflicts)]
@@ -244,20 +260,16 @@ impl NookVaultManager {
 
     // Delete a secret
     pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status_tx.send("DELETE_SECRET_START".to_owned());
+        let _ = self.status.tx.send("DELETE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
         let id = nook_core::validate_secret_id(&id)?;
-        let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
-        let mut db = nook_core::Database::from_jsonl(&jsonl)?;
-        db.remove(&id);
-        let new_jsonl = db.to_jsonl()?;
-        self.decrypted_jsonl = new_jsonl.into_inner();
-        self.meta.secrets.remove(&id);
+        self.vault.database.remove_and_zeroize(&id);
+        self.vault.meta.secrets.remove(&id);
         self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
             secret_id: id.clone(),
         }])
         .await?;
-        let _ = self.status_tx.send("READY".to_owned());
+        let _ = self.status.tx.send("READY".to_owned());
         let records = self.get_records()?;
         tracing::info!(
             scope = "wasm-secrets",

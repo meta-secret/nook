@@ -13,7 +13,7 @@
 - The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`). `wasm-pack build` installs the matching `wasm-bindgen-cli` itself — not `cargo install`. **Binaryen (`wasm-opt`) is baked into the base image** (pinned `BINARYEN_VERSION`, installed to `/usr/local/bin`) so wasm-pack runs post-link optimization with a correct, local `wasm-opt` and never downloads it at build time (a modern version is required — old Debian binaryen corrupts `externref` tables).
 
 ## 3. Session state (`NookVaultManager`)
-- `decrypted_jsonl` — in-memory plaintext session (JSONL)
+- `database` — typed in-memory plaintext session (`nook_core::Database`)
 - `stored_armored` — per-key armored ciphertext cache (incremental saves)
 - `crypto` — `nook_core::VaultCrypto` (derived once per connect)
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`

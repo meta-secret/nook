@@ -30,6 +30,29 @@ pub const PASSWORD_SCRYPT_LOG_N: u8 = 18;
 /// entropy policy; this is the absolute floor below which we refuse to wrap.
 pub const PASSWORD_MIN_LENGTH: usize = 5;
 
+/// Recommended floor for creating a new password-backed vault.
+pub const PASSWORD_RECOMMENDED_MIN_LENGTH: usize = 8;
+
+#[must_use]
+pub fn vault_password_min_length() -> usize {
+    PASSWORD_MIN_LENGTH
+}
+
+#[must_use]
+pub fn is_vault_password_long_enough(password: &str) -> bool {
+    password.len() >= PASSWORD_MIN_LENGTH
+}
+
+#[must_use]
+pub fn vault_password_recommended_min_length() -> usize {
+    PASSWORD_RECOMMENDED_MIN_LENGTH
+}
+
+#[must_use]
+pub fn is_vault_password_recommended_length(password: &str) -> bool {
+    password.trim().len() >= PASSWORD_RECOMMENDED_MIN_LENGTH
+}
+
 /// A labelled password unlock slot. Each entry wraps the same vault keys with
 /// a distinct password so devices (or people) can maintain separate credentials.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -243,7 +266,7 @@ pub fn attach_password_envelope_with_work_factor(
     if !(1..64).contains(&work_factor) {
         return Err(PasswordError::InvalidWorkFactor);
     }
-    if password.len() < PASSWORD_MIN_LENGTH {
+    if !is_vault_password_long_enough(password) {
         return Err(PasswordError::TooShort {
             min: PASSWORD_MIN_LENGTH,
         });
@@ -408,6 +431,21 @@ mod tests {
     fn short_password_rejected() {
         let err = attach_password_envelope(&sample_keys(), "abc").unwrap_err();
         assert!(err.to_string().contains("at least"));
+    }
+
+    #[test]
+    fn exposes_password_length_floor() {
+        assert_eq!(vault_password_min_length(), 5);
+        assert!(!is_vault_password_long_enough("1234"));
+        assert!(is_vault_password_long_enough("12345"));
+    }
+
+    #[test]
+    fn exposes_recommended_password_length_floor() {
+        assert_eq!(vault_password_recommended_min_length(), 8);
+        assert!(!is_vault_password_recommended_length("1234567"));
+        assert!(is_vault_password_recommended_length("12345678"));
+        assert!(!is_vault_password_recommended_length(" 1234567 "));
     }
 
     #[test]

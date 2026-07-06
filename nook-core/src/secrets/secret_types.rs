@@ -9,13 +9,14 @@
 //!   representation that flows through the wasm bridge.
 //! - `SecretRecord` — `(id, type, data)` plaintext triple for the session.
 //! - `StoredSecretRecord` — the on-disk shape: same triple but `value` is an
-//!   age-encrypted ciphertext string. Sorted, written to YAML/JSONL.
+//!   age-encrypted ciphertext string. Sorted, written to vault YAML.
 
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use zeroize::Zeroize;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -138,6 +139,30 @@ impl SecretValue {
             Self::SecureNote(_) => SecretType::SecureNote,
         }
     }
+
+    pub(crate) fn zeroize_plaintext(&mut self) {
+        match self {
+            Self::Login(value) => {
+                value.website_url.zeroize();
+                value.username.zeroize();
+                value.password.zeroize();
+                value.notes.zeroize();
+            }
+            Self::ApiKey(value) => {
+                value.website_url.zeroize();
+                value.key.zeroize();
+                value.expires_at.zeroize();
+            }
+            Self::SeedPhrase(value) => {
+                value.name.zeroize();
+                value.seed.zeroize();
+            }
+            Self::SecureNote(value) => {
+                value.title.zeroize();
+                value.note.zeroize();
+            }
+        }
+    }
 }
 
 /// Typed plaintext secret (in memory only).
@@ -147,6 +172,12 @@ pub struct SecretRecord {
     #[serde(rename = "type")]
     pub secret_type: SecretType,
     pub data: SecretValue,
+}
+
+impl SecretRecord {
+    pub(crate) fn zeroize_plaintext(&mut self) {
+        self.data.zeroize_plaintext();
+    }
 }
 
 /// Opaque on-disk payload — user secrets are age-armored YAML; auth/join/member rows use JSON or nested armor.

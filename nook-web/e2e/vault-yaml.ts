@@ -98,7 +98,7 @@ export type VaultYamlSnapshot = {
    * fresh ciphertext (scrypt nonce + random salt), so a poll that compares
    * against a previously-captured value is a reliable "rotated yet?" check.
    */
-  passwordEnvelopeCiphertext: string | null
+  passwordEnvelopeCiphertext: string | undefined
 }
 
 function parseJoinValue(
@@ -148,7 +148,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const passwordEnvelopeCiphertext =
     typeof activeEnvelope?.ciphertext === 'string'
       ? activeEnvelope.ciphertext.trim()
-      : null
+      : undefined
 
   return {
     raw: yaml,
@@ -164,8 +164,8 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
 
 function eventSecretToStored(
   secret?: EventSecretRecord,
-): StoredSecretRecord | null {
-  if (!secret?.id) return null
+): StoredSecretRecord | undefined {
+  if (!secret?.id) return undefined
   return {
     id: secret.id,
     type: secret.type ?? 'api-key',

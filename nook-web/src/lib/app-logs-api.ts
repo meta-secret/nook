@@ -40,12 +40,16 @@ const LOG_LEVELS: readonly LogLevel[] = [
   'trace',
 ]
 
-function parseLevel(raw: string | null, fallback: LogLevel): LogLevel {
+function parseLevel(raw: string | undefined, fallback: LogLevel): LogLevel {
   const value = raw?.trim().toLowerCase()
   return LOG_LEVELS.includes(value as LogLevel) ? (value as LogLevel) : fallback
 }
 
-function parsePositiveInt(raw: string | null, fallback: number, max: number) {
+function parsePositiveInt(
+  raw: string | undefined,
+  fallback: number,
+  max: number,
+) {
   const parsed = Number.parseInt(raw ?? '', 10)
   if (!Number.isFinite(parsed) || parsed < 0) return fallback
   return Math.min(parsed, max)
@@ -63,9 +67,13 @@ export function parseAppLogsQuery(search: string): AppLogsQuery {
     search.startsWith('?') ? search.slice(1) : search,
   )
   return {
-    minLevel: parseLevel(params.get('minLevel'), 'trace'),
-    limit: parsePositiveInt(params.get('limit'), 500, 5000),
-    offset: parsePositiveInt(params.get('offset'), 0, Number.MAX_SAFE_INTEGER),
+    minLevel: parseLevel(params.get('minLevel') ?? undefined, 'trace'),
+    limit: parsePositiveInt(params.get('limit') ?? undefined, 500, 5000),
+    offset: parsePositiveInt(
+      params.get('offset') ?? undefined,
+      0,
+      Number.MAX_SAFE_INTEGER,
+    ),
   }
 }
 

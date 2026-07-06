@@ -5,9 +5,9 @@ Use this workflow for feature work that touches more than one package.
 0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [rules.md](../rules.md) §6).
 0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [rules.md](../rules.md) §6.
 1. Identify the lowest package that should own the behavior.
-2. Put portable logic in `nook-core`; keep wasm-specific conversion in `nook-wasm`.
-3. Expose only small JavaScript-friendly functions from `nook-wasm`.
-4. Consume wasm through `nook-web/src/lib` wrappers rather than importing generated files from Svelte components directly.
+2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
+3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.
+4. Consume generated WASM APIs directly when they are already ergonomic; add `nook-web/src/lib` wrappers only for UI/browser glue, localization, or reactive state.
 5. Keep shadcn-svelte UI primitives and default styling in `nook-web/src/lib/components/ui` and `nook-web/src/app.css`.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
 7. Add any new routine command to `Taskfile.yml`.
@@ -20,7 +20,9 @@ Dependency direction must stay:
 nook-core → nook-wasm → nook-web
 ```
 
-Do not make `nook-core` depend on wasm, browser, Svelte, or Bun concepts.
+Do not make `nook-core` depend on `nook-wasm`, browser, Svelte, Bun, IndexedDB,
+HTTP, or session concepts. `wasm-bindgen` annotations on simple core DTOs/enums
+are allowed when they preserve one typed domain model across Rust and web.
 
 Use Bun for JavaScript tooling and run project commands through Taskfile/Docker. Do not introduce npm command flows or npm lockfiles.
 

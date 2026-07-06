@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test'
+import type { createLocalE2eGithubVaultStub } from './helpers'
 import { expect } from './fixtures'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
@@ -121,10 +122,12 @@ export type SyncStubHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
   | ReturnType<typeof createLocalE2eICloudVaultStub>
+  | ReturnType<typeof createLocalE2eGithubVaultStub>
 
 type OAuthFileStubHandle =
   | ReturnType<typeof createLocalE2eGoogleDriveVaultStub>
   | ReturnType<typeof createLocalE2eFileSyncVaultStub>
+type GithubStubHandle = ReturnType<typeof createLocalE2eGithubVaultStub>
 
 /** Remote target for stub sync — `pat` is access token, `repoName` is the remote file/repo id. */
 export type SyncE2eTarget = {
@@ -256,7 +259,7 @@ export async function connectSyncVault(page: Page, target: SyncE2eTarget) {
       page,
       target.pat,
       target.repoName,
-      target.stub as NonNullable<Parameters<typeof connectGithubVault>[3]>,
+      target.stub as GithubStubHandle,
     )
     return
   }

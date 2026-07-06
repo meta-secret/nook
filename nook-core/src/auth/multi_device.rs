@@ -240,7 +240,7 @@ impl VaultMetaRecord {
 ///
 /// Built from / flattened back to `StoredSecretRecord` rows at the wire
 /// boundary via [`VaultMetaState::from_stored_records`] /
-/// [`VaultMetaState::to_stored_records`] so on-disk YAML/JSONL shape is
+/// [`VaultMetaState::to_stored_records`] so on-disk YAML shape is
 /// unaffected — this type only changes how the meta cache is held and
 /// mutated in memory.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

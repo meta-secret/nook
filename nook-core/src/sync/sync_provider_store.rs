@@ -102,8 +102,9 @@ fn non_empty(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// Sync-target identity for one provider, mirroring the web `oauthFile ? … :
-/// missing` fallback for `oauth-file` rows without captured OAuth config.
+/// Sync-target identity for one provider. Rows without enough captured
+/// configuration collapse to [`SyncProviderTarget::Empty`] because they do not
+/// name a usable sync provider target yet.
 fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
     match provider.provider_type.as_str() {
         "local" => SyncProviderTarget::Local,
@@ -118,8 +119,12 @@ fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
                 .and_then(|folder| folder.handle_id.clone()),
         }),
         "github" => SyncProviderTarget::Github(GithubSyncTarget {
-            repo: provider.github_repo.clone(),
-            pat: provider.github_pat.clone(),
+            repo: non_empty(provider.github_repo.as_deref())
+                .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
+            pat: match non_empty(provider.github_pat.as_deref()) {
+                Some(pat) => pat,
+                None => return SyncProviderTarget::Empty,
+            },
         }),
         _ => match &provider.oauth_file {
             Some(oauth) => SyncProviderTarget::OauthFile(OauthFileSyncTarget {
@@ -130,7 +135,7 @@ fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
                 account_email: oauth.account_email.clone(),
                 access_token: Some(oauth.access_token.clone()),
             }),
-            None => SyncProviderTarget::MissingOauthFileConfig,
+            None => SyncProviderTarget::Empty,
         },
     }
 }
@@ -445,6 +450,15 @@ mod tests {
             found.map(|provider| provider.id).as_deref(),
             Some("gh-existing")
         );
+    }
+
+    #[test]
+    fn github_without_pat_has_no_stable_sync_identity() {
+        let provider = StorageProviderData {
+            github_pat: None,
+            ..github_provider("gh-draft", "nook", "github_pat_11AAAA")
+        };
+        assert_eq!(provider_target_key(&provider), None);
     }
 
     #[test]

@@ -35,7 +35,7 @@
   let {
     vault,
     providers,
-    setupType = $bindable(null as StorageProviderType | null),
+    setupType = $bindable(undefined as StorageProviderType | undefined),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     isVerifying,
@@ -56,7 +56,7 @@
   }: {
     vault: VaultState
     providers: StorageProvider[]
-    setupType?: StorageProviderType | null
+    setupType?: StorageProviderType | undefined
     githubPat: string
     githubRepo: string
     isVerifying: boolean
@@ -89,7 +89,7 @@
   let showProviderSetupLink = $state(false)
 
   const hasProviders = $derived(providers.length > 0)
-  const showSetup = $derived(setupType !== null)
+  const showSetup = $derived(setupType !== undefined)
   const showVaultPicker = $derived(vault.showLoginVaultPicker)
   const showLocalUnlock = $derived(
     vault.localVaultPresent &&
@@ -104,7 +104,7 @@
         (vault.selectedLoginVaultStoreId ?? vault.activeVaultStoreId),
     ) ??
       vault.localVaults[0] ??
-      null,
+      undefined,
   )
   const showCreateVault = $derived(
     !vault.localVaultPresent &&

@@ -47,8 +47,8 @@ export function applyActiveProviderCredentials(state: VaultState) {
   if (state.localVaultPresent) {
     state.storageMode = 'local'
     state.githubPat = ''
-    state.oauthFile = null
-    state.localFolder = null
+    state.oauthFile = undefined
+    state.localFolder = undefined
     return
   }
 
@@ -58,10 +58,10 @@ export function applyActiveProviderCredentials(state: VaultState) {
       state.githubPat = ''
     }
     if (state.loginSetupType !== 'oauth-file') {
-      state.oauthFile = null
+      state.oauthFile = undefined
     }
     if (state.loginSetupType !== 'local-folder') {
-      state.localFolder = null
+      state.localFolder = undefined
     }
     return
   }
@@ -85,18 +85,18 @@ export function applyActiveProviderCredentials(state: VaultState) {
   state.storageMode = syncProvider.type
   state.githubPat = syncProvider.githubPat ?? ''
   if (syncProvider.type === 'oauth-file') {
-    state.oauthFile = syncProvider.oauthFile ?? null
-    state.localFolder = null
+    state.oauthFile = syncProvider.oauthFile ?? undefined
+    state.localFolder = undefined
     state.githubRepo =
       syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
   } else if (syncProvider.type === 'local-folder') {
-    state.localFolder = syncProvider.localFolder ?? null
+    state.localFolder = syncProvider.localFolder ?? undefined
     state.githubRepo = DEFAULT_GITHUB_REPO
-    state.oauthFile = null
+    state.oauthFile = undefined
   } else {
     state.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-    state.oauthFile = null
-    state.localFolder = null
+    state.oauthFile = undefined
+    state.localFolder = undefined
   }
 }
 
@@ -146,10 +146,10 @@ export function beginProviderSetup(
       fileName: DEFAULT_DRIVE_BACKUP_NAME,
     }
   } else {
-    state.oauthSetupPreset = null
-    state.oauthFile = null
+    state.oauthSetupPreset = undefined
+    state.oauthFile = undefined
   }
-  state.localFolder = null
+  state.localFolder = undefined
   state.errorMsg = ''
   state.dismissSuccess()
   log.debug('provider setup started', { type, oauthPreset })
@@ -160,31 +160,31 @@ export function beginAddProvider(state: VaultState) {
     state.resetVaultSessionState()
   }
   state.addProviderOpen = true
-  state.loginSetupType = null
+  state.loginSetupType = undefined
   state.errorMsg = ''
 }
 
 export function cancelAddProvider(state: VaultState) {
   state.addProviderOpen = false
-  state.loginSetupType = null
+  state.loginSetupType = undefined
   state.applyActiveProviderCredentials()
   state.errorMsg = ''
 }
 
 export function cancelProviderSetup(state: VaultState) {
-  if (state.addProviderOpen && state.loginSetupType !== null) {
+  if (state.addProviderOpen && state.loginSetupType !== undefined) {
     const setupType = state.loginSetupType
-    state.loginSetupType = null
+    state.loginSetupType = undefined
     state.githubPat = ''
     state.githubRepo =
       setupType === 'oauth-file'
         ? DEFAULT_DRIVE_BACKUP_NAME
         : DEFAULT_GITHUB_REPO
-    state.localFolder = null
+    state.localFolder = undefined
     state.errorMsg = ''
     return
   }
-  state.loginSetupType = null
+  state.loginSetupType = undefined
   state.addProviderOpen = false
   state.applyActiveProviderCredentials()
   state.errorMsg = ''
@@ -216,7 +216,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO
   const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME
   const type = state.loginSetupType ?? state.storageMode
-  const isNewSetup = state.loginSetupType !== null
+  const isNewSetup = state.loginSetupType !== undefined
   const vaultStoreId = vaultStoreIdForProviderSave(state)
   const oauthPreset =
     state.oauthFile?.preset ?? state.oauthSetupPreset ?? 'google-drive'
@@ -242,7 +242,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
 
   const isExplicitAdd =
     state.addProviderOpen ||
-    (state.isAuthenticated && state.loginSetupType !== null)
+    (state.isAuthenticated && state.loginSetupType !== undefined)
 
   if (isNewSetup && type !== 'local') {
     if (type === 'local-folder' && !localFolderSnapshot?.handleId) {
@@ -338,7 +338,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
       )?.oauthFile ?? state.oauthFile
   }
 
-  state.loginSetupType = null
+  state.loginSetupType = undefined
   state.addProviderOpen = false
   state.applyActiveProviderCredentials()
   await state.persistProviders()
@@ -381,7 +381,7 @@ export async function connectAndSyncStagedProvider(
       return
     }
     await state.syncProviderById(provider.id, { quiet: true })
-    state.loginSetupType = null
+    state.loginSetupType = undefined
     state.addProviderOpen = false
   } catch (e: unknown) {
     state.errorMsg =

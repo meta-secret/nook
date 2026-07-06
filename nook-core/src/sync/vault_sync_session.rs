@@ -3,7 +3,7 @@
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
 use crate::{
-    DeviceIdentity, VaultMetaState, VaultUnlock, capture_vault_unlock_from_content,
+    Database, DeviceIdentity, VaultMetaState, VaultUnlock, capture_vault_unlock_from_content,
     load_stored_vault, merge_remote_join_records,
 };
 
@@ -19,14 +19,14 @@ pub enum YamlSyncOutcome {
 /// Session fields reloaded from remote YAML.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YamlSyncReloaded {
-    pub jsonl: String,
+    pub database: Database,
     pub meta: VaultMetaState,
-    pub secrets_key: String,
-    pub members_key: String,
+    pub secrets_key: crate::SymmetricKey,
+    pub members_key: crate::SymmetricKey,
     pub unlock: VaultUnlock,
     pub password_entries: Vec<crate::PasswordUnlockEntry>,
-    pub store_id: Option<String>,
-    pub vault_name: Option<String>,
+    pub store_id: String,
+    pub vault_name: String,
     pub version: u64,
 }
 
@@ -43,16 +43,17 @@ pub fn reconcile_yaml_sync(
         if members_key.is_empty() {
             if event_log_mode && !content.trim().is_empty() {
                 let loaded = load_stored_vault(content, identity)?;
+                let metadata = capture_vault_unlock_from_content(content)?;
                 return Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
-                    jsonl: loaded.jsonl,
+                    database: loaded.database,
                     meta: loaded.meta,
                     secrets_key: loaded.secrets_key,
                     members_key: loaded.members_key,
-                    unlock: VaultUnlock::Keys,
-                    password_entries: Vec::new(),
-                    store_id: None,
-                    vault_name: None,
-                    version: 0,
+                    unlock: metadata.unlock,
+                    password_entries: metadata.password_entries,
+                    store_id: metadata.store_id,
+                    vault_name: metadata.vault_name,
+                    version: metadata.version,
                 })));
             }
             return Ok(YamlSyncOutcome::Unchanged);
@@ -75,7 +76,7 @@ pub fn reconcile_yaml_sync(
     let loaded = load_stored_vault(content, identity)?;
     let metadata = capture_vault_unlock_from_content(content)?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
-        jsonl: loaded.jsonl,
+        database: loaded.database,
         meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,
@@ -91,8 +92,9 @@ pub fn reconcile_yaml_sync(
 mod tests {
     use super::*;
     use crate::{
-        VaultKeys, VaultResult, generate_store_id, generate_vault_keys, genesis_auth_record,
-        genesis_members_records, serialize_stored_yaml_with_unlock,
+        PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultResult, generate_store_id,
+        generate_vault_keys, genesis_auth_record, genesis_members_records,
+        serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_and_name,
     };
 
     fn genesis_yaml(
@@ -120,6 +122,20 @@ mod tests {
         .map_err(Into::into)
     }
 
+    fn password_entry(id: &str) -> PasswordUnlockEntry {
+        PasswordUnlockEntry {
+            id: id.to_owned(),
+            label: "Backup password".to_owned(),
+            created_at: "2026-06-28T00:00:00Z".to_owned(),
+            envelope: PasswordEnvelope {
+                version: 1,
+                kdf: "argon2id".to_owned(),
+                work_factor: 3,
+                ciphertext: "AGE-ENCRYPTED-KEYS".to_owned(),
+            },
+        }
+    }
+
     #[test]
     fn unchanged_when_content_matches_and_keys_present() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
@@ -143,7 +159,28 @@ mod tests {
     fn event_log_mode_rehydrates_when_keys_missing_but_cache_present() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
-        let yaml = genesis_yaml(&keys, &identity)?;
+        let password_entries = vec![password_entry("backup-password")];
+        let mut records = vec![genesis_auth_record(
+            &identity,
+            &keys.secrets_key,
+            &keys.members_key,
+        )?];
+        records.extend(genesis_members_records(
+            &identity,
+            &keys.members_key,
+            "2026-06-28T00:00:00Z",
+        )?);
+        let store_id = generate_store_id()?;
+        let yaml = serialize_stored_yaml_with_unlock_and_name(
+            &records,
+            &VaultUnlock::Passwords {
+                entries: password_entries.clone(),
+            },
+            &password_entries,
+            Some(store_id.as_str()),
+            Some("Team Vault"),
+            Some(42),
+        )?;
         let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(
             yaml.as_str(),
@@ -157,6 +194,11 @@ mod tests {
             YamlSyncOutcome::Reloaded(reloaded) => {
                 assert_eq!(reloaded.secrets_key.as_str(), keys.secrets_key.as_str());
                 assert_eq!(reloaded.members_key.as_str(), keys.members_key.as_str());
+                assert_eq!(reloaded.unlock, VaultUnlock::Keys);
+                assert_eq!(reloaded.password_entries, password_entries);
+                assert_eq!(reloaded.store_id, store_id.as_str());
+                assert_eq!(reloaded.vault_name, "Team Vault");
+                assert_eq!(reloaded.version, 42);
             }
             other => {
                 return Err(crate::errors::EventError::UnexpectedYamlSyncOutcome {

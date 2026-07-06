@@ -191,7 +191,7 @@ nook-web  →  nook-wasm  →  nook-core
    UI        I/O bridge    domain logic
 ```
 
-- **`nook-core`** — typed secret model, YAML/JSONL vault formats, age encryption,
+- **`nook-core`** — typed secret model, YAML vault format, age encryption,
   device enrollment, validation, search, and password generation. It has no
   browser dependencies and is tested natively.
 - **`nook-wasm`** — `wasm-bindgen` bridge and session manager. It connects the core

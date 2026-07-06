@@ -11,7 +11,7 @@
     suggestBip39Words,
     type MnemonicLength,
   } from '$lib/bip39-wordlist'
-  import { validateBip39MnemonicChecksum } from '$lib/bip39-mnemonic'
+  import { validateBip39Mnemonic } from '$lib/nook-wasm/nook_wasm'
 
   let {
     vault,
@@ -30,15 +30,14 @@
 
   let wordCount = $state<MnemonicLength>(12)
   let cells = $state<string[]>(Array.from({ length: 24 }, () => ''))
-  let wordlist = $state<Set<string> | null>(null)
+  let wordlist = $state<Set<string> | undefined>(undefined)
   let loading = $state(true)
-  let loadError = $state<string | null>(null)
+  let loadError = $state<string | undefined>(undefined)
   let syncingFromCells = $state(false)
-  let focusedIndex = $state<number | null>(null)
+  let focusedIndex = $state<number | undefined>(undefined)
   let suggestionIndex = $state(0)
-  let inputRefs = $state<Array<HTMLInputElement | null>>([])
-  let checksumValid = $state<boolean | null>(null)
-  let checksumChecking = $state(false)
+  let inputRefs = $state<Array<HTMLInputElement | undefined>>([])
+  let checksumValid = $state<boolean | undefined>(undefined)
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
@@ -54,7 +53,7 @@
   )
 
   const suggestions = $derived.by(() => {
-    if (readonly || focusedIndex === null || !wordlist) return []
+    if (readonly || focusedIndex === undefined || !wordlist) return []
     const prefix = cells[focusedIndex]?.trim().toLowerCase() ?? ''
     if (!prefix || prefix.includes(' ')) return []
     if (wordlist.has(prefix)) return []
@@ -101,7 +100,7 @@
     }
     cells = next
     syncValueFromCells()
-    focusedIndex = null
+    focusedIndex = undefined
     focusCell(Math.min(startIndex + words.length, wordCount - 1))
   }
 
@@ -116,9 +115,8 @@
     cells = Array.from({ length: 24 }, () => '')
     wordCount = 12
     value = ''
-    checksumValid = null
-    checksumChecking = false
-    focusedIndex = null
+    checksumValid = undefined
+    focusedIndex = undefined
     suggestionIndex = 0
     focusCell(0)
   }
@@ -150,7 +148,7 @@
 
   function selectSuggestion(word: string, index: number) {
     setCellValue(index, word)
-    focusedIndex = null
+    focusedIndex = undefined
     suggestionIndex = 0
     focusCell(index + 1)
   }
@@ -187,7 +185,7 @@
     }
 
     if (event.key === 'Escape') {
-      focusedIndex = null
+      focusedIndex = undefined
       suggestionIndex = 0
     }
   }
@@ -205,39 +203,21 @@
 
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
-      checksumValid = null
-      checksumChecking = false
+      checksumValid = undefined
       valid = false
       return
     }
 
     const mnemonic = value
-    let cancelled = false
-    checksumChecking = true
-
-    void validateBip39MnemonicChecksum(mnemonic)
-      .then((ok) => {
-        if (cancelled) return
-        checksumValid = ok
-        checksumChecking = false
-        valid = ok
-      })
-      .catch(() => {
-        if (cancelled) return
-        checksumValid = false
-        checksumChecking = false
-        valid = false
-      })
-
-    return () => {
-      cancelled = true
-    }
+    const ok = validateBip39Mnemonic(mnemonic)
+    checksumValid = ok
+    valid = ok
   })
 
   $effect(() => {
     let cancelled = false
     loading = true
-    loadError = null
+    loadError = undefined
 
     void loadBip39Wordlist()
       .then((set) => {
@@ -366,7 +346,7 @@
                 ) {
                   return
                 }
-                if (focusedIndex === index) focusedIndex = null
+                if (focusedIndex === index) focusedIndex = undefined
               })
             }}
             onkeydown={(event) => onCellKeyDown(index, event)}
@@ -425,13 +405,6 @@
       data-testid="seed-phrase-checksum-error"
     >
       {vault.t('add_secret.seed_phrase_invalid')}
-    </p>
-  {:else if !readonly && checksumChecking}
-    <p
-      class="text-xs text-muted-foreground"
-      data-testid="seed-phrase-checksum-checking"
-    >
-      {vault.t('add_secret.seed_phrase_checking')}
     </p>
   {/if}
 </div>

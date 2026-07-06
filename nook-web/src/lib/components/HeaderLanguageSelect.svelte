@@ -9,7 +9,7 @@
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let root = $state<HTMLDivElement | null>(null)
+  let root = $state<HTMLDivElement | undefined>(undefined)
 
   function selectLocale(locale: 'en' | 'ru') {
     void vault.updateLocale(locale)

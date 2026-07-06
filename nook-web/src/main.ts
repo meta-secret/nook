@@ -6,4 +6,4 @@ mount(App, {
   target: document.getElementById('app')!,
 })
 
-export default null
+export default undefined

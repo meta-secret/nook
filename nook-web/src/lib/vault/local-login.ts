@@ -2,13 +2,14 @@ import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import {
+  getActiveVaultId,
   hasActiveLocalVault,
-  listLocalVaultEntries,
-  prepareCreateNewVaultSlot,
-  readActiveVaultStoreId,
-  renameLocalVault as renameLocalVaultEntry,
-  switchActiveVault,
-} from '$lib/local-vault'
+  isVaultPasswordRecommendedLength,
+  listLocalVaults,
+  prepareNewLocalVaultSlot,
+  setActiveVault,
+  setLocalVaultLabel,
+} from '$lib/nook-wasm/nook_wasm'
 import { saveAuthProviders } from '$lib/auth-providers'
 import { requireManagerVaultStoreId } from '$lib/vault-store-id'
 
@@ -17,9 +18,9 @@ const log = createLogger('vault-local')
 export async function refreshLocalVaultCatalog(
   state: VaultState,
 ): Promise<void> {
-  state.localVaults = await listLocalVaultEntries()
+  state.localVaults = await listLocalVaults()
   state.localVaultPresent = await hasActiveLocalVault()
-  const activeFromWasm = await readActiveVaultStoreId()
+  const activeFromWasm = await getActiveVaultId()
   if (activeFromWasm) {
     state.activeVaultStoreId = activeFromWasm
   }
@@ -30,8 +31,8 @@ export async function prepareLocalLogin(state: VaultState): Promise<void> {
   log.debug('preparing local login gate')
   state.storageMode = 'local'
   state.githubPat = ''
-  state.oauthFile = null
-  state.localFolder = null
+  state.oauthFile = undefined
+  state.localFolder = undefined
   await state.refreshPasswordEntriesList()
   state.localLoginPrepared = true
 }
@@ -44,7 +45,7 @@ export async function selectVaultForUnlock(
   state.dismissSuccess()
   state.isVerifying = true
   try {
-    await switchActiveVault(storeId)
+    await setActiveVault(storeId)
     state.activeVaultStoreId = storeId
     if (state.manager) {
       await state.enqueueStorage(() => state.manager!.resetVaultSession())
@@ -82,15 +83,15 @@ export async function createLocalVaultWithDeviceKeys(
   state.dismissSuccess()
   state.storageMode = 'local'
   state.githubPat = ''
-  state.oauthFile = null
-  state.localFolder = null
+  state.oauthFile = undefined
+  state.localFolder = undefined
   state.isVerifying = true
 
   try {
     await state.initDeviceIdentity()
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
-      await prepareCreateNewVaultSlot()
+      await prepareNewLocalVaultSlot()
     }
     const rawRecords = (await state.enqueueStorage(() => {
       if (creatingAdditionalVault) {
@@ -104,7 +105,7 @@ export async function createLocalVaultWithDeviceKeys(
     const storeId = requireManagerVaultStoreId(state.manager)
     state.activeVaultStoreId = storeId
     state.manager.setVaultName(trimmedLabel)
-    await renameLocalVaultEntry(storeId, trimmedLabel)
+    await setLocalVaultLabel(storeId, trimmedLabel)
     await refreshLocalVaultCatalog(state)
     state.localLoginPrepared = true
     await state.ensureProviderSaved()
@@ -147,7 +148,7 @@ export async function renameLocalVaultLabel(
   state.isVerifying = true
 
   try {
-    await renameLocalVaultEntry(trimmedStoreId, trimmedLabel)
+    await setLocalVaultLabel(trimmedStoreId, trimmedLabel)
     if (trimmedStoreId === state.activeVaultStoreId?.trim()) {
       state.manager?.setVaultName(trimmedLabel)
     }
@@ -169,7 +170,7 @@ export async function createLocalVault(
     return
   }
   if (state.isVerifying) return
-  if (password.trim().length < 8) {
+  if (!isVaultPasswordRecommendedLength(password)) {
     state.errorMsg = state.t('login.password_too_short')
     return
   }
@@ -178,15 +179,15 @@ export async function createLocalVault(
   state.dismissSuccess()
   state.storageMode = 'local'
   state.githubPat = ''
-  state.oauthFile = null
-  state.localFolder = null
+  state.oauthFile = undefined
+  state.localFolder = undefined
   state.isVerifying = true
 
   try {
     await state.initDeviceIdentity()
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
-      await prepareCreateNewVaultSlot()
+      await prepareNewLocalVaultSlot()
     }
     const rawRecords = (await state.enqueueStorage(() => {
       if (creatingAdditionalVault) {

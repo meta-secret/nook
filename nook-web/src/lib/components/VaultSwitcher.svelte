@@ -5,22 +5,22 @@
     FolderKey,
     SlidersHorizontal,
   } from '@lucide/svelte'
-  import type { LocalVaultEntry } from '$lib/local-vault'
+  import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
 
   let { vault }: { vault: VaultState } = $props()
 
   let open = $state(false)
-  let root = $state<HTMLDivElement | null>(null)
-  let switchingTo = $state<string | null>(null)
+  let root = $state<HTMLDivElement | undefined>(undefined)
+  let switchingTo = $state<string | undefined>(undefined)
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
   const activeVault = $derived(
     vaults.find((entry) => entry.storeId === activeStoreId) ??
       vaults[0] ??
-      null,
+      undefined,
   )
   const activeLabel = $derived(
     activeVault
@@ -29,7 +29,7 @@
   )
   const vaultCount = $derived(vaults.length)
   const isBusy = $derived(
-    vault.isVerifying || vault.isInitializing || switchingTo !== null,
+    vault.isVerifying || vault.isInitializing || switchingTo !== undefined,
   )
 
   const triggerClass =
@@ -71,14 +71,14 @@
     }
   }
 
-  async function switchTo(entry: LocalVaultEntry) {
+  async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return
     open = false
     switchingTo = entry.storeId
     try {
       await vault.switchToVault(entry.storeId)
     } finally {
-      switchingTo = null
+      switchingTo = undefined
     }
   }
 

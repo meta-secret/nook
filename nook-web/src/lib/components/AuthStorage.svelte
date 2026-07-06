@@ -29,12 +29,12 @@
   let {
     vault,
     syncProviders,
-    syncingProviderId = null,
+    syncingProviderId = undefined,
     isVerifying,
     isInitializing,
     addProviderOpen = false,
     embedded = false,
-    setupType = $bindable(null as StorageProviderType | null),
+    setupType = $bindable(undefined as StorageProviderType | undefined),
     githubPat = $bindable(''),
     githubRepo = $bindable(DEFAULT_GITHUB_REPO),
     onReconnect,
@@ -47,12 +47,12 @@
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | null
+    syncingProviderId?: string | undefined
     isVerifying: boolean
     isInitializing: boolean
     addProviderOpen?: boolean
     embedded?: boolean
-    setupType?: StorageProviderType | null
+    setupType?: StorageProviderType | undefined
     githubPat: string
     githubRepo: string
     onReconnect: () => void | Promise<void>
@@ -83,7 +83,8 @@
   function formatSyncStatus(provider: StorageProvider): string {
     if (provider.lastSyncedAt) {
       const version =
-        provider.lastSyncedVersion != null && provider.lastSyncedVersion > 0
+        provider.lastSyncedVersion != undefined &&
+        provider.lastSyncedVersion > 0
           ? ` · v${provider.lastSyncedVersion}`
           : ''
       return `${vault.t('auth_storage.last_synced')}${version}`
@@ -91,7 +92,7 @@
     return vault.t('auth_storage.not_synced_yet')
   }
 
-  const showSetup = $derived(setupType !== null)
+  const showSetup = $derived(setupType !== undefined)
   const addingProvider = $derived(addProviderOpen || showSetup)
   const setupCanConnect = $derived(
     setupType === 'local' ||
@@ -273,7 +274,7 @@
                       data-testid="sync-provider-{provider.id}"
                       disabled={isVerifying ||
                         isInitializing ||
-                        syncingProviderId !== null}
+                        syncingProviderId !== undefined}
                       aria-busy={syncingProviderId === provider.id}
                       onclick={() => void onSyncProvider(provider.id)}
                     >

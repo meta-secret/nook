@@ -65,7 +65,7 @@ type PendingRecord = {
 }
 
 let wasmReady = false
-let flushTimer: ReturnType<typeof setInterval> | null = null
+let flushTimer: ReturnType<typeof setInterval> | undefined = undefined
 let flushing = false
 let consolePatched = false
 let diagnosticsInstalled = false
@@ -97,20 +97,24 @@ const originalConsole: Record<
         log: () => {},
       }
 
-function parseLevel(raw: string | null | undefined): LogLevel | null {
+function parseLevel(raw: string | undefined): LogLevel | undefined {
   const value = raw?.trim().toLowerCase()
-  return LOG_LEVELS.includes(value as LogLevel) ? (value as LogLevel) : null
+  return LOG_LEVELS.includes(value as LogLevel)
+    ? (value as LogLevel)
+    : undefined
 }
 
 function initialLevel(): LogLevel {
   if (typeof localStorage !== 'undefined') {
-    const stored = parseLevel(localStorage.getItem('nook_log_level'))
+    const stored = parseLevel(
+      localStorage.getItem('nook_log_level') ?? undefined,
+    )
     if (stored) return stored
   }
   const env =
     typeof import.meta !== 'undefined'
       ? parseLevel(import.meta.env?.VITE_LOG_LEVEL as string | undefined)
-      : null
+      : undefined
   return env ?? 'info'
 }
 

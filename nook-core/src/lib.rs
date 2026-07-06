@@ -4,45 +4,30 @@
     clippy::uninlined_format_args
 )]
 
-mod bip39;
-mod database;
-mod device_key_protection;
-mod enrollment;
+mod auth;
+mod crypto;
 mod errors;
-mod event_canonical;
 mod i18n;
-mod multi_device;
-mod password;
-mod password_envelope;
-mod secret_types;
-mod secret_view;
-mod session;
-mod sync_provider_credentials;
-mod sync_provider_store;
-mod validation;
-mod vault_connect;
-mod vault_crypto;
-mod vault_epoch;
-mod vault_epoch_crypto;
-mod vault_event;
-mod vault_event_builder;
-mod vault_event_graph;
-mod vault_event_session;
-mod vault_event_store;
-mod vault_format;
-mod vault_ids;
-mod vault_import;
-mod vault_projection;
-mod vault_session;
-mod vault_session_cache;
-mod vault_signing;
-mod vault_sync;
-mod vault_sync_session;
-mod vault_sync_store;
-mod vault_wire;
+mod secrets;
+mod sync;
+mod vault;
+
+pub(crate) use auth::{device_key_protection, enrollment, multi_device, password_envelope};
+pub(crate) use crypto::{event_canonical, vault_crypto, vault_epoch_crypto, vault_signing};
+pub(crate) use secrets::{bip39, password, secret_types, secret_view, session};
+pub(crate) use sync::{
+    sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_session,
+    vault_sync_store,
+};
+pub(crate) use vault::{
+    database, vault_connect, vault_epoch, vault_event, vault_event_builder, vault_event_graph,
+    vault_event_session, vault_event_store, vault_format, vault_ids, vault_import,
+    vault_projection, vault_session, vault_session_cache, vault_wire,
+};
 
 pub use bip39::{
-    bip39_english_wordlist, is_bip39_word_sequence_valid, is_known_bip39_word, suggest_bip39_words,
+    bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
+    is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
     validate_bip39_mnemonic,
 };
 pub use database::Database;
@@ -97,8 +82,10 @@ pub use password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
     PasswordUnlockEntry, VaultUnlock, attach_password_envelope,
     attach_password_envelope_with_work_factor, create_password_entry,
-    create_password_entry_with_work_factor, resolve_keys_from_entry, resolve_keys_from_password,
-    verify_password, verify_password_entry,
+    create_password_entry_with_work_factor, is_vault_password_long_enough,
+    is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
+    vault_password_min_length, vault_password_recommended_min_length, verify_password,
+    verify_password_entry,
 };
 pub use session::{ReplaceSecretInput, replace_secret};
 pub use sync_provider_credentials::{
@@ -151,7 +138,7 @@ pub use vault_event_store::{
     union_remote_events_and_heads,
 };
 pub use vault_format::{
-    VaultFormat, current_vault_schema_version, deserialize_stored,
+    VaultFormat, current_vault_schema_version, default_vault_name_for_store_id, deserialize_stored,
     deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,
     read_vault_password_entries, read_vault_schema_version, read_vault_store_id, read_vault_unlock,
     read_vault_version, serialize_stored, serialize_stored_yaml_with_unlock,
@@ -187,6 +174,6 @@ pub use vault_sync_store::{
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    SecretPayloadYaml, SessionJsonl, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultJsonl,
-    StoredVaultYaml, SymmetricKey, Url64EncodedString,
+    SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey,
+    Url64EncodedString,
 };

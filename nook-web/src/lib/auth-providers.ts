@@ -8,10 +8,9 @@ import {
   formatDriveStorageRef as formatDriveStorageRefCore,
   loadAuthProviders as loadAuthProvidersWasm,
   maskGithubPatHint as maskGithubPatHintCore,
-  NookSyncProviderTarget,
   providerDefaultLabel as providerDefaultLabelCore,
   saveAuthProviders as saveAuthProvidersWasm,
-  syncProviderTargetKey as syncProviderTargetKeyCore,
+  syncProviderTargetKeyForProvider as syncProviderTargetKeyForProviderCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookVaultManager,
 } from './nook-wasm/nook_wasm'
@@ -73,7 +72,7 @@ export interface AuthProvidersSnapshot {
 /** Shape returned by the wasm `loadAuthProviders` pipeline. */
 interface LoadedAuthProviders {
   snapshot: AuthProvidersSnapshot
-  legacyActiveProviderId: string | null
+  legacyActiveProviderId: string | undefined
   changed: boolean
 }
 
@@ -88,34 +87,8 @@ function toPlain<T>(value: T): T {
 /** Canonical identity for a sync target — two providers with the same key are duplicates. */
 export function syncProviderTargetKey(
   provider: StorageProvider,
-): string | null {
-  const target =
-    provider.type === 'local'
-      ? NookSyncProviderTarget.local()
-      : provider.type === 'local-folder'
-        ? NookSyncProviderTarget.localFolder(
-            provider.localFolder?.directoryName ?? null,
-            provider.localFolder?.handleId ?? null,
-          )
-        : provider.type === 'github'
-          ? NookSyncProviderTarget.github(
-              provider.githubRepo ?? null,
-              provider.githubPat ?? null,
-            )
-          : provider.oauthFile
-            ? NookSyncProviderTarget.oauthFile(
-                provider.oauthFile.preset,
-                provider.oauthFile.fileId ?? null,
-                provider.oauthFile.fileName ?? null,
-                provider.oauthFile.accountEmail ?? null,
-                provider.oauthFile.accessToken ?? null,
-              )
-            : NookSyncProviderTarget.missingOauthFileConfig()
-  try {
-    return syncProviderTargetKeyCore(target) ?? null
-  } finally {
-    target.free()
-  }
+): string | undefined {
+  return syncProviderTargetKeyForProviderCore(toPlain(provider)) ?? undefined
 }
 
 export function findDuplicateSyncProvider(
@@ -134,7 +107,7 @@ export function formatDriveStorageRef(
   fileId: string | undefined,
   fileName: string,
 ): string {
-  return formatDriveStorageRefCore(fileId ?? null, fileName)
+  return formatDriveStorageRefCore(fileId ?? undefined, fileName)
 }
 
 export async function loadAuthProviders(
@@ -171,7 +144,7 @@ export function wasmStorageModeForProvider(
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ): string {
-  return wasmStorageModeForProviderCore(type, oauthPreset ?? null)
+  return wasmStorageModeForProviderCore(type, oauthPreset ?? undefined)
 }
 
 export function providerDefaultLabel(
@@ -179,7 +152,7 @@ export function providerDefaultLabel(
   detail?: string,
   oauthPreset: OAuthFilePreset = 'google-drive',
 ): string {
-  return providerDefaultLabelCore(type, detail ?? null, oauthPreset)
+  return providerDefaultLabelCore(type, detail ?? undefined, oauthPreset)
 }
 
 export function localizeProviderLabel(
@@ -225,8 +198,8 @@ export function maskGithubPat(
   pat: string | undefined,
   t?: (key: string) => string,
 ): string {
-  const hint = maskGithubPatHintCore(pat ?? null)
-  if (hint == null) {
+  const hint = maskGithubPatHintCore(pat ?? undefined)
+  if (hint == undefined) {
     return t ? t('auth_storage.no_token_saved') : 'No token saved'
   }
   return hint

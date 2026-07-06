@@ -10,7 +10,7 @@ describe('normalizeAuthSnapshot', () => {
   it('handles missing IndexedDB value without throwing', () => {
     const result = normalizeAuthSnapshot(undefined)
     expect(result.snapshot).toEqual({ providers: [] })
-    expect(result.legacyActiveProviderId).toBeNull()
+    expect(result.legacyActiveProviderId).toBeUndefined()
     expect(result.changed).toBe(false)
   })
 

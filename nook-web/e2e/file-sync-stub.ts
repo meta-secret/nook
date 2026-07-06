@@ -14,7 +14,7 @@ function toPosixPath(value: string) {
 
 function sha256FileNameFromPath(filePath: string) {
   const name = path.basename(filePath)
-  return EVENT_FILE_NAME_PATTERN.test(name) ? name : null
+  return EVENT_FILE_NAME_PATTERN.test(name) ? name : undefined
 }
 
 /** File-backed e2e sync remote. The browser still uses the OAuth-file code path;
@@ -50,7 +50,7 @@ export function createLocalE2eFileSyncVaultStub(
   function eventDigestFromFileId(id: string) {
     return id.startsWith('e2e-file-event-')
       ? id.slice('e2e-file-event-'.length)
-      : null
+      : undefined
   }
 
   function eventDigests() {
@@ -64,7 +64,7 @@ export function createLocalE2eFileSyncVaultStub(
 
   function readEvent(digest: string) {
     const file = eventPath(digest)
-    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined
   }
 
   function writeEvent(digest: string, content: string) {
@@ -93,7 +93,7 @@ export function createLocalE2eFileSyncVaultStub(
 
   function parseEventMultipart(
     body: string,
-  ): { digest: string; content: string } | null {
+  ): { digest: string; content: string } | undefined {
     const eventId = body.match(
       new RegExp(`"event_id"\\s*:\\s*"sha256u:(${EVENT_DIGEST_PATTERN})"`),
     )?.[1]
@@ -101,15 +101,15 @@ export function createLocalE2eFileSyncVaultStub(
       new RegExp(`"name"\\s*:\\s*"(${EVENT_DIGEST_PATTERN})\\.yaml"`),
     )?.[1]
     const digest = eventId ?? nameDigest
-    if (!digest) return null
+    if (!digest) return undefined
     const markers = [
       '\r\nContent-Type: application/x-yaml\r\n\r\n',
       '\r\nContent-Type: application/json\r\n\r\n',
     ]
     const marker = markers.find((candidate) => body.includes(candidate))
-    if (!marker) return null
+    if (!marker) return undefined
     const start = body.indexOf(marker)
-    if (start === -1) return null
+    if (start === -1) return undefined
     const contentStart = start + marker.length
     const end = body.indexOf('\r\n--nook_event_boundary--', contentStart)
     const content =
@@ -135,7 +135,7 @@ export function createLocalE2eFileSyncVaultStub(
     getEventFileContents: () =>
       eventDigests()
         .map((digest) => readEvent(digest))
-        .filter((content): content is string => content !== null),
+        .filter((content): content is string => content !== undefined),
     clearEventFiles: () => {
       if (!fs.existsSync(eventsDir())) return
       for (const name of fs.readdirSync(eventsDir())) {
@@ -233,7 +233,7 @@ export function createLocalE2eFileSyncVaultStub(
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
             const content = readEvent(eventDigest)
-            if (content === null) {
+            if (content === undefined) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }
@@ -260,7 +260,7 @@ export function createLocalE2eFileSyncVaultStub(
         if (driveFileId && method === 'GET') {
           const eventDigest = eventDigestFromFileId(driveFileId)
           if (eventDigest) {
-            if (readEvent(eventDigest) === null) {
+            if (readEvent(eventDigest) === undefined) {
               await route.fulfill({ status: 404, body: '{}' })
               return
             }

@@ -14,7 +14,10 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { LocalVaultEntry } from '$lib/local-vault'
+  import type {
+    NookLocalVaultEntry,
+    NookPasswordEntrySummary,
+  } from '$lib/nook-wasm/nook_wasm'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
   import type {
@@ -22,17 +25,16 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
     vault,
     isVerifying,
     isInitializing,
     syncProviders,
-    syncingProviderId = null,
+    syncingProviderId = undefined,
     isAuthenticated,
     addProviderOpen = false,
-    setupType = $bindable(null as StorageProviderType | null),
+    setupType = $bindable(undefined as StorageProviderType | undefined),
     githubPat = $bindable(''),
     githubRepo = $bindable(''),
     passwordEntries,
@@ -52,20 +54,20 @@
     onIssueCode,
     onClearCode,
     activeSection = $bindable(
-      null as 'vaults' | 'storage' | 'passwords' | null,
+      undefined as 'vaults' | 'storage' | 'passwords' | undefined,
     ),
   }: {
     vault: VaultState
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
-    syncingProviderId?: string | null
+    syncingProviderId?: string | undefined
     isAuthenticated: boolean
     addProviderOpen?: boolean
-    setupType?: StorageProviderType | null
+    setupType?: StorageProviderType | undefined
     githubPat: string
     githubRepo: string
-    passwordEntries: VaultPasswordEntrySummary[]
+    passwordEntries: NookPasswordEntrySummary[]
     isPasswordBusy: boolean
     passwordError: string
     enrollmentCode: string
@@ -87,16 +89,16 @@
     onRemovePassword: (entryId: string) => void | Promise<void>
     onIssueCode: (entryId: string, password: string) => Promise<string | void>
     onClearCode: () => void
-    activeSection?: 'vaults' | 'storage' | 'passwords' | null
+    activeSection?: 'vaults' | 'storage' | 'passwords' | undefined
   } = $props()
 
   let newVaultName = $state('')
   let drafts = $state<Record<string, string>>({})
   let draftSeed = $state('')
   let creating = $state(false)
-  let editingStoreId = $state<string | null>(null)
-  let renamingStoreId = $state<string | null>(null)
-  let switchingTo = $state<string | null>(null)
+  let editingStoreId = $state<string | undefined>(undefined)
+  let renamingStoreId = $state<string | undefined>(undefined)
+  let switchingTo = $state<string | undefined>(undefined)
 
   const activeStoreId = $derived(vault.activeVaultStoreId?.trim() ?? '')
   const vaults = $derived(vault.localVaults)
@@ -106,8 +108,8 @@
       isInitializing ||
       vault.isVerifying ||
       creating ||
-      renamingStoreId !== null ||
-      switchingTo !== null,
+      renamingStoreId !== undefined ||
+      switchingTo !== undefined,
   )
 
   function buildDrafts() {
@@ -128,31 +130,31 @@
     }
   })
 
-  function draftFor(entry: LocalVaultEntry) {
+  function draftFor(entry: NookLocalVaultEntry) {
     return drafts[entry.storeId] ?? vaultDisplayLabel(entry, vault.t)
   }
 
-  function setDraft(entry: LocalVaultEntry, value: string) {
+  function setDraft(entry: NookLocalVaultEntry, value: string) {
     drafts = { ...drafts, [entry.storeId]: value }
   }
 
-  function canSave(entry: LocalVaultEntry) {
+  function canSave(entry: NookLocalVaultEntry) {
     const draft = draftFor(entry).trim()
     return (
       !isBusy && draft.length > 0 && draft !== vaultDisplayLabel(entry, vault.t)
     )
   }
 
-  function beginRename(entry: LocalVaultEntry) {
+  function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
     setDraft(entry, vaultDisplayLabel(entry, vault.t))
     editingStoreId = entry.storeId
   }
 
-  function cancelRename(entry: LocalVaultEntry) {
+  function cancelRename(entry: NookLocalVaultEntry) {
     setDraft(entry, vaultDisplayLabel(entry, vault.t))
     if (editingStoreId === entry.storeId) {
-      editingStoreId = null
+      editingStoreId = undefined
     }
   }
 
@@ -170,26 +172,26 @@
     }
   }
 
-  async function renameVault(entry: LocalVaultEntry) {
+  async function renameVault(entry: NookLocalVaultEntry) {
     if (!canSave(entry)) return
     renamingStoreId = entry.storeId
     try {
       await vault.renameLocalVault(entry.storeId, draftFor(entry))
       if (!vault.errorMsg) {
-        editingStoreId = null
+        editingStoreId = undefined
       }
     } finally {
-      renamingStoreId = null
+      renamingStoreId = undefined
     }
   }
 
-  async function switchTo(entry: LocalVaultEntry) {
+  async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return
     switchingTo = entry.storeId
     try {
       await vault.switchToVault(entry.storeId)
     } finally {
-      switchingTo = null
+      switchingTo = undefined
     }
   }
 </script>

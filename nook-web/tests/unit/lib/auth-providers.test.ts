@@ -268,7 +268,7 @@ describe('syncProviderTargetKey', () => {
     )
   })
 
-  test('returns null for incomplete OAuth providers', () => {
+  test('returns undefined for incomplete OAuth providers', () => {
     expect(
       syncProviderTargetKey({
         id: 'gd-missing',
@@ -276,7 +276,7 @@ describe('syncProviderTargetKey', () => {
         label: 'Google Drive',
         createdAt: '2026-06-24T00:00:00.000Z',
       }),
-    ).toBeNull()
+    ).toBeUndefined()
   })
 })
 

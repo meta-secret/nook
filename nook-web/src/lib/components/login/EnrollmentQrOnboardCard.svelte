@@ -14,15 +14,15 @@
   let {
     vault,
     code,
-    passwordEntryId = null,
-    passwordEntryLabel = null,
+    passwordEntryId = undefined,
+    passwordEntryLabel = undefined,
     isVerifying,
     onSubmit,
   }: {
     vault: VaultState
     code: string
-    passwordEntryId?: string | null
-    passwordEntryLabel?: string | null
+    passwordEntryId?: string | undefined
+    passwordEntryLabel?: string | undefined
     isVerifying: boolean
     onSubmit: (password: string) => void | Promise<void>
   } = $props()

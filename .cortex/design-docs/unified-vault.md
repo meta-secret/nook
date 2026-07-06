@@ -104,7 +104,6 @@ secrets:
 | **Genesis** | `vault_version: 1` on first persist |
 | **Every save** | Increment before write |
 | **Legacy vaults** | Missing field → treat as `0`; next save normalizes to `1+` |
-| **JSONL legacy** | Version always `0` until migrated to YAML |
 
 Implementation: `nook-core/src/vault_format.rs` (`read_vault_version`), `nook-core/src/vault_sync.rs`.
 

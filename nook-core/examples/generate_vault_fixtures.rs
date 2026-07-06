@@ -34,29 +34,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         api_key("https://notes.example.com", "multiline\nsecret\nwith\ttabs"),
     );
 
-    let session_jsonl = db.to_jsonl()?;
     let stored_yaml = db.to_stored_yaml(passphrase)?;
-    let stored_jsonl = db.to_stored_jsonl(passphrase)?;
 
-    fs::write(
-        fixtures_dir.join("session.example.jsonl"),
-        session_jsonl.as_str(),
-    )
-    .map_err(|e| format!("write session.example.jsonl: {e}"))?;
     fs::write(
         fixtures_dir.join("nook-projection.example.yaml"),
         stored_yaml.as_str(),
     )
     .map_err(|e| format!("write nook-projection.example.yaml: {e}"))?;
-    fs::write(
-        fixtures_dir.join("nook-projection.example.jsonl"),
-        stored_jsonl.as_str(),
-    )
-    .map_err(|e| format!("write nook-projection.example.jsonl: {e}"))?;
 
     println!("Wrote fixtures to {}", fixtures_dir.display());
-    println!("  session.example.jsonl     — plaintext in-memory format (WASM session only)");
     println!("  nook-projection.example.yaml   — encrypted on-disk format (GitHub / IndexedDB)");
-    println!("  nook-projection.example.jsonl  — same data, JSONL on-disk format (also supported)");
     Ok(())
 }

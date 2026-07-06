@@ -47,18 +47,18 @@ impl From<ConnectAccessStatus> for VaultAccessStatus {
 
 /// Decrypted session material loaded from a stored vault blob.
 pub struct LoadedVault {
-    pub jsonl: String,
+    pub database: Database,
     pub meta: VaultMetaState,
-    pub secrets_key: String,
-    pub members_key: String,
+    pub secrets_key: crate::SymmetricKey,
+    pub members_key: crate::SymmetricKey,
 }
 
 /// Non-secret top-level YAML metadata captured without decrypting records.
 pub struct VaultContentMetadata {
     pub unlock: VaultUnlock,
     pub password_entries: Vec<crate::PasswordUnlockEntry>,
-    pub store_id: Option<String>,
-    pub vault_name: Option<String>,
+    pub store_id: String,
+    pub vault_name: String,
     pub version: u64,
 }
 
@@ -101,12 +101,11 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
     let meta = VaultMetaState::from_stored_records(&stored_records);
     let user_records = user_stored_records(&stored_records);
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
-    let jsonl = db.to_jsonl()?;
     Ok(LoadedVault {
-        jsonl: jsonl.into_inner(),
+        database: db,
         meta,
-        secrets_key: secrets_key.into_inner(),
-        members_key: members_key.into_inner(),
+        secrets_key,
+        members_key,
     })
 }
 
@@ -126,8 +125,10 @@ pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[Stored
 pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultContentMetadata> {
     let unlock = crate::read_vault_unlock(content).unwrap_or(VaultUnlock::Keys);
     let password_entries = crate::read_vault_password_entries(content).unwrap_or_default();
-    let store_id = crate::read_vault_store_id(content).ok().flatten();
-    let vault_name = crate::read_vault_name(content).ok().flatten();
+    let store_id = crate::read_vault_store_id(content)?
+        .ok_or(crate::errors::VaultFormatError::YamlMissingSections)?;
+    let vault_name = crate::read_vault_name(content)?
+        .unwrap_or_else(|| crate::default_vault_name_for_store_id(&store_id));
     let version = crate::read_vault_version(content).unwrap_or(0);
     Ok(VaultContentMetadata {
         unlock,
@@ -181,8 +182,9 @@ mod tests {
             VaultAccessStatus::Ready
         );
         let loaded = load_stored_vault(yaml.as_str(), &identity)?;
-        assert_eq!(loaded.secrets_key, keys.secrets_key.as_str());
-        assert!(loaded.jsonl.is_empty() || loaded.meta.auth.len() + loaded.meta.members.len() >= 2);
+        assert_eq!(loaded.secrets_key, keys.secrets_key);
+        assert!(loaded.database.list().is_empty());
+        assert!(loaded.meta.auth.len() + loaded.meta.members.len() >= 2);
         Ok(())
     }
 }

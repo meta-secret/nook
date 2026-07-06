@@ -4,16 +4,18 @@
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
-  import type { LocalVaultEntry } from '$lib/local-vault'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import type {
+    NookLocalVaultEntry,
+    NookPasswordEntrySummary,
+  } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
-    vaultEntry = null as LocalVaultEntry | null,
+    vaultEntry = undefined as NookLocalVaultEntry | undefined,
     hasMultipleVaults = false,
-    passwordEntries = [] as VaultPasswordEntrySummary[],
-    selectedPasswordEntryId = $bindable(null as string | null),
+    passwordEntries = [] as NookPasswordEntrySummary[],
+    selectedPasswordEntryId = $bindable(undefined as string | undefined),
     isVerifying,
     isInitializing,
     isUnlocking = false,
@@ -24,10 +26,10 @@
     onImportFromSync,
   }: {
     vault: VaultState
-    vaultEntry?: LocalVaultEntry | null
+    vaultEntry?: NookLocalVaultEntry | undefined
     hasMultipleVaults?: boolean
-    passwordEntries?: VaultPasswordEntrySummary[]
-    selectedPasswordEntryId?: string | null
+    passwordEntries?: NookPasswordEntrySummary[]
+    selectedPasswordEntryId?: string | undefined
     isVerifying: boolean
     isInitializing: boolean
     isUnlocking?: boolean

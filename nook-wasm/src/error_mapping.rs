@@ -67,8 +67,6 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::AgeArmoredInvalid
             | ValidationError::DevicePublicKeyInvalid
             | ValidationError::DeviceIdentitySecretInvalid
-            | ValidationError::SessionJsonlInvalid
-            | ValidationError::StoredVaultJsonlInvalid
             | ValidationError::Sha256HexInvalid
             | ValidationError::DeviceSigningPublicKeyInvalid
             | ValidationError::IsoTimestampInvalid

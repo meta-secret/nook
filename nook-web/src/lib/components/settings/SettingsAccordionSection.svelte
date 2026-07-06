@@ -6,7 +6,7 @@
     title,
     subtitle,
     section,
-    activeSection = $bindable(null as string | null),
+    activeSection = $bindable<string | undefined>(undefined),
     disabled = false,
     testId,
     badge,
@@ -15,7 +15,7 @@
     title: string
     subtitle?: string
     section: string
-    activeSection?: string | null
+    activeSection?: string | undefined
     disabled?: boolean
     testId?: string
     badge?: Snippet
@@ -25,7 +25,7 @@
   const open = $derived(activeSection === section)
 
   function handleToggle() {
-    activeSection = open ? null : section
+    activeSection = open ? undefined : section
   }
 </script>
 

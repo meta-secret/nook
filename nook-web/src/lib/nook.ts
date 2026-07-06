@@ -121,16 +121,16 @@ export function buildSecretYaml(
   return wasmBuildSecretYaml(
     secretType,
     new NookSecretFormFields(
-      fields.websiteUrl ?? null,
-      fields.username ?? null,
-      fields.password ?? null,
-      fields.notes ?? null,
-      fields.key ?? null,
-      fields.expiresAt ?? null,
-      fields.name ?? null,
-      fields.seed ?? null,
-      fields.title ?? null,
-      fields.note ?? null,
+      fields.websiteUrl ?? undefined,
+      fields.username ?? undefined,
+      fields.password ?? undefined,
+      fields.notes ?? undefined,
+      fields.key ?? undefined,
+      fields.expiresAt ?? undefined,
+      fields.name ?? undefined,
+      fields.seed ?? undefined,
+      fields.title ?? undefined,
+      fields.note ?? undefined,
     ),
   )
 }

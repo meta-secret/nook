@@ -51,10 +51,10 @@ pub(crate) fn wasm_iso_timestamp() -> String {
 }
 
 pub(crate) struct LoadedVault {
-    pub(crate) jsonl: String,
+    pub(crate) database: nook_core::Database,
     pub(crate) meta: nook_core::VaultMetaState,
-    pub(crate) secrets_key: String,
-    pub(crate) members_key: String,
+    pub(crate) secrets_key: nook_core::SymmetricKey,
+    pub(crate) members_key: nook_core::SymmetricKey,
 }
 
 pub(crate) fn load_stored_vault(
@@ -63,7 +63,7 @@ pub(crate) fn load_stored_vault(
 ) -> Result<LoadedVault, NookError> {
     let loaded = nook_core::load_stored_vault(content, identity)?;
     Ok(LoadedVault {
-        jsonl: loaded.jsonl,
+        database: loaded.database,
         meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,

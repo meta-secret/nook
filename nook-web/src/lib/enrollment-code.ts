@@ -13,6 +13,7 @@
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
+  StorageProviderType,
   default as initNookWasm,
   decryptEnrollmentPayload as decryptEnrollmentPayloadCore,
   encryptEnrollmentPayload as encryptEnrollmentPayloadCore,
@@ -57,19 +58,25 @@ export async function encryptEnrollmentPayload(
   )
 }
 
-export function peekEnrollmentIssuedAt(code: string): string | null {
+export function peekEnrollmentIssuedAt(code: string): string | undefined {
   const normalized = normalizeEnrollmentCode(code)
-  return normalized ? (peekEnrollmentIssuedAtCore(normalized) ?? null) : null
+  return normalized
+    ? (peekEnrollmentIssuedAtCore(normalized) ?? undefined)
+    : undefined
 }
 
-export function peekEnrollmentEntryId(code: string): string | null {
+export function peekEnrollmentEntryId(code: string): string | undefined {
   const normalized = normalizeEnrollmentCode(code)
-  return normalized ? (peekEnrollmentEntryIdCore(normalized) ?? null) : null
+  return normalized
+    ? (peekEnrollmentEntryIdCore(normalized) ?? undefined)
+    : undefined
 }
 
-export function peekEnrollmentEntryLabel(code: string): string | null {
+export function peekEnrollmentEntryLabel(code: string): string | undefined {
   const normalized = normalizeEnrollmentCode(code)
-  return normalized ? (peekEnrollmentEntryLabelCore(normalized) ?? null) : null
+  return normalized
+    ? (peekEnrollmentEntryLabelCore(normalized) ?? undefined)
+    : undefined
 }
 
 /** App root used in QR links (`origin` + Vite `BASE_URL`, or `VITE_PUBLIC_APP_URL`). */
@@ -132,29 +139,29 @@ export function normalizeEnrollmentCode(input: string): string {
  * Read an enrollment code from the current page URL (hash or query), then
  * strip it from the address bar so secrets do not linger in history.
  */
-export function consumeEnrollmentFromLocation(): string | null {
+export function consumeEnrollmentFromLocation(): string | undefined {
   if (typeof window === 'undefined') {
-    return null
+    return undefined
   }
 
   const url = new URL(window.location.href)
-  let raw: string | null
+  let raw: string | undefined
 
   if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
     raw = decodeURIComponent(url.hash.slice(ENROLLMENT_HASH_PREFIX.length))
     url.hash = ''
   } else {
-    raw = url.searchParams.get('enroll')
+    raw = url.searchParams.get('enroll') ?? undefined
     if (raw) {
       url.searchParams.delete('enroll')
     }
   }
 
   if (!raw) {
-    return null
+    return undefined
   }
 
-  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  history.replaceState(undefined, '', `${url.pathname}${url.search}${url.hash}`)
   return normalizeEnrollmentCode(raw)
 }
 
@@ -185,23 +192,19 @@ function toWasmIssueInput(
 
 function toWasmProvider(provider: EnrollmentProvider): NookEnrollmentProvider {
   if (provider.type === 'github') {
-    return new NookEnrollmentProvider(
-      provider.type,
-      provider.pat,
-      provider.repo,
-    )
+    return NookEnrollmentProvider.github(provider.repo, provider.pat)
   }
-  return new NookEnrollmentProvider(provider.type)
+  return NookEnrollmentProvider.local()
 }
 
 function fromWasmProvider(
   provider: NookEnrollmentProvider,
 ): EnrollmentProvider {
-  if (provider.type === 'github') {
+  if (provider.type === StorageProviderType.Github) {
     return {
       type: 'github',
-      pat: provider.pat,
-      repo: provider.repo,
+      pat: provider.githubPat ?? '',
+      repo: provider.githubRepo ?? '',
     }
   }
   return { type: 'local' }

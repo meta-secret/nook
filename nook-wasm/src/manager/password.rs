@@ -28,7 +28,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "listVaultPasswordEntries")]
     pub fn list_vault_password_entries(&self) -> Result<Vec<NookPasswordEntrySummary>, JsError> {
-        Ok(password_entries_to_vec(&self.password_entries))
+        Ok(password_entries_to_vec(&self.vault.password_entries))
     }
 
     #[wasm_bindgen(js_name = "fetchVaultPasswordEntries")]
@@ -53,13 +53,14 @@ impl NookVaultManager {
             }
         }
         let entries = nook_core::read_vault_password_entries(&content)?;
-        self.password_entries = entries.clone();
+        self.vault.password_entries = entries.clone();
         Ok(password_entries_to_vec(&entries))
     }
 
     #[wasm_bindgen(js_name = "verifyVaultPassword")]
     pub fn verify_vault_password(&self, entry_id: &str, password: &str) -> bool {
         match self
+            .vault
             .password_entries
             .iter()
             .find(|entry| entry.id == entry_id)
@@ -96,15 +97,15 @@ impl NookVaultManager {
         work_factor: u8,
     ) -> Result<(), JsError> {
         self.ensure_vault_crypto_from_cache().await?;
-        if self.secrets_key.is_empty() || self.members_key.is_empty() {
+        if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
             return Err(NookError::Database(
                 "Vault must be unlocked before adding a password.".to_owned(),
             )
             .into());
         }
         let keys = nook_core::VaultKeys {
-            secrets_key: nook_core::SymmetricKey::parse(&self.secrets_key)?,
-            members_key: nook_core::SymmetricKey::parse(&self.members_key)?,
+            secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
+            members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
         };
         let entry = nook_core::create_password_entry_with_work_factor(
             &keys,
@@ -115,8 +116,8 @@ impl NookVaultManager {
             work_factor,
         )?;
 
-        self.password_entries.push(entry.clone());
-        self.unlock = nook_core::VaultUnlock::Keys;
+        self.vault.password_entries.push(entry.clone());
+        self.vault.unlock = nook_core::VaultUnlock::Keys;
         self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
             entry_id: nook_core::PasswordEntryId::parse(&entry.id)?,
             label: entry.label,
@@ -168,13 +169,14 @@ impl NookVaultManager {
         work_factor: u8,
     ) -> Result<(), JsError> {
         self.ensure_vault_crypto_from_cache().await?;
-        if self.secrets_key.is_empty() || self.members_key.is_empty() {
+        if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
             return Err(NookError::Database(
                 "Vault must be unlocked before updating a password.".to_owned(),
             )
             .into());
         }
         if !self
+            .vault
             .password_entries
             .iter()
             .any(|entry| entry.id == entry_id)
@@ -189,6 +191,7 @@ impl NookVaultManager {
             )
             .await?;
         let target = self
+            .vault
             .password_entries
             .iter_mut()
             .find(|entry| entry.id == entry_id)
@@ -200,7 +203,9 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
-        self.password_entries.retain(|entry| entry.id != entry_id);
+        self.vault
+            .password_entries
+            .retain(|entry| entry.id != entry_id);
         self.ensure_event_log_ready().await?;
         self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
             entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
@@ -212,11 +217,12 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
         let entry_ids: Vec<String> = self
+            .vault
             .password_entries
             .iter()
             .map(|entry| entry.id.clone())
             .collect();
-        self.password_entries.clear();
+        self.vault.password_entries.clear();
         self.ensure_event_log_ready().await?;
         if let Some(first_id) = entry_ids.first() {
             self.rotate_security_epoch(nook_core::VaultOperation::PasswordRemoved {
@@ -242,7 +248,7 @@ impl NookVaultManager {
         entry_id: String,
         password: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let _ = self.status_tx.send("CONNECT_START".to_owned());
+        let _ = self.status.tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
         let identity = self.ensure_device_identity()?;
@@ -260,6 +266,7 @@ impl NookVaultManager {
         }
 
         let entry = self
+            .vault
             .password_entries
             .iter()
             .find(|entry| {
@@ -269,7 +276,7 @@ impl NookVaultManager {
                     entry.id == entry_id
                 }
             })
-            .or_else(|| self.password_entries.first())
+            .or_else(|| self.vault.password_entries.first())
             .ok_or_else(|| {
                 NookError::Decryption("No backup password found on this vault.".to_owned())
             })?
@@ -277,7 +284,7 @@ impl NookVaultManager {
         let keys = nook_core::resolve_keys_from_entry(&entry, &password)?;
 
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.unlock = nook_core::VaultUnlock::Keys;
+        self.vault.unlock = nook_core::VaultUnlock::Keys;
         self.persist_password_unlock_membership(
             event_log_remote,
             &mut records,
@@ -290,14 +297,13 @@ impl NookVaultManager {
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let stored_records = self.stored_records_snapshot();
         let user_records = nook_core::user_stored_records(&stored_records);
-        let database =
+        self.vault.database =
             nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)?;
-        self.decrypted_jsonl = database.to_jsonl()?.into_inner();
         if event_log_remote {
             let yaml = self.serialize_current_projection_yaml()?;
             save_to_indexed_db(&yaml).await?;
         }
-        let _ = self.status_tx.send("READY".to_owned());
+        let _ = self.status.tx.send("READY".to_owned());
         Ok(self.get_records()?)
     }
 
@@ -306,26 +312,26 @@ impl NookVaultManager {
         content: &str,
         vault_missing: bool,
     ) -> Result<(bool, Vec<nook_core::StoredSecretRecord>), NookError> {
-        let event_log_remote = self.storage_mode != nook_core::StorageMode::Local
+        let event_log_remote = self.storage.mode != nook_core::StorageMode::Local
             && (vault_missing || content.trim().is_empty());
         if event_log_remote {
             self.sync_events_from_current_provider().await?;
-            if self.store_id.is_empty() || !self.event_log_has_events().await? {
+            if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
                 return Err(NookError::Database(
                     "No event log found at this provider. Ask the inviter to confirm the repo/path."
                         .to_owned(),
                 ));
             }
-            let store = load_local_event_store(&self.store_id).await?;
-            let graph = store.load_graph(&self.store_id)?;
-            let projection = nook_core::project_vault(&graph, &self.store_id)?;
-            self.password_entries = projection.password_entries.clone();
+            let store = load_local_event_store(&self.vault.store_id).await?;
+            let graph = store.load_graph(&self.vault.store_id)?;
+            let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
+            self.vault.password_entries = projection.password_entries.clone();
             let user_records: Vec<nook_core::StoredSecretRecord> =
                 projection.live_secrets(&graph).into_values().collect();
             let mut meta = nook_core::VaultMetaState::from_stored_records(&user_records);
             nook_core::materialize_vault_meta_from_graph(&graph, &mut meta)?;
-            self.meta = meta;
-            return Ok((true, self.meta.to_stored_records()));
+            self.vault.meta = meta;
+            return Ok((true, self.vault.meta.to_stored_records()));
         }
 
         if vault_missing || content.trim().is_empty() {
@@ -389,17 +395,19 @@ impl NookVaultManager {
             &keys.members_key,
         )?);
 
-        self.meta = nook_core::VaultMetaState::from_stored_records(records);
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(records);
         let content_vault_name = nook_core::read_vault_name(content).ok().flatten();
         let import_yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
             records,
-            &self.unlock,
-            &self.password_entries,
+            &self.vault.unlock,
+            &self.vault.password_entries,
             nook_core::read_vault_store_id(content)
                 .ok()
                 .flatten()
                 .as_deref(),
-            content_vault_name.as_deref().or(self.vault_name.as_deref()),
+            content_vault_name
+                .as_deref()
+                .or(self.vault.vault_name.as_deref()),
             None,
         )?;
         self.import_stored_vault_to_event_log(import_yaml.as_str())

@@ -1,10 +1,10 @@
 //! Plaintext session hydration from projected or stored user records.
 
 use crate::errors::VaultResult;
-use crate::vault_wire::SessionJsonl;
 use crate::{Database, StoredSecretRecord, VaultCrypto, VaultMetaState};
 
-/// Merge live user secrets into the typed session meta state and return decrypted JSONL.
+/// Merge live user secrets into the typed session meta state and return the
+/// decrypted in-memory database.
 ///
 /// Vault meta rows (auth, members, join) in `state` are preserved; the `secrets`
 /// bucket is fully replaced from `user_records`.
@@ -12,9 +12,8 @@ pub fn apply_user_records_to_armored_session(
     user_records: Vec<StoredSecretRecord>,
     crypto: &VaultCrypto,
     state: &mut VaultMetaState,
-) -> VaultResult<SessionJsonl> {
+) -> VaultResult<Database> {
     let db = Database::from_stored_records_with_crypto(&user_records, crypto)?;
-    let jsonl = db.to_jsonl()?;
     state.secrets.clear();
     for record in user_records {
         if let Some(secret_type) = record.secret_type {
@@ -23,7 +22,7 @@ pub fn apply_user_records_to_armored_session(
                 .insert(record.key, (secret_type, record.value));
         }
     }
-    Ok(jsonl)
+    Ok(db)
 }
 
 #[cfg(test)]
@@ -66,9 +65,9 @@ mod tests {
             value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 
-        let jsonl = apply_user_records_to_armored_session(user_records, &crypto, &mut state)?;
+        let db = apply_user_records_to_armored_session(user_records, &crypto, &mut state)?;
 
-        assert!(jsonl.as_str().contains("secret_new0000001"));
+        assert!(db.list().iter().any(|record| record.id == new_id));
         assert!(!state.secrets.contains_key(&old_id));
         assert!(state.secrets.contains_key(&new_id));
         assert!(state.auth.contains_key(&identity.auth_id()));

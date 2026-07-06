@@ -17,7 +17,10 @@
     buildEnrollmentLink,
     peekEnrollmentIssuedAt,
   } from '$lib/enrollment-code'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import {
+    isVaultPasswordLongEnough,
+    type NookPasswordEntrySummary,
+  } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
   type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
@@ -39,7 +42,7 @@
     showWarningBanner = true,
   }: {
     vault: VaultState
-    passwordEntries: VaultPasswordEntrySummary[]
+    passwordEntries: NookPasswordEntrySummary[]
     isBusy: boolean
     passwordError: string
     enrollmentCode: string
@@ -62,7 +65,7 @@
   }
 
   let panel = $state<Panel>(resolveInitialPanel())
-  let activeEntryId = $state<string | null>(null)
+  let activeEntryId = $state<string | undefined>(undefined)
 
   let labelInput = $state('')
   let passwordInput = $state('')
@@ -72,11 +75,11 @@
 
   const hasPasswords = $derived(passwordEntries.length > 0)
   const activeEntry = $derived(
-    passwordEntries.find((entry) => entry.id === activeEntryId) ?? null,
+    passwordEntries.find((entry) => entry.id === activeEntryId) ?? undefined,
   )
 
   const issuedAt = $derived.by(() => {
-    if (!enrollmentCode) return null
+    if (!enrollmentCode) return undefined
     return peekEnrollmentIssuedAt(enrollmentCode)
   })
   const enrollmentLink = $derived.by(() =>
@@ -109,7 +112,7 @@
     return vault.t('vault_passwords.issued_hours_ago', { hours: String(hours) })
   })
 
-  function openPanel(target: Panel, entryId: string | null = null) {
+  function openPanel(target: Panel, entryId: string | undefined = undefined) {
     panel = target
     activeEntryId = entryId
     labelInput = ''
@@ -121,7 +124,7 @@
 
   function closePanel() {
     panel = 'idle'
-    activeEntryId = null
+    activeEntryId = undefined
     labelInput = ''
     passwordInput = ''
     confirmInput = ''
@@ -135,7 +138,7 @@
       localError = vault.t('vault_passwords.enter_label_error')
       return
     }
-    if (passwordInput.length < 5) {
+    if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
     }
@@ -154,7 +157,7 @@
   async function submitRotatePassword() {
     localError = ''
     if (!activeEntryId) return
-    if (passwordInput.length < 5) {
+    if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
     }

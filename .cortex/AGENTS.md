@@ -45,7 +45,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local validation → push when ready → monitor → full local loop on failure → merge). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/coderabbit.md](workflows/coderabbit.md) — CodeRabbit CLI / PR-review workflow for agent pre-commit review loops and GitHub-side review control.
-* [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Capture user-explained codebase lessons as reusable `.cortex/dynamic-skills/` skill cards and optional Cursor project skills.
+* [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).
@@ -61,7 +61,11 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ### Grow `.cortex` dynamically
 * When prompts, dialogues, test runs, or PRs reveal **durable** facts (invariants, tooling behavior, architectural decisions, coverage gaps), **write them into `.cortex` in the same task** — do not leave knowledge only in chat history.
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
-* For recurring refactor or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
+* For recurring refactor, review, boundary, or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
+
+### Project skills
+* [dynamic-skills/index.md](dynamic-skills/index.md) is the canonical registry of repo-specific skills agents must consult for matching work. The directory name means the skills were captured dynamically from durable project feedback; it does **not** mean they are optional or ad hoc.
+* `.cursor/skills/` entries are executable mirrors for tools that support project skills. They must point back to `.cortex/dynamic-skills/`; do not treat `.cursor/skills/` as the source of truth.
 
 ### Debugging and CI verification — always check app logs
 * Investigation order: **tests** → **static analysis** (`task check`) → **persisted app logs**.

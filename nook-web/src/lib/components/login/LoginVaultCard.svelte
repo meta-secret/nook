@@ -1,6 +1,6 @@
 <script lang="ts">
   import { FolderKey } from '@lucide/svelte'
-  import type { LocalVaultEntry } from '$lib/local-vault'
+  import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -11,7 +11,7 @@
     interactive = false,
   }: {
     vault: VaultState
-    entry: LocalVaultEntry
+    entry: NookLocalVaultEntry
     active?: boolean
     interactive?: boolean
   } = $props()

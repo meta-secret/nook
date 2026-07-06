@@ -26,14 +26,14 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
                                v (core domain dependencies)
 +-------------------------------------------------------------+
 |                         nook-core                           |
-|     (Pure Rust: crypto, formats, validation, passwords)       |
+|   (Rust domain: crypto, formats, validation, passwords)       |
 +-------------------------------------------------------------+
 ```
 
 ### Dependency Enforcements
 
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
-2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`.
+2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
 ---
 
@@ -41,20 +41,17 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ### A. `nook-core` (The Domain Core)
 
-- **`multi_device`:** `secrets_key` + `members_key`, device identity, join/approve/enroll; YAML `auth:` / `joins:` / `members:` sections.
-- **`device_key_protection`:** WebAuthn-PRF input/output validation, HKDF-SHA256 key derivation, and AES-256-GCM wrapping of the X25519 device identity.
-- **`Database`:** In-memory JSONL session (sorted KV records); user secrets only at rest in session.
-- **`vault_format`:** On-disk YAML (default) and JSONL serialization; auto-detect on load; `vault_version` monotonic counter.
-- **`vault_sync`:** Version-based local/remote reconciliation (`compare_vault_sync`).
-- **`vault_crypto`:** Session-scoped age encrypt/decrypt with cached scrypt identity/recipient.
-- **`secret_types` / `secret_view`:** Typed secret payloads, YAML parse/serialize, display/search helpers shared across hosts.
-- **`validation`:** Storage mode, PAT, secret field validation; label search filter.
-- **`password`:** CSPRNG password generation via `getrandom`.
+- **`src/auth/`:** Device identity protection, enrollment, multi-device roster/auth records, and password unlock envelopes.
+- **`src/crypto/`:** Canonical event signing/hashing, vault encryption, key-epoch re-encryption, and signing identity helpers.
+- **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
+- **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
+- **`src/vault/`:** In-memory database, vault formats, ids/newtypes, event log, projection, import, connect, and session-cache workflows.
+- **Root exports:** `nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
 ### B. `nook-wasm` (The Bridge Layer)
 
-- **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
+- **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
 - **Device protection:** Persist/migrate the wrapped identity and expose typed setup/unlock values to the web layer.
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
@@ -95,15 +92,15 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
               → load local projection or remote event log
               → resolve_secrets_key() + resolve_members_key() from auth row
               → VaultCrypto::new(secrets_key)
-              → decrypt user secret values → decrypted_jsonl session
+              → decrypt user secret values → typed Database session
 ```
 
 ### Add Secret (incremental save)
 
-```
+```text
 [Svelte] → add_secret(key, value)
          → validate_secret_label, validate_secret_value
-         → update decrypted_jsonl (Database)
+         → update typed Database session
          → encrypt_value ONLY for this key → stored_armored
          → serialize_stored(Yaml) from cache (no full re-encrypt)
          → write encrypted_db / GitHub PUT
@@ -123,7 +120,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 | Layer                                  | Format                                                        | Location                                                                                                                                                                       |
 | -------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Session (plaintext user secrets)       | JSONL lines                                                   | WASM `decrypted_jsonl` only                                                                                                                                                    |
+| Session (plaintext user secrets)       | Typed `Database` records                                      | WASM memory only                                                                                                                                                               |
 | On-disk user secrets                   | YAML `secrets:` list                                          | Values encrypted with `secrets_key`                                                                                                                                            |
 | Logical secret store                   | YAML `store_id`                                               | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md))                                                             |
 | Vault revision                         | YAML `vault_version`                                          | Monotonic counter; incremented on every save ([unified-vault.md](design-docs/unified-vault.md))                                                                                |
@@ -147,7 +144,6 @@ members:  members_key-encrypted catalog entries
 ```
 
 - **Per-record age armor** for values; labels plaintext in YAML.
-- **Legacy JSONL vault files** load via `from_stored_auto`; new writes use YAML.
 - **GitHub:** UTF-8 YAML file, base64 in API payloads (not hex blob).
 - **IndexedDB `encrypted_db`:** UTF-8 YAML text (not hex).
 

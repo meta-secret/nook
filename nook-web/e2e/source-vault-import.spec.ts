@@ -11,10 +11,10 @@ async function readIdbKey(
   page: Page,
   storeName: string,
   key: string,
-): Promise<string | null> {
+): Promise<string | undefined> {
   return page.evaluate(
     ({ storeName, idbKey }) => {
-      return new Promise<string | null>((resolve, reject) => {
+      return new Promise<string | undefined>((resolve, reject) => {
         const request = indexedDB.open('nook_db')
         request.onerror = () =>
           reject(request.error ?? new Error('idb open failed'))
@@ -22,7 +22,7 @@ async function readIdbKey(
           const db = request.result
           if (!db.objectStoreNames.contains(storeName)) {
             db.close()
-            resolve(null)
+            resolve(undefined)
             return
           }
           const tx = db.transaction(storeName, 'readonly')
@@ -32,7 +32,7 @@ async function readIdbKey(
             reject(getReq.error ?? new Error('idb read failed'))
           getReq.onsuccess = () => {
             const value = getReq.result
-            resolve(value == null ? null : String(value))
+            resolve(value == undefined ? undefined : String(value))
           }
           tx.oncomplete = () => db.close()
         }
@@ -121,7 +121,7 @@ test.describe('source vault import to event log', () => {
 
     await page.getByTestId('header-lock-vault-btn').click()
     await clearEventLogState(page, storeId)
-    expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBeNull()
+    expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBeUndefined()
 
     await authorizeDeviceProtection(page)
     await unlockVaultOnLogin(page)

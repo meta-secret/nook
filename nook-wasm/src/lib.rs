@@ -108,6 +108,24 @@ pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> boo
     nook_core::is_bip39_word_sequence_valid(text, expected_word_count as usize)
 }
 
+#[wasm_bindgen(js_name = parseBip39Words)]
+pub fn parse_bip39_words(text: &str) -> Vec<String> {
+    nook_core::parse_bip39_words(text)
+}
+
+#[wasm_bindgen(js_name = joinBip39Words)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn join_bip39_words(words: Vec<String>) -> String {
+    nook_core::join_bip39_words(&words)
+}
+
+#[wasm_bindgen(js_name = inferBip39MnemonicLength)]
+#[must_use]
+pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
+    nook_core::infer_bip39_mnemonic_length(text)
+}
+
 #[wasm_bindgen(js_name = generateId)]
 pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_id()?.to_string())
@@ -135,6 +153,31 @@ pub fn generate_password(
         numbers,
         symbols,
     })?)
+}
+
+#[wasm_bindgen(js_name = vaultPasswordMinLength)]
+#[must_use]
+pub fn vault_password_min_length() -> u32 {
+    u32::try_from(nook_core::vault_password_min_length()).expect("password minimum fits in u32")
+}
+
+#[wasm_bindgen(js_name = vaultPasswordRecommendedMinLength)]
+#[must_use]
+pub fn vault_password_recommended_min_length() -> u32 {
+    u32::try_from(nook_core::vault_password_recommended_min_length())
+        .expect("password recommended minimum fits in u32")
+}
+
+#[wasm_bindgen(js_name = isVaultPasswordLongEnough)]
+#[must_use]
+pub fn is_vault_password_long_enough(password: &str) -> bool {
+    nook_core::is_vault_password_long_enough(password)
+}
+
+#[wasm_bindgen(js_name = isVaultPasswordRecommendedLength)]
+#[must_use]
+pub fn is_vault_password_recommended_length(password: &str) -> bool {
+    nook_core::is_vault_password_recommended_length(password)
 }
 
 #[wasm_bindgen(js_name = defaultGithubRepo)]
@@ -195,6 +238,14 @@ pub fn provider_default_label(
 #[must_use]
 pub fn sync_provider_target_key(target: &NookSyncProviderTarget) -> Option<String> {
     nook_core::sync_provider_target_key(target.as_core())
+}
+
+#[wasm_bindgen(js_name = syncProviderTargetKeyForProvider)]
+pub fn sync_provider_target_key_for_provider(
+    provider: JsValue,
+) -> Result<Option<String>, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    Ok(nook_core::provider_target_key(&provider))
 }
 
 /// Masked GitHub PAT hint for provider lists. `None` means no token is saved;
@@ -259,11 +310,8 @@ pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
 /// Returns `{ snapshot, legacyActiveProviderId, changed }`; `snapshot` carries
 /// decrypted credentials for in-memory sync use, and `legacyActiveProviderId`
 /// drives the one-time remote-vault copy that still lives in the web layer.
-/// Serialize with `None` mapped to JS `null` (not `undefined`) so optional
-/// fields without `skip_serializing_if` (e.g. `legacyActiveProviderId`) keep the
-/// nullable contract the web layer expects.
-fn to_js_nullable<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
-    value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_missing_as_null(true))
+fn to_js_value<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
+    serde_wasm_bindgen::to_value(value)
 }
 
 #[wasm_bindgen(js_name = loadAuthProviders)]
@@ -272,7 +320,7 @@ pub async fn load_auth_providers(
 ) -> Result<JsValue, wasm_bindgen::JsError> {
     let identity = manager.device_identity()?;
     let normalized = crate::storage::auth_providers::load_auth_providers(&identity).await?;
-    Ok(to_js_nullable(&normalized)?)
+    Ok(to_js_value(&normalized)?)
 }
 
 /// Seal credential fields with the device key and persist the snapshot to the
@@ -305,7 +353,7 @@ pub fn normalize_auth_snapshot(raw: JsValue) -> Result<JsValue, wasm_bindgen::Js
         serde_wasm_bindgen::from_value(raw)?
     };
     let normalized = nook_core::normalize_auth_snapshot(&value);
-    Ok(to_js_nullable(&normalized)?)
+    Ok(to_js_value(&normalized)?)
 }
 
 /// Find an existing provider whose sync target matches `candidate`, optionally
@@ -359,8 +407,8 @@ pub async fn has_active_local_vault() -> Result<bool, wasm_bindgen::JsError> {
 #[derive(Clone)]
 pub struct NookLocalVaultEntry {
     store_id: String,
-    label: Option<String>,
-    last_unlocked_at: Option<String>,
+    label: String,
+    last_unlocked_at: Option<nook_core::IsoTimestamp>,
 }
 
 #[wasm_bindgen]
@@ -371,13 +419,15 @@ impl NookLocalVaultEntry {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn label(&self) -> Option<String> {
+    pub fn label(&self) -> String {
         self.label.clone()
     }
 
     #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
     pub fn last_unlocked_at(&self) -> Option<String> {
-        self.last_unlocked_at.clone()
+        self.last_unlocked_at
+            .as_ref()
+            .map(nook_core::IsoTimestamp::to_string)
     }
 }
 

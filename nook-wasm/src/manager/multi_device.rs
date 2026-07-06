@@ -51,17 +51,17 @@ impl NookVaultManager {
         let content = self.fetch_vault_content(&mut vault_missing).await?;
         if vault_missing || content.trim().is_empty() {
             self.sync_events_from_current_provider().await?;
-            if self.store_id.is_empty() || !self.event_log_has_events().await? {
+            if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
                 return Err(NookError::Database("No vault found to join.".to_owned()).into());
             }
         } else {
             // Fresh join attempt against an old provider blob — adopt the remote unlock mode.
             self.capture_vault_unlock(&content);
             self.sync_events_from_current_provider().await?;
-            if self.store_id.is_empty() || !self.event_log_has_events().await? {
+            if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
                 let format = nook_core::detect_stored_format(&content)?;
                 let records = nook_core::deserialize_stored(&content, format)?;
-                self.meta = nook_core::VaultMetaState::from_stored_records(&records);
+                self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
                 self.import_stored_vault_to_event_log(&content).await?;
             }
         }
@@ -89,7 +89,7 @@ impl NookVaultManager {
             label: nook_core::MemberLabel::from_trusted(String::new()),
         }])
         .await?;
-        if self.storage_mode != nook_core::StorageMode::Local {
+        if self.storage.mode != nook_core::StorageMode::Local {
             self.flush_event_outbox().await?;
         }
         Ok(())
@@ -133,19 +133,20 @@ impl NookVaultManager {
         records.push(auth);
         records.extend(members);
 
-        self.meta = nook_core::VaultMetaState::from_stored_records(&records);
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.persist_vault_change(Vec::new()).await?;
 
         let updated = nook_core::serialize_stored(&records, format)?;
+        let loaded = load_stored_vault(updated.as_str(), &identity)?;
         let LoadedVault {
-            jsonl,
+            database,
             meta,
             secrets_key: resolved_secrets_key,
             members_key: resolved_members_key,
-        } = load_stored_vault(updated.as_str(), &identity)?;
-        self.apply_vault_keys(&resolved_secrets_key, &resolved_members_key)?;
-        self.decrypted_jsonl = jsonl;
-        self.meta = meta;
+        } = loaded;
+        self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
+        self.vault.database = database;
+        self.vault.meta = meta;
         Ok(self.get_records()?)
     }
 
@@ -161,7 +162,7 @@ impl NookVaultManager {
             &requested_at,
             &signing_pk,
         )?;
-        self.meta.apply_record(&record);
+        self.vault.meta.apply_record(&record);
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key().clone(),
@@ -185,8 +186,8 @@ impl NookVaultManager {
             .into_iter()
             .find(|entry| entry.device_id == join_device)
             .ok_or_else(|| NookError::Database("Join request not found.".to_owned()))?;
-        let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
-        let members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
         let (auth_record, join_key, member_records) = nook_core::approve_join_request(
             &secrets_key,
             &members_key,
@@ -194,9 +195,9 @@ impl NookVaultManager {
             &identity,
             &records,
         )?;
-        self.meta.remove_key(&join_key);
-        self.meta.apply_record(&auth_record);
-        apply_member_records(&mut self.meta, &member_records);
+        self.vault.meta.remove_key(&join_key);
+        self.vault.meta.apply_record(&auth_record);
+        apply_member_records(&mut self.vault.meta, &member_records);
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
@@ -224,7 +225,7 @@ impl NookVaultManager {
             return Err(NookError::Database("Join request not found.".to_owned()).into());
         }
         let updated = nook_core::deny_join_request(&records, &join_device);
-        self.meta = nook_core::VaultMetaState::from_stored_records(&updated);
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&updated);
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinDenied {
             device_id: join_device,
         }])
@@ -239,10 +240,10 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let records = self.stored_records_snapshot();
         let parsed_auth_id = nook_core::AuthKeyId::parse(&auth_id)?;
-        let members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
+        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
         let member_records =
             nook_core::rename_vault_member(&records, &members_key, &parsed_auth_id, &label)?;
-        apply_member_records(&mut self.meta, &member_records);
+        apply_member_records(&mut self.vault.meta, &member_records);
         let roster = nook_core::resolve_member_roster(&records, &members_key)?;
         let device_id = roster
             .iter()
@@ -265,7 +266,7 @@ impl NookVaultManager {
         let parsed_auth_id = nook_core::AuthKeyId::parse(&auth_id)?;
         let is_self = parsed_auth_id == identity.auth_id();
         let records = self.stored_records_snapshot();
-        let members_key = nook_core::SymmetricKey::parse(&self.members_key)?;
+        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
         let device_id = nook_core::resolve_member_roster(&records, &members_key)
             .ok()
             .and_then(|roster| {
@@ -276,14 +277,14 @@ impl NookVaultManager {
             })
             .unwrap_or_default();
         let updated = nook_core::revoke_vault_member(&records, &members_key, &parsed_auth_id)?;
-        self.meta = nook_core::VaultMetaState::from_stored_records(&updated);
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&updated);
 
         if is_self {
             self.persist_vault_change(Vec::new()).await?;
-            self.secrets_key.clear();
-            self.members_key.clear();
-            self.crypto = None;
-            self.decrypted_jsonl.clear();
+            self.vault.secrets_key.clear();
+            self.vault.members_key.clear();
+            self.vault.crypto = None;
+            self.vault.database.clear();
             return Ok(Vec::new());
         }
 
@@ -312,9 +313,9 @@ impl NookVaultManager {
             &wasm_iso_timestamp(),
         )?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
-        self.meta.apply_record(&auth);
+        self.vault.meta.apply_record(&auth);
         for member in &members {
-            self.meta.apply_record(member);
+            self.vault.meta.apply_record(member);
         }
         self.persist_vault_change(Vec::new()).await?;
         Ok(self.get_records()?)

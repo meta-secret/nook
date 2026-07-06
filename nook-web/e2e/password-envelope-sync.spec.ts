@@ -199,7 +199,7 @@ test.describe('vault password envelope (stub sync)', () => {
       (snapshot) => snapshot.hasPasswordEnvelope,
     )
     const oldEnvelope = before.passwordEnvelopeCiphertext
-    expect(oldEnvelope).not.toBeNull()
+    expect(oldEnvelope).not.toBeUndefined()
 
     await openStorageSettings(deviceA)
     await rotateVaultPassword(deviceA, 'rotated-pw-9')
@@ -208,12 +208,12 @@ test.describe('vault password envelope (stub sync)', () => {
       deviceA,
       (snapshot) =>
         snapshot.hasPasswordEnvelope &&
-        snapshot.passwordEnvelopeCiphertext !== null &&
+        snapshot.passwordEnvelopeCiphertext !== undefined &&
         snapshot.passwordEnvelopeCiphertext !== oldEnvelope,
       { timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS, stableReads: 2 },
     )
     expect(after.passwordEnvelopeCiphertext).not.toBe(oldEnvelope)
-    expect(after.passwordEnvelopeCiphertext).not.toBeNull()
+    expect(after.passwordEnvelopeCiphertext).not.toBeUndefined()
   })
 
   test('removing the backup password leaves device-key unlock intact', async () => {

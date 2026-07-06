@@ -21,7 +21,7 @@ export function createLocalE2eGoogleDriveVaultStub(
   function eventDigestFromFileId(id: string) {
     return id.startsWith('e2e-drive-event-')
       ? id.slice('e2e-drive-event-'.length)
-      : null
+      : undefined
   }
 
   function eventListEntries(digest?: string) {
@@ -39,7 +39,7 @@ export function createLocalE2eGoogleDriveVaultStub(
 
   function parseEventMultipart(
     body: string,
-  ): { digest: string; content: string } | null {
+  ): { digest: string; content: string } | undefined {
     const eventId = body.match(
       new RegExp(`"event_id"\\s*:\\s*"sha256u:(${EVENT_DIGEST_PATTERN})"`),
     )?.[1]
@@ -47,15 +47,15 @@ export function createLocalE2eGoogleDriveVaultStub(
       new RegExp(`"name"\\s*:\\s*"(${EVENT_DIGEST_PATTERN})\\.yaml"`),
     )?.[1]
     const digest = eventId ?? nameDigest
-    if (!digest) return null
+    if (!digest) return undefined
     const markers = [
       '\r\nContent-Type: application/x-yaml\r\n\r\n',
       '\r\nContent-Type: application/json\r\n\r\n',
     ]
     const marker = markers.find((candidate) => body.includes(candidate))
-    if (!marker) return null
+    if (!marker) return undefined
     const start = body.indexOf(marker)
-    if (start === -1) return null
+    if (start === -1) return undefined
     const contentStart = start + marker.length
     const end = body.indexOf('\r\n--nook_event_boundary--', contentStart)
     const content =

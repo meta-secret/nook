@@ -48,17 +48,17 @@
       numbers: boolean,
       symbols: boolean,
     ) => string
-    onAddModeChange?: (open: boolean, type?: VaultItemType | null) => void
+    onAddModeChange?: (open: boolean, type?: VaultItemType | undefined) => void
   } = $props()
 
   let searchPattern = $state('')
   let revealSecrets = $state<Record<string, boolean>>({})
   let expandedSecrets = $state<Record<string, boolean>>({})
-  let copiedKey = $state<string | null>(null)
+  let copiedKey = $state<string | undefined>(undefined)
   let addSecretOpen = $state(false)
-  let formSelectedType = $state<VaultItemType | null>(null)
+  let formSelectedType = $state<VaultItemType | undefined>(undefined)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  let editItem = $state<NookSecretRecord | null>(null)
+  let editItem = $state<NookSecretRecord | undefined>(undefined)
 
   const filteredItems = $derived.by(() => {
     const needle = searchPattern.trim()
@@ -99,15 +99,15 @@
   }
 
   function openAddSecret() {
-    editItem = null
-    formSelectedType = null
+    editItem = undefined
+    formSelectedType = undefined
     addSecretOpen = true
     notifyAddMode()
   }
 
   function closeAddSecret() {
     addSecretOpen = false
-    formSelectedType = null
+    formSelectedType = undefined
     notifyAddMode()
   }
 
@@ -119,7 +119,7 @@
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function closeEditItem() {
-    editItem = null
+    editItem = undefined
     notifyAddMode()
   }
 
@@ -138,7 +138,7 @@
     await navigator.clipboard.writeText(text)
     copiedKey = `${id}-${field}`
     setTimeout(() => {
-      if (copiedKey === `${id}-${field}`) copiedKey = null
+      if (copiedKey === `${id}-${field}`) copiedKey = undefined
     }, 2000)
   }
 
@@ -170,7 +170,7 @@
         : ''}"
       data-testid="add-secret-panel"
     >
-      {#if formSelectedType === null}
+      {#if formSelectedType === undefined}
         <div class="mb-3">
           <button
             type="button"

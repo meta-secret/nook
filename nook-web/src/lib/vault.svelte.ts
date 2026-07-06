@@ -9,8 +9,14 @@ import {
 } from '$lib/nook'
 import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
-import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
-import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+import {
+  hasActiveLocalVault,
+  hasLocalVault,
+  setActiveVault,
+  type NookLocalVaultEntry,
+  type NookPasswordEntrySummary,
+  type NookVaultManager,
+} from '$lib/nook-wasm/nook_wasm'
 import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -36,12 +42,6 @@ import {
   type AppLocale,
 } from '$lib/locale'
 import { TRANSLATION_CATALOGS, lookupTranslation } from '$lib/locale-catalogs'
-import {
-  hasActiveLocalVault,
-  hasLocalVault,
-  switchActiveVault,
-} from '$lib/local-vault'
-import type { LocalVaultEntry } from '$lib/local-vault'
 import { createLogger } from '$lib/log'
 import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import {
@@ -80,36 +80,38 @@ export class VaultState {
 
   settingsOpen = $state(false)
   settingsSection = $state<'storage' | 'onboard' | 'admin'>('storage')
-  settingsAccordionSection = $state<'devices' | 'language' | null>('devices')
-  adminAccordionSection = $state<'vaults' | 'storage' | 'passwords' | null>(
-    'vaults',
+  settingsAccordionSection = $state<'devices' | 'language' | undefined>(
+    'devices',
   )
+  adminAccordionSection = $state<
+    'vaults' | 'storage' | 'passwords' | undefined
+  >('vaults')
   helpOpen = $state(false)
 
   providers = $state<StorageProvider[]>([])
   providersLoaded = $state(false)
   /** Locally cached vaults on this browser (metadata only). */
-  localVaults = $state<LocalVaultEntry[]>([])
+  localVaults = $state<NookLocalVaultEntry[]>([])
   /** Active vault store_id — sync providers and local blob are scoped to this. */
-  activeVaultStoreId = $state<string | null>(null)
+  activeVaultStoreId = $state<string | undefined>(undefined)
   /** Login gate: user picked a vault but has not unlocked yet. */
-  selectedLoginVaultStoreId = $state<string | null>(null)
+  selectedLoginVaultStoreId = $state<string | undefined>(undefined)
   /** True when the active vault blob exists in IndexedDB. */
   localVaultPresent = $state(false)
   localLoginPrepared = $state(false)
-  loginSetupType = $state<StorageProviderType | null>(null)
+  loginSetupType = $state<StorageProviderType | undefined>(undefined)
   addProviderOpen = $state(false)
 
   storageMode = $state<StorageProviderType>('local')
   githubPat = $state('')
   githubRepo = $state(DEFAULT_GITHUB_REPO)
-  oauthFile = $state<OAuthFileConfig | null>(null)
-  localFolder = $state<LocalFolderConfig | null>(null)
-  oauthSetupPreset = $state<OAuthFilePreset | null>(null)
+  oauthFile = $state<OAuthFileConfig | undefined>(undefined)
+  localFolder = $state<LocalFolderConfig | undefined>(undefined)
+  oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined)
   googleOAuthBusy = $state(false)
   icloudOAuthBusy = $state(false)
 
-  manager = $state<NookVaultManager | null>(null)
+  manager = $state<NookVaultManager | undefined>(undefined)
   deviceProtectionStatus = $state<
     'loading' | 'missing' | 'plaintext' | 'passkey' | 'unlocked' | 'error'
   >('loading')
@@ -137,10 +139,10 @@ export class VaultState {
    * auto-connect when the approval lands (`applyVaultSyncResult`).
    */
   awaitingJoinApproval = $state(false)
-  lastSyncedAt = $state<SvelteDate | null>(null)
+  lastSyncedAt = $state<SvelteDate | undefined>(undefined)
   isSyncing = $state(false)
   /** Provider id currently running a manual sync (Settings UI). */
-  syncingProviderId = $state<string | null>(null)
+  syncingProviderId = $state<string | undefined>(undefined)
   /** Background push to all sync providers after a local vault mutation. */
   isFanOutSyncing = $state(false)
   /** Concurrent secret replacement conflicts from the event log projection. */
@@ -152,10 +154,10 @@ export class VaultState {
     Array<{ eventsJson: string; reasonsJson: string }>
   >([])
   /** User must pick local vs remote before editing when versions match but content differs. */
-  pendingSyncConflict = $state<PendingSyncConflict | null>(null)
+  pendingSyncConflict = $state<PendingSyncConflict | undefined>(undefined)
 
   get syncBlocked(): boolean {
-    return this.pendingSyncConflict !== null
+    return this.pendingSyncConflict !== undefined
   }
 
   get editsBlocked(): boolean {
@@ -170,17 +172,18 @@ export class VaultState {
     return this.syncProviders.length
   }
 
-  get syncingProviderLabel(): string | null {
-    if (!this.syncingProviderId) return null
+  get syncingProviderLabel(): string | undefined {
+    if (!this.syncingProviderId) return undefined
     return (
-      this.providers.find((p) => p.id === this.syncingProviderId)?.label ?? null
+      this.providers.find((p) => p.id === this.syncingProviderId)?.label ??
+      undefined
     )
   }
 
   get isSyncActivityVisible(): boolean {
     return (
       this.isFanOutSyncing ||
-      this.syncingProviderId !== null ||
+      this.syncingProviderId !== undefined ||
       this.isSyncing ||
       this.isSaving
     )
@@ -203,9 +206,9 @@ export class VaultState {
   prefillEnrollmentCode = $state('')
   enrollmentFromUrlPending = $state(false)
   loginEnrollmentCode = $state('')
-  passwordEntries = $state<VaultPasswordEntrySummary[]>([])
-  selectedPasswordEntryId = $state<string | null>(null)
-  activeEnrollmentEntryId = $state<string | null>(null)
+  passwordEntries = $state<NookPasswordEntrySummary[]>([])
+  selectedPasswordEntryId = $state<string | undefined>(undefined)
+  activeEnrollmentEntryId = $state<string | undefined>(undefined)
 
   get hasPasswordEnvelope(): boolean {
     return this.passwordEntries.length > 0 || this.unlockMode === 'password'
@@ -216,14 +219,14 @@ export class VaultState {
     return resolveVaultSyncIntervalMs(import.meta.env)
   }
 
-  successDismissTimer: ReturnType<typeof setTimeout> | null = null
-  idleSessionTracker: VaultIdleSessionTracker | null = null
-  syncTimer: ReturnType<typeof setInterval> | null = null
-  initPromise: Promise<void> | null = null
+  successDismissTimer: ReturnType<typeof setTimeout> | undefined = undefined
+  idleSessionTracker: VaultIdleSessionTracker | undefined = undefined
+  syncTimer: ReturnType<typeof setInterval> | undefined = undefined
+  initPromise: Promise<void> | undefined = undefined
   storageChain: Promise<unknown> = Promise.resolve()
   private deviceAuthorizationInProgress = false
-  pendingEnrollmentFromUrl: string | null =
-    typeof window !== 'undefined' ? consumeEnrollmentFromLocation() : null
+  pendingEnrollmentFromUrl: string | undefined =
+    typeof window !== 'undefined' ? consumeEnrollmentFromLocation() : undefined
 
   enqueueStorage<T>(operation: () => T | Promise<T>): Promise<T> {
     const next = this.storageChain.then(() => operation())
@@ -296,23 +299,23 @@ export class VaultState {
     return this.wasmStorageArgs()
   }
 
-  stagedRemoteStorageArgs(): [string, string, string] | null {
+  stagedRemoteStorageArgs(): [string, string, string] | undefined {
     const type = this.loginSetupType ?? this.storageMode
     if (type === 'local') {
-      return null
+      return undefined
     }
     if (type === 'github') {
       const pat = this.githubPat.trim()
       const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
       if (!pat) {
-        return null
+        return undefined
       }
       return ['github', pat, repo]
     }
     if (type === 'oauth-file') {
       const token = this.oauthFile?.accessToken?.trim()
       if (!token) {
-        return null
+        return undefined
       }
       const fileName =
         this.githubRepo.trim() ||
@@ -324,7 +327,7 @@ export class VaultState {
         formatDriveStorageRef(this.oauthFile?.fileId, fileName),
       ]
     }
-    return null
+    return undefined
   }
 
   stagedProviderLabel(): string {
@@ -399,9 +402,9 @@ export class VaultState {
   }
 
   dismissSuccess() {
-    if (this.successDismissTimer !== null) {
+    if (this.successDismissTimer !== undefined) {
       clearTimeout(this.successDismissTimer)
-      this.successDismissTimer = null
+      this.successDismissTimer = undefined
     }
     this.successMsg = ''
   }
@@ -430,12 +433,14 @@ export class VaultState {
     }, 5000)
   }
 
-  get localProvider(): StorageProvider | null {
-    return this.activeVaultProviders.find((p) => p.type === 'local') ?? null
+  get localProvider(): StorageProvider | undefined {
+    return (
+      this.activeVaultProviders.find((p) => p.type === 'local') ?? undefined
+    )
   }
 
   /** Canonical on-device vault row — alias kept while settings code migrates. */
-  get activeProvider(): StorageProvider | null {
+  get activeProvider(): StorageProvider | undefined {
     return this.localProvider
   }
 
@@ -463,8 +468,8 @@ export class VaultState {
     return (
       !this.isAuthenticated &&
       this.localVaults.length > 1 &&
-      this.selectedLoginVaultStoreId === null &&
-      this.loginSetupType === null &&
+      this.selectedLoginVaultStoreId === undefined &&
+      this.loginSetupType === undefined &&
       !this.addProviderOpen &&
       isVaultSessionLocked()
     )
@@ -552,7 +557,9 @@ export class VaultState {
       this.errorMsg = ''
     }
     try {
-      const savedLocale = parseAppLocale(localStorage.getItem('nook_locale'))
+      const savedLocale = parseAppLocale(
+        localStorage.getItem('nook_locale') ?? undefined,
+      )
       const browserLocale = getBrowserAppLocale()
       const locale = savedLocale ?? browserLocale
       await this.updateLocale(locale)
@@ -613,17 +620,17 @@ export class VaultState {
     await this.loadProviders({ ensureLocalRow: true })
     await localLoginActions.refreshLocalVaultCatalog(this)
     if (!this.activeVaultStoreId) {
-      this.activeVaultStoreId = this.localVaults[0]?.storeId ?? null
+      this.activeVaultStoreId = this.localVaults[0]?.storeId ?? undefined
     }
     if (this.activeVaultStoreId) {
-      await switchActiveVault(this.activeVaultStoreId).catch(() => undefined)
+      await setActiveVault(this.activeVaultStoreId).catch(() => undefined)
     }
     this.localVaultPresent = await hasActiveLocalVault()
     if (this.localVaultPresent) {
       this.storageMode = 'local'
       this.githubPat = ''
-      this.oauthFile = null
-      this.localFolder = null
+      this.oauthFile = undefined
+      this.localFolder = undefined
     } else {
       this.applyActiveProviderCredentials()
     }
@@ -644,7 +651,7 @@ export class VaultState {
 
     if (this.pendingEnrollmentFromUrl && !this.isAuthenticated) {
       const code = this.pendingEnrollmentFromUrl
-      this.pendingEnrollmentFromUrl = null
+      this.pendingEnrollmentFromUrl = undefined
       this.prefillEnrollmentCode = code
       this.enrollmentFromUrlPending = true
     }
@@ -741,8 +748,8 @@ export class VaultState {
       this.providers = []
       this.providersLoaded = false
       this.githubPat = ''
-      this.oauthFile = null
-      this.localFolder = null
+      this.oauthFile = undefined
+      this.localFolder = undefined
       this.storageMode = 'local'
       this.showSuccess(this.t('device_protection.recovery_complete'))
     } catch (error) {
@@ -763,7 +770,7 @@ export class VaultState {
     return (
       this.localVaultPresent &&
       this.syncProviders.length === 0 &&
-      this.loginSetupType === null &&
+      this.loginSetupType === undefined &&
       !this.addProviderOpen
     )
   }
@@ -806,7 +813,7 @@ export class VaultState {
   }
 
   beginLoginVaultPicker() {
-    this.selectedLoginVaultStoreId = null
+    this.selectedLoginVaultStoreId = undefined
     this.localLoginPrepared = false
     this.resetVaultSessionState()
   }
@@ -957,7 +964,7 @@ export class VaultState {
     }
     if (accessStatus === 'remote_missing') {
       // Empty remote on first provider setup is normal — genesis runs on connect.
-      if (this.loginSetupType !== null) {
+      if (this.loginSetupType !== undefined) {
         return false
       }
       this.remoteVaultRecoveryPrompt = 'missing_only'
@@ -976,7 +983,7 @@ export class VaultState {
       )
     }
     this.passwordEntries = []
-    this.selectedPasswordEntryId = null
+    this.selectedPasswordEntryId = undefined
     this.loginUnlockMode = 'unknown'
     this.loginPasswordPrompt = false
   }
@@ -1273,15 +1280,15 @@ export class VaultState {
 
   remoteEventProviderArgs(
     provider?: StorageProvider,
-  ): [string, string, string] | null {
+  ): [string, string, string] | undefined {
     if (provider?.type === 'local-folder') {
-      return null
+      return undefined
     }
     if (provider) {
       return this.providerWasmArgs(provider)
     }
     if (this.syncProviders[0]?.type === 'local-folder') {
-      return null
+      return undefined
     }
     if (this.syncProviders.length > 0) {
       return this.providerWasmArgs(this.syncProviders[0]!)
@@ -1289,13 +1296,13 @@ export class VaultState {
     if (this.hasRemoteCredentials()) {
       return this.wasmStorageArgs()
     }
-    return null
+    return undefined
   }
 
   async updateProviderSyncMetadata(
     providerId: string,
     yaml: string,
-    revision: string | null,
+    revision: string | undefined,
   ): Promise<void> {
     const version = await readVaultVersionFromBlob(yaml)
     // `vaultStoreId` borrows the wasm manager; read it through the storage chain
@@ -1365,7 +1372,7 @@ export class VaultState {
   }
 
   clearPendingSyncConflict() {
-    this.pendingSyncConflict = null
+    this.pendingSyncConflict = undefined
   }
 
   /** E2E / dev: open the conflict dialog without reaching remote storage. */
@@ -1391,7 +1398,7 @@ export class VaultState {
     if (conflict.providerId !== '__pending_provider__') {
       return
     }
-    this.loginSetupType = null
+    this.loginSetupType = undefined
     this.addProviderOpen = false
   }
 
@@ -1572,8 +1579,8 @@ export class VaultState {
     if (this.localVaultPresent) {
       this.storageMode = 'local'
       this.githubPat = ''
-      this.oauthFile = null
-      this.localFolder = null
+      this.oauthFile = undefined
+      this.localFolder = undefined
     }
   }
 
@@ -1661,7 +1668,7 @@ export class VaultState {
         ? provider
         : !provider && this.syncProviders[0]?.type === 'local-folder'
           ? this.syncProviders[0]
-          : null
+          : undefined
     if (folderProvider) {
       try {
         await syncLocalFolderProvider(this, folderProvider)

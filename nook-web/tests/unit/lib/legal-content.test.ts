@@ -6,8 +6,8 @@ describe('legal-content', () => {
     expect(getLegalPageFromPath('/privacy')).toBe('privacy')
     expect(getLegalPageFromPath('/privacy/')).toBe('privacy')
     expect(getLegalPageFromPath('/terms')).toBe('terms')
-    expect(getLegalPageFromPath('/')).toBeNull()
-    expect(getLegalPageFromPath('/vault')).toBeNull()
+    expect(getLegalPageFromPath('/')).toBeUndefined()
+    expect(getLegalPageFromPath('/vault')).toBeUndefined()
   })
 
   test('loads markdown sources from docs/', () => {
