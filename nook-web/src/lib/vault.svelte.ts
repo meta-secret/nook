@@ -348,13 +348,12 @@ export class VaultState {
   }
 
   /**
-   * Compare local IndexedDB vault with a staged remote provider before connect.
-   * Newer version wins automatically; equal version + different content → conflict UI.
+   * Check whether a staged remote provider exists before connect.
    */
   async reconcileStagedRemoteWithLocal(options?: {
     providerId?: string
     quiet?: boolean
-  }): Promise<'ok' | 'conflict' | 'skip'> {
+  }): Promise<'ok' | 'skip'> {
     void options
     return this.stagedRemoteStorageArgs() ? 'ok' : 'skip'
   }

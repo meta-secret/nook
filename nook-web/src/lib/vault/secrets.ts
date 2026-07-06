@@ -119,9 +119,7 @@ export async function loadDb(state: VaultState) {
 
     if (state.stagedRemoteStorageArgs()) {
       const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
-      if (reconcileOutcome === 'conflict') {
-        return
-      }
+      if (reconcileOutcome === 'skip') return
     }
 
     const rawRecords = await state.enqueueStorage(async () => {

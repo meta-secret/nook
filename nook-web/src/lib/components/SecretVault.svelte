@@ -18,7 +18,7 @@
   let {
     vault,
     isSaving,
-    syncBlocked = false,
+    editsBlocked = false,
     secrets = [] as NookSecretRecord[],
     onAddSecret,
     onReplaceSecret,
@@ -28,7 +28,7 @@
   }: {
     vault: VaultState
     isSaving: boolean
-    syncBlocked?: boolean
+    editsBlocked?: boolean
     secrets?: NookSecretRecord[]
     onAddSecret: (
       id: string,
@@ -217,8 +217,8 @@
             variant="outline"
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
-            disabled={syncBlocked}
-            title={syncBlocked
+            disabled={editsBlocked}
+            title={editsBlocked
               ? vault.t('auth_storage.sync_blocked_edits')
               : undefined}
             onclick={openAddSecret}

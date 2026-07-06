@@ -463,7 +463,7 @@
                   <SecretVault
                     {vault}
                     isSaving={vault.isSaving}
-                    syncBlocked={vault.editsBlocked}
+                    editsBlocked={vault.editsBlocked}
                     secrets={vault.secrets}
                     onAddModeChange={(open, type = null) => {
                       secretsAddOpen = open

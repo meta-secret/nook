@@ -9,6 +9,7 @@ const EVENT_LOG_ACTIVE: &str = "event_log";
 const STORE_VAULT: &str = "vault";
 const STORE_EVENTS: &str = "events";
 const STORE_PROJECTIONS: &str = "projections";
+const STORE_PROVIDER_RECEIPTS: &str = "provider_receipts";
 const STORE_OUTBOX: &str = "outbox";
 const EVENT_LOG_V2_MIGRATION_KEY: &str = "event_log:v2_migrated";
 const EVENT_LOG_V2_MIGRATION_DONE: &str = "done";
@@ -43,7 +44,7 @@ async fn open_nook_db() -> Result<rexie::Rexie, NookError> {
         .add_object_store(rexie::ObjectStore::new(STORE_VAULT))
         .add_object_store(rexie::ObjectStore::new(STORE_EVENTS))
         .add_object_store(rexie::ObjectStore::new(STORE_PROJECTIONS))
-        .add_object_store(rexie::ObjectStore::new("provider_receipts"))
+        .add_object_store(rexie::ObjectStore::new(STORE_PROVIDER_RECEIPTS))
         .add_object_store(rexie::ObjectStore::new(STORE_OUTBOX))
         .build()
         .await

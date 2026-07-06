@@ -8,7 +8,7 @@ use crate::vault_event::{
 };
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
 use crate::vault_ids::StoreId;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
 #[derive(Debug, Clone, Default)]
@@ -103,9 +103,10 @@ pub fn union_remote_events(
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
 ) -> VaultResult<Vec<EventId>> {
-    let mut imported = Vec::new();
+    let mut candidate = local.clone();
+    let mut candidates = Vec::new();
     for (event_id, bytes) in remote_events {
-        if local.get_bytes(event_id).is_some() {
+        if local.get_bytes(event_id).is_some() || candidate.get_bytes(event_id).is_some() {
             continue;
         }
         let event = parse_remote_event_storage_bytes(bytes)?;
@@ -116,20 +117,24 @@ pub fn union_remote_events(
             .into());
         }
         event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
-        let mut candidate = local.clone();
         candidate.put_event(event_id.clone(), bytes.clone());
-        let graph = candidate.load_graph(store_id)?;
-        for quarantined_id in graph.quarantined().keys() {
-            candidate.remove_event(quarantined_id);
-        }
-        if graph.quarantined().contains_key(event_id) {
-            *local = candidate;
-            continue;
-        }
-        *local = candidate;
-        local.put_event(event_id.clone(), bytes.clone());
-        imported.push(event_id.clone());
+        candidates.push(event_id.clone());
     }
+    if candidates.is_empty() {
+        let _ = local.load_graph(store_id)?;
+        return Ok(Vec::new());
+    }
+
+    let graph = candidate.load_graph(store_id)?;
+    let quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
+    for event_id in &quarantined {
+        candidate.remove_event(event_id);
+    }
+    *local = candidate;
+    let imported = candidates
+        .into_iter()
+        .filter(|event_id| !quarantined.contains(event_id))
+        .collect();
     let _ = local.load_graph(store_id)?;
     Ok(imported)
 }
@@ -426,6 +431,34 @@ mod tests {
         assert!(imported.is_empty());
         assert!(local.load_graph(STORE)?.quarantined().is_empty());
         assert!(local.get_bytes(&child_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn union_stages_batch_and_quarantines_unauthorized_child() -> VaultResult<()> {
+        let root_key = SigningKey::generate(&mut OsRng);
+        let stranger_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let child = signed_child(&stranger_key, genesis_id.clone(), "secret_batchbad1")?;
+        let child_id = child.id()?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
+
+        let mut local = LocalEventStore::new();
+        let imported = union_remote_events(
+            &mut local,
+            &[
+                (genesis_id.clone(), genesis_bytes),
+                (child_id.clone(), child_bytes),
+            ],
+            STORE,
+        )?;
+
+        assert_eq!(imported, vec![genesis_id.clone()]);
+        assert!(local.get_bytes(&genesis_id).is_some());
+        assert!(local.get_bytes(&child_id).is_none());
+        assert!(local.load_graph(STORE)?.quarantined().is_empty());
         Ok(())
     }
 

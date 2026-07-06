@@ -377,7 +377,15 @@ impl NookVaultManager {
                 .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect();
         } else {
+            let local_ids: BTreeSet<EventId> = load_local_event_store(&self.store_id)
+                .await?
+                .event_ids()
+                .into_iter()
+                .collect();
             for event_id in remote_ids {
+                if local_ids.contains(&event_id) {
+                    continue;
+                }
                 let bytes = self.fetch_current_provider_event(&event_id).await?;
                 if !nook_core::remote_event_belongs_to_store(&event_id, &bytes, &self.store_id)? {
                     continue;

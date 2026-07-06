@@ -118,7 +118,11 @@ export function createLocalE2eGoogleDriveVaultStub(
           const eventDigest = decoded.match(
             new RegExp(`name\\s*=\\s*'(${EVENT_DIGEST_PATTERN})\\.yaml'`),
           )?.[1]
-          if (decoded.includes("name contains '.yaml'") || eventDigest) {
+          if (
+            eventDigest ||
+            (decoded.includes("name contains '.yaml'") &&
+              decoded.includes("'appDataFolder' in parents"))
+          ) {
             await route.fulfill({
               status: 200,
               contentType: 'application/json',

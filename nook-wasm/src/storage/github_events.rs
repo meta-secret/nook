@@ -124,14 +124,21 @@ pub(crate) async fn fetch_github_event(
     repo: &str,
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
+    fetch_github_event_optional(pat, repo, event_id)
+        .await?
+        .ok_or_else(|| NookError::GitHub(format!("Event file missing at {}", event_id.as_str())))
+}
+
+async fn fetch_github_event_optional(
+    pat: &str,
+    repo: &str,
+    event_id: &EventId,
+) -> Result<Option<Vec<u8>>, NookError> {
     let path = event_id.storage_path();
     if let Some(file) = fetch_github_vault(pat, repo, &path, None).await? {
-        return Ok(file.content.into_bytes());
+        return Ok(Some(file.content.into_bytes()));
     }
-    Err(NookError::GitHub(format!(
-        "Event file missing at {}",
-        event_id.as_str()
-    )))
+    Ok(None)
 }
 
 /// Append-only event upload. Retries branch conflicts; never overwrites different content.
@@ -142,19 +149,18 @@ pub(crate) async fn put_github_event_if_absent(
     bytes: &[u8],
 ) -> Result<(), NookError> {
     let expected_event = parse_expected_event_storage_bytes(bytes, event_id, "GitHub")?;
-    match fetch_github_event(pat, repo, event_id).await {
-        Ok(existing)
+    match fetch_github_event_optional(pat, repo, event_id).await? {
+        Some(existing)
             if existing == bytes || event_storage_matches_expected(&existing, &expected_event) =>
         {
             return Ok(());
         }
-        Ok(_) => {
+        Some(_) => {
             return Err(NookError::GitHub(
                 "Event path exists with different content (corruption)".to_owned(),
             ));
         }
-        Err(NookError::GitHub(message)) if message.contains("Event file missing") => {}
-        Err(err) => return Err(err),
+        None => {}
     }
 
     let path = event_id.storage_path();

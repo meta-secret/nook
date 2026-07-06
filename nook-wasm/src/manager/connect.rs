@@ -44,6 +44,11 @@ impl NookVaultManager {
                     .send(format!("ASSESS_{}_{}", self.storage_mode, status));
                 return Ok(status);
             }
+            if let Some(cached) = load_vault_local_cache(&self.local_cache_ref()).await?
+                && !cached.trim().is_empty()
+            {
+                return Ok("remote_missing_local_cache".to_owned());
+            }
             return Ok("remote_missing".to_owned());
         }
         let mut remote_content_missing = false;
@@ -306,6 +311,7 @@ impl NookVaultManager {
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.decrypted_jsonl = jsonl;
         self.meta = meta;
+        self.event_log_mode = true;
         self.apply_event_projection_to_session().await?;
         self.persist_projection_cache().await?;
         let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());

@@ -365,9 +365,7 @@ export async function connectAndSyncStagedProvider(
   state.isVerifying = true
   try {
     const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
-    if (reconcileOutcome === 'conflict') {
-      return
-    }
+    if (reconcileOutcome === 'skip') return
 
     const saved = await state.ensureProviderSaved()
     if (!saved) {

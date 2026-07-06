@@ -24,18 +24,22 @@ export const test = base.extend<{ nookAppLogs: void }>({
     async ({ page, context }, use, testInfo) => {
       await context.addInitScript(installMockPasskeyRuntime)
       await use()
-      const targetPage = [page, ...context.pages()].find((candidate) => {
-        try {
-          const url = candidate.url()
-          return !!url && url !== 'about:blank'
-        } catch {
-          return false
-        }
-      })
-      if (!targetPage) return
-      await attachNookLogsForTest(targetPage, testInfo, {
-        print: testInfo.status !== testInfo.expectedStatus,
-      })
+      const targetPages = [page, ...context.pages()].filter(
+        (candidate, index, pages) => {
+          if (pages.indexOf(candidate) !== index) return false
+          try {
+            const url = candidate.url()
+            return !!url && url !== 'about:blank'
+          } catch {
+            return false
+          }
+        },
+      )
+      for (const targetPage of targetPages) {
+        await attachNookLogsForTest(targetPage, testInfo, {
+          print: testInfo.status !== testInfo.expectedStatus,
+        })
+      }
     },
     { auto: true },
   ],
