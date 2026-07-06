@@ -26,13 +26,16 @@ Treat all actionable PR feedback surfaces as a checklist: inline review threads
 and PR timeline/summary comments. For each active, non-outdated actionable item,
 verify the finding against current code, use reviewer-provided AI-agent prompts
 as review context, make the minimal correct fix or write down why no change is
-needed, validate locally, push the result, and leave a concise GitHub reply. If
-the item is a CodeRabbit review thread, wait for CodeRabbit to mark it addressed
-or close it after the targeted reply; do not call `resolveReviewThread` manually.
-For human or non-CodeRabbit threads, resolve only after the targeted reply is
-posted and resolution is the correct next action. If the item appears only in a
-PR timeline/summary comment, reply on the PR timeline and reference the item,
-URL, or CodeRabbit `cr-comment` id.
+needed, validate locally, and push the result. Leave a concise GitHub reply only
+when GitHub exposes a real reply target for the original feedback, such as an
+inline review thread or a human review comment. If the item is a CodeRabbit
+review thread, wait for CodeRabbit to mark it addressed or close it after the
+targeted reply; do not call `resolveReviewThread` manually. For human or
+non-CodeRabbit threads, resolve only after the targeted reply is posted and
+resolution is the correct next action. If the item appears only in a PR
+timeline/summary comment and GitHub does not expose a threaded reply target, do
+not leave a normal PR timeline comment. Track it in the local checklist/final
+handoff instead; regular PR comments for unthreaded summary items are spam.
 CodeRabbit's automatic status text is useful context, but it does not satisfy the
 agent-reply requirement. A broad PR audit comment also does not satisfy the
 requirement; the reply must target the particular review thread, comment, or
@@ -70,17 +73,18 @@ Does not apply to:
 - Before: query only unresolved review threads and miss CodeRabbit's "outside
   diff range comments" section in a PR timeline comment.
 - After: inspect CodeRabbit issue comments too, add each actionable summary item
-  to the checklist, fix or explain it, then reply with the exact CodeRabbit
-  comment URL and `cr-comment` id if no review thread exists.
+  to the checklist, fix or explain it, and report it in the final handoff if no
+  real threaded reply target exists.
 - Before: rely on CodeRabbit's appended "addressed in commit" marker and resolve
   the thread without saying anything.
 - After: leave an agent reply with the addressing commit and validation, then
   wait for CodeRabbit's addressed/closing reply and re-query the thread.
 - Before: leave one generic "CodeRabbit reply audit" PR comment summarizing all
-  review surfaces.
-- After: reply to each specific review thread, or for unthreaded summary items
-  leave targeted PR comments that identify the original CodeRabbit comment URL,
-  file/item title, and `cr-comment` id.
+  review surfaces, or leave many normal PR comments for CodeRabbit summary
+  items.
+- After: reply only to specific review threads/comments that support threaded
+  replies. Do not use normal PR timeline comments as a substitute for missing
+  thread support.
 
 ## Application Checklist
 
@@ -97,13 +101,12 @@ Does not apply to:
       changes.
 - [ ] Push the fix or rationale commit when code/docs changed.
 - [ ] Leave a GitHub reply explaining the fix, validation, or no-change
-      rationale: on the review thread when one exists, otherwise as a targeted
-      PR timeline reply referencing the exact review item, original comment URL,
-      file/item title, and CodeRabbit `cr-comment` id.
+      rationale only on the original review thread/comment when GitHub supports
+      a threaded reply there.
 - [ ] For CodeRabbit review summaries that do not create resolvable threads,
-      leave targeted PR timeline replies for the specific actionable item or a
-      tightly grouped set from the same CodeRabbit summary comment. Do not use a
-      broad/general audit comment as the reply.
+      do not leave normal PR timeline comments. Keep those items in the local
+      checklist/final handoff and let the pushed code plus CodeRabbit re-review
+      update the PR state.
 - [ ] For CodeRabbit review threads, do not manually resolve; wait for
       CodeRabbit's addressed/closing reply and re-query the thread state.
 - [ ] For human or non-CodeRabbit review threads, resolve the GitHub
