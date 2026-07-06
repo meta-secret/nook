@@ -218,6 +218,20 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
+## Google Cloud operations
+
+The local Codex machine has Google Cloud CLI 575.0.0 installed at
+`/Users/bynull/google-cloud-sdk/bin/gcloud`. It is authenticated as
+`bynull@meta-secret.org` with active project `nook-500604` (`name: nook`,
+`projectNumber: 327685619872`). New interactive shells should resolve `gcloud`
+from `.zshrc`; non-interactive agent commands may use the full binary path.
+
+Use this CLI for Nook Google Cloud project inspection and safe operational
+changes. OAuth browser-origin changes still require the Google Auth Platform
+client configuration to contain exact origins; do not commit client secrets, and
+do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
+[auth-providers.md §7](../design-docs/auth-providers.md#7-oauth-origins-and-pr-previews).
+
 ## CI agent (`ci-fix` job)
 
 Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait for checks → squash merge. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt.
