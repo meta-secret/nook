@@ -39,60 +39,168 @@ use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
 
-// Session state of our secret vault
-#[wasm_bindgen]
-pub struct NookVaultManager {
-    pub(in crate::manager) storage_mode: nook_core::StorageMode,
-    pub(in crate::manager) github_pat: String,
-    pub(in crate::manager) github_repo: String,
-    pub(in crate::manager) github_path: String,
-    pub(in crate::manager) secrets_key: String,
-    pub(in crate::manager) members_key: String,
-    pub(in crate::manager) device_id: String,
-    pub(in crate::manager) device_identity_private_key: String,
-    pub(in crate::manager) crypto: Option<nook_core::VaultCrypto>,
-    pub(in crate::manager) meta: nook_core::VaultMetaState,
-    pub(in crate::manager) database: nook_core::Database,
-    pub(in crate::manager) file_sha: Option<String>,
-    pub(in crate::manager) last_synced_content: String,
-    /// Cached empty-repo listing from GitHub (`GET .../contents/` → 404).
-    pub(in crate::manager) github_root_empty: bool,
-    /// Active unlock mode for this vault.
-    pub(in crate::manager) unlock: nook_core::VaultUnlock,
-    /// Backup password entries — parallel to device-key auth rows.
-    pub(in crate::manager) password_entries: Vec<nook_core::PasswordUnlockEntry>,
-    /// Logical secret-store id — persisted in vault YAML and mirrored on saved providers.
-    pub(in crate::manager) store_id: String,
-    /// Human-readable vault label persisted in vault YAML.
-    pub(in crate::manager) vault_name: Option<String>,
-    /// Monotonic vault revision — incremented on every save.
-    pub(in crate::manager) vault_version: u64,
-    pub(in crate::manager) status_tx: flume::Sender<String>,
-    pub(in crate::manager) status_rx: flume::Receiver<String>,
+struct StorageSession {
+    mode: nook_core::StorageMode,
+    access_token: String,
+    remote_ref: String,
+    remote_path: String,
+    file_sha: Option<String>,
+    /// Cached empty-repo listing from GitHub (`GET .../contents/` -> 404).
+    github_root_empty: bool,
     /// When true, the next `connect` loads vault YAML from the browser cache
     /// instead of remote storage (used to recreate a deleted remote file).
-    pub(in crate::manager) use_local_cache_for_connect: bool,
-    pub(in crate::manager) event_log_mode: bool,
-    pub(in crate::manager) signing_seed: String,
-    pub(in crate::manager) key_epoch: String,
-    pub(in crate::manager) event_heads: Vec<String>,
+    use_local_cache_for_connect: bool,
+}
+
+impl Default for StorageSession {
+    fn default() -> Self {
+        Self {
+            // Default to local until `prepare_storage` parses the incoming tag.
+            mode: nook_core::StorageMode::Local,
+            access_token: String::new(),
+            remote_ref: String::new(),
+            remote_path: String::new(),
+            file_sha: None,
+            github_root_empty: false,
+            use_local_cache_for_connect: false,
+        }
+    }
+}
+
+struct VaultSessionState {
+    secrets_key: String,
+    members_key: String,
+    crypto: Option<nook_core::VaultCrypto>,
+    meta: nook_core::VaultMetaState,
+    database: nook_core::Database,
+    last_synced_content: String,
+    /// Active unlock mode for this vault.
+    unlock: nook_core::VaultUnlock,
+    /// Backup password entries - parallel to device-key auth rows.
+    password_entries: Vec<nook_core::PasswordUnlockEntry>,
+    /// Logical secret-store id - persisted in vault YAML and mirrored on saved providers.
+    store_id: String,
+    /// Human-readable vault label persisted in vault YAML.
+    vault_name: Option<String>,
+    /// Monotonic vault revision - incremented on every save.
+    vault_version: u64,
+}
+
+impl Default for VaultSessionState {
+    fn default() -> Self {
+        Self {
+            secrets_key: String::new(),
+            members_key: String::new(),
+            crypto: None,
+            meta: nook_core::VaultMetaState::default(),
+            database: nook_core::Database::new(),
+            last_synced_content: String::new(),
+            unlock: nook_core::VaultUnlock::Keys,
+            password_entries: Vec::new(),
+            store_id: String::new(),
+            vault_name: None,
+            vault_version: 0,
+        }
+    }
+}
+
+impl VaultSessionState {
+    fn reset(&mut self) {
+        self.secrets_key.zeroize();
+        self.members_key.zeroize();
+        self.crypto = None;
+        self.meta = nook_core::VaultMetaState::default();
+        self.database.clear();
+        self.last_synced_content.clear();
+        self.unlock = nook_core::VaultUnlock::Keys;
+        self.password_entries.clear();
+        self.store_id.clear();
+        self.vault_name = None;
+        self.vault_version = 0;
+    }
+}
+
+#[derive(Default)]
+struct DeviceSessionState {
+    id: String,
+    identity_private_key: String,
+}
+
+struct StatusChannel {
+    tx: flume::Sender<String>,
+    rx: flume::Receiver<String>,
+}
+
+impl StatusChannel {
+    fn new() -> Self {
+        let (tx, rx) = flume::unbounded();
+        Self { tx, rx }
+    }
+}
+
+#[derive(Default)]
+struct EventLogSessionState {
+    enabled: bool,
+    signing_seed: String,
+    key_epoch: String,
+    heads: Vec<String>,
+}
+
+impl EventLogSessionState {
+    fn reset(&mut self) {
+        self.enabled = false;
+        self.signing_seed.zeroize();
+        self.key_epoch.zeroize();
+        self.heads.clear();
+    }
+}
+
+struct SyncOutboxState {
+    provider_id: String,
+    storage_mode: nook_core::StorageMode,
+    access_token: String,
+    repo_arg: String,
+}
+
+impl Default for SyncOutboxState {
+    fn default() -> Self {
+        Self {
+            provider_id: String::new(),
+            storage_mode: nook_core::StorageMode::Local,
+            access_token: String::new(),
+            repo_arg: String::new(),
+        }
+    }
+}
+
+impl SyncOutboxState {
+    fn reset(&mut self) {
+        self.provider_id.clear();
+        self.storage_mode = nook_core::StorageMode::Local;
+        self.access_token.zeroize();
+        self.repo_arg.clear();
+    }
+}
+
+// Session state of our secret vault.
+#[wasm_bindgen]
+pub struct NookVaultManager {
+    pub(in crate::manager) storage: StorageSession,
+    pub(in crate::manager) vault: VaultSessionState,
+    pub(in crate::manager) device: DeviceSessionState,
+    pub(in crate::manager) status: StatusChannel,
+    pub(in crate::manager) event_log: EventLogSessionState,
     /// Last non-local sync provider used for event outbox fan-out.
-    pub(in crate::manager) sync_outbox_provider_id: String,
-    pub(in crate::manager) sync_outbox_storage_mode: nook_core::StorageMode,
-    pub(in crate::manager) sync_outbox_pat: String,
-    pub(in crate::manager) sync_outbox_repo_arg: String,
+    pub(in crate::manager) sync_outbox: SyncOutboxState,
 }
 
 impl Drop for NookVaultManager {
     fn drop(&mut self) {
-        self.github_pat.zeroize();
-        self.secrets_key.zeroize();
-        self.members_key.zeroize();
-        self.device_identity_private_key.zeroize();
-        self.database.clear();
-        self.signing_seed.zeroize();
-        self.key_epoch.zeroize();
-        self.sync_outbox_pat.zeroize();
+        self.storage.access_token.zeroize();
+        self.vault.reset();
+        self.device.identity_private_key.zeroize();
+        self.event_log.reset();
+        self.sync_outbox.reset();
     }
 }
 
@@ -100,66 +208,40 @@ impl Drop for NookVaultManager {
 impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
-        let (status_tx, status_rx) = flume::unbounded();
         Self {
-            // Default to local until `prepare_storage` parses the incoming tag.
-            storage_mode: nook_core::StorageMode::Local,
-            github_pat: String::new(),
-            github_repo: String::new(),
-            github_path: String::new(),
-            secrets_key: String::new(),
-            members_key: String::new(),
-            device_id: String::new(),
-            device_identity_private_key: String::new(),
-            crypto: None,
-            meta: nook_core::VaultMetaState::default(),
-            unlock: nook_core::VaultUnlock::Keys,
-            password_entries: Vec::new(),
-            store_id: String::new(),
-            vault_name: None,
-            vault_version: 0,
-            database: nook_core::Database::new(),
-            file_sha: None,
-            last_synced_content: String::new(),
-            github_root_empty: false,
-            use_local_cache_for_connect: false,
-            event_log_mode: false,
-            signing_seed: String::new(),
-            key_epoch: String::new(),
-            event_heads: Vec::new(),
-            sync_outbox_provider_id: String::new(),
-            sync_outbox_storage_mode: nook_core::StorageMode::Local,
-            sync_outbox_pat: String::new(),
-            sync_outbox_repo_arg: String::new(),
-            status_tx,
-            status_rx,
+            storage: StorageSession::default(),
+            vault: VaultSessionState::default(),
+            device: DeviceSessionState::default(),
+            status: StatusChannel::new(),
+            event_log: EventLogSessionState::default(),
+            sync_outbox: SyncOutboxState::default(),
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn storage_mode(&self) -> String {
-        self.storage_mode.to_string()
+        self.storage.mode.to_string()
     }
 
     #[wasm_bindgen(getter, js_name = vaultStoreId)]
     pub fn vault_store_id(&self) -> String {
-        self.store_id.clone()
+        self.vault.store_id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = vaultVersion)]
     pub fn vault_version(&self) -> u64 {
-        self.vault_version
+        self.vault.vault_version
     }
 
     #[wasm_bindgen(getter, js_name = vaultName)]
     pub fn vault_name(&self) -> Option<String> {
-        self.vault_name.clone()
+        self.vault.vault_name.clone()
     }
 
     #[wasm_bindgen(js_name = setVaultName)]
     pub fn set_vault_name(&mut self, name: &str) {
         let trimmed = name.trim();
-        self.vault_name = if trimmed.is_empty() {
+        self.vault.vault_name = if trimmed.is_empty() {
             None
         } else {
             Some(trimmed.to_owned())
@@ -168,20 +250,20 @@ impl NookVaultManager {
 
     #[wasm_bindgen(getter)]
     pub fn file_sha(&self) -> Option<String> {
-        self.file_sha.clone()
+        self.storage.file_sha.clone()
     }
 
     #[wasm_bindgen(getter)]
     pub fn device_id(&self) -> String {
-        self.device_id.clone()
+        self.device.id.clone()
     }
 
     #[wasm_bindgen(getter)]
     pub fn device_public_key(&self) -> String {
-        if self.device_identity_private_key.is_empty() {
+        if self.device.identity_private_key.is_empty() {
             return String::new();
         }
-        nook_core::DeviceIdentitySecret::parse(&self.device_identity_private_key)
+        nook_core::DeviceIdentitySecret::parse(&self.device.identity_private_key)
             .ok()
             .and_then(|secret| nook_core::DeviceIdentity::from_secret_str(&secret).ok())
             .map(|identity| identity.public_key().as_str().to_owned())
@@ -191,35 +273,19 @@ impl NookVaultManager {
     /// GitHub repo (`owner/name`) or Google Drive file id, depending on mode.
     #[wasm_bindgen(getter)]
     pub fn storage_remote_ref(&self) -> String {
-        self.github_repo.clone()
+        self.storage.remote_ref.clone()
     }
 
     /// Drop in-memory vault session state when switching storage providers.
     /// Device identity and configured storage credentials are preserved.
     #[wasm_bindgen(js_name = "resetVaultSession")]
     pub fn reset_vault_session(&mut self) {
-        self.secrets_key.zeroize();
-        self.members_key.zeroize();
-        self.crypto = None;
-        self.meta = nook_core::VaultMetaState::default();
-        self.database.clear();
-        self.password_entries.clear();
-        self.file_sha = None;
-        self.last_synced_content.clear();
-        self.github_root_empty = false;
-        self.unlock = nook_core::VaultUnlock::Keys;
-        self.use_local_cache_for_connect = false;
-        self.store_id.clear();
-        self.vault_name = None;
-        self.vault_version = 0;
-        self.event_log_mode = false;
-        self.signing_seed.zeroize();
-        self.key_epoch.zeroize();
-        self.event_heads.clear();
-        self.sync_outbox_provider_id.clear();
-        self.sync_outbox_storage_mode = nook_core::StorageMode::Local;
-        self.sync_outbox_pat.zeroize();
-        self.sync_outbox_repo_arg.clear();
+        self.vault.reset();
+        self.storage.file_sha = None;
+        self.storage.github_root_empty = false;
+        self.storage.use_local_cache_for_connect = false;
+        self.event_log.reset();
+        self.sync_outbox.reset();
     }
 }
 
@@ -232,7 +298,7 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        records_to_vec(self.database.list())
+        records_to_vec(self.vault.database.list())
     }
 
     pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {
@@ -240,24 +306,24 @@ impl NookVaultManager {
     }
 
     pub(crate) fn vault_members(&self) -> Result<Vec<NookVaultMember>, NookError> {
-        vault_members_to_vec(&self.stored_records_snapshot(), &self.members_key)
+        vault_members_to_vec(&self.stored_records_snapshot(), &self.vault.members_key)
     }
 
     pub(in crate::manager) fn serialize_current_projection_yaml(
         &self,
     ) -> Result<String, NookError> {
-        if self.store_id.is_empty() {
+        if self.vault.store_id.is_empty() {
             return Err(NookError::Database(
                 "Vault store id is not initialized.".to_owned(),
             ));
         }
-        let records = self.meta.to_stored_records();
+        let records = self.vault.meta.to_stored_records();
         Ok(nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
-            &self.unlock,
-            &self.password_entries,
-            Some(self.store_id.as_str()),
-            self.vault_name.as_deref(),
+            &self.vault.unlock,
+            &self.vault.password_entries,
+            Some(self.vault.store_id.as_str()),
+            self.vault.vault_name.as_deref(),
             None,
         )?
         .into_inner())
@@ -265,15 +331,15 @@ impl NookVaultManager {
 
     pub(in crate::manager) fn local_cache_ref(&self) -> String {
         nook_core::format_sync_provider_cache_ref(
-            self.storage_mode,
-            &self.github_repo,
-            &self.github_path,
+            self.storage.mode,
+            &self.storage.remote_ref,
+            &self.storage.remote_path,
         )
     }
 
     pub(crate) fn device_identity(&self) -> Result<nook_core::DeviceIdentity, NookError> {
         Ok(nook_core::DeviceIdentity::from_secret_str(
-            &nook_core::DeviceIdentitySecret::parse(&self.device_identity_private_key)?,
+            &nook_core::DeviceIdentitySecret::parse(&self.device.identity_private_key)?,
         )?)
     }
 
@@ -289,11 +355,11 @@ impl NookVaultManager {
     /// would clobber a freshly-set password envelope back to keys mode.
     pub(in crate::manager) fn capture_vault_unlock(&mut self, content: &str) {
         if let Ok(metadata) = nook_core::capture_vault_unlock_from_content(content) {
-            self.unlock = metadata.unlock;
-            self.password_entries = metadata.password_entries;
-            self.store_id = metadata.store_id;
-            self.vault_name = Some(metadata.vault_name);
-            self.vault_version = metadata.version;
+            self.vault.unlock = metadata.unlock;
+            self.vault.password_entries = metadata.password_entries;
+            self.vault.store_id = metadata.store_id;
+            self.vault.vault_name = Some(metadata.vault_name);
+            self.vault.vault_version = metadata.version;
         }
     }
 
@@ -302,10 +368,10 @@ impl NookVaultManager {
         secrets_key: &str,
         members_key: &str,
     ) -> Result<(), NookError> {
-        self.secrets_key = secrets_key.to_owned();
-        self.members_key = members_key.to_owned();
+        self.vault.secrets_key = secrets_key.to_owned();
+        self.vault.members_key = members_key.to_owned();
         let parsed_secrets = nook_core::SymmetricKey::parse(secrets_key)?;
-        self.crypto = Some(nook_core::VaultCrypto::new(&parsed_secrets)?);
+        self.vault.crypto = Some(nook_core::VaultCrypto::new(&parsed_secrets)?);
         Ok(())
     }
 
@@ -314,13 +380,15 @@ impl NookVaultManager {
     pub(in crate::manager) async fn ensure_vault_crypto_from_cache(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.crypto.is_some() {
+        if self.vault.crypto.is_some() {
             return Ok(());
         }
         let identity = self.ensure_device_identity()?;
-        if !self.last_synced_content.trim().is_empty() {
-            let (secrets_key, members_key) =
-                nook_core::hydrate_keys_from_projection_yaml(&self.last_synced_content, &identity)?;
+        if !self.vault.last_synced_content.trim().is_empty() {
+            let (secrets_key, members_key) = nook_core::hydrate_keys_from_projection_yaml(
+                &self.vault.last_synced_content,
+                &identity,
+            )?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
@@ -330,7 +398,7 @@ impl NookVaultManager {
             let (secrets_key, members_key) =
                 nook_core::hydrate_keys_from_projection_yaml(&cache, &identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
-            self.last_synced_content = cache;
+            self.vault.last_synced_content = cache;
             return Ok(());
         }
         Err(NookError::Encryption(
@@ -343,13 +411,13 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
-        let members_key = self.members_key.clone();
+        let members_key = self.vault.members_key.clone();
         if let Some(member_records) = nook_core::ensure_self_in_roster(
             &records,
             identity,
             &nook_core::SymmetricKey::parse(&members_key)?,
         )? {
-            nook_core::apply_member_records(&mut self.meta, &member_records);
+            nook_core::apply_member_records(&mut self.vault.meta, &member_records);
         }
         Ok(())
     }
@@ -359,10 +427,10 @@ impl NookVaultManager {
     pub(in crate::manager) async fn ensure_vault_roster_hydrated(
         &mut self,
     ) -> Result<bool, NookError> {
-        if self.members_key.is_empty() {
+        if self.vault.members_key.is_empty() {
             let _ = self.ensure_vault_crypto_from_cache().await;
         }
-        if self.members_key.is_empty() {
+        if self.vault.members_key.is_empty() {
             return Ok(false);
         }
         let identity = self.device_identity()?;
@@ -377,7 +445,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn stored_records_snapshot(&self) -> Vec<nook_core::StoredSecretRecord> {
-        self.meta.to_stored_records()
+        self.vault.meta.to_stored_records()
     }
 
     pub(in crate::manager) fn needs_genesis_persist(&self) -> bool {
@@ -394,60 +462,63 @@ impl NookVaultManager {
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
         let mode = nook_core::StorageMode::parse(storage_mode)?;
-        let previous_mode = self.storage_mode;
-        let previous_remote_ref = self.github_repo.clone();
-        self.storage_mode = mode;
-        self.file_sha = None;
+        let previous_mode = self.storage.mode;
+        let previous_remote_ref = self.storage.remote_ref.clone();
+        self.storage.mode = mode;
+        self.storage.file_sha = None;
 
         match mode {
             nook_core::StorageMode::Local => {
-                self.github_pat = String::new();
+                self.storage.access_token = String::new();
             }
             nook_core::StorageMode::Github => {
-                self.github_pat = nook_core::validate_github_pat(github_pat)?.to_string();
+                self.storage.access_token = nook_core::validate_github_pat(github_pat)?.to_string();
                 let repo_name = nook_core::validate_github_repo_name(github_repo_name)?;
-                let _ = self.status_tx.send("GITHUB_USER_FETCH".to_owned());
-                let username = fetch_github_username(&self.github_pat).await?;
+                let _ = self.status.tx.send("GITHUB_USER_FETCH".to_owned());
+                let username = fetch_github_username(&self.storage.access_token).await?;
                 let new_repo = format!("{}/{}", username, repo_name);
-                if self.github_repo != new_repo {
-                    self.github_root_empty = false;
+                if self.storage.remote_ref != new_repo {
+                    self.storage.github_root_empty = false;
                 }
-                self.github_repo = new_repo;
-                self.github_path.clear();
-                let _ = self.status_tx.send("GITHUB_REPO_ENSURE".to_owned());
-                ensure_github_repo_exists(&self.github_pat, &self.github_repo).await?;
+                self.storage.remote_ref = new_repo;
+                self.storage.remote_path.clear();
+                let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
+                ensure_github_repo_exists(&self.storage.access_token, &self.storage.remote_ref)
+                    .await?;
             }
             nook_core::StorageMode::GoogleDrive => {
-                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?.to_string();
+                self.storage.access_token =
+                    nook_core::validate_oauth_access_token(github_pat)?.to_string();
                 let (known_file_id, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
-                self.github_path = file_name.to_string();
-                let _ = self.status_tx.send("DRIVE_VERIFY".to_owned());
-                verify_drive_access(&self.github_pat).await?;
-                self.github_repo = known_file_id;
+                self.storage.remote_path = file_name.to_string();
+                let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
+                verify_drive_access(&self.storage.access_token).await?;
+                self.storage.remote_ref = known_file_id;
             }
             nook_core::StorageMode::ICloud => {
-                self.github_pat = nook_core::validate_oauth_access_token(github_pat)?.to_string();
+                self.storage.access_token =
+                    nook_core::validate_oauth_access_token(github_pat)?.to_string();
                 let (_known_revision, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
-                self.github_path = file_name.to_string();
-                let _ = self.status_tx.send("ICLOUD_VERIFY".to_owned());
-                verify_icloud_access(&self.github_pat).await?;
-                self.github_repo = file_name.to_string();
+                self.storage.remote_path = file_name.to_string();
+                let _ = self.status.tx.send("ICLOUD_VERIFY".to_owned());
+                verify_icloud_access(&self.storage.access_token).await?;
+                self.storage.remote_ref = file_name.to_string();
             }
         }
 
-        if previous_mode != self.storage_mode || previous_remote_ref != self.github_repo {
-            self.password_entries.clear();
-            self.unlock = nook_core::VaultUnlock::Keys;
-            self.vault_name = None;
+        if previous_mode != self.storage.mode || previous_remote_ref != self.storage.remote_ref {
+            self.vault.password_entries.clear();
+            self.vault.unlock = nook_core::VaultUnlock::Keys;
+            self.vault.vault_name = None;
         }
 
         if mode != nook_core::StorageMode::Local {
-            self.sync_outbox_provider_id = self.local_cache_ref();
-            self.sync_outbox_storage_mode = mode;
-            self.sync_outbox_pat = self.github_pat.clone();
-            self.sync_outbox_repo_arg = github_repo_name.to_owned();
+            self.sync_outbox.provider_id = self.local_cache_ref();
+            self.sync_outbox.storage_mode = mode;
+            self.sync_outbox.access_token = self.storage.access_token.clone();
+            self.sync_outbox.repo_arg = github_repo_name.to_owned();
         }
 
         Ok(())
@@ -459,21 +530,21 @@ impl NookVaultManager {
         github_pat: &str,
         github_repo_name: &str,
     ) -> Result<(), NookError> {
-        let password_entries = self.password_entries.clone();
-        let unlock = self.unlock.clone();
-        let vault_name = self.vault_name.clone();
+        let password_entries = self.vault.password_entries.clone();
+        let unlock = self.vault.unlock.clone();
+        let vault_name = self.vault.vault_name.clone();
         self.prepare_storage(storage_mode, github_pat, github_repo_name)
             .await?;
-        self.password_entries = password_entries;
-        self.unlock = unlock;
-        self.vault_name = vault_name;
+        self.vault.password_entries = password_entries;
+        self.vault.unlock = unlock;
+        self.vault.vault_name = vault_name;
         Ok(())
     }
 
     pub(in crate::manager) fn ensure_device_identity(
         &mut self,
     ) -> Result<nook_core::DeviceIdentity, NookError> {
-        if self.device_identity_private_key.is_empty() {
+        if self.device.identity_private_key.is_empty() {
             return Err(NookError::Decryption(
                 "errors.device_protection.authorization_required".to_owned(),
             ));
@@ -485,11 +556,11 @@ impl NookVaultManager {
         &mut self,
         remote_content_missing: &mut bool,
     ) -> Result<String, NookError> {
-        let content = match self.storage_mode {
+        let content = match self.storage.mode {
             nook_core::StorageMode::Local => {
-                let _ = self.status_tx.send("IDB_LOAD_START".to_owned());
+                let _ = self.status.tx.send("IDB_LOAD_START".to_owned());
                 let stored = load_from_indexed_db().await?;
-                let _ = self.status_tx.send("IDB_LOAD_SUCCESS".to_owned());
+                let _ = self.status.tx.send("IDB_LOAD_SUCCESS".to_owned());
                 stored.unwrap_or_default()
             }
             nook_core::StorageMode::Github

@@ -49,6 +49,10 @@ When you see `Option<T>`, ask:
 - Before adding a new struct or enum, search for an equivalent core type. Reuse
   the canonical type instead of duplicating DTOs across `nook-core` and
   `nook-wasm`; WASM wrappers should delegate to core types when possible.
+- Keep stateful WASM manager objects composed from cohesive private state
+  structs instead of flat field bags. Provider credentials/cache, vault session
+  state, device identity, event-log state, status channels, and outbox state
+  should not all live as sibling fields on one exported manager.
 - Keep `nook-core` organized by domain module groups (`auth`, `crypto`,
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
   `nook-core/src`; place them in the owning group and re-export through
