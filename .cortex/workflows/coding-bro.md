@@ -23,14 +23,14 @@ After targeted fixes pass, run the relevant project or full PR mirror once befor
 Default agent flow:
 
 1. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
-2. **Validate locally before push** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
-3. **Push when ready** — commit, push, and open the PR only after local gates pass.
-4. **Monitor remote CI** — watch checks on the PR.
-5. **On any remote failure** — read **app logs** (`nook-app-logs.json` is attached
-   to every e2e result; `fetchAppLogs` and `/app-logs` are available locally) →
-   fix locally (prefer single-spec e2e while debugging) → run `task ci:pr` until
-   green → push again.
-6. **Merge** — squash merge only when **every** remote check is green.
+2. **Run CodeRabbit when it adds signal** — for nontrivial agent-authored changes, run `coderabbit review --agent --type uncommitted`, fix valid `critical`/`major` findings, and re-run once after meaningful fixes. See [coderabbit.md](coderabbit.md).
+3. **Validate locally before push** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
+4. **Push when ready** — commit, push, and open the PR only after local gates pass.
+5. **Monitor remote CI and PR review** — watch checks on the PR; use CodeRabbit PR commands from [coderabbit.md](coderabbit.md) when a refreshed GitHub-side review is useful after new commits.
+6. **On any remote failure** — read **app logs** (`nook-app-logs.json` attachment,
+   `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
+   debugging) → run `task ci:pr` until green → push again.
+7. **Merge** — squash merge only when **every** remote check is green.
 
 Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.
 
@@ -54,26 +54,28 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    If part of the requested functionality is too large, risky, blocked, or out
    of scope, follow [issues.md](issues.md) before handoff: update or create the
    aggregate GitHub issue and focused sub-issues for the missing work.
-4. **Local validation** — Run `task check` (or a scoped subset) and relevant e2e before push. Prefer local Docker (cached images) over remote CI for iteration. During debug, run specs one at a time with `E2E_SPEC=… task web:test:e2e:file`.
-5. **Push and open PR** — Commit, push, and open the PR **only when local checks pass** and the change is ready. Remote CI validates a clean environment — it is not the first test pass.
-6. **Monitor CI** — Watch remote checks until every required job finishes.
-7. **Fix loop on failure** — If CI fails: read **app logs** (Playwright
+4. **CodeRabbit review when useful** — For nontrivial agent-authored code, run `coderabbit review --agent --type uncommitted` before final validation. Fix valid high-severity findings and do not let CodeRabbit override `.cortex`, tests, or repo architecture. See [coderabbit.md](coderabbit.md).
+5. **Local validation** — Run `task check` (or a scoped subset) and relevant e2e before push. Prefer local Docker (cached images) over remote CI for iteration. During debug, run specs one at a time with `E2E_SPEC=… task web:test:e2e:file`.
+6. **Push and open PR** — Commit, push, and open the PR **only when local checks pass** and the change is ready. Remote CI validates a clean environment — it is not the first test pass.
+7. **Monitor CI and PR review** — Watch remote checks until every required job finishes. If an agent pushes new commits and CodeRabbit's GitHub-side review needs a refresh, post `@coderabbitai review` (focused) or `@coderabbitai full review` (large rewrite).
+8. **Fix loop on failure** — If CI fails: read **app logs** (Playwright
    `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) → fix → run `task ci:pr`
    locally → fix → re-run `task ci:pr` until green → commit → push → monitor again.
-8. **Repeat** — Return to step 7 until every remote check is green.
-9. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
+9. **Repeat** — Return to step 8 until every remote check is green.
+10. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
 
 ```mermaid
 flowchart TD
   P[0 Prompt] --> F[1 Fetch origin/main]
   F --> B[2 Branch from origin/main]
   B --> I[3 Implement]
-  I --> L[4 Local validation: check / e2e / ci:pr]
-  L --> PU[5 Push + open PR when ready]
-  PU --> PR[6 Monitor CI]
+  I --> CR[4 CodeRabbit when useful]
+  CR --> L[5 Local validation: check / e2e / ci:pr]
+  L --> PU[6 Push + open PR when ready]
+  PU --> PR[7 Monitor CI + PR review]
   PR --> G{All checks green?}
-  G -->|yes| M[9 Squash merge]
-  G -->|no| FIX[7 Read app logs + fix]
+  G -->|yes| M[10 Squash merge]
+  G -->|no| FIX[8 Read app logs + fix]
   FIX --> FULL[Run task ci:pr locally until green]
   FULL --> PUSH[Push + monitor]
   PUSH --> G
@@ -96,7 +98,21 @@ git checkout -b <branch-name> origin/main
 
 Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
-### 4 — Local validation (before push)
+### 4 — CodeRabbit review (when useful)
+
+CodeRabbit is a second-pass AI reviewer, not a required build gate. For
+nontrivial code changes authored by an agent, run it before final validation:
+
+```bash
+coderabbit review --agent --type uncommitted
+```
+
+Fix valid `critical` and `major` findings, consider behaviorally meaningful
+`minor` findings, then re-run once after substantial fixes. Skip it for trivial
+docs/mechanical changes or when auth/rate limits block it; report that decision
+in the handoff. Full rules: [coderabbit.md](coderabbit.md).
+
+### 5 — Local validation (before push)
 
 **Why local first:** GitHub Actions runners download Docker images and run the full prepared test set from scratch every time. Locally, toolchain images are **already cached** — the same gates finish much faster. Use local Task commands to check code and fix issues; push only when ready.
 
@@ -136,7 +152,7 @@ implement → fix → E2E_SPEC=… task web:test:e2e:file   (fast debug loop)
 
 Add `task web:test:e2e` or `task ci:pr` before the first push when the change touches vault sync, login/unlock, multi-step web flows, or Playwright helpers. Skip e2e for isolated Rust-only or docs-only changes.
 
-### 7 — Full local loop (after any remote CI failure)
+### 8 — Full local loop (after any remote CI failure)
 
 **Mandatory before every push that follows a red remote build:**
 
@@ -165,11 +181,11 @@ task web:test:e2e:parallel
 
 If the failure was obviously fmt/lint-only, `task format:check` plus the relevant lint/test subset can unblock a quick fix — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
 
-See [pull-requests.md § Local checks](pull-requests.md#2-local-checks-before-every-push) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
+See [pull-requests.md § Local checks](pull-requests.md#3-local-checks) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
-### 5–6 — Push, open PR, monitor
+### 6–7 — Push, open PR, monitor
 
-Push only after local checks pass and the change is ready — include scoped e2e or `task ci:pr` when the touch surface warrants it (see step 4).
+Push only after local checks pass and the change is ready — include scoped e2e or `task ci:pr` when the touch surface warrants it (see step 5).
 
 ```bash
 git push -u origin HEAD
@@ -177,7 +193,7 @@ gh pr create --title "…" --body "…"
 gh pr checks <number> --watch
 ```
 
-### 9 — Merge
+### 10 — Merge
 
 When all checks pass and the user asked to merge (or the task implies merge-on-green):
 
@@ -204,7 +220,7 @@ When [`main.yml`](../../.github/workflows/main.yml) or [`e2e-nightly.yml`](../..
 - **Never hide deferred scope** — if requested functionality is not fully
   implemented because it is large, risky, blocked, or out of scope, manage it in
   GitHub issues first. See [issues.md](issues.md).
-- **Duration report** on every completed implementation task. See [pull-requests.md §8](pull-requests.md#8-task-completion-report).
+- **Duration report** on every completed implementation task. See [pull-requests.md §9](pull-requests.md#9-task-completion-report).
 
 ## Related docs
 

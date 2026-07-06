@@ -44,6 +44,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ## 6. Workflows (`workflows/`)
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local validation → push when ready → monitor → full local loop on failure → merge). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
+* [workflows/coderabbit.md](workflows/coderabbit.md) — CodeRabbit CLI / PR-review workflow for agent pre-commit review loops and GitHub-side review control.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Capture user-explained codebase lessons as reusable `.cortex/dynamic-skills/` skill cards and optional Cursor project skills.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.

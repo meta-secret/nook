@@ -24,13 +24,14 @@ Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for auto
 ```mermaid
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + implement]
-  A --> B[2 Local validation: check / e2e / ci:pr]
-  B --> E[3 Push + open PR when ready]
-  E --> F[4 Monitor PR CI]
+  A --> CR[2 CodeRabbit when useful]
+  CR --> B[3 Local validation: check / e2e / ci:pr]
+  B --> E[4 Push + open PR when ready]
+  E --> F[5 Monitor PR CI + review]
   F --> G{All checks green?}
-  G -->|no| H[5 Read app logs + fix]
-  H --> FULL[6 task ci:pr locally until green]
-  FULL --> PUSH[7 Push + monitor]
+  G -->|no| H[6 Read app logs + fix]
+  H --> FULL[7 task ci:pr locally until green]
+  FULL --> PUSH[8 Push + monitor]
   PUSH --> G
   G -->|yes| I[Squash merge PR]
   I --> J[Report task duration]
@@ -50,7 +51,23 @@ Never commit directly on `main`.
 
 ### 1. Implement
 
-### 2. Local checks
+### 2. CodeRabbit review when useful
+
+For nontrivial agent-authored changes, run a CodeRabbit local review before the
+final local gate:
+
+```bash
+coderabbit review --agent --type uncommitted
+```
+
+Fix valid `critical` and `major` findings, consider behaviorally meaningful
+`minor` findings, then re-run once after substantial fixes. CodeRabbit is an
+extra review signal; it does not replace `task check`, e2e/`task ci:pr`, app-log
+inspection, or `.cortex` architecture rules. Skip it for trivial docs/mechanical
+changes or when authentication/rate limits block it, and say so in the PR
+handoff. See [coderabbit.md](coderabbit.md).
+
+### 3. Local checks
 
 **Remote CI is cold and heavy** — fresh runners pull Docker images and run the full prepared test set from scratch (**5+ minutes** plus queue). **Local Docker uses cached images** and is strongly preferred for checking tests, fixing issues, and iterating. Push only when local gates pass; remote CI validates a clean environment for the PR.
 
@@ -92,7 +109,7 @@ Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
-### 3. Local e2e (debug and pre-push validation)
+### 4. Local e2e (debug and pre-push validation)
 
 PR CI runs the full stub-backed **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` before pushing changes that touch:
 
@@ -116,7 +133,7 @@ task web:test:e2e:parallel
 
 Skip e2e for small, isolated Rust-only or docs-only changes.
 
-### 4. Push and open a PR
+### 5. Push and open a PR
 
 Push only after local checks pass and the change is ready — include scoped e2e or `task ci:pr` when the touch surface warrants it.
 
@@ -125,9 +142,9 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, then deploys a Cloudflare preview. Toolchain publish runs on main only (`ci:main:publish`).
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
 
-### 5. Monitor CI until green
+### 6. Monitor CI and review until green
 
 **Do not stop after opening the PR.** Poll checks until every required job finishes:
 
@@ -137,7 +154,7 @@ gh pr checks <number> --watch          # blocks until done
 gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
 ```
 
-### 5.1. Address review comments
+### 6.1. Address review comments
 
 Actionable PR feedback is part of the PR gate, whether it comes from a human
 reviewer, CodeRabbit, or another automated reviewer. Follow
@@ -165,42 +182,20 @@ not inline review threads, including "outside diff range comments", nitpicks,
 and collapsed "actionable comments posted" sections. Expand and handle those
 items too.
 
+If CodeRabbit is enabled on the repository and an agent pushed new commits after
+the initial review, use `@coderabbitai review` as a top-level PR comment for
+focused feedback on the new code. Use `@coderabbitai full review` after large
+rewrites, draft-to-ready transitions, or cross-cutting changes that need a fresh
+whole-PR pass. See [coderabbit.md](coderabbit.md).
+
 Use the GitHub review-thread GraphQL query from the agent's CodeRabbit workflow
-to inspect unresolved inline conversations.
+to inspect unresolved inline conversations. Reply only on actual review
+threads/comments that support threaded replies. Do not use normal PR timeline
+comments as a substitute for unthreaded CodeRabbit summary items; track those in
+the checklist/final handoff and let pushed code plus CodeRabbit re-review update
+the PR state.
 
-For each active, non-outdated PR review item:
-
-1. Build a checklist item from the thread or summary item, including the
-   file/line when available, finding, and any reviewer-provided AI-agent prompt
-   when present.
-2. Verify the finding against current code before editing.
-3. Make the minimal correct fix, or document why the finding no longer applies.
-4. Validate locally with the smallest relevant check, then broader checks when
-   the touched surface warrants it.
-5. Push the fix.
-6. Leave a short GitHub reply that states what changed, what validation ran, or
-   why no code change was needed. The reply must target the particular review
-   thread or comment item. Reply on the review thread when one exists. If the
-   item is only present inside a PR timeline/summary comment and GitHub does not
-   provide a threaded reply API for that item, leave a targeted PR timeline reply
-   that references the exact CodeRabbit comment URL plus the item title/file and
-   `cr-comment` id.
-7. For CodeRabbit threads, wait for CodeRabbit's addressed/closing reply and
-   re-query the thread state. Do not call `resolveReviewThread` yourself unless
-   the user explicitly asks you to override CodeRabbit's handling.
-8. For human or non-CodeRabbit review threads, resolve the GitHub conversation
-   only after the targeted reply is posted and only when resolution is the
-   correct next action.
-
-Do not silently resolve review conversations or ignore actionable summary
-comments. The PR history must show how each item was handled.
-Do not use a broad/general audit comment as a substitute for replying to the
-particular comment item. For CodeRabbit review summaries without resolvable
-threads, leave targeted PR timeline replies for each actionable item or tightly
-grouped set of items from the same CodeRabbit summary comment, each referencing
-the original comment URL and item identifiers.
-
-### 6. Fix loop on failure
+### 7. Fix loop on failure
 
 Investigation order: **test output** → **static analysis** → **app logs** (most
 important after the first two). See
@@ -212,11 +207,11 @@ important after the first two). See
    `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
 4. **Run full local PR CI and repeat until green:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
-5. Commit, push, return to step 5.
+5. Commit, push, return to step 6.
 
 If the failure was obviously fmt/lint-only, `task format:check` + the relevant lint/test subset can unblock a quick fix — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
 
-### 7. Merge and finish
+### 8. Merge and finish
 
 When **all PR checks pass** and the user asked you to merge (or the task implies merge-on-green):
 
@@ -226,7 +221,7 @@ gh pr merge <number> --squash
 
 After merge, `main.yml` runs full stub **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
-### 8. Task completion report
+### 9. Task completion report
 
 Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
 
@@ -253,16 +248,17 @@ Rules:
 
 ## Standard flow (summary)
 
-See [coding-bro.md](coding-bro.md) for the numbered 0–9 checklist.
+See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 
 1. Fetch `origin/main`; branch from it.
-2. Implement; run `task check` (or scoped subset) before the first push.
-3. Push; open PR with summary and test plan.
-4. Monitor CI until green.
-5. On failure: fix → `task ci:pr` locally until green → push → monitor again.
-6. **Squash merge** into `main` when every remote check is green.
-7. Delete the branch (optional).
-8. **Report task duration** in the final message (see [§ Task completion report](#8-task-completion-report)).
+2. Implement; run CodeRabbit when useful for nontrivial agent-authored changes.
+3. Run `task check` (or scoped subset) before the first push.
+4. Push; open PR with summary and test plan.
+5. Monitor CI and PR review until green.
+6. On failure: fix → `task ci:pr` locally until green → push → monitor again.
+7. **Squash merge** into `main` when every remote check is green.
+8. Delete the branch (optional).
+9. **Report task duration** in the final message (see [§ Task completion report](#9-task-completion-report)).
 
 ## CLI reference
 

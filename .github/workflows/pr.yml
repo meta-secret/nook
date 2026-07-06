@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
   packages: read
   pull-requests: write
   issues: write
@@ -71,6 +72,46 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         run: task ci:pr:comment-preview
+
+      - name: Record github-pages deployment
+        if: steps.deploy.outcome == 'success'
+        uses: actions/github-script@v9
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
+        with:
+          script: |
+            const previewUrl = process.env.PREVIEW_URL
+            if (!previewUrl) {
+              throw new Error('Cloudflare preview deploy succeeded but did not emit preview_url')
+            }
+
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.payload.pull_request.head.sha,
+              environment: 'github-pages',
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: true,
+              production_environment: false,
+              description: `PR #${context.payload.pull_request.number} preview`,
+              payload: {
+                pull_request: context.payload.pull_request.number,
+                preview_url: previewUrl,
+              },
+            })
+
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment: 'github-pages',
+              environment_url: previewUrl,
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'Cloudflare Pages preview deployed',
+              auto_inactive: false,
+            })
 
       - name: Export PR nook-core coverage
         run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
