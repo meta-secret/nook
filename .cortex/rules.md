@@ -70,7 +70,7 @@ This document defines the strict development standards, architectural boundaries
 | ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Unit / property tests**     | ~99% of domain behavior — edge cases, concurrency, replay invariance, error paths | `nook-app/nook-core/src/**` `#[cfg(test)]`, `nook-app/nook-core/tests/*.rs`    |
 | **Integration harness tests** | Multi-device decentralized sync, provider union, session orchestration            | `nook-app/nook-core/tests/event_log_*.rs`, `multi_device_workflow.rs` |
-| **E2e (Playwright)**          | Critical UI smoke only — unlock, save, sync stub, conflict UX                     | `nook-app/nook-web/e2e/`                                              |
+| **E2e (Playwright)**          | Critical UI smoke only — unlock, save, provider sync, conflict UX                 | `nook-app/nook-web/e2e/`                                              |
 
 When adding or changing domain logic, **add Rust tests first** (or in the same PR). Do not rely on e2e to catch regressions in sync or projection.
 

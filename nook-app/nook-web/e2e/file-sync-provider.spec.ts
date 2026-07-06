@@ -15,7 +15,7 @@ import {
   connectSyncGenesisDevice,
   connectSyncJoinerDevice,
   createSyncTarget,
-  installSyncStubOnPages,
+  installSyncRemoteOnPages,
   waitForSyncRemoteState,
   type SyncE2eTarget,
 } from './sync-provider'
@@ -37,7 +37,7 @@ test.describe('file sync provider event log', () => {
     await disableVaultIdleLock(deviceA)
     await disableVaultIdleLock(deviceB)
     target = createSyncTarget('', 'file-sync', 'file')
-    await installSyncStubOnPages([deviceA, deviceB], target)
+    await installSyncRemoteOnPages([deviceA, deviceB], target)
   })
 
   test.afterAll(async () => {
@@ -50,7 +50,7 @@ test.describe('file sync provider event log', () => {
   test('stores flat YAML events on disk and replicates across browsers', async () => {
     const stub = target.stub
     if (!stub || !('getRootDir' in stub) || !('getEventFilePaths' in stub)) {
-      throw new Error('file sync target did not create a file-backed stub')
+      throw new Error('file sync target did not create a file-backed remote')
     }
 
     await connectSyncGenesisDevice(deviceA, target)

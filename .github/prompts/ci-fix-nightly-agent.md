@@ -42,7 +42,7 @@ Live e2e requires `NOOK_GITHUB_PAT` and a disposable `NOOK_GITHUB_E2E_REPO` (alr
      ```bash
      task ci:nightly:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
      ```
-3. Implement the minimal correct fix (match existing conventions). Prefer stub-backed coverage in `e2e` over relying on live API behavior.
+3. Implement the minimal correct fix (match existing conventions). Prefer local-provider coverage in `e2e` over relying on live API behavior.
 4. Re-run **only** the CI tasks that failed in step 2 — do not run full nightly e2e unless the failure spans multiple stages.
 
 ## Rules

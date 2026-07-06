@@ -12,13 +12,13 @@ import {
   openStorageSettings,
   readLocalVaultYamlFromIdb,
   reloadUnlockWithSyncProvider,
-  stubGoogleDriveVaultForLocalE2e,
+  installOauthFileRemoteForLocalE2e,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
 } from './helpers'
-import { createSyncTarget, installSyncStub } from './sync-provider'
+import { createSyncTarget, installSyncRemote } from './sync-provider'
 
-test.describe('unified vault backup passwords (stub sync)', () => {
+test.describe('unified vault backup passwords with sync provider', () => {
   test.describe.configure({ mode: 'serial' })
 
   const target = createSyncTarget('', 'provider-switch')
@@ -26,7 +26,7 @@ test.describe('unified vault backup passwords (stub sync)', () => {
   test('login gate keeps backup passwords after adding sync providers', async ({
     page,
   }) => {
-    await installSyncStub(page, target)
+    await installSyncRemote(page, target)
     await page.goto('/')
     await clearBrowserVault(page)
     await page.reload()
@@ -39,7 +39,7 @@ test.describe('unified vault backup passwords (stub sync)', () => {
 
     await disableLoginAutoUnlock(page)
     const vaultYaml = await readLocalVaultYamlFromIdb(page)
-    await stubGoogleDriveVaultForLocalE2e(
+    await installOauthFileRemoteForLocalE2e(
       page,
       { fileName: target.repoName, vaultYaml },
       target.stub,

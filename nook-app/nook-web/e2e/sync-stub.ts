@@ -20,8 +20,8 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** Unique repo name per suite — no GitHub API registration or cleanup. */
-export function createE2eStubRepoName(prefix = 'nook-stub'): string {
+/** Unique remote id per suite — no live provider registration or cleanup. */
+export function createE2eRemoteName(prefix = 'nook-e2e'): string {
   const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
   return `${prefix}-${suffix}`
 }
@@ -31,7 +31,7 @@ export function createStubSyncTarget(
   initialYaml = '',
   prefix?: string,
 ): StubSyncTarget {
-  const repoName = createE2eStubRepoName(prefix)
+  const repoName = createE2eRemoteName(prefix)
   const stub = createLocalE2eGithubVaultStub(initialYaml)
   return { pat: E2E_STUB_PAT, repoName, stub }
 }
@@ -72,7 +72,7 @@ export async function waitForStubVaultState(
   // Pure in-memory read (no network, no page round-trip) — poll fast.
   const intervalMs = options?.intervalMs ?? 100
   const deadline = Date.now() + timeoutMs
-  let lastError = 'stub event log empty'
+  let lastError = 'remote event log empty'
 
   while (Date.now() < deadline) {
     const events = target.stub.getEventFileContents()
@@ -85,11 +85,11 @@ export async function waitForStubVaultState(
         lastError = `predicate not satisfied (secrets=${snapshot.secretIds.length}, joins=${snapshot.joinEntries.length})`
       } catch (error) {
         lastError =
-          error instanceof Error ? error.message : 'invalid stub event log'
+          error instanceof Error ? error.message : 'invalid remote event log'
       }
     }
     await sleep(intervalMs)
   }
 
-  throw new Error(`Timed out waiting for stub event log: ${lastError}`)
+  throw new Error(`Timed out waiting for remote event log: ${lastError}`)
 }

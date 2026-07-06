@@ -16,9 +16,9 @@ process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
 const distDir = path.join(rootDir, 'dist')
-/** One shared preview/dev server is safe: app state lives in per-context IndexedDB; stubs are per-page. */
+/** One shared preview/dev server is safe: app state lives in per-context IndexedDB; provider routes are per-page. */
 
-/** IndexedDB-only specs — fast manual/debug subset of the full stub suite. */
+/** IndexedDB-only specs — fast manual/debug subset of the full e2e suite. */
 const PR_SPECS = [
   'auth-provider-credential-encryption.spec.ts',
   'connect.spec.ts',
@@ -41,8 +41,8 @@ const PR_SPECS = [
   'logs-page.spec.ts',
 ] as const
 
-/** Sync provider flows via in-memory REST stubs (unlimited isolated repos). */
-const SYNC_STUB_SPECS = [
+/** Sync provider flows via isolated local e2e remotes (no live cloud quota). */
+const SYNC_PROVIDER_SPECS = [
   'file-sync-provider.spec.ts',
   'onboarding-file-provider.spec.ts',
   'sync-fanout.spec.ts',
@@ -55,8 +55,8 @@ const SYNC_STUB_SPECS = [
   'remote-vault-recovery-sync.spec.ts',
 ] as const
 
-/** All stub-backed e2e — main CI and local full runs. */
-const E2E_SPECS = [...PR_SPECS, ...SYNC_STUB_SPECS] as const
+/** All local-provider e2e — main CI and local full runs. */
+const E2E_SPECS = [...PR_SPECS, ...SYNC_PROVIDER_SPECS] as const
 
 /** Real sync provider API — nightly / manual only. */
 const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
