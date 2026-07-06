@@ -18,6 +18,10 @@ import {
   requestICloudWebAuthToken,
   type ICloudOAuthTokens,
 } from '$lib/icloud-oauth'
+import {
+  resolveOAuthOriginSupport,
+  type BrowserOAuthProvider,
+} from '$lib/oauth-origin'
 
 export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   if (state.storageMode !== 'oauth-file' || !state.oauthFile) {
@@ -50,6 +54,9 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
     state.errorMsg = state.t('provider_setup.google_oauth_unconfigured')
     return
   }
+  if (!ensureSupportedOAuthOrigin(state, 'google-drive')) {
+    return
+  }
   state.googleOAuthBusy = true
   state.errorMsg = ''
   try {
@@ -67,6 +74,9 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
 export async function signInWithICloud(state: VaultState): Promise<void> {
   if (!isICloudOAuthConfigured()) {
     state.errorMsg = state.t('provider_setup.icloud_oauth_unconfigured')
+    return
+  }
+  if (!ensureSupportedOAuthOrigin(state, 'icloud')) {
     return
   }
   state.icloudOAuthBusy = true
@@ -106,6 +116,23 @@ async function applyICloudOAuthTokens(
   state.githubPat = ''
   state.githubRepo =
     state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+}
+
+function ensureSupportedOAuthOrigin(
+  state: VaultState,
+  provider: BrowserOAuthProvider,
+): boolean {
+  const support = resolveOAuthOriginSupport(provider)
+  if (support.supported) {
+    return true
+  }
+  state.errorMsg = state.t(
+    support.reason === 'cloudflare-pr-preview'
+      ? 'provider_setup.oauth_preview_origin_unsupported'
+      : 'provider_setup.oauth_origin_unsupported',
+    { origin: support.origin },
+  )
+  return false
 }
 
 async function applyGoogleOAuthTokens(

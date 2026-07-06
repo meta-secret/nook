@@ -134,3 +134,40 @@ Version-based sync is in `nook-app/nook-core/src/vault_sync.rs`. UI uses local-f
 - GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise exposes GitHub repo access, not plaintext vault secrets (still independently encrypted in the vault file).
 - Reusing the existing device identity means no extra key material and no new key-management surface; the same identity already gates vault-key envelopes.
 - Device identity and encrypted vault blob remain in a separate IDB database (`nook_db`); provider rows live in `nook_auth`. E2E tests clear both on reset.
+
+## 7. OAuth origins and PR previews
+
+Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
+Identity Services in the browser; the current Google web client is configured
+for `http://localhost:5173` and `https://nokey.sh`. Nook's CloudKit JS token is
+configured for `https://nokey.sh`.
+
+PR previews deploy to Cloudflare Pages aliases such as
+`https://pr-191.nook-1n8.pages.dev/`. The browser origin is the exact
+scheme/host/port tuple, for example `https://pr-191.nook-1n8.pages.dev`.
+Google's Authorized JavaScript origins must be exact origins: they cannot
+include paths, query strings, fragments, or wildcard characters. A single PR
+origin can be added manually for a one-off test, but the PR pattern cannot be
+represented as `https://pr-*.nook-1n8.pages.dev`, and origin-sprawl should not be
+treated as a durable preview strategy. Apple CloudKit API tokens have the same
+practical constraint when allowed origins are restricted to specific domains.
+
+Current fallback: [`oauth-origin.ts`](../../nook-app/nook-web/src/lib/oauth-origin.ts)
+detects Nook PR preview hosts (`pr-<number>.nook-1n8.pages.dev`) and disables
+Google Drive / iCloud sign-in with a clear message. Reviewers can still test
+local, local-folder, and GitHub providers on PR previews. Google Drive browser
+OAuth should be tested on `https://nokey.sh` or local dev until preview hosting
+uses a registered stable origin. If a stable Cloudflare origin such as
+`https://nook-1n8.pages.dev` or `https://preview.nokey.sh` becomes the preview
+entry point, add that exact origin both in Google Cloud Console and in
+`oauth-origin.ts`; adding `https://nook-1n8.pages.dev` does not authorize
+subdomains like `https://pr-191.nook-1n8.pages.dev`.
+
+Preferred future options:
+
+| Option | Summary | Trade-off |
+|--------|---------|-----------|
+| Stable preview origin | Serve previews from one registered origin such as `https://nook-1n8.pages.dev/pr-191/` or `https://preview.nokey.sh/pr-191/` via Worker/path routing. | Best reviewer UX; requires Cloudflare routing/base-path work and careful static asset paths. |
+| Preview OAuth client | Create a separate Google OAuth client for a small set of fixed staging origins. | Good for staging; still does not solve per-PR subdomains. |
+| Backend/redirect broker | Move to an authorization-code flow with PKCE and a fixed redirect/broker origin. | More secure and flexible, but adds server or Worker state and a larger auth surface. |
+| Manual one-off origin | Add the exact PR origin in Google Cloud Console for a specific review. | Useful for urgent manual testing; not automatable or scalable as the normal PR flow. |

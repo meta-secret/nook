@@ -673,6 +673,8 @@
     "google_signed_in_as": "Signed in as {account}",
     "google_tokens_local_desc": "OAuth tokens stay in this browser only, like a saved GitHub token.",
     "google_oauth_unconfigured": "Google sign-in is not configured. Set GOOGLE_OAUTH_CLIENT_ID in google-oauth-config.ts.",
+    "oauth_preview_origin_unsupported": "OAuth sign-in is disabled on PR preview origin {origin}. Google and Apple require exact registered origins; use production or local dev to test this provider.",
+    "oauth_origin_unsupported": "OAuth sign-in is not enabled for {origin}. Add this exact origin to the provider console before testing this provider here.",
     "icloud_desc": "Nook stores your encrypted vault as a private CloudKit record in your iCloud account. Click Sign in with Apple — no API keys to copy.",
     "icloud_connection_subtitle": "Sign in with Apple and choose your vault file",
     "icloud_sync_subtitle": "Save this provider and reconcile with your vault",

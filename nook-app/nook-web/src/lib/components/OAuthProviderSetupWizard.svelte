@@ -5,6 +5,7 @@
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { OAuthFilePreset } from '$lib/auth-providers'
   import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
+  import { resolveOAuthOriginSupport } from '$lib/oauth-origin'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -33,6 +34,18 @@
   const oauthAccount = $derived(vault.oauthFile?.accountEmail ?? '')
   const oauthBusy = $derived(
     isICloud ? vault.icloudOAuthBusy : vault.googleOAuthBusy,
+  )
+  const oauthOriginSupport = $derived(
+    resolveOAuthOriginSupport(isICloud ? 'icloud' : 'google-drive'),
+  )
+  const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
+  const oauthOriginUnsupportedMessage = $derived(
+    vault.t(
+      oauthOriginSupport.reason === 'cloudflare-pr-preview'
+        ? 'provider_setup.oauth_preview_origin_unsupported'
+        : 'provider_setup.oauth_origin_unsupported',
+      { origin: oauthOriginSupport.origin },
+    ),
   )
 
   let connectionStepOpen = $state(true)
@@ -151,7 +164,7 @@
           'w-full sm:w-auto',
         )}
         data-testid={isICloud ? 'icloud-sign-in-btn' : 'google-sign-in-btn'}
-        disabled={oauthBusy}
+        disabled={oauthBusy || oauthOriginUnsupported}
         onclick={() =>
           void (isICloud ? vault.signInWithICloud() : vault.signInWithGoogle())}
       >
@@ -165,6 +178,17 @@
           {vault.t('provider_setup.sign_in_with_google')}
         {/if}
       </button>
+
+      {#if oauthOriginUnsupported}
+        <p
+          class="text-xs text-muted-foreground"
+          data-testid={isICloud
+            ? 'icloud-origin-unsupported'
+            : 'google-origin-unsupported'}
+        >
+          {oauthOriginUnsupportedMessage}
+        </p>
+      {/if}
 
       {#if vault.errorMsg}
         <p

@@ -665,6 +665,8 @@
     "google_signed_in_as": "Вошли как {account}",
     "google_tokens_local_desc": "OAuth-токены остаются только в этом браузере, как сохранённый токен GitHub.",
     "google_oauth_unconfigured": "Вход через Google не настроен. Укажите GOOGLE_OAUTH_CLIENT_ID в google-oauth-config.ts.",
+    "oauth_preview_origin_unsupported": "OAuth-вход отключён на PR preview origin {origin}. Google и Apple требуют точно зарегистрированные origin; для проверки этого провайдера используйте production или local dev.",
+    "oauth_origin_unsupported": "OAuth-вход не включён для {origin}. Добавьте этот точный origin в консоли провайдера перед проверкой этого провайдера здесь.",
     "icloud_desc": "Nook хранит зашифрованный сейф как приватную запись CloudKit в вашем аккаунте iCloud. Нажмите «Войти через Apple» — API-ключи не нужны.",
     "icloud_connection_subtitle": "Войдите через Apple и выберите файл сейфа",
     "icloud_sync_subtitle": "Сохраните провайдера и согласуйте сейф",
