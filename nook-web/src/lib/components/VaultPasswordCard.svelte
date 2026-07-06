@@ -17,7 +17,10 @@
     buildEnrollmentLink,
     peekEnrollmentIssuedAt,
   } from '$lib/enrollment-code'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import {
+    isVaultPasswordLongEnough,
+    type NookPasswordEntrySummary,
+  } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
   type Panel = 'idle' | 'add' | 'rotate' | 'remove' | 'issue'
@@ -39,7 +42,7 @@
     showWarningBanner = true,
   }: {
     vault: VaultState
-    passwordEntries: VaultPasswordEntrySummary[]
+    passwordEntries: NookPasswordEntrySummary[]
     isBusy: boolean
     passwordError: string
     enrollmentCode: string
@@ -135,7 +138,7 @@
       localError = vault.t('vault_passwords.enter_label_error')
       return
     }
-    if (passwordInput.length < 5) {
+    if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
     }
@@ -154,7 +157,7 @@
   async function submitRotatePassword() {
     localError = ''
     if (!activeEntryId) return
-    if (passwordInput.length < 5) {
+    if (!isVaultPasswordLongEnough(passwordInput)) {
       localError = vault.t('vault_passwords.min_length_error')
       return
     }

@@ -5,7 +5,7 @@
     FolderKey,
     SlidersHorizontal,
   } from '@lucide/svelte'
-  import type { LocalVaultEntry } from '$lib/local-vault'
+  import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -71,7 +71,7 @@
     }
   }
 
-  async function switchTo(entry: LocalVaultEntry) {
+  async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return
     open = false
     switchingTo = entry.storeId

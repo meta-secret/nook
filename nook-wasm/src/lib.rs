@@ -108,6 +108,24 @@ pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> boo
     nook_core::is_bip39_word_sequence_valid(text, expected_word_count as usize)
 }
 
+#[wasm_bindgen(js_name = parseBip39Words)]
+pub fn parse_bip39_words(text: &str) -> Vec<String> {
+    nook_core::parse_bip39_words(text)
+}
+
+#[wasm_bindgen(js_name = joinBip39Words)]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn join_bip39_words(words: Vec<String>) -> String {
+    nook_core::join_bip39_words(&words)
+}
+
+#[wasm_bindgen(js_name = inferBip39MnemonicLength)]
+#[must_use]
+pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
+    nook_core::infer_bip39_mnemonic_length(text)
+}
+
 #[wasm_bindgen(js_name = generateId)]
 pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_id()?.to_string())
@@ -137,6 +155,31 @@ pub fn generate_password(
     })?)
 }
 
+#[wasm_bindgen(js_name = vaultPasswordMinLength)]
+#[must_use]
+pub fn vault_password_min_length() -> u32 {
+    u32::try_from(nook_core::vault_password_min_length()).expect("password minimum fits in u32")
+}
+
+#[wasm_bindgen(js_name = vaultPasswordRecommendedMinLength)]
+#[must_use]
+pub fn vault_password_recommended_min_length() -> u32 {
+    u32::try_from(nook_core::vault_password_recommended_min_length())
+        .expect("password recommended minimum fits in u32")
+}
+
+#[wasm_bindgen(js_name = isVaultPasswordLongEnough)]
+#[must_use]
+pub fn is_vault_password_long_enough(password: &str) -> bool {
+    nook_core::is_vault_password_long_enough(password)
+}
+
+#[wasm_bindgen(js_name = isVaultPasswordRecommendedLength)]
+#[must_use]
+pub fn is_vault_password_recommended_length(password: &str) -> bool {
+    nook_core::is_vault_password_recommended_length(password)
+}
+
 #[wasm_bindgen(js_name = defaultGithubRepo)]
 #[must_use]
 pub fn default_github_repo() -> String {
@@ -157,14 +200,9 @@ pub fn format_drive_storage_ref(file_id: Option<String>, file_name: &str) -> Str
 #[wasm_bindgen(js_name = wasmStorageModeForProvider)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn wasm_storage_mode_for_provider(
-    provider_type: &str,
-    oauth_preset: Option<String>,
+    provider_type: nook_core::StorageProviderType,
+    oauth_preset: Option<nook_core::OauthFilePreset>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
-    let oauth_preset = oauth_preset
-        .as_deref()
-        .map(nook_core::OauthFilePreset::parse)
-        .transpose()?;
     Ok(
         nook_core::storage_mode_for_provider(provider_type, oauth_preset)
             .as_str()
@@ -175,15 +213,10 @@ pub fn wasm_storage_mode_for_provider(
 #[wasm_bindgen(js_name = providerDefaultLabel)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_default_label(
-    provider_type: &str,
+    provider_type: nook_core::StorageProviderType,
     detail: Option<String>,
-    oauth_preset: Option<String>,
+    oauth_preset: Option<nook_core::OauthFilePreset>,
 ) -> Result<String, wasm_bindgen::JsError> {
-    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
-    let oauth_preset = oauth_preset
-        .as_deref()
-        .map(nook_core::OauthFilePreset::parse)
-        .transpose()?;
     Ok(nook_core::sync_provider_default_label(
         provider_type,
         detail.as_deref(),

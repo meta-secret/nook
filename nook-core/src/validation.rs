@@ -1,5 +1,6 @@
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{is_auth_key_id, is_device_id};
+use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Backend that persists the encrypted vault file.
 ///
@@ -75,6 +76,7 @@ pub const DEFAULT_DRIVE_BACKUP_NAME: &str = "nook-events";
 /// wasm connect `github_repo` argument for `google-drive` mode.
 pub const DRIVE_STORAGE_REF_SEP: char = '\t';
 
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StorageProviderType {
     Local,
@@ -107,6 +109,7 @@ impl StorageProviderType {
     }
 }
 
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OauthFilePreset {
     GoogleDrive,
@@ -133,16 +136,14 @@ impl OauthFilePreset {
     }
 }
 
-/// GitHub sync target identity inputs.
+/// Configured GitHub sync target identity.
 ///
-/// The fields stay `Option<String>` on purpose: they are raw, independent draft
-/// inputs straight from a provider form, where "not filled in yet" is the only
-/// meaning of absence. This is the boundary-DTO exemption in the
-/// rust-typescript-code-separation dynamic skill, not a missing enum.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Missing credentials are not a GitHub target; represent that as
+/// [`SyncProviderTarget::Empty`] instead of optional fields here.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GithubSyncTarget {
-    pub repo: Option<String>,
-    pub pat: Option<String>,
+    pub repo: String,
+    pub pat: String,
 }
 
 /// OAuth-file (Google Drive / iCloud) sync target identity inputs.
@@ -170,15 +171,16 @@ pub struct LocalFolderSyncTarget {
 
 /// Storage/sync provider identity, one variant per provider kind.
 ///
-/// `MissingOauthFileConfig` models an `oauth-file` provider row whose OAuth
-/// configuration has not been captured yet; it has no stable identity.
+/// `Empty` models the absence of a usable provider target. It has no stable
+/// identity and is used when a persisted/browser row has not captured the fields
+/// required to become a configured provider variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SyncProviderTarget {
+    Empty,
     Local,
     LocalFolder(LocalFolderSyncTarget),
     Github(GithubSyncTarget),
     OauthFile(OauthFileSyncTarget),
-    MissingOauthFileConfig,
 }
 
 /// Validated GitHub personal access token.
@@ -515,6 +517,7 @@ pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
     }
 
     match target {
+        SyncProviderTarget::Empty => None,
         SyncProviderTarget::Local => Some("local".to_owned()),
         SyncProviderTarget::LocalFolder(folder) => {
             let key = non_empty(folder.handle_id.as_ref())
@@ -523,10 +526,8 @@ pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
             Some(format!("local-folder:{key}"))
         }
         SyncProviderTarget::Github(github) => {
-            let repo = non_empty(github.repo.as_ref())
-                .unwrap_or(DEFAULT_GITHUB_REPO_NAME)
-                .to_lowercase();
-            let pat = github.pat.as_deref().map(str::trim).unwrap_or_default();
+            let repo = github.repo.trim().to_lowercase();
+            let pat = github.pat.trim();
             Some(format!("github:{repo}:{pat}"))
         }
         SyncProviderTarget::OauthFile(oauth) => {
@@ -541,7 +542,6 @@ pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
                 oauth.preset.as_str()
             ))
         }
-        SyncProviderTarget::MissingOauthFileConfig => None,
     }
 }
 
@@ -745,12 +745,12 @@ mod tests {
     #[test]
     fn sync_provider_target_key_matches_duplicates_by_storage_identity() {
         let github_a = SyncProviderTarget::Github(GithubSyncTarget {
-            repo: Some("My-Repo".to_owned()),
-            pat: Some("github_pat_11AAAA".to_owned()),
+            repo: "My-Repo".to_owned(),
+            pat: "github_pat_11AAAA".to_owned(),
         });
         let github_b = SyncProviderTarget::Github(GithubSyncTarget {
-            repo: Some("my-repo".to_owned()),
-            pat: Some("github_pat_11AAAA".to_owned()),
+            repo: "my-repo".to_owned(),
+            pat: "github_pat_11AAAA".to_owned(),
         });
         assert_eq!(
             sync_provider_target_key(&github_a),
@@ -785,10 +785,7 @@ mod tests {
             Some("local-folder:folder-1".to_owned())
         );
 
-        assert_eq!(
-            sync_provider_target_key(&SyncProviderTarget::MissingOauthFileConfig),
-            None
-        );
+        assert_eq!(sync_provider_target_key(&SyncProviderTarget::Empty), None);
     }
 
     #[test]

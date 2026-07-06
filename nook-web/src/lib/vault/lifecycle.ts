@@ -1,7 +1,7 @@
 import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
-import { prepareCreateNewVaultSlot } from '$lib/local-vault'
+import { prepareNewLocalVaultSlot } from '$lib/nook-wasm/nook_wasm'
 import { requireManagerVaultStoreId } from '$lib/vault-store-id'
 import * as localLoginActions from '$lib/vault/local-login'
 
@@ -33,7 +33,7 @@ export async function createFreshVault(state: VaultState) {
     await state.initDeviceIdentity()
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
-      await prepareCreateNewVaultSlot()
+      await prepareNewLocalVaultSlot()
     }
     const rawRecords = await state.enqueueStorage(async () => {
       if (creatingAdditionalVault) {

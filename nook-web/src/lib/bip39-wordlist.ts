@@ -1,8 +1,11 @@
 import {
   default as initNookWasm,
   getBip39EnglishWordlist,
+  inferBip39MnemonicLength as inferBip39MnemonicLengthCore,
   isBip39WordSequenceValid,
   isKnownBip39Word as isKnownBip39WordCore,
+  joinBip39Words as joinBip39WordsCore,
+  parseBip39Words as parseBip39WordsCore,
   suggestBip39Words as suggestBip39WordsCore,
 } from './nook-wasm/nook_wasm'
 
@@ -23,21 +26,16 @@ export async function loadBip39Wordlist(force = false): Promise<Set<string>> {
 }
 
 export function parseMnemonicWords(text: string): string[] {
-  return text.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  return parseBip39WordsCore(text)
 }
 
 export function joinMnemonicWords(words: string[]): string {
-  return words
-    .map((word) => word.trim().toLowerCase())
-    .filter(Boolean)
-    .join(' ')
+  return joinBip39WordsCore(words)
 }
 
 export function inferMnemonicLength(text: string): MnemonicLength | null {
-  const count = parseMnemonicWords(text).length
-  if (count === 12) return 12
-  if (count === 24) return 24
-  return null
+  const inferred = inferBip39MnemonicLengthCore(text)
+  return inferred === 12 || inferred === 24 ? inferred : null
 }
 
 export function isKnownBip39Word(word: string, wordlist: Set<string>): boolean {

@@ -4,7 +4,7 @@
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { LocalVaultEntry } from '$lib/local-vault'
+  import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
 
   let {
     vault,
@@ -16,7 +16,7 @@
     onConnectStorage,
   }: {
     vault: VaultState
-    vaults: LocalVaultEntry[]
+    vaults: NookLocalVaultEntry[]
     isVerifying: boolean
     isInitializing: boolean
     onChooseVault: (storeId: string) => void | Promise<void>

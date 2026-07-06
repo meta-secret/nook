@@ -1,10 +1,10 @@
-import type { LocalVaultEntry } from '$lib/local-vault'
+import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
 
 type VaultTranslate = (key: string, params?: Record<string, string>) => string
 
 /** Human-readable label for a local vault registry entry. */
 export function vaultDisplayLabel(
-  entry: LocalVaultEntry,
+  entry: NookLocalVaultEntry,
   t: VaultTranslate,
 ): string {
   if (entry.label?.trim()) {

@@ -14,7 +14,10 @@
   import AuthStorage from '$lib/components/AuthStorage.svelte'
   import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { LocalVaultEntry } from '$lib/local-vault'
+  import type {
+    NookLocalVaultEntry,
+    NookPasswordEntrySummary,
+  } from '$lib/nook-wasm/nook_wasm'
   import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
   import type {
@@ -22,7 +25,6 @@
     StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 
   let {
     vault,
@@ -65,7 +67,7 @@
     setupType?: StorageProviderType | null
     githubPat: string
     githubRepo: string
-    passwordEntries: VaultPasswordEntrySummary[]
+    passwordEntries: NookPasswordEntrySummary[]
     isPasswordBusy: boolean
     passwordError: string
     enrollmentCode: string
@@ -128,28 +130,28 @@
     }
   })
 
-  function draftFor(entry: LocalVaultEntry) {
+  function draftFor(entry: NookLocalVaultEntry) {
     return drafts[entry.storeId] ?? vaultDisplayLabel(entry, vault.t)
   }
 
-  function setDraft(entry: LocalVaultEntry, value: string) {
+  function setDraft(entry: NookLocalVaultEntry, value: string) {
     drafts = { ...drafts, [entry.storeId]: value }
   }
 
-  function canSave(entry: LocalVaultEntry) {
+  function canSave(entry: NookLocalVaultEntry) {
     const draft = draftFor(entry).trim()
     return (
       !isBusy && draft.length > 0 && draft !== vaultDisplayLabel(entry, vault.t)
     )
   }
 
-  function beginRename(entry: LocalVaultEntry) {
+  function beginRename(entry: NookLocalVaultEntry) {
     if (isBusy) return
     setDraft(entry, vaultDisplayLabel(entry, vault.t))
     editingStoreId = entry.storeId
   }
 
-  function cancelRename(entry: LocalVaultEntry) {
+  function cancelRename(entry: NookLocalVaultEntry) {
     setDraft(entry, vaultDisplayLabel(entry, vault.t))
     if (editingStoreId === entry.storeId) {
       editingStoreId = null
@@ -170,7 +172,7 @@
     }
   }
 
-  async function renameVault(entry: LocalVaultEntry) {
+  async function renameVault(entry: NookLocalVaultEntry) {
     if (!canSave(entry)) return
     renamingStoreId = entry.storeId
     try {
@@ -183,7 +185,7 @@
     }
   }
 
-  async function switchTo(entry: LocalVaultEntry) {
+  async function switchTo(entry: NookLocalVaultEntry) {
     if (entry.storeId === activeStoreId || isBusy) return
     switchingTo = entry.storeId
     try {

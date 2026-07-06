@@ -23,9 +23,14 @@ Put app/domain types in Rust first:
 
 - Prefer `nook-core` for simple domain structs, enums, payload schemas,
   serialization, and validation.
-- It is acceptable for simple core DTOs to carry wasm/serialization annotations
-  needed for boundary exposure, as long as `nook-core` does not gain browser
-  APIs, I/O, session state, or wasm-specific behavior.
+- Follow [rust-coding.md](rust-coding.md) for Rust model shape: closed sets are
+  enums, cross-workflow optional fields are usually missing enum variants, and
+  loose persisted JSON must be classified before domain logic.
+- It is acceptable for simple core DTOs/enums to carry wasm/serialization
+  annotations needed for boundary exposure, as long as `nook-core` does not
+  gain browser APIs, I/O, session state, or wasm-specific behavior. Do not copy
+  a core enum into a string field in `nook-wasm` merely because the enum lives in
+  `nook-core`; export the core enum with `#[wasm_bindgen]` and use it directly.
 - Use `nook-wasm` for bridge concerns: wasm exports, session manager methods,
   IndexedDB/GitHub/browser I/O, and conversions between JS calls and core
   types.
@@ -86,20 +91,39 @@ pub struct EnrollmentIssueInput {
 
 ```rust
 #[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StorageProviderType {
+    Local,
+    Github,
+}
+
+#[wasm_bindgen]
 pub struct NookEnrollmentProvider {
     inner: EnrollmentProvider,
+    provider_type: StorageProviderType,
 }
 
 #[wasm_bindgen]
 impl NookEnrollmentProvider {
     #[wasm_bindgen(js_name = local)]
     pub fn local() -> Self {
-        Self { inner: EnrollmentProvider::Local }
+        Self {
+            inner: EnrollmentProvider::Local,
+            provider_type: StorageProviderType::Local,
+        }
     }
 
     #[wasm_bindgen(js_name = github)]
     pub fn github(pat: String, repo: String) -> Self {
-        Self { inner: EnrollmentProvider::Github { pat, repo } }
+        Self {
+            inner: EnrollmentProvider::Github { pat, repo },
+            provider_type: StorageProviderType::Github,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = "type")]
+    pub fn provider_type(&self) -> StorageProviderType {
+        self.provider_type
     }
 }
 ```
@@ -111,6 +135,19 @@ const provider =
     : NookEnrollmentProvider.local()
 
 await issueEnrollmentCode(provider, selectedEntryId)
+```
+
+If the provider type already exists in `nook-core` (for example
+`StorageProviderType`), use that exported enum directly in the wasm-facing
+struct. Avoid this anti-pattern:
+
+```rust
+#[wasm_bindgen]
+pub struct NookEnrollmentProvider {
+    provider_type: String,
+    pat: String,
+    repo: String,
+}
 ```
 
 Before: TypeScript computes provider identity or storage-mode rules.
@@ -163,16 +200,17 @@ pub struct LocalSyncProvider;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GithubSyncProvider {
-    pub repo: Option<String>,
-    pub pat: Option<String>,
+    pub repo: String,
+    pub pat: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SyncProviderTarget {
+    Empty,
     Local(LocalSyncProvider),
     Github(GithubSyncProvider),
-    // OauthFile(OauthFileSyncProvider), MissingOauthFileConfig, ...
+    // OauthFile(OauthFileSyncProvider), ...
 }
 ```
 
@@ -209,6 +247,9 @@ Rules:
 - The **variant carries its own struct** (`Github(GithubSyncProvider)`), so each
   state only holds the fields it actually has — no cross-variant field soup, no
   `oauth_config_present`-style booleans standing in for a variant.
+- A configured variant must not contain optional fields for required
+  configuration. Use a separate absence/draft variant, such as `Empty`, rather
+  than `Github { pat: Option<String> }`.
 - The **wasm type is a newtype wrapper** `Wasm...(CoreEnum)`, not a hand-copied
   mirror of every field. Expose `is_*` predicates and `as_*` accessors that
   return the per-variant struct.

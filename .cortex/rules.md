@@ -8,8 +8,9 @@ This document defines the strict development standards, architectural boundaries
 
 - **Strict Uni-directional Flow:** The dependency path is strictly `nook-core` ➔ `nook-wasm` ➔ `nook-web`. Circular dependencies or reverse imports (e.g. importing a WASM type inside `nook-core`) are strictly forbidden.
 - **`nook-core` Isolation:**
-  - Must remain 100% pure Rust.
-  - Must not depend on `wasm-bindgen`, `js-sys`, `web-sys`, or any browser Web APIs.
+  - Must remain Rust domain code with no browser, Svelte, Bun, IndexedDB, HTTP, or session-state behavior.
+  - May use `wasm-bindgen` annotations on simple domain DTOs/enums when that exposes the real core type through WASM and avoids a TypeScript/string mirror.
+  - Must not depend on `js-sys`, `web-sys`, or any browser Web APIs.
   - Must be fully compilable and testable on native desktop/server targets.
   - **Rust-First for Reuse (including i18n):** Keep as much domain logic, validation rules, and resources (like localization catalogs) in Rust (`nook-core`). This guarantees that future platforms—like a CLI tool or mobile apps—can easily reuse this code, which would not be possible if implemented in TypeScript.
 - **`nook-wasm` Bridge Responsibilities:**
@@ -28,6 +29,9 @@ This document defines the strict development standards, architectural boundaries
 - **Minimal raw JS Type Exposure:**
   - Avoid raw `JsValue` types unless required by external APIs (like `js_sys::Array::push`).
   - Use strongly-typed structures or system-supported types where possible.
+- **Typed Core Models:**
+  - Prefer exporting simple `nook-core` enums/DTOs through WASM over recreating their tags as strings or parallel TypeScript unions.
+  - `nook-wasm` should adapt browser I/O and JS-friendly constructors/getters; it should not own duplicate domain models.
 - **Asynchronous Execution:**
   - Use native Rust `async/await` syntax for all asynchronous operations inside WASM.
   - Do not use `JsFuture` or raw JavaScript promises inside Rust.

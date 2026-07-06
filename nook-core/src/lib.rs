@@ -42,7 +42,8 @@ mod vault_sync_store;
 mod vault_wire;
 
 pub use bip39::{
-    bip39_english_wordlist, is_bip39_word_sequence_valid, is_known_bip39_word, suggest_bip39_words,
+    bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
+    is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
     validate_bip39_mnemonic,
 };
 pub use database::Database;
@@ -97,8 +98,10 @@ pub use password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
     PasswordUnlockEntry, VaultUnlock, attach_password_envelope,
     attach_password_envelope_with_work_factor, create_password_entry,
-    create_password_entry_with_work_factor, resolve_keys_from_entry, resolve_keys_from_password,
-    verify_password, verify_password_entry,
+    create_password_entry_with_work_factor, is_vault_password_long_enough,
+    is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
+    vault_password_min_length, vault_password_recommended_min_length, verify_password,
+    verify_password_entry,
 };
 pub use session::{ReplaceSecretInput, replace_secret};
 pub use sync_provider_credentials::{

@@ -1,7 +1,7 @@
 import type { AuthProvidersSnapshot } from '$lib/auth-providers'
-import { hasLocalVault } from '$lib/local-vault'
 import {
   ensureLocalProviderRow as ensureLocalProviderRowWasm,
+  hasLocalVault,
   normalizeAuthSnapshot as normalizeAuthSnapshotWasm,
 } from '$lib/nook-wasm/nook_wasm'
 

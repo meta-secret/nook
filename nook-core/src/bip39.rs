@@ -49,12 +49,32 @@ pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: usize) -> b
     words.len() == expected_word_count && words.iter().all(|word| is_known_bip39_word(word))
 }
 
-fn parse_bip39_words(text: &str) -> Vec<String> {
+#[must_use]
+pub fn parse_bip39_words(text: &str) -> Vec<String> {
     text.split_whitespace()
         .map(str::trim)
         .filter(|word| !word.is_empty())
         .map(str::to_lowercase)
         .collect()
+}
+
+#[must_use]
+pub fn join_bip39_words(words: &[String]) -> String {
+    words
+        .iter()
+        .map(|word| word.trim().to_lowercase())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[must_use]
+pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
+    match parse_bip39_words(text).len() {
+        12 => Some(12),
+        24 => Some(24),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -120,5 +140,33 @@ mod tests {
         ));
         assert!(!is_bip39_word_sequence_valid("abandon notaword", 12));
         assert!(!is_bip39_word_sequence_valid("abandon ability", 12));
+    }
+
+    #[test]
+    fn normalizes_and_joins_mnemonic_words() {
+        assert_eq!(
+            parse_bip39_words("  Abandon   ability\nable "),
+            vec!["abandon", "ability", "able"]
+        );
+        assert_eq!(
+            join_bip39_words(&[
+                " abandon ".to_owned(),
+                "ABILITY".to_owned(),
+                String::new(),
+                "able".to_owned(),
+            ]),
+            "abandon ability able"
+        );
+    }
+
+    #[test]
+    fn infers_supported_mnemonic_lengths() {
+        assert_eq!(
+            infer_bip39_mnemonic_length(
+                "abandon ability able about above absent absorb abstract absurd abuse access accident"
+            ),
+            Some(12)
+        );
+        assert_eq!(infer_bip39_mnemonic_length("abandon ability"), None);
     }
 }

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { KeyRound, RefreshCw, ShieldCheck, UserRound } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import type { NookPasswordEntrySummary } from '$lib/nook-wasm/nook_wasm'
 
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
-    passwordEntries = [] as VaultPasswordEntrySummary[],
+    passwordEntries = [] as NookPasswordEntrySummary[],
     selectedPasswordEntryId = $bindable(null as string | null),
     isVerifying,
     isInitializing,
@@ -18,7 +18,7 @@
     onConsumeLoginPasswordPrompt,
   }: {
     vault: VaultState
-    passwordEntries?: VaultPasswordEntrySummary[]
+    passwordEntries?: NookPasswordEntrySummary[]
     selectedPasswordEntryId?: string | null
     isVerifying: boolean
     isInitializing: boolean

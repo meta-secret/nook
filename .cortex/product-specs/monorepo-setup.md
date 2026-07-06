@@ -18,7 +18,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.42.1` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
 - **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.
-- **wasm-bindgen** (crate + CLI): `0.2.125` in `nook-wasm/Cargo.toml`; CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
+- **wasm-bindgen** (crate + CLI): `0.2.125` in the Rust crates that export web-facing types (`nook-wasm`, and `nook-core` for simple shared DTOs/enums). CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
 
 ## 4. Docker & CI caching
 

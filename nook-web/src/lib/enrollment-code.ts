@@ -13,6 +13,7 @@
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
+  StorageProviderType,
   default as initNookWasm,
   decryptEnrollmentPayload as decryptEnrollmentPayloadCore,
   encryptEnrollmentPayload as encryptEnrollmentPayloadCore,
@@ -185,19 +186,15 @@ function toWasmIssueInput(
 
 function toWasmProvider(provider: EnrollmentProvider): NookEnrollmentProvider {
   if (provider.type === 'github') {
-    return new NookEnrollmentProvider(
-      provider.type,
-      provider.pat,
-      provider.repo,
-    )
+    return NookEnrollmentProvider.github(provider.pat, provider.repo)
   }
-  return new NookEnrollmentProvider(provider.type)
+  return NookEnrollmentProvider.local()
 }
 
 function fromWasmProvider(
   provider: NookEnrollmentProvider,
 ): EnrollmentProvider {
-  if (provider.type === 'github') {
+  if (provider.type === StorageProviderType.Github) {
     return {
       type: 'github',
       pat: provider.pat,

@@ -28,7 +28,10 @@
     type StorageProvider,
     type StorageProviderType,
   } from '$lib/auth-providers'
-  import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+  import {
+    isVaultPasswordLongEnough,
+    type NookPasswordEntrySummary,
+  } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -55,7 +58,7 @@
   }: {
     vault: VaultState
     syncProviders: StorageProvider[]
-    passwordEntries: VaultPasswordEntrySummary[]
+    passwordEntries: NookPasswordEntrySummary[]
     enrollmentCode: string
     isBusy: boolean
     passwordError: string
@@ -225,7 +228,7 @@
       passwordFormError = vault.t('vault_passwords.enter_label_error')
       return
     }
-    if (newPasswordInput.length < 5) {
+    if (!isVaultPasswordLongEnough(newPasswordInput)) {
       passwordFormError = vault.t('vault_passwords.min_length_error')
       return
     }

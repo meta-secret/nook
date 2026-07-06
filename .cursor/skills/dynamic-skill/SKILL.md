@@ -1,10 +1,11 @@
 ---
 name: dynamic-skill
 description: >-
-  Captures user-explained codebase lessons as durable project dynamic skills and
-  applies them to refactors. Use when the user invokes /dynamic-skill, asks to
-  create or update dynamic skills, explains what is wrong with a recurring code
-  pattern, or wants to refactor code using accumulated skill guidance.
+  Captures user-explained codebase lessons as durable project skills in the
+  canonical .cortex/dynamic-skills registry and applies them to refactors. Use
+  when the user invokes /dynamic-skill, asks to create or update dynamic skills,
+  explains what is wrong with a recurring code pattern, or wants to refactor code
+  using accumulated skill guidance.
 ---
 
 # Dynamic Skill
@@ -15,6 +16,8 @@ skill.
 
 System of record: [`.cortex/workflows/dynamic-skills.md`](../../.cortex/workflows/dynamic-skills.md).
 Registry: [`.cortex/dynamic-skills/index.md`](../../.cortex/dynamic-skills/index.md).
+The `.cortex/dynamic-skills/` card is canonical; this Cursor skill is only an
+invocation mirror.
 
 ## Intake
 

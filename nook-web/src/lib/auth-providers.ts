@@ -9,8 +9,10 @@ import {
   loadAuthProviders as loadAuthProvidersWasm,
   maskGithubPatHint as maskGithubPatHintCore,
   NookSyncProviderTarget,
+  OauthFilePreset as WasmOauthFilePreset,
   providerDefaultLabel as providerDefaultLabelCore,
   saveAuthProviders as saveAuthProvidersWasm,
+  StorageProviderType as WasmStorageProviderType,
   syncProviderTargetKey as syncProviderTargetKeyCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookVaultManager,
@@ -80,6 +82,30 @@ interface LoadedAuthProviders {
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
 
+function toWasmStorageProviderType(
+  type: StorageProviderType,
+): WasmStorageProviderType {
+  switch (type) {
+    case 'local':
+      return WasmStorageProviderType.Local
+    case 'local-folder':
+      return WasmStorageProviderType.LocalFolder
+    case 'github':
+      return WasmStorageProviderType.Github
+    case 'oauth-file':
+      return WasmStorageProviderType.OauthFile
+  }
+}
+
+function toWasmOauthFilePreset(preset: OAuthFilePreset): WasmOauthFilePreset {
+  switch (preset) {
+    case 'google-drive':
+      return WasmOauthFilePreset.GoogleDrive
+    case 'icloud':
+      return WasmOauthFilePreset.ICloud
+  }
+}
+
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
 function toPlain<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -98,19 +124,21 @@ export function syncProviderTargetKey(
             provider.localFolder?.handleId ?? null,
           )
         : provider.type === 'github'
-          ? NookSyncProviderTarget.github(
-              provider.githubRepo ?? null,
-              provider.githubPat ?? null,
-            )
+          ? provider.githubPat?.trim()
+            ? NookSyncProviderTarget.github(
+                provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO,
+                provider.githubPat,
+              )
+            : NookSyncProviderTarget.empty()
           : provider.oauthFile
             ? NookSyncProviderTarget.oauthFile(
-                provider.oauthFile.preset,
+                toWasmOauthFilePreset(provider.oauthFile.preset),
                 provider.oauthFile.fileId ?? null,
                 provider.oauthFile.fileName ?? null,
                 provider.oauthFile.accountEmail ?? null,
                 provider.oauthFile.accessToken ?? null,
               )
-            : NookSyncProviderTarget.missingOauthFileConfig()
+            : NookSyncProviderTarget.empty()
   try {
     return syncProviderTargetKeyCore(target) ?? null
   } finally {
@@ -171,7 +199,10 @@ export function wasmStorageModeForProvider(
   type: StorageProviderType,
   oauthPreset?: OAuthFilePreset,
 ): string {
-  return wasmStorageModeForProviderCore(type, oauthPreset ?? null)
+  return wasmStorageModeForProviderCore(
+    toWasmStorageProviderType(type),
+    oauthPreset ? toWasmOauthFilePreset(oauthPreset) : null,
+  )
 }
 
 export function providerDefaultLabel(
@@ -179,7 +210,11 @@ export function providerDefaultLabel(
   detail?: string,
   oauthPreset: OAuthFilePreset = 'google-drive',
 ): string {
-  return providerDefaultLabelCore(type, detail ?? null, oauthPreset)
+  return providerDefaultLabelCore(
+    toWasmStorageProviderType(type),
+    detail ?? null,
+    toWasmOauthFilePreset(oauthPreset),
+  )
 }
 
 export function localizeProviderLabel(

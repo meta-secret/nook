@@ -26,14 +26,14 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
                                v (core domain dependencies)
 +-------------------------------------------------------------+
 |                         nook-core                           |
-|     (Pure Rust: crypto, formats, validation, passwords)       |
+|   (Rust domain: crypto, formats, validation, passwords)       |
 +-------------------------------------------------------------+
 ```
 
 ### Dependency Enforcements
 
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
-2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`.
+2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
 ---
 

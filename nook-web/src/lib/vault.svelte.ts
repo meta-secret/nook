@@ -9,8 +9,14 @@ import {
 } from '$lib/nook'
 import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
-import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
-import type { VaultPasswordEntrySummary } from '$lib/vault-password'
+import {
+  hasActiveLocalVault,
+  hasLocalVault,
+  setActiveVault,
+  type NookLocalVaultEntry,
+  type NookPasswordEntrySummary,
+  type NookVaultManager,
+} from '$lib/nook-wasm/nook_wasm'
 import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -36,12 +42,6 @@ import {
   type AppLocale,
 } from '$lib/locale'
 import { TRANSLATION_CATALOGS, lookupTranslation } from '$lib/locale-catalogs'
-import {
-  hasActiveLocalVault,
-  hasLocalVault,
-  switchActiveVault,
-} from '$lib/local-vault'
-import type { LocalVaultEntry } from '$lib/local-vault'
 import { createLogger } from '$lib/log'
 import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import {
@@ -89,7 +89,7 @@ export class VaultState {
   providers = $state<StorageProvider[]>([])
   providersLoaded = $state(false)
   /** Locally cached vaults on this browser (metadata only). */
-  localVaults = $state<LocalVaultEntry[]>([])
+  localVaults = $state<NookLocalVaultEntry[]>([])
   /** Active vault store_id — sync providers and local blob are scoped to this. */
   activeVaultStoreId = $state<string | null>(null)
   /** Login gate: user picked a vault but has not unlocked yet. */
@@ -203,7 +203,7 @@ export class VaultState {
   prefillEnrollmentCode = $state('')
   enrollmentFromUrlPending = $state(false)
   loginEnrollmentCode = $state('')
-  passwordEntries = $state<VaultPasswordEntrySummary[]>([])
+  passwordEntries = $state<NookPasswordEntrySummary[]>([])
   selectedPasswordEntryId = $state<string | null>(null)
   activeEnrollmentEntryId = $state<string | null>(null)
 
@@ -616,7 +616,7 @@ export class VaultState {
       this.activeVaultStoreId = this.localVaults[0]?.storeId ?? null
     }
     if (this.activeVaultStoreId) {
-      await switchActiveVault(this.activeVaultStoreId).catch(() => undefined)
+      await setActiveVault(this.activeVaultStoreId).catch(() => undefined)
     }
     this.localVaultPresent = await hasActiveLocalVault()
     if (this.localVaultPresent) {

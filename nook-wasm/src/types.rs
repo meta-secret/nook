@@ -193,7 +193,7 @@ pub(crate) fn password_entries_to_vec(
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookEnrollmentProvider {
-    provider_type: String,
+    provider_type: nook_core::StorageProviderType,
     pat: String,
     repo: String,
 }
@@ -201,7 +201,11 @@ pub struct NookEnrollmentProvider {
 #[wasm_bindgen]
 impl NookEnrollmentProvider {
     #[wasm_bindgen(constructor)]
-    pub fn new(provider_type: String, pat: Option<String>, repo: Option<String>) -> Self {
+    pub fn new(
+        provider_type: nook_core::StorageProviderType,
+        pat: Option<String>,
+        repo: Option<String>,
+    ) -> Self {
         Self {
             provider_type,
             pat: pat.unwrap_or_default(),
@@ -209,39 +213,52 @@ impl NookEnrollmentProvider {
         }
     }
 
+    #[wasm_bindgen(js_name = local)]
+    #[must_use]
+    pub fn local() -> Self {
+        Self {
+            provider_type: nook_core::StorageProviderType::Local,
+            pat: String::new(),
+            repo: String::new(),
+        }
+    }
+
+    #[wasm_bindgen(js_name = github)]
+    #[must_use]
+    pub fn github(pat: String, repo: String) -> Self {
+        Self {
+            provider_type: nook_core::StorageProviderType::Github,
+            pat,
+            repo,
+        }
+    }
+
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
         match provider {
-            nook_core::EnrollmentProvider::Local => Self {
-                provider_type: "local".to_owned(),
-                pat: String::new(),
-                repo: String::new(),
-            },
-            nook_core::EnrollmentProvider::Github { pat, repo } => Self {
-                provider_type: "github".to_owned(),
-                pat,
-                repo,
-            },
+            nook_core::EnrollmentProvider::Local => Self::local(),
+            nook_core::EnrollmentProvider::Github { pat, repo } => Self::github(pat, repo),
         }
     }
 
     pub(crate) fn to_core(
         &self,
     ) -> Result<nook_core::EnrollmentProvider, nook_core::EnrollmentError> {
-        match self.provider_type.as_str() {
-            "local" => Ok(nook_core::EnrollmentProvider::Local),
-            "github" => Ok(nook_core::EnrollmentProvider::Github {
+        match self.provider_type {
+            nook_core::StorageProviderType::Local => Ok(nook_core::EnrollmentProvider::Local),
+            nook_core::StorageProviderType::Github => Ok(nook_core::EnrollmentProvider::Github {
                 pat: self.pat.clone(),
                 repo: self.repo.clone(),
             }),
             provider_type => Err(nook_core::EnrollmentError::UnsupportedProviderType {
-                provider_type: provider_type.to_owned(),
+                provider_type: provider_type.as_str().to_owned(),
             }),
         }
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
-    pub fn provider_type(&self) -> String {
-        self.provider_type.clone()
+    #[must_use]
+    pub fn provider_type(&self) -> nook_core::StorageProviderType {
+        self.provider_type
     }
 
     #[wasm_bindgen(getter)]
@@ -282,22 +299,28 @@ impl NookSyncProviderTarget {
 
     #[wasm_bindgen(js_name = github)]
     #[must_use]
-    pub fn github(repo: Option<String>, pat: Option<String>) -> Self {
+    pub fn github(repo: String, pat: String) -> Self {
         Self(nook_core::SyncProviderTarget::Github(
             nook_core::GithubSyncTarget { repo, pat },
         ))
     }
 
+    #[wasm_bindgen(js_name = empty)]
+    #[must_use]
+    pub fn empty() -> Self {
+        Self(nook_core::SyncProviderTarget::Empty)
+    }
+
     #[wasm_bindgen(js_name = oauthFile)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn oauth_file(
-        preset: Option<String>,
+        preset: Option<nook_core::OauthFilePreset>,
         file_id: Option<String>,
         file_name: Option<String>,
         account_email: Option<String>,
         access_token: Option<String>,
     ) -> Result<NookSyncProviderTarget, wasm_bindgen::JsError> {
-        let preset = nook_core::OauthFilePreset::parse(preset.as_deref().unwrap_or(""))?;
+        let preset = preset.unwrap_or(nook_core::OauthFilePreset::GoogleDrive);
         Ok(Self(nook_core::SyncProviderTarget::OauthFile(
             nook_core::OauthFileSyncTarget {
                 preset,
@@ -307,12 +330,6 @@ impl NookSyncProviderTarget {
                 access_token,
             },
         )))
-    }
-
-    #[wasm_bindgen(js_name = missingOauthFileConfig)]
-    #[must_use]
-    pub fn missing_oauth_file_config() -> Self {
-        Self(nook_core::SyncProviderTarget::MissingOauthFileConfig)
     }
 
     #[wasm_bindgen(js_name = isLocal)]
@@ -331,6 +348,12 @@ impl NookSyncProviderTarget {
     #[must_use]
     pub fn is_github(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::Github(_))
+    }
+
+    #[wasm_bindgen(js_name = isEmpty)]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        matches!(self.0, nook_core::SyncProviderTarget::Empty)
     }
 
     #[wasm_bindgen(js_name = isOauthFile)]

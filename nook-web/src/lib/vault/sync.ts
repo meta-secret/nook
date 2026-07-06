@@ -2,7 +2,7 @@ import { VaultState } from '$lib/vault.svelte'
 import { SvelteDate } from 'svelte/reactivity'
 import { createLogger } from '$lib/log'
 import { readLocalVaultBlob, type PendingSyncConflict } from '$lib/vault-sync'
-import { importVaultAsNewLocalCopy } from '$lib/local-vault'
+import { importLocalVaultBlob } from '$lib/nook-wasm/nook_wasm'
 import * as localLoginActions from '$lib/vault/local-login'
 import { syncLocalFolderProvider } from '$lib/local-folder-sync'
 
@@ -266,9 +266,9 @@ export async function resolveSyncConflictImportRemote(
   state.errorMsg = ''
   let providerId: string | null
   try {
-    const importedStoreId = await importVaultAsNewLocalCopy(
+    const importedStoreId = await importLocalVaultBlob(
       conflict.remoteYaml,
-      conflict.providerLabel,
+      conflict.providerLabel ?? null,
     )
     state.activeVaultStoreId = importedStoreId
     state.selectedLoginVaultStoreId = importedStoreId

@@ -11,7 +11,7 @@
     suggestBip39Words,
     type MnemonicLength,
   } from '$lib/bip39-wordlist'
-  import { validateBip39MnemonicChecksum } from '$lib/bip39-mnemonic'
+  import { validateBip39Mnemonic } from '$lib/nook-wasm/nook_wasm'
 
   let {
     vault,
@@ -212,26 +212,12 @@
     }
 
     const mnemonic = value
-    let cancelled = false
     checksumChecking = true
 
-    void validateBip39MnemonicChecksum(mnemonic)
-      .then((ok) => {
-        if (cancelled) return
-        checksumValid = ok
-        checksumChecking = false
-        valid = ok
-      })
-      .catch(() => {
-        if (cancelled) return
-        checksumValid = false
-        checksumChecking = false
-        valid = false
-      })
-
-    return () => {
-      cancelled = true
-    }
+    const ok = validateBip39Mnemonic(mnemonic)
+    checksumValid = ok
+    checksumChecking = false
+    valid = ok
   })
 
   $effect(() => {

@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Capture a user's concrete code feedback as durable project knowledge, then make
-that knowledge reusable for future refactors.
+Capture a user's concrete code feedback as durable project knowledge in the
+canonical `.cortex/dynamic-skills/` registry, then make that knowledge reusable
+for future refactors.
 
 ## Problem Pattern
 
@@ -17,10 +18,11 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 
 1. Inspect the referenced code.
 2. Convert the explanation into a concise `.cortex/dynamic-skills/<skill>.md`
-   card.
+   card. This card is the source of truth.
 3. Update `.cortex/dynamic-skills/index.md`.
 4. Create `.cursor/skills/<skill>/SKILL.md` when the pattern should be invokable
-   directly by future agents.
+   directly by future agents. The Cursor skill must point back to the `.cortex`
+   card instead of duplicating the full guidance.
 5. Apply the skill to code when the user asks for capture plus refactor.
 
 ## Scope
