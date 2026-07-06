@@ -8,10 +8,9 @@ import {
   formatDriveStorageRef as formatDriveStorageRefCore,
   loadAuthProviders as loadAuthProvidersWasm,
   maskGithubPatHint as maskGithubPatHintCore,
-  NookSyncProviderTarget,
   providerDefaultLabel as providerDefaultLabelCore,
   saveAuthProviders as saveAuthProvidersWasm,
-  syncProviderTargetKey as syncProviderTargetKeyCore,
+  syncProviderTargetKeyForProvider as syncProviderTargetKeyForProviderCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookVaultManager,
 } from './nook-wasm/nook_wasm'
@@ -89,36 +88,7 @@ function toPlain<T>(value: T): T {
 export function syncProviderTargetKey(
   provider: StorageProvider,
 ): string | null {
-  const githubPat = provider.type === 'github' ? provider.githubPat?.trim() : ''
-  const target =
-    provider.type === 'local'
-      ? NookSyncProviderTarget.local()
-      : provider.type === 'local-folder'
-        ? NookSyncProviderTarget.localFolder(
-            provider.localFolder?.directoryName ?? null,
-            provider.localFolder?.handleId ?? null,
-          )
-        : provider.type === 'github'
-          ? githubPat
-            ? NookSyncProviderTarget.github(
-                provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO,
-                githubPat,
-              )
-            : NookSyncProviderTarget.empty()
-          : provider.oauthFile
-            ? NookSyncProviderTarget.oauthFile(
-                provider.oauthFile.preset,
-                provider.oauthFile.fileId ?? null,
-                provider.oauthFile.fileName ?? null,
-                provider.oauthFile.accountEmail ?? null,
-                provider.oauthFile.accessToken ?? null,
-              )
-            : NookSyncProviderTarget.empty()
-  try {
-    return syncProviderTargetKeyCore(target) ?? null
-  } finally {
-    target.free()
-  }
+  return syncProviderTargetKeyForProviderCore(toPlain(provider)) ?? null
 }
 
 export function findDuplicateSyncProvider(

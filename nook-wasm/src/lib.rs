@@ -240,6 +240,14 @@ pub fn sync_provider_target_key(target: &NookSyncProviderTarget) -> Option<Strin
     nook_core::sync_provider_target_key(target.as_core())
 }
 
+#[wasm_bindgen(js_name = syncProviderTargetKeyForProvider)]
+pub fn sync_provider_target_key_for_provider(
+    provider: JsValue,
+) -> Result<Option<String>, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    Ok(nook_core::provider_target_key(&provider))
+}
+
 /// Masked GitHub PAT hint for provider lists. `None` means no token is saved;
 /// the JS layer supplies the localized "no token" copy. `Some` is a truncated
 /// hint that never contains the full secret.
