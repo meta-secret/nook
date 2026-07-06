@@ -16,7 +16,7 @@ This document defines the strict development standards, architectural boundaries
 - **`nook-wasm` Bridge Responsibilities:**
   - Exposes Rust structs to JS via `#[wasm_bindgen]`.
   - Performs network/database input/output operations (e.g., IndexedDB, GitHub API).
-  - Holds WASM session state (`decrypted_jsonl`, `stored_armored`, `VaultCrypto`).
+  - Holds WASM session state (`Database`, vault metadata, `VaultCrypto`).
   - All complex business logic (crypto, formats, validation, password generation, search) must live in `nook-core` and be tested there.
 
 ---

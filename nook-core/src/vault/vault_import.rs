@@ -13,7 +13,7 @@ use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use ed25519_dalek::SigningKey;
 
-/// Content-addressed context for a stored vault blob (YAML/JSONL on disk).
+/// Content-addressed context for a stored vault YAML blob.
 ///
 /// Hash is SHA-256 over trimmed UTF-8 bytes — stable across providers for the
 /// same on-wire vault file.

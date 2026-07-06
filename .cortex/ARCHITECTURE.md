@@ -51,7 +51,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ### B. `nook-wasm` (The Bridge Layer)
 
-- **`NookVaultManager`:** Session state — `decrypted_jsonl`, `stored_armored` cache, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
+- **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
 - **Device protection:** Persist/migrate the wrapped identity and expose typed setup/unlock values to the web layer.
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
@@ -92,7 +92,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
               → load local projection or remote event log
               → resolve_secrets_key() + resolve_members_key() from auth row
               → VaultCrypto::new(secrets_key)
-              → decrypt user secret values → decrypted_jsonl session
+              → decrypt user secret values → typed Database session
 ```
 
 ### Add Secret (incremental save)
@@ -100,7 +100,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 [Svelte] → add_secret(key, value)
          → validate_secret_label, validate_secret_value
-         → update decrypted_jsonl (Database)
+         → update typed Database session
          → encrypt_value ONLY for this key → stored_armored
          → serialize_stored(Yaml) from cache (no full re-encrypt)
          → write encrypted_db / GitHub PUT
@@ -120,7 +120,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 | Layer                                  | Format                                                        | Location                                                                                                                                                                       |
 | -------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Session (plaintext user secrets)       | JSONL lines                                                   | WASM `decrypted_jsonl` only                                                                                                                                                    |
+| Session (plaintext user secrets)       | Typed `Database` records                                      | WASM memory only                                                                                                                                                               |
 | On-disk user secrets                   | YAML `secrets:` list                                          | Values encrypted with `secrets_key`                                                                                                                                            |
 | Logical secret store                   | YAML `store_id`                                               | `store_{token}` — same across provider replicas ([secret-store-identity.md](design-docs/secret-store-identity.md))                                                             |
 | Vault revision                         | YAML `vault_version`                                          | Monotonic counter; incremented on every save ([unified-vault.md](design-docs/unified-vault.md))                                                                                |
@@ -144,7 +144,6 @@ members:  members_key-encrypted catalog entries
 ```
 
 - **Per-record age armor** for values; labels plaintext in YAML.
-- **Legacy JSONL vault files** load via `from_stored_auto`; new writes use YAML.
 - **GitHub:** UTF-8 YAML file, base64 in API payloads (not hex blob).
 - **IndexedDB `encrypted_db`:** UTF-8 YAML text (not hex).
 

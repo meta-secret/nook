@@ -1,4 +1,4 @@
-//! On-disk vault format (YAML / JSONL) errors.
+//! On-disk vault YAML format errors.
 
 use super::validation::ValidationError;
 use thiserror::Error;
@@ -9,12 +9,6 @@ pub type VaultFormatResult<T> = Result<T, VaultFormatError>;
 pub enum VaultFormatError {
     #[error("Unrecognized vault format (first non-empty line: {first_line:?})")]
     UnrecognizedFormat { first_line: String },
-
-    #[error("Failed to serialize stored JSONL record")]
-    JsonlSerialize(#[source] serde_json::Error),
-
-    #[error("Failed to parse stored JSONL line")]
-    JsonlParse(#[source] serde_json::Error),
 
     #[error("Failed to serialize stored YAML")]
     YamlSerialize(#[source] serde_yaml::Error),

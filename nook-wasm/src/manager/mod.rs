@@ -52,7 +52,7 @@ pub struct NookVaultManager {
     pub(in crate::manager) device_identity_private_key: String,
     pub(in crate::manager) crypto: Option<nook_core::VaultCrypto>,
     pub(in crate::manager) meta: nook_core::VaultMetaState,
-    pub(in crate::manager) decrypted_jsonl: String,
+    pub(in crate::manager) database: nook_core::Database,
     pub(in crate::manager) file_sha: Option<String>,
     pub(in crate::manager) last_synced_content: String,
     /// Cached empty-repo listing from GitHub (`GET .../contents/` → 404).
@@ -89,7 +89,7 @@ impl Drop for NookVaultManager {
         self.secrets_key.zeroize();
         self.members_key.zeroize();
         self.device_identity_private_key.zeroize();
-        self.decrypted_jsonl.zeroize();
+        self.database.clear();
         self.signing_seed.zeroize();
         self.key_epoch.zeroize();
         self.sync_outbox_pat.zeroize();
@@ -118,7 +118,7 @@ impl NookVaultManager {
             store_id: String::new(),
             vault_name: None,
             vault_version: 0,
-            decrypted_jsonl: String::new(),
+            database: nook_core::Database::new(),
             file_sha: None,
             last_synced_content: String::new(),
             github_root_empty: false,
@@ -167,11 +167,6 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn decrypted_jsonl(&self) -> String {
-        self.decrypted_jsonl.clone()
-    }
-
-    #[wasm_bindgen(getter)]
     pub fn file_sha(&self) -> Option<String> {
         self.file_sha.clone()
     }
@@ -207,7 +202,7 @@ impl NookVaultManager {
         self.members_key.zeroize();
         self.crypto = None;
         self.meta = nook_core::VaultMetaState::default();
-        self.decrypted_jsonl.zeroize();
+        self.database.clear();
         self.password_entries.clear();
         self.file_sha = None;
         self.last_synced_content.clear();
@@ -237,9 +232,7 @@ impl NookVaultManager {
 impl NookVaultManager {
     /// Typed secret list for the active decrypted session.
     pub(crate) fn get_records(&self) -> Result<Vec<NookSecretRecord>, NookError> {
-        let jsonl = nook_core::SessionJsonl::parse(&self.decrypted_jsonl)?;
-        let db = nook_core::Database::from_jsonl(&jsonl)?;
-        records_to_vec(db.list())
+        records_to_vec(self.database.list())
     }
 
     pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {

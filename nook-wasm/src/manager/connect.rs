@@ -205,14 +205,14 @@ impl NookVaultManager {
                 let _ = self.status_tx.send("DECRYPT_START".to_owned());
                 let loaded = load_stored_vault(&content, &identity)?;
                 let LoadedVault {
+                    database,
                     meta,
                     secrets_key,
                     members_key,
-                    ..
-                } = &loaded;
+                } = loaded;
                 self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-                self.decrypted_jsonl = loaded.session_jsonl()?;
-                self.meta = meta.clone();
+                self.database = database;
+                self.meta = meta;
                 self.maybe_sync_self_into_roster(&identity)?;
                 let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
                 self.last_synced_content = content.clone();
@@ -305,14 +305,14 @@ impl NookVaultManager {
         let projection = self.serialize_current_projection_yaml()?;
         let loaded = load_stored_vault(&projection, identity)?;
         let LoadedVault {
+            database,
             meta,
             secrets_key,
             members_key,
-            ..
-        } = &loaded;
+        } = loaded;
         self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-        self.decrypted_jsonl = loaded.session_jsonl()?;
-        self.meta = meta.clone();
+        self.database = database;
+        self.meta = meta;
         self.event_log_mode = true;
         self.apply_event_projection_to_session().await?;
         self.persist_projection_cache().await?;
@@ -335,7 +335,7 @@ impl NookVaultManager {
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.meta.apply_record(&member);
         }
-        self.decrypted_jsonl = String::new();
+        self.database.clear();
         self.last_synced_content.clear();
         Ok(())
     }
@@ -343,7 +343,7 @@ impl NookVaultManager {
     // Initialize an empty database
     pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status_tx.send("INITIALIZE_START".to_owned());
-        self.decrypted_jsonl = String::new();
+        self.database.clear();
         self.meta.secrets.clear();
         if self.needs_genesis_persist() {
             let identity = self.device_identity()?;

@@ -1,5 +1,5 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
-use crate::vault_wire::{StoredVaultBlob, StoredVaultJsonl, StoredVaultYaml as VaultYamlBlob};
+use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
     PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultUnlock,
@@ -10,21 +10,14 @@ use serde::{Deserialize, Serialize};
 /// On-disk vault serialization format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultFormat {
-    Jsonl,
     Yaml,
 }
 
 impl VaultFormat {
     #[must_use]
     pub fn from_path(path: &str) -> Self {
-        if std::path::Path::new(path)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
-        {
-            Self::Jsonl
-        } else {
-            Self::Yaml
-        }
+        let _ = path;
+        Self::Yaml
     }
 }
 
@@ -40,10 +33,6 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
         .map(str::trim)
         .find(|line| !line.is_empty())
         .unwrap_or("");
-
-    if first_line.starts_with('{') {
-        return Ok(VaultFormat::Jsonl);
-    }
 
     if first_line.starts_with('-')
         || first_line.starts_with('[')
@@ -72,7 +61,6 @@ pub fn serialize_stored(
     format: VaultFormat,
 ) -> VaultFormatResult<StoredVaultBlob> {
     match format {
-        VaultFormat::Jsonl => serialize_stored_jsonl(records).map(StoredVaultBlob::Jsonl),
         VaultFormat::Yaml => serialize_stored_yaml(records).map(StoredVaultBlob::Yaml),
     }
 }
@@ -82,34 +70,8 @@ pub fn deserialize_stored(
     format: VaultFormat,
 ) -> VaultFormatResult<Vec<StoredSecretRecord>> {
     match format {
-        VaultFormat::Jsonl => deserialize_stored_jsonl(stored),
         VaultFormat::Yaml => deserialize_stored_yaml(stored),
     }
-}
-
-pub fn serialize_stored_jsonl(
-    records: &[StoredSecretRecord],
-) -> VaultFormatResult<StoredVaultJsonl> {
-    let mut lines = Vec::with_capacity(records.len());
-    for record in records {
-        let line = serde_json::to_string(record).map_err(VaultFormatError::JsonlSerialize)?;
-        lines.push(line);
-    }
-    Ok(StoredVaultJsonl::from_trusted(lines.join("\n")))
-}
-
-pub fn deserialize_stored_jsonl(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
-    let mut records = Vec::new();
-    for line in stored.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let record: StoredSecretRecord =
-            serde_json::from_str(line).map_err(VaultFormatError::JsonlParse)?;
-        records.push(record);
-    }
-    Ok(records)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -279,9 +241,7 @@ pub fn read_vault_schema_version(stored: &str) -> VaultFormatResult<u32> {
     if trimmed.is_empty() {
         return Ok(1);
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        return Ok(1);
-    }
+    detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
     Ok(vault.schema_version)
@@ -362,9 +322,7 @@ pub fn read_vault_name(stored: &str) -> VaultFormatResult<Option<String>> {
     if trimmed.is_empty() {
         return Ok(None);
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        return Ok(None);
-    }
+    detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
     Ok(vault
@@ -378,11 +336,7 @@ pub fn set_vault_name(stored: &str, name: &str) -> VaultFormatResult<VaultYamlBl
     if trimmed.is_empty() {
         return Err(VaultFormatError::YamlMissingSections);
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        return Err(VaultFormatError::UnrecognizedFormat {
-            first_line: "jsonl".to_owned(),
-        });
-    }
+    detect_stored_format(trimmed)?;
     let mut vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
     vault.name = resolve_vault_name_for_write(Some(name));
@@ -397,9 +351,7 @@ pub fn read_vault_version(stored: &str) -> VaultFormatResult<u64> {
     if trimmed.is_empty() {
         return Ok(0);
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        return Ok(0);
-    }
+    detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
     Ok(vault.vault_version)
@@ -439,9 +391,7 @@ pub fn read_vault_password_entries(stored: &str) -> VaultFormatResult<Vec<Passwo
     if trimmed.is_empty() {
         return Ok(Vec::new());
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        return Ok(Vec::new());
-    }
+    detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParsePasswordEntries)?;
     Ok(extract_password_entries(&vault))
@@ -453,9 +403,7 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
     if trimmed.is_empty() {
         return Ok(None);
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        return Ok(None);
-    }
+    detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
     match vault.store_id {
@@ -505,10 +453,7 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
     if trimmed.is_empty() {
         return Ok(VaultUnlock::Keys);
     }
-    if detect_stored_format(trimmed)? == VaultFormat::Jsonl {
-        // JSONL is the legacy single-user format — always keys mode.
-        return Ok(VaultUnlock::Keys);
-    }
+    detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseUnlock)?;
     Ok(resolve_unlock_with_legacy(&vault))
@@ -567,17 +512,6 @@ mod tests {
     }
 
     #[test]
-    fn jsonl_roundtrip_stored_records() {
-        let records = sample_records();
-        let stored = serialize_stored_jsonl(&records).unwrap();
-        assert!(stored.as_str().contains("\"id\":\"github.com\""));
-        assert!(stored.as_str().lines().count() == 2);
-
-        let parsed = deserialize_stored_jsonl(stored.as_str()).unwrap();
-        assert_eq!(parsed, records);
-    }
-
-    #[test]
     fn yaml_roundtrip_stored_records() {
         let records = sample_records();
         let stored = serialize_stored_yaml(&records).unwrap();
@@ -590,11 +524,8 @@ mod tests {
     }
 
     #[test]
-    fn detect_jsonl_and_yaml() {
-        assert_eq!(
-            detect_stored_format(r#"{"key":"a","value":"b"}"#).unwrap(),
-            VaultFormat::Jsonl
-        );
+    fn detect_yaml_and_reject_json_objects() {
+        assert!(detect_stored_format(r#"{"key":"a","value":"b"}"#).is_err());
         assert_eq!(
             detect_stored_format("secrets:\n  - key: a\n    value: b\n").unwrap(),
             VaultFormat::Yaml
@@ -612,8 +543,8 @@ mod tests {
             VaultFormat::Yaml
         );
         assert_eq!(
-            VaultFormat::from_path("nook-events.jsonl"),
-            VaultFormat::Jsonl
+            VaultFormat::from_path("nook-events.backup"),
+            VaultFormat::Yaml
         );
         assert_eq!(VaultFormat::from_path("nook-events.yml"), VaultFormat::Yaml);
         assert_eq!(
@@ -632,14 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn detect_leading_whitespace_before_jsonl() {
-        assert_eq!(
-            detect_stored_format("\n\n  {\"key\":\"a\",\"value\":\"b\"}\n").unwrap(),
-            VaultFormat::Jsonl
-        );
-    }
-
-    #[test]
     fn detect_yaml_document_header() {
         assert_eq!(
             detect_stored_format("%YAML 1.2\n---\nsecrets: []\n").unwrap(),
@@ -654,43 +577,12 @@ mod tests {
     }
 
     #[test]
-    fn empty_stored_records_roundtrip_both_formats() {
-        for format in [VaultFormat::Jsonl, VaultFormat::Yaml] {
-            let stored = serialize_stored(&[], format).unwrap();
-            let parsed = deserialize_stored(stored.as_str(), format).unwrap();
-            assert!(parsed.is_empty());
-        }
+    fn empty_stored_records_roundtrip_yaml() {
+        let stored = serialize_stored(&[], VaultFormat::Yaml).unwrap();
+        let parsed = deserialize_stored(stored.as_str(), VaultFormat::Yaml).unwrap();
+        assert!(parsed.is_empty());
         assert!(deserialize_stored_yaml("").unwrap().is_empty());
         assert!(deserialize_stored_yaml("  \n").unwrap().is_empty());
-        assert!(deserialize_stored_jsonl("").unwrap().is_empty());
-        assert!(deserialize_stored_jsonl("\n\n").unwrap().is_empty());
-    }
-
-    #[test]
-    fn jsonl_skips_blank_lines() {
-        let records = sample_records();
-        let mut stored = serialize_stored_jsonl(&records).unwrap().into_inner();
-        stored.insert(0, '\n');
-        stored.push('\n');
-        stored.push('\n');
-
-        let parsed = deserialize_stored_jsonl(stored.as_str()).unwrap();
-        assert_eq!(parsed, records);
-    }
-
-    #[test]
-    fn jsonl_invalid_line_fails() {
-        let err = deserialize_stored_jsonl(
-            r#"{"key":"ok","value":"x"}
-not-json
-"#,
-        )
-        .unwrap_err();
-        assert!(
-            err.to_string()
-                .as_str()
-                .contains("Failed to parse stored JSONL line")
-        );
     }
 
     #[test]
@@ -704,24 +596,8 @@ not-json
     }
 
     #[test]
-    fn deserialize_stored_rejects_wrong_format() {
-        let records = sample_records();
-        let jsonl = serialize_stored_jsonl(&records).unwrap();
-        let yaml = serialize_stored_yaml(&records).unwrap();
-
-        assert!(deserialize_stored(jsonl.as_str(), VaultFormat::Yaml).is_err());
-        assert!(deserialize_stored(yaml.as_str(), VaultFormat::Jsonl).is_err());
-    }
-
-    #[test]
     fn serialize_stored_matches_format_specific_helpers() {
         let records = sample_records();
-        assert_eq!(
-            serialize_stored(&records, VaultFormat::Jsonl)
-                .unwrap()
-                .as_str(),
-            serialize_stored_jsonl(&records).unwrap().as_str()
-        );
         assert_eq!(
             serialize_stored(&records, VaultFormat::Yaml)
                 .unwrap()
@@ -1014,15 +890,6 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
                 max_supported: 1
             }
         ));
-    }
-
-    #[test]
-    fn jsonl_format_reads_as_keys_unlock() {
-        let jsonl = serialize_stored_jsonl(&sample_records()).unwrap();
-        assert_eq!(
-            read_vault_unlock(jsonl.as_str()).unwrap(),
-            VaultUnlock::Keys
-        );
     }
 
     #[test]

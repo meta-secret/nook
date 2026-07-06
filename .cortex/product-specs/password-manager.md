@@ -73,15 +73,12 @@ keys.
 
 ## 3. Database Schema & File Formats
 
-### A. In-Memory Plaintext Layout (JSONL session)
-The WASM session holds a UTF-8 JSONL string (`decrypted_jsonl`). Each line is one plaintext record:
+### A. In-Memory Plaintext Layout (typed Database session)
+The WASM session holds a typed Rust `Database` of plaintext `SecretRecord`
+values. It is never represented as a serialized text format inside the app
+session.
 
-```json
-{"key":"github.com","value":"ghp_SecretToken123"}
-{"key":"gmail.com","value":"my_secure_password_99"}
-```
-
-- **Sorting:** Lines sorted lexicographically by `key`.
+- **Sorting:** `Database::list()` returns records sorted lexicographically by id.
 - **Scope:** In-memory only — never written to GitHub or IndexedDB as plaintext.
 
 ### B. Local Projection Layout (YAML)
@@ -103,8 +100,6 @@ secrets:
 - **`vault_version`:** Legacy/local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
-- **Legacy JSONL on-disk format** is still supported on load (`from_stored_auto` / format detection). New saves always use YAML.
-
 Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
@@ -141,8 +136,8 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 
 | Module | Responsibility |
 |--------|----------------|
-| `lib.rs` / `Database` | In-memory JSONL session, stored vault encrypt/decrypt |
-| `vault_format.rs` | YAML + JSONL serialization, format detection |
+| `lib.rs` / `Database` | Typed in-memory session, stored vault encrypt/decrypt |
+| `vault_format.rs` | YAML serialization and parsing |
 | `vault_crypto.rs` | Session-scoped age encrypt/decrypt |
 | `validation.rs` | Connect/secret validation, search filter |
 | `password.rs` | CSPRNG password generation |
@@ -154,7 +149,7 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 ## 6. TypeScript / UI Boundaries
 
 **Belongs in Rust (not TS/Svelte):**
-- Vault serialization (YAML/JSONL)
+- Vault serialization (YAML)
 - Encrypt/decrypt
 - Password generation
 - Secret label/value validation

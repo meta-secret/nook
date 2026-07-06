@@ -92,14 +92,14 @@ impl NookVaultManager {
         nook_core::merge_remote_join_records(&mut self.meta, &fresh_records);
         let loaded = load_stored_vault(&content, &identity)?;
         let LoadedVault {
+            database,
             meta,
             secrets_key,
             members_key,
-            ..
-        } = &loaded;
+        } = loaded;
         self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-        self.decrypted_jsonl = loaded.session_jsonl()?;
-        self.meta = meta.clone();
+        self.database = database;
+        self.meta = meta;
         self.capture_vault_unlock(&content);
         self.last_synced_content = content.clone();
         let import_yaml = self.serialize_current_projection_yaml()?;

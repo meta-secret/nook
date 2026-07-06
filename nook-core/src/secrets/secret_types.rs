@@ -9,7 +9,7 @@
 //!   representation that flows through the wasm bridge.
 //! - `SecretRecord` — `(id, type, data)` plaintext triple for the session.
 //! - `StoredSecretRecord` — the on-disk shape: same triple but `value` is an
-//!   age-encrypted ciphertext string. Sorted, written to YAML/JSONL.
+//!   age-encrypted ciphertext string. Sorted, written to vault YAML.
 
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};

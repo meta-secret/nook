@@ -29,7 +29,7 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 | `DeviceIdentitySecret` | `vault_wire` | age X25519 identity secret |
 | `AgeArmoredCiphertext` | `vault_wire` | age armor block |
 | `StoredRecordPayload` | `secret_types` | opaque on-disk ciphertext / JSON blob |
-| `SessionJsonl` / `StoredVaultJsonl` / `StoredVaultYaml` | `vault_wire` | session / vault wire blobs |
+| `StoredVaultYaml` | `vault_wire` | vault YAML blob |
 | `SecretPayloadYaml` | `vault_wire` | typed secret YAML before encryption |
 | `IsoTimestamp` | `vault_wire` | RFC 3339 timestamps (`created_at`, …) |
 | `MemberLabel` | `vault_wire` | human device / member label |
@@ -111,9 +111,9 @@ Use `VaultHashContext` so content hash and encrypted-secret extraction stay alig
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
-- [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultJsonl` / `StoredVaultBlob`
+- [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`
 - [x] `sha256_hex()` → `Sha256Hex`; `VaultCrypto::decrypt_value` → `DecryptedPlaintext`
-- [x] `apply_user_records_to_armored_session` → `SessionJsonl`
+- [x] `apply_user_records_to_armored_session` → `Database`
 - [x] `SigningIdentity::generate` seed → `SigningSeedHex`
 
 ## Related

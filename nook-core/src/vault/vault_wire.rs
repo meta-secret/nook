@@ -53,8 +53,6 @@ macro_rules! transparent_str_newtype {
 transparent_str_newtype!(SymmetricKey);
 transparent_str_newtype!(AgeArmoredCiphertext);
 transparent_str_newtype!(DevicePublicKey);
-transparent_str_newtype!(SessionJsonl);
-transparent_str_newtype!(StoredVaultJsonl);
 transparent_str_newtype!(StoredVaultYaml);
 transparent_str_newtype!(MemberLabel);
 transparent_str_newtype!(PasswordEntryId);
@@ -112,10 +110,9 @@ impl Drop for DeviceIdentitySecret {
     }
 }
 
-/// On-disk vault blob — JSONL or YAML wire, selected explicitly or via auto-detect.
+/// On-disk vault blob. Projection caches are YAML only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoredVaultBlob {
-    Jsonl(StoredVaultJsonl),
     Yaml(StoredVaultYaml),
 }
 
@@ -123,7 +120,6 @@ impl StoredVaultBlob {
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Jsonl(blob) => blob.as_str(),
             Self::Yaml(blob) => blob.as_str(),
         }
     }
@@ -131,17 +127,13 @@ impl StoredVaultBlob {
     #[must_use]
     pub fn format(&self) -> crate::VaultFormat {
         match self {
-            Self::Jsonl(_) => crate::VaultFormat::Jsonl,
             Self::Yaml(_) => crate::VaultFormat::Yaml,
         }
     }
 
     pub fn parse_auto(raw: &str) -> crate::errors::DatabaseResult<Self> {
-        let format = crate::detect_stored_format(raw)?;
-        Ok(match format {
-            crate::VaultFormat::Jsonl => Self::Jsonl(StoredVaultJsonl::parse(raw)?),
-            crate::VaultFormat::Yaml => Self::Yaml(StoredVaultYaml::parse(raw)?),
-        })
+        crate::detect_stored_format(raw)?;
+        Ok(Self::Yaml(StoredVaultYaml::parse(raw)?))
     }
 }
 transparent_str_newtype!(SecretPayloadYaml);
@@ -220,39 +212,6 @@ impl<'de> Deserialize<'de> for DeviceIdentitySecret {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
         Self::parse(&raw).map_err(serde::de::Error::custom)
-    }
-}
-
-impl SessionJsonl {
-    pub fn parse(raw: &str) -> ValidationResult<Self> {
-        for line in raw.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            serde_json::from_str::<serde_json::Value>(line)
-                .map_err(|_| ValidationError::SessionJsonlInvalid)?;
-        }
-        Ok(Self(raw.to_owned()))
-    }
-}
-
-impl StoredVaultJsonl {
-    pub fn parse(raw: &str) -> ValidationResult<Self> {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return Ok(Self(String::new()));
-        }
-        for line in trimmed.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            if !line.starts_with('{') {
-                return Err(ValidationError::StoredVaultJsonlInvalid);
-            }
-        }
-        Ok(Self(raw.to_owned()))
     }
 }
 
@@ -490,20 +449,6 @@ impl<'de> Deserialize<'de> for OpaqueCiphertext {
     }
 }
 
-impl<'de> Deserialize<'de> for SessionJsonl {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
-    }
-}
-
-impl<'de> Deserialize<'de> for StoredVaultJsonl {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
-    }
-}
-
 impl<'de> Deserialize<'de> for StoredVaultYaml {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
@@ -584,30 +529,14 @@ mod tests {
     }
 
     #[test]
-    fn session_jsonl_rejects_broken_lines() {
-        assert!(SessionJsonl::parse("{}\n{broken").is_err());
-        assert!(SessionJsonl::parse("{}\n{}").is_ok());
-        assert!(SessionJsonl::parse("").is_ok());
-    }
-
-    #[test]
-    fn stored_vault_jsonl_and_yaml_parse() {
-        assert!(StoredVaultJsonl::parse("").unwrap().as_str().is_empty());
-        assert!(
-            StoredVaultJsonl::parse("{}\n")
-                .unwrap()
-                .as_str()
-                .contains('{')
-        );
-        assert!(StoredVaultJsonl::parse("not-json").is_err());
+    fn stored_vault_yaml_parse() {
         let yaml = StoredVaultYaml::parse("secrets:\n").unwrap();
         assert!(yaml.as_str().starts_with("secrets:"));
     }
 
     #[test]
-    fn stored_vault_blob_auto_detects_format() {
-        let jsonl = StoredVaultBlob::parse_auto("{}\n").unwrap();
-        assert!(matches!(jsonl, StoredVaultBlob::Jsonl(_)));
+    fn stored_vault_blob_accepts_yaml_only() {
+        assert!(StoredVaultBlob::parse_auto("{}\n").is_err());
         let yaml = StoredVaultBlob::parse_auto("secrets:\n").unwrap();
         assert!(matches!(yaml, StoredVaultBlob::Yaml(_)));
         assert_eq!(yaml.format(), crate::VaultFormat::Yaml);
@@ -627,9 +556,6 @@ mod tests {
         let roundtripped: SymmetricKey =
             serde_json::from_str(&serde_json::to_string(&key).unwrap()).unwrap();
         assert_eq!(roundtripped, key);
-
-        let session: SessionJsonl = serde_json::from_str("\"{}\"").unwrap();
-        assert_eq!(session.as_str(), "{}");
     }
 
     #[test]

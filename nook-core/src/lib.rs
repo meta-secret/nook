@@ -174,6 +174,6 @@ pub use vault_sync_store::{
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    SecretPayloadYaml, SessionJsonl, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultJsonl,
-    StoredVaultYaml, SymmetricKey, Url64EncodedString,
+    SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey,
+    Url64EncodedString,
 };

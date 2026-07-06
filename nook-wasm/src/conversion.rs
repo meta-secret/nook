@@ -57,12 +57,6 @@ pub(crate) struct LoadedVault {
     pub(crate) members_key: nook_core::SymmetricKey,
 }
 
-impl LoadedVault {
-    pub(crate) fn session_jsonl(&self) -> Result<String, NookError> {
-        Ok(self.database.to_jsonl()?.into_inner())
-    }
-}
-
 pub(crate) fn load_stored_vault(
     content: &str,
     identity: &nook_core::DeviceIdentity,

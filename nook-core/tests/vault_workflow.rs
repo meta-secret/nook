@@ -146,9 +146,6 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() {
     )
     .unwrap();
 
-    let jsonl = db.to_jsonl().unwrap();
-    assert!(!jsonl.as_str().contains(old_id));
-    assert!(jsonl.as_str().contains(new_id));
     assert_eq!(db.list().len(), 1);
     assert_eq!(db.list()[0].id.as_str(), new_id);
     assert_eq!(db.list()[0].data, api_key("new-token"));

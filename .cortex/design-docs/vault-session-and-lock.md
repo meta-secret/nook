@@ -14,7 +14,7 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, an
 | **Local vault cache** | Authoritative copies in `nook_db` as `vault:{store_id}` blobs + registry | Yes |
 | **Sync provider** | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth` | Yes — credentials only |
 | **Device identity** | Passkey-wrapped X25519 key in `nook_db.device_identity_wrapped` | Ciphertext persists; plaintext does not |
-| **Unlocked session** | WASM `decrypted_jsonl` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
+| **Unlocked session** | WASM typed `Database` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
 | **Lock** | End session; return to login gate | N/A |
 
 ```mermaid
@@ -47,7 +47,7 @@ flowchart TB
 | Cleared (memory) | Kept (disk) |
 |------------------|-------------|
 | `isAuthenticated`, `secrets[]` | `nook_db` vault blobs + registry |
-| WASM `decrypted_jsonl` via `resetVaultSession()` | `nook_db.device_identity_wrapped` |
+| WASM typed `Database` via `resetVaultSession()` | `nook_db.device_identity_wrapped` |
 | WASM device identity via `lockDeviceIdentity()` | WebAuthn credential in the platform authenticator |
 | Pending joins / roster UI cache | `nook_auth` sync provider list + tokens |
 | Settings / help panels | Password entries inside encrypted YAML |

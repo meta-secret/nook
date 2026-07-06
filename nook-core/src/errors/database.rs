@@ -10,12 +10,6 @@ pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
-    #[error("Failed to parse JSONL line")]
-    JsonlParse(#[source] serde_json::Error),
-
-    #[error("Failed to serialize record")]
-    JsonlSerialize(#[source] serde_json::Error),
-
     #[error("Secret {key} is missing required type metadata.")]
     MissingSecretType { key: crate::SecretId },
 

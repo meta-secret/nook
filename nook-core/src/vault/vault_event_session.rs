@@ -2,12 +2,12 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::vault_ids::{AuthKeyId, StoreId};
-use crate::vault_wire::{IsoTimestamp, SessionJsonl, Sha256Hex};
+use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
-    AppendEventInput, EventId, LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord,
-    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
-    build_signed_event, project_vault, resolve_member_roster, rotate_vault_keys_with_secrets,
-    sha256_hex, union_remote_events,
+    AppendEventInput, Database, EventId, LocalEventStore, ObservedHeads, SigningIdentity,
+    StoredSecretRecord, VaultCrypto, VaultMetaState, VaultOperation, VaultProjection,
+    build_members_records, build_signed_event, project_vault, resolve_member_roster,
+    rotate_vault_keys_with_secrets, sha256_hex, union_remote_events,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -94,7 +94,7 @@ impl VaultEventSession {
         &self,
         crypto: &VaultCrypto,
         state: &mut VaultMetaState,
-    ) -> VaultResult<SessionJsonl> {
+    ) -> VaultResult<Database> {
         let graph = self.store.load_graph(&self.store_id)?;
         let projection = project_vault(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);

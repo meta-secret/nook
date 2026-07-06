@@ -1,3 +1,0 @@
-{"id":"github.com","type":"api-key","data":{"api-key":{"websiteUrl":"https://github.com","key":"hunter2","expiresAt":""}}}
-{"id":"notes","type":"api-key","data":{"api-key":{"websiteUrl":"https://notes.example.com","key":"multiline\nsecret\nwith\ttabs","expiresAt":""}}}
-{"id":"work-vpn","type":"api-key","data":{"api-key":{"websiteUrl":"https://vpn.example.com","key":"token-abc","expiresAt":""}}}

@@ -23,7 +23,7 @@ These files are the source of truth for how this project works.
 
 ### Package boundaries
 - Dependency flow is strictly `nook-core` → `nook-wasm` → `nook-web`. Never reverse this.
-- Crypto, vault formats (YAML/JSONL), validation, password generation, search filtering, and shared domain models belong in `nook-core` with Rust tests. Storage I/O (IndexedDB, GitHub API) belongs in `nook-wasm`. UI and reactive state belong in `nook-web`.
+- Crypto, vault YAML format, validation, password generation, search filtering, and shared domain models belong in `nook-core` with Rust tests. Storage I/O (IndexedDB, GitHub API) belongs in `nook-wasm`. UI and reactive state belong in `nook-web`.
 - `nook-core` may expose simple DTOs/enums with `wasm-bindgen` so web code consumes the typed core model directly. Browser APIs, IndexedDB, HTTP, JS promises, and session state still belong outside core.
 
 ### WASM API contract

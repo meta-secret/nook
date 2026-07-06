@@ -75,12 +75,6 @@ pub enum ValidationError {
     #[error("errors.validation.device_identity_secret_invalid")]
     DeviceIdentitySecretInvalid,
 
-    #[error("errors.validation.session_jsonl_invalid")]
-    SessionJsonlInvalid,
-
-    #[error("errors.validation.stored_vault_jsonl_invalid")]
-    StoredVaultJsonlInvalid,
-
     #[error("errors.validation.sha256_hex_invalid")]
     Sha256HexInvalid,
 

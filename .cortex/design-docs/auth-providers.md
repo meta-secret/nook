@@ -85,7 +85,7 @@ stateDiagram-v2
 
 ### Lock
 
-See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears WASM `decrypted_jsonl`, the in-memory device identity, and Svelte state. The passkey gate runs before the normal vault login gate.
+See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears the WASM typed session database, the in-memory device identity, and Svelte state. The passkey gate runs before the normal vault login gate.
 
 **Test ids:** `header-lock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `unlock-vault-btn`, `add-provider-btn`, `remove-provider-{id}`.
 

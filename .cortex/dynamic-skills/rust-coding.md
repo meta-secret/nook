@@ -29,9 +29,9 @@ When you see `Option<T>`, ask:
 - Use `Option<T>` only when absence is truly a field-level fact inside one
   workflow, not a disguised variant.
 - Do not use `String` for typed domain values such as timestamps, YAML payloads,
-  JSONL payloads, storage/provider types, vault/store ids, event ids, or secret
+  YAML payloads, storage/provider types, vault/store ids, event ids, or secret
   keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
-  `SessionJsonl`, `StoreId`, `EventId`, `SymmetricKey`, etc.) or add one.
+  `StoreId`, `EventId`, `SymmetricKey`, etc.) or add one.
 - Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings only when crossing storage, provider, or JS boundaries.
