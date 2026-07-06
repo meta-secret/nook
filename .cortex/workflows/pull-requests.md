@@ -142,7 +142,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, then deploys a Cloudflare preview. Toolchain publish runs on main only (`ci:main:publish`).
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full stub e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
 
 ### 6. Monitor CI and review until green
 
