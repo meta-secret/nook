@@ -35,6 +35,9 @@
   const oauthBusy = $derived(
     isICloud ? vault.icloudOAuthBusy : vault.googleOAuthBusy,
   )
+  const icloudSignInPreparing = $derived(
+    isICloud && vault.icloudOAuthPreparing && !vault.icloudOAuthReady,
+  )
   const oauthOriginSupport = $derived(
     resolveOAuthOriginSupport(isICloud ? 'icloud' : 'google-drive'),
   )
@@ -50,11 +53,28 @@
 
   let connectionStepOpen = $state(true)
   let syncStepOpen = $state(false)
+  let icloudSignInPrepareStarted = $state(false)
 
   $effect(() => {
     if (oauthSignedIn) {
       connectionStepOpen = false
       syncStepOpen = true
+    }
+  })
+
+  $effect(() => {
+    if (!isICloud) {
+      icloudSignInPrepareStarted = false
+      return
+    }
+    if (
+      !oauthOriginUnsupported &&
+      !vault.icloudOAuthReady &&
+      !vault.icloudOAuthPreparing &&
+      !icloudSignInPrepareStarted
+    ) {
+      icloudSignInPrepareStarted = true
+      void vault.prepareICloudSignIn()
     }
   })
 </script>
@@ -164,11 +184,11 @@
           'w-full sm:w-auto',
         )}
         data-testid={isICloud ? 'icloud-sign-in-btn' : 'google-sign-in-btn'}
-        disabled={oauthBusy || oauthOriginUnsupported}
+        disabled={oauthBusy || oauthOriginUnsupported || icloudSignInPreparing}
         onclick={() =>
           void (isICloud ? vault.signInWithICloud() : vault.signInWithGoogle())}
       >
-        {#if oauthBusy}
+        {#if oauthBusy || icloudSignInPreparing}
           {isICloud
             ? vault.t('provider_setup.icloud_signing_in')
             : vault.t('provider_setup.google_signing_in')}

@@ -12,10 +12,10 @@ import {
 import {
   ensureValidICloudOAuthFileConfig,
   fetchICloudAccountEmail,
-  initICloudAuth,
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
-  requestICloudWebAuthToken,
+  prepareICloudSignInControl,
+  requestPreparedICloudWebAuthToken,
   type ICloudOAuthTokens,
 } from '$lib/icloud-oauth'
 import {
@@ -82,14 +82,51 @@ export async function signInWithICloud(state: VaultState): Promise<void> {
   state.icloudOAuthBusy = true
   state.errorMsg = ''
   try {
-    await initICloudAuth()
-    const tokens = await requestICloudWebAuthToken()
+    const wasReady = state.icloudOAuthReady
+    if (!wasReady) {
+      await prepareICloudSignIn(state)
+    }
+    if (!state.icloudOAuthReady) {
+      throw new Error(
+        'Apple sign-in control is still loading. Try again in a moment.',
+      )
+    }
+    if (!wasReady) {
+      throw new Error('Apple sign-in is ready. Click Sign in with Apple again.')
+    }
+    const tokenRequest = requestPreparedICloudWebAuthToken()
+    const tokens = await tokenRequest
     await applyICloudOAuthTokens(state, tokens)
   } catch (error) {
     state.errorMsg =
       error instanceof Error ? error.message : 'iCloud sign-in failed.'
   } finally {
     state.icloudOAuthBusy = false
+  }
+}
+
+export async function prepareICloudSignIn(state: VaultState): Promise<void> {
+  if (
+    state.icloudOAuthReady ||
+    state.icloudOAuthPreparing ||
+    !isICloudOAuthConfigured()
+  ) {
+    return
+  }
+  const support = resolveOAuthOriginSupport('icloud')
+  if (!support.supported) {
+    return
+  }
+  state.icloudOAuthPreparing = true
+  try {
+    await prepareICloudSignInControl()
+    state.icloudOAuthReady = true
+  } catch (error) {
+    state.icloudOAuthReady = false
+    state.errorMsg =
+      error instanceof Error ? error.message : 'iCloud sign-in failed.'
+  } finally {
+    state.icloudOAuthPreparing = false
   }
 }
 
