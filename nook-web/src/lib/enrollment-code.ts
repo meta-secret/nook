@@ -203,8 +203,8 @@ function fromWasmProvider(
   if (provider.type === StorageProviderType.Github) {
     return {
       type: 'github',
-      pat: provider.pat,
-      repo: provider.repo,
+      pat: provider.githubPat ?? '',
+      repo: provider.githubRepo ?? '',
     }
   }
   return { type: 'local' }

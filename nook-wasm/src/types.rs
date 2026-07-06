@@ -192,83 +192,53 @@ pub(crate) fn password_entries_to_vec(
 
 #[wasm_bindgen]
 #[derive(Clone)]
-pub struct NookEnrollmentProvider {
-    provider_type: nook_core::StorageProviderType,
-    pat: String,
-    repo: String,
-}
+pub struct NookEnrollmentProvider(nook_core::EnrollmentProvider);
 
 #[wasm_bindgen]
 impl NookEnrollmentProvider {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        provider_type: nook_core::StorageProviderType,
-        pat: Option<String>,
-        repo: Option<String>,
-    ) -> Self {
-        Self {
-            provider_type,
-            pat: pat.unwrap_or_default(),
-            repo: repo.unwrap_or_default(),
-        }
-    }
-
     #[wasm_bindgen(js_name = local)]
     #[must_use]
     pub fn local() -> Self {
-        Self {
-            provider_type: nook_core::StorageProviderType::Local,
-            pat: String::new(),
-            repo: String::new(),
-        }
+        Self(nook_core::EnrollmentProvider::Local)
     }
 
     #[wasm_bindgen(js_name = github)]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
-        Self {
-            provider_type: nook_core::StorageProviderType::Github,
-            pat,
-            repo,
-        }
+        Self(nook_core::EnrollmentProvider::Github { pat, repo })
     }
 
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
-        match provider {
-            nook_core::EnrollmentProvider::Local => Self::local(),
-            nook_core::EnrollmentProvider::Github { pat, repo } => Self::github(repo, pat),
-        }
+        Self(provider)
     }
 
-    pub(crate) fn to_core(
-        &self,
-    ) -> Result<nook_core::EnrollmentProvider, nook_core::EnrollmentError> {
-        match self.provider_type {
-            nook_core::StorageProviderType::Local => Ok(nook_core::EnrollmentProvider::Local),
-            nook_core::StorageProviderType::Github => Ok(nook_core::EnrollmentProvider::Github {
-                pat: self.pat.clone(),
-                repo: self.repo.clone(),
-            }),
-            provider_type => Err(nook_core::EnrollmentError::UnsupportedProviderType {
-                provider_type: provider_type.as_str().to_owned(),
-            }),
-        }
+    pub(crate) fn to_core(&self) -> nook_core::EnrollmentProvider {
+        self.0.clone()
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
     #[must_use]
     pub fn provider_type(&self) -> nook_core::StorageProviderType {
-        self.provider_type
+        match self.0 {
+            nook_core::EnrollmentProvider::Local => nook_core::StorageProviderType::Local,
+            nook_core::EnrollmentProvider::Github { .. } => nook_core::StorageProviderType::Github,
+        }
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn pat(&self) -> String {
-        self.pat.clone()
+    #[wasm_bindgen(getter, js_name = githubPat)]
+    pub fn github_pat(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::Github { pat, .. } => Some(pat.clone()),
+            nook_core::EnrollmentProvider::Local => None,
+        }
     }
 
-    #[wasm_bindgen(getter)]
-    pub fn repo(&self) -> String {
-        self.repo.clone()
+    #[wasm_bindgen(getter, js_name = githubRepo)]
+    pub fn github_repo(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::Github { repo, .. } => Some(repo.clone()),
+            nook_core::EnrollmentProvider::Local => None,
+        }
     }
 }
 
@@ -399,7 +369,7 @@ impl NookEnrollmentIssueInput {
         &self,
     ) -> Result<nook_core::EnrollmentIssueInput, nook_core::EnrollmentError> {
         Ok(nook_core::EnrollmentIssueInput {
-            provider: self.provider.to_core()?,
+            provider: self.provider.to_core(),
             entry_id: self.entry_id.clone(),
             issued_at: self.issued_at.clone(),
         })
