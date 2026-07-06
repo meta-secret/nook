@@ -28,11 +28,12 @@ The persisted object is a structured-clone JS object (not a JSON string). Its wi
 ```typescript
 interface StorageProvider {
   id: string
-  type: 'local' | 'github' | 'oauth-file'
+  type: 'local' | 'github' | 'oauth-file' | 'local-folder'
   label: string
   githubPat?: string   // GitHub only — sealed at rest
   githubRepo?: string  // GitHub only — repo name (default `nook`)
   oauthFile?: OAuthFileConfig  // Drive/iCloud — accessToken/refreshToken sealed at rest
+  localFolder?: LocalFolderConfig  // Browser File System Access directory handle metadata
   storeId?: string     // Logical secret store (`store_{token}`) — see secret-store-identity.md
   lastSyncedVersion?: number
   lastSyncedAt?: string
@@ -59,6 +60,13 @@ interface StorageProvider {
 **Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`had_plaintext` upgrade path).
 
 **Provider switch:** Changing the active saved provider calls `resetVaultSession` in wasm and clears login password-entry preview state so backup-password lists always reflect the remote vault for that provider — never a prior provider's in-memory session.
+
+**Local-folder provider availability:** Local backup uses the browser File
+System Access directory API (`showDirectoryPicker`) and persisted structured
+clone directory handles. The provider picker must gate this option with
+`isLocalFolderBackupSupported()` and show it as unavailable when the browser
+cannot grant writable folder access; do not let unsupported browsers enter setup
+and surface the lower-level WASM/database error.
 
 ---
 

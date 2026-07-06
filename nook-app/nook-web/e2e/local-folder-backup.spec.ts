@@ -106,7 +106,37 @@ async function installLocalFolderPickerMock(page: Page) {
   })
 }
 
+async function installUnsupportedLocalFolderPickerMock(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'showDirectoryPicker', {
+      configurable: true,
+      value: undefined,
+    })
+  })
+}
+
 test.describe('local folder backup provider', () => {
+  test('disables local folder backup when writable folders are unavailable', async ({
+    page,
+  }) => {
+    await installPasskeyMock(page)
+    await installUnsupportedLocalFolderPickerMock(page)
+    await page.goto('/')
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+
+    await openStorageSettings(page)
+    await expandSettingsSection(page, 'storage')
+    await page.getByTestId('add-provider-btn').first().click()
+    const localFolderOption = page.getByTestId('provider-option-local-folder')
+    await expect(localFolderOption).toBeDisabled()
+    await expect(localFolderOption).toContainText(
+      'Requires a browser with writable folder access',
+    )
+    await expect(page.getByTestId('local-folder-setup')).toHaveCount(0)
+  })
+
   test('connects from settings and writes flat YAML event files', async ({
     page,
   }) => {

@@ -26,6 +26,7 @@
   let syncOpen = $state(false)
 
   const hasFolder = $derived(Boolean(vault.localFolder?.handleId))
+  const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
 
   $effect(() => {
     if (hasFolder) {
@@ -39,10 +40,15 @@
     try {
       await vault.chooseLocalFolderBackupDirectory()
     } catch (error) {
-      folderError =
+      const message =
         error instanceof Error
           ? error.message
           : vault.t('auth_storage.local_folder_choose_err')
+      folderError = message.includes(
+        'Local folder backup is not supported in this browser',
+      )
+        ? vault.t('provider_setup.local_folder_unsupported_browser')
+        : message
     } finally {
       folderBusy = false
     }
@@ -80,7 +86,10 @@
         type="button"
         variant="outline"
         data-testid="{idPrefix}-choose-local-folder-btn"
-        disabled={folderBusy || isVerifying || isInitializing}
+        disabled={localFolderUnavailable ||
+          folderBusy ||
+          isVerifying ||
+          isInitializing}
         onclick={() => void chooseFolder()}
       >
         {#if folderBusy}
@@ -91,6 +100,14 @@
           {vault.t('provider_setup.choose_local_folder')}
         {/if}
       </Button>
+      {#if localFolderUnavailable}
+        <p
+          class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+          data-testid="{idPrefix}-local-folder-unsupported"
+        >
+          {vault.t('provider_setup.local_folder_unsupported_browser')}
+        </p>
+      {/if}
       {#if vault.localFolder?.directoryName}
         <p
           class="truncate rounded-md border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-muted-foreground"
