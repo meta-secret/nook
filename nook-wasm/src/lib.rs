@@ -200,9 +200,14 @@ pub fn format_drive_storage_ref(file_id: Option<String>, file_name: &str) -> Str
 #[wasm_bindgen(js_name = wasmStorageModeForProvider)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn wasm_storage_mode_for_provider(
-    provider_type: nook_core::StorageProviderType,
-    oauth_preset: Option<nook_core::OauthFilePreset>,
+    provider_type: &str,
+    oauth_preset: Option<String>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_preset = oauth_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
     Ok(
         nook_core::storage_mode_for_provider(provider_type, oauth_preset)
             .as_str()
@@ -213,10 +218,15 @@ pub fn wasm_storage_mode_for_provider(
 #[wasm_bindgen(js_name = providerDefaultLabel)]
 #[allow(clippy::needless_pass_by_value)]
 pub fn provider_default_label(
-    provider_type: nook_core::StorageProviderType,
+    provider_type: &str,
     detail: Option<String>,
-    oauth_preset: Option<nook_core::OauthFilePreset>,
+    oauth_preset: Option<String>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    let provider_type = nook_core::StorageProviderType::parse(provider_type)?;
+    let oauth_preset = oauth_preset
+        .as_deref()
+        .map(nook_core::OauthFilePreset::parse)
+        .transpose()?;
     Ok(nook_core::sync_provider_default_label(
         provider_type,
         detail.as_deref(),

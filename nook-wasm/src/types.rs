@@ -314,13 +314,17 @@ impl NookSyncProviderTarget {
     #[wasm_bindgen(js_name = oauthFile)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn oauth_file(
-        preset: Option<nook_core::OauthFilePreset>,
+        preset: Option<String>,
         file_id: Option<String>,
         file_name: Option<String>,
         account_email: Option<String>,
         access_token: Option<String>,
     ) -> Result<NookSyncProviderTarget, wasm_bindgen::JsError> {
-        let preset = preset.unwrap_or(nook_core::OauthFilePreset::GoogleDrive);
+        let preset = preset
+            .as_deref()
+            .map(nook_core::OauthFilePreset::parse)
+            .transpose()?
+            .unwrap_or(nook_core::OauthFilePreset::GoogleDrive);
         Ok(Self(nook_core::SyncProviderTarget::OauthFile(
             nook_core::OauthFileSyncTarget {
                 preset,

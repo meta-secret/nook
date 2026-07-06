@@ -9,10 +9,8 @@ import {
   loadAuthProviders as loadAuthProvidersWasm,
   maskGithubPatHint as maskGithubPatHintCore,
   NookSyncProviderTarget,
-  OauthFilePreset as WasmOauthFilePreset,
   providerDefaultLabel as providerDefaultLabelCore,
   saveAuthProviders as saveAuthProvidersWasm,
-  StorageProviderType as WasmStorageProviderType,
   syncProviderTargetKey as syncProviderTargetKeyCore,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookVaultManager,
@@ -82,30 +80,6 @@ interface LoadedAuthProviders {
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
 export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
 
-function toWasmStorageProviderType(
-  type: StorageProviderType,
-): WasmStorageProviderType {
-  switch (type) {
-    case 'local':
-      return WasmStorageProviderType.Local
-    case 'local-folder':
-      return WasmStorageProviderType.LocalFolder
-    case 'github':
-      return WasmStorageProviderType.Github
-    case 'oauth-file':
-      return WasmStorageProviderType.OauthFile
-  }
-}
-
-function toWasmOauthFilePreset(preset: OAuthFilePreset): WasmOauthFilePreset {
-  switch (preset) {
-    case 'google-drive':
-      return WasmOauthFilePreset.GoogleDrive
-    case 'icloud':
-      return WasmOauthFilePreset.ICloud
-  }
-}
-
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
 function toPlain<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -133,7 +107,7 @@ export function syncProviderTargetKey(
             : NookSyncProviderTarget.empty()
           : provider.oauthFile
             ? NookSyncProviderTarget.oauthFile(
-                toWasmOauthFilePreset(provider.oauthFile.preset),
+                provider.oauthFile.preset,
                 provider.oauthFile.fileId ?? null,
                 provider.oauthFile.fileName ?? null,
                 provider.oauthFile.accountEmail ?? null,
@@ -201,8 +175,8 @@ export function wasmStorageModeForProvider(
   oauthPreset?: OAuthFilePreset,
 ): string {
   return wasmStorageModeForProviderCore(
-    toWasmStorageProviderType(type),
-    oauthPreset ? toWasmOauthFilePreset(oauthPreset) : null,
+    type,
+    oauthPreset ?? null,
   )
 }
 
@@ -212,9 +186,9 @@ export function providerDefaultLabel(
   oauthPreset: OAuthFilePreset = 'google-drive',
 ): string {
   return providerDefaultLabelCore(
-    toWasmStorageProviderType(type),
+    type,
     detail ?? null,
-    toWasmOauthFilePreset(oauthPreset),
+    oauthPreset,
   )
 }
 
