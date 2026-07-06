@@ -1,7 +1,3 @@
-const DEFAULT_VAULT_IDLE_TIMEOUT_MS = 5 * 60_000
-const DEFAULT_VAULT_IDLE_WARNING_MS = 30_000
-const MIN_IDLE_TIMEOUT_MS = 1_000
-
 /** User input events that reset the idle lock timer while the vault is unlocked. */
 const ACTIVITY_EVENTS = [
   'pointerdown',
@@ -10,44 +6,6 @@ const ACTIVITY_EVENTS = [
   'scroll',
   'click',
 ] as const
-
-export function resolveVaultIdleTimeoutMs(env: {
-  DEV?: boolean
-  VITE_E2E_EXPOSE_VAULT?: string
-  VITE_VAULT_IDLE_TIMEOUT_MS?: string
-}): number {
-  const allowFastIdle = env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
-  if (!allowFastIdle) {
-    return DEFAULT_VAULT_IDLE_TIMEOUT_MS
-  }
-  const raw = env.VITE_VAULT_IDLE_TIMEOUT_MS
-  const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
-  if (Number.isFinite(parsed) && parsed >= MIN_IDLE_TIMEOUT_MS) {
-    return parsed
-  }
-  return DEFAULT_VAULT_IDLE_TIMEOUT_MS
-}
-
-/** Warning lead time before auto-lock; 0 disables the warning. */
-export function resolveVaultIdleWarningMs(env: {
-  DEV?: boolean
-  VITE_E2E_EXPOSE_VAULT?: string
-  VITE_VAULT_IDLE_WARNING_MS?: string
-}): number {
-  const allowFastIdle = env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
-  if (!allowFastIdle) {
-    return DEFAULT_VAULT_IDLE_WARNING_MS
-  }
-  const raw = env.VITE_VAULT_IDLE_WARNING_MS
-  if (raw === '0') {
-    return 0
-  }
-  const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
-  if (Number.isFinite(parsed) && parsed >= 0) {
-    return parsed
-  }
-  return DEFAULT_VAULT_IDLE_WARNING_MS
-}
 
 export type VaultIdleSessionTracker = {
   start: () => void

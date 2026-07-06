@@ -7,6 +7,7 @@ use aes_gcm::{
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use getrandom::getrandom;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256};
+use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, utf8_percent_encode};
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{EnrollmentError, EnrollmentResult};
@@ -17,6 +18,33 @@ const IV_LEN: usize = 12;
 const KEY_LEN: usize = 32;
 const ENROLLMENT_KDF: &str = "pbkdf2-sha256";
 const ENROLLMENT_CIPHER: &str = "aes-gcm-256";
+const ENROLLMENT_HASH_PREFIX: &str = "#enroll=";
+
+const ENCODE_URI_COMPONENT: &AsciiSet = &CONTROLS
+    .add(b' ')
+    .add(b'"')
+    .add(b'#')
+    .add(b'$')
+    .add(b'%')
+    .add(b'&')
+    .add(b'+')
+    .add(b',')
+    .add(b'/')
+    .add(b':')
+    .add(b';')
+    .add(b'<')
+    .add(b'=')
+    .add(b'>')
+    .add(b'?')
+    .add(b'@')
+    .add(b'[')
+    .add(b'\\')
+    .add(b']')
+    .add(b'^')
+    .add(b'`')
+    .add(b'{')
+    .add(b'|')
+    .add(b'}');
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -147,6 +175,46 @@ pub fn parse_enrollment_envelope(code: &str) -> EnrollmentResult<EnrollmentCodeE
     Ok(envelope)
 }
 
+/// Deep link scanned from a QR code — opens the browser and carries the raw
+/// enrollment code in the hash. The browser supplies `base_url`.
+#[must_use]
+pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    let encoded = utf8_percent_encode(code, ENCODE_URI_COMPONENT).to_string();
+    format!("{base}/{ENROLLMENT_HASH_PREFIX}{encoded}")
+}
+
+/// Accept raw base64url enrollment codes or full enrollment links.
+#[must_use]
+pub fn normalize_enrollment_code(input: &str) -> String {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if trimmed.contains("://") {
+        if let Some(raw) = enrollment_query_value(trimmed) {
+            return decode_uri_component(raw);
+        }
+        if let Some(hash) = trimmed.split_once('#').map(|(_, hash)| hash) {
+            let prefixed = format!("#{hash}");
+            if let Some(raw) = prefixed.strip_prefix(ENROLLMENT_HASH_PREFIX) {
+                return decode_uri_component(raw);
+            }
+        }
+    }
+
+    if let Some(raw) = trimmed.strip_prefix(ENROLLMENT_HASH_PREFIX) {
+        return decode_uri_component(raw);
+    }
+
+    if let Some(raw) = enrollment_query_value(trimmed) {
+        return decode_uri_component(raw);
+    }
+
+    trimmed.to_owned()
+}
+
 #[must_use]
 pub fn peek_enrollment_entry_id(code: &str) -> Option<String> {
     parse_enrollment_envelope(code)
@@ -235,6 +303,23 @@ fn classify_envelope_parse_error(_error: &serde_json::Error) -> EnrollmentError 
     EnrollmentError::InvalidCode
 }
 
+fn enrollment_query_value(input: &str) -> Option<&str> {
+    let query = input
+        .split_once('?')?
+        .1
+        .split('#')
+        .next()
+        .unwrap_or_default();
+    query.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        (key == "enroll").then_some(value)
+    })
+}
+
+fn decode_uri_component(value: &str) -> String {
+    percent_decode_str(value).decode_utf8_lossy().into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,6 +355,20 @@ mod tests {
         assert!(!serialized.contains("vault-pass-99"));
         assert!(!serialized.contains("github_pat_11AAAAbbbbCCCC"));
         assert!(!envelope.ct.is_empty());
+    }
+
+    #[test]
+    fn enrollment_link_roundtrip_normalizes_hash_and_query_forms() {
+        let code = "abc-123_DEF";
+        let link = build_enrollment_link(code, "https://nook.example/");
+        assert_eq!(link, "https://nook.example/#enroll=abc-123_DEF");
+        assert_eq!(normalize_enrollment_code(&link), code);
+        assert_eq!(
+            normalize_enrollment_code("https://nook.example/?enroll=abc%20123"),
+            "abc 123"
+        );
+        assert_eq!(normalize_enrollment_code("#enroll=abc%2F123"), "abc/123");
+        assert_eq!(normalize_enrollment_code("  raw-code  "), "raw-code");
     }
 
     #[test]

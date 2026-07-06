@@ -1,11 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import {
-  buildEnrollmentLink,
-  normalizeEnrollmentCode,
-  peekEnrollmentEntryId,
-  peekEnrollmentEntryLabel,
-  peekEnrollmentIssuedAt,
-} from '$lib/enrollment-code'
+import { buildEnrollmentLink } from '$lib/enrollment-code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
@@ -13,6 +7,10 @@ import {
   default as initNookWasm,
   decryptEnrollmentPayload,
   encryptEnrollmentPayload,
+  normalizeEnrollmentCode,
+  peekEnrollmentEntryId,
+  peekEnrollmentEntryLabel,
+  peekEnrollmentIssuedAt,
 } from '$lib/nook-wasm/nook_wasm'
 
 await initNookWasm()
@@ -58,6 +56,14 @@ describe('enrollment-code links', () => {
     const code = encryptEnrollmentPayload(samplePayload(), 'hunter2')
     const link = buildEnrollmentLink(code, 'https://nook.example')
     expect(normalizeEnrollmentCode(link)).toBe(code)
+  })
+
+  test('wasm peek helpers accept full enrollment links', async () => {
+    const code = encryptEnrollmentPayload(samplePayload(), 'hunter2', 'Desk')
+    const link = buildEnrollmentLink(code, 'https://nook.example')
+    expect(peekEnrollmentEntryId(link)).toBe('entry-local')
+    expect(peekEnrollmentEntryLabel(link)).toBe('Desk')
+    expect(peekEnrollmentIssuedAt(link)).toBe('2026-06-23T12:00:00Z')
   })
 })
 

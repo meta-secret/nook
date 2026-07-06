@@ -98,10 +98,7 @@
     }
     void vault.init()
 
-    if (
-      import.meta.env.DEV ||
-      import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true'
-    ) {
+    if (vault.runtimeConfig.exposeDebugHooks()) {
       ;(window as Window & { __nookVault?: VaultState }).__nookVault = vault
       ;(
         window as Window & {

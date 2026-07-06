@@ -2,18 +2,8 @@ use gloo_storage::{SessionStorage, Storage};
 
 const VAULT_SESSION_LOCKED_KEY: &str = "nook_vault_session_locked";
 
-fn session_storage_available() -> bool {
-    web_sys::window()
-        .and_then(|window| window.session_storage().ok().flatten())
-        .is_some()
-}
-
 #[must_use]
 pub(crate) fn is_vault_session_locked() -> bool {
-    if !session_storage_available() {
-        return false;
-    }
-
     if SessionStorage::get::<bool>(VAULT_SESSION_LOCKED_KEY).unwrap_or(false) {
         return true;
     }
@@ -26,10 +16,6 @@ pub(crate) fn is_vault_session_locked() -> bool {
 }
 
 pub(crate) fn set_vault_session_locked(locked: bool) {
-    if !session_storage_available() {
-        return;
-    }
-
     if locked {
         let _ = SessionStorage::set(VAULT_SESSION_LOCKED_KEY, true);
     } else {

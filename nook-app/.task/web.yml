@@ -239,7 +239,13 @@ tasks:
     desc: Run full Playwright e2e suite.
     deps:
       - _wasm:build
+    env:
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
+      - task: _web:e2e:build-if-needed
       - cd "{{.WEB_ROOT}}" && bun run test:e2e
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 

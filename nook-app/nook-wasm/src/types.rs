@@ -3,10 +3,26 @@
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::NookVaultManager;
+use gloo_utils::window;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+const DEFAULT_VAULT_IDLE_TIMEOUT_MS: u32 = 5 * 60_000;
+const DEFAULT_VAULT_IDLE_WARNING_MS: u32 = 30_000;
+const MIN_IDLE_TIMEOUT_MS: u32 = 1_000;
+const DEFAULT_VAULT_SYNC_INTERVAL_MS: u32 = 60_000;
+const MIN_VAULT_SYNC_INTERVAL_MS: u32 = 250;
+const RUN_MODE_LOCAL_DEV: &str = "localDev";
+const RUN_MODE_LOCAL: &str = "local";
+const RUN_MODE_DEVELOPMENT: &str = "development";
+const RUN_MODE_TEST: &str = "test";
+const RUN_MODE_DEV: &str = "dev";
+const RUN_MODE_PROD: &str = "prod";
+const RUN_MODE_PRODUCTION: &str = "production";
 
 #[wasm_bindgen(typescript_custom_section)]
 const AUTH_PROVIDER_TYPES: &'static str = r#"
+export type NookAppLocale = 'en' | 'ru';
+
 export type NookStorageProviderType =
   | 'local'
   | 'local-folder'
@@ -56,7 +72,282 @@ export interface NookLoadedAuthProviders {
   legacyActiveProviderId?: string;
   changed: boolean;
 }
+
+export interface NookLocalAuthProviderSnapshot {
+  snapshot: NookAuthProvidersSnapshot;
+  migrated: boolean;
+}
 "#;
+
+fn parse_config_millis(raw: Option<String>, min: u32) -> Option<u32> {
+    let raw = raw?;
+    if raw.is_empty() {
+        return None;
+    }
+    let value = raw.parse::<u32>().ok()?;
+    if value >= min { Some(value) } else { None }
+}
+
+fn browser_language_tags() -> Vec<String> {
+    let navigator = window().navigator();
+    let mut tags = navigator
+        .languages()
+        .iter()
+        .filter_map(|value| value.as_string())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+
+    if tags.is_empty()
+        && let Some(language) = navigator.language()
+    {
+        let language = language.trim();
+        if !language.is_empty() {
+            tags.push(language.to_owned());
+        }
+    }
+
+    tags
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookBrowserLocale {
+    language_tags: Vec<String>,
+}
+
+#[wasm_bindgen]
+impl NookBrowserLocale {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            language_tags: browser_language_tags(),
+        }
+    }
+
+    #[wasm_bindgen(js_name = fromTags)]
+    pub fn from_tags(tags: Vec<String>) -> Self {
+        Self {
+            language_tags: tags,
+        }
+    }
+
+    #[wasm_bindgen(js_name = languageTags)]
+    #[must_use]
+    pub fn language_tags(&self) -> Vec<String> {
+        self.language_tags.clone()
+    }
+
+    #[wasm_bindgen(js_name = appLocale)]
+    #[must_use]
+    pub fn app_locale(&self) -> String {
+        nook_core::resolve_app_locale_from_tags(self.language_tags.iter().map(String::as_str))
+            .to_owned()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookClientRunMode {
+    Local,
+    Dev,
+    Prod,
+}
+
+#[wasm_bindgen]
+pub struct NookClientRunModeUtil;
+
+#[wasm_bindgen]
+impl NookClientRunModeUtil {
+    pub fn parse(mode: &str) -> Result<NookClientRunMode, wasm_bindgen::JsError> {
+        match mode {
+            RUN_MODE_LOCAL_DEV | RUN_MODE_LOCAL | RUN_MODE_DEVELOPMENT | RUN_MODE_TEST => {
+                Ok(NookClientRunMode::Local)
+            }
+            RUN_MODE_DEV => Ok(NookClientRunMode::Dev),
+            RUN_MODE_PROD | RUN_MODE_PRODUCTION => Ok(NookClientRunMode::Prod),
+            _ => Err(wasm_bindgen::JsError::new(&format!(
+                "Unknown client run mode: {mode}"
+            ))),
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookStorageProviderKind {
+    Local,
+    LocalFolder,
+    Github,
+    OauthFile,
+}
+
+impl From<nook_core::StorageProviderType> for NookStorageProviderKind {
+    fn from(provider_type: nook_core::StorageProviderType) -> Self {
+        match provider_type {
+            nook_core::StorageProviderType::Local => Self::Local,
+            nook_core::StorageProviderType::LocalFolder => Self::LocalFolder,
+            nook_core::StorageProviderType::Github => Self::Github,
+            nook_core::StorageProviderType::OauthFile => Self::OauthFile,
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookStorageProviderTypeUtil;
+
+#[wasm_bindgen]
+impl NookStorageProviderTypeUtil {
+    pub fn parse(provider_type: &str) -> Result<NookStorageProviderKind, wasm_bindgen::JsError> {
+        Ok(nook_core::StorageProviderType::parse(provider_type)?.into())
+    }
+
+    #[wasm_bindgen(js_name = value)]
+    #[must_use]
+    pub fn value(kind: NookStorageProviderKind) -> String {
+        match kind {
+            NookStorageProviderKind::Local => nook_core::StorageProviderType::Local,
+            NookStorageProviderKind::LocalFolder => nook_core::StorageProviderType::LocalFolder,
+            NookStorageProviderKind::Github => nook_core::StorageProviderType::Github,
+            NookStorageProviderKind::OauthFile => nook_core::StorageProviderType::OauthFile,
+        }
+        .as_str()
+        .to_owned()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookStorageConnectArgs {
+    mode: String,
+    pat: String,
+    repo: String,
+}
+
+impl From<nook_core::StorageConnectArgs> for NookStorageConnectArgs {
+    fn from(args: nook_core::StorageConnectArgs) -> Self {
+        Self {
+            mode: args.mode,
+            pat: args.pat,
+            repo: args.repo,
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl NookStorageConnectArgs {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn mode(&self) -> String {
+        self.mode.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn pat(&self) -> String {
+        self.pat.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn repo(&self) -> String {
+        self.repo.clone()
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookRuntimeConfig {
+    run_mode: NookClientRunMode,
+    e2e_expose_vault: bool,
+}
+
+#[wasm_bindgen]
+impl NookRuntimeConfig {
+    #[wasm_bindgen(constructor)]
+    pub fn new(run_mode: NookClientRunMode, e2e_expose_vault: bool) -> Self {
+        Self {
+            run_mode,
+            e2e_expose_vault,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = runMode)]
+    #[must_use]
+    pub fn run_mode(&self) -> NookClientRunMode {
+        self.run_mode
+    }
+
+    #[wasm_bindgen(getter, js_name = isLocal)]
+    #[must_use]
+    pub fn is_local(&self) -> bool {
+        self.run_mode == NookClientRunMode::Local
+    }
+
+    #[wasm_bindgen(getter, js_name = isDev)]
+    #[must_use]
+    pub fn is_dev(&self) -> bool {
+        self.run_mode == NookClientRunMode::Dev
+    }
+
+    #[wasm_bindgen(getter, js_name = isProd)]
+    #[must_use]
+    pub fn is_prod(&self) -> bool {
+        self.run_mode == NookClientRunMode::Prod
+    }
+
+    #[wasm_bindgen(getter, js_name = e2eExposeVault)]
+    #[must_use]
+    pub fn e2e_expose_vault(&self) -> bool {
+        self.e2e_expose_vault
+    }
+
+    #[must_use]
+    pub fn allow_fast_idle(&self) -> bool {
+        self.run_mode != NookClientRunMode::Prod || self.e2e_expose_vault
+    }
+
+    #[wasm_bindgen(js_name = allowFastSync)]
+    #[must_use]
+    pub fn allow_fast_sync(&self) -> bool {
+        self.run_mode != NookClientRunMode::Prod || self.e2e_expose_vault
+    }
+
+    #[wasm_bindgen(js_name = exposeDebugHooks)]
+    #[must_use]
+    pub fn expose_debug_hooks(&self) -> bool {
+        self.run_mode != NookClientRunMode::Prod || self.e2e_expose_vault
+    }
+
+    #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
+    #[must_use]
+    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: Option<String>) -> u32 {
+        if !self.allow_fast_idle() {
+            return DEFAULT_VAULT_IDLE_TIMEOUT_MS;
+        }
+        parse_config_millis(raw_timeout_ms, MIN_IDLE_TIMEOUT_MS)
+            .unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
+    }
+
+    #[wasm_bindgen(js_name = resolveVaultIdleWarningMs)]
+    #[must_use]
+    pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: Option<String>) -> u32 {
+        if !self.allow_fast_idle() {
+            return DEFAULT_VAULT_IDLE_WARNING_MS;
+        }
+        parse_config_millis(raw_warning_ms, 0).unwrap_or(DEFAULT_VAULT_IDLE_WARNING_MS)
+    }
+
+    #[wasm_bindgen(js_name = resolveVaultSyncIntervalMs)]
+    #[must_use]
+    pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: Option<String>) -> u32 {
+        if !self.allow_fast_sync() {
+            return DEFAULT_VAULT_SYNC_INTERVAL_MS;
+        }
+        parse_config_millis(raw_interval_ms, MIN_VAULT_SYNC_INTERVAL_MS)
+            .unwrap_or(DEFAULT_VAULT_SYNC_INTERVAL_MS)
+    }
+}
 
 #[wasm_bindgen]
 #[derive(Clone)]

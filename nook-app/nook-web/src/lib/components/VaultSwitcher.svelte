@@ -6,7 +6,6 @@
     SlidersHorizontal,
   } from '@lucide/svelte'
   import type { NookLocalVaultEntry } from '$lib/nook-wasm/nook_wasm'
-  import { vaultDisplayLabel } from '$lib/vault-display'
   import type { VaultState } from '$lib/vault.svelte'
 
   let { vault }: { vault: VaultState } = $props()
@@ -24,7 +23,7 @@
   )
   const activeLabel = $derived(
     activeVault
-      ? vaultDisplayLabel(activeVault, vault.t)
+      ? activeVault.displayLabel(vault.t('login.vault_picker_unnamed'))
       : vault.t('nav.vault'),
   )
   const vaultCount = $derived(vaults.length)
@@ -152,7 +151,7 @@
                 />
                 <span class="min-w-0 flex-1">
                   <span class="block truncate font-medium">
-                    {vaultDisplayLabel(entry, vault.t)}
+                    {entry.displayLabel(vault.t('login.vault_picker_unnamed'))}
                   </span>
                   <span class="block truncate font-mono text-[10px] opacity-70">
                     {entry.storeId}

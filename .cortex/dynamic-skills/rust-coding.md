@@ -53,6 +53,14 @@ When you see `Option<T>`, ask:
   structs instead of flat field bags. Provider credentials/cache, vault session
   state, device identity, event-log state, status channels, and outbox state
   should not all live as sibling fields on one exported manager.
+- Model stateful WASM concepts as real `#[wasm_bindgen]` structs with
+  constructors and methods. JavaScript/Svelte should create the struct instance
+  directly, keep that instance in app state/storage, and call methods on it.
+  Do not create mutable global config (`OnceCell`, `thread_local`, static
+  setters) for per-app runtime state, and do not add TypeScript wrapper
+  functions whose only job is to simulate state around a WASM object. If Rust
+  owns the state, expose the object; if TypeScript owns the browser lifecycle,
+  store/pass the WASM object from Svelte state explicitly.
 - Keep `nook-core` organized by domain module groups (`auth`, `crypto`,
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
   `nook-app/nook-core/src`; place them in the owning group and re-export through
@@ -121,6 +129,46 @@ struct LogEntry {
 If a browser file/provider API still reads or writes YAML text, parse it into a
 typed Rust DTO before handing it to sync/domain code, and serialize the typed
 DTO back only at the file/provider write call.
+
+Use a stateful WASM struct directly instead of a global setter or TS wrapper:
+
+```rust
+#[wasm_bindgen]
+pub struct NookRuntimeConfig {
+    run_mode: NookClientRunMode,
+    e2e_expose_vault: bool,
+}
+
+#[wasm_bindgen]
+impl NookRuntimeConfig {
+    #[wasm_bindgen(constructor)]
+    pub fn new(run_mode: NookClientRunMode, e2e_expose_vault: bool) -> Self {
+        Self {
+            run_mode,
+            e2e_expose_vault,
+        }
+    }
+
+    #[wasm_bindgen(js_name = resolveVaultIdleTimeoutMs)]
+    pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: Option<String>) -> u32 {
+        // Use immutable instance state directly.
+        300_000
+    }
+}
+```
+
+```ts
+class VaultState {
+  runtimeConfig = new NookRuntimeConfig(
+    NookClientRunModeUtil.parse(import.meta.env.MODE),
+    import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true',
+  )
+}
+
+vault.runtimeConfig.resolveVaultIdleTimeoutMs(
+  import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
+)
+```
 
 ## Scope
 

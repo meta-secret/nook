@@ -18,6 +18,21 @@
 - `crypto` — `nook_core::VaultCrypto` (derived once per connect)
 - GitHub/IndexedDB I/O via `reqwest` / `rexie` — not in `nook-core`
 
+## 3a. Browser API boundaries
+
+- Prefer Rust wrapper crates over direct Web APIs in `nook-wasm`: use
+  `gloo-storage` for `sessionStorage`/`localStorage`, `gloo-file` for browser
+  file reads, `rexie` for IndexedDB, and `reqwest` for provider HTTP calls.
+- Avoid direct `web-sys`/`js-sys` in normal WASM code. If no wrapper exists for
+  a narrow browser API, isolate the direct call in the smallest adapter module
+  and keep it out of domain/session policy.
+- Browser lifecycle glue belongs in TypeScript/Svelte: DOM event listeners,
+  timers, Vite `import.meta.env` parsing, viewport/URL state, and UI callbacks.
+  The closer a behavior is to `document`, `window`, or rendering lifecycle, the
+  more strongly it belongs in `nook-web`.
+- `nook-wasm` may own durable browser storage/provider adapters and typed
+  manager state; `nook-web` owns presentation and browser orchestration.
+
 ## 4. Typed WASM boundary (`nook-app/nook-wasm/src/types.rs`)
 
 **Prefer typed `#[wasm_bindgen]` structs over raw `JsValue`, `js_sys::Array`, and `Reflect`.** Errors may still surface as `JsError`; data crossing the boundary should not.

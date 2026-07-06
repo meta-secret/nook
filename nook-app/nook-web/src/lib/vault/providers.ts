@@ -8,14 +8,17 @@ import {
   loadAuthProvidersWithLocalRow,
   providerDefaultLabel,
   saveAuthProviders,
+  type AuthProvidersSnapshot,
   type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
-import { removeLocalFolderHandle } from '$lib/nook-wasm/nook_wasm'
-import { ensureLocalProviderRow } from '$lib/vault-migration'
+import {
+  ensureLocalProviderRow as ensureLocalProviderRowWasm,
+  removeLocalFolderHandle,
+} from '$lib/nook-wasm/nook_wasm'
 import { createLogger } from '$lib/log'
 
 const log = createLogger('vault-providers')
@@ -309,13 +312,16 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         : provider,
     )
   } else {
-    state.providers = ensureLocalProviderRow(
-      {
-        providers: state.providers,
-        activeVaultStoreId: state.activeVaultStoreId ?? undefined,
-      },
-      vaultStoreId,
-    ).providers
+    const snapshot = ensureLocalProviderRowWasm(
+      JSON.parse(
+        JSON.stringify({
+          providers: state.providers,
+          activeVaultStoreId: state.activeVaultStoreId ?? undefined,
+        }),
+      ),
+      vaultStoreId ?? undefined,
+    ) as AuthProvidersSnapshot
+    state.providers = snapshot.providers
   }
 
   if (state.storageMode === 'oauth-file' && state.oauthFile?.fileId) {

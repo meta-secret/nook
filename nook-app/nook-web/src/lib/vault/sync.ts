@@ -10,7 +10,6 @@ import type { StorageProvider } from '$lib/auth-providers'
 import * as localLoginActions from '$lib/vault/local-login'
 
 const log = createLogger('vault-sync')
-const DEFAULT_VAULT_SYNC_INTERVAL_MS = 60_000
 
 /** Pending user choice when local and remote vaults diverge. */
 export type PendingSyncConflict = NookPendingSyncConflict
@@ -32,24 +31,6 @@ export function syncConflictLabel(state: SyncConflictLabelState): string {
       ? 'auth_storage.sync_conflict_store_id_banner'
       : 'auth_storage.sync_conflict_banner'
   return state.t(key, { provider: conflict.providerLabel })
-}
-
-/** Background pull interval - production always uses 60s; fast sync is dev/e2e only. */
-export function resolveVaultSyncIntervalMs(env: {
-  DEV?: boolean
-  VITE_E2E_EXPOSE_VAULT?: string
-  VITE_VAULT_SYNC_INTERVAL_MS?: string
-}): number {
-  const allowFastSync = env.DEV === true || env.VITE_E2E_EXPOSE_VAULT === 'true'
-  if (!allowFastSync) {
-    return DEFAULT_VAULT_SYNC_INTERVAL_MS
-  }
-  const raw = env.VITE_VAULT_SYNC_INTERVAL_MS
-  const parsed = raw === undefined || raw === '' ? NaN : Number(raw)
-  if (Number.isFinite(parsed) && parsed >= 250) {
-    return parsed
-  }
-  return DEFAULT_VAULT_SYNC_INTERVAL_MS
 }
 
 function syncError(context: string, error: unknown) {
@@ -81,7 +62,9 @@ export async function syncLocalFolderProvider(
 
 export function startVaultSync(state: VaultState) {
   state.stopVaultSync()
-  const intervalMs = resolveVaultSyncIntervalMs(import.meta.env)
+  const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
+    import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+  )
   const needsRemoteUpdates =
     state.isAuthenticated ||
     state.joinEnrollmentPrompt !== 'none' ||

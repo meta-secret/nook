@@ -509,6 +509,62 @@ pub fn sync_provider_default_label(
 }
 
 #[must_use]
+pub fn staged_provider_default_label(
+    provider_type: StorageProviderType,
+    github_repo: Option<&str>,
+    oauth_file_name: Option<&str>,
+    oauth_file_preset: Option<OauthFilePreset>,
+    oauth_setup_preset: Option<OauthFilePreset>,
+) -> String {
+    match provider_type {
+        StorageProviderType::Github => {
+            let detail = github_repo
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
+            sync_provider_default_label(StorageProviderType::Github, Some(detail), None)
+        }
+        StorageProviderType::OauthFile => {
+            let detail = github_repo
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    oauth_file_name
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                })
+                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
+            let preset = oauth_file_preset
+                .or(oauth_setup_preset)
+                .unwrap_or(OauthFilePreset::GoogleDrive);
+            sync_provider_default_label(StorageProviderType::OauthFile, Some(detail), Some(preset))
+        }
+        other => sync_provider_default_label(other, None, None),
+    }
+}
+
+#[must_use]
+pub fn has_provider_credentials(
+    provider_type: StorageProviderType,
+    github_pat: Option<&str>,
+    oauth_access_token: Option<&str>,
+    local_folder_handle_id: Option<&str>,
+) -> bool {
+    match provider_type {
+        StorageProviderType::Github => github_pat
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty()),
+        StorageProviderType::OauthFile => oauth_access_token
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty()),
+        StorageProviderType::LocalFolder => local_folder_handle_id
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty()),
+        StorageProviderType::Local => true,
+    }
+}
+
+#[must_use]
 pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
     fn non_empty(value: Option<&String>) -> Option<&str> {
         value
@@ -722,6 +778,106 @@ mod tests {
             ),
             "iCloud · work.yaml"
         );
+    }
+
+    #[test]
+    fn staged_provider_labels_match_login_setup_draft_fields() {
+        assert_eq!(
+            staged_provider_default_label(
+                StorageProviderType::Github,
+                Some("  team-vault  "),
+                None,
+                None,
+                None,
+            ),
+            "GitHub · team-vault"
+        );
+        assert_eq!(
+            staged_provider_default_label(
+                StorageProviderType::Github,
+                Some("  "),
+                None,
+                None,
+                None
+            ),
+            "GitHub"
+        );
+        assert_eq!(
+            staged_provider_default_label(
+                StorageProviderType::OauthFile,
+                Some("drive-vault"),
+                Some("ignored-file"),
+                None,
+                Some(OauthFilePreset::ICloud),
+            ),
+            "iCloud · drive-vault"
+        );
+        assert_eq!(
+            staged_provider_default_label(
+                StorageProviderType::OauthFile,
+                Some("  "),
+                Some(" personal-events "),
+                Some(OauthFilePreset::GoogleDrive),
+                Some(OauthFilePreset::ICloud),
+            ),
+            "Google Drive · personal-events"
+        );
+        assert_eq!(
+            staged_provider_default_label(
+                StorageProviderType::LocalFolder,
+                Some("ignored"),
+                Some("ignored"),
+                None,
+                None,
+            ),
+            "Local backup"
+        );
+    }
+
+    #[test]
+    fn provider_credentials_match_provider_requirements() {
+        assert!(has_provider_credentials(
+            StorageProviderType::Local,
+            None,
+            None,
+            None,
+        ));
+        assert!(has_provider_credentials(
+            StorageProviderType::Github,
+            Some(" ghp_test "),
+            None,
+            None,
+        ));
+        assert!(!has_provider_credentials(
+            StorageProviderType::Github,
+            Some(" "),
+            None,
+            None,
+        ));
+        assert!(has_provider_credentials(
+            StorageProviderType::OauthFile,
+            None,
+            Some(" token "),
+            None,
+        ));
+        assert!(!has_provider_credentials(
+            StorageProviderType::OauthFile,
+            None,
+            None,
+            None,
+        ));
+        assert!(has_provider_credentials(
+            StorageProviderType::LocalFolder,
+            None,
+            None,
+            Some(" folder-1 "),
+        ));
+        assert!(!has_provider_credentials(
+            StorageProviderType::LocalFolder,
+            None,
+            None,
+            Some(" "),
+        ));
     }
 
     #[test]

@@ -11,25 +11,44 @@ import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
 import { SvelteDate } from 'svelte/reactivity'
 import {
   chooseLocalFolderBackupDirectory,
+  ensureLocalAuthProviderSnapshot,
   hasActiveLocalVault,
   hasLocalVault,
+  hasRemoteCredentials as wasmHasRemoteCredentials,
   isVaultSessionLocked,
+  NookBrowserLocale,
+  NookClientRunModeUtil,
   NookPendingSyncConflict,
+  NookRuntimeConfig,
+  get_translation_catalog as getTranslationCatalog,
+  parseAppLocale,
+  providerWasmArgs as wasmProviderWasmArgs,
   readVaultVersion,
   setActiveVault,
   setVaultSessionLocked,
+  stagedProviderLabel as wasmStagedProviderLabel,
+  translateFromCatalog,
   vaultContentHash,
+  wasmStorageArgs as wasmStorageArgsCore,
   type NookLocalVaultEntry,
+  type NookLocalAuthProviderSnapshot,
   type NookPasswordEntrySummary,
+  type NookStorageConnectArgs,
   type NookVaultManager,
+  type NookAppLocale,
 } from '$lib/nook-wasm/nook_wasm'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
   formatDriveStorageRef,
+  GITHUB_PROVIDER_TYPE,
   loadAuthProviders,
+  LOCAL_PROVIDER_TYPE,
+  NookStorageProviderKind,
+  OAUTH_FILE_PROVIDER_TYPE,
   providerDefaultLabel,
   saveAuthProviders,
+  storageProviderKind,
   wasmStorageModeForProvider,
   type LocalFolderConfig,
   type OAuthFileConfig,
@@ -37,23 +56,10 @@ import {
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
-import {
-  getBrowserAppLocale,
-  parseAppLocale,
-  type AppLocale,
-} from '$lib/locale'
-import {
-  getTranslationCatalog,
-  translateFromCatalog,
-  type TranslationCatalog,
-} from '$lib/locale-catalogs'
 import { createLogger } from '$lib/log'
-import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import type { PendingSyncConflict } from '$lib/vault/sync'
 import {
   createVaultIdleSessionTracker,
-  resolveVaultIdleTimeoutMs,
-  resolveVaultIdleWarningMs,
   type VaultIdleSessionTracker,
 } from '$lib/vault-idle-session'
 import {
@@ -88,8 +94,26 @@ type PendingSyncConflictDraft = {
   remoteStoreId?: string
 }
 
+type TranslationCatalog = string
+
+function storageArgsTuple(
+  args: NookStorageConnectArgs,
+): [string, string, string] {
+  return [args.mode, args.pat, args.repo]
+}
+
+function plainProvider(provider: StorageProvider): StorageProvider {
+  return JSON.parse(JSON.stringify(provider)) as StorageProvider
+}
+
 export class VaultState {
-  locale = $state<AppLocale>('en')
+  browserLocale = new NookBrowserLocale()
+  runtimeConfig = new NookRuntimeConfig(
+    NookClientRunModeUtil.parse(import.meta.env.MODE),
+    import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true',
+  )
+
+  locale = $state<NookAppLocale>('en')
   translations = $state<TranslationCatalog>(getTranslationCatalog('en'))
 
   settingsOpen = $state(false)
@@ -116,7 +140,7 @@ export class VaultState {
   loginSetupType = $state<StorageProviderType | undefined>(undefined)
   addProviderOpen = $state(false)
 
-  storageMode = $state<StorageProviderType>('local')
+  storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE)
   githubPat = $state('')
   githubRepo = $state(DEFAULT_GITHUB_REPO)
   oauthFile = $state<OAuthFileConfig | undefined>(undefined)
@@ -233,8 +257,10 @@ export class VaultState {
   }
 
   /** Default 60s in production; dev/e2e may override via VITE_VAULT_SYNC_INTERVAL_MS. */
-  static syncIntervalMs(): number {
-    return syncActions.resolveVaultSyncIntervalMs(import.meta.env)
+  syncIntervalMs(): number {
+    return this.runtimeConfig.resolveVaultSyncIntervalMs(
+      import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
+    )
   }
 
   successDismissTimer: ReturnType<typeof setTimeout> | undefined = undefined
@@ -281,28 +307,22 @@ export class VaultState {
   }
 
   wasmStorageArgs(): [string, string, string] {
-    if (this.localVaultPresent) {
-      return ['local', '', '']
-    }
-    if (this.isAuthenticated && this.syncProviders[0]) {
-      return this.providerWasmArgs(this.syncProviders[0])
-    }
-    const mode = wasmStorageModeForProvider(
-      this.storageMode,
-      this.oauthFile?.preset,
+    return storageArgsTuple(
+      wasmStorageArgsCore(
+        this.localVaultPresent,
+        this.isAuthenticated,
+        this.syncProviders[0]
+          ? plainProvider(this.syncProviders[0])
+          : undefined,
+        this.storageMode,
+        this.githubPat,
+        this.githubRepo,
+        this.oauthFile?.preset ?? undefined,
+        this.oauthFile?.accessToken ?? undefined,
+        this.oauthFile?.fileId ?? undefined,
+        this.oauthFile?.fileName ?? undefined,
+      ),
     )
-    if (this.storageMode === 'oauth-file') {
-      const fileName =
-        this.oauthFile?.fileName?.trim() ||
-        this.githubRepo.trim() ||
-        DEFAULT_DRIVE_BACKUP_NAME
-      return [
-        mode,
-        this.oauthFile?.accessToken?.trim() ?? '',
-        formatDriveStorageRef(this.oauthFile?.fileId, fileName),
-      ]
-    }
-    return [mode, this.githubPat, this.githubRepo]
   }
 
   /** WASM connect always uses the local cache when one exists (unified vault). */
@@ -319,18 +339,19 @@ export class VaultState {
 
   stagedRemoteStorageArgs(): [string, string, string] | undefined {
     const type = this.loginSetupType ?? this.storageMode
-    if (type === 'local') {
+    const kind = storageProviderKind(type)
+    if (kind === NookStorageProviderKind.Local) {
       return undefined
     }
-    if (type === 'github') {
+    if (kind === NookStorageProviderKind.Github) {
       const pat = this.githubPat.trim()
       const repo = this.githubRepo.trim() || DEFAULT_GITHUB_REPO
       if (!pat) {
         return undefined
       }
-      return ['github', pat, repo]
+      return [wasmStorageModeForProvider(GITHUB_PROVIDER_TYPE), pat, repo]
     }
-    if (type === 'oauth-file') {
+    if (kind === NookStorageProviderKind.OauthFile) {
       const token = this.oauthFile?.accessToken?.trim()
       if (!token) {
         return undefined
@@ -340,7 +361,10 @@ export class VaultState {
         this.oauthFile?.fileName?.trim() ||
         DEFAULT_DRIVE_BACKUP_NAME
       return [
-        wasmStorageModeForProvider('oauth-file', this.oauthFile?.preset),
+        wasmStorageModeForProvider(
+          OAUTH_FILE_PROVIDER_TYPE,
+          this.oauthFile?.preset,
+        ),
         token,
         formatDriveStorageRef(this.oauthFile?.fileId, fileName),
       ]
@@ -349,23 +373,13 @@ export class VaultState {
   }
 
   stagedProviderLabel(): string {
-    const type = this.loginSetupType ?? this.storageMode
-    if (type === 'github') {
-      return providerDefaultLabel(
-        'github',
-        this.githubRepo.trim() || DEFAULT_GITHUB_REPO,
-      )
-    }
-    if (type === 'oauth-file') {
-      return providerDefaultLabel(
-        'oauth-file',
-        this.githubRepo.trim() ||
-          this.oauthFile?.fileName?.trim() ||
-          DEFAULT_DRIVE_BACKUP_NAME,
-        this.oauthFile?.preset ?? this.oauthSetupPreset ?? 'google-drive',
-      )
-    }
-    return providerDefaultLabel(type)
+    return wasmStagedProviderLabel(
+      this.loginSetupType ?? this.storageMode,
+      this.githubRepo,
+      this.oauthFile?.fileName ?? undefined,
+      this.oauthFile?.preset ?? undefined,
+      this.oauthSetupPreset ?? undefined,
+    )
   }
 
   /**
@@ -380,20 +394,21 @@ export class VaultState {
   }
 
   hasRemoteCredentials(): boolean {
-    if (this.storageMode === 'github') {
-      return Boolean(this.githubPat.trim())
-    }
-    if (this.storageMode === 'oauth-file') {
-      return Boolean(this.oauthFile?.accessToken?.trim())
-    }
-    if (this.storageMode === 'local-folder') {
-      return Boolean(this.localFolder?.handleId?.trim())
-    }
-    return true
+    return wasmHasRemoteCredentials(
+      this.storageMode,
+      this.githubPat,
+      this.oauthFile?.accessToken ?? undefined,
+      this.localFolder?.handleId ?? undefined,
+    )
   }
 
   syncOAuthRemoteRefFromManager() {
-    if (this.storageMode !== 'oauth-file' || !this.manager || !this.oauthFile) {
+    if (
+      storageProviderKind(this.storageMode) !==
+        NookStorageProviderKind.OauthFile ||
+      !this.manager ||
+      !this.oauthFile
+    ) {
       return
     }
     const remoteRef = this.manager.storage_remote_ref ?? ''
@@ -457,7 +472,9 @@ export class VaultState {
 
   get localProvider(): StorageProvider | undefined {
     return (
-      this.activeVaultProviders.find((p) => p.type === 'local') ?? undefined
+      this.activeVaultProviders.find(
+        (p) => storageProviderKind(p.type) === NookStorageProviderKind.Local,
+      ) ?? undefined
     )
   }
 
@@ -479,7 +496,9 @@ export class VaultState {
 
   /** Cloud sync destinations for the active vault — local row omitted. */
   get syncProviders(): StorageProvider[] {
-    return this.activeVaultProviders.filter((p) => p.type !== 'local')
+    return this.activeVaultProviders.filter(
+      (p) => storageProviderKind(p.type) !== NookStorageProviderKind.Local,
+    )
   }
 
   get hasMultipleLocalVaults(): boolean {
@@ -498,30 +517,7 @@ export class VaultState {
   }
 
   providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    const mode = wasmStorageModeForProvider(
-      provider.type,
-      provider.oauthFile?.preset,
-    )
-    if (provider.type === 'oauth-file') {
-      const fileName =
-        provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
-      return [
-        mode,
-        provider.oauthFile?.accessToken?.trim() ?? '',
-        formatDriveStorageRef(provider.oauthFile?.fileId, fileName),
-      ]
-    }
-    if (provider.type === 'local-folder') {
-      return ['local', '', '']
-    }
-    if (provider.type === 'github') {
-      return [
-        mode,
-        provider.githubPat?.trim() ?? '',
-        provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO,
-      ]
-    }
-    return ['local', '', '']
+    return storageArgsTuple(wasmProviderWasmArgs(plainProvider(provider)))
   }
 
   get hasProviders(): boolean {
@@ -532,7 +528,10 @@ export class VaultState {
     return this.activeProvider?.label ?? providerDefaultLabel(this.storageMode)
   }
 
-  async updateLocale(newLocale: AppLocale, options?: { preferWasm?: boolean }) {
+  async updateLocale(
+    newLocale: NookAppLocale,
+    options?: { preferWasm?: boolean },
+  ) {
     return localeActions.updateLocale(this, newLocale, options)
   }
 
@@ -574,8 +573,8 @@ export class VaultState {
     try {
       const savedLocale = parseAppLocale(
         localStorage.getItem('nook_locale') ?? undefined,
-      )
-      const browserLocale = getBrowserAppLocale()
+      ) as NookAppLocale | undefined
+      const browserLocale = this.browserLocale.appLocale() as NookAppLocale
       const locale = savedLocale ?? browserLocale
       await this.updateLocale(locale)
       await localLoginActions.refreshLocalVaultCatalog(this)
@@ -589,7 +588,7 @@ export class VaultState {
           | 'unlocked'
 
       const autoAuthorizeE2e =
-        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        this.runtimeConfig.e2eExposeVault &&
         localStorage.getItem('nook_e2e_manual_passkey') !== 'true'
       if (!this.deviceProtectionReady && autoAuthorizeE2e) {
         if (this.deviceProtectionStatus === 'passkey') {
@@ -642,7 +641,7 @@ export class VaultState {
     }
     this.localVaultPresent = await hasActiveLocalVault()
     if (this.localVaultPresent) {
-      this.storageMode = 'local'
+      this.storageMode = LOCAL_PROVIDER_TYPE
       this.githubPat = ''
       this.oauthFile = undefined
       this.localFolder = undefined
@@ -651,7 +650,7 @@ export class VaultState {
     }
     const hasPendingEnrollment = Boolean(this.pendingEnrollmentFromUrl)
     if (this.localVaultPresent) {
-      this.storageMode = 'local'
+      this.storageMode = LOCAL_PROVIDER_TYPE
       await this.refreshPasswordEntriesList()
     }
     const autoUnlock = !hasPendingEnrollment && this.shouldAutoUnlock()
@@ -765,7 +764,7 @@ export class VaultState {
       this.githubPat = ''
       this.oauthFile = undefined
       this.localFolder = undefined
-      this.storageMode = 'local'
+      this.storageMode = LOCAL_PROVIDER_TYPE
       this.showSuccess(this.t('device_protection.recovery_complete'))
     } catch (error) {
       this.errorMsg =
@@ -1006,8 +1005,12 @@ export class VaultState {
   ensureIdleSessionTracker() {
     if (this.idleSessionTracker) return
     this.idleSessionTracker = createVaultIdleSessionTracker({
-      timeoutMs: resolveVaultIdleTimeoutMs(import.meta.env),
-      warningMs: resolveVaultIdleWarningMs(import.meta.env),
+      timeoutMs: this.runtimeConfig.resolveVaultIdleTimeoutMs(
+        import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? undefined,
+      ),
+      warningMs: this.runtimeConfig.resolveVaultIdleWarningMs(
+        import.meta.env.VITE_VAULT_IDLE_WARNING_MS ?? undefined,
+      ),
       onExpire: () => this.lockVaultDueToIdle(),
       onWarning: () => this.showIdleLockWarning(),
     })
@@ -1151,7 +1154,10 @@ export class VaultState {
     const mergedJoins: JoinRequest[] = []
     try {
       for (const provider of this.syncProviders) {
-        if (provider.type === 'local-folder') {
+        if (
+          storageProviderKind(provider.type) ===
+          NookStorageProviderKind.LocalFolder
+        ) {
           await syncActions.syncLocalFolderProvider(this, provider)
           continue
         }
@@ -1296,13 +1302,20 @@ export class VaultState {
   remoteEventProviderArgs(
     provider?: StorageProvider,
   ): [string, string, string] | undefined {
-    if (provider?.type === 'local-folder') {
+    if (
+      provider &&
+      storageProviderKind(provider.type) === NookStorageProviderKind.LocalFolder
+    ) {
       return undefined
     }
     if (provider) {
       return this.providerWasmArgs(provider)
     }
-    if (this.syncProviders[0]?.type === 'local-folder') {
+    if (
+      this.syncProviders[0] &&
+      storageProviderKind(this.syncProviders[0].type) ===
+        NookStorageProviderKind.LocalFolder
+    ) {
       return undefined
     }
     if (this.syncProviders.length > 0) {
@@ -1438,7 +1451,10 @@ export class VaultState {
     const provider =
       this.syncProviders[this.syncProviders.length - 1] ??
       this.providers[this.providers.length - 1]
-    if (!provider || provider.type === 'local') {
+    if (
+      !provider ||
+      storageProviderKind(provider.type) === NookStorageProviderKind.Local
+    ) {
       throw new Error('Choose a cloud sync provider.')
     }
     return provider.id
@@ -1447,7 +1463,11 @@ export class VaultState {
   async reloadSessionFromLocal(): Promise<void> {
     if (!this.manager) return
     const raw = await this.enqueueStorage(() =>
-      this.manager!.sync_vault_from_storage('local', '', ''),
+      this.manager!.sync_vault_from_storage(
+        wasmStorageModeForProvider(LOCAL_PROVIDER_TYPE),
+        '',
+        '',
+      ),
     )
     this.applyVaultSyncResult(raw)
     await this.refreshSecretsFromSession()
@@ -1586,9 +1606,13 @@ export class VaultState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
-    const { snapshot, migrated } = await ensureLocalAuthProviderSnapshot({
-      providers: this.providers,
-    })
+    const { snapshot, migrated } = (await ensureLocalAuthProviderSnapshot(
+      JSON.parse(
+        JSON.stringify({
+          providers: this.providers,
+        }),
+      ),
+    )) as NookLocalAuthProviderSnapshot
     if (migrated || snapshot.providers.length !== this.providers.length) {
       this.providers = snapshot.providers
       await this.enqueueStorage(() =>
@@ -1597,7 +1621,7 @@ export class VaultState {
     }
     this.localVaultPresent = await hasLocalVault()
     if (this.localVaultPresent) {
-      this.storageMode = 'local'
+      this.storageMode = LOCAL_PROVIDER_TYPE
       this.githubPat = ''
       this.oauthFile = undefined
       this.localFolder = undefined
@@ -1684,9 +1708,13 @@ export class VaultState {
   async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return
     const folderProvider =
-      provider?.type === 'local-folder'
+      provider &&
+      storageProviderKind(provider.type) === NookStorageProviderKind.LocalFolder
         ? provider
-        : !provider && this.syncProviders[0]?.type === 'local-folder'
+        : !provider &&
+            this.syncProviders[0] &&
+            storageProviderKind(this.syncProviders[0].type) ===
+              NookStorageProviderKind.LocalFolder
           ? this.syncProviders[0]
           : undefined
     if (folderProvider) {

@@ -38,8 +38,9 @@ pub use device_key_protection::{
 };
 pub use enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
-    decrypt_enrollment_payload, encrypt_enrollment_payload, parse_enrollment_envelope,
-    peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
+    build_enrollment_link, decrypt_enrollment_payload, encrypt_enrollment_payload,
+    normalize_enrollment_code, parse_enrollment_envelope, peek_enrollment_entry_id,
+    peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use errors::{
     DatabaseError, DeviceKeyProtectionError, EnrollmentError, EventError, MultiDeviceError,
@@ -97,9 +98,11 @@ pub use sync_provider_credentials::{
 };
 pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
-    StorageProviderData, ensure_local_provider_row, find_duplicate_sync_provider,
-    migrate_provider_fields, normalize_auth_snapshot, provider_target_key,
-    seed_provider_from_legacy_storage,
+    ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
+    draft_storage_args, ensure_local_provider_row, find_duplicate_sync_provider,
+    localize_provider_label, migrate_provider_fields, normalize_auth_snapshot,
+    provider_storage_detail, provider_target_key, seed_provider_from_legacy_storage,
+    storage_args_for_provider, vault_storage_args,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, DriveBackupName,
@@ -107,10 +110,11 @@ pub use validation::{
     OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB,
     STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget, filter_secrets,
     format_drive_storage_ref, format_drive_storage_ref_raw, format_sync_provider_cache_ref,
-    mask_github_pat, parse_drive_storage_ref, storage_mode_for_provider,
-    sync_provider_default_label, sync_provider_target_key, validate_connect,
-    validate_drive_backup_name, validate_github_pat, validate_github_repo_name,
-    validate_oauth_access_token, validate_secret_data, validate_storage_mode,
+    has_provider_credentials, mask_github_pat, parse_drive_storage_ref,
+    staged_provider_default_label, storage_mode_for_provider, sync_provider_default_label,
+    sync_provider_target_key, validate_connect, validate_drive_backup_name, validate_github_pat,
+    validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
+    validate_storage_mode,
 };
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,

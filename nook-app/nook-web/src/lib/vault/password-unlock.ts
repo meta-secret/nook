@@ -1,7 +1,6 @@
 import { VaultState } from '$lib/vault.svelte'
 import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
-import { normalizeEnrollmentCode } from '$lib/enrollment-code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentProvider,
@@ -44,7 +43,7 @@ export async function addVaultPassword(
       const trimmedLabel = label.trim()
       const e2eManager = manager as typeof manager & E2ePasswordManager
       if (
-        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        state.runtimeConfig.e2eExposeVault &&
         e2eManager.addVaultPasswordForE2e
       ) {
         return e2eManager.addVaultPasswordForE2e(trimmedLabel, password)
@@ -85,7 +84,7 @@ export async function updateVaultPasswordEntry(
     await state.enqueueStorage(() => {
       const e2eManager = manager as typeof manager & E2ePasswordManager
       if (
-        import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true' &&
+        state.runtimeConfig.e2eExposeVault &&
         e2eManager.updateVaultPasswordEntryForE2e
       ) {
         return e2eManager.updateVaultPasswordEntryForE2e(entryId, password)
@@ -268,10 +267,7 @@ export async function connectWithEnrollmentCode(
   state.dismissSuccess()
   state.isVerifying = true
   try {
-    const payload = decryptEnrollmentPayload(
-      normalizeEnrollmentCode(code),
-      password,
-    )
+    const payload = decryptEnrollmentPayload(code, password)
     const entryId = payload.entryId.trim()
     const unlockPassword = password.trim()
     if (!entryId) {

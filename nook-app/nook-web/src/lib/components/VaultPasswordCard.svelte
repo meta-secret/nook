@@ -13,12 +13,10 @@
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
   import QRCode from 'qrcode'
-  import {
-    buildEnrollmentLink,
-    peekEnrollmentIssuedAt,
-  } from '$lib/enrollment-code'
+  import { buildEnrollmentLink } from '$lib/enrollment-code'
   import {
     isVaultPasswordLongEnough,
+    peekEnrollmentIssuedAt,
     type NookPasswordEntrySummary,
   } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'
