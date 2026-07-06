@@ -3,7 +3,7 @@
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
 use crate::{
-    DeviceIdentity, VaultMetaState, VaultUnlock, capture_vault_unlock_from_content,
+    Database, DeviceIdentity, VaultMetaState, VaultUnlock, capture_vault_unlock_from_content,
     load_stored_vault, merge_remote_join_records,
 };
 
@@ -19,14 +19,14 @@ pub enum YamlSyncOutcome {
 /// Session fields reloaded from remote YAML.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YamlSyncReloaded {
-    pub jsonl: String,
+    pub database: Database,
     pub meta: VaultMetaState,
-    pub secrets_key: String,
-    pub members_key: String,
+    pub secrets_key: crate::SymmetricKey,
+    pub members_key: crate::SymmetricKey,
     pub unlock: VaultUnlock,
     pub password_entries: Vec<crate::PasswordUnlockEntry>,
-    pub store_id: Option<String>,
-    pub vault_name: Option<String>,
+    pub store_id: String,
+    pub vault_name: String,
     pub version: u64,
 }
 
@@ -43,15 +43,19 @@ pub fn reconcile_yaml_sync(
         if members_key.is_empty() {
             if event_log_mode && !content.trim().is_empty() {
                 let loaded = load_stored_vault(content, identity)?;
+                let store_id = crate::read_vault_store_id(content)?
+                    .ok_or(crate::errors::VaultFormatError::YamlMissingSections)?;
+                let vault_name = crate::read_vault_name(content)?
+                    .unwrap_or_else(|| crate::default_vault_name_for_store_id(&store_id));
                 return Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
-                    jsonl: loaded.jsonl,
+                    database: loaded.database,
                     meta: loaded.meta,
                     secrets_key: loaded.secrets_key,
                     members_key: loaded.members_key,
                     unlock: VaultUnlock::Keys,
                     password_entries: Vec::new(),
-                    store_id: None,
-                    vault_name: None,
+                    store_id,
+                    vault_name,
                     version: 0,
                 })));
             }
@@ -75,7 +79,7 @@ pub fn reconcile_yaml_sync(
     let loaded = load_stored_vault(content, identity)?;
     let metadata = capture_vault_unlock_from_content(content)?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
-        jsonl: loaded.jsonl,
+        database: loaded.database,
         meta: loaded.meta,
         secrets_key: loaded.secrets_key,
         members_key: loaded.members_key,

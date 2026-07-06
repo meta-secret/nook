@@ -186,7 +186,7 @@ function toWasmIssueInput(
 
 function toWasmProvider(provider: EnrollmentProvider): NookEnrollmentProvider {
   if (provider.type === 'github') {
-    return NookEnrollmentProvider.github(provider.pat, provider.repo)
+    return NookEnrollmentProvider.github(provider.repo, provider.pat)
   }
   return NookEnrollmentProvider.local()
 }

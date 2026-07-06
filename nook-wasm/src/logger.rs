@@ -113,7 +113,7 @@ impl LogLevel {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct LogEntry {
-    ts: String,
+    ts: nook_core::IsoTimestamp,
     level: String,
     scope: String,
     message: String,
@@ -141,8 +141,8 @@ thread_local! {
     static INIT_DONE: Cell<bool> = const { Cell::new(false) };
 }
 
-fn now_iso() -> String {
-    js_sys::Date::new_0().to_iso_string().into()
+fn now_iso() -> nook_core::IsoTimestamp {
+    nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
 }
 
 /// Push an entry onto the write-behind queue.

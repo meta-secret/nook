@@ -298,12 +298,8 @@ impl NookVaultManager {
         if let Ok(metadata) = nook_core::capture_vault_unlock_from_content(content) {
             self.unlock = metadata.unlock;
             self.password_entries = metadata.password_entries;
-            if let Some(id) = metadata.store_id {
-                self.store_id = id;
-            }
-            if metadata.vault_name.is_some() {
-                self.vault_name = metadata.vault_name;
-            }
+            self.store_id = metadata.store_id;
+            self.vault_name = Some(metadata.vault_name);
             self.vault_version = metadata.version;
         }
     }

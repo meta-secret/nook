@@ -225,7 +225,7 @@ impl NookEnrollmentProvider {
 
     #[wasm_bindgen(js_name = github)]
     #[must_use]
-    pub fn github(pat: String, repo: String) -> Self {
+    pub fn github(repo: String, pat: String) -> Self {
         Self {
             provider_type: nook_core::StorageProviderType::Github,
             pat,
@@ -236,7 +236,7 @@ impl NookEnrollmentProvider {
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
         match provider {
             nook_core::EnrollmentProvider::Local => Self::local(),
-            nook_core::EnrollmentProvider::Github { pat, repo } => Self::github(pat, repo),
+            nook_core::EnrollmentProvider::Github { pat, repo } => Self::github(repo, pat),
         }
     }
 

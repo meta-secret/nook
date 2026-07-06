@@ -115,6 +115,7 @@ function toPlain<T>(value: T): T {
 export function syncProviderTargetKey(
   provider: StorageProvider,
 ): string | null {
+  const githubPat = provider.type === 'github' ? provider.githubPat?.trim() : ''
   const target =
     provider.type === 'local'
       ? NookSyncProviderTarget.local()
@@ -124,10 +125,10 @@ export function syncProviderTargetKey(
             provider.localFolder?.handleId ?? null,
           )
         : provider.type === 'github'
-          ? provider.githubPat?.trim()
+          ? githubPat
             ? NookSyncProviderTarget.github(
                 provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO,
-                provider.githubPat,
+                githubPat,
               )
             : NookSyncProviderTarget.empty()
           : provider.oauthFile

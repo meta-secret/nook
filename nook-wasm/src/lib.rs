@@ -392,8 +392,8 @@ pub async fn has_active_local_vault() -> Result<bool, wasm_bindgen::JsError> {
 #[derive(Clone)]
 pub struct NookLocalVaultEntry {
     store_id: String,
-    label: Option<String>,
-    last_unlocked_at: Option<String>,
+    label: String,
+    last_unlocked_at: Option<nook_core::IsoTimestamp>,
 }
 
 #[wasm_bindgen]
@@ -404,13 +404,15 @@ impl NookLocalVaultEntry {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn label(&self) -> Option<String> {
+    pub fn label(&self) -> String {
         self.label.clone()
     }
 
     #[wasm_bindgen(getter, js_name = lastUnlockedAt)]
     pub fn last_unlocked_at(&self) -> Option<String> {
-        self.last_unlocked_at.clone()
+        self.last_unlocked_at
+            .as_ref()
+            .map(nook_core::IsoTimestamp::to_string)
     }
 }
 

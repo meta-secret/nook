@@ -434,7 +434,6 @@
     "seed_wordlist_loading": "Загрузка словаря BIP39…",
     "seed_wordlist_error": "Не удалось загрузить официальный словарь BIP39.",
     "seed_phrase_invalid": "Неверная контрольная сумма BIP39 сид-фразы.",
-    "seed_phrase_checking": "Проверка сид-фразы…",
     "seed_phrase_clear": "Очистить фразу",
     "seed_phrase_valid": "Сид-фраза верна",
     "placeholder_title": "например, Моя секретная заметка",

@@ -100,7 +100,6 @@ pub enum StorageProviderType {
 #[wasm_bindgen]
 pub struct NookEnrollmentProvider {
     inner: EnrollmentProvider,
-    provider_type: StorageProviderType,
 }
 
 #[wasm_bindgen]
@@ -109,21 +108,22 @@ impl NookEnrollmentProvider {
     pub fn local() -> Self {
         Self {
             inner: EnrollmentProvider::Local,
-            provider_type: StorageProviderType::Local,
         }
     }
 
     #[wasm_bindgen(js_name = github)]
-    pub fn github(pat: String, repo: String) -> Self {
+    pub fn github(repo: String, pat: String) -> Self {
         Self {
             inner: EnrollmentProvider::Github { pat, repo },
-            provider_type: StorageProviderType::Github,
         }
     }
 
     #[wasm_bindgen(getter, js_name = "type")]
     pub fn provider_type(&self) -> StorageProviderType {
-        self.provider_type
+        match self.inner {
+            EnrollmentProvider::Local => StorageProviderType::Local,
+            EnrollmentProvider::Github { .. } => StorageProviderType::Github,
+        }
     }
 }
 ```
@@ -131,7 +131,7 @@ impl NookEnrollmentProvider {
 ```ts
 const provider =
   selectedProvider === 'github'
-    ? NookEnrollmentProvider.github(githubPat, githubRepo)
+    ? NookEnrollmentProvider.github(githubRepo, githubPat)
     : NookEnrollmentProvider.local()
 
 await issueEnrollmentCode(provider, selectedEntryId)

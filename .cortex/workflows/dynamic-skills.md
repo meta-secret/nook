@@ -73,9 +73,8 @@ from the user's example and surrounding code.
 
 When applying a skill to code:
 
-1. Read the matching skill card from
-   [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md) and any
-   linked project skill.
+1. Use [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md) to find
+   the matching skill card, then read that card and any linked project skill.
 2. Search for candidate code by behavior and exact symbols.
 3. Refactor only the requested scope unless the skill card explicitly defines a
    broader migration.

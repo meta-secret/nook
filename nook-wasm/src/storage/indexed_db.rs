@@ -33,10 +33,10 @@ const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultRegistryEntry {
     pub store_id: String,
+    #[serde(default)]
+    pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_unlocked_at: Option<String>,
+    pub last_unlocked_at: Option<nook_core::IsoTimestamp>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -149,13 +149,23 @@ fn label_from_yaml(content: &str) -> Option<String> {
     nook_core::read_vault_name(content).ok().flatten()
 }
 
+fn default_registry_label(store_id: &str) -> String {
+    nook_core::default_vault_name_for_store_id(store_id)
+}
+
 pub(crate) async fn load_vault_registry() -> Result<VaultRegistry, NookError> {
     let raw = idb_get_string(VAULT_REGISTRY_KEY).await?;
     let Some(json) = raw else {
         return Ok(VaultRegistry::default());
     };
-    serde_json::from_str(&json)
-        .map_err(|e| NookError::IndexedDb(format!("Vault registry parse error: {e}")))
+    let mut registry: VaultRegistry = serde_json::from_str(&json)
+        .map_err(|e| NookError::IndexedDb(format!("Vault registry parse error: {e}")))?;
+    for entry in &mut registry.vaults {
+        if entry.label.trim().is_empty() {
+            entry.label = default_registry_label(&entry.store_id);
+        }
+    }
+    Ok(registry)
 }
 
 async fn save_vault_registry(registry: &VaultRegistry) -> Result<(), NookError> {
@@ -201,7 +211,7 @@ fn upsert_registry_entry(
         .find(|entry| entry.store_id == store_id)
     {
         if let Some(text) = label {
-            entry.label = Some(text.to_owned());
+            entry.label = text.to_owned();
         }
         if touch_unlock {
             entry.last_unlocked_at = now;
@@ -210,13 +220,13 @@ fn upsert_registry_entry(
     }
     registry.vaults.push(VaultRegistryEntry {
         store_id: store_id.to_owned(),
-        label: label.map(str::to_owned),
+        label: label.map_or_else(|| default_registry_label(store_id), str::to_owned),
         last_unlocked_at: now,
     });
 }
 
-fn chrono_lite_now() -> String {
-    js_sys::Date::new_0().to_iso_string().into()
+fn chrono_lite_now() -> nook_core::IsoTimestamp {
+    nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
 }
 
 async fn migrate_legacy_encrypted_db_if_needed() -> Result<(), NookError> {

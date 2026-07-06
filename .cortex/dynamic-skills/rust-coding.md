@@ -28,8 +28,22 @@ When you see `Option<T>`, ask:
 - Put fields only on the variant/sub-struct that actually owns them.
 - Use `Option<T>` only when absence is truly a field-level fact inside one
   workflow, not a disguised variant.
+- Do not use `String` for typed domain values such as timestamps, YAML payloads,
+  JSONL payloads, storage/provider types, vault/store ids, event ids, or secret
+  keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
+  `SessionJsonl`, `StoreId`, `EventId`, `SymmetricKey`, etc.) or add one.
+- Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
+  records immediately after deserialization, and serialize typed records back to
+  wire strings only when crossing storage, provider, or JS boundaries.
+- Secret material that does not cross JS directly should use validated secret
+  newtypes and avoid raw `String` storage. If a session cache still has to hold a
+  string for WASM compatibility, convert from the typed value at the narrowest
+  boundary and zeroize it on reset/drop.
 - Convert loose persisted/browser JSON into typed Rust states at the boundary.
 - Keep domain validation next to the Rust type that makes the state explicit.
+- Before adding a new struct or enum, search for an equivalent core type. Reuse
+  the canonical type instead of duplicating DTOs across `nook-core` and
+  `nook-wasm`; WASM wrappers should delegate to core types when possible.
 
 ## Examples
 
@@ -69,6 +83,27 @@ let target = match non_empty(provider.github_pat.as_deref()) {
     None => SyncProviderTarget::Empty,
 };
 ```
+
+Avoid raw timestamps or payload strings:
+
+```rust
+struct LogEntry {
+    ts: String,
+    yaml: String,
+}
+```
+
+Prefer typed fields internally:
+
+```rust
+struct LogEntry {
+    ts: IsoTimestamp,
+    event: VaultEvent,
+}
+```
+
+If web/storage JSON still uses `yaml` or `ts`, implement serde
+`serialize_with`/`deserialize_with` helpers that convert at the boundary.
 
 ## Scope
 

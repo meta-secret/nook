@@ -137,15 +137,16 @@ impl NookVaultManager {
         self.persist_vault_change(Vec::new()).await?;
 
         let updated = nook_core::serialize_stored(&records, format)?;
+        let loaded = load_stored_vault(updated.as_str(), &identity)?;
         let LoadedVault {
-            jsonl,
             meta,
             secrets_key: resolved_secrets_key,
             members_key: resolved_members_key,
-        } = load_stored_vault(updated.as_str(), &identity)?;
-        self.apply_vault_keys(&resolved_secrets_key, &resolved_members_key)?;
-        self.decrypted_jsonl = jsonl;
-        self.meta = meta;
+            ..
+        } = &loaded;
+        self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
+        self.decrypted_jsonl = loaded.session_jsonl()?;
+        self.meta = meta.clone();
         Ok(self.get_records()?)
     }
 

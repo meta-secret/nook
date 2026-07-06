@@ -20,12 +20,12 @@ use crate::storage::icloud::{
 };
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
-    AppendEventInput, EventId, SigningIdentity, VaultOperation,
+    AppendEventInput, EventId, SigningIdentity, VaultEvent, VaultOperation,
     apply_user_records_to_armored_session, build_signed_event, members_checkpoint_hash_from_roster,
     project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
     union_remote_events_and_heads, verify_stored_vault_import,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::BTreeSet;
 
 fn iso_timestamp() -> String {
@@ -36,7 +36,8 @@ fn iso_timestamp() -> String {
 #[serde(rename_all = "camelCase")]
 pub(in crate::manager) struct ExternalEventLogRecord {
     pub event_id: String,
-    pub yaml: String,
+    #[serde(rename = "yaml", deserialize_with = "deserialize_event_yaml")]
+    pub event: VaultEvent,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -44,7 +45,26 @@ pub(in crate::manager) struct ExternalEventLogRecord {
 pub(in crate::manager) struct EventLogStorageRecord {
     pub event_id: String,
     pub path: String,
-    pub yaml: String,
+    #[serde(rename = "yaml", serialize_with = "serialize_event_yaml")]
+    pub event: VaultEvent,
+}
+
+fn deserialize_event_yaml<'de, D>(deserializer: D) -> Result<VaultEvent, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let yaml = String::deserialize(deserializer)?;
+    nook_core::parse_event_storage_bytes(yaml.as_bytes()).map_err(serde::de::Error::custom)
+}
+
+fn serialize_event_yaml<S>(event: &VaultEvent, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let bytes =
+        nook_core::serialize_event_storage_yaml(event).map_err(serde::ser::Error::custom)?;
+    let yaml = String::from_utf8(bytes).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&yaml)
 }
 
 impl NookVaultManager {
@@ -419,12 +439,11 @@ impl NookVaultManager {
             let bytes = store.get_bytes(&event_id).ok_or_else(|| {
                 NookError::Database(format!("Event {} missing from local store.", event_id))
             })?;
-            let yaml = String::from_utf8(bytes.to_vec())
-                .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
+            let event = nook_core::parse_event_storage_bytes(bytes)?;
             records.push(EventLogStorageRecord {
                 event_id: event_id.as_str().to_owned(),
                 path: event_id.storage_path(),
-                yaml,
+                event,
             });
         }
         Ok(records)
@@ -448,7 +467,17 @@ impl NookVaultManager {
             .into_iter()
             .map(|record| {
                 let event_id = EventId::parse(&record.event_id)?;
-                Ok((event_id, record.yaml.into_bytes()))
+                let canonical_id = record.event.id()?;
+                if canonical_id != event_id {
+                    return Err(nook_core::VaultError::Event(
+                        nook_core::EventError::EventStoreIdMismatch {
+                            expected: canonical_id.as_str().to_owned(),
+                            actual: event_id.as_str().to_owned(),
+                        },
+                    ));
+                }
+                let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
+                Ok((event_id, bytes))
             })
             .collect::<Result<_, nook_core::VaultError>>()?;
 

@@ -154,7 +154,7 @@ pub use vault_event_store::{
     union_remote_events_and_heads,
 };
 pub use vault_format::{
-    VaultFormat, current_vault_schema_version, deserialize_stored,
+    VaultFormat, current_vault_schema_version, default_vault_name_for_store_id, deserialize_stored,
     deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,
     read_vault_password_entries, read_vault_schema_version, read_vault_store_id, read_vault_unlock,
     read_vault_version, serialize_stored, serialize_stored_yaml_with_unlock,

@@ -304,6 +304,16 @@ fn resolve_vault_name_for_write(name: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
+#[must_use]
+pub fn default_vault_name_for_store_id(store_id: &str) -> String {
+    let suffix = store_id
+        .rsplit('_')
+        .next()
+        .filter(|part| !part.is_empty())
+        .unwrap_or(store_id);
+    format!("Vault {suffix}")
+}
+
 /// Serialize records together with unlock metadata. Backup passwords live in
 /// `password_entries` alongside `auth:` device-key rows; `unlock.type` stays
 /// `keys` for hybrid vaults.

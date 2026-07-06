@@ -18,7 +18,7 @@ use crate::vault_wire::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Database {
     records: HashMap<SecretId, SecretRecord>,
 }

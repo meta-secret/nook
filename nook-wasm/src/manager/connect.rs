@@ -191,7 +191,7 @@ impl NookVaultManager {
                     members_key,
                     ..
                 } = load_stored_vault(&cache, &identity)?;
-                self.apply_vault_keys(&secrets_key, &members_key)?;
+                self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
                 self.meta = meta;
                 self.capture_vault_unlock(&cache);
                 self.sync_events_from_current_provider().await?;
@@ -203,15 +203,16 @@ impl NookVaultManager {
                     return Err(NookError::Database(message).into());
                 }
                 let _ = self.status_tx.send("DECRYPT_START".to_owned());
+                let loaded = load_stored_vault(&content, &identity)?;
                 let LoadedVault {
-                    jsonl,
                     meta,
                     secrets_key,
                     members_key,
-                } = load_stored_vault(&content, &identity)?;
-                self.apply_vault_keys(&secrets_key, &members_key)?;
-                self.decrypted_jsonl = jsonl;
-                self.meta = meta;
+                    ..
+                } = &loaded;
+                self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
+                self.decrypted_jsonl = loaded.session_jsonl()?;
+                self.meta = meta.clone();
                 self.maybe_sync_self_into_roster(&identity)?;
                 let _ = self.status_tx.send("DECRYPT_SUCCESS".to_owned());
                 self.last_synced_content = content.clone();
@@ -302,15 +303,16 @@ impl NookVaultManager {
             return Err(NookError::Database(message));
         }
         let projection = self.serialize_current_projection_yaml()?;
+        let loaded = load_stored_vault(&projection, identity)?;
         let LoadedVault {
-            jsonl,
             meta,
             secrets_key,
             members_key,
-        } = load_stored_vault(&projection, identity)?;
-        self.apply_vault_keys(&secrets_key, &members_key)?;
-        self.decrypted_jsonl = jsonl;
-        self.meta = meta;
+            ..
+        } = &loaded;
+        self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
+        self.decrypted_jsonl = loaded.session_jsonl()?;
+        self.meta = meta.clone();
         self.event_log_mode = true;
         self.apply_event_projection_to_session().await?;
         self.persist_projection_cache().await?;

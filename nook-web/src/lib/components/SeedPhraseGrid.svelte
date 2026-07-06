@@ -38,7 +38,6 @@
   let suggestionIndex = $state(0)
   let inputRefs = $state<Array<HTMLInputElement | null>>([])
   let checksumValid = $state<boolean | null>(null)
-  let checksumChecking = $state(false)
 
   const gridCols = $derived(wordCount === 12 ? 'grid-cols-3' : 'grid-cols-4')
   const activeCells = $derived(cells.slice(0, wordCount))
@@ -117,7 +116,6 @@
     wordCount = 12
     value = ''
     checksumValid = null
-    checksumChecking = false
     focusedIndex = null
     suggestionIndex = 0
     focusCell(0)
@@ -206,17 +204,13 @@
   $effect(() => {
     if (readonly || !perWordValid || !allWordsFilled) {
       checksumValid = null
-      checksumChecking = false
       valid = false
       return
     }
 
     const mnemonic = value
-    checksumChecking = true
-
     const ok = validateBip39Mnemonic(mnemonic)
     checksumValid = ok
-    checksumChecking = false
     valid = ok
   })
 
@@ -411,13 +405,6 @@
       data-testid="seed-phrase-checksum-error"
     >
       {vault.t('add_secret.seed_phrase_invalid')}
-    </p>
-  {:else if !readonly && checksumChecking}
-    <p
-      class="text-xs text-muted-foreground"
-      data-testid="seed-phrase-checksum-checking"
-    >
-      {vault.t('add_secret.seed_phrase_checking')}
     </p>
   {/if}
 </div>
