@@ -38,7 +38,7 @@ The **same sync spec files** run against different backends. CI swaps providers 
 | ------------------------ | ------------------------ | -------- |
 | `NOOK_E2E_SYNC_PROVIDER` | `file`, `local`, `google-drive`, `github` | `file` |
 
-Registry and factories live in `nook-web/e2e/sync-provider.ts`:
+Registry and factories live in `nook-app/nook-web/e2e/sync-provider.ts`:
 
 - **`createSyncTarget()`** — isolated stub remote (reads provider from env)
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
@@ -96,7 +96,7 @@ Do **not** spin up multiple Nook servers for parallel stub e2e unless debugging 
 
 ## Playwright projects
 
-Defined in `nook-web/playwright.config.ts`:
+Defined in `nook-app/nook-web/playwright.config.ts`:
 
 | Project     | Specs                                          | CI                            |
 | ----------- | ---------------------------------------------- | ----------------------------- |
@@ -108,7 +108,7 @@ Legacy script aliases: `test:e2e:local` → `e2e-pr`, `test:e2e:sync-stub` → `
 
 ## Task commands (Docker)
 
-All commands run containerized via `Taskfile.yml`:
+All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands live in `nook-app/Taskfile.yml` and `nook-app/.task/`, and are included into the root command surface:
 
 ```bash
 # Minimum before every agent push
@@ -121,7 +121,7 @@ task ci:pr                          # prepare → verify ‖ build → full stub
 task web:test:e2e                   # full stub e2e (PR/main gate)
 task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
 
-# Single spec — preferred during fix/debug (E2E_SPEC paths relative to nook-web/)
+# Single spec — preferred during fix/debug (E2E_SPEC paths relative to nook-app/nook-web/)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 
 # Main CI equivalent
@@ -138,7 +138,7 @@ task web:test:e2e:github            # → sync-live
 ## nook-core coverage export
 
 The `nook-core` coverage gate runs during the Docker image build in
-`nook-core/Dockerfile` (`builder-debug`). That single `cargo llvm-cov nextest`
+`nook-app/nook-core/Dockerfile` (`builder-debug`). That single `cargo llvm-cov nextest`
 run both enforces the committed floor and writes reusable artifacts to
 `/opt/nook/coverage/nook-core` in the image.
 
@@ -149,11 +149,10 @@ Do not make coverage export start a container and rerun `cargo llvm-cov`; PR CI
 exports current and base coverage, so a runtime coverage command would duplicate
 the same Rust tests after the image build.
 
-When PR CI builds the base worktree for comparison, it copies the PR branch's
-coverage plumbing (`nook-core/Dockerfile` and `.task/docker.yml`) into that
-worktree before `task setup`. The measured Rust source still comes from
-`origin/$BASE_REF`, but CI can validate coverage-infra changes in the PR itself
-and avoid falling back to an older base-branch export task.
+When PR CI builds the base worktree for comparison, it measures the base source in
+the base worktree's own layout. The current PR image is built first, so this
+branch's Dockerfile/task plumbing is still validated before base coverage is
+exported.
 
 ## Local vs remote CI
 
@@ -214,7 +213,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core coverage comment                                                                                                             |
 | `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml)                                                                                                                            |
 
-Local live e2e: copy `nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
+Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
 ## CI agent (`ci-fix` job)
 

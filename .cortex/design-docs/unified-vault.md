@@ -105,7 +105,7 @@ secrets:
 | **Every save** | Increment before write |
 | **Legacy vaults** | Missing field → treat as `0`; next save normalizes to `1+` |
 
-Implementation: `nook-core/src/vault_format.rs` (`read_vault_version`), `nook-core/src/vault_sync.rs`.
+Implementation: `nook-app/nook-core/src/vault_format.rs` (`read_vault_version`), `nook-app/nook-core/src/vault_sync.rs`.
 
 ---
 
@@ -214,7 +214,7 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 
 ### In-memory sync tests
 
-`MemoryVaultStore` in `nook-core/src/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-core/tests/vault_sync_workflow.rs` (no browser required).
+`MemoryVaultStore` in `nook-app/nook-core/src/vault_sync_store.rs` is a HashMap-friendly stand-in for local IndexedDB and remote providers. `reconcile_vault_stores` and `fan_out_sync` apply the same actions as the web layer after I/O. Integration coverage lives in `nook-app/nook-core/tests/vault_sync_workflow.rs` (no browser required).
 
 ---
 

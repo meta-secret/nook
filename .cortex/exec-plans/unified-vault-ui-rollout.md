@@ -29,9 +29,9 @@ Gradual UI migration from **provider-as-vault** to **local-first unified vault**
 
 | Deliverable | Location |
 |-------------|----------|
-| `vault_version` in vault YAML | `nook-core/src/vault_format.rs` |
-| `compare_vault_sync` | `nook-core/src/vault_sync.rs` |
-| WASM `compareVaultSync` export | `nook-wasm/src/lib.rs` |
+| `vault_version` in vault YAML | `nook-app/nook-core/src/vault_format.rs` |
+| `compare_vault_sync` | `nook-app/nook-core/src/vault_sync.rs` |
+| WASM `compareVaultSync` export | `nook-app/nook-wasm/src/lib.rs` |
 | Architecture docs | `.cortex/design-docs/unified-vault.md` |
 | This rollout plan | `.cortex/exec-plans/unified-vault-ui-rollout.md` |
 

@@ -7,10 +7,10 @@ Use this workflow for feature work that touches more than one package.
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
 3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.
-4. Consume generated WASM APIs directly when they are already ergonomic; add `nook-web/src/lib` wrappers only for UI/browser glue, localization, or reactive state.
-5. Keep shadcn-svelte UI primitives and default styling in `nook-web/src/lib/components/ui` and `nook-web/src/app.css`.
+4. Consume generated WASM APIs directly when they are already ergonomic; add `nook-app/nook-web/src/lib` wrappers only for UI/browser glue, localization, or reactive state.
+5. Keep shadcn-svelte UI primitives and default styling in `nook-app/nook-web/src/lib/components/ui` and `nook-app/nook-web/src/app.css`.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
-7. Add any new routine command to `Taskfile.yml`.
+7. Add new app routine commands to `nook-app/Taskfile.yml` or `nook-app/.task/`; add repo-level non-app commands to the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Verify with `task check`.
 
@@ -30,11 +30,11 @@ Use Bun for JavaScript tooling and run project commands through Taskfile/Docker.
 
 Portable work belongs in `nook-core` first so web, mobile, and CLI can share it:
 
-1. `nook-core/src/secret_types.rs` — enum variant + payload struct + `SecretValue` parse/serialize.
-2. `nook-core/src/secret_view.rs` — list/search/build helpers (`display_title`, `group_key`, `build_secret_yaml`, …).
-3. `nook-wasm` — expose fields on `NookSecretRecord`; extend `records_to_array` if needed.
-4. `nook-core` tests — payload round-trips and validation (no TS mirror tests).
-5. `nook-web` — form + detail UI only; use `buildSecretYaml` and wasm getters, not duplicated TS schemas.
+1. `nook-app/nook-core/src/secret_types.rs` — enum variant + payload struct + `SecretValue` parse/serialize.
+2. `nook-app/nook-core/src/secret_view.rs` — list/search/build helpers (`display_title`, `group_key`, `build_secret_yaml`, …).
+3. `nook-app/nook-wasm` — expose fields on `NookSecretRecord`; extend `records_to_array` if needed.
+4. `nook-app/nook-core` tests — payload round-trips and validation (no TS mirror tests).
+5. `nook-app/nook-web` — form + detail UI only; use `buildSecretYaml` and wasm getters, not duplicated TS schemas.
 6. Playwright — user flow coverage when the type is exposed in the vault UI.
 
 See [references/rust-wasm.md](../references/rust-wasm.md) §4 for the boundary pattern.

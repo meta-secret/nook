@@ -2,15 +2,15 @@
 
 Use this workflow for quality, CI, and deployment changes.
 
-1. Keep the Taskfile as the source of truth for build, lint, test, and check commands.
+1. Keep Taskfile as the source of truth for build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml` and `nook-app/.task/`; the root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
 2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for repo behavior.
-3. Build Docker images with Docker Buildx Bake through `docker-bake.hcl`. Do **not** use Docker named volumes in `docker run` — GH Actions does not persist them; the Rust dep cache and warm `target/` are baked into the image (cargo-chef), and workspace source is copied into the nook-web image (sealed image, no runtime mount). See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
+3. Build Docker images with Docker Buildx Bake through `nook-app/docker-bake.hcl`. Do **not** use Docker named volumes in `docker run` — GH Actions does not persist them; the Rust dep cache and warm `target/` are baked into the image (cargo-chef), and workspace source is copied into the nook-web image (sealed image, no runtime mount). See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
 5. Prefer official prebuilt release archives downloaded with `curl` for standalone Docker image tools. Avoid `cargo install` when a release archive is available.
 6. Preserve these gates unless the task explicitly changes them:
-   - `cargo fmt --all -- --check`
-   - `cargo clippy -p nook-core --all-targets` and `cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm` (`-D warnings`)
-   - `task rust:coverage:check` — `cargo llvm-cov nextest -p nook-core --profile ci` vs **90%** line floor (`nook-core/coverage-floor.json`)
+   - `cd nook-app && cargo fmt --all -- --check`
+   - `cd nook-app && cargo clippy -p nook-core --all-targets` and `cd nook-app && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm` (`-D warnings`)
+   - `task rust:coverage:check` — `cd nook-app && cargo llvm-cov nextest -p nook-core --profile ci` vs **90%** line floor (`nook-app/nook-core/coverage-floor.json`)
    - `svelte-check`
    - `eslint`
    - `prettier --check`

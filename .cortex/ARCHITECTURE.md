@@ -6,9 +6,26 @@ This document provides a comprehensive guide to Nook's architecture, package bou
 
 ## 1. Monorepo Structure & Dependency flow
 
-Nook is built as a modular monorepo using a strict, uni-directional dependency flow. This prevents architectural drift, guarantees separation of concerns, and isolates WebAssembly bindings from core domain code.
+Nook is built as a modular monorepo using a strict, uni-directional dependency flow. App code lives under the root `nook-app/` directory, which contains the Rust core, WASM bridge, web app, browser-extension package, and Docker build definitions for the app/toolchain images. This prevents architectural drift, guarantees separation of concerns, and isolates WebAssembly bindings from core domain code.
 
 ```
+root/
+├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
+├── .task/
+│   └── agentic-ai.yml    (repo-level agent tooling)
+└── nook-app/
+    ├── Taskfile.yml      (app command surface)
+    ├── .task/            (app build/check/dev task fragments)
+    ├── Cargo.toml
+    ├── Cargo.lock
+    ├── docker-bake.hcl
+    ├── .cargo/
+    ├── .config/
+    ├── docker/              (shared app/toolchain image definitions)
+    ├── nook-core/
+    ├── nook-wasm/
+    ├── nook-web/
+    └── nook-web-extension/
 +-------------------------------------------------------------+
 |                         nook-web                            |
 |             (Vite + Svelte 5 + TypeScript UI)               |
@@ -46,7 +63,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
 - **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
 - **`src/vault/`:** In-memory database, vault formats, ids/newtypes, event log, projection, import, connect, and session-cache workflows.
-- **Root exports:** `nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
+- **Root exports:** `nook-app/nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
 ### B. `nook-wasm` (The Bridge Layer)
@@ -71,9 +88,9 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 
 ### D. `nook-web-extension` (The Browser Extension Layer)
 
-- **Manifest V3 package:** Browser extension build output lives in `nook-web-extension/dist`; source lives under `nook-web-extension/src`.
+- **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web-extension/dist`; source lives under `nook-app/nook-web-extension/src`.
 - **Separate product surface:** Popup UI, service worker, content scripts, and future autofill flows stay out of `nook-web` so extension-only browser privileges and page-injection code do not leak into the web app.
-- **Task/Docker integration:** `task extension:build` builds the extension in Docker; the sealed `nook-web:local` image also builds `nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
+- **Task/Docker integration:** `task extension:build` builds the extension in Docker; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 
 ---
@@ -161,7 +178,7 @@ members:  members_key-encrypted catalog entries
 
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-core` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
+| `nook-core` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web`  | Playwright e2e: `task web:test:e2e` (PR/main stub suite), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |
 
@@ -171,7 +188,7 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile`. The workspace **source is copied into the nook-web image** at build time (`nook-web/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The one exception is `task web:dev`, which mounts the repo for Vite hot-reload.
+All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific build/check/dev commands live in `nook-app/Taskfile.yml` and `nook-app/.task/`, and are included into the root command surface. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The one exception is `task web:dev`, which mounts the repo for Vite hot-reload.
 
 ### Two image tiers
 
@@ -190,6 +207,8 @@ The nook-web image is large (~9 GB — it bakes the warm `target/` so runtime `t
 
 **Shared cache is pull-always, push-main-only.** `cache-from` (the GHCR `:buildcache` layers plus the current commit tag when present) is wired for **every** build — local dev included — so a fresh checkout with a cold Docker cache pulls CI's warm dep/target layers instead of a catastrophic cold recompile. `cache-to` (publish) is gated on `TOOLCHAIN_PUSH`, which only **main** CI sets (`docker:push` -> `toolchain-push`, verified `:<git-commit>` image + `:buildcache`). PR CI and local dev never push (so no auth/`403`); an unauthenticated local pull that misses simply falls back to a cold build. No global mutable state blocks a local build — the registry is cache, not a dependency.
 
+Docker bake orchestration is app-owned: `nook-app/Taskfile.yml` passes `nook-app/docker-bake.hcl` plus package-local bake files under `nook-app/**/docker-bake.hcl` to `docker buildx bake`, while the root `Taskfile.yml` includes those app commands for repo-root usage. The Taskfile passes bake files as absolute paths, grants buildx read access to the repo root, and sets every target context to the repo root so local and self-hosted runner buildx versions resolve paths the same way. The Docker build context remains the repository root, so the sealed app image can copy root workflow files (`Taskfile.yml`, `.task/agentic-ai.yml`, docs, and CI helper scripts) as well as `nook-app`.
+
 ### Docker cache model (no named volumes)
 
 GitHub Actions **does not persist Docker named volumes** between jobs or workflow runs. Nook therefore **must not** rely on named volumes for `target/` or `node_modules` caching across runs.
@@ -198,14 +217,14 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Toolchain base image    | `cache-from` pulled by **every** build (local + CI). **Main** publishes the verified `:<git-commit>` image + cache (`ci:main:publish` -> `toolchain-push`). PR CI and local dev never publish.                                                                            |
 | Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) + clippy/test warm-up during the toolchain build.                                                                                                                                                                                                                   |
-| `target/`               | Lives at the **default in-tree path** `/meta-secret/nook/target` (= WORKDIR). Baked warm into the toolchain base; the nook-web image COPYs source over the same workdir and reuses it (no dep recompile). No bind mount means nothing shadows it — so **no `CARGO_TARGET_DIR` override, no `/opt` gymnastics, no single-container hack**. |
-| `nook-web/node_modules` | Installed in the `web-deps` bake target (parallel branch, own `cache-to` like `builder-deps`). BuildKit cache mount at `/opt/nook/bun-install-cache` during `bun install`. `web:dev` (mounted) runs `bun install` in its command.                                                                                                         |
-| Web wasm pkg            | Generated by `wasm-pack` in the wasm builder into `nook-web/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY).                                                                                                                                         |
+| `nook-app/target/`      | Lives at the **default in-tree path** `/meta-secret/nook/nook-app/target` (= Rust workspace root). Baked warm into the toolchain base; the nook-web image COPYs source over the same workdir and reuses it (no dep recompile). No bind mount means nothing shadows it — so **no `CARGO_TARGET_DIR` override, no `/opt` gymnastics, no single-container hack**. |
+| `nook-app/nook-web/node_modules` | Installed in the `web-deps` bake target (parallel branch, own `cache-to` like `builder-deps`). BuildKit cache mount at `/opt/nook/bun-install-cache` during `bun install`. `web:dev` (mounted) runs `bun install` in its command.                                                                                                         |
+| Web wasm pkg            | Generated by `wasm-pack` in the wasm builder into `nook-app/nook-web/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY).                                                                                                                                         |
 | Web dist                | Built at **nook-web image build time** (`bun run build`, `VITE_BASE` arg) so it is present in every container: the Cloudflare preview deploy (in-container) and the GitHub Pages upload (extracted via `task docker:extract:dist`) both read it.                                                                                          |
 | Playwright Chromium     | Pre-installed in `nook-base` (baked once; reruns only when base/Playwright version changes).                                                                                                                                                                                                                                              |
 | CI Docker builds        | **`task ci:pr`** (PR verify, in-container Cloudflare deploy, GitHub `github-pages` deployment status for the PR head SHA) / **`task ci:main:publish`** (main — `toolchain-push` after green verify, then `docker:extract:dist` for Pages).                                                                                               |
 
-Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
+Regenerate chef inputs after dependency changes: commit **`nook-app/Cargo.lock`** when dependencies change; `recipe.json` is produced during `docker build`.
 
 ### Sealed-image consequences
 
@@ -214,6 +233,6 @@ Regenerate chef inputs after dependency changes: commit **`Cargo.lock`** when de
 
 ### Build & verify
 
-- **Native linking:** `.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
-- **Wasm:** generated by `wasm-pack build nook-wasm` in the `builder-wasm` stage into `nook-web/src/lib/nook-wasm` (COPY'd into the nook-web image; `task wasm:build` only regenerates on the mounted `web:dev` path when sources change). Chef-cached `target/` at the default in-tree path.
+- **Native linking:** `nook-app/.cargo/config.toml` uses **mold** for `x86_64-unknown-linux-gnu` only (installed in the toolchain image); wasm32 targets keep the default linker.
+- **Wasm:** generated by `wasm-pack build nook-wasm` from the `nook-app` workspace root in the `builder-wasm` stage into `nook-app/nook-web/src/lib/nook-wasm` (COPY'd into the nook-web image; `task wasm:build` only regenerates on the mounted `web:dev` path when sources change). Chef-cached `nook-app/target/` at the default in-tree path.
 - **Verify:** `task check` (fmt, clippy, `task rust:coverage:check`, svelte-check, eslint, vitest, vite build).

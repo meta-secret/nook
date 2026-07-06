@@ -104,4 +104,4 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 | Replication / mismatch guards | Planned (sync logic in `vault_sync.rs`) |
 | Event-log causal heads | Implemented |
 
-Implementation: `nook-core/src/vault_ids.rs`.
+Implementation: `nook-app/nook-core/src/vault_ids.rs`.

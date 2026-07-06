@@ -29,7 +29,7 @@ The job runs `task setup` before you start. It builds the sealed **nook-web imag
      ```
    - **E2e failure** — identify the failing spec file(s) in the logs first. After prepare + parallel (dist must exist), prefer a **scoped** Playwright run over the full 72-test suite:
      ```bash
-     cp -a nook-web/dist nook-web/dist-prod
+     cp -a nook-app/nook-web/dist nook-app/nook-web/dist-prod
      task web:test:e2e:file E2E_SPEC='e2e/multi-device-local.spec.ts'
      task web:e2e:restore-prod-dist
      ```
@@ -38,7 +38,7 @@ The job runs `task setup` before you start. It builds the sealed **nook-web imag
      task ci:main:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
      task web:e2e:restore-prod-dist
      ```
-4. Implement the minimal correct fix (match existing conventions). E2e sync flakes often need `triggerVaultSyncRefresh`, `dismissSyncConflictIfVisible`, or `waitForVaultSyncIdle` from `nook-web/e2e/helpers.ts` — see `password-envelope-sync.spec.ts`. Failing specs auto-attach the app's persisted logs (`nook-app-logs.json`) via `e2e/fixtures.ts`; to capture more detail rebuild with `VITE_LOG_LEVEL=debug` or add `page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`. See [.cortex/references/logging.md](../../.cortex/references/logging.md).
+4. Implement the minimal correct fix (match existing conventions). E2e sync flakes often need `triggerVaultSyncRefresh`, `dismissSyncConflictIfVisible`, or `waitForVaultSyncIdle` from `nook-app/nook-web/e2e/helpers.ts` — see `password-envelope-sync.spec.ts`. Failing specs auto-attach the app's persisted logs (`nook-app-logs.json`) via `e2e/fixtures.ts`; to capture more detail rebuild with `VITE_LOG_LEVEL=debug` or add `page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`. See [.cortex/references/logging.md](../../.cortex/references/logging.md).
 5. Re-run **only** the CI tasks that failed in steps 2–3 — do not run full main CI unless multiple stages failed.
 
 ## Rules

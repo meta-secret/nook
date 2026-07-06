@@ -55,7 +55,7 @@ When you see `Option<T>`, ask:
   should not all live as sibling fields on one exported manager.
 - Keep `nook-core` organized by domain module groups (`auth`, `crypto`,
   `secrets`, `sync`, `vault`). Do not add new domain files directly under
-  `nook-core/src`; place them in the owning group and re-export through
+  `nook-app/nook-core/src`; place them in the owning group and re-export through
   `lib.rs` only when they are part of the stable public core API.
 - Authored TypeScript/Svelte uses `undefined`, never `null`, for absence. Rust
   and WASM helpers should make it easy for TS to pass plain objects or omitted
@@ -137,5 +137,5 @@ structs must convert into a typed enum before domain decisions are made.
 - Add or update tests for each new enum state.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
-- Run targeted core tests plus `cargo clippy -p nook-core --all-targets -- -D warnings`.
+- Run targeted core tests plus `cd nook-app && cargo clippy -p nook-core --all-targets -- -D warnings`.
 - When exposed to web, regenerate wasm bindings and run the web type check.

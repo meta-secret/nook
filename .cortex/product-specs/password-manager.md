@@ -100,7 +100,7 @@ secrets:
 - **`vault_version`:** Legacy/local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
-Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example generate_vault_fixtures -p nook-core`).
+Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
 - **Database Name:** `nook_db`, version `1`, store `vault`
@@ -142,7 +142,7 @@ Example fixtures: `nook-core/fixtures/` (generate via `cargo run --example gener
 | `validation.rs` | Connect/secret validation, search filter |
 | `password.rs` | CSPRNG password generation |
 
-All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-core/tests/vault_workflow.rs`.
+All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-core/tests/vault_workflow.rs`.
 
 ---
 

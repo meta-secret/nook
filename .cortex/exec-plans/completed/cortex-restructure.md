@@ -11,13 +11,13 @@ Restructured `.cortex` from an overengineered skill/subagent hierarchy into a fl
 
 ### 2. Pinned Precise Versions
 - Pinned all dependencies to exact versions (removed `^`, `~`, etc.) across:
-  - `nook-core/Cargo.toml` (`serde = "=1.0.228"`)
-  - `nook-wasm/Cargo.toml` (`serde_json = "=1.0.150"`, `wasm-bindgen = "=0.2.125"`)
-  - `nook-web/package.json` (all 22 dependencies pinned to exact versions)
+  - `nook-app/nook-core/Cargo.toml` (`serde = "=1.0.228"`)
+  - `nook-app/nook-wasm/Cargo.toml` (`serde_json = "=1.0.150"`, `wasm-bindgen = "=0.2.125"`)
+  - `nook-app/nook-web/package.json` (all 22 dependencies pinned to exact versions)
 - Added strict rules to `.cortex/rules.md` to prevent any future semver ranges.
 
 ### 3. Upgraded Outdated JS Packages
-- Upgraded the 4 requested packages to their latest major versions inside `nook-web/package.json`:
+- Upgraded the 4 requested packages to their latest major versions inside `nook-app/nook-web/package.json`:
   - `@lucide/svelte`: `0.561.0` ➔ `1.21.0`
   - `eslint`: `9.39.4` ➔ `10.5.0`
   - `globals`: `16.5.0` ➔ `17.6.0`
@@ -25,7 +25,7 @@ Restructured `.cortex` from an overengineered skill/subagent hierarchy into a fl
 
 ### 4. Relocated & Modernized Dockerfile
 - Moved Dockerfile from `.docker/build.Dockerfile` to `Dockerfile` at the project root (removing pointless nesting in `.docker/`).
-- Updated `docker-bake.hcl` to point to the new root path.
+- Updated `nook-app/docker-bake.hcl` to point to the new app root path.
 - Upgraded the Rust base image from `1.94-bookworm` to `1.96-bookworm` to match the host system.
 - Structured layers for system package installations, Bun installation, Task installation, Rust toolchain setup, and binary installations to optimize Docker caching.
 

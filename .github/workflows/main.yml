@@ -58,7 +58,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: nook-web/dist
+          path: nook-app/nook-web/dist
 
   ci-fix:
     name: AI fix, PR, and merge

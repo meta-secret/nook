@@ -41,7 +41,7 @@ Put app/domain types in Rust first:
 
 Applies to:
 
-- `nook-web/src/lib/**/*.ts` and Svelte modules that define exported app/domain
+- `nook-app/nook-web/src/lib/**/*.ts` and Svelte modules that define exported app/domain
   unions, payloads, or validators.
 - `nook-wasm` boundary types that should delegate schema and validation to
   `nook-core`.
