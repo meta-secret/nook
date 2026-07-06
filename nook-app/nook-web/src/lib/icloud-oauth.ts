@@ -19,6 +19,7 @@ export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000
 
 export type ICloudOAuthTokens = {
   accessToken: string
+  accountName?: string
 }
 
 type ICloudWebAuthTokenRequestOptions = {
@@ -69,14 +70,30 @@ type CloudKitGlobal = {
 
 const ICLOUD_AUTH_TOKEN_STORAGE_PREFIX = 'nook.icloud.webAuthToken.'
 
+const webAuthTokenListeners = new Set<(token: string) => void>()
+
+function storeCloudKitWebAuthToken(
+  containerIdentifier: string,
+  authToken: unknown,
+): string | undefined {
+  const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`
+  if (authToken == undefined) {
+    sessionStorage.removeItem(key)
+    return undefined
+  }
+  sessionStorage.setItem(key, JSON.stringify(authToken))
+  const token = normalizeWebAuthToken(authToken)
+  if (containerIdentifier === ICLOUD_CONTAINER_ID && token) {
+    for (const listener of webAuthTokenListeners) {
+      listener(token)
+    }
+  }
+  return token
+}
+
 const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
   putToken(containerIdentifier, authToken) {
-    const key = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${containerIdentifier}`
-    if (authToken == undefined) {
-      sessionStorage.removeItem(key)
-      return
-    }
-    sessionStorage.setItem(key, JSON.stringify(authToken))
+    storeCloudKitWebAuthToken(containerIdentifier, authToken)
   },
   getToken(containerIdentifier) {
     const raw = sessionStorage.getItem(
@@ -109,6 +126,7 @@ export function resetICloudAuthStateForTests(): void {
   initPromise = undefined
   authSetupPromise = undefined
   authSetupUserIdentity = undefined
+  webAuthTokenListeners.clear()
 }
 
 export function isICloudOAuthConfigured(): boolean {
@@ -189,6 +207,31 @@ function readStoredWebAuthToken(): string | undefined {
   return normalizeWebAuthToken(
     cloudKitAuthTokenStore.getToken(ICLOUD_CONTAINER_ID),
   )
+}
+
+function waitForStoredWebAuthToken(
+  timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
+): Promise<string> {
+  const existing = readStoredWebAuthToken()
+  if (existing) {
+    return Promise.resolve(existing)
+  }
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
+    const listener = (token: string) => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId)
+      }
+      webAuthTokenListeners.delete(listener)
+      resolve(token)
+    }
+    webAuthTokenListeners.add(listener)
+    timeoutId = setTimeout(() => {
+      webAuthTokenListeners.delete(listener)
+      reject(cloudKitSignInTimeoutError())
+    }, timeoutMs)
+  })
 }
 
 function cloudKitAuthErrorMessage(error: unknown): string {
@@ -284,39 +327,50 @@ function clickCloudKitSignInButton(): void {
   control.click()
 }
 
-function requireStoredWebAuthToken(): ICloudOAuthTokens {
+function accountNameFromIdentity(
+  identity: CloudKitUserIdentity | undefined,
+): string | undefined {
+  const given = identity?.nameComponents?.givenName?.trim() ?? ''
+  const family = identity?.nameComponents?.familyName?.trim() ?? ''
+  const fullName = `${given} ${family}`.trim()
+  if (fullName) {
+    return fullName
+  }
+  return identity?.lookupInfo?.emailAddress?.trim() || undefined
+}
+
+function requireStoredWebAuthToken(
+  identity = authSetupUserIdentity,
+): ICloudOAuthTokens {
   const token = readStoredWebAuthToken()
   if (!token) {
     throw new Error('iCloud sign-in did not return a web auth token.')
   }
-  return { accessToken: token }
+  const accountName = accountNameFromIdentity(identity)
+  return accountName
+    ? { accessToken: token, accountName }
+    : { accessToken: token }
 }
 
 async function waitForCloudKitSignIn(
   container: CloudKitContainer,
   timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
 ): Promise<CloudKitUserIdentity> {
-  const signInPromise = container.whenUserSignsIn()
-  clickCloudKitSignInButton()
-  let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
-  try {
-    const userIdentity = await Promise.race([
-      signInPromise,
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(cloudKitSignInTimeoutError()),
-          timeoutMs,
-        )
-      }),
-    ])
+  const tokenPromise = waitForStoredWebAuthToken(timeoutMs)
+  const signInPromise = container.whenUserSignsIn().then((userIdentity) => {
     authSetupUserIdentity = userIdentity
     return userIdentity
+  })
+  signInPromise.catch(() => {
+    // The CloudKit token store can resolve first; keep later callback failures handled.
+  })
+  clickCloudKitSignInButton()
+  try {
+    await Promise.race([tokenPromise, signInPromise])
+    await tokenPromise
+    return authSetupUserIdentity ?? {}
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
-  } finally {
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId)
-    }
   }
 }
 
@@ -334,8 +388,8 @@ export function requestPreparedICloudWebAuthToken(
     return Promise.resolve(requireStoredWebAuthToken())
   }
   const container = window.CloudKit.getDefaultContainer()
-  return waitForCloudKitSignIn(container, options.signInTimeoutMs).then(() =>
-    requireStoredWebAuthToken(),
+  return waitForCloudKitSignIn(container, options.signInTimeoutMs).then(
+    (identity) => requireStoredWebAuthToken(identity),
   )
 }
 
@@ -367,7 +421,7 @@ export function oauthTokensToICloudConfig(
     accessToken: tokens.accessToken,
     fileId: existing?.fileId,
     fileName: existing?.fileName,
-    accountEmail: existing?.accountEmail,
+    accountEmail: tokens.accountName ?? existing?.accountEmail,
     refreshToken: existing?.refreshToken,
     expiresAt: existing?.expiresAt,
   }
@@ -381,27 +435,4 @@ export async function ensureValidICloudOAuthFileConfig(
   }
   const refreshed = await requestICloudWebAuthToken()
   return oauthTokensToICloudConfig(refreshed, config)
-}
-
-export async function fetchICloudAccountEmail(): Promise<string | undefined> {
-  const token = readStoredWebAuthToken()
-  if (!token) {
-    return undefined
-  }
-  const url = new URL(
-    `https://api.apple-cloudkit.com/user/1/${ICLOUD_CONTAINER_ID}/${ICLOUD_ENVIRONMENT}/users/current`,
-  )
-  url.searchParams.set('ckAPIToken', ICLOUD_API_TOKEN)
-  url.searchParams.set('ckWebAuthToken', token)
-  const response = await fetch(url)
-  if (!response.ok) {
-    return undefined
-  }
-  const payload = (await response.json()) as {
-    nameComponents?: { givenName?: string; familyName?: string }
-  }
-  const given = payload.nameComponents?.givenName?.trim() ?? ''
-  const family = payload.nameComponents?.familyName?.trim() ?? ''
-  const full = `${given} ${family}`.trim()
-  return full || undefined
 }
