@@ -15,7 +15,8 @@ RUN cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D wa
 # --out-dir is relative to the crate dir (nook-wasm/), so "../nook-web/..." lands the JS/wasm bundle
 # in the web source tree where Vite imports it. target/ stays in-tree for reuse.
 RUN wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm \
-    && ( find nook-wasm/src nook-core/src -type f -name '*.rs' -print0 \
+    && ( find nook-wasm/src nook-core/src nook-core/locales \
+           \( -name '*.rs' -o -name '*.json' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
          | sha256sum \

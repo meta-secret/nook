@@ -52,12 +52,11 @@ impl EventLogDevice {
 
     /// Second device sharing the same vault `store_id` but with an empty local event log.
     pub fn replica_of(peer: &Self) -> VaultResult<Self> {
-        let (signing, signing_seed) = SigningIdentity::generate()?;
         Ok(Self {
             session: VaultEventSession::new(
                 peer.store_id().to_owned(),
-                signing,
-                signing_seed.into_inner(),
+                peer.session.signing.clone(),
+                peer.session.signing_seed.clone(),
             ),
             identity: DeviceIdentity::generate()?,
             secrets_key: peer.secrets_key.clone(),
@@ -164,8 +163,9 @@ impl EventLogDevice {
             &nook_core::IsoTimestamp::from_trusted(TS.to_owned()),
         )?;
         let id = event.id()?;
-        let bytes = serde_json::to_vec(&event).map_err(nook_core::EventError::from)?;
-        self.session.store.put_event(id.clone(), bytes);
+        let bytes = nook_core::serialize_event_storage_yaml(&event)?;
+        self.session.store.put_event(id.clone(), bytes.clone());
+        self.session.store.queue_outbox("github", id.clone(), bytes);
         self.session.set_heads_from_graph()?;
         Ok(id)
     }

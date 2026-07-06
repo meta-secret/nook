@@ -92,7 +92,7 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
          → VaultState.loadDb()
          → NookVaultManager.connect(mode, pat)
               → use authorized device identity (memory)
-              → load nook-vault.yaml (IDB or GitHub)
+              → load local projection or remote event log
               → resolve_secrets_key() + resolve_members_key() from auth row
               → VaultCrypto::new(secrets_key)
               → decrypt user secret values → decrypted_jsonl session

@@ -7,12 +7,6 @@ import {
   type EnrollmentIssueInput,
   type EnrollmentProvider,
 } from '$lib/enrollment-code'
-import {
-  attemptReconcileVaultSyncBlobs,
-  fetchRemoteVaultBlob,
-  readLocalVaultBlob,
-  writeLocalVaultBlob,
-} from '$lib/vault-sync'
 
 const log = createLogger('vault-password')
 
@@ -245,47 +239,9 @@ export async function connectWithEnrollmentCode(
 
     await state.initDeviceIdentity()
 
-    if (payload.provider.type === 'github') {
-      const remote = await fetchRemoteVaultBlob(
-        'github',
-        payload.provider.pat,
-        payload.provider.repo,
-      )
-      if (!remote.content.trim()) {
-        throw new Error(
-          'This sync provider has no vault copy yet. Save secrets on the issuing device first.',
-        )
-      }
-      const localYaml = await readLocalVaultBlob()
-      const attempt = attemptReconcileVaultSyncBlobs(
-        localYaml,
-        remote.content,
-        remote.revision,
-      )
-      if (attempt.status === 'store_id_mismatch') {
-        throw new Error(
-          state.t('auth_storage.sync_store_id_mismatch', {
-            provider: 'GitHub',
-          }),
-        )
-      }
-      const reconcile = attempt.result
-      if (reconcile.action === 'conflict') {
-        throw new Error(
-          'Local and sync-provider vaults conflict. Resolve on the issuing device first.',
-        )
-      }
-      if (!localYaml.trim() || reconcile.action === 'adopt_remote') {
-        await writeLocalVaultBlob(reconcile.localYaml)
-      }
-      state.localVaultPresent = true
-    }
-
     const rawRecords = (await state.enqueueStorage(() =>
       state.manager!.connectWithPassword(
-        'local',
-        '',
-        '',
+        ...state.wasmStorageArgs(),
         entryId,
         unlockPassword,
       ),
@@ -383,6 +339,11 @@ export async function issueEnrollmentCode(
     if (selectedProvider.type === 'local') {
       throw new Error(
         'Choose a cloud sync provider — local vault is already on state device.',
+      )
+    }
+    if (selectedProvider.type === 'local-folder') {
+      throw new Error(
+        'Local backup folders cannot be embedded in enrollment codes. Choose a cloud provider or have the other browser choose the same folder.',
       )
     }
     const provider: EnrollmentProvider =

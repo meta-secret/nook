@@ -42,7 +42,7 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-        requested_at: String,
+        _requested_at: String,
     ) -> Result<(), JsError> {
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
@@ -50,50 +50,47 @@ impl NookVaultManager {
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
         if vault_missing || content.trim().is_empty() {
-            return Err(NookError::Database("No vault found to join.".to_owned()).into());
+            self.sync_events_from_current_provider().await?;
+            if self.store_id.is_empty() || !self.event_log_has_events().await? {
+                return Err(NookError::Database("No vault found to join.".to_owned()).into());
+            }
+        } else {
+            // Fresh join attempt against an old provider blob — adopt the remote unlock mode.
+            self.capture_vault_unlock(&content);
+            self.sync_events_from_current_provider().await?;
+            if self.store_id.is_empty() || !self.event_log_has_events().await? {
+                let format = nook_core::detect_stored_format(&content)?;
+                let records = nook_core::deserialize_stored(&content, format)?;
+                self.meta = nook_core::VaultMetaState::from_stored_records(&records);
+                self.import_stored_vault_to_event_log(&content).await?;
+            }
         }
-        // Fresh join attempt — adopt the remote unlock mode.
-        self.capture_vault_unlock(&content);
-
-        let format = nook_core::detect_stored_format(&content)?;
-        let mut records = nook_core::deserialize_stored(&content, format)?;
 
         let auth_id =
             nook_core::SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
-        if records.iter().any(|record| record.key == auth_id) {
+        if self
+            .stored_records_snapshot()
+            .iter()
+            .any(|record| record.key == auth_id)
+        {
             return Err(NookError::Database(
                 "This device is already enrolled. Use Connect vault.".to_owned(),
             )
             .into());
         }
-
-        let join_key = nook_core::SecretId::from_vault_record(&nook_core::join_record_key(
-            identity.device_id(),
+        let signing = self.ensure_signing_identity().await?;
+        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing.verifying_key().as_bytes(),
         ));
-        records.retain(|record| record.key != join_key);
-        records.push(nook_core::create_join_request_record(
-            &identity,
-            &requested_at,
-        )?);
-
-        self.meta = nook_core::VaultMetaState::from_stored_records(&records);
-        let can_decrypt =
-            self.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok();
-        if can_decrypt {
-            let signing = self.ensure_signing_identity().await?;
-            let signing_pk = hex::encode(signing.verifying_key().as_bytes());
-            self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
-                device_id: identity.device_id().clone(),
-                encryption_public_key: identity.public_key().clone(),
-                signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
-                label: nook_core::MemberLabel::from_trusted(String::new()),
-            }])
-            .await?;
-        } else {
-            self.persist_projection_cache().await?;
-        }
+        self.append_vault_operations(vec![nook_core::VaultOperation::JoinRequested {
+            device_id: identity.device_id().clone(),
+            encryption_public_key: identity.public_key().clone(),
+            signing_public_key: signing_pk,
+            label: nook_core::MemberLabel::from_trusted(String::new()),
+        }])
+        .await?;
         if self.storage_mode != nook_core::StorageMode::Local {
-            self.push_remote_vault_yaml_snapshot().await?;
+            self.flush_event_outbox().await?;
         }
         Ok(())
     }
@@ -155,14 +152,20 @@ impl NookVaultManager {
     /// Device B publishes a join request record with its public key.
     pub async fn create_join_request(&mut self, requested_at: String) -> Result<(), JsError> {
         let identity = self.device_identity()?;
-        let record = nook_core::create_join_request_record(&identity, &requested_at)?;
-        self.meta.apply_record(&record);
         let signing = self.ensure_signing_identity().await?;
-        let signing_pk = hex::encode(signing.verifying_key().as_bytes());
+        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing.verifying_key().as_bytes(),
+        ));
+        let record = nook_core::create_join_request_record_with_signing_key(
+            &identity,
+            &requested_at,
+            &signing_pk,
+        )?;
+        self.meta.apply_record(&record);
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key().clone(),
-            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(signing_pk),
+            signing_public_key: signing_pk,
             label: nook_core::MemberLabel::from_trusted(String::new()),
         }])
         .await?;
@@ -199,7 +202,7 @@ impl NookVaultManager {
         self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
             device_id: join.device_id.clone(),
             encryption_public_key: join.public_key.clone(),
-            signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(String::new()),
+            signing_public_key: join.signing_public_key.clone(),
             label: nook_core::MemberLabel::from_trusted(String::new()),
             secrets_key_ciphertext: envelopes.secrets_key.clone(),
             members_key_ciphertext: envelopes.members_key.clone(),

@@ -5,6 +5,7 @@ import {
   generateSecretId,
 } from '$lib/nook'
 import { createLogger } from '$lib/log'
+import { syncLocalFolderProvider } from '$lib/local-folder-sync'
 
 const log = createLogger('connect')
 
@@ -31,6 +32,17 @@ export async function loadDb(state: VaultState) {
   try {
     await state.initDeviceIdentity()
     await state.ensureOAuthTokensFresh()
+
+    if (!state.isAuthenticated && state.loginSetupType === 'local-folder') {
+      const saved = await state.ensureProviderSaved()
+      if (!saved) return
+      const provider =
+        state.syncProviders[state.syncProviders.length - 1] ??
+        state.providers[state.providers.length - 1]
+      if (provider?.type === 'local-folder') {
+        await syncLocalFolderProvider(state, provider)
+      }
+    }
 
     if (!state.isAuthenticated && state.syncProviders.length > 0) {
       await state.syncProviderById(state.syncProviders[0]!.id, { quiet: true })
@@ -107,9 +119,7 @@ export async function loadDb(state: VaultState) {
 
     if (state.stagedRemoteStorageArgs()) {
       const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
-      if (reconcileOutcome === 'conflict') {
-        return
-      }
+      if (reconcileOutcome === 'skip') return
     }
 
     const rawRecords = await state.enqueueStorage(async () => {
@@ -151,6 +161,8 @@ export async function loadDb(state: VaultState) {
     await state.hydrateMultiDeviceState()
     if (state.storageMode === 'local') {
       state.showSuccess(state.t('toasts.local_loaded'))
+    } else if (state.storageMode === 'local-folder') {
+      state.showSuccess(state.t('toasts.local_folder_connected'))
     } else if (state.storageMode === 'oauth-file') {
       state.showSuccess(state.t('toasts.google_drive_connected'))
     } else {
@@ -175,6 +187,12 @@ export async function loadDb(state: VaultState) {
   }
 }
 
+function editBlockedMessage(state: VaultState): string {
+  return state.securityConflicts.length > 0
+    ? state.t('auth_storage.security_conflict_edits')
+    : state.t('auth_storage.sync_blocked_edits')
+}
+
 export async function handleAddSecret(
   state: VaultState,
   id: string,
@@ -182,8 +200,8 @@ export async function handleAddSecret(
   data: string,
 ) {
   if (!state.manager) return
-  if (state.syncBlocked) {
-    state.errorMsg = state.t('auth_storage.sync_blocked_edits')
+  if (state.editsBlocked) {
+    state.errorMsg = editBlockedMessage(state)
     return
   }
   state.errorMsg = ''
@@ -215,8 +233,8 @@ export async function handleAddSecret(
 
 export async function handleDeleteSecret(state: VaultState, id: string) {
   if (!state.manager) return
-  if (state.syncBlocked) {
-    state.errorMsg = state.t('auth_storage.sync_blocked_edits')
+  if (state.editsBlocked) {
+    state.errorMsg = editBlockedMessage(state)
     return
   }
   state.errorMsg = ''
@@ -257,8 +275,8 @@ export async function handleReplaceSecret(
   data: string,
 ) {
   if (!state.manager) return
-  if (state.syncBlocked) {
-    state.errorMsg = state.t('auth_storage.sync_blocked_edits')
+  if (state.editsBlocked) {
+    state.errorMsg = editBlockedMessage(state)
     return
   }
   state.errorMsg = ''

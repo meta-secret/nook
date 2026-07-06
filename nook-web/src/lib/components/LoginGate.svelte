@@ -19,6 +19,7 @@
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
+  import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import LoginUnlockStep from '$lib/components/login/LoginUnlockStep.svelte'
   import LoginCreateVaultChooser from '$lib/components/login/LoginCreateVaultChooser.svelte'
   import LoginVaultPicker from '$lib/components/login/LoginVaultPicker.svelte'
@@ -138,6 +139,8 @@
 
   const setupCanConnect = $derived(
     setupType === 'local' ||
+      (setupType === 'local-folder' &&
+        Boolean(vault.localFolder?.handleId?.trim())) ||
       (setupType === 'oauth-file' &&
         Boolean(vault.oauthFile?.accessToken?.trim())) ||
       (setupType === 'github' && Boolean(githubPat.trim())),
@@ -213,7 +216,9 @@
                 provider:
                   setupType === 'github'
                     ? 'GitHub'
-                    : vault.t('onboarding.local_storage'),
+                    : setupType === 'local-folder'
+                      ? vault.t('provider_picker.local_folder')
+                      : vault.t('onboarding.local_storage'),
               })}
             {:else if addProviderOpen}
               {vault.t('onboarding.add_provider')}
@@ -336,6 +341,15 @@
                 {/if}
               {/snippet}
             </GitHubProviderSetupWizard>
+          {:else if setupType === 'local-folder'}
+            <LocalFolderProviderSetupWizard
+              {vault}
+              idPrefix="login"
+              {isVerifying}
+              {isInitializing}
+              {onCancelSetup}
+              onConnect={onUnlock}
+            />
           {:else}
             <form
               novalidate

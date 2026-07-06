@@ -57,7 +57,11 @@
     showWarningBanner?: boolean
   } = $props()
 
-  let panel = $state<Panel>(initialPanel)
+  function resolveInitialPanel() {
+    return initialPanel
+  }
+
+  let panel = $state<Panel>(resolveInitialPanel())
   let activeEntryId = $state<string | null>(null)
 
   let labelInput = $state('')

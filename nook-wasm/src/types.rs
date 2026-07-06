@@ -269,6 +269,17 @@ impl NookSyncProviderTarget {
         Self(nook_core::SyncProviderTarget::Local)
     }
 
+    #[wasm_bindgen(js_name = localFolder)]
+    #[must_use]
+    pub fn local_folder(directory_name: Option<String>, handle_id: Option<String>) -> Self {
+        Self(nook_core::SyncProviderTarget::LocalFolder(
+            nook_core::LocalFolderSyncTarget {
+                directory_name,
+                handle_id,
+            },
+        ))
+    }
+
     #[wasm_bindgen(js_name = github)]
     #[must_use]
     pub fn github(repo: Option<String>, pat: Option<String>) -> Self {
@@ -308,6 +319,12 @@ impl NookSyncProviderTarget {
     #[must_use]
     pub fn is_local(&self) -> bool {
         matches!(self.0, nook_core::SyncProviderTarget::Local)
+    }
+
+    #[wasm_bindgen(js_name = isLocalFolder)]
+    #[must_use]
+    pub fn is_local_folder(&self) -> bool {
+        matches!(self.0, nook_core::SyncProviderTarget::LocalFolder(_))
     }
 
     #[wasm_bindgen(js_name = isGithub)]
@@ -479,118 +496,6 @@ impl NookVaultSyncResult {
     }
 }
 
-#[wasm_bindgen]
-pub struct NookRemoteVaultFetch {
-    content: String,
-    revision: Option<String>,
-    missing: bool,
-}
-
-#[wasm_bindgen]
-impl NookRemoteVaultFetch {
-    pub(crate) fn new(content: String, revision: Option<String>, missing: bool) -> Self {
-        Self {
-            content,
-            revision,
-            missing,
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn content(&self) -> String {
-        self.content.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn revision(&self) -> Option<String> {
-        self.revision.clone()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn missing(&self) -> bool {
-        self.missing
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookReconcileVaultBlobsResult {
-    action: String,
-    local_yaml: String,
-    remote_yaml: String,
-    remote_revision: Option<String>,
-}
-
-#[wasm_bindgen]
-impl NookReconcileVaultBlobsResult {
-    pub(crate) fn new(
-        action: String,
-        local_yaml: String,
-        remote_yaml: String,
-        remote_revision: Option<String>,
-    ) -> Self {
-        Self {
-            action,
-            local_yaml,
-            remote_yaml,
-            remote_revision,
-        }
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn action(&self) -> String {
-        self.action.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = localYaml)]
-    pub fn local_yaml(&self) -> String {
-        self.local_yaml.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = remoteYaml)]
-    pub fn remote_yaml(&self) -> String {
-        self.remote_yaml.clone()
-    }
-
-    #[wasm_bindgen(getter, js_name = remoteRevision)]
-    pub fn remote_revision(&self) -> Option<String> {
-        self.remote_revision.clone()
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookResolveConflictKeepLocalResult {
-    remote_yaml: String,
-}
-
-#[wasm_bindgen]
-impl NookResolveConflictKeepLocalResult {
-    pub(crate) fn new(remote_yaml: String) -> Self {
-        Self { remote_yaml }
-    }
-
-    #[wasm_bindgen(getter, js_name = remoteYaml)]
-    pub fn remote_yaml(&self) -> String {
-        self.remote_yaml.clone()
-    }
-}
-
-#[wasm_bindgen]
-pub struct NookResolveConflictKeepRemoteResult {
-    local_yaml: String,
-}
-
-#[wasm_bindgen]
-impl NookResolveConflictKeepRemoteResult {
-    pub(crate) fn new(local_yaml: String) -> Self {
-        Self { local_yaml }
-    }
-
-    #[wasm_bindgen(getter, js_name = localYaml)]
-    pub fn local_yaml(&self) -> String {
-        self.local_yaml.clone()
-    }
-}
-
 /// Flat form payload for `buildSecretYaml` — unused fields stay empty.
 #[wasm_bindgen]
 pub struct NookSecretFormFields {
@@ -714,6 +619,56 @@ pub(crate) fn replacement_conflicts_to_vec(
             Ok(NookReplacementConflict {
                 old_secret_id: conflict.old_secret_id.as_str().to_owned(),
                 candidates_json,
+            })
+        })
+        .collect()
+}
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookSecurityConflict {
+    events_json: String,
+    reasons_json: String,
+}
+
+#[wasm_bindgen]
+impl NookSecurityConflict {
+    #[wasm_bindgen(getter, js_name = eventsJson)]
+    pub fn events_json(&self) -> String {
+        self.events_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = reasonsJson)]
+    pub fn reasons_json(&self) -> String {
+        self.reasons_json.clone()
+    }
+}
+
+pub(crate) fn security_conflicts_to_vec(
+    conflicts: Vec<nook_core::SecurityConflict>,
+) -> Result<Vec<NookSecurityConflict>, NookError> {
+    conflicts
+        .into_iter()
+        .map(|conflict| {
+            let events_json = serde_json::to_string(
+                &conflict
+                    .events
+                    .iter()
+                    .map(|event| event.as_str().to_owned())
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+            let reasons_json = serde_json::to_string(
+                &conflict
+                    .reasons
+                    .iter()
+                    .map(|reason| reason.as_str())
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+            Ok(NookSecurityConflict {
+                events_json,
+                reasons_json,
             })
         })
         .collect()

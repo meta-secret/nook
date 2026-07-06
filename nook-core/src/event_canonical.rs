@@ -6,32 +6,48 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::vault_wire::Sha256Hex;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
-/// Content-addressed event identifier (`sha256:{hex}`).
+const EVENT_ID_PREFIX: &str = "sha256u:";
+const SHA256_BASE64URL_LEN: usize = 43;
+const SHA256_BYTES_LEN: usize = 32;
+
+/// Content-addressed event identifier (`sha256u:{base64url_no_pad}`).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EventId(String);
 
 impl EventId {
     pub fn parse(raw: &str) -> VaultResult<Self> {
         let trimmed = raw.trim();
-        let hex =
-            trimmed
-                .strip_prefix("sha256:")
-                .ok_or_else(|| EventError::EventIdMissingPrefix {
-                    raw: trimmed.to_owned(),
-                })?;
-        if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        let encoded = trimmed.strip_prefix(EVENT_ID_PREFIX).ok_or_else(|| {
+            EventError::EventIdMissingPrefix {
+                raw: trimmed.to_owned(),
+            }
+        })?;
+        if encoded.len() != SHA256_BASE64URL_LEN {
             return Err(EventError::EventIdInvalidDigest {
-                hex: hex.to_owned(),
+                hex: encoded.to_owned(),
             }
             .into());
         }
-        Ok(Self(format!("sha256:{hex}")))
+        let bytes =
+            URL_SAFE_NO_PAD
+                .decode(encoded)
+                .map_err(|_| EventError::EventIdInvalidDigest {
+                    hex: encoded.to_owned(),
+                })?;
+        if bytes.len() != SHA256_BYTES_LEN {
+            return Err(EventError::EventIdInvalidDigest {
+                hex: encoded.to_owned(),
+            }
+            .into());
+        }
+        Ok(Self(format!("{EVENT_ID_PREFIX}{encoded}")))
     }
 
     #[must_use]
@@ -49,17 +65,35 @@ impl EventId {
         Self(value)
     }
 
-    #[must_use]
-    pub fn hex_digest(&self) -> &str {
-        self.0.strip_prefix("sha256:").unwrap_or(&self.0)
+    pub fn from_sha256_hex(hex_digest: &str) -> VaultResult<Self> {
+        let bytes = hex::decode(hex_digest).map_err(EventError::from)?;
+        let bytes: [u8; SHA256_BYTES_LEN] =
+            bytes
+                .try_into()
+                .map_err(|_| EventError::EventIdInvalidDigest {
+                    hex: hex_digest.to_owned(),
+                })?;
+        Ok(Self::from_sha256_bytes(&bytes))
     }
 
-    /// Immutable provider path: `nook-log/v1/events/{shard}/{digest}.event`.
+    #[must_use]
+    pub fn from_sha256_bytes(bytes: &[u8; SHA256_BYTES_LEN]) -> Self {
+        Self(format!(
+            "{EVENT_ID_PREFIX}{}",
+            URL_SAFE_NO_PAD.encode(bytes)
+        ))
+    }
+
+    #[must_use]
+    pub fn encoded_digest(&self) -> &str {
+        self.0.strip_prefix(EVENT_ID_PREFIX).unwrap_or(&self.0)
+    }
+
+    /// Immutable provider path: `nook-log/v1/events/{base64url_digest}.yaml`.
     #[must_use]
     pub fn storage_path(&self) -> String {
-        let hex = self.hex_digest();
-        let shard = &hex[..2];
-        format!("nook-log/v1/events/{shard}/{hex}.event")
+        let digest = self.encoded_digest();
+        format!("nook-log/v1/events/{digest}.yaml")
     }
 }
 
@@ -149,7 +183,8 @@ pub fn sha256_hex(bytes: &[u8]) -> Sha256Hex {
 /// Compute the content-addressed [`EventId`] for canonical event body bytes.
 #[must_use]
 pub fn event_id_from_body_bytes(body_bytes: &[u8]) -> EventId {
-    EventId(format!("sha256:{}", sha256_hex(body_bytes).as_str()))
+    let digest: [u8; SHA256_BYTES_LEN] = Sha256::digest(body_bytes).into();
+    EventId::from_sha256_bytes(&digest)
 }
 
 /// Recursively sort object keys for canonical JSON encoding.
@@ -235,19 +270,16 @@ mod tests {
         let a = event_id_from_body_bytes(body);
         let b = event_id_from_body_bytes(body);
         assert_eq!(a, b);
-        assert!(a.as_str().starts_with("sha256:"));
-        assert_eq!(a.hex_digest().len(), 64);
+        assert!(a.as_str().starts_with("sha256u:"));
+        assert_eq!(a.encoded_digest().len(), 43);
     }
 
     #[test]
-    fn storage_path_uses_hash_shard() {
-        let id = EventId::parse(
-            "sha256:7a3e99112233445566778899aabbccddeeff00112233445566778899aabbccdd",
-        )
-        .unwrap();
+    fn storage_path_is_flat_yaml() {
+        let id = EventId::parse("sha256u:ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0").unwrap();
         assert_eq!(
             id.storage_path(),
-            "nook-log/v1/events/7a/7a3e99112233445566778899aabbccddeeff00112233445566778899aabbccdd.event"
+            "nook-log/v1/events/ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0.yaml"
         );
     }
 
@@ -265,10 +297,7 @@ mod tests {
 
     #[test]
     fn event_id_and_signature_serde_roundtrip() {
-        let id = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let roundtripped: EventId =
             serde_json::from_str(&serde_json::to_string(&id).unwrap()).unwrap();
         assert_eq!(roundtripped, id);

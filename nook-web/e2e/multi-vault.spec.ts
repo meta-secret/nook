@@ -17,7 +17,7 @@ type LocalVaultRegistryEntry = {
 async function listLocalVaultEntries(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
     return new Promise<LocalVaultRegistryEntry[]>((resolve, reject) => {
-      const request = indexedDB.open('nook_db', 1)
+      const request = indexedDB.open('nook_db')
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
       request.onsuccess = () => {
@@ -74,12 +74,12 @@ async function seedScopedSyncProviders(
               {
                 id: 'provider-a',
                 type: 'oauth-file',
-                label: 'Google Drive · nook-multi-vault-a',
+                label: 'File · nook-multi-vault-a',
                 oauthFile: {
                   preset: 'google-drive',
-                  accessToken: 'ya29.e2e_stub_access_token',
+                  accessToken: 'ya29.e2e_file_sync_token',
                   fileName: 'nook-multi-vault-a.yaml',
-                  accountEmail: 'e2e-user@example.com',
+                  accountEmail: 'file-sync-e2e@example.com',
                 },
                 storeId: storeA,
                 createdAt: new Date().toISOString(),
@@ -87,12 +87,12 @@ async function seedScopedSyncProviders(
               {
                 id: 'provider-b',
                 type: 'oauth-file',
-                label: 'Google Drive · nook-multi-vault-b',
+                label: 'File · nook-multi-vault-b',
                 oauthFile: {
                   preset: 'google-drive',
-                  accessToken: 'ya29.e2e_stub_access_token',
+                  accessToken: 'ya29.e2e_file_sync_token',
                   fileName: 'nook-multi-vault-b.yaml',
-                  accountEmail: 'e2e-user@example.com',
+                  accountEmail: 'file-sync-e2e@example.com',
                 },
                 storeId: storeB,
                 createdAt: new Date().toISOString(),

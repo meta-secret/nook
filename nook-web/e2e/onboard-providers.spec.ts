@@ -109,15 +109,15 @@ test.describe('onboard provider picker', () => {
 
     const providers = [
       {
-        id: 'gd-personal',
-        label: 'Google Drive · personal',
+        id: 'file-personal',
+        label: 'File · personal',
         fileName: 'personal.yaml',
         accessToken: personalToken,
         accountEmail: 'personal@example.com',
       },
       {
-        id: 'gd-work',
-        label: 'Google Drive · work',
+        id: 'file-work',
+        label: 'File · work',
         fileName: 'work.yaml',
         accessToken: workToken,
         accountEmail: 'work@example.com',
@@ -155,16 +155,16 @@ test.describe('onboard provider picker', () => {
     const providerList = page.getByTestId('onboard-provider-list')
     await expect(providerList).toBeVisible()
 
-    const personal = page.getByTestId('onboard-provider-gd-personal')
-    const work = page.getByTestId('onboard-provider-gd-work')
+    const personal = page.getByTestId('onboard-provider-file-personal')
+    const work = page.getByTestId('onboard-provider-file-work')
     await expect(personal).toBeVisible()
     await expect(work).toBeVisible()
 
     await expect(
-      page.getByTestId('onboard-provider-detail-gd-personal'),
+      page.getByTestId('onboard-provider-detail-file-personal'),
     ).toContainText('personal.yaml')
     await expect(
-      page.getByTestId('onboard-provider-detail-gd-work'),
+      page.getByTestId('onboard-provider-detail-file-work'),
     ).toContainText('work.yaml')
     await expect(providerList).toContainText('personal@example.com')
     await expect(providerList).toContainText('work@example.com')

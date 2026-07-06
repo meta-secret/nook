@@ -13,6 +13,7 @@ import {
   rotateVaultPassword,
   seedExtraOauthFileProviders,
   seedLocalVaultYamlForEnrollment,
+  readLocalVaultYamlFromIdb,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   UI_TIMEOUT_MS,
@@ -88,7 +89,7 @@ test.describe('vault password envelope (stub sync)', () => {
     expect(yaml.secretIds.length).toBeGreaterThanOrEqual(1)
   })
 
-  test('device A issues an enrollment link carrying github credentials', async () => {
+  test('device A issues an enrollment link without plaintext provider credentials', async () => {
     await deviceA.getByTestId('vault-secrets-tab').click()
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible()
     await deviceA.getByTestId('vault-onboard-tab').click()
@@ -122,9 +123,9 @@ test.describe('vault password envelope (stub sync)', () => {
     const link = (await linkInput.inputValue()).trim()
     expect(link).toContain('#enroll=')
 
-    const remoteYaml = target.stub?.getVaultYaml() ?? ''
-    expect(remoteYaml.trim().length).toBeGreaterThan(0)
-    await installSyncStub(deviceB, target, remoteYaml)
+    const enrollmentYaml = await readLocalVaultYamlFromIdb(deviceA)
+    expect(enrollmentYaml.trim().length).toBeGreaterThan(0)
+    await installSyncStub(deviceB, target)
 
     await deviceB.goto('/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
@@ -141,11 +142,11 @@ test.describe('vault password envelope (stub sync)', () => {
         ),
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await seedLocalVaultYamlForEnrollment(deviceB, remoteYaml)
+    await seedLocalVaultYamlForEnrollment(deviceB, enrollmentYaml)
     await seedExtraOauthFileProviders(deviceB, [
       {
         id: 'e2e-enroll-sync',
-        label: 'E2E Drive',
+        label: 'File',
         fileName: target.repoName,
         accessToken: target.pat,
       },
@@ -192,7 +193,7 @@ test.describe('vault password envelope (stub sync)', () => {
     expect(yaml.joinEntries).toHaveLength(0)
   })
 
-  test('rotating the password rewrites the envelope on github', async () => {
+  test('rotating the password rewrites the envelope on the sync provider', async () => {
     const before = await waitForLocalVaultState(
       deviceA,
       (snapshot) => snapshot.hasPasswordEnvelope,

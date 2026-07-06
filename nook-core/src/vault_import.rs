@@ -1,10 +1,13 @@
 //! Stored vault blob → genesis import event conversion.
 
+use crate::PasswordUnlockEntry;
 use crate::errors::VaultResult;
 use crate::event_canonical::{EventId, sha256_hex};
 use crate::multi_device::user_stored_records;
 use crate::secret_types::StoredSecretRecord;
-use crate::vault_event::{EncryptedSecretPayload, VaultEvent, build_genesis_import_event};
+use crate::vault_event::{
+    EncryptedSecretPayload, GenesisImportPayload, VaultEvent, build_genesis_import_event,
+};
 use crate::vault_format::deserialize_stored;
 use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
@@ -48,6 +51,10 @@ impl VaultHashContext {
             .collect())
     }
 
+    pub fn password_entries(&self) -> VaultResult<Vec<PasswordUnlockEntry>> {
+        Ok(crate::read_vault_password_entries(&self.stored)?)
+    }
+
     #[must_use]
     pub fn genesis_epoch_id(&self) -> KeyEpochId {
         KeyEpochId::from_content_hash(self.content_hash.as_str())
@@ -69,12 +76,16 @@ pub fn stored_vault_to_import_event(
     created_at: &IsoTimestamp,
 ) -> VaultResult<VaultEvent> {
     let secrets = ctx.encrypted_secrets()?;
+    let password_entries = ctx.password_entries()?;
     build_genesis_import_event(
         store_id,
         actor_id,
         ctx.genesis_epoch_id().as_event_id(),
-        ctx.content_hash(),
-        secrets,
+        GenesisImportPayload {
+            source_content_hash: ctx.content_hash().clone(),
+            secrets,
+            password_entries,
+        },
         created_at,
         signing_key,
     )
@@ -87,7 +98,10 @@ pub struct KeyEpochId(EventId);
 impl KeyEpochId {
     #[must_use]
     pub fn from_content_hash(content_hash: &str) -> Self {
-        Self(EventId::from_trusted(format!("sha256:{content_hash}")))
+        Self(
+            EventId::from_sha256_hex(content_hash)
+                .expect("source content hash is a valid SHA-256 digest"),
+        )
     }
 
     #[must_use]
@@ -100,6 +114,7 @@ impl KeyEpochId {
 pub fn verify_stored_vault_import(ctx: &VaultHashContext, import: &VaultEvent) -> VaultResult<()> {
     let crate::vault_event::VaultOperation::VaultImported {
         secrets,
+        password_entries,
         source_content_hash,
     } = import
         .body
@@ -124,6 +139,10 @@ pub fn verify_stored_vault_import(ctx: &VaultHashContext, import: &VaultEvent) -
     if source_ids != import_ids {
         return Err(crate::errors::EventError::ImportSecretSetMismatch.into());
     }
+    let source_password_entries = ctx.password_entries()?;
+    if &source_password_entries != password_entries {
+        return Err(crate::errors::EventError::ImportPasswordEntriesMismatch.into());
+    }
     Ok(())
 }
 
@@ -142,6 +161,7 @@ mod tests {
     use crate::VaultResult;
     use crate::database::Database;
     use crate::secret_types::SecretType;
+    use crate::vault_signing::SigningIdentity;
     use crate::{ApiKeySecret, SecretId, SecretValue, generate_store_id};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
@@ -150,9 +170,7 @@ mod tests {
     fn stored_vault_import_is_idempotent_by_content_hash() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let store_id = generate_store_id()?;
-        let actor = AuthKeyId::parse(
-            "key_1111111111111111111111111111111111111111111111111111111111111111",
-        )?;
+        let actor = SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
         let created_at = IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned());
 
         let mut db = Database::new();
@@ -176,10 +194,12 @@ mod tests {
 
         if let crate::vault_event::VaultOperation::VaultImported {
             secrets,
+            password_entries,
             source_content_hash,
         } = &first.body.operations[0]
         {
             assert_eq!(secrets.len(), 1);
+            assert!(password_entries.is_empty());
             assert_eq!(secrets[0].secret_type, SecretType::ApiKey);
             assert_eq!(source_content_hash, ctx.content_hash());
         } else {

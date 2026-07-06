@@ -126,7 +126,12 @@ mod tests {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::PasswordRotated {
                 entry_id: crate::PasswordEntryId::from_trusted("pwdentry001".to_owned()),
-                envelope_ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
+                envelope: crate::PasswordEnvelope {
+                    version: 1,
+                    kdf: "scrypt".to_owned(),
+                    work_factor: 10,
+                    ciphertext: "c".to_owned()
+                },
             }),
             Some(EpochRotationReason::PasswordRotated)
         );

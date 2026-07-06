@@ -1,6 +1,14 @@
 //! IndexedDB-backed storage adapter.
 //!
-//! Object keys in the `vault` store inside `nook_db`:
+//! Object stores inside `nook_db`:
+//! - `vault` — encrypted vault YAML, local metadata, device identities, and
+//!   legacy compatibility keys.
+//! - `events` — immutable event bytes keyed by `[store_id, event_id]` strings.
+//! - `projections` — encrypted materialized-view cache metadata.
+//! - `provider_receipts` — reserved provider event receipt cache.
+//! - `outbox` — retryable event appends per provider.
+//!
+//! Object keys in the `vault` store:
 //! - `vault:{store_id}` — encrypted vault YAML for one logical vault.
 //! - `vault_registry` — JSON list of locally cached vault metadata.
 //! - `active_vault_id` — which `store_id` is currently selected.
@@ -46,8 +54,12 @@ fn vault_cache_key(cache_ref: &str) -> String {
 
 async fn open_vault_db() -> Result<rexie::Rexie, NookError> {
     rexie::Rexie::builder("nook_db")
-        .version(1)
+        .version(2)
         .add_object_store(rexie::ObjectStore::new("vault"))
+        .add_object_store(rexie::ObjectStore::new("events"))
+        .add_object_store(rexie::ObjectStore::new("projections"))
+        .add_object_store(rexie::ObjectStore::new("provider_receipts"))
+        .add_object_store(rexie::ObjectStore::new("outbox"))
         .build()
         .await
         .map_err(|e| NookError::IndexedDb(format!("IndexedDB build error: {e:?}")))
@@ -394,14 +406,6 @@ pub(crate) async fn has_active_local_vault() -> Result<bool, NookError> {
     Ok(load_from_indexed_db()
         .await?
         .is_some_and(|content| !content.trim().is_empty()))
-}
-
-/// Browser-local mirror of the last known vault YAML for a remote storage ref.
-pub(crate) async fn save_vault_local_cache(
-    cache_ref: &str,
-    content: &str,
-) -> Result<(), NookError> {
-    idb_put_string(&vault_cache_key(cache_ref), content).await
 }
 
 pub(crate) async fn load_vault_local_cache(cache_ref: &str) -> Result<Option<String>, NookError> {

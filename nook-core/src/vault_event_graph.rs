@@ -1,8 +1,10 @@
 //! Causal event DAG: parent validation, ancestry, heads, and pending events.
 
-use crate::errors::{EventError, VaultResult};
+use crate::errors::{EventError, VaultError, VaultResult};
 use crate::event_canonical::EventId;
-use crate::vault_event::VaultEvent;
+use crate::vault_event::{VaultEvent, VaultOperation};
+use crate::vault_ids::AuthKeyId;
+use crate::vault_signing::SigningIdentity;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Why an event is not yet applicable to projection.
@@ -62,7 +64,7 @@ impl EventGraph {
         &self.quarantined
     }
 
-    /// Insert an event after envelope validation. Signature verification is the caller's duty.
+    /// Insert an event after envelope and current-schema signature validation.
     pub fn insert(
         &mut self,
         event: VaultEvent,
@@ -91,14 +93,19 @@ impl EventGraph {
             .cloned()
             .collect::<Vec<_>>();
 
-        if !missing_parents.is_empty() {
+        if !missing_parents.is_empty() || !self.event_ancestors_present(&event) {
             self.events.insert(event_id, event);
+            self.quarantine_rejected_applicable_events()?;
             return Ok(EventInsertStatus::Pending(
                 EventPendingReason::MissingParents(missing_parents),
             ));
         }
 
-        self.events.insert(event_id, event);
+        self.events.insert(event_id.clone(), event);
+        self.quarantine_rejected_applicable_events()?;
+        if let Some(reason) = self.quarantined.get(&event_id) {
+            return Ok(EventInsertStatus::Quarantined(reason.clone()));
+        }
         Ok(EventInsertStatus::Applied)
     }
 
@@ -106,14 +113,11 @@ impl EventGraph {
     #[must_use]
     pub fn applicable_events(&self) -> Vec<&VaultEvent> {
         self.events
-            .values()
-            .filter(|event| {
-                event
-                    .body
-                    .parents
-                    .iter()
-                    .all(|parent| self.events.contains_key(parent))
+            .iter()
+            .filter(|(id, event)| {
+                !self.quarantined.contains_key(*id) && self.event_ancestors_present(event)
             })
+            .map(|(_, event)| event)
             .collect()
     }
 
@@ -123,11 +127,7 @@ impl EventGraph {
             .iter()
             .filter(|(id, event)| {
                 !event.body.parents.is_empty()
-                    && event
-                        .body
-                        .parents
-                        .iter()
-                        .any(|parent| !self.events.contains_key(parent))
+                    && !self.event_ancestors_present(event)
                     && !self.quarantined.contains_key(*id)
             })
             .collect()
@@ -137,14 +137,17 @@ impl EventGraph {
     #[must_use]
     pub fn heads(&self) -> Vec<EventId> {
         let mut referenced = BTreeSet::new();
-        for event in self.events.values() {
+        for (id, event) in &self.events {
+            if self.quarantined.contains_key(id) {
+                continue;
+            }
             for parent in &event.body.parents {
                 referenced.insert(parent.clone());
             }
         }
         self.events
             .keys()
-            .filter(|id| !referenced.contains(*id))
+            .filter(|id| !self.quarantined.contains_key(*id) && !referenced.contains(*id))
             .cloned()
             .collect()
     }
@@ -175,6 +178,7 @@ impl EventGraph {
 
     /// Deterministic topological order — ties broken by event id lexicographic order.
     pub fn topological_order(&self) -> VaultResult<Vec<EventId>> {
+        self.validate_authorizations()?;
         let applicable: Vec<EventId> = self
             .applicable_events()
             .into_iter()
@@ -213,6 +217,15 @@ impl EventGraph {
         Ok(ordered)
     }
 
+    /// Validate all applicable events against actors authorized in their causal
+    /// past. Pending events wait until all parents are present.
+    pub fn validate_authorizations(&self) -> VaultResult<()> {
+        for event in self.applicable_events() {
+            self.validate_event_actor_authorized(event)?;
+        }
+        Ok(())
+    }
+
     /// Union of events from two graphs (commutative, associative, idempotent).
     #[must_use]
     pub fn union(&self, other: &Self) -> Self {
@@ -231,6 +244,143 @@ impl EventGraph {
         }
         merged
     }
+
+    fn validate_event_actor_authorized(&self, event: &VaultEvent) -> VaultResult<()> {
+        if event.body.parents.is_empty() {
+            return Ok(());
+        }
+        if Self::is_self_signed_join_request(event)? {
+            return Ok(());
+        }
+        let authorized = self.authorized_actors_before(event)?;
+        if authorized.contains(&event.body.actor_id) {
+            return Ok(());
+        }
+        Err(EventError::UnauthorizedActor {
+            actor_id: event.body.actor_id.as_str().to_owned(),
+        }
+        .into())
+    }
+
+    fn quarantine_rejected_applicable_events(&mut self) -> VaultResult<()> {
+        loop {
+            let mut changed = false;
+            let ids = self.events.keys().cloned().collect::<Vec<_>>();
+            for id in ids {
+                if self.quarantined.contains_key(&id) {
+                    continue;
+                }
+                let event = self.events.get(&id).expect("event id from map");
+                if !self.event_ancestors_present(event) {
+                    continue;
+                }
+                let reason = if event
+                    .body
+                    .parents
+                    .iter()
+                    .any(|parent| self.quarantined.contains_key(parent))
+                {
+                    Some("Ancestor event was rejected".to_owned())
+                } else {
+                    match self.validate_event_actor_authorized(event) {
+                        Ok(()) => None,
+                        Err(VaultError::Event(EventError::UnauthorizedActor { actor_id })) => Some(
+                            format!("Event actor {actor_id} was not authorized in causal history"),
+                        ),
+                        Err(err) => return Err(err),
+                    }
+                };
+                if let Some(reason) = reason {
+                    self.quarantined.insert(id, reason);
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Ok(());
+            }
+        }
+    }
+
+    fn event_ancestors_present(&self, event: &VaultEvent) -> bool {
+        let mut visited = BTreeSet::new();
+        let mut stack = event.body.parents.clone();
+        while let Some(id) = stack.pop() {
+            if !visited.insert(id.clone()) {
+                continue;
+            }
+            let Some(parent) = self.events.get(&id) else {
+                return false;
+            };
+            stack.extend(parent.body.parents.iter().cloned());
+        }
+        true
+    }
+
+    fn is_self_signed_join_request(event: &VaultEvent) -> VaultResult<bool> {
+        if event.body.operations.is_empty() {
+            return Ok(false);
+        }
+        for operation in &event.body.operations {
+            let VaultOperation::JoinRequested {
+                signing_public_key, ..
+            } = operation
+            else {
+                return Ok(false);
+            };
+            if signing_public_key.is_empty() {
+                return Ok(false);
+            }
+            if let Some(body_public_key) = &event.body.actor_signing_public_key
+                && body_public_key != signing_public_key
+            {
+                return Ok(false);
+            }
+            let request_actor =
+                SigningIdentity::actor_id_for_public_key_hex(signing_public_key.as_str())?;
+            if request_actor != event.body.actor_id {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn authorized_actors_before(&self, event: &VaultEvent) -> VaultResult<BTreeSet<AuthKeyId>> {
+        let mut authorized = BTreeSet::new();
+        let mut visited = BTreeSet::new();
+        let mut stack = event.body.parents.clone();
+
+        while let Some(id) = stack.pop() {
+            if !visited.insert(id.clone()) {
+                continue;
+            }
+            let Some(parent_event) = self.events.get(&id) else {
+                continue;
+            };
+            if parent_event.body.parents.is_empty()
+                && parent_event
+                    .body
+                    .operations
+                    .iter()
+                    .any(|operation| matches!(operation, VaultOperation::VaultImported { .. }))
+            {
+                authorized.insert(parent_event.body.actor_id.clone());
+            }
+            for operation in &parent_event.body.operations {
+                if let VaultOperation::JoinApproved {
+                    signing_public_key, ..
+                } = operation
+                    && !signing_public_key.is_empty()
+                {
+                    authorized.insert(SigningIdentity::actor_id_for_public_key_hex(
+                        signing_public_key.as_str(),
+                    )?);
+                }
+            }
+            stack.extend(parent_event.body.parents.iter().cloned());
+        }
+
+        Ok(authorized)
+    }
 }
 
 #[cfg(test)]
@@ -238,11 +388,15 @@ mod tests {
     use super::*;
     use crate::VaultResult;
     use crate::vault_event::{
-        VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+        GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
         build_genesis_import_event,
     };
-    use crate::vault_ids::{AuthKeyId, SecretId, StoreId};
-    use crate::vault_wire::{IsoTimestamp, OpaqueCiphertext, Sha256Hex};
+    use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
+    use crate::vault_signing::SigningIdentity;
+    use crate::vault_wire::{
+        AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
+        OpaqueCiphertext, Sha256Hex,
+    };
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
@@ -256,14 +410,16 @@ mod tests {
         StoreId::parse("store_testtoken11").unwrap()
     }
 
-    fn actor() -> AuthKeyId {
-        AuthKeyId::parse("key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
-            .unwrap()
+    fn actor(signing_key: &SigningKey) -> AuthKeyId {
+        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
+    }
+
+    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
     }
 
     fn epoch() -> EventId {
-        EventId::parse("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            .unwrap()
+        EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap()
     }
 
     fn genesis_source_hash() -> Sha256Hex {
@@ -278,7 +434,8 @@ mod tests {
         let body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: store(),
-            actor_id: actor(),
+            actor_id: actor(signing_key),
+            actor_signing_public_key: Some(public_key(signing_key)),
             parents,
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch(),
@@ -296,14 +453,35 @@ mod tests {
     fn genesis_event(signing_key: &SigningKey) -> VaultEvent {
         build_genesis_import_event(
             &store(),
-            &actor(),
+            &actor(signing_key),
             &epoch(),
-            &genesis_source_hash(),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: genesis_source_hash(),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )
         .unwrap()
+    }
+
+    fn signed_operation(
+        parents: Vec<EventId>,
+        operation: VaultOperation,
+        signing_key: &SigningKey,
+    ) -> VaultEvent {
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: store(),
+            actor_id: actor(signing_key),
+            actor_signing_public_key: Some(public_key(signing_key)),
+            parents,
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: epoch(),
+            operations: vec![operation],
+        };
+        VaultEvent::sign(body, signing_key).unwrap()
     }
 
     #[test]
@@ -361,6 +539,37 @@ mod tests {
 
         graph.insert(genesis, store_str)?;
         assert!(graph.pending_events().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn unauthorized_pending_event_is_quarantined_when_parent_arrives() -> VaultResult<()> {
+        let root_key = signing_key();
+        let stranger_key = signing_key();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+
+        let child = signed_child(
+            vec![genesis_id.clone()],
+            "secret_badpending1",
+            &stranger_key,
+        );
+        let child_id = child.id()?;
+
+        let mut graph = EventGraph::new();
+        assert!(matches!(
+            graph.insert(child, STORE_STR)?,
+            EventInsertStatus::Pending(_)
+        ));
+        assert_eq!(graph.pending_events().len(), 1);
+
+        assert_eq!(
+            graph.insert(genesis, STORE_STR)?,
+            EventInsertStatus::Applied
+        );
+        assert!(graph.pending_events().is_empty());
+        assert!(graph.quarantined().contains_key(&child_id));
+        assert_eq!(graph.topological_order()?, vec![genesis_id]);
         Ok(())
     }
 
@@ -447,6 +656,79 @@ mod tests {
         let first = graph.topological_order()?;
         let second = graph.topological_order()?;
         assert_eq!(first, second);
+        Ok(())
+    }
+
+    #[test]
+    fn unapproved_actor_child_is_rejected() -> VaultResult<()> {
+        let root_key = signing_key();
+        let stranger_key = signing_key();
+        let mut graph = EventGraph::new();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+        graph.insert(genesis, STORE_STR)?;
+
+        let stranger_event = signed_child(vec![genesis_id], "secret_unauth0001", &stranger_key);
+        let stranger_id = stranger_event.id()?;
+        assert!(matches!(
+            graph.insert(stranger_event, STORE_STR)?,
+            EventInsertStatus::Quarantined(_)
+        ));
+        assert!(graph.quarantined().contains_key(&stranger_id));
+        Ok(())
+    }
+
+    #[test]
+    fn self_signed_join_request_is_allowed_before_approval() -> VaultResult<()> {
+        let root_key = signing_key();
+        let joiner_key = signing_key();
+        let mut graph = EventGraph::new();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+        graph.insert(genesis, STORE_STR)?;
+
+        let join = signed_operation(
+            vec![genesis_id],
+            VaultOperation::JoinRequested {
+                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("phone".to_owned()),
+            },
+            &joiner_key,
+        );
+        assert_eq!(graph.insert(join, STORE_STR)?, EventInsertStatus::Applied);
+        Ok(())
+    }
+
+    #[test]
+    fn join_approval_authorizes_future_joiner_events() -> VaultResult<()> {
+        let root_key = signing_key();
+        let joiner_key = signing_key();
+        let mut graph = EventGraph::new();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+        graph.insert(genesis, STORE_STR)?;
+
+        let approval = signed_operation(
+            vec![genesis_id],
+            VaultOperation::JoinApproved {
+                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("phone".to_owned()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
+                    "members-key".to_owned(),
+                ),
+            },
+            &root_key,
+        );
+        let approval_id = approval.id()?;
+        graph.insert(approval, STORE_STR)?;
+
+        let child = signed_child(vec![approval_id], "secret_joiner0001", &joiner_key);
+        assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
         Ok(())
     }
 }

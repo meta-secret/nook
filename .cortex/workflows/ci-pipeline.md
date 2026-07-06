@@ -32,15 +32,20 @@ The **same sync spec files** run against different backends. CI swaps providers 
 
 | Env                      | Values                   | Default  |
 | ------------------------ | ------------------------ | -------- |
-| `NOOK_E2E_SYNC_PROVIDER` | `local`, `google-drive`, `github` | `local` |
+| `NOOK_E2E_SYNC_PROVIDER` | `file`, `local`, `google-drive`, `github` | `file` |
 
 Registry and factories live in `nook-web/e2e/sync-provider.ts`:
 
 - **`createSyncTarget()`** — isolated stub remote (reads provider from env)
 - **`connectSyncGenesisDevice()` / `connectSyncVault()`** — provider-aware connect
 - **`live/sync.smoke.spec.ts`** — one nightly smoke per matrix row
+- **`local` is a legacy alias for `file`** in stub e2e; new tests should use
+  `file` when they need the default local file-backed provider explicitly.
 
-**Main CI (`e2e`):** defaults to `local` stub provider (in-memory Google Drive REST mock).
+**Main CI (`e2e`):** defaults to the `file` stub provider. The stub stores
+remote event files in a real temp directory while Playwright serves the
+oauth-file HTTP calls, so default sync tests exercise local file-backed
+replication without external API quota.
 
 **Nightly (`sync-live`):** matrix in `e2e-nightly.yml`:
 
@@ -175,7 +180,8 @@ logs are the most important remaining signal.** They record vault session
 lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 
 - **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
-  the CI artifact/report before changing code.
+  the CI artifact/report before changing code. The attachment is created for
+  every e2e result; failures also print the same entries to test output.
 - **Local repro:** `E2E_SPEC=… task web:test:e2e:file`, then `fetchAppLogs(page)`
   or open `/app-logs?minLevel=debug&limit=1000`.
 - **Human inspection:** `/logs` in the running app.

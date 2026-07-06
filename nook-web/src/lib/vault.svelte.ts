@@ -13,18 +13,23 @@ import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
 import type { VaultPasswordEntrySummary } from '$lib/vault-password'
 import { isVaultSessionLocked, setVaultSessionLocked } from '$lib/vault-session'
 import {
-  DEFAULT_DRIVE_VAULT_FILE,
+  DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
   formatDriveStorageRef,
   loadAuthProviders,
   providerDefaultLabel,
   saveAuthProviders,
   wasmStorageModeForProvider,
+  type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
+import {
+  chooseLocalFolderBackupDirectory,
+  syncLocalFolderProvider,
+} from '$lib/local-folder-sync'
 import {
   getBrowserAppLocale,
   parseAppLocale,
@@ -38,18 +43,12 @@ import {
 } from '$lib/local-vault'
 import type { LocalVaultEntry } from '$lib/local-vault'
 import { createLogger } from '$lib/log'
-import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
+import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import {
-  attemptReconcileVaultSyncBlobs,
-  fetchRemoteVaultBlob,
-  parseVaultStoreIdMismatch,
-  readLocalVaultBlob,
   readVaultVersionFromBlob,
   resolveVaultSyncIntervalMs,
-  writeLocalVaultBlob,
-  writeRemoteVaultBlob,
+  vaultBlobContentHash,
   type PendingSyncConflict,
-  type ReconcileVaultResult,
 } from '$lib/vault-sync'
 import {
   createVaultIdleSessionTracker,
@@ -105,6 +104,7 @@ export class VaultState {
   githubPat = $state('')
   githubRepo = $state(DEFAULT_GITHUB_REPO)
   oauthFile = $state<OAuthFileConfig | null>(null)
+  localFolder = $state<LocalFolderConfig | null>(null)
   oauthSetupPreset = $state<OAuthFilePreset | null>(null)
   googleOAuthBusy = $state(false)
   icloudOAuthBusy = $state(false)
@@ -147,11 +147,19 @@ export class VaultState {
   replacementConflicts = $state<
     Array<{ oldSecretId: string; candidatesJson: string }>
   >([])
+  /** Concurrent key-epoch rotations; local writes fail closed while present. */
+  securityConflicts = $state<
+    Array<{ eventsJson: string; reasonsJson: string }>
+  >([])
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | null>(null)
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== null
+  }
+
+  get editsBlocked(): boolean {
+    return this.syncBlocked || this.securityConflicts.length > 0
   }
 
   get deviceProtectionReady(): boolean {
@@ -266,7 +274,7 @@ export class VaultState {
       const fileName =
         this.oauthFile?.fileName?.trim() ||
         this.githubRepo.trim() ||
-        DEFAULT_DRIVE_VAULT_FILE
+        DEFAULT_DRIVE_BACKUP_NAME
       return [
         mode,
         this.oauthFile?.accessToken?.trim() ?? '',
@@ -309,7 +317,7 @@ export class VaultState {
       const fileName =
         this.githubRepo.trim() ||
         this.oauthFile?.fileName?.trim() ||
-        DEFAULT_DRIVE_VAULT_FILE
+        DEFAULT_DRIVE_BACKUP_NAME
       return [
         wasmStorageModeForProvider('oauth-file', this.oauthFile?.preset),
         token,
@@ -332,7 +340,7 @@ export class VaultState {
         'oauth-file',
         this.githubRepo.trim() ||
           this.oauthFile?.fileName?.trim() ||
-          DEFAULT_DRIVE_VAULT_FILE,
+          DEFAULT_DRIVE_BACKUP_NAME,
         this.oauthFile?.preset ?? this.oauthSetupPreset ?? 'google-drive',
       )
     }
@@ -340,136 +348,14 @@ export class VaultState {
   }
 
   /**
-   * Compare local IndexedDB vault with a staged remote provider before connect.
-   * Newer version wins automatically; equal version + different content → conflict UI.
+   * Check whether a staged remote provider exists before connect.
    */
   async reconcileStagedRemoteWithLocal(options?: {
     providerId?: string
     quiet?: boolean
-  }): Promise<'ok' | 'conflict' | 'skip'> {
-    if (!this.localVaultPresent) {
-      return 'skip'
-    }
-    const args = this.stagedRemoteStorageArgs()
-    if (!args) {
-      return 'skip'
-    }
-
-    const localYaml = await readLocalVaultBlob()
-    if (!localYaml.trim()) {
-      return 'skip'
-    }
-
-    const [mode, pat, repo] = args
-    const remote = await fetchRemoteVaultBlob(mode, pat, repo)
-    if (!remote.content.trim()) {
-      return 'ok'
-    }
-
-    try {
-      return await this.reconcileStagedRemoteWithLocalBlobs({
-        localYaml,
-        remote,
-        mode,
-        pat,
-        repo,
-        options,
-      })
-    } catch (error: unknown) {
-      const mismatch = parseVaultStoreIdMismatch(error)
-      if (!mismatch) {
-        throw error
-      }
-      await this.stageVaultSyncConflict({
-        providerId:
-          options?.providerId ??
-          this.syncProviders[this.syncProviders.length - 1]?.id ??
-          '__pending_provider__',
-        providerLabel: this.stagedProviderLabel(),
-        localYaml,
-        remoteYaml: remote.content,
-        mode,
-        pat,
-        repo,
-        remoteRevision: remote.revision,
-        kind: 'store_id',
-        localStoreId: mismatch.localStoreId,
-        remoteStoreId: mismatch.remoteStoreId,
-      })
-      return 'conflict'
-    }
-  }
-
-  async reconcileStagedRemoteWithLocalBlobs(ctx: {
-    localYaml: string
-    remote: Awaited<ReturnType<typeof fetchRemoteVaultBlob>>
-    mode: string
-    pat: string
-    repo: string
-    options?: { providerId?: string; quiet?: boolean }
-  }): Promise<'ok' | 'conflict'> {
-    const { localYaml, remote, mode, pat, repo, options } = ctx
-
-    const attempt = attemptReconcileVaultSyncBlobs(
-      localYaml,
-      remote.content,
-      remote.revision,
-    )
-    if (attempt.status === 'store_id_mismatch') {
-      await this.stageVaultSyncConflict({
-        providerId:
-          options?.providerId ??
-          this.syncProviders[this.syncProviders.length - 1]?.id ??
-          '__pending_provider__',
-        providerLabel: this.stagedProviderLabel(),
-        localYaml,
-        remoteYaml: remote.content,
-        mode,
-        pat,
-        repo,
-        remoteRevision: remote.revision,
-        kind: 'store_id',
-        localStoreId: attempt.localStoreId,
-        remoteStoreId: attempt.remoteStoreId,
-      })
-      return 'conflict'
-    }
-
-    const reconcile = attempt.result
-
-    if (reconcile.action === 'conflict') {
-      await this.stageVaultSyncConflict({
-        providerId:
-          options?.providerId ??
-          this.syncProviders[this.syncProviders.length - 1]?.id ??
-          '__pending_provider__',
-        providerLabel: this.stagedProviderLabel(),
-        localYaml: reconcile.localYaml,
-        remoteYaml: reconcile.remoteYaml,
-        mode,
-        pat,
-        repo,
-        remoteRevision: remote.revision,
-        kind: 'content',
-      })
-      return 'conflict'
-    }
-
-    await this.applyReconcileResult(
-      reconcile,
-      {
-        providerId:
-          options?.providerId ??
-          this.syncProviders[this.syncProviders.length - 1]?.id ??
-          '__pending_provider__',
-        remote,
-        mode,
-        pat,
-        repo,
-      },
-      { quiet: options?.quiet ?? false },
-    )
-    return 'ok'
+  }): Promise<'ok' | 'skip'> {
+    void options
+    return this.stagedRemoteStorageArgs() ? 'ok' : 'skip'
   }
 
   hasRemoteCredentials(): boolean {
@@ -478,6 +364,9 @@ export class VaultState {
     }
     if (this.storageMode === 'oauth-file') {
       return Boolean(this.oauthFile?.accessToken?.trim())
+    }
+    if (this.storageMode === 'local-folder') {
+      return Boolean(this.localFolder?.handleId?.trim())
     }
     return true
   }
@@ -503,6 +392,10 @@ export class VaultState {
 
   async signInWithICloud(): Promise<void> {
     return oauthActions.signInWithICloud(this)
+  }
+
+  async chooseLocalFolderBackupDirectory(): Promise<void> {
+    this.localFolder = await chooseLocalFolderBackupDirectory()
   }
 
   dismissSuccess() {
@@ -584,12 +477,15 @@ export class VaultState {
     )
     if (provider.type === 'oauth-file') {
       const fileName =
-        provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+        provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
       return [
         mode,
         provider.oauthFile?.accessToken?.trim() ?? '',
         formatDriveStorageRef(provider.oauthFile?.fileId, fileName),
       ]
+    }
+    if (provider.type === 'local-folder') {
+      return ['local', '', '']
     }
     if (provider.type === 'github') {
       return [
@@ -714,7 +610,7 @@ export class VaultState {
   private async continueInitializationAfterDeviceUnlock() {
     if (!this.manager) return
     await this.initDeviceIdentity({ allowPendingAuthorization: true })
-    await this.loadProviders({ migrateLegacyVault: true })
+    await this.loadProviders({ ensureLocalRow: true })
     await localLoginActions.refreshLocalVaultCatalog(this)
     if (!this.activeVaultStoreId) {
       this.activeVaultStoreId = this.localVaults[0]?.storeId ?? null
@@ -727,6 +623,7 @@ export class VaultState {
       this.storageMode = 'local'
       this.githubPat = ''
       this.oauthFile = null
+      this.localFolder = null
     } else {
       this.applyActiveProviderCredentials()
     }
@@ -845,6 +742,7 @@ export class VaultState {
       this.providersLoaded = false
       this.githubPat = ''
       this.oauthFile = null
+      this.localFolder = null
       this.storageMode = 'local'
       this.showSuccess(this.t('device_protection.recovery_complete'))
     } catch (error) {
@@ -971,7 +869,7 @@ export class VaultState {
     return localLoginActions.createLocalVault(this, password)
   }
 
-  async loadProviders(options?: { migrateLegacyVault?: boolean }) {
+  async loadProviders(options?: { ensureLocalRow?: boolean }) {
     return providersActions.loadProviders(this, options)
   }
 
@@ -1231,6 +1129,10 @@ export class VaultState {
     const mergedJoins: JoinRequest[] = []
     try {
       for (const provider of this.syncProviders) {
+        if (provider.type === 'local-folder') {
+          await syncLocalFolderProvider(this, provider)
+          continue
+        }
         const [mode, pat, repo] = this.providerWasmArgs(provider)
         const joins = (await this.enqueueStorage(() =>
           this.manager!.mergeRemoteJoinsFromProvider(mode, pat, repo),
@@ -1323,7 +1225,7 @@ export class VaultState {
     return syncActions.manualSync(this)
   }
 
-  /** Reconcile local vault with one sync provider using `reconcileVaultBlobs`. */
+  /** Sync local event log with one provider. */
   async syncProviderById(
     providerId: string,
     options?: { quiet?: boolean },
@@ -1355,20 +1257,32 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
-    await this.pushRemoteYamlSnapshotNow()
-    await this.flushRemoteEventOutboxNow()
+    if (this.syncProviders.length === 0) {
+      await this.flushRemoteEventOutboxNow()
+      return
+    }
+    for (const provider of this.syncProviders) {
+      if (this.syncBlocked) break
+      await this.flushRemoteEventOutboxNow(provider)
+    }
   }
 
   scheduleFanOutSyncAfterLocalSave(): void {
     void this.runFanOutSyncAfterLocalSave()
   }
 
-  /** Fire-and-forget YAML projection for providers that still read nook-vault.yaml. */
-  scheduleRemoteYamlSnapshotPush(): void {
-    void this.pushRemoteYamlSnapshotNow()
-  }
-
-  remoteYamlSnapshotStorageArgs(): [string, string, string] | null {
+  remoteEventProviderArgs(
+    provider?: StorageProvider,
+  ): [string, string, string] | null {
+    if (provider?.type === 'local-folder') {
+      return null
+    }
+    if (provider) {
+      return this.providerWasmArgs(provider)
+    }
+    if (this.syncProviders[0]?.type === 'local-folder') {
+      return null
+    }
     if (this.syncProviders.length > 0) {
       return this.providerWasmArgs(this.syncProviders[0]!)
     }
@@ -1376,118 +1290,6 @@ export class VaultState {
       return this.wasmStorageArgs()
     }
     return null
-  }
-
-  async pushRemoteYamlSnapshotNow(): Promise<void> {
-    if (!this.manager) return
-    const args = this.remoteYamlSnapshotStorageArgs()
-    if (!args) return
-    await this.enqueueStorage(() =>
-      this.manager!.pushRemoteVaultYamlSnapshotForProvider(...args),
-    )
-  }
-
-  async applyReconcileResult(
-    result: ReconcileVaultResult,
-    ctx: {
-      providerId: string
-      remote: Awaited<ReturnType<typeof fetchRemoteVaultBlob>>
-      mode: string
-      pat: string
-      repo: string
-    },
-    options?: { quiet?: boolean },
-  ): Promise<void> {
-    const { providerId, remote, mode, pat, repo } = ctx
-    const quiet = options?.quiet ?? false
-
-    if (result.action === 'conflict') {
-      await this.stageVaultSyncConflict({
-        providerId,
-        providerLabel:
-          this.providers.find((p) => p.id === providerId)?.label ?? providerId,
-        localYaml: result.localYaml,
-        remoteYaml: result.remoteYaml,
-        mode,
-        pat,
-        repo,
-        remoteRevision: remote.revision,
-        kind: 'content',
-      })
-      return
-    }
-
-    if (result.action === 'adopt_remote') {
-      // Reconcile can start from a stale local read while a mutation (e.g.
-      // addVaultPassword) is still landing in IndexedDB, or an in-flight
-      // background sync can finish after a newer local save. Re-read local
-      // before adopting remote so we never clobber a fresher local copy.
-      const freshLocal = await readLocalVaultBlob()
-      if (freshLocal.trim()) {
-        const retry = attemptReconcileVaultSyncBlobs(
-          freshLocal,
-          remote.content,
-          remote.revision,
-        )
-        if (retry.status === 'store_id_mismatch') {
-          await this.stageVaultSyncConflict({
-            providerId,
-            providerLabel:
-              this.providers.find((p) => p.id === providerId)?.label ??
-              providerId,
-            localYaml: freshLocal,
-            remoteYaml: remote.content,
-            mode,
-            pat,
-            repo,
-            remoteRevision: remote.revision,
-            kind: 'store_id',
-            localStoreId: retry.localStoreId,
-            remoteStoreId: retry.remoteStoreId,
-          })
-          return
-        }
-        if (retry.result.action !== 'adopt_remote') {
-          await this.applyReconcileResult(retry.result, ctx, options)
-          return
-        }
-      }
-
-      await writeLocalVaultBlob(result.localYaml)
-      if (this.isAuthenticated) {
-        await this.reloadSessionFromLocal()
-      }
-    } else if (result.action === 'push_local') {
-      const revision = await writeRemoteVaultBlob(
-        mode,
-        pat,
-        repo,
-        result.remoteYaml,
-        remote.revision,
-      )
-      await this.updateProviderSyncMetadata(
-        providerId,
-        result.localYaml,
-        revision,
-      )
-      if (!quiet) {
-        this.showSuccess(this.t('auth_storage.sync_pushed'))
-      }
-      return
-    }
-
-    await this.updateProviderSyncMetadata(
-      providerId,
-      result.localYaml,
-      remote.revision,
-    )
-    if (!quiet) {
-      if (result.action === 'unchanged') {
-        this.showSuccess(this.t('auth_storage.sync_up_to_date'))
-      } else {
-        this.showSuccess(this.t('auth_storage.sync_pulled'))
-      }
-    }
   }
 
   async updateProviderSyncMetadata(
@@ -1508,6 +1310,7 @@ export class VaultState {
             lastSyncedAt: isoTimestamp(),
             lastSyncedVersion: version || p.lastSyncedVersion,
             lastSyncRevision: revision ?? p.lastSyncRevision,
+            lastCommonContentHash: vaultBlobContentHash(yaml),
             storeId: managerStoreId || p.storeId,
           }
         : p,
@@ -1518,6 +1321,29 @@ export class VaultState {
 
   async refreshReplacementConflicts(): Promise<void> {
     return syncActions.refreshReplacementConflicts(this)
+  }
+
+  async resolveReplacementConflict(
+    oldSecretId: string,
+    chosenSecretId: string,
+  ): Promise<void> {
+    if (!this.manager || this.isSaving) return
+    this.isSaving = true
+    this.errorMsg = ''
+    try {
+      const raw = await this.enqueueStorage(() =>
+        this.manager!.resolveProjectionConflict(oldSecretId, chosenSecretId),
+      )
+      this.secrets = raw as NookSecretRecord[]
+      await this.refreshReplacementConflicts()
+      this.scheduleFanOutSyncAfterLocalSave()
+      this.showSuccess('Secret conflict resolved.')
+    } catch (error: unknown) {
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Could not resolve conflict.'
+    } finally {
+      this.isSaving = false
+    }
   }
 
   async stageVaultSyncConflict(
@@ -1674,7 +1500,7 @@ export class VaultState {
     return multiDeviceActions.refreshDeviceState(this)
   }
 
-  /** Merge remote YAML join rows into the session (manual sync + provider poll). */
+  /** Refresh event-log joins from providers (manual sync + provider poll). */
   async refreshPendingJoinsFromProviders() {
     return multiDeviceActions.refreshPendingJoinsFromProviders(this)
   }
@@ -1733,7 +1559,7 @@ export class VaultState {
   }
 
   async promoteSessionVaultToLocalIfNeeded(): Promise<void> {
-    const { snapshot, migrated } = await migrateLegacyVaultToLocal({
+    const { snapshot, migrated } = await ensureLocalAuthProviderSnapshot({
       providers: this.providers,
     })
     if (migrated || snapshot.providers.length !== this.providers.length) {
@@ -1747,6 +1573,7 @@ export class VaultState {
       this.storageMode = 'local'
       this.githubPat = ''
       this.oauthFile = null
+      this.localFolder = null
     }
   }
 
@@ -1827,16 +1654,36 @@ export class VaultState {
     void this.flushRemoteEventOutboxNow()
   }
 
-  async flushRemoteEventOutboxNow(): Promise<void> {
+  async flushRemoteEventOutboxNow(provider?: StorageProvider): Promise<void> {
     if (!this.manager) return
-    const args = this.remoteYamlSnapshotStorageArgs()
+    const folderProvider =
+      provider?.type === 'local-folder'
+        ? provider
+        : !provider && this.syncProviders[0]?.type === 'local-folder'
+          ? this.syncProviders[0]
+          : null
+    if (folderProvider) {
+      try {
+        await syncLocalFolderProvider(this, folderProvider)
+      } catch (error) {
+        vaultLog.warn('local backup sync skipped', {
+          providerId: folderProvider.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+      return
+    }
+    const args = this.remoteEventProviderArgs(provider)
     if (!args) return
     try {
       await this.enqueueStorage(() =>
         this.manager!.flushEventOutboxForProvider(...args),
       )
-    } catch {
-      // Best-effort — YAML snapshot push carries the legacy projection.
+    } catch (error) {
+      vaultLog.warn('event outbox flush skipped', {
+        providerId: provider?.id ?? 'active',
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

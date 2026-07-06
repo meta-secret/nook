@@ -14,6 +14,9 @@ pub enum VaultSyncError {
     #[error("sync provider {provider_id} disappeared during fan-out")]
     ProviderDisappeared { provider_id: String },
 
+    #[error("Remote vault changed during write; sync conflict required.")]
+    RemoteChangedDuringWrite,
+
     #[error(transparent)]
     VaultFormat(#[from] VaultFormatError),
 }

@@ -365,10 +365,10 @@ mod tests {
 
         let session = std::fs::read_to_string(fixtures.join("session.example.jsonl"))
             .expect("missing fixtures/session.example.jsonl — run: cargo run --example generate_vault_fixtures -p nook-core");
-        let yaml = std::fs::read_to_string(fixtures.join("nook-vault.example.yaml"))
-            .expect("missing fixtures/nook-vault.example.yaml");
-        let jsonl = std::fs::read_to_string(fixtures.join("nook-vault.example.jsonl"))
-            .expect("missing fixtures/nook-vault.example.jsonl");
+        let yaml = std::fs::read_to_string(fixtures.join("nook-projection.example.yaml"))
+            .expect("missing fixtures/nook-projection.example.yaml");
+        let jsonl = std::fs::read_to_string(fixtures.join("nook-projection.example.jsonl"))
+            .expect("missing fixtures/nook-projection.example.jsonl");
 
         assert!(yaml.as_str().contains("secrets:"));
         assert!(yaml.as_str().contains('|'));

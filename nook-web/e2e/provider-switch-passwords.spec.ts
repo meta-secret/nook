@@ -17,7 +17,6 @@ import {
   unlockVaultOnLogin,
 } from './helpers'
 import { createSyncTarget, installSyncStub } from './sync-provider'
-import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 test.describe('unified vault backup passwords (stub sync)', () => {
   test.describe.configure({ mode: 'serial' })
@@ -43,20 +42,18 @@ test.describe('unified vault backup passwords (stub sync)', () => {
     await stubGoogleDriveVaultForLocalE2e(
       page,
       { fileName: target.repoName, vaultYaml },
-      target.stub as ReturnType<typeof createLocalE2eGoogleDriveVaultStub>,
+      target.stub,
     )
     await reloadUnlockWithSyncProvider(page, {
       providers: [
         {
           id: 'e2e-empty-sync',
-          label: 'Empty Drive',
+          label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
         },
       ],
-      sharedStub: target.stub as ReturnType<
-        typeof createLocalE2eGoogleDriveVaultStub
-      >,
+      sharedStub: target.stub,
     })
     await disableVaultIdleLock(page)
 

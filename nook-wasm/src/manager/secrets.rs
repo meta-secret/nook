@@ -5,8 +5,8 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::records_to_vec;
-use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, JsValue};
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -153,31 +153,6 @@ impl NookVaultManager {
         Ok(self.get_records()?)
     }
 
-    #[wasm_bindgen(js_name = pushRemoteVaultYamlSnapshot)]
-    pub async fn push_remote_vault_yaml_snapshot_js(&mut self) -> Result<(), JsError> {
-        self.push_remote_vault_yaml_snapshot()
-            .await
-            .map_err(Into::into)
-    }
-
-    #[wasm_bindgen(js_name = pushRemoteVaultYamlSnapshotForProvider)]
-    pub async fn push_remote_vault_yaml_snapshot_for_provider(
-        &mut self,
-        storage_mode: String,
-        github_pat: String,
-        github_repo: String,
-    ) -> Result<(), JsError> {
-        let password_entries = self.password_entries.clone();
-        let unlock = self.unlock.clone();
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
-            .await?;
-        self.password_entries = password_entries;
-        self.unlock = unlock;
-        self.push_remote_vault_yaml_snapshot()
-            .await
-            .map_err(Into::into)
-    }
-
     #[wasm_bindgen(js_name = mergeRemoteJoinsFromProvider)]
     pub async fn merge_remote_joins_from_provider(
         &mut self,
@@ -186,11 +161,12 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let _ = self.merge_remote_yaml_joins_from_storage().await?;
+        self.sync_events_from_current_provider().await?;
         if restore_local {
-            self.prepare_storage("local", "", "").await?;
+            self.prepare_storage_preserving_vault_metadata("local", "", "")
+                .await?;
         }
         Ok(self.pending_joins()?)
     }
@@ -203,11 +179,12 @@ impl NookVaultManager {
         github_repo: String,
     ) -> Result<(), JsError> {
         let restore_local = self.storage_mode == nook_core::StorageMode::Local;
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.flush_event_outbox().await?;
         if restore_local {
-            self.prepare_storage("local", "", "").await?;
+            self.prepare_storage_preserving_vault_metadata("local", "", "")
+                .await?;
         }
         Ok(())
     }
@@ -219,12 +196,28 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<(), JsError> {
-        self.prepare_storage(&storage_mode, &github_pat, &github_repo)
+        self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
-        let _ = self.merge_remote_yaml_joins_from_storage().await?;
         self.flush_event_outbox().await?;
         Ok(())
+    }
+
+    #[wasm_bindgen(js_name = exportEventLogRecords)]
+    pub async fn export_event_log_records_js(&self) -> Result<JsValue, JsError> {
+        let records = self.export_event_log_records().await?;
+        serde_wasm_bindgen::to_value(&records).map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = syncExternalEventLogRecords)]
+    pub async fn sync_external_event_log_records_js(
+        &mut self,
+        records: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let records =
+            serde_wasm_bindgen::from_value(records).map_err(|e| JsError::new(&e.to_string()))?;
+        let merged = self.sync_external_event_log_records(records).await?;
+        serde_wasm_bindgen::to_value(&merged).map_err(|e| JsError::new(&e.to_string()))
     }
 
     #[wasm_bindgen(js_name = eventLogMode)]
@@ -239,6 +232,14 @@ impl NookVaultManager {
         let projection = self.load_projection_conflicts().await?;
         crate::types::replacement_conflicts_to_vec(projection.replacement_conflicts)
             .map_err(Into::into)
+    }
+
+    #[wasm_bindgen(js_name = listProjectionSecurityConflicts)]
+    pub async fn list_projection_security_conflicts(
+        &self,
+    ) -> Result<Vec<crate::NookSecurityConflict>, JsError> {
+        let projection = self.load_projection_conflicts().await?;
+        crate::types::security_conflicts_to_vec(projection.security_conflicts).map_err(Into::into)
     }
 
     // Delete a secret
@@ -266,5 +267,45 @@ impl NookVaultManager {
             "secret deleted"
         );
         Ok(records)
+    }
+
+    #[wasm_bindgen(js_name = resolveProjectionConflict)]
+    pub async fn resolve_projection_conflict(
+        &mut self,
+        old_secret_id: String,
+        chosen_secret_id: String,
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
+        let old_id = nook_core::validate_secret_id(&old_secret_id)?;
+        let chosen_id = nook_core::validate_secret_id(&chosen_secret_id)?;
+        let projection = self.load_projection_conflicts().await?;
+        let conflict = projection
+            .replacement_conflicts
+            .get(&old_id)
+            .ok_or_else(|| {
+                NookError::Database("Secret replacement conflict not found.".to_owned())
+            })?;
+        if !conflict
+            .candidates
+            .values()
+            .any(|secret_id| secret_id == &chosen_id)
+        {
+            return Err(NookError::Database(
+                "Chosen secret is not part of this replacement conflict.".to_owned(),
+            )
+            .into());
+        }
+        let rejected_secret_ids = conflict
+            .candidates
+            .values()
+            .filter(|secret_id| *secret_id != &chosen_id)
+            .cloned()
+            .collect();
+        self.append_vault_operations(vec![nook_core::VaultOperation::SecretConflictResolved {
+            old_id,
+            chosen_secret_id: chosen_id,
+            rejected_secret_ids,
+        }])
+        .await?;
+        Ok(self.get_records()?)
     }
 }

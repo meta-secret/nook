@@ -39,7 +39,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ## 5. Technology Cheat Sheets (`references/`)
 * [references/rust-wasm.md](references/rust-wasm.md) — Rust-Wasm binding conventions.
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
-* [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, e2e auto-dump).
+* [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, per-test e2e log attachments).
 
 ## 6. Workflows (`workflows/`)
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → local validation → push when ready → monitor → full local loop on failure → merge). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
@@ -47,6 +47,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [workflows/coderabbit.md](workflows/coderabbit.md) — CodeRabbit CLI / PR-review workflow for agent pre-commit review loops and GitHub-side review control.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Capture user-explained codebase lessons as reusable `.cortex/dynamic-skills/` skill cards and optional Cursor project skills.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
+* [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
 * [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (PR / main / nightly e2e split; sync-stub vs sync-live).
 * [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
 * [workflows/quality.md](workflows/quality.md) — Quality gates, **testing pyramid** (Rust ~99% domain coverage), and release.
@@ -67,5 +68,23 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   App logs are the most important source after the first two — vault session, sync,
   and WASM tracing do not appear in clippy or Playwright DOM assertions.
 * When debugging Playwright/e2e, vault UI flows, or red CI, **always consult app logs**
-  (`nook-app-logs.json`, `fetchAppLogs`, `/app-logs`) before changing code.
+  (`nook-app-logs.json` is attached to every Playwright result; `fetchAppLogs`
+  and `/app-logs` are available for local repro) before changing code.
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
+
+### PR review comments
+* When a PR has actionable review feedback from a human, CodeRabbit, or another automated reviewer, treat
+  every active, non-outdated item as required work. An agent must leave its own GitHub reply explaining the
+  fix, validation, or no-change rationale before resolving any PR comment or review conversation. CodeRabbit
+  also posts actionable items outside normal code review threads, including PR timeline/summary comments,
+  outside-diff-range sections, and nitpicks; inspect those surfaces too. CodeRabbit's automatic "addressed"
+  marker does not count as the agent's own reply. Replies must target the specific comment/item; a broad PR
+  audit comment is not a substitute. For CodeRabbit threads, do not manually resolve after replying; wait
+  for CodeRabbit to mark/close the thread, then re-query. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
+
+### Deferred or out-of-scope functionality
+* If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of
+  scope for the current PR, the agent must not silently drop it. First inspect existing GitHub issues,
+  then update the existing aggregate issue or create one, and attach/create focused sub-issues for the
+  missing work. See [workflows/issues.md](workflows/issues.md) and
+  [dynamic-skills/issue-scope-management.md](dynamic-skills/issue-scope-management.md).

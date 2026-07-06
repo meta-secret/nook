@@ -44,19 +44,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .map_err(|e| format!("write session.example.jsonl: {e}"))?;
     fs::write(
-        fixtures_dir.join("nook-vault.example.yaml"),
+        fixtures_dir.join("nook-projection.example.yaml"),
         stored_yaml.as_str(),
     )
-    .map_err(|e| format!("write nook-vault.example.yaml: {e}"))?;
+    .map_err(|e| format!("write nook-projection.example.yaml: {e}"))?;
     fs::write(
-        fixtures_dir.join("nook-vault.example.jsonl"),
+        fixtures_dir.join("nook-projection.example.jsonl"),
         stored_jsonl.as_str(),
     )
-    .map_err(|e| format!("write nook-vault.example.jsonl: {e}"))?;
+    .map_err(|e| format!("write nook-projection.example.jsonl: {e}"))?;
 
     println!("Wrote fixtures to {}", fixtures_dir.display());
     println!("  session.example.jsonl     — plaintext in-memory format (WASM session only)");
-    println!("  nook-vault.example.yaml   — encrypted on-disk format (GitHub / IndexedDB)");
-    println!("  nook-vault.example.jsonl  — same data, JSONL on-disk format (also supported)");
+    println!("  nook-projection.example.yaml   — encrypted on-disk format (GitHub / IndexedDB)");
+    println!("  nook-projection.example.jsonl  — same data, JSONL on-disk format (also supported)");
     Ok(())
 }

@@ -146,6 +146,7 @@ impl JoinApproval<Pending> {
         let join = JoinRequest {
             device_id: joiner.device_id().clone(),
             public_key: joiner.public_key(),
+            signing_public_key: DeviceSigningPublicKey::from_trusted(String::new()),
             requested_at: SIM_TS.to_owned(),
         };
         world.devices[requester_index].append_signed(vec![VaultOperation::JoinRequested {

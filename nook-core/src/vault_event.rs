@@ -7,10 +7,12 @@ use crate::event_canonical::{
 };
 use crate::secret_types::{SecretType, StoredRecordPayload, StoredSecretRecord};
 use crate::vault_ids::{AuthKeyId, DeviceId, SecretId, StoreId};
+use crate::vault_signing::SigningIdentity;
 use crate::vault_wire::{
     AgeArmoredCiphertext, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp, MemberLabel,
     OpaqueCiphertext, PasswordEntryId, Sha256Hex,
 };
+use crate::{PasswordEnvelope, PasswordUnlockEntry};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -21,8 +23,8 @@ use serde_json::{Value, json};
 pub struct VaultEventSchemaVersion(u32);
 
 impl VaultEventSchemaVersion {
-    pub const V1: Self = Self(1);
-    pub const CURRENT: Self = Self::V1;
+    pub const V2: Self = Self(2);
+    pub const CURRENT: Self = Self::V2;
 
     #[must_use]
     pub const fn get(self) -> u32 {
@@ -66,6 +68,7 @@ pub enum VaultOperation {
     VaultImported {
         source_content_hash: Sha256Hex,
         secrets: Vec<EncryptedSecretPayload>,
+        password_entries: Vec<PasswordUnlockEntry>,
     },
     SecretCreated {
         secret: EncryptedSecretPayload,
@@ -108,11 +111,13 @@ pub enum VaultOperation {
     },
     PasswordAdded {
         entry_id: PasswordEntryId,
-        envelope_ciphertext: OpaqueCiphertext,
+        label: String,
+        created_at: IsoTimestamp,
+        envelope: PasswordEnvelope,
     },
     PasswordRotated {
         entry_id: PasswordEntryId,
-        envelope_ciphertext: OpaqueCiphertext,
+        envelope: PasswordEnvelope,
     },
     PasswordRemoved {
         entry_id: PasswordEntryId,
@@ -131,6 +136,8 @@ pub struct VaultEventBody {
     pub schema_version: VaultEventSchemaVersion,
     pub store_id: StoreId,
     pub actor_id: AuthKeyId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_signing_public_key: Option<DeviceSigningPublicKey>,
     pub parents: Vec<EventId>,
     pub created_at: IsoTimestamp,
     pub key_epoch: EventId,
@@ -186,8 +193,28 @@ impl VaultEvent {
         verify_body_signature(&body_bytes, self.signature.as_str(), verifying_key)
     }
 
+    pub fn validate_actor_signature(&self) -> VaultResult<()> {
+        let public_key = self
+            .body
+            .actor_signing_public_key
+            .as_ref()
+            .filter(|key| !key.is_empty())
+            .ok_or(EventError::MissingActorSigningPublicKey)?;
+        let verifying_key =
+            SigningIdentity::verifying_key_from_public_key_hex(public_key.as_str())?;
+        let signing_key_actor_id = SigningIdentity::actor_id_for_verifying_key(&verifying_key)?;
+        if signing_key_actor_id != self.body.actor_id {
+            return Err(EventError::ActorSigningKeyMismatch {
+                actor_id: self.body.actor_id.as_str().to_owned(),
+                signing_key_actor_id: signing_key_actor_id.as_str().to_owned(),
+            }
+            .into());
+        }
+        self.verify_signature(&verifying_key)
+    }
+
     pub fn validate_envelope(&self, expected_store_id: &StoreId) -> VaultResult<EventId> {
-        if self.body.schema_version > VaultEventSchemaVersion::CURRENT {
+        if self.body.schema_version != VaultEventSchemaVersion::CURRENT {
             return Err(EventError::UnsupportedSchemaVersion {
                 version: self.body.schema_version.get(),
             }
@@ -201,10 +228,11 @@ impl VaultEvent {
             .into());
         }
         if self.body.parents.is_empty()
-            && !matches!(
-                self.body.operations.as_slice(),
-                [VaultOperation::VaultImported { .. }]
-            )
+            && !self
+                .body
+                .operations
+                .iter()
+                .any(|operation| matches!(operation, VaultOperation::VaultImported { .. }))
         {
             return Err(EventError::MissingEventParents.into());
         }
@@ -212,30 +240,81 @@ impl VaultEvent {
             EventId::parse(parent.as_str())?;
         }
         EventId::parse(self.body.key_epoch.as_str())?;
+        self.validate_actor_signature()?;
         self.id()
     }
 }
 
+/// Serialize an event for provider/local storage.
+///
+/// Event ids and signatures still use canonical compact JSON body bytes. The
+/// persisted event envelope is pretty YAML so humans can inspect provider files.
+pub fn serialize_event_storage_yaml(event: &VaultEvent) -> VaultResult<Vec<u8>> {
+    let mut yaml =
+        serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
+    if !yaml.ends_with('\n') {
+        yaml.push('\n');
+    }
+    Ok(yaml.into_bytes())
+}
+
+/// Parse a stored event from YAML bytes.
+pub fn parse_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
+    let text = std::str::from_utf8(bytes).map_err(|e| {
+        EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
+    })?;
+    serde_yaml::from_str(text)
+        .map_err(|e| EventError::ParseStoredEvent(format!("YAML parse failed: {e}")).into())
+}
+
+/// Parse a remote event and classify errors for provider sync.
+pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> VaultResult<VaultEvent> {
+    parse_event_storage_bytes(bytes).map_err(|error| match error {
+        crate::errors::VaultError::Event(EventError::ParseStoredEvent(message)) => {
+            EventError::ParseRemoteEvent(message).into()
+        }
+        other => other,
+    })
+}
+
 /// Build a genesis import event from encrypted snapshot data.
+pub struct GenesisImportPayload {
+    pub source_content_hash: Sha256Hex,
+    pub secrets: Vec<EncryptedSecretPayload>,
+    pub password_entries: Vec<PasswordUnlockEntry>,
+}
+
 pub fn build_genesis_import_event(
     store_id: &StoreId,
     actor_id: &AuthKeyId,
     key_epoch: &EventId,
-    source_content_hash: &Sha256Hex,
-    secrets: Vec<EncryptedSecretPayload>,
+    payload: GenesisImportPayload,
     created_at: &IsoTimestamp,
     signing_key: &SigningKey,
 ) -> VaultResult<VaultEvent> {
+    let signing_actor_id =
+        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?;
+    if signing_actor_id != *actor_id {
+        return Err(EventError::ActorSigningKeyMismatch {
+            actor_id: actor_id.as_str().to_owned(),
+            signing_key_actor_id: signing_actor_id.as_str().to_owned(),
+        }
+        .into());
+    }
     let body = VaultEventBody {
         schema_version: VaultEventSchemaVersion::CURRENT,
         store_id: store_id.clone(),
         actor_id: actor_id.clone(),
+        actor_signing_public_key: Some(DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing_key.verifying_key().as_bytes(),
+        ))),
         parents: Vec::new(),
         created_at: created_at.clone(),
         key_epoch: key_epoch.clone(),
         operations: vec![VaultOperation::VaultImported {
-            source_content_hash: source_content_hash.clone(),
-            secrets,
+            source_content_hash: payload.source_content_hash,
+            secrets: payload.secrets,
+            password_entries: payload.password_entries,
         }],
     };
     VaultEvent::sign(body, signing_key)
@@ -251,22 +330,27 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
+    fn actor(signing_key: &SigningKey) -> AuthKeyId {
+        SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key()).unwrap()
+    }
+
+    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
+    }
+
     #[test]
     fn genesis_event_has_no_parents() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
-            &AuthKeyId::parse(
-                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            )
-            .unwrap(),
+            &actor(&signing_key),
             &epoch,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )
@@ -278,19 +362,42 @@ mod tests {
     }
 
     #[test]
-    fn event_id_changes_when_parents_change() {
-        let _signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    fn schema_one_event_is_rejected() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
+        let mut event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11").unwrap(),
+            &actor(&signing_key),
+            &epoch,
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            &signing_key,
         )
         .unwrap();
+        event.body.schema_version = VaultEventSchemaVersion(1);
+
+        let err = event
+            .validate_envelope(&StoreId::parse("store_testtoken11").unwrap())
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(EventError::UnsupportedSchemaVersion { version: 1 })
+        ));
+    }
+
+    #[test]
+    fn event_id_changes_when_parents_change() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw").unwrap();
         let mut body = VaultEventBody {
             schema_version: VaultEventSchemaVersion::CURRENT,
             store_id: StoreId::parse("store_testtoken11").unwrap(),
-            actor_id: AuthKeyId::parse(
-                "key_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-            )
-            .unwrap(),
+            actor_id: actor(&signing_key),
+            actor_signing_public_key: Some(public_key(&signing_key)),
             parents: vec![epoch.clone()],
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch.clone(),
@@ -303,12 +410,8 @@ mod tests {
             }],
         };
         let id_a = body.event_id().unwrap();
-        body.parents.push(
-            EventId::parse(
-                "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-            )
-            .unwrap(),
-        );
+        body.parents
+            .push(EventId::parse("sha256u:7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u4").unwrap());
         body.parents.sort();
         let id_b = body.event_id().unwrap();
         assert_ne!(id_a, id_b);
@@ -317,24 +420,96 @@ mod tests {
     #[test]
     fn validate_envelope_rejects_wrong_store() {
         let signing_key = test_signing_key();
-        let epoch = EventId::parse(
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .unwrap();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
         let event = build_genesis_import_event(
             &StoreId::parse("store_testtoken11").unwrap(),
-            &AuthKeyId::parse(
-                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            )
-            .unwrap(),
+            &actor(&signing_key),
             &epoch,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             &signing_key,
         )
         .unwrap();
         let wrong_store = StoreId::parse("store_otherid0001").unwrap();
         assert!(event.validate_envelope(&wrong_store).is_err());
+    }
+
+    #[test]
+    fn event_storage_is_pretty_yaml_and_roundtrips() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
+        let event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11").unwrap(),
+            &actor(&signing_key),
+            &epoch,
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![EncryptedSecretPayload {
+                    id: SecretId::from_vault_record("secret_abc12345678"),
+                    secret_type: SecretType::Login,
+                    ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                }],
+                password_entries: vec![],
+            },
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            &signing_key,
+        )
+        .unwrap();
+
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event).unwrap()).unwrap();
+        assert!(yaml.starts_with("schema_version: 2\n"));
+        assert!(yaml.contains("operations:\n- type: vault-imported\n"));
+        assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
+        assert!(yaml.contains("\nsignature: ed25519:"));
+        assert!(yaml.ends_with('\n'));
+        assert!(!yaml.trim_start().starts_with('{'));
+        assert_eq!(
+            parse_event_storage_bytes(yaml.as_bytes())
+                .unwrap()
+                .id()
+                .unwrap(),
+            event.id().unwrap()
+        );
+    }
+
+    #[test]
+    fn password_envelope_event_storage_is_yaml_map() {
+        let signing_key = test_signing_key();
+        let epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo").unwrap();
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: StoreId::parse("store_testtoken11").unwrap(),
+            actor_id: actor(&signing_key),
+            actor_signing_public_key: Some(public_key(&signing_key)),
+            parents: vec![epoch.clone()],
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: epoch,
+            operations: vec![VaultOperation::PasswordAdded {
+                entry_id: PasswordEntryId::from_trusted("pwdentry001".to_owned()),
+                label: "Recovery".to_owned(),
+                created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:01Z".to_owned()),
+                envelope: PasswordEnvelope {
+                    version: 1,
+                    kdf: "scrypt".to_owned(),
+                    work_factor: 18,
+                    ciphertext: "age-ciphertext".to_owned(),
+                },
+            }],
+        };
+        let event = VaultEvent::sign(body, &signing_key).unwrap();
+
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event).unwrap()).unwrap();
+        assert!(yaml.contains("  envelope:\n"));
+        assert!(yaml.contains("    version: 1\n"));
+        assert!(yaml.contains("    kdf: scrypt\n"));
+        assert!(yaml.contains("    work_factor: 18\n"));
+        assert!(yaml.contains("    ciphertext: age-ciphertext\n"));
+        assert!(!yaml.contains("envelope_"));
+        assert!(!yaml.contains('{'));
+        assert_eq!(parse_event_storage_bytes(yaml.as_bytes()).unwrap(), event);
     }
 }

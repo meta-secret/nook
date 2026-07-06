@@ -1,5 +1,5 @@
 import type { VaultState } from '$lib/vault.svelte'
-import { DEFAULT_DRIVE_VAULT_FILE } from '$lib/auth-providers'
+import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
 import {
   ensureValidOAuthFileConfig,
   fetchGoogleAccountEmail,
@@ -100,12 +100,12 @@ async function applyICloudOAuthTokens(
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
-      DEFAULT_DRIVE_VAULT_FILE,
+      DEFAULT_DRIVE_BACKUP_NAME,
     accountEmail: account,
   })
   state.githubPat = ''
   state.githubRepo =
-    state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
 }
 
 async function applyGoogleOAuthTokens(
@@ -126,10 +126,10 @@ async function applyGoogleOAuthTokens(
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
-      DEFAULT_DRIVE_VAULT_FILE,
+      DEFAULT_DRIVE_BACKUP_NAME,
     accountEmail: email,
   })
   state.githubPat = ''
   state.githubRepo =
-    state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+    state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
 }

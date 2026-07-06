@@ -1,17 +1,10 @@
 import { VaultState } from '$lib/vault.svelte'
 import { SvelteDate } from 'svelte/reactivity'
 import { createLogger } from '$lib/log'
-import {
-  fetchRemoteVaultBlob,
-  readLocalVaultBlob,
-  resolveVaultSyncConflictKeepLocal,
-  resolveVaultSyncConflictKeepRemote,
-  writeLocalVaultBlob,
-  writeRemoteVaultBlob,
-  type PendingSyncConflict,
-} from '$lib/vault-sync'
+import { readLocalVaultBlob, type PendingSyncConflict } from '$lib/vault-sync'
 import { importVaultAsNewLocalCopy } from '$lib/local-vault'
 import * as localLoginActions from '$lib/vault/local-login'
+import { syncLocalFolderProvider } from '$lib/local-folder-sync'
 
 const log = createLogger('vault-sync')
 
@@ -92,11 +85,16 @@ export async function syncFromStorage(
   if (!state.isAuthenticated && state.syncProviders.length > 0) {
     state.isSyncing = true
     try {
-      const [mode, pat, repo] = state.providerWasmArgs(state.syncProviders[0]!)
-      const raw = await state.enqueueStorage(() =>
-        state.manager!.sync_vault_from_storage(mode, pat, repo),
-      )
-      state.applyVaultSyncResult(raw)
+      const provider = state.syncProviders[0]!
+      if (provider.type === 'local-folder') {
+        await syncLocalFolderProvider(state, provider)
+      } else {
+        const [mode, pat, repo] = state.providerWasmArgs(provider)
+        const raw = await state.enqueueStorage(() =>
+          state.manager!.sync_vault_from_storage(mode, pat, repo),
+        )
+        state.applyVaultSyncResult(raw)
+      }
       await state.refreshSecretsFromSession()
       state.lastSyncedAt = new SvelteDate()
     } catch (error) {
@@ -190,22 +188,33 @@ export async function refreshReplacementConflicts(
 ): Promise<void> {
   if (!state.manager) {
     state.replacementConflicts = []
+    state.securityConflicts = []
     return
   }
   // These borrow the wasm manager (`&mut self`); route them through the storage
   // chain so they never alias an in-flight foreground op (e.g. a delete), which
   // would trigger a wasm-bindgen recursive-borrow hang/panic.
-  const conflicts = await state.enqueueStorage(() => {
+  const [conflicts, securityConflicts] = await state.enqueueStorage(() => {
     if (!state.manager!.eventLogMode()) {
-      return [] as Awaited<
-        ReturnType<typeof state.manager.listProjectionConflicts>
-      >
+      return [
+        [] as Awaited<ReturnType<typeof state.manager.listProjectionConflicts>>,
+        [] as Awaited<
+          ReturnType<typeof state.manager.listProjectionSecurityConflicts>
+        >,
+      ] as const
     }
-    return state.manager!.listProjectionConflicts()
+    return Promise.all([
+      state.manager!.listProjectionConflicts(),
+      state.manager!.listProjectionSecurityConflicts(),
+    ])
   })
   state.replacementConflicts = conflicts.map((conflict) => ({
     oldSecretId: conflict.oldSecretId,
     candidatesJson: conflict.candidatesJson,
+  }))
+  state.securityConflicts = securityConflicts.map((conflict) => ({
+    eventsJson: conflict.eventsJson,
+    reasonsJson: conflict.reasonsJson,
   }))
 }
 
@@ -306,43 +315,9 @@ export async function resolveSyncConflictKeepLocal(
     provider: conflict.providerLabel,
     kind: conflict.kind,
   })
-  let providerId: string | null
-  try {
-    const remoteYaml = resolveVaultSyncConflictKeepLocal(
-      conflict.localYaml,
-      conflict.remoteYaml,
-      conflict.remoteRevision,
-    )
-    const revision = await writeRemoteVaultBlob(
-      conflict.mode,
-      conflict.pat,
-      conflict.repo,
-      remoteYaml,
-      conflict.remoteRevision,
-    )
-    providerId = await state.ensureProviderSavedAfterConflict(conflict)
-    await state.updateProviderSyncMetadata(
-      providerId,
-      conflict.localYaml,
-      revision,
-    )
-    state.clearPendingSyncConflict()
-    state.finishStagedProviderConnectAfterConflict(conflict)
-    state.showSuccess(
-      state.t('auth_storage.sync_conflict_resolved_local', {
-        provider: conflict.providerLabel,
-      }),
-    )
-  } catch (e: unknown) {
-    state.errorMsg =
-      e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
-    providerId = null
-  } finally {
-    state.isVerifying = false
-  }
-  if (providerId) {
-    await resumeConnectAfterSyncConflict(state, providerId)
-  }
+  state.errorMsg =
+    'Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.'
+  state.isVerifying = false
 }
 
 export async function resolveSyncConflictKeepRemote(
@@ -351,46 +326,13 @@ export async function resolveSyncConflictKeepRemote(
   const conflict = state.pendingSyncConflict
   if (!conflict || state.isVerifying) return
 
-  state.isVerifying = true
-  state.errorMsg = ''
   log.info('sync conflict resolved (keep remote)', {
     provider: conflict.providerLabel,
     kind: conflict.kind,
   })
-  let providerId: string | null
-  try {
-    const localYaml = resolveVaultSyncConflictKeepRemote(
-      conflict.localYaml,
-      conflict.remoteYaml,
-      conflict.remoteRevision,
-    )
-    await writeLocalVaultBlob(localYaml)
-    if (state.isAuthenticated) {
-      await state.reloadSessionFromLocal()
-    }
-    providerId = await state.ensureProviderSavedAfterConflict(conflict)
-    await state.updateProviderSyncMetadata(
-      providerId,
-      conflict.remoteYaml,
-      conflict.remoteRevision,
-    )
-    state.clearPendingSyncConflict()
-    state.finishStagedProviderConnectAfterConflict(conflict)
-    state.showSuccess(
-      state.t('auth_storage.sync_conflict_resolved_remote', {
-        provider: conflict.providerLabel,
-      }),
-    )
-  } catch (e: unknown) {
-    state.errorMsg =
-      e instanceof Error ? e.message : state.t('auth_storage.sync_failed')
-    providerId = null
-  } finally {
-    state.isVerifying = false
-  }
-  if (providerId) {
-    await resumeConnectAfterSyncConflict(state, providerId)
-  }
+  state.errorMsg =
+    'Whole-vault conflict resolution is retired. Sync the event log from all providers and retry.'
+  state.isVerifying = false
 }
 
 export async function confirmRecoverRemoteVault(
@@ -479,31 +421,15 @@ export async function syncProviderById(
     quiet: options?.quiet ?? false,
   })
   try {
-    const [mode, pat, repo] = state.providerWasmArgs(provider)
-    if (state.isAuthenticated && state.localVaultPresent) {
-      const remote = await fetchRemoteVaultBlob(mode, pat, repo)
-      if (remote.missing || !remote.content.trim()) {
-        await state.enqueueStorage(() =>
-          state.manager!.pushRemoteVaultYamlSnapshotForProvider(
-            mode,
-            pat,
-            repo,
-          ),
-        )
-        const localYaml = await readLocalVaultBlob()
-        if (localYaml.trim()) {
-          await state.updateProviderSyncMetadata(
-            providerId,
-            localYaml,
-            remote.revision,
-          )
-        }
-        if (!options?.quiet) {
-          state.showSuccess(state.t('auth_storage.sync_pushed'))
-        }
-        return
-      }
+    if (provider.type === 'local-folder') {
+      await syncLocalFolderProvider(state, provider)
+      await state.refreshSecretsFromSession()
+      await state.refreshReplacementConflicts()
+      log.debug('provider sync finished', { providerId, type: provider.type })
+      return
     }
+
+    const [mode, pat, repo] = state.providerWasmArgs(provider)
     // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
     // `eventLogMode()` bit can be false after reload until connect finishes.
     const raw = await state.enqueueStorage(() =>

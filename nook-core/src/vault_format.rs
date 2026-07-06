@@ -597,14 +597,17 @@ mod tests {
 
     #[test]
     fn format_from_path() {
-        assert_eq!(VaultFormat::from_path("nook-vault.yaml"), VaultFormat::Yaml);
         assert_eq!(
-            VaultFormat::from_path("nook-vault.jsonl"),
+            VaultFormat::from_path("nook-events.yaml"),
+            VaultFormat::Yaml
+        );
+        assert_eq!(
+            VaultFormat::from_path("nook-events.jsonl"),
             VaultFormat::Jsonl
         );
-        assert_eq!(VaultFormat::from_path("nook-vault.yml"), VaultFormat::Yaml);
+        assert_eq!(VaultFormat::from_path("nook-events.yml"), VaultFormat::Yaml);
         assert_eq!(
-            VaultFormat::from_path("/data/user/nook-vault.yaml"),
+            VaultFormat::from_path("/data/user/nook-events.yaml"),
             VaultFormat::Yaml
         );
     }
@@ -754,6 +757,7 @@ not-json
         let join_request = JoinRequest {
             device_id: joiner.device_id().clone(),
             public_key: joiner.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::default(),
             requested_at: "2026-01-01T00:00:00Z".to_owned(),
         };
         let join_id = join_request.device_id.as_str();
@@ -823,14 +827,17 @@ not-json
     #[test]
     fn yaml_password_entries_roundtrip_with_keys_unlock() {
         use crate::{
-            attach_password_envelope, multi_device::VaultKeys, resolve_keys_from_password,
+            attach_password_envelope_with_work_factor, multi_device::VaultKeys,
+            resolve_keys_from_password,
         };
 
         let keys = VaultKeys {
             secrets_key: crate::SymmetricKey::parse(&"d".repeat(64)).unwrap(),
             members_key: crate::SymmetricKey::parse(&"e".repeat(64)).unwrap(),
         };
-        let envelope = attach_password_envelope(&keys, "correct horse battery staple").unwrap();
+        let envelope =
+            attach_password_envelope_with_work_factor(&keys, "correct horse battery staple", 10)
+                .unwrap();
         let entry = PasswordUnlockEntry {
             id: "pw-1".to_owned(),
             label: "test password".to_owned(),

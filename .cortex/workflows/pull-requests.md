@@ -154,11 +154,46 @@ gh pr checks <number> --watch          # blocks until done
 gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
 ```
 
+### 6.1. Address review comments
+
+Actionable PR feedback is part of the PR gate, whether it comes from a human
+reviewer, CodeRabbit, or another automated reviewer. Follow
+[code-review-comments.md](../dynamic-skills/code-review-comments.md) for the full
+checklist.
+
+Agents must leave their own GitHub reply explaining the fix, validation, or
+no-change rationale before resolving any PR comment or review conversation. Do
+not resolve comments silently. CodeRabbit's automatic "addressed in commit ..."
+text does not count as the agent's reply.
+For CodeRabbit threads, do not manually resolve after replying. CodeRabbit can
+mark/close the conversation after it accepts the targeted reply; wait for that
+and re-query the thread state instead of forcing resolution.
+
+Inspect both CodeRabbit surfaces:
+
+```bash
+gh pr view <pr-number> --comments
+gh api repos/meta-secret/nook/issues/<pr-number>/comments \
+  --jq '.[] | select(.user.login == "coderabbitai") | {url, body}'
+```
+
+CodeRabbit can post actionable items in PR timeline/summary comments that are
+not inline review threads, including "outside diff range comments", nitpicks,
+and collapsed "actionable comments posted" sections. Expand and handle those
+items too.
+
 If CodeRabbit is enabled on the repository and an agent pushed new commits after
 the initial review, use `@coderabbitai review` as a top-level PR comment for
 focused feedback on the new code. Use `@coderabbitai full review` after large
 rewrites, draft-to-ready transitions, or cross-cutting changes that need a fresh
 whole-PR pass. See [coderabbit.md](coderabbit.md).
+
+Use the GitHub review-thread GraphQL query from the agent's CodeRabbit workflow
+to inspect unresolved inline conversations. Reply only on actual review
+threads/comments that support threaded replies. Do not use normal PR timeline
+comments as a substitute for unthreaded CodeRabbit summary items; track those in
+the checklist/final handoff and let pushed code plus CodeRabbit re-review update
+the PR state.
 
 ### 7. Fix loop on failure
 

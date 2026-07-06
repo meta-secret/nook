@@ -1,6 +1,6 @@
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 
-/** Parsed shape of nook-vault.yaml (matches nook-core StoredVaultYaml). */
+/** Parsed shape of nook-events (matches nook-core StoredVaultYaml). */
 type StoredSecretRecord = {
   id: string
   type: 'login' | 'api-key' | 'seed-phrase' | 'secure-note'
@@ -51,6 +51,37 @@ type StoredVaultYaml = {
 type JoinRequestJson = {
   device_id?: string
   public_key?: string
+}
+
+type EventSecretRecord = {
+  id?: string
+  type?: StoredSecretRecord['type']
+  ciphertext?: string
+}
+
+type VaultEventOperation = {
+  type?: string
+  secrets?: EventSecretRecord[]
+  secret?: EventSecretRecord
+  secret_id?: string
+  old_id?: string
+  new_secret?: EventSecretRecord
+  chosen_secret_id?: string
+  rejected_secret_ids?: string[]
+  device_id?: string
+  encryption_public_key?: string
+  secrets_key_ciphertext?: string
+  members_key_ciphertext?: string
+  entry_id?: string
+  label?: string
+  created_at?: string
+  envelope?: PasswordEnvelopeYaml
+  password_entries?: PasswordEntryYaml[]
+}
+
+type VaultEventYaml = {
+  created_at?: string
+  operations?: VaultEventOperation[]
 }
 
 export type VaultYamlSnapshot = {
@@ -129,6 +160,163 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     hasPasswordEnvelope,
     passwordEnvelopeCiphertext,
   }
+}
+
+function eventSecretToStored(
+  secret?: EventSecretRecord,
+): StoredSecretRecord | null {
+  if (!secret?.id) return null
+  return {
+    id: secret.id,
+    type: secret.type ?? 'api-key',
+    data: secret.ciphertext ?? '',
+  }
+}
+
+function passwordEventEnvelope(
+  envelope?: PasswordEnvelopeYaml,
+): PasswordEnvelopeYaml {
+  return envelope ?? {}
+}
+
+function sortEventYamls(eventYamls: string[]): VaultEventYaml[] {
+  return eventYamls
+    .map((yaml) => parseYaml(yaml) as VaultEventYaml)
+    .sort((left, right) =>
+      (left.created_at ?? '').localeCompare(right.created_at ?? ''),
+    )
+}
+
+/** Materialize the e2e-visible remote state from immutable provider event YAML. */
+export function parseVaultEventLogSnapshot(
+  eventYamls: string[],
+): VaultYamlSnapshot {
+  const secrets = new Map<string, StoredSecretRecord>()
+  const joins = new Map<string, { deviceId: string; publicKey: string }>()
+  const auth = new Map<
+    string,
+    { pk_id: string; secrets_key: string; members_key: string }
+  >()
+  const members = new Map<string, { pk_id: string; ciphertext: string }>()
+  const passwordEntries = new Map<string, PasswordEntryYaml>()
+
+  for (const event of sortEventYamls(eventYamls)) {
+    for (const operation of event.operations ?? []) {
+      switch (operation.type) {
+        case 'vault-imported':
+          for (const secret of operation.secrets ?? []) {
+            const stored = eventSecretToStored(secret)
+            if (stored) secrets.set(stored.id, stored)
+          }
+          passwordEntries.clear()
+          for (const entry of operation.password_entries ?? []) {
+            if (entry.id) passwordEntries.set(entry.id, entry)
+          }
+          break
+        case 'epoch-checkpoint':
+          for (const secret of operation.secrets ?? []) {
+            const stored = eventSecretToStored(secret)
+            if (stored) secrets.set(stored.id, stored)
+          }
+          break
+        case 'secret-created': {
+          const stored = eventSecretToStored(operation.secret)
+          if (stored) secrets.set(stored.id, stored)
+          break
+        }
+        case 'secret-deleted':
+          if (operation.secret_id) secrets.delete(operation.secret_id)
+          break
+        case 'secret-replaced': {
+          if (operation.old_id) secrets.delete(operation.old_id)
+          const stored = eventSecretToStored(operation.new_secret)
+          if (stored) secrets.set(stored.id, stored)
+          break
+        }
+        case 'secret-conflict-resolved':
+          for (const rejected of operation.rejected_secret_ids ?? []) {
+            secrets.delete(rejected)
+          }
+          break
+        case 'join-requested':
+          if (operation.device_id) {
+            joins.set(operation.device_id, {
+              deviceId: operation.device_id,
+              publicKey: operation.encryption_public_key ?? '',
+            })
+          }
+          break
+        case 'join-approved':
+          if (operation.device_id) {
+            joins.delete(operation.device_id)
+            auth.set(operation.device_id, {
+              pk_id: operation.device_id,
+              secrets_key: operation.secrets_key_ciphertext ?? '',
+              members_key: operation.members_key_ciphertext ?? '',
+            })
+            members.set(operation.device_id, {
+              pk_id: operation.device_id,
+              ciphertext: operation.members_key_ciphertext ?? '',
+            })
+          }
+          break
+        case 'join-denied':
+          if (operation.device_id) joins.delete(operation.device_id)
+          break
+        case 'device-revoked':
+          if (operation.device_id) {
+            joins.delete(operation.device_id)
+            auth.delete(operation.device_id)
+            members.delete(operation.device_id)
+          }
+          break
+        case 'password-added':
+          if (operation.entry_id) {
+            passwordEntries.set(operation.entry_id, {
+              id: operation.entry_id,
+              label: operation.label,
+              envelope: passwordEventEnvelope(operation.envelope),
+            })
+          }
+          break
+        case 'password-rotated':
+          if (operation.entry_id) {
+            const existing = passwordEntries.get(operation.entry_id)
+            passwordEntries.set(operation.entry_id, {
+              id: operation.entry_id,
+              label: existing?.label,
+              envelope: passwordEventEnvelope(operation.envelope),
+            })
+          }
+          break
+        case 'password-removed':
+          if (operation.entry_id) passwordEntries.delete(operation.entry_id)
+          break
+        case 'vault-cleared':
+          secrets.clear()
+          joins.clear()
+          passwordEntries.clear()
+          break
+      }
+    }
+  }
+
+  const projectionLikeYaml = stringifyYaml({
+    secrets: [...secrets.values()],
+    auth: [...auth.values()],
+    joins: [...joins.values()].map((join) => ({
+      id: join.deviceId,
+      type: 'secure-note',
+      data: JSON.stringify({
+        device_id: join.deviceId,
+        public_key: join.publicKey,
+      }),
+    })),
+    members: [...members.values()],
+    password_entries: [...passwordEntries.values()],
+  })
+
+  return parseVaultYamlSnapshot(projectionLikeYaml)
 }
 
 export function joinCountFromYaml(yaml: string): number {

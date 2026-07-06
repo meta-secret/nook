@@ -1,18 +1,20 @@
 import type { VaultState } from '$lib/vault.svelte'
 import { generateId, isoTimestamp } from '$lib/nook'
 import {
-  DEFAULT_DRIVE_VAULT_FILE,
+  DEFAULT_DRIVE_BACKUP_NAME,
   DEFAULT_GITHUB_REPO,
   findDuplicateSyncProvider,
   loadAuthProviders,
-  loadAuthProvidersWithVaultMigration,
+  loadAuthProvidersWithLocalRow,
   providerDefaultLabel,
   saveAuthProviders,
+  type LocalFolderConfig,
   type OAuthFileConfig,
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
 } from '$lib/auth-providers'
+import { removeLocalFolderHandle } from '$lib/local-folder-sync'
 import { ensureLocalProviderRow } from '$lib/vault-migration'
 import { createLogger } from '$lib/log'
 import { vaultStoreIdForProviderSave } from '$lib/vault-store-id'
@@ -21,11 +23,11 @@ const log = createLogger('vault-providers')
 
 export async function loadProviders(
   state: VaultState,
-  options?: { migrateLegacyVault?: boolean },
+  options?: { ensureLocalRow?: boolean },
 ) {
   const snapshot = await state.enqueueStorage(() =>
-    options?.migrateLegacyVault
-      ? loadAuthProvidersWithVaultMigration(state.manager!)
+    options?.ensureLocalRow
+      ? loadAuthProvidersWithLocalRow(state.manager!)
       : loadAuthProviders(state.manager!),
   )
   state.providers = snapshot.providers.map((p) =>
@@ -46,6 +48,7 @@ export function applyActiveProviderCredentials(state: VaultState) {
     state.storageMode = 'local'
     state.githubPat = ''
     state.oauthFile = null
+    state.localFolder = null
     return
   }
 
@@ -56,6 +59,9 @@ export function applyActiveProviderCredentials(state: VaultState) {
     }
     if (state.loginSetupType !== 'oauth-file') {
       state.oauthFile = null
+    }
+    if (state.loginSetupType !== 'local-folder') {
+      state.localFolder = null
     }
     return
   }
@@ -80,11 +86,17 @@ export function applyActiveProviderCredentials(state: VaultState) {
   state.githubPat = syncProvider.githubPat ?? ''
   if (syncProvider.type === 'oauth-file') {
     state.oauthFile = syncProvider.oauthFile ?? null
+    state.localFolder = null
     state.githubRepo =
-      syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+      syncProvider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+  } else if (syncProvider.type === 'local-folder') {
+    state.localFolder = syncProvider.localFolder ?? null
+    state.githubRepo = DEFAULT_GITHUB_REPO
+    state.oauthFile = null
   } else {
     state.githubRepo = syncProvider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
     state.oauthFile = null
+    state.localFolder = null
   }
 }
 
@@ -124,19 +136,20 @@ export function beginProviderSetup(
   state.storageMode = type
   state.githubPat = ''
   state.githubRepo =
-    type === 'oauth-file' ? DEFAULT_DRIVE_VAULT_FILE : DEFAULT_GITHUB_REPO
+    type === 'oauth-file' ? DEFAULT_DRIVE_BACKUP_NAME : DEFAULT_GITHUB_REPO
   if (type === 'oauth-file') {
     const preset = oauthPreset ?? 'google-drive'
     state.oauthSetupPreset = preset
     state.oauthFile = {
       preset,
       accessToken: '',
-      fileName: DEFAULT_DRIVE_VAULT_FILE,
+      fileName: DEFAULT_DRIVE_BACKUP_NAME,
     }
   } else {
     state.oauthSetupPreset = null
     state.oauthFile = null
   }
+  state.localFolder = null
   state.errorMsg = ''
   state.dismissSuccess()
   log.debug('provider setup started', { type, oauthPreset })
@@ -165,8 +178,9 @@ export function cancelProviderSetup(state: VaultState) {
     state.githubPat = ''
     state.githubRepo =
       setupType === 'oauth-file'
-        ? DEFAULT_DRIVE_VAULT_FILE
+        ? DEFAULT_DRIVE_BACKUP_NAME
         : DEFAULT_GITHUB_REPO
+    state.localFolder = null
     state.errorMsg = ''
     return
   }
@@ -183,6 +197,7 @@ export async function removeProvider(
   const target = state.providers.find((p) => p.id === id)
   if (!target || target.type === 'local') return
 
+  await removeLocalFolderHandle(target)
   state.providers = state.providers.filter((p) => p.id !== id)
 
   if (state.providers.length === 0 && state.isAuthenticated) {
@@ -199,7 +214,7 @@ export async function removeProvider(
 export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
   const pat = state.githubPat.trim()
   const repo = state.githubRepo.trim() || DEFAULT_GITHUB_REPO
-  const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_VAULT_FILE
+  const driveFile = state.githubRepo.trim() || DEFAULT_DRIVE_BACKUP_NAME
   const type = state.loginSetupType ?? state.storageMode
   const isNewSetup = state.loginSetupType !== null
   const vaultStoreId = vaultStoreIdForProviderSave(state)
@@ -217,12 +232,23 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           fileName: driveFile,
         }
       : undefined
+  const localFolderSnapshot: LocalFolderConfig | undefined =
+    type === 'local-folder'
+      ? {
+          directoryName: state.localFolder?.directoryName,
+          handleId: state.localFolder?.handleId,
+        }
+      : undefined
 
   const isExplicitAdd =
     state.addProviderOpen ||
     (state.isAuthenticated && state.loginSetupType !== null)
 
   if (isNewSetup && type !== 'local') {
+    if (type === 'local-folder' && !localFolderSnapshot?.handleId) {
+      state.errorMsg = state.t('auth_storage.local_folder_choose_err')
+      return false
+    }
     const provider: StorageProvider = {
       id: generateId(),
       type,
@@ -232,12 +258,15 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           ? repo
           : type === 'oauth-file'
             ? driveFile
-            : undefined,
+            : type === 'local-folder'
+              ? localFolderSnapshot?.directoryName
+              : undefined,
         oauthPreset,
       ),
       githubPat: type === 'github' ? pat : undefined,
       githubRepo: type === 'github' ? repo : undefined,
       oauthFile: oauthSnapshot,
+      localFolder: localFolderSnapshot,
       storeId: vaultStoreId,
       createdAt: isoTimestamp(),
     }
@@ -335,9 +364,9 @@ export async function connectAndSyncStagedProvider(
   if (state.isVerifying) return
   state.isVerifying = true
   try {
-    const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
-    if (reconcileOutcome === 'conflict') {
-      return
+    if (state.stagedRemoteStorageArgs()) {
+      const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
+      if (reconcileOutcome === 'skip') return
     }
 
     const saved = await state.ensureProviderSaved()

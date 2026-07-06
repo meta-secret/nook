@@ -4,10 +4,10 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum EventError {
-    #[error("event id must start with sha256: (got {raw:?})")]
+    #[error("event id must start with sha256u: (got {raw:?})")]
     EventIdMissingPrefix { raw: String },
 
-    #[error("event id digest must be 64 hex chars (got {hex:?})")]
+    #[error("event id digest must be 43 base64url chars (got {hex:?})")]
     EventIdInvalidDigest { hex: String },
 
     #[error("failed to serialize JSON")]
@@ -17,13 +17,13 @@ pub enum EventError {
     EventBodySerialize(#[source] serde_json::Error),
 
     #[error("failed to serialize event")]
-    EventSerialize(#[source] serde_json::Error),
+    EventSerialize(String),
 
     #[error("failed to parse stored event")]
-    ParseStoredEvent(#[source] serde_json::Error),
+    ParseStoredEvent(String),
 
     #[error("failed to parse remote event")]
-    ParseRemoteEvent(#[source] serde_json::Error),
+    ParseRemoteEvent(String),
 
     #[error("signature must start with ed25519: (got {raw:?})")]
     SignatureMissingPrefix { raw: String },
@@ -36,6 +36,26 @@ pub enum EventError {
 
     #[error("event signature verification failed")]
     SignatureVerificationFailed,
+
+    #[error("current event schema requires actor_signing_public_key")]
+    MissingActorSigningPublicKey,
+
+    #[error("actor signing public key must be 32 bytes")]
+    ActorSigningPublicKeyWrongLength,
+
+    #[error("invalid actor signing public key")]
+    ActorSigningPublicKeyInvalid,
+
+    #[error(
+        "event actor_id {actor_id} does not match signing public key digest {signing_key_actor_id}"
+    )]
+    ActorSigningKeyMismatch {
+        actor_id: String,
+        signing_key_actor_id: String,
+    },
+
+    #[error("event actor {actor_id} was not authorized in causal history")]
+    UnauthorizedActor { actor_id: String },
 
     #[error("unsupported event schema version {version}")]
     UnsupportedSchemaVersion { version: u32 },
@@ -99,4 +119,7 @@ pub enum EventError {
 
     #[error("import event secret ids do not match source vault")]
     ImportSecretSetMismatch,
+
+    #[error("import event password entries do not match source vault")]
+    ImportPasswordEntriesMismatch,
 }

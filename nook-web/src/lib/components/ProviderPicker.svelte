@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Cloud, HardDrive } from '@lucide/svelte'
+  import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import type {
     OAuthFilePreset,
     StorageProviderType,
@@ -40,6 +40,24 @@
         </button>
       </li>
     {/if}
+    <li>
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        data-testid="provider-option-local-folder"
+        onclick={() => onSelect('local-folder')}
+      >
+        <FolderOpen class="size-4 shrink-0 text-foreground" />
+        <span class="min-w-0 flex-1">
+          <span class="block text-sm font-semibold text-foreground"
+            >{vault.t('provider_picker.local_folder')}</span
+          >
+          <span class="block truncate text-xs text-muted-foreground">
+            {vault.t('provider_picker.local_folder_desc')}
+          </span>
+        </span>
+      </button>
+    </li>
     <li>
       <button
         type="button"

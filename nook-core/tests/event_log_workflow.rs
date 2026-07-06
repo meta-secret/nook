@@ -11,9 +11,29 @@ use nook_core::{
     AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
     SecretId, SecretType, StoreId, VaultOperation, VaultResult, build_signed_event,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 const TS: &str = "2026-06-28T00:00:00Z";
+
+fn event_id_set(device: &EventLogDevice) -> BTreeSet<String> {
+    device
+        .session
+        .store
+        .event_ids()
+        .into_iter()
+        .map(|id| id.as_str().to_owned())
+        .collect()
+}
+
+fn live_secret_ids(device: &EventLogDevice) -> VaultResult<BTreeSet<String>> {
+    let graph = device.session.store.load_graph(device.store_id())?;
+    Ok(device
+        .project()?
+        .live_secrets(&graph)
+        .keys()
+        .cloned()
+        .collect())
+}
 
 #[test]
 fn two_device_genesis_append_and_union() -> VaultResult<()> {
@@ -45,6 +65,101 @@ fn concurrent_adds_both_survive_after_union() -> VaultResult<()> {
     let projection = a.project()?;
     assert_eq!(projection.live_secrets(&graph).len(), 2);
     assert_eq!(graph.heads().len(), 2);
+    Ok(())
+}
+
+#[test]
+fn event_union_is_associative_commutative_and_idempotent_across_orders() -> VaultResult<()> {
+    let root = EventLogDevice::genesis("root")?;
+    let mut a = EventLogDevice::replica_of(&root)?;
+    let mut b = EventLogDevice::replica_of(&root)?;
+    let mut c = EventLogDevice::replica_of(&root)?;
+    a.union_from(&root)?;
+    b.union_from(&root)?;
+    c.union_from(&root)?;
+
+    let shared_head = root.session.heads[0].clone();
+    a.session.heads = vec![shared_head.clone()];
+    a.append_secret("secret_unionaaaa", "from-a")?;
+    b.session.heads = vec![shared_head.clone()];
+    b.append_secret("secret_unionbbbb", "from-b")?;
+    c.session.heads = vec![shared_head];
+    c.append_secret("secret_unioncccc", "from-c")?;
+
+    let mut ab = a.remote_events();
+    ab.extend(b.remote_events());
+    let c_events = c.remote_events();
+
+    let mut left_grouped = EventLogDevice::replica_of(&root)?;
+    left_grouped.union_from(&root)?;
+    left_grouped.session.union_remote(&ab)?;
+    left_grouped.session.union_remote(&c_events)?;
+    // Duplicate delivery is allowed and must not change the materialized view.
+    left_grouped.session.union_remote(&ab)?;
+
+    let mut cb = c.remote_events();
+    cb.extend(b.remote_events());
+    let a_events = a.remote_events();
+
+    let mut right_grouped = EventLogDevice::replica_of(&root)?;
+    right_grouped.union_from(&root)?;
+    right_grouped.session.union_remote(&cb)?;
+    right_grouped.session.union_remote(&a_events)?;
+
+    assert_eq!(event_id_set(&left_grouped), event_id_set(&right_grouped));
+    assert_eq!(
+        live_secret_ids(&left_grouped)?,
+        live_secret_ids(&right_grouped)?
+    );
+    assert_eq!(live_secret_ids(&left_grouped)?.len(), 3);
+    let graph = left_grouped
+        .session
+        .store
+        .load_graph(left_grouped.store_id())?;
+    assert_eq!(graph.heads().len(), 3);
+    Ok(())
+}
+
+#[test]
+fn provider_delivery_order_does_not_change_event_set_or_projection() -> VaultResult<()> {
+    let root = EventLogDevice::genesis("root")?;
+    let mut laptop = EventLogDevice::replica_of(&root)?;
+    let mut phone = EventLogDevice::replica_of(&root)?;
+    let mut tablet = EventLogDevice::replica_of(&root)?;
+    laptop.union_from(&root)?;
+    phone.union_from(&root)?;
+    tablet.union_from(&root)?;
+
+    let shared_head = root.session.heads[0].clone();
+    laptop.session.heads = vec![shared_head.clone()];
+    laptop.append_secret("secret_provideraa", "github")?;
+    phone.session.heads = vec![shared_head.clone()];
+    phone.append_secret("secret_providerbb", "drive")?;
+    tablet.session.heads = vec![shared_head];
+    tablet.append_secret("secret_providercc", "icloud")?;
+
+    let provider_a = laptop.remote_events();
+    let provider_b = phone.remote_events();
+    let provider_c = tablet.remote_events();
+
+    let mut github_drive_icloud = EventLogDevice::replica_of(&root)?;
+    github_drive_icloud.session.union_remote(&provider_a)?;
+    github_drive_icloud.session.union_remote(&provider_b)?;
+    github_drive_icloud.session.union_remote(&provider_c)?;
+
+    let mut icloud_drive_github = EventLogDevice::replica_of(&root)?;
+    icloud_drive_github.session.union_remote(&provider_c)?;
+    icloud_drive_github.session.union_remote(&provider_b)?;
+    icloud_drive_github.session.union_remote(&provider_a)?;
+
+    assert_eq!(
+        event_id_set(&github_drive_icloud),
+        event_id_set(&icloud_drive_github)
+    );
+    assert_eq!(
+        live_secret_ids(&github_drive_icloud)?,
+        live_secret_ids(&icloud_drive_github)?
+    );
     Ok(())
 }
 
@@ -81,6 +196,33 @@ fn concurrent_replace_creates_conflict() -> VaultResult<()> {
             .contains_key(&SecretId::from_vault_record("secret_original1"))
     );
     assert_eq!(projection.live_secrets(&graph).len(), 2);
+    Ok(())
+}
+
+#[test]
+fn causal_join_observes_all_heads_and_collapses_branch_vector() -> VaultResult<()> {
+    let mut device = EventLogDevice::genesis("main")?;
+    let genesis_head = device.session.heads[0].clone();
+
+    device.session.heads = vec![genesis_head.clone()];
+    let branch_a = device.append_secret("secret_branchaaaa", "a")?;
+    device.session.heads = vec![genesis_head];
+    let branch_b = device.append_secret("secret_branchbbbb", "b")?;
+
+    let graph = device.session.store.load_graph(device.store_id())?;
+    assert!(graph.are_concurrent(&branch_a, &branch_b));
+    assert_eq!(graph.heads().len(), 2);
+
+    device.session.heads = vec![branch_a.as_str().to_owned(), branch_b.as_str().to_owned()];
+    let join = device.append_secret("secret_joinvector", "joined")?;
+
+    let graph = device.session.store.load_graph(device.store_id())?;
+    assert!(graph.is_ancestor(&branch_a, &join));
+    assert!(graph.is_ancestor(&branch_b, &join));
+    assert!(!graph.are_concurrent(&branch_a, &join));
+    assert!(!graph.are_concurrent(&branch_b, &join));
+    assert_eq!(graph.heads(), vec![join]);
+    assert_eq!(live_secret_ids(&device)?.len(), 3);
     Ok(())
 }
 
@@ -126,6 +268,54 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
     let graph = store.load_graph(device.store_id())?;
     assert!(graph.pending_events().is_empty());
     assert_eq!(graph.applicable_events().len(), 2);
+    Ok(())
+}
+
+#[test]
+fn pending_child_from_one_provider_applies_after_parent_arrives_from_another() -> VaultResult<()> {
+    let device = EventLogDevice::genesis("main")?;
+    let genesis_head = EventId::parse(&device.session.heads[0])?;
+    let genesis_bytes = device
+        .session
+        .store
+        .get_bytes(&genesis_head)
+        .ok_or(EventError::MissingGenesisBytes)?
+        .to_vec();
+
+    let store_id = StoreId::parse(device.store_id())?;
+    let actor_id = device.actor_id()?;
+    let key_epoch = EventId::parse(&device.session.key_epoch)?;
+    let created_at = IsoTimestamp::from_trusted(TS.to_owned());
+    let (event, child_bytes) = build_signed_event(AppendEventInput {
+        store_id: &store_id,
+        actor_id: &actor_id,
+        signing_identity: &device.session.signing,
+        parents: vec![genesis_head.clone()],
+        key_epoch: &key_epoch,
+        created_at: &created_at,
+        operations: vec![VaultOperation::SecretCreated {
+            secret: EncryptedSecretPayload {
+                id: SecretId::from_vault_record("secret_splitparent"),
+                secret_type: SecretType::ApiKey,
+                ciphertext: OpaqueCiphertext::from_trusted("cipher-split".to_owned()),
+            },
+        }],
+    })?;
+    let child_id = event.id()?;
+
+    let github_events = vec![(child_id, child_bytes)];
+    let drive_events = vec![(genesis_head, genesis_bytes)];
+    let mut joiner = EventLogDevice::replica_of(&device)?;
+
+    joiner.session.union_remote(&github_events)?;
+    let graph = joiner.session.store.load_graph(joiner.store_id())?;
+    assert_eq!(graph.pending_events().len(), 1);
+    assert!(live_secret_ids(&joiner)?.is_empty());
+
+    joiner.session.union_remote(&drive_events)?;
+    let graph = joiner.session.store.load_graph(joiner.store_id())?;
+    assert!(graph.pending_events().is_empty());
+    assert!(live_secret_ids(&joiner)?.contains("secret_splitparent"));
     Ok(())
 }
 
@@ -234,6 +424,47 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
 
     let graph = b.session.store.load_graph(b.store_id())?;
     assert!(!b.project()?.live_secrets(&graph).is_empty());
+    Ok(())
+}
+
+#[test]
+fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultResult<()> {
+    let root = EventLogDevice::genesis("root")?;
+    let mut local = EventLogDevice::replica_of(&root)?;
+    let mut remote_device = EventLogDevice::replica_of(&root)?;
+    let mut providers: ProviderBuckets =
+        HashMap::from([("github".to_owned(), nook_core::LocalEventStore::new())]);
+
+    for (id, bytes) in root.remote_events() {
+        providers
+            .get_mut("github")
+            .ok_or(EventError::MissingProviderBucket)?
+            .put_event(id, bytes);
+    }
+    union_device_from_providers(&mut local, &providers)?;
+    union_device_from_providers(&mut remote_device, &providers)?;
+
+    let shared_head = root.session.heads[0].clone();
+    local.session.heads = vec![shared_head.clone()];
+    local.append_secret("secret_localflush1", "local draft")?;
+
+    remote_device.session.heads = vec![shared_head];
+    remote_device.append_secret("secret_remotewrite", "remote draft")?;
+    push_device_outbox(&mut remote_device, &mut providers)?;
+
+    // This is the event-log equivalent of saving after the provider changed:
+    // flushing a new immutable event must not overwrite the remote event.
+    push_device_outbox(&mut local, &mut providers)?;
+
+    let mut reloaded = EventLogDevice::replica_of(&root)?;
+    union_device_from_providers(&mut reloaded, &providers)?;
+    let graph = reloaded.session.store.load_graph(reloaded.store_id())?;
+    let live = reloaded.project()?.live_secrets(&graph);
+
+    assert!(live.contains_key("secret_localflush1"));
+    assert!(live.contains_key("secret_remotewrite"));
+    assert_eq!(live.len(), 2);
+    assert_eq!(graph.heads().len(), 2);
     Ok(())
 }
 

@@ -1,5 +1,10 @@
 # Unified Vault Architecture
 
+**Superseded for provider sync:** event-log vaults use immutable YAML events
+under `nook-log/v1/events/`; see [vault-event-log.md](vault-event-log.md).
+The scalar `vault_version` model below is retained as historical context for
+local projection and migration behavior.
+
 This document defines Nook's architecture: **vaults** (logical encrypted databases), **sync providers** (replica targets), local-first storage, and version-based reconciliation.
 
 **Related:** [auth-providers.md](auth-providers.md), [vault-session-and-lock.md](vault-session-and-lock.md), [secret-store-identity.md](secret-store-identity.md), [ARCHITECTURE.md](../ARCHITECTURE.md) §4, [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).
@@ -17,7 +22,7 @@ Previously each saved **storage provider** could point at a **separate vault fil
 ```mermaid
 flowchart TB
   subgraph vault["Vault (store_id)"]
-    V[nook-vault.yaml]
+    V[nook-projection.yaml]
   end
   subgraph local["Browser"]
     L[nook_db.encrypted_db — local cache]

@@ -19,7 +19,6 @@ import {
   resolveE2eSyncProvider,
   type SyncE2eTarget,
 } from './sync-provider'
-import type { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 
 const providerId = resolveE2eSyncProvider()
 const providerLabel = e2eSyncProviderDef(providerId).label
@@ -43,14 +42,12 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
       providers: [
         {
           id: 'e2e-sync-vault',
-          label: 'E2E Drive',
+          label: 'File',
           fileName: target.repoName,
           accessToken: target.pat,
         },
       ],
-      sharedStub: target.stub as ReturnType<
-        typeof createLocalE2eGoogleDriveVaultStub
-      >,
+      sharedStub: target.stub,
     })
     await waitForLoadedSyncProviders(vaultPage)
   })
@@ -84,7 +81,7 @@ test.describe(`${providerLabel} vault (stub sync)`, () => {
     await addSecret(vaultPage, key, value, target)
     await vaultPage.reload()
     await vaultPage.waitForLoadState('domcontentloaded')
-    await installSyncStub(vaultPage, target, target.stub?.getVaultYaml())
+    await installSyncStub(vaultPage, target)
     await reconnectSyncVault(vaultPage)
     await assertVaultReady(vaultPage)
 

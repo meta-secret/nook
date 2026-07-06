@@ -71,6 +71,21 @@ pub fn read_vault_revision(stored: &str) -> VaultSyncResult<VaultRevision> {
 /// 4. Higher `vault_version` wins → [`AdoptRemote`] or [`PushLocal`].
 /// 5. Equal version, different content → [`VaultSyncAction::Conflict`].
 pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyncAction> {
+    compare_vault_sync_with_common(local, remote, None)
+}
+
+/// Decide how to reconcile local vs remote vault blobs, using the last
+/// byte-content hash successfully shared with this provider as a causal base.
+///
+/// The old scalar `vault_version` is still useful when one side is a direct
+/// successor of the remembered common blob. If neither side matches that base,
+/// the blobs are divergent branches and must be surfaced as a conflict even
+/// when one version counter is larger.
+pub fn compare_vault_sync_with_common(
+    local: &str,
+    remote: &str,
+    last_common_content_hash: Option<&str>,
+) -> VaultSyncResult<VaultSyncAction> {
     let local_trim = local.trim();
     let remote_trim = remote.trim();
 
@@ -106,6 +121,30 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyn
         });
     }
 
+    if let Some(base_hash) = last_common_content_hash
+        .map(str::trim)
+        .filter(|hash| !hash.is_empty())
+        && local_rev.content_hash != remote_rev.content_hash
+    {
+        let local_matches_base = local_rev.content_hash == base_hash;
+        let remote_matches_base = remote_rev.content_hash == base_hash;
+        if local_matches_base && !remote_matches_base {
+            return Ok(VaultSyncAction::AdoptRemote);
+        }
+        if remote_matches_base && !local_matches_base {
+            return Ok(VaultSyncAction::PushLocal);
+        }
+        if !local_matches_base && !remote_matches_base {
+            tracing::warn!(
+                scope = "vault-sync",
+                local_version = local_rev.version,
+                remote_version = remote_rev.version,
+                "vault blobs diverged from last common content hash; refusing scalar-version winner"
+            );
+            return Ok(VaultSyncAction::Conflict);
+        }
+    }
+
     let action = if local_rev.version < remote_rev.version {
         VaultSyncAction::AdoptRemote
     } else if local_rev.version > remote_rev.version {
@@ -126,10 +165,15 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> VaultSyncResult<VaultSyn
     Ok(action)
 }
 
-fn content_hash(content: &str) -> String {
+#[must_use]
+pub fn vault_content_hash(content: &str) -> String {
     use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(content.as_bytes());
+    let digest = Sha256::digest(content.trim().as_bytes());
     hex::encode(digest)
+}
+
+fn content_hash(content: &str) -> String {
+    vault_content_hash(content)
 }
 
 #[cfg(test)]
@@ -208,6 +252,36 @@ mod tests {
         let remote = sample_yaml(2, "store_AAAAAAAAAAA", "b");
         assert_eq!(
             compare_vault_sync(&local, &remote).unwrap(),
+            VaultSyncAction::Conflict
+        );
+    }
+
+    #[test]
+    fn common_hash_allows_single_successor_to_win() {
+        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base");
+        let local = sample_yaml(3, "store_AAAAAAAAAAA", "local");
+        let remote = base.clone();
+        let base_hash = vault_content_hash(&base);
+
+        assert_eq!(
+            compare_vault_sync_with_common(&local, &remote, Some(&base_hash)).unwrap(),
+            VaultSyncAction::PushLocal
+        );
+        assert_eq!(
+            compare_vault_sync_with_common(&remote, &local, Some(&base_hash)).unwrap(),
+            VaultSyncAction::AdoptRemote
+        );
+    }
+
+    #[test]
+    fn common_hash_rejects_divergent_scalar_winner() {
+        let base = sample_yaml(2, "store_AAAAAAAAAAA", "base");
+        let local = sample_yaml(4, "store_AAAAAAAAAAA", "local");
+        let remote = sample_yaml(3, "store_AAAAAAAAAAA", "remote");
+        let base_hash = vault_content_hash(&base);
+
+        assert_eq!(
+            compare_vault_sync_with_common(&local, &remote, Some(&base_hash)).unwrap(),
             VaultSyncAction::Conflict
         );
     }

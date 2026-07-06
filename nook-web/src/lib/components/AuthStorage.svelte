@@ -13,6 +13,7 @@
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
+  import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
   import type {
     OAuthFilePreset,
     StorageProvider,
@@ -94,6 +95,8 @@
   const addingProvider = $derived(addProviderOpen || showSetup)
   const setupCanConnect = $derived(
     setupType === 'local' ||
+      (setupType === 'local-folder' &&
+        Boolean(vault.localFolder?.handleId?.trim())) ||
       (setupType === 'oauth-file' &&
         Boolean(vault.oauthFile?.accessToken?.trim())) ||
       (setupType === 'github' && Boolean(githubPat.trim())),
@@ -124,7 +127,9 @@
                   ? vault.t('auth_storage.github')
                   : setupType === 'oauth-file'
                     ? vault.t('provider_picker.google_drive')
-                    : vault.t('auth_storage.this_device'),
+                    : setupType === 'local-folder'
+                      ? vault.t('provider_picker.local_folder')
+                      : vault.t('auth_storage.this_device'),
             })}
           {:else}
             {vault.t('settings.add_sync_provider')}
@@ -173,6 +178,15 @@
             {vault}
             bind:githubPat
             bind:githubRepo
+            idPrefix="settings"
+            {isVerifying}
+            {isInitializing}
+            {onCancelSetup}
+            onConnect={onReconnect}
+          />
+        {:else if setupType === 'local-folder'}
+          <LocalFolderProviderSetupWizard
+            {vault}
             idPrefix="settings"
             {isVerifying}
             {isInitializing}

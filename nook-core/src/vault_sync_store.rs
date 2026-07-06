@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use crate::errors::VaultSyncError;
-use crate::vault_sync::{VaultSyncAction, compare_vault_sync};
+use crate::vault_sync::{VaultSyncAction, compare_vault_sync_with_common};
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
@@ -16,6 +16,12 @@ type VaultSyncResult<T> = Result<T, VaultSyncError>;
 pub struct MemoryVaultStore {
     blob: String,
     revision: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RevisionGuardedWrite {
+    Written { revision: String },
+    AlreadyPresent { revision: Option<String> },
 }
 
 impl MemoryVaultStore {
@@ -62,6 +68,33 @@ impl MemoryVaultStore {
     pub fn is_empty(&self) -> bool {
         self.blob.trim().is_empty()
     }
+
+    /// Provider-style guarded write.
+    ///
+    /// GitHub SHA, Drive revision, and `CloudKit` change-tag writes all have the
+    /// same race: the caller proposes content against a remembered revision,
+    /// then the provider may reject because the remote changed first. If the
+    /// fetched remote already equals the proposed content the retry is
+    /// idempotent; otherwise the caller must surface a sync conflict.
+    pub fn write_if_revision_matches_or_same_content(
+        &mut self,
+        content: impl Into<String>,
+        expected_revision: Option<&str>,
+    ) -> VaultSyncResult<RevisionGuardedWrite> {
+        let content = content.into();
+        if self.blob.trim() == content.trim() {
+            return Ok(RevisionGuardedWrite::AlreadyPresent {
+                revision: self.revision.clone(),
+            });
+        }
+        if self.revision.as_deref() != expected_revision {
+            return Err(VaultSyncError::RemoteChangedDuringWrite);
+        }
+        self.blob = content;
+        let next = next_revision(self.revision.as_deref());
+        self.revision = Some(next.clone());
+        Ok(RevisionGuardedWrite::Written { revision: next })
+    }
 }
 
 /// Compare local vs remote and apply the sync action to the in-memory stores.
@@ -73,7 +106,18 @@ pub fn reconcile_vault_stores(
     local: &mut MemoryVaultStore,
     remote: &mut MemoryVaultStore,
 ) -> VaultSyncResult<VaultSyncAction> {
-    let action = compare_vault_sync(local.blob(), remote.blob())?;
+    reconcile_vault_stores_with_common(local, remote, None)
+}
+
+/// Compare local vs remote against a remembered common content hash and apply
+/// the sync action to the in-memory stores.
+pub fn reconcile_vault_stores_with_common(
+    local: &mut MemoryVaultStore,
+    remote: &mut MemoryVaultStore,
+    last_common_content_hash: Option<&str>,
+) -> VaultSyncResult<VaultSyncAction> {
+    let action =
+        compare_vault_sync_with_common(local.blob(), remote.blob(), last_common_content_hash)?;
     apply_vault_sync_action(action, local, remote);
     Ok(action)
 }
@@ -200,6 +244,23 @@ mod tests {
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
         let action = reconcile_vault_stores(&mut local, &mut remote).unwrap();
+        assert_eq!(action, VaultSyncAction::Conflict);
+        assert_eq!(local.blob(), local_blob);
+        assert_eq!(remote.blob(), remote_blob);
+    }
+
+    #[test]
+    fn reconcile_with_common_hash_preserves_divergent_branches() {
+        let store_id = "store_AAAAAAAAAAA";
+        let base_blob = sample_yaml(2, store_id, "base");
+        let local_blob = sample_yaml(4, store_id, "local");
+        let remote_blob = sample_yaml(3, store_id, "remote");
+        let base_hash = crate::vault_sync::vault_content_hash(&base_blob);
+        let mut local = MemoryVaultStore::with_blob(local_blob.clone());
+        let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
+
+        let action =
+            reconcile_vault_stores_with_common(&mut local, &mut remote, Some(&base_hash)).unwrap();
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);

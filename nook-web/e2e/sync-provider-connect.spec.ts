@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   createLocalVaultOnLogin,
+  E2E_OAUTH_ONBOARD_PROVIDER,
   reloadUnlockWithSyncProvider,
   UI_TIMEOUT_MS,
 } from './helpers'
@@ -24,10 +25,10 @@ test.describe('sync provider settings', () => {
       .click()
     await expect(page.getByTestId('settings-provider-oauth-file')).toBeVisible()
     await expect(
-      page.getByTestId('sync-provider-e2e-onboard-oauth'),
+      page.getByTestId(`sync-provider-${E2E_OAUTH_ONBOARD_PROVIDER.id}`),
     ).toBeVisible()
     await expect(
-      page.getByTestId('sync-status-e2e-onboard-oauth'),
+      page.getByTestId(`sync-status-${E2E_OAUTH_ONBOARD_PROVIDER.id}`),
     ).toContainText(/Not synced yet|Last synced/i)
   })
 })

@@ -8,7 +8,7 @@ How Nook names and distinguishes **logical secret stores** (vault database files
 
 ## 1. Problem
 
-A user may connect several **storage providers** (local IndexedDB, GitHub repo A, GitHub repo B, Google Drive, …). Each provider holds an encrypted vault file (today usually `nook-vault.yaml`).
+A user may connect several **storage providers** (local IndexedDB, GitHub repo A, GitHub repo B, Google Drive, …). Each provider holds immutable encrypted event files under `nook-log/v1/events/`.
 
 Future work replicates **one logical database** across multiple providers. To do that safely we must answer:
 
@@ -52,7 +52,7 @@ auth:
 |-------|------------|-------|---------|
 | **Secret store** | `store_id` | One logical encrypted database | `store_SMypl8K0w9Y` |
 | **Storage provider** | `StorageProvider.id` | Saved connection in `nook_auth` | compact id (no vault prefix) |
-| **Vault file path** | Provider config | Physical blob location | `nook-vault.yaml` in `user/nook` |
+| **Event log path** | Provider config | Physical event location | `nook-log/v1/events/{digest}.yaml` in `user/nook` |
 
 **Rules**
 
@@ -71,14 +71,14 @@ auth:
 ```mermaid
 flowchart LR
   subgraph store["Vault store_id: store_SMypl8K0w9Y"]
-    V[nook-vault.yaml content]
+    E[nook-log/v1/events]
   end
-  V --> L[Local IndexedDB — authoritative cache]
-  V --> G[GitHub user/nook]
-  V --> D[Google Drive appData]
+  E --> L[Local IndexedDB event store]
+  E --> G[GitHub user/nook]
+  E --> D[Google Drive appData]
 ```
 
-Many **sync providers**, one **`store_id`** per active vault. Physical filenames may stay `nook-vault.yaml`; **`store_id` + `vault_version`** inside the file drive reconciliation.
+Many **sync providers**, one **`store_id`** per active vault. Provider files are immutable event records; **`store_id` + causal event heads** drive reconciliation.
 
 **Multiple vaults:** a user may have unrelated vaults (different `store_id`) on different providers or, in future, multiple caches in one browser. Replication never crosses `store_id` boundaries.
 
@@ -102,6 +102,6 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 | `StorageProvider.storeId` | Implemented |
 | Legacy unprefixed read + normalize on write | Implemented |
 | Replication / mismatch guards | Planned (sync logic in `vault_sync.rs`) |
-| `vault_version` monotonic counter | Implemented |
+| Event-log causal heads | Implemented |
 
 Implementation: `nook-core/src/vault_ids.rs`.

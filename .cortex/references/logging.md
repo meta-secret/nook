@@ -19,10 +19,11 @@ this order:
    output live here. Test output and linters do not surface this layer.
 
 **Always check app logs** before changing production code or guessing from DOM
-snapshots or screenshot diffs alone. On e2e failure the fixtures attach
-`nook-app-logs.json` automatically; locally use `fetchAppLogs(page)`, `/app-logs`,
-or the `/logs` viewer. If the trail is thin, lower the capture level and
-reproduce (`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`).
+snapshots or screenshot diffs alone. Every Playwright result includes
+`nook-app-logs.json` automatically; failed tests also print a readable tail to
+the test output. Locally use `fetchAppLogs(page)`, `/app-logs`, or the `/logs`
+viewer. If the trail is thin, lower the capture level and reproduce
+(`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`).
 
 See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and-analysis) below for the preferred read order and helpers.
 
@@ -34,7 +35,7 @@ See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and
 | Web shim / console authority | [`nook-web/src/lib/log.ts`](../../nook-web/src/lib/log.ts) | `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog` |
 | Viewer | [`nook-web/src/lib/components/LogsPage.svelte`](../../nook-web/src/lib/components/LogsPage.svelte) | `/logs` page: filter, pagination, copy, clear |
 | JSON export | [`nook-web/src/lib/app-logs-api.ts`](../../nook-web/src/lib/app-logs-api.ts), [`AppLogsApiPage.svelte`](../../nook-web/src/lib/components/AppLogsApiPage.svelte) | `/app-logs` — machine-readable JSON export for agents and log pipelines |
-| e2e | [`nook-web/e2e/fixtures.ts`](../../nook-web/e2e/fixtures.ts), [`e2e/helpers.ts`](../../nook-web/e2e/helpers.ts) | Auto-dump + attach logs on test failure; `fetchAppLogs()` via `/app-logs` |
+| e2e | [`nook-web/e2e/fixtures.ts`](../../nook-web/e2e/fixtures.ts), [`e2e/helpers.ts`](../../nook-web/e2e/helpers.ts) | Attach canonical `nook-app-logs.json` to every test result, print on failure; `fetchAppLogs()` via `/app-logs` |
 
 - **Built on `tracing`:** `nook-core` and `nook-wasm` emit structured events via
   `tracing::debug!/info!/warn!/error!` (use a `scope = "…"` field to set the log
@@ -139,12 +140,13 @@ default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
 - **Rust status channel:** the manager `status_tx` channel is still drained by
   `$lib/nook` into the `wasm` scope at `debug`.
 
-## e2e integration (auto-dump on failure)
+## e2e integration (per-test log attachment)
 
 Specs import `test`/`expect` from [`e2e/fixtures.ts`](../../nook-web/e2e/fixtures.ts)
-(not `@playwright/test`). On failure the fixture prints the persisted app logs to
-the test output and attaches `nook-app-logs.json` (canonical `nook.app-logs.v1`
-envelope) to the Playwright report.
+(not `@playwright/test`). The fixture attaches `nook-app-logs.json` to every
+test result using the same canonical `nook.app-logs.v1` envelope exposed by
+`/app-logs` (up to the IndexedDB ring-buffer cap of 5000 entries). On failure it
+also prints the last 500 attached entries to the test output.
 
 ### Agent rule: use app logs for Playwright debug and analysis
 
@@ -154,8 +156,8 @@ from DOM snapshots or screenshot diffs alone.
 
 Preferred order:
 
-1. **Failure attachments** — read `nook-app-logs.json` from the Playwright report
-   (auto-attached by the fixtures on failure).
+1. **Playwright attachments** — read `nook-app-logs.json` from the test result
+   first. The fixture attaches it for both passing and failing e2e tests.
 2. **`fetchAppLogs(page, { minLevel: 'trace' })`** — navigate to `/app-logs` and
    parse the JSON body (`data-testid="app-logs-json"`). Use in specs and local
    debug scripts.
@@ -180,14 +182,16 @@ the default trail is too thin.
 
 ### Milestone assertions in e2e specs
 
-Use **`waitForPersistedAppLog(page, filter)`** or **`expectAppLogMilestones(page, [...])`**
-from [`e2e/helpers.ts`](../../nook-web/e2e/helpers.ts) to assert persisted `info`
-milestones **in-page** (via `window.__nookLog` + flush). Do not navigate to
-`/app-logs` mid-flow — that tears down vault UI state.
+Use **`waitForPersistedAppLog(page, filter)`** for a single milestone, or
+**`expectAppLogMilestones(page, [...])`** when the order matters. Both helpers
+assert persisted `info` milestones **in-page** (via `window.__nookLog` + flush).
+Do not navigate to `/app-logs` mid-flow — that tears down vault UI state.
 
 Add log checks **sparingly** alongside DOM assertions: one or two milestones per
 meaningful step, not a full log transcript. Prefer `info`-level messages (stable
-at default capture level in CI).
+at default capture level in CI). Ordered assertions should cover causality that
+the UI does not show directly, for example "manual sync started" before "secret
+added" in an event-log sync flow.
 
 | Spec | When | Scope | Message (includes) |
 |------|------|-------|-------------------|

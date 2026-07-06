@@ -109,7 +109,7 @@ a secure password generator.
 
 ## Vault and trust model
 
-The default on-disk format is `nook-vault.yaml`. A user item has a plaintext envelope
+The default on-disk format is `nook-events`. A user item has a plaintext envelope
 and encrypted data:
 
 ```yaml
@@ -233,7 +233,7 @@ Open [http://localhost:5173](http://localhost:5173).
 
 To use GitHub storage, connect a personal access token in the UI. Nook creates the
 selected repository as private when it does not already exist and stores the
-encrypted vault at `nook-vault.yaml`.
+encrypted event log under `nook-log/v1/events/`.
 
 ## Development
 

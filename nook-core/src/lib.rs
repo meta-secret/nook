@@ -72,15 +72,15 @@ pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
     MemberEntry, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
     apply_vault_meta_operation, approve_join_request, assess_connect_access, auth_record,
-    build_members_records, create_join_request_record, dec_auth_id, dec_auth_id_from_public_key,
-    deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
-    enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
-    explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
-    generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
-    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
-    is_members_stored_record, is_reserved_device_label, is_vault_meta_record, join_record_key,
-    list_join_requests, materialize_vault_meta_from_graph, member_from_identity, member_from_join,
-    member_stored_key, merge_remote_join_records, merge_remote_yaml_user_secrets,
+    build_members_records, create_join_request_record, create_join_request_record_with_signing_key,
+    dec_auth_id, dec_auth_id_from_public_key, deny_join_request, device_is_enrolled,
+    encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys,
+    ensure_self_in_roster, explain_connect_blocked, generate_dec, generate_id,
+    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
+    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record,
+    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
+    is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
+    member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
     parse_auth_envelopes, parse_join_request, pending_join_for_device, rename_vault_member,
     replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
     resolve_secrets_key, revoke_vault_member, roster_add_member, user_stored_records,
@@ -105,19 +105,20 @@ pub use sync_provider_credentials::{
     AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials, seal_provider_credentials,
 };
 pub use sync_provider_store::{
-    AuthProvidersSnapshotData, NormalizedAuthSnapshot, OAuthFileConfigData, StorageProviderData,
-    ensure_local_provider_row, find_duplicate_sync_provider, migrate_provider_fields,
-    normalize_auth_snapshot, provider_target_key, seed_provider_from_legacy_storage,
+    AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
+    StorageProviderData, ensure_local_provider_row, find_duplicate_sync_provider,
+    migrate_provider_fields, normalize_auth_snapshot, provider_target_key,
+    seed_provider_from_legacy_storage,
 };
 pub use validation::{
-    DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP,
-    DriveVaultFileName, GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, DriveBackupName,
+    GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget, LocalFolderSyncTarget,
     OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB,
     STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget, filter_secrets,
     format_drive_storage_ref, format_drive_storage_ref_raw, format_sync_provider_cache_ref,
     mask_github_pat, parse_drive_storage_ref, storage_mode_for_provider,
     sync_provider_default_label, sync_provider_target_key, validate_connect,
-    validate_drive_vault_file_name, validate_github_pat, validate_github_repo_name,
+    validate_drive_backup_name, validate_github_pat, validate_github_repo_name,
     validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };
 pub use vault_connect::{
@@ -135,8 +136,9 @@ pub use vault_epoch_crypto::{
     rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
 };
 pub use vault_event::{
-    EncryptedSecretPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    build_genesis_import_event,
+    EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
+    VaultEventSchemaVersion, VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
+    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
 pub use vault_event_builder::{
     AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,
@@ -144,7 +146,10 @@ pub use vault_event_builder::{
 };
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
-pub use vault_event_store::{LocalEventStore, union_remote_events, union_remote_events_and_heads};
+pub use vault_event_store::{
+    LocalEventStore, remote_event_belongs_to_store, remote_event_store_id, union_remote_events,
+    union_remote_events_and_heads,
+};
 pub use vault_format::{
     VaultFormat, current_vault_schema_version, deserialize_stored,
     deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,
@@ -170,11 +175,14 @@ pub use vault_projection::{
 pub use vault_session::apply_user_records_to_armored_session;
 pub use vault_session_cache::hydrate_keys_from_projection_yaml;
 pub use vault_signing::SigningIdentity;
-pub use vault_sync::{VaultRevision, VaultSyncAction, compare_vault_sync, read_vault_revision};
+pub use vault_sync::{
+    VaultRevision, VaultSyncAction, compare_vault_sync, compare_vault_sync_with_common,
+    read_vault_revision, vault_content_hash,
+};
 pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_sync};
 pub use vault_sync_store::{
-    MemoryVaultStore, fan_out_sync, reconcile_vault_stores, resolve_conflict_keep_local,
-    resolve_conflict_keep_remote,
+    MemoryVaultStore, RevisionGuardedWrite, fan_out_sync, reconcile_vault_stores,
+    reconcile_vault_stores_with_common, resolve_conflict_keep_local, resolve_conflict_keep_remote,
 };
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,

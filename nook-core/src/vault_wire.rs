@@ -340,7 +340,7 @@ impl<'de> Deserialize<'de> for Sha256Hex {
 }
 
 /// Ed25519 verifying key as 64-hex raw bytes (event join operations).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DeviceSigningPublicKey(String);
 
 impl DeviceSigningPublicKey {

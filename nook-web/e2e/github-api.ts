@@ -1,4 +1,4 @@
-const GITHUB_VAULT_PATH = 'nook-vault.yaml'
+const GITHUB_VAULT_PATH = 'nook-events'
 const GITHUB_FETCH_TIMEOUT_MS = 30_000
 const GITHUB_RATE_LIMIT_MAX_WAIT_MS = 5 * 60_000
 

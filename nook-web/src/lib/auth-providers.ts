@@ -1,8 +1,8 @@
-import { migrateLegacyVaultToLocal } from '$lib/vault-migration'
+import { ensureLocalAuthProviderSnapshot } from '$lib/vault-migration'
 import {
   deleteAuthProvidersDb as deleteAuthProvidersDbWasm,
   default as initNookWasm,
-  defaultDriveVaultFile,
+  defaultDriveBackupName,
   defaultGithubRepo,
   findDuplicateSyncProvider as findDuplicateSyncProviderWasm,
   formatDriveStorageRef as formatDriveStorageRefCore,
@@ -18,7 +18,11 @@ import {
 
 await initNookWasm()
 
-export type StorageProviderType = 'local' | 'github' | 'oauth-file'
+export type StorageProviderType =
+  | 'local'
+  | 'local-folder'
+  | 'github'
+  | 'oauth-file'
 
 export type OAuthFilePreset = 'google-drive' | 'icloud'
 
@@ -28,9 +32,14 @@ export interface OAuthFileConfig {
   refreshToken?: string
   expiresAt?: string
   fileId?: string
-  /** Vault file name in Drive app data or CloudKit record name (default `nook-vault.yaml`). */
+  /** Optional Drive/iCloud label retained for account display. */
   fileName?: string
   accountEmail?: string
+}
+
+export interface LocalFolderConfig {
+  directoryName?: string
+  handleId?: string
 }
 
 export interface StorageProvider {
@@ -41,6 +50,7 @@ export interface StorageProvider {
   /** GitHub repository name (not owner/name). Defaults to `nook`. */
   githubRepo?: string
   oauthFile?: OAuthFileConfig
+  localFolder?: LocalFolderConfig
   /** Logical secret-store id — same across provider replicas of one vault. */
   storeId?: string
   /** Monotonic vault_version after last successful sync to this provider. */
@@ -49,6 +59,8 @@ export interface StorageProvider {
   lastSyncedAt?: string
   /** Remote revision token (GitHub sha, Drive revisionId) for the next write. */
   lastSyncRevision?: string
+  /** SHA-256 of the last vault blob both local and this provider shared. */
+  lastCommonContentHash?: string
   createdAt: string
 }
 
@@ -66,7 +78,7 @@ interface LoadedAuthProviders {
 }
 
 export const DEFAULT_GITHUB_REPO = defaultGithubRepo()
-export const DEFAULT_DRIVE_VAULT_FILE = defaultDriveVaultFile()
+export const DEFAULT_DRIVE_BACKUP_NAME = defaultDriveBackupName()
 
 /** Plain snapshot safe for the wasm boundary (no reactive proxies / undefined). */
 function toPlain<T>(value: T): T {
@@ -80,20 +92,25 @@ export function syncProviderTargetKey(
   const target =
     provider.type === 'local'
       ? NookSyncProviderTarget.local()
-      : provider.type === 'github'
-        ? NookSyncProviderTarget.github(
-            provider.githubRepo ?? null,
-            provider.githubPat ?? null,
+      : provider.type === 'local-folder'
+        ? NookSyncProviderTarget.localFolder(
+            provider.localFolder?.directoryName ?? null,
+            provider.localFolder?.handleId ?? null,
           )
-        : provider.oauthFile
-          ? NookSyncProviderTarget.oauthFile(
-              provider.oauthFile.preset,
-              provider.oauthFile.fileId ?? null,
-              provider.oauthFile.fileName ?? null,
-              provider.oauthFile.accountEmail ?? null,
-              provider.oauthFile.accessToken ?? null,
+        : provider.type === 'github'
+          ? NookSyncProviderTarget.github(
+              provider.githubRepo ?? null,
+              provider.githubPat ?? null,
             )
-          : NookSyncProviderTarget.missingOauthFileConfig()
+          : provider.oauthFile
+            ? NookSyncProviderTarget.oauthFile(
+                provider.oauthFile.preset,
+                provider.oauthFile.fileId ?? null,
+                provider.oauthFile.fileName ?? null,
+                provider.oauthFile.accountEmail ?? null,
+                provider.oauthFile.accessToken ?? null,
+              )
+            : NookSyncProviderTarget.missingOauthFileConfig()
   try {
     return syncProviderTargetKeyCore(target) ?? null
   } finally {
@@ -128,15 +145,12 @@ export async function loadAuthProviders(
 }
 
 /** Load providers, then copy a legacy remote vault into local storage once. */
-export async function loadAuthProvidersWithVaultMigration(
+export async function loadAuthProvidersWithLocalRow(
   manager: NookVaultManager,
 ): Promise<AuthProvidersSnapshot> {
   const loaded = (await loadAuthProvidersWasm(manager)) as LoadedAuthProviders
   const { snapshot: migratedSnapshot, migrated } =
-    await migrateLegacyVaultToLocal(
-      loaded.snapshot,
-      loaded.legacyActiveProviderId,
-    )
+    await ensureLocalAuthProviderSnapshot(loaded.snapshot)
   if (
     migrated ||
     migratedSnapshot.providers.length !== loaded.snapshot.providers.length
@@ -177,6 +191,13 @@ export function localizeProviderLabel(
   }
   if (label === 'GitHub') {
     return t('provider_picker.github')
+  }
+  if (label === 'Local backup') {
+    return t('provider_picker.local_folder')
+  }
+  if (label.startsWith('Local backup · ')) {
+    const directory = label.slice('Local backup · '.length)
+    return `${t('provider_picker.local_folder')} · ${directory}`
   }
   if (label.startsWith('Google Drive · ')) {
     const file = label.slice('Google Drive · '.length)
@@ -243,12 +264,18 @@ export function providerStorageDetail(
   }
   if (provider.type === 'oauth-file') {
     const file =
-      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_VAULT_FILE
+      provider.oauthFile?.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
     const account = maskOAuthAccount(provider.oauthFile, t)
     return `${file} · ${account}`
   }
+  if (provider.type === 'local-folder') {
+    return (
+      provider.localFolder?.directoryName?.trim() ||
+      (t ? t('auth_storage.local_folder_needs_reconnect') : 'Choose folder')
+    )
+  }
   const repo = provider.githubRepo?.trim() || DEFAULT_GITHUB_REPO
-  return `${repo}/nook-vault.yaml · ${maskGithubPat(provider.githubPat, t)}`
+  return `${repo} · ${maskGithubPat(provider.githubPat, t)}`
 }
 
 export async function deleteAuthProvidersDb(): Promise<void> {

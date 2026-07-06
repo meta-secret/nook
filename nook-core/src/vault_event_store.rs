@@ -2,9 +2,13 @@
 
 use crate::errors::{EventError, VaultResult};
 use crate::event_canonical::EventId;
-use crate::vault_event::VaultEvent;
+use crate::vault_event::{
+    VaultEvent, VaultEventSchemaVersion, parse_event_storage_bytes,
+    parse_remote_event_storage_bytes, serialize_event_storage_yaml,
+};
 use crate::vault_event_graph::{EventGraph, EventInsertStatus};
-use std::collections::BTreeMap;
+use crate::vault_ids::StoreId;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
 #[derive(Debug, Clone, Default)]
@@ -19,8 +23,12 @@ impl LocalEventStore {
         Self::default()
     }
 
-    pub fn put_event(&mut self, event_id: EventId, canonical_bytes: Vec<u8>) {
-        self.events.insert(event_id, canonical_bytes);
+    pub fn put_event(&mut self, event_id: EventId, storage_bytes: Vec<u8>) {
+        self.events.insert(event_id, storage_bytes);
+    }
+
+    pub fn remove_event(&mut self, event_id: &EventId) {
+        self.events.remove(event_id);
     }
 
     #[must_use]
@@ -59,12 +67,11 @@ impl LocalEventStore {
             .unwrap_or_default()
     }
 
-    /// Build a causal graph from stored canonical bytes.
+    /// Build a causal graph from stored YAML bytes.
     pub fn load_graph(&self, store_id: &str) -> VaultResult<EventGraph> {
         let mut graph = EventGraph::new();
         for bytes in self.events.values() {
-            let event: VaultEvent =
-                serde_json::from_slice(bytes).map_err(EventError::ParseStoredEvent)?;
+            let event = parse_event_storage_bytes(bytes)?;
             let _ = graph.insert(event, store_id)?;
         }
         Ok(graph)
@@ -77,19 +84,15 @@ impl LocalEventStore {
         store_id: &str,
     ) -> VaultResult<(EventId, EventInsertStatus)> {
         let event_id = event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
-        let bytes = serde_json::to_vec(event).map_err(EventError::EventSerialize)?;
+        let bytes = serialize_event_storage_yaml(event)?;
         if self.events.contains_key(&event_id) {
             return Ok((event_id, EventInsertStatus::Duplicate));
         }
-        self.put_event(event_id.clone(), bytes);
-        let graph = self.load_graph(store_id)?;
-        let status = if graph.pending_events().is_empty() {
-            EventInsertStatus::Applied
-        } else {
-            EventInsertStatus::Pending(
-                crate::vault_event_graph::EventPendingReason::MissingParents(vec![]),
-            )
-        };
+        let mut graph = self.load_graph(store_id)?;
+        let status = graph.insert(event.clone(), store_id)?;
+        if !matches!(status, EventInsertStatus::Quarantined(_)) {
+            self.put_event(event_id.clone(), bytes);
+        }
         Ok((event_id, status))
     }
 }
@@ -100,22 +103,38 @@ pub fn union_remote_events(
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
 ) -> VaultResult<Vec<EventId>> {
-    let mut imported = Vec::new();
+    let mut candidate = local.clone();
+    let mut candidates = Vec::new();
     for (event_id, bytes) in remote_events {
-        if local.get_bytes(event_id).is_some() {
+        if local.get_bytes(event_id).is_some() || candidate.get_bytes(event_id).is_some() {
             continue;
         }
-        let event: VaultEvent =
-            serde_json::from_slice(bytes).map_err(EventError::ParseRemoteEvent)?;
+        let event = parse_remote_event_storage_bytes(bytes)?;
         if event.id()? != *event_id {
             return Err(EventError::RemoteEventIdMismatch {
                 event_id: event_id.as_str().to_owned(),
             }
             .into());
         }
-        local.put_event(event_id.clone(), bytes.clone());
-        imported.push(event_id.clone());
+        event.validate_envelope(&crate::StoreId::parse(store_id)?)?;
+        candidate.put_event(event_id.clone(), bytes.clone());
+        candidates.push(event_id.clone());
     }
+    if candidates.is_empty() {
+        let _ = local.load_graph(store_id)?;
+        return Ok(Vec::new());
+    }
+
+    let graph = candidate.load_graph(store_id)?;
+    let quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
+    for event_id in &quarantined {
+        candidate.remove_event(event_id);
+    }
+    *local = candidate;
+    let imported = candidates
+        .into_iter()
+        .filter(|event_id| !quarantined.contains(event_id))
+        .collect();
     let _ = local.load_graph(store_id)?;
     Ok(imported)
 }
@@ -135,28 +154,71 @@ pub fn union_remote_events_and_heads(
         .collect())
 }
 
+/// Validate a remote event's content-addressed id and test whether it belongs to
+/// the active vault. Providers may physically contain events for multiple
+/// vaults; those unrelated events must not poison this vault's projection.
+pub fn remote_event_belongs_to_store(
+    event_id: &EventId,
+    bytes: &[u8],
+    store_id: &str,
+) -> VaultResult<bool> {
+    Ok(remote_event_store_id(event_id, bytes)?.as_str() == store_id)
+}
+
+/// Validate a remote event's content-addressed id and actor signature, then
+/// return the store id declared by the signed body.
+pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> VaultResult<StoreId> {
+    let event = parse_remote_event_storage_bytes(bytes)?;
+    if event.id()? != *event_id {
+        return Err(EventError::RemoteEventIdMismatch {
+            event_id: event_id.as_str().to_owned(),
+        }
+        .into());
+    }
+    if event.body.schema_version != VaultEventSchemaVersion::CURRENT {
+        return Err(EventError::UnsupportedSchemaVersion {
+            version: event.body.schema_version.get(),
+        }
+        .into());
+    }
+    event.validate_actor_signature()?;
+    Ok(event.body.store_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::VaultResult;
-    use crate::vault_event::build_genesis_import_event;
+    use crate::event_canonical::Ed25519Signature;
+    use crate::secret_types::SecretType;
+    use crate::vault_event::{
+        EncryptedSecretPayload, GenesisImportPayload, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
+    };
     use crate::vault_event_graph::EventInsertStatus;
-    use crate::vault_ids::{AuthKeyId, StoreId};
-    use crate::vault_wire::{IsoTimestamp, Sha256Hex};
+    use crate::vault_ids::{SecretId, StoreId};
+    use crate::vault_signing::SigningIdentity;
+    use crate::vault_wire::{DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, Sha256Hex};
     use ed25519_dalek::SigningKey;
     use rand_core::OsRng;
 
     fn genesis(signing_key: &SigningKey) -> VaultResult<crate::vault_event::VaultEvent> {
+        genesis_for_store(signing_key, "store_testtoken11")
+    }
+
+    fn genesis_for_store(
+        signing_key: &SigningKey,
+        store_id: &str,
+    ) -> VaultResult<crate::vault_event::VaultEvent> {
         build_genesis_import_event(
-            &StoreId::parse("store_testtoken11")?,
-            &AuthKeyId::parse(
-                "key_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            )?,
-            &EventId::parse(
-                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            )?,
-            &Sha256Hex::from_trusted("deadbeef".repeat(8)),
-            vec![],
+            &StoreId::parse(store_id)?,
+            &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
+            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            GenesisImportPayload {
+                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
             &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             signing_key,
         )
@@ -164,12 +226,40 @@ mod tests {
 
     const STORE: &str = "store_testtoken11";
 
+    fn public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
+        DeviceSigningPublicKey::from_trusted(hex::encode(signing_key.verifying_key().as_bytes()))
+    }
+
+    fn signed_child(
+        signing_key: &SigningKey,
+        parent: EventId,
+        secret_id: &str,
+    ) -> VaultResult<VaultEvent> {
+        let body = VaultEventBody {
+            schema_version: VaultEventSchemaVersion::CURRENT,
+            store_id: StoreId::parse(STORE)?,
+            actor_id: SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
+            actor_signing_public_key: Some(public_key(signing_key)),
+            parents: vec![parent],
+            created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            key_epoch: EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            operations: vec![VaultOperation::SecretCreated {
+                secret: EncryptedSecretPayload {
+                    id: SecretId::from_vault_record(secret_id),
+                    secret_type: SecretType::ApiKey,
+                    ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                },
+            }],
+        };
+        VaultEvent::sign(body, signing_key)
+    }
+
     #[test]
     fn union_imports_missing_events() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         union_remote_events(&mut local, &[(id.clone(), bytes)], STORE)?;
@@ -192,9 +282,7 @@ mod tests {
     #[test]
     fn outbox_queue_and_dequeue() -> VaultResult<()> {
         let mut local = LocalEventStore::new();
-        let id = EventId::parse(
-            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        )?;
+        let id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
         let bytes = b"event-bytes".to_vec();
         local.queue_outbox("github", id.clone(), bytes.clone());
         assert_eq!(local.pending_outbox("github").len(), 1);
@@ -223,7 +311,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local = LocalEventStore::new();
         let heads = union_remote_events_and_heads(&mut local, &[(id.clone(), bytes)], STORE)?;
@@ -237,7 +325,7 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut local_a = LocalEventStore::new();
         local_a.put_event(genesis_id.clone(), genesis_bytes.clone());
@@ -260,10 +348,8 @@ mod tests {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let real_id = genesis.id()?;
-        let bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
-        let wrong_id = EventId::parse(
-            "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-        )?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
 
         let mut local = LocalEventStore::new();
         let err = union_remote_events(&mut local, &[(wrong_id, bytes)], STORE).unwrap_err();
@@ -276,11 +362,135 @@ mod tests {
     }
 
     #[test]
+    fn remote_event_store_filter_skips_other_vaults() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let other = genesis_for_store(&signing_key, "store_otherstore1")?;
+        let other_id = other.id()?;
+        let bytes = serialize_event_storage_yaml(&other)?;
+
+        assert_eq!(
+            remote_event_store_id(&other_id, &bytes)?.as_str(),
+            "store_otherstore1"
+        );
+        assert!(!remote_event_belongs_to_store(&other_id, &bytes, STORE)?);
+        assert!(remote_event_belongs_to_store(
+            &other_id,
+            &bytes,
+            "store_otherstore1"
+        )?);
+        Ok(())
+    }
+
+    #[test]
+    fn remote_event_store_filter_rejects_id_mismatch() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&signing_key)?;
+        let bytes = serialize_event_storage_yaml(&genesis)?;
+        let wrong_id = EventId::parse("sha256u:3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0")?;
+
+        let err = remote_event_belongs_to_store(&wrong_id, &bytes, STORE).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::RemoteEventIdMismatch { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn union_rejects_current_schema_event_with_bad_signature() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let mut genesis = genesis(&signing_key)?;
+        let event_id = genesis.id()?;
+        genesis.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "00".repeat(64)));
+        let bytes = serialize_event_storage_yaml(&genesis)?;
+
+        let mut local = LocalEventStore::new();
+        let err = union_remote_events(&mut local, &[(event_id.clone(), bytes)], STORE).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::SignatureVerificationFailed)
+        ));
+        assert!(local.get_bytes(&event_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn union_skips_unapproved_actor_event() -> VaultResult<()> {
+        let root_key = SigningKey::generate(&mut OsRng);
+        let stranger_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let child = signed_child(&stranger_key, genesis_id.clone(), "secret_remoteuna1")?;
+        let child_id = child.id()?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
+
+        let mut local = LocalEventStore::new();
+        union_remote_events(&mut local, &[(genesis_id, genesis_bytes)], STORE)?;
+        let imported = union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE)?;
+        assert!(imported.is_empty());
+        assert!(local.load_graph(STORE)?.quarantined().is_empty());
+        assert!(local.get_bytes(&child_id).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn union_stages_batch_and_quarantines_unauthorized_child() -> VaultResult<()> {
+        let root_key = SigningKey::generate(&mut OsRng);
+        let stranger_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let child = signed_child(&stranger_key, genesis_id.clone(), "secret_batchbad1")?;
+        let child_id = child.id()?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
+
+        let mut local = LocalEventStore::new();
+        let imported = union_remote_events(
+            &mut local,
+            &[
+                (genesis_id.clone(), genesis_bytes),
+                (child_id.clone(), child_bytes),
+            ],
+            STORE,
+        )?;
+
+        assert_eq!(imported, vec![genesis_id.clone()]);
+        assert!(local.get_bytes(&genesis_id).is_some());
+        assert!(local.get_bytes(&child_id).is_none());
+        assert!(local.load_graph(STORE)?.quarantined().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn union_removes_pending_event_that_becomes_unauthorized() -> VaultResult<()> {
+        let root_key = SigningKey::generate(&mut OsRng);
+        let stranger_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&root_key)?;
+        let genesis_id = genesis.id()?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
+        let child = signed_child(&stranger_key, genesis_id.clone(), "secret_pendingbad1")?;
+        let child_id = child.id()?;
+        let child_bytes = serialize_event_storage_yaml(&child)?;
+
+        let mut local = LocalEventStore::new();
+        let imported = union_remote_events(&mut local, &[(child_id.clone(), child_bytes)], STORE)?;
+        assert_eq!(imported, vec![child_id.clone()]);
+        assert!(local.get_bytes(&child_id).is_some());
+
+        union_remote_events(&mut local, &[(genesis_id.clone(), genesis_bytes)], STORE)?;
+        assert!(local.get_bytes(&genesis_id).is_some());
+        assert!(local.get_bytes(&child_id).is_none());
+        assert!(local.load_graph(STORE)?.quarantined().is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn bidirectional_union_converges() -> VaultResult<()> {
         let signing_key = SigningKey::generate(&mut OsRng);
         let genesis = genesis(&signing_key)?;
         let genesis_id = genesis.id()?;
-        let genesis_bytes = serde_json::to_vec(&genesis).map_err(EventError::from)?;
+        let genesis_bytes = serialize_event_storage_yaml(&genesis)?;
 
         let mut device_a = LocalEventStore::new();
         device_a.put_event(genesis_id.clone(), genesis_bytes.clone());

@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DEFAULT_DRIVE_VAULT_FILE_NAME, DEFAULT_GITHUB_REPO_NAME, GithubSyncTarget, OauthFilePreset,
-    OauthFileSyncTarget, StorageProviderType, SyncProviderTarget, sync_provider_default_label,
-    sync_provider_target_key,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubSyncTarget, LocalFolderSyncTarget,
+    OauthFilePreset, OauthFileSyncTarget, StorageProviderType, SyncProviderTarget,
+    sync_provider_default_label, sync_provider_target_key,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -36,6 +36,16 @@ pub struct OAuthFileConfigData {
     pub account_email: Option<String>,
 }
 
+/// Browser-local File System Access folder handle metadata.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFolderConfigData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handle_id: Option<String>,
+}
+
 /// One persisted sync provider row.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +61,8 @@ pub struct StorageProviderData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oauth_file: Option<OAuthFileConfigData>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_folder: Option<LocalFolderConfigData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub store_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_synced_version: Option<i64>,
@@ -58,6 +70,8 @@ pub struct StorageProviderData {
     pub last_synced_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_sync_revision: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_common_content_hash: Option<String>,
     pub created_at: String,
 }
 
@@ -93,6 +107,16 @@ fn non_empty(value: Option<&str>) -> Option<String> {
 fn provider_target(provider: &StorageProviderData) -> SyncProviderTarget {
     match provider.provider_type.as_str() {
         "local" => SyncProviderTarget::Local,
+        "local-folder" => SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
+            directory_name: provider
+                .local_folder
+                .as_ref()
+                .and_then(|folder| folder.directory_name.clone()),
+            handle_id: provider
+                .local_folder
+                .as_ref()
+                .and_then(|folder| folder.handle_id.clone()),
+        }),
         "github" => SyncProviderTarget::Github(GithubSyncTarget {
             repo: provider.github_repo.clone(),
             pat: provider.github_pat.clone(),
@@ -217,8 +241,9 @@ pub fn migrate_provider_fields(
                         expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
                         file_id: existing.and_then(|oauth| oauth.file_id.clone()),
                         account_email: existing.and_then(|oauth| oauth.account_email.clone()),
-                        file_name: Some(DEFAULT_DRIVE_VAULT_FILE_NAME.to_owned()),
+                        file_name: Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned()),
                     }),
+                    local_folder: None,
                     ..provider.clone()
                 }
             }
@@ -266,10 +291,12 @@ pub fn ensure_local_provider_row(
         github_pat: None,
         github_repo: None,
         oauth_file: None,
+        local_folder: None,
         store_id,
         last_synced_version: None,
         last_synced_at: None,
         last_sync_revision: None,
+        last_common_content_hash: None,
         created_at: created_at.to_owned(),
     };
     let mut providers = Vec::with_capacity(snapshot.providers.len() + 1);
@@ -316,10 +343,12 @@ pub fn seed_provider_from_legacy_storage(
         github_pat: is_github.then(|| pat.to_owned()),
         github_repo: is_github.then(|| DEFAULT_GITHUB_REPO_NAME.to_owned()),
         oauth_file: None,
+        local_folder: None,
         store_id: None,
         last_synced_version: None,
         last_synced_at: None,
         last_sync_revision: None,
+        last_common_content_hash: None,
         created_at: created_at.to_owned(),
     };
     Some(AuthProvidersSnapshotData {
@@ -341,10 +370,33 @@ mod tests {
             github_pat: Some(pat.to_owned()),
             github_repo: Some(repo.to_owned()),
             oauth_file: None,
+            local_folder: None,
             store_id: None,
             last_synced_version: None,
             last_synced_at: None,
             last_sync_revision: None,
+            last_common_content_hash: None,
+            created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+        }
+    }
+
+    fn local_folder_provider(id: &str, handle_id: &str) -> StorageProviderData {
+        StorageProviderData {
+            id: id.to_owned(),
+            provider_type: "local-folder".to_owned(),
+            label: "Local backup".to_owned(),
+            github_pat: None,
+            github_repo: None,
+            oauth_file: None,
+            local_folder: Some(LocalFolderConfigData {
+                directory_name: Some("Nook Backup".to_owned()),
+                handle_id: Some(handle_id.to_owned()),
+            }),
+            store_id: None,
+            last_synced_version: None,
+            last_synced_at: None,
+            last_sync_revision: None,
+            last_common_content_hash: None,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
     }
@@ -414,6 +466,17 @@ mod tests {
     }
 
     #[test]
+    fn find_duplicate_matches_local_folder_handle() {
+        let existing = local_folder_provider("folder-a", "handle-1");
+        let candidate = local_folder_provider("folder-b", "handle-1");
+        let found = find_duplicate_sync_provider(&[existing], &candidate, None);
+        assert_eq!(
+            found.map(|provider| provider.id).as_deref(),
+            Some("folder-a")
+        );
+    }
+
+    #[test]
     fn migrate_backfills_github_repo() {
         let snapshot = AuthProvidersSnapshotData {
             providers: vec![StorageProviderData {
@@ -445,10 +508,12 @@ mod tests {
                     account_email: Some("me@example.com".to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
+                local_folder: None,
                 store_id: None,
                 last_synced_version: None,
                 last_synced_at: None,
                 last_sync_revision: None,
+                last_common_content_hash: None,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: None,
@@ -456,10 +521,7 @@ mod tests {
         let (migrated, changed) = migrate_provider_fields(&snapshot);
         assert!(changed);
         let oauth = migrated.providers[0].oauth_file.as_ref().unwrap();
-        assert_eq!(
-            oauth.file_name.as_deref(),
-            Some(DEFAULT_DRIVE_VAULT_FILE_NAME)
-        );
+        assert_eq!(oauth.file_name.as_deref(), Some(DEFAULT_DRIVE_BACKUP_NAME));
         assert_eq!(oauth.preset, "icloud");
         assert_eq!(oauth.access_token, "tok");
         assert_eq!(oauth.account_email.as_deref(), Some("me@example.com"));
@@ -500,10 +562,12 @@ mod tests {
                 github_pat: None,
                 github_repo: None,
                 oauth_file: None,
+                local_folder: None,
                 store_id: Some("vault-1".to_owned()),
                 last_synced_version: None,
                 last_synced_at: None,
                 last_sync_revision: None,
+                last_common_content_hash: None,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
             active_vault_store_id: Some("vault-1".to_owned()),

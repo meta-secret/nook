@@ -109,7 +109,7 @@
             class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
           />
           <p class="text-[11px] text-muted-foreground text-pretty">
-            {vault.t('provider_setup.vault_file_desc')}
+            {vault.t('provider_setup.event_log_desc')}
           </p>
         </div>
 

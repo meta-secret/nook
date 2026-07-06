@@ -24,7 +24,9 @@ pub struct VaultEventSession {
 impl VaultEventSession {
     #[must_use]
     pub fn new(store_id: String, signing: SigningIdentity, signing_seed: String) -> Self {
-        let key_epoch = format!("sha256:{}", sha256_hex(store_id.as_bytes()).as_str());
+        let key_epoch = EventId::from_sha256_hex(crate::sha256_hex(store_id.as_bytes()).as_str())
+            .expect("store id hash is a valid SHA-256 digest")
+            .into_inner();
         Self {
             store: LocalEventStore::new(),
             store_id,
@@ -70,7 +72,7 @@ impl VaultEventSession {
             operations,
         })?;
         let event_id = event.id()?;
-        self.store.put_event(event_id.clone(), bytes.clone());
+        let _ = self.store.append_event(&event, &self.store_id)?;
         self.heads = vec![event_id.as_str().to_owned()];
         if let Some(provider) = provider_id {
             self.store.queue_outbox(provider, event_id.clone(), bytes);
