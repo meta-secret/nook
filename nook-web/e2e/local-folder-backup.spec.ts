@@ -129,6 +129,7 @@ test.describe('local folder backup provider', () => {
     await page.getByTestId('settings-connect-local-folder-btn').click()
     await waitForVaultOperationsIdle(page)
     await assertVaultReady(page)
+    await expandSettingsSection(page, 'storage')
     await expect(page.getByTestId('settings-providers-list')).toContainText(
       'Local backup',
     )

@@ -364,8 +364,10 @@ export async function connectAndSyncStagedProvider(
   if (state.isVerifying) return
   state.isVerifying = true
   try {
-    const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
-    if (reconcileOutcome === 'skip') return
+    if (state.stagedRemoteStorageArgs()) {
+      const reconcileOutcome = await state.reconcileStagedRemoteWithLocal()
+      if (reconcileOutcome === 'skip') return
+    }
 
     const saved = await state.ensureProviderSaved()
     if (!saved) {
