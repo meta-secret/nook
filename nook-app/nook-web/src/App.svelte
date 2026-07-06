@@ -11,6 +11,7 @@
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
+  import PublicHome from '$lib/components/PublicHome.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
@@ -346,8 +347,56 @@
             onDismissError={() => vault.dismissError()}
           />
         </div>
-      {:else if !vault.deviceProtectionReady}
-        <DeviceProtectionGate {vault} />
+      {:else if !vault.isAuthenticated}
+        <div class="space-y-6">
+          <PublicHome {colorMode} onOpenHelp={() => vault.openHelp()} />
+          {#if !vault.deviceProtectionReady}
+            <DeviceProtectionGate {vault} />
+          {:else if vault.providersLoaded}
+            <LoginGate
+              {vault}
+              providers={vault.providers}
+              bind:setupType={vault.loginSetupType}
+              bind:githubPat={vault.githubPat}
+              bind:githubRepo={vault.githubRepo}
+              addProviderOpen={vault.addProviderOpen}
+              isVerifying={vault.isVerifying}
+              isInitializing={vault.isInitializing}
+              onUnlock={handleUnlock}
+              onBeginAddProvider={() => vault.beginAddProvider()}
+              onCancelAddProvider={() => vault.cancelAddProvider()}
+              onBeginSetup={(type, preset) =>
+                vault.beginProviderSetup(type, preset)}
+              onCancelSetup={() => vault.cancelProviderSetup()}
+              onOpenHelp={() => vault.openHelp()}
+              onUseEnrollmentCode={(code, password) =>
+                vault.connectWithEnrollmentCode(code, password)}
+              prefillEnrollmentCode={vault.prefillEnrollmentCode}
+              enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
+              onUnlockWithPassword={(entryId, password) =>
+                vault.unlockWithPassword(entryId, password)}
+              onCreateDeviceVault={(label) =>
+                vault.createLocalVaultWithDeviceKeys(label)}
+              onRemoveProvider={(id) => vault.removeProvider(id)}
+            />
+            <VaultStatusBar
+              {vault}
+              storageMode={vault.storageMode}
+              githubRepo={vault.githubRepo}
+              lastSyncedAt={vault.lastSyncedAt}
+              isSyncing={vault.isSyncActivityVisible}
+              successMsg={vault.successMsg}
+              errorMsg={vault.errorMsg}
+              {appVersion}
+              label="Nook"
+              showSyncStatus={false}
+              showStorageIcon={false}
+              variant="quiet"
+              onDismissSuccess={() => vault.dismissSuccess()}
+              onDismissError={() => vault.dismissError()}
+            />
+          {/if}
+        </div>
       {:else if vault.isAuthenticated}
         <div
           class="flex w-full {authenticatedShellSize} flex-col overflow-hidden rounded-xl bg-card shadow-sm sm:border sm:border-border/60"
@@ -517,51 +566,6 @@
               />
             {/if}
           </div>
-        </div>
-      {:else if vault.providersLoaded}
-        <div class="space-y-4">
-          <LoginGate
-            {vault}
-            providers={vault.providers}
-            bind:setupType={vault.loginSetupType}
-            bind:githubPat={vault.githubPat}
-            bind:githubRepo={vault.githubRepo}
-            addProviderOpen={vault.addProviderOpen}
-            isVerifying={vault.isVerifying}
-            isInitializing={vault.isInitializing}
-            onUnlock={handleUnlock}
-            onBeginAddProvider={() => vault.beginAddProvider()}
-            onCancelAddProvider={() => vault.cancelAddProvider()}
-            onBeginSetup={(type, preset) =>
-              vault.beginProviderSetup(type, preset)}
-            onCancelSetup={() => vault.cancelProviderSetup()}
-            onOpenHelp={() => vault.openHelp()}
-            onUseEnrollmentCode={(code, password) =>
-              vault.connectWithEnrollmentCode(code, password)}
-            prefillEnrollmentCode={vault.prefillEnrollmentCode}
-            enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
-            onUnlockWithPassword={(entryId, password) =>
-              vault.unlockWithPassword(entryId, password)}
-            onCreateDeviceVault={(label) =>
-              vault.createLocalVaultWithDeviceKeys(label)}
-            onRemoveProvider={(id) => vault.removeProvider(id)}
-          />
-          <VaultStatusBar
-            {vault}
-            storageMode={vault.storageMode}
-            githubRepo={vault.githubRepo}
-            lastSyncedAt={vault.lastSyncedAt}
-            isSyncing={vault.isSyncActivityVisible}
-            successMsg={vault.successMsg}
-            errorMsg={vault.errorMsg}
-            {appVersion}
-            label="Nook"
-            showSyncStatus={false}
-            showStorageIcon={false}
-            variant="quiet"
-            onDismissSuccess={() => vault.dismissSuccess()}
-            onDismissError={() => vault.dismissError()}
-          />
         </div>
       {/if}
     </div>
