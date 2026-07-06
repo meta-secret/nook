@@ -200,6 +200,27 @@ impl NookVaultManager {
         serde_wasm_bindgen::to_value(&records).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    #[wasm_bindgen(js_name = parseEventLogStorageRecord)]
+    pub fn parse_event_log_storage_record_js(
+        &self,
+        event_id: &str,
+        path: &str,
+        content: &str,
+    ) -> Result<JsValue, JsError> {
+        let record = Self::parse_event_log_storage_record(event_id, path, content)?;
+        serde_wasm_bindgen::to_value(&record).map_err(|e| JsError::new(&e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = serializeEventLogStorageRecord)]
+    pub fn serialize_event_log_storage_record_js(
+        &self,
+        record: JsValue,
+    ) -> Result<String, JsError> {
+        let record =
+            serde_wasm_bindgen::from_value(record).map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(Self::serialize_event_log_storage_record(&record)?)
+    }
+
     #[wasm_bindgen(js_name = syncExternalEventLogRecords)]
     pub async fn sync_external_event_log_records_js(
         &mut self,

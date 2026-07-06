@@ -25,7 +25,7 @@ use nook_core::{
     project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
     union_remote_events_and_heads, verify_stored_vault_import,
 };
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 fn iso_timestamp() -> String {
@@ -36,38 +36,60 @@ fn iso_timestamp() -> String {
 #[serde(rename_all = "camelCase")]
 pub(in crate::manager) struct ExternalEventLogRecord {
     pub event_id: String,
-    #[serde(rename = "yaml", deserialize_with = "deserialize_event_yaml")]
     pub event: VaultEvent,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(in crate::manager) struct EventLogStorageRecord {
     pub event_id: String,
     pub path: String,
-    #[serde(rename = "yaml", serialize_with = "serialize_event_yaml")]
     pub event: VaultEvent,
 }
 
-fn deserialize_event_yaml<'de, D>(deserializer: D) -> Result<VaultEvent, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let yaml = String::deserialize(deserializer)?;
-    nook_core::parse_event_storage_bytes(yaml.as_bytes()).map_err(serde::de::Error::custom)
-}
-
-fn serialize_event_yaml<S>(event: &VaultEvent, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let bytes =
-        nook_core::serialize_event_storage_yaml(event).map_err(serde::ser::Error::custom)?;
-    let yaml = String::from_utf8(bytes).map_err(serde::ser::Error::custom)?;
-    serializer.serialize_str(&yaml)
-}
-
 impl NookVaultManager {
+    fn validate_event_record_id(
+        expected_event_id: &EventId,
+        event: &VaultEvent,
+    ) -> Result<(), nook_core::VaultError> {
+        let canonical_id = event.id()?;
+        if canonical_id != *expected_event_id {
+            return Err(nook_core::VaultError::Event(
+                nook_core::EventError::EventStoreIdMismatch {
+                    expected: canonical_id.as_str().to_owned(),
+                    actual: expected_event_id.as_str().to_owned(),
+                },
+            ));
+        }
+        Ok(())
+    }
+
+    pub(in crate::manager) fn parse_event_log_storage_record(
+        event_id: &str,
+        path: &str,
+        content: &str,
+    ) -> Result<EventLogStorageRecord, NookError> {
+        let event_id = EventId::parse(event_id)?;
+        let event = nook_core::parse_event_storage_bytes(content.as_bytes())?;
+        Self::validate_event_record_id(&event_id, &event)?;
+        Ok(EventLogStorageRecord {
+            event_id: event_id.as_str().to_owned(),
+            path: path.to_owned(),
+            event,
+        })
+    }
+
+    pub(in crate::manager) fn serialize_event_log_storage_record(
+        record: &EventLogStorageRecord,
+    ) -> Result<String, NookError> {
+        let event_id = EventId::parse(&record.event_id)?;
+        Self::validate_event_record_id(&event_id, &record.event)?;
+        let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
+        String::from_utf8(bytes).map_err(|e| {
+            NookError::Serialization(format!("Event storage content is not UTF-8: {e}"))
+        })
+    }
+
     pub(in crate::manager) async fn ensure_event_log_mode(&mut self) -> Result<bool, NookError> {
         if self.event_log_mode {
             if !is_event_log_mode().await? {
@@ -466,15 +488,7 @@ impl NookVaultManager {
             .into_iter()
             .map(|record| {
                 let event_id = EventId::parse(&record.event_id)?;
-                let canonical_id = record.event.id()?;
-                if canonical_id != event_id {
-                    return Err(nook_core::VaultError::Event(
-                        nook_core::EventError::EventStoreIdMismatch {
-                            expected: canonical_id.as_str().to_owned(),
-                            actual: event_id.as_str().to_owned(),
-                        },
-                    ));
-                }
+                Self::validate_event_record_id(&event_id, &record.event)?;
                 let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
                 Ok((event_id, bytes))
             })

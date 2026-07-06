@@ -17,6 +17,11 @@ represent them. Parse persisted/browser strings into typed Rust values as early
 as possible, serialize back only at I/O or JS boundaries, and reuse core types
 instead of duplicating structs/enums in WASM wrappers.
 
+Do not expose WASM DTO fields named `yaml` for event/vault records when the real
+payload is a typed domain value. Keep sync/merge DTOs typed, for example
+`event: VaultEvent`, and use explicit parse/serialize helpers only at browser
+file/provider read-write boundaries.
+
 Keep `nook-core` organized under domain module groups (`auth`, `crypto`,
 `secrets`, `sync`, `vault`). New domain files should go into the owning group;
 root `lib.rs` is the public export surface and internal compatibility alias

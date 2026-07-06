@@ -35,6 +35,11 @@ When you see `Option<T>`, ask:
 - Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings only when crossing storage, provider, or JS boundaries.
+- Do not expose WASM DTO fields named `yaml` for event/vault records when the
+  real payload is a typed domain value. Use typed fields such as
+  `event: VaultEvent` internally and across merge/sync APIs; add explicit
+  parse/serialize helpers for the narrow browser file/provider boundary that
+  must read or write YAML text.
 - Secret material that does not cross JS directly should use validated secret
   newtypes and avoid raw `String` storage. If a session cache still has to hold a
   string for WASM compatibility, convert from the typed value at the narrowest
@@ -109,8 +114,9 @@ struct LogEntry {
 }
 ```
 
-If web/storage JSON still uses `yaml` or `ts`, implement serde
-`serialize_with`/`deserialize_with` helpers that convert at the boundary.
+If a browser file/provider API still reads or writes YAML text, parse it into a
+typed Rust DTO before handing it to sync/domain code, and serialize the typed
+DTO back only at the file/provider write call.
 
 ## Scope
 
