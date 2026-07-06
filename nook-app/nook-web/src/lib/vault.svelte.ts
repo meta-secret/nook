@@ -151,6 +151,8 @@ export class VaultState {
   )
   oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined)
   googleOAuthBusy = $state(false)
+  icloudOAuthPreparing = $state(false)
+  icloudOAuthReady = $state(false)
   icloudOAuthBusy = $state(false)
 
   manager = $state<NookVaultManager | undefined>(undefined)
@@ -428,6 +430,10 @@ export class VaultState {
 
   async signInWithGoogle(): Promise<void> {
     return oauthActions.signInWithGoogle(this)
+  }
+
+  async prepareICloudSignIn(): Promise<void> {
+    return oauthActions.prepareICloudSignIn(this)
   }
 
   async signInWithICloud(): Promise<void> {

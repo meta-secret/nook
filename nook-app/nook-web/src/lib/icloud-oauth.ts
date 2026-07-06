@@ -100,10 +100,15 @@ declare global {
 }
 
 let initPromise: Promise<void> | undefined = undefined
+let authSetupPromise: Promise<CloudKitUserIdentity | undefined> | undefined =
+  undefined
+let authSetupUserIdentity: CloudKitUserIdentity | undefined = undefined
 
 /** @internal Clears module singletons between unit tests. */
 export function resetICloudAuthStateForTests(): void {
   initPromise = undefined
+  authSetupPromise = undefined
+  authSetupUserIdentity = undefined
 }
 
 export function isICloudOAuthConfigured(): boolean {
@@ -235,6 +240,39 @@ export async function initICloudAuth(): Promise<void> {
   return initPromise
 }
 
+function setUpCloudKitAuth(
+  container: CloudKitContainer,
+): Promise<CloudKitUserIdentity | undefined> {
+  if (authSetupPromise) {
+    return authSetupPromise
+  }
+  authSetupPromise = container
+    .setUpAuth({
+      grabAuthToken: true,
+      persist: true,
+    })
+    .then((userIdentity) => {
+      authSetupUserIdentity = userIdentity
+      return userIdentity
+    })
+    .catch((error: unknown) => {
+      authSetupPromise = undefined
+      authSetupUserIdentity = undefined
+      throw error
+    })
+  return authSetupPromise
+}
+
+export async function prepareICloudSignInControl(): Promise<void> {
+  await initICloudAuth()
+  const container = window.CloudKit!.getDefaultContainer()
+  try {
+    await setUpCloudKitAuth(container)
+  } catch (error) {
+    throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
+  }
+}
+
 function clickCloudKitSignInButton(): void {
   const mount = document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID)
   const control =
@@ -246,15 +284,23 @@ function clickCloudKitSignInButton(): void {
   control.click()
 }
 
+function requireStoredWebAuthToken(): ICloudOAuthTokens {
+  const token = readStoredWebAuthToken()
+  if (!token) {
+    throw new Error('iCloud sign-in did not return a web auth token.')
+  }
+  return { accessToken: token }
+}
+
 async function waitForCloudKitSignIn(
   container: CloudKitContainer,
   timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
-): Promise<void> {
+): Promise<CloudKitUserIdentity> {
   const signInPromise = container.whenUserSignsIn()
   clickCloudKitSignInButton()
   let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
   try {
-    await Promise.race([
+    const userIdentity = await Promise.race([
       signInPromise,
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(
@@ -263,6 +309,8 @@ async function waitForCloudKitSignIn(
         )
       }),
     ])
+    authSetupUserIdentity = userIdentity
+    return userIdentity
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   } finally {
@@ -272,6 +320,25 @@ async function waitForCloudKitSignIn(
   }
 }
 
+export function requestPreparedICloudWebAuthToken(
+  options: ICloudWebAuthTokenRequestOptions = {},
+): Promise<ICloudOAuthTokens> {
+  if (!window.CloudKit || !authSetupPromise) {
+    return Promise.reject(
+      new Error(
+        'Apple sign-in control is still loading. Try again in a moment.',
+      ),
+    )
+  }
+  if (authSetupUserIdentity) {
+    return Promise.resolve(requireStoredWebAuthToken())
+  }
+  const container = window.CloudKit.getDefaultContainer()
+  return waitForCloudKitSignIn(container, options.signInTimeoutMs).then(() =>
+    requireStoredWebAuthToken(),
+  )
+}
+
 export async function requestICloudWebAuthToken(
   options: ICloudWebAuthTokenRequestOptions = {},
 ): Promise<ICloudOAuthTokens> {
@@ -279,10 +346,7 @@ export async function requestICloudWebAuthToken(
   const container = window.CloudKit!.getDefaultContainer()
   let userIdentity: CloudKitUserIdentity | undefined
   try {
-    userIdentity = await container.setUpAuth({
-      grabAuthToken: true,
-      persist: true,
-    })
+    userIdentity = await setUpCloudKitAuth(container)
   } catch (error) {
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
@@ -291,11 +355,7 @@ export async function requestICloudWebAuthToken(
     await waitForCloudKitSignIn(container, options.signInTimeoutMs)
   }
 
-  const token = readStoredWebAuthToken()
-  if (!token) {
-    throw new Error('iCloud sign-in did not return a web auth token.')
-  }
-  return { accessToken: token }
+  return requireStoredWebAuthToken()
 }
 
 export function oauthTokensToICloudConfig(

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   isICloudOAuthConfigured,
   oauthTokensToICloudConfig,
+  prepareICloudSignInControl,
+  requestPreparedICloudWebAuthToken,
   requestICloudWebAuthToken,
   resetICloudAuthStateForTests,
 } from '$lib/icloud-oauth'
@@ -89,6 +91,41 @@ describe('icloud-oauth', () => {
       await vi.waitFor(() => {
         expect(whenUserSignsIn).toHaveBeenCalled()
       })
+
+      sessionStorage.setItem(
+        `nook.icloud.webAuthToken.${ICLOUD_CONTAINER_ID}`,
+        JSON.stringify('fresh-token'),
+      )
+      resolveSignIn({ lookupInfo: {} })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'fresh-token',
+      })
+    })
+
+    it('clicks the prepared CloudKit sign-in control without re-running setup', async () => {
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      const signInButton = document.querySelector<HTMLButtonElement>(
+        '#apple-sign-in-button button',
+      )
+      const clickSpy = vi.fn()
+      signInButton?.addEventListener('click', clickSpy)
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken()
+
+      expect(clickSpy).toHaveBeenCalledOnce()
+      expect(setUpAuth).toHaveBeenCalledTimes(1)
+      expect(whenUserSignsIn).toHaveBeenCalledOnce()
 
       sessionStorage.setItem(
         `nook.icloud.webAuthToken.${ICLOUD_CONTAINER_ID}`,
