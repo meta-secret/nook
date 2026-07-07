@@ -17,7 +17,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 * **Predictable Structure**: Each package has a strict layer of responsibility. We enforce a one-way dependency flow: `nook-core` (Rust logic) ➔ `nook-wasm` (bindgen) ➔ `nook-web` (UI). Any cross-layer leakage is disallowed.
 
 ## 4. Centralize Tooling behind a Single Command Surface
-* **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml` and `nook-app/.task/`. Agents do not run raw compiler, bundler, or environment commands. They call `task setup`, `task check`, `task build`, or `task web:dev`.
+* **Task runner as the API**: We use Taskfile as the single interface for all development tasks. The root `Taskfile.yml` is the repo entrypoint; app tasks live in `nook-app/Taskfile.yml`, cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Agents do not run raw compiler, bundler, or environment commands. They call `task setup`, `task check`, `task build`, or `task web:dev`.
 * **Containerized Toolchain**: All compiles, tests, and package installs run inside Docker to ensure environment parity between the host machine and GitHub Actions CI.
 
 ## 5. Pay Down Tech Debt Continuously

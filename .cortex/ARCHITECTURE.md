@@ -15,6 +15,9 @@ root/
 │   └── agentic-ai.yml    (repo-level agent tooling)
 └── nook-app/
     ├── Taskfile.yml      (app command surface)
+    ├── .task/            (cross-package app and CI task includes)
+    ├── docker/
+    │   └── Taskfile.yml  (Docker orchestration task include)
     ├── .task/            (app build/check/dev task fragments)
     ├── Cargo.toml
     ├── Cargo.lock
@@ -26,13 +29,20 @@ root/
     ├── nook-core/
     ├── nook-wasm/
     ├── nook-web/
-    └── nook-web-extension/
+    │   ├── Taskfile.yml  (web-family task include)
+    │   ├── .task/        (web, extension, and wasm task includes)
+    │   ├── nook-web-app/
+    │   ├── nook-web-extension/
+    │   └── nook-web-shared/
 +-------------------------------------------------------------+
-|                         nook-web                            |
+|                      nook-web-app                           |
 |             (Vite + Svelte 5 + TypeScript UI)               |
 +-------------------------------------------------------------+
 |                    nook-web-extension                       |
 |       (Manifest V3 extension UI, service worker, scripts)   |
++-------------------------------------------------------------+
+|                      nook-web-shared                        |
+|        (Source-only TS/Svelte shared presentation glue)      |
 +-------------------------------------------------------------+
                                |
                                v (consumes generated bindings)
@@ -90,7 +100,7 @@ root/
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
-### D. `nook-web` (The Web Presentation Layer)
+### D. `nook-web/nook-web-app` (The Web Presentation Layer)
 
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
@@ -102,11 +112,24 @@ root/
 - **`nook.ts`:** WASM loader + sync result mapping; vault secrets are `NookSecretRecord` wasm objects (no TS schema mirror).
 - **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
 
-### E. `nook-web-extension` (The Browser Extension Layer)
+### D2. `nook-web/nook-web-shared` (Shared TypeScript/Svelte Source)
 
-- **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web-extension/dist`; source lives under `nook-app/nook-web-extension/src`.
+- **Source-only package:** Shared TypeScript helpers and small Svelte presentation
+  primitives that are safe for both `nook-web-app` and `nook-web-extension`.
+- **No ownership of domain policy:** Shared TS/Svelte code may coordinate UI,
+  browser-page scanning, message DTOs, or wrapper helpers around WASM exports,
+  but it must not own vault format logic, crypto, validation, password
+  generation, or secret search. Those remain in `nook-core` and are exposed
+  through `nook-wasm`.
+- **No generated artifacts:** Generated WASM bindings continue to live under
+  `nook-web/nook-web-app/src/lib/nook-wasm`; extension builds may import them
+  explicitly from the sealed Docker image.
+
+### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
+
+- **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web/nook-web-extension/dist`; source lives under `nook-app/nook-web/nook-web-extension/src`.
 - **Separate product surface:** Popup UI, service worker, content scripts, and future autofill flows stay out of `nook-web` so extension-only browser privileges and page-injection code do not leak into the web app.
-- **Task/Docker integration:** `task extension:build` builds the extension in Docker; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
+- **Task/Docker integration:** `task extension:build` builds the extension in Docker; `task extension:test:e2e` runs the extension Playwright smoke; the sealed `nook-web:local` image also builds `nook-app/nook-web-extension/dist` at image time. Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
 - **Domain boundary:** The extension may consume WASM/domain APIs through explicit bridge modules when needed, but must not reimplement vault format logic, crypto, validation, password generation, or search filtering in TypeScript.
 
 ---
@@ -195,8 +218,9 @@ members:  members_key-encrypted catalog entries
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `nook-core` / `nook-auth2` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
-| `nook-web`  | Playwright e2e: `task web:test:e2e` (PR/main stub suite), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
+| `nook-web/nook-web-app`  | Playwright e2e: `task web:test:e2e` (PR/main stub suite), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |
+| `nook-web/nook-web-extension` | `task extension:check` for type/build validation; `task extension:test:e2e` for the Chromium extension smoke loaded from the packaged `dist` bundle |
 
 Domain logic changes **must** add or update Rust tests before merge. **Line coverage must stay at or above 90%** (`task rust:coverage:check`).
 
@@ -204,7 +228,7 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 ## 7. The Engineering Harness
 
-All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific build/check/dev commands live in `nook-app/Taskfile.yml` and `nook-app/.task/`, and are included into the root command surface. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload) and `task wasm:build:fast` (mounted no-opt WASM regeneration).
+All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload) and `task wasm:build:fast` (mounted no-opt WASM regeneration).
 
 ### Two image tiers
 
@@ -234,8 +258,8 @@ GitHub Actions **does not persist Docker named volumes** between jobs or workflo
 | Toolchain base image    | `cache-from` pulled by **every** build (local + CI). **Main** publishes the verified `:<git-commit>` image + cache (`ci:main:publish` -> `toolchain-push`). PR CI and local dev never publish.                                                                            |
 | Rust crate dependencies | **cargo-chef** (`cook --all-targets` + `cook --clippy --all-targets`) + clippy/test warm-up during the toolchain build. The chef planner copies only `Cargo.toml`/`Cargo.lock` plus dummy crate roots, so ordinary Rust source edits do not invalidate the dependency recipe.                                                               |
 | `nook-app/target/`      | Lives at the **default in-tree path** `/meta-secret/nook/nook-app/target` (= Rust workspace root). Baked warm into the toolchain base; the nook-web image COPYs source over the same workdir and reuses it (no dep recompile). No bind mount means nothing shadows it — so **no `CARGO_TARGET_DIR` override, no `/opt` gymnastics, no single-container hack**. |
-| `nook-app/nook-web/node_modules` | Installed in the `web-deps` bake target (parallel branch, own `cache-to` like `builder-deps`). BuildKit cache mount at `/opt/nook/bun-install-cache` during `bun install`. `web:dev` (mounted) runs `bun install` in its command.                                                                                                         |
-| Web wasm pkg            | Generated by `wasm-pack` in the wasm builder into `nook-app/nook-web/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY).                                                                                                                                         |
+| `nook-app/nook-web/nook-web-app/node_modules` | Installed in the `web-deps` bake target (parallel branch, own `cache-to` like `builder-deps`). BuildKit cache mount at `/opt/nook/bun-install-cache` during `bun install`. `web:dev` (mounted) runs `bun install` in its command.                                                                                                         |
+| Web wasm pkg            | Generated by `wasm-pack` in the wasm builder into `nook-app/nook-web/nook-web-app/src/lib/nook-wasm`; the nook-web image COPYs it from `builder-wasm` (gitignored/dockerignored, so it is not part of the source COPY).                                                                                                                                         |
 | Web dist                | Built at **nook-web image build time** (`bun run build`, `VITE_BASE` arg) so it is present in every container: the Cloudflare preview deploy (in-container) and the GitHub Pages upload (extracted via `task docker:extract:dist`) both read it.                                                                                          |
 | Playwright Chromium     | Pre-installed in `nook-base` (baked once; reruns only when base/Playwright version changes).                                                                                                                                                                                                                                              |
 | CI Docker builds        | **`task ci:pr`** (PR verify, in-container Cloudflare deploy, GitHub `github-pages` deployment status for the PR head SHA) / **`task ci:main:publish`** (main — `toolchain-push` after green verify, then `docker:extract:dist` for Pages).                                                                                               |

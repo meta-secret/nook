@@ -10,7 +10,7 @@ Use this workflow for feature work that touches more than one package.
 4. Consume generated WASM APIs directly when they are already ergonomic; add `nook-app/nook-web/src/lib` wrappers only for UI/browser glue, localization, or reactive state.
 5. Keep shadcn-svelte UI primitives and default styling in `nook-app/nook-web/src/lib/components/ui` and `nook-app/nook-web/src/app.css`.
 6. Add or update tests in the owning package (`nook-core` Rust tests for domain logic; Playwright for UI flows).
-7. Add new app routine commands to `nook-app/Taskfile.yml` or `nook-app/.task/`; add repo-level non-app commands to the root `Taskfile.yml` or root `.task/`.
+7. Add new app routine commands to the nearest owning Taskfile: web-family tasks under `nook-app/nook-web/Taskfile.yml` or `nook-app/nook-web/.task/`, Docker tasks under `nook-app/docker/Taskfile.yml`, cross-package app/CI tasks under `nook-app/.task/`, and repo-level non-app commands under the root `Taskfile.yml` or root `.task/`.
 8. Update `.cortex` docs when architecture or workflow changes.
 9. Verify with `task check`.
 

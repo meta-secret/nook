@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build nook-app/nook-web/dist for e2e preview when missing or stale.
+# Build nook-app/nook-web/nook-web-app/dist for e2e preview when missing or stale.
 # Skips vite when dist matches e2e env vars and app sources are unchanged.
 #
 # Env:
@@ -10,7 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-DIST="nook-app/nook-web/dist"
+WEB_ROOT="nook-app/nook-web/nook-web-app"
+DIST="$WEB_ROOT/dist"
 STAMP="$DIST/.nook-e2e-build-stamp"
 INDEX="$DIST/index.html"
 
@@ -41,11 +42,11 @@ else
   elif [[ ! -f "$STAMP" ]] || [[ "$(cat "$STAMP")" != "$inputs_hash" ]]; then
     need=1
   elif find \
-    nook-app/nook-web/src \
-    nook-app/nook-web/index.html \
-    nook-app/nook-web/vite.config.ts \
-    nook-app/nook-web/svelte.config.js \
-    nook-app/nook-web/src/lib/nook-wasm/nook_wasm_bg.wasm \
+    "$WEB_ROOT/src" \
+    "$WEB_ROOT/index.html" \
+    "$WEB_ROOT/vite.config.ts" \
+    "$WEB_ROOT/svelte.config.js" \
+    "$WEB_ROOT/src/lib/nook-wasm/nook_wasm_bg.wasm" \
     -newer "$INDEX" \
     -print -quit 2>/dev/null | grep -q .; then
     need=1
@@ -54,7 +55,7 @@ fi
 
 if [[ "$need" -eq 1 ]]; then
   echo "==> e2e dist stale or missing — running vite build"
-  (cd nook-app/nook-web && bun run build)
+  (cd "$WEB_ROOT" && bun run build)
   mkdir -p "$DIST"
   printf '%s' "$inputs_hash" >"$STAMP"
 else

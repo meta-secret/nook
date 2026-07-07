@@ -2,7 +2,7 @@
 
 # PARALLEL BRANCHES merged into one toolchain. Two independent inputs must not serialize:
 #   - RUST branch (builder-deps -> builder-debug -> builder-wasm): owns the multi-GB target/ and
-#     produces the small generated wasm pkg (nook-app/nook-web/src/lib/nook-wasm). Keyed on Rust source.
+#     produces the small generated wasm pkg (nook-app/nook-web/nook-web-app/src/lib/nook-wasm). Keyed on Rust source.
 #   - WEB branch (web-deps): `bun install` -> node_modules. Keyed ONLY on package.json + bun.lock.
 # In the old linear chain the web branch sat ON TOP of the rust chain, so a Rust edit needlessly
 # re-ran `bun install` and the two never built concurrently. Here they are SEPARATE branches off the
@@ -14,18 +14,18 @@
 #   - Rust edit  -> rust branch rebuilds; web-deps stays cached (only the node_modules COPY re-runs).
 #   - JS dep bump -> web-deps rebuilds; the whole rust branch stays cached.
 # Contexts (nook-base, builder-wasm) are injected by bake (see nook-app/docker/toolchain.docker-bake.hcl).
-# This `toolchain` stage is the base for the sealed nook-web image (nook-app/nook-web/Dockerfile).
+# This `toolchain` stage is the base for the sealed nook-web image (nook-app/nook-web/nook-web-app/Dockerfile).
 
 # --- WEB branch: node_modules only, independent of Rust (builds in parallel with the rust chain) ---
 FROM nook-base AS web-deps
 
-COPY nook-app/nook-web/package.json nook-app/nook-web/bun.lock ./nook-app/nook-web/
+COPY nook-app/nook-web/nook-web-app/package.json nook-app/nook-web/nook-web-app/bun.lock ./nook-app/nook-web/nook-web-app/
 RUN --mount=type=cache,target=/opt/nook/bun-install-cache,sharing=locked \
-    cd nook-app/nook-web && bun install --frozen-lockfile
+    cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
 
 # --- Merge: rust lineage (target/ + wasm pkg in place) + web node_modules copied in cheaply ---
 FROM builder-wasm AS toolchain
 
 WORKDIR /meta-secret/nook
 
-COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/node_modules /meta-secret/nook/nook-app/nook-web/node_modules
+COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules

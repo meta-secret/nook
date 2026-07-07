@@ -1,0 +1,131 @@
+version: "3"
+
+tasks:
+  extension:build:
+    desc: Build the browser extension in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _extension:build }
+
+  extension:check:
+    desc: Type-check and build the browser extension in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _extension:check }
+
+  extension:test:e2e:
+    desc: Run browser extension Playwright e2e in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _extension:test:e2e }
+
+  extension:format:
+    desc: Format the browser extension in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _extension:format }
+
+  extension:format:check:
+    desc: Check browser extension formatting in Docker.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _extension:format:check }
+
+  extension:package:
+    desc: Build and zip the browser extension for distribution.
+    cmds:
+      - task: extension:build
+      - task: docker:extract:extension
+      - >-
+        bash -c 'set -euo pipefail;
+        version="$(jq -r ".version" "{{.EXTENSION_ROOT}}/package.json")";
+        zip_name="nook-web-extension-${version}.zip";
+        zip_path="{{.EXTENSION_ROOT}}/dist/${zip_name}";
+        rm -f "$zip_path";
+        cd "{{.EXTENSION_ROOT}}/dist";
+        zip -r "$zip_name" . -x "$zip_name" >/dev/null;
+        test "$(unzip -Z1 "$zip_name" | grep -c "^manifest.json$")" -eq 1;
+        printf "Packaged %s\n" "$zip_path";'
+
+  extension:install:local:
+    desc: Copy the packaged extension to a stable local Nook install directory.
+    cmds:
+      - task: extension:package
+      - >-
+        bash -c 'set -euo pipefail;
+        version="$(jq -r ".version" "{{.EXTENSION_ROOT}}/package.json")";
+        zip_name="nook-web-extension-${version}.zip";
+        release_root="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}";
+        unpacked_dir="$release_root/current";
+        releases_dir="$release_root/releases";
+        rm -rf "$unpacked_dir";
+        mkdir -p "$unpacked_dir" "$releases_dir";
+        cp -R "{{.EXTENSION_ROOT}}/dist/." "$unpacked_dir/";
+        rm -f "$unpacked_dir"/nook-web-extension-*.zip;
+        cp "{{.EXTENSION_ROOT}}/dist/$zip_name" "$releases_dir/$zip_name";
+        printf "Copied unpacked extension to %s\n" "$unpacked_dir";
+        printf "Copied release zip to %s\n" "$releases_dir/$zip_name";'
+
+  extension:run:chrome:
+    desc: Launch Google Chrome with the local unpacked extension in an isolated dev profile.
+    cmds:
+      - task: extension:install:local
+      - >-
+        bash -c 'set -euo pipefail;
+        app="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}";
+        extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
+        profile_dir="${NOOK_CHROME_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/chrome-extension-dev}";
+        test -x "$app" || { echo "Google Chrome binary not found at $app" >&2; exit 1; };
+        mkdir -p "$profile_dir";
+        "$app" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank >/dev/null 2>&1 &
+        printf "Launched Chrome with %s\n" "$extension_dir";'
+
+  extension:run:brave:
+    desc: Launch Brave with the local unpacked extension in an isolated dev profile.
+    cmds:
+      - task: extension:install:local
+      - >-
+        bash -c 'set -euo pipefail;
+        app="${BRAVE_BIN:-/Applications/Brave Browser.app/Contents/MacOS/Brave Browser}";
+        extension_dir="${NOOK_EXTENSION_RELEASE_DIR:-$HOME/Library/Application Support/Nook/browser-extensions/nook-web-extension}/current";
+        profile_dir="${NOOK_BRAVE_EXTENSION_PROFILE_DIR:-$HOME/Library/Application Support/Nook/browser-profiles/brave-extension-dev}";
+        test -x "$app" || { echo "Brave binary not found at $app" >&2; exit 1; };
+        mkdir -p "$profile_dir";
+        "$app" --user-data-dir="$profile_dir" --load-extension="$extension_dir" about:blank >/dev/null 2>&1 &
+        printf "Launched Brave with %s\n" "$extension_dir";'
+
+  _extension:build:
+    desc: Build the browser extension.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run build
+
+  _extension:check:
+    desc: Type-check and build the browser extension.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run check
+      - cd "{{.EXTENSION_ROOT}}" && bun run build
+
+  _extension:test:e2e:
+    desc: Run browser extension Playwright e2e.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
+
+  _extension:format:
+    desc: Format the browser extension.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run format
+
+  _extension:format:check:
+    desc: Check browser extension formatting.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bun run format:check

@@ -111,7 +111,7 @@ Legacy script aliases: `test:e2e:local` → `e2e-pr`, `test:e2e:sync-stub` → `
 
 ## Task commands (Docker)
 
-All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands live in `nook-app/Taskfile.yml` and `nook-app/.task/`, and are included into the root command surface:
+All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands are included through `nook-app/Taskfile.yml`, with cross-package app tasks in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`:
 
 ```bash
 # Minimum local final gate after final-validation push

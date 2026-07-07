@@ -4,8 +4,10 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   APP_ROOT: '{{.REPO_ROOT}}/nook-app'
-  WEB_ROOT: '{{.APP_ROOT}}/nook-web'
-  EXTENSION_ROOT: '{{.APP_ROOT}}/nook-web-extension'
+  WEB_GROUP_ROOT: '{{.APP_ROOT}}/nook-web'
+  WEB_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-app'
+  EXTENSION_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-extension'
+  WEB_SHARED_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-shared'
   DOCKER: '{{default "docker" .DOCKER}}'
   # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that, with the
   # containerd image store, the build result is written STRAIGHT into the image store — no 9 GB
@@ -32,7 +34,7 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/nook-core/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-wasm/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
-    -f {{.REPO_ROOT}}/nook-app/nook-web/docker-bake.hcl
+    -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   # ci sets TOOLCHAIN_REGISTRY so bake reuses GHCR :buildcache; dev builds locally.
@@ -42,7 +44,7 @@ vars:
 
 includes:
   docker:
-    taskfile: .task/docker.yml
+    taskfile: docker/Taskfile.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
   ci:
@@ -53,16 +55,8 @@ includes:
     taskfile: .task/core.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
-  wasm:
-    taskfile: .task/wasm.yml
-    dir: '{{.REPO_ROOT}}'
-    flatten: true
   web:
-    taskfile: .task/web.yml
-    dir: '{{.REPO_ROOT}}'
-    flatten: true
-  extension:
-    taskfile: .task/extension.yml
+    taskfile: nook-web/Taskfile.yml
     dir: '{{.REPO_ROOT}}'
     flatten: true
 

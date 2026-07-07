@@ -1,7 +1,7 @@
 # Nook
 
 <p align="center">
-  <img src="nook-app/nook-web/public/nook-logo-dark-transparent.png" alt="Nook logo" width="240">
+  <img src="nook-app/nook-web/nook-web-app/public/nook-logo-dark-transparent.png" alt="Nook logo" width="240">
 </p>
 
 [GitHub repository](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
@@ -186,9 +186,9 @@ it does not become the authority that can decrypt it.
 App code lives under `nook-app/`. The app packages keep a strict one-way dependency flow:
 
 ```text
-nook-web  →  nook-wasm  →  nook-core
- Svelte       browser       pure Rust
-   UI        I/O bridge    domain logic
+nook-web-app  →  nook-wasm  →  nook-core
+ Svelte app      browser       pure Rust
+     UI         I/O bridge    domain logic
 ```
 
 - **`nook-core`** — typed secret model, YAML vault format, age encryption,
@@ -197,8 +197,12 @@ nook-web  →  nook-wasm  →  nook-core
 - **`nook-wasm`** — `wasm-bindgen` bridge and session manager. It connects the core
   to IndexedDB and the GitHub REST API, caches encrypted records, and exposes small
   JavaScript-friendly operations.
-- **`nook-web`** — Svelte 5 and TypeScript presentation layer. It owns forms,
+- **`nook-web/nook-web-app`** — Svelte 5 and TypeScript presentation layer. It owns forms,
   provider selection, reactive state, clipboard actions, and the vault UI.
+- **`nook-web/nook-web-extension`** — browser extension popup, service worker,
+  content scripts, and extension e2e smoke tests.
+- **`nook-web/nook-web-shared`** — source-only TypeScript/Svelte glue shared by
+  the app and extension.
 
 The incremental save path encrypts only the changed item. Unchanged ciphertext is
 kept in an armored cache and reused when the YAML vault is serialized again.
@@ -221,8 +225,10 @@ Prerequisites:
 - [Task](https://taskfile.dev/)
 
 The root `Taskfile.yml` is the repository entrypoint. App-specific commands live
-in `nook-app/Taskfile.yml` and `nook-app/.task/`, and are flattened into the root
-Taskfile so commands work from the repo root or from `nook-app/`. Rust, Bun,
+in `nook-app/Taskfile.yml`; cross-cutting app tasks stay in `nook-app/.task/`,
+Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family
+tasks live in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`.
+They are flattened into the root Taskfile so commands work from the repo root or from `nook-app/`. Rust, Bun,
 wasm-pack, and other build tools run inside the project container.
 
 ```sh
@@ -251,12 +257,13 @@ task web:test:e2e          # complete Playwright suite; GitHub PAT required
 ```
 
 GitHub end-to-end tests read `NOOK_GITHUB_PAT` from the environment or
-`nook-app/nook-web/.env.test.local`; see `nook-app/nook-web/.env.test.example`. Test repositories are
+`nook-app/nook-web/nook-web-app/.env.test.local`; see `nook-app/nook-web/nook-web-app/.env.test.example`. Test repositories are
 cleaned up automatically.
 
 Architecture changes should begin in the lowest appropriate layer. Portable domain
 logic belongs in `nook-core`, browser I/O in `nook-wasm`, and presentation behavior
-in `nook-web`. CI enforces formatting, Clippy warnings, Rust tests, Svelte and
+in `nook-web/nook-web-app`, `nook-web/nook-web-extension`, or `nook-web/nook-web-shared`
+depending on the browser surface. CI enforces formatting, Clippy warnings, Rust tests, Svelte and
 TypeScript diagnostics, ESLint, Prettier, Vitest, and production builds.
 
 ### Rust dependency cache

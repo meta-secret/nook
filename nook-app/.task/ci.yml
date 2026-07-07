@@ -2,7 +2,7 @@ version: "3"
 
 tasks:
   ci:pr:
-    desc: PR CI — one container for format/verify/build/e2e (source + warm target/ baked in the nook-web image).
+    desc: PR CI — one container for format/verify/build/web e2e/extension e2e (source + warm target/ baked in the nook-web image).
     deps:
       - setup
     cmds:
@@ -10,11 +10,12 @@ tasks:
         vars: { TASK: _ci:pr }
 
   ci:pr:e2e:
-    desc: Full stub Playwright e2e for PRs (when dist/wasm already built in the same job).
+    desc: Full stub web Playwright e2e plus extension e2e for PRs.
     cmds:
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
       - task: web:e2e:build-dist
       - task: web:test:e2e:parallel
+      - task: extension:test:e2e
 
   ci:pr:e2e:local:
     desc: Alias for ci:pr:e2e.
@@ -22,7 +23,7 @@ tasks:
       - task: ci:pr:e2e
 
   ci:main:
-    desc: Main branch CI — one container for format/verify/build/e2e (source + warm target/ baked in the nook-web image).
+    desc: Main branch CI — one container for format/verify/build/web e2e/extension e2e (source + warm target/ baked in the nook-web image).
     deps:
       - setup
     cmds:
@@ -51,9 +52,10 @@ tasks:
       - task: ci:main
 
   ci:main:e2e:
-    desc: Full stub Playwright e2e when wasm/dist already built (same job container).
+    desc: Full stub web Playwright e2e plus extension e2e when wasm/dist already built.
     cmds:
       - task: web:test:e2e:parallel
+      - task: extension:test:e2e
 
   ci:main:e2e:parallel:
     desc: Alias for ci:main:e2e.
@@ -138,7 +140,7 @@ tasks:
         vars: { TASK: _verify }
 
   _ci:pr:
-    desc: PR gate — format, wasm (image-seeded), verify ‖ build, full stub e2e, restore prod dist (one container).
+    desc: PR gate — format, wasm (image-seeded), verify ‖ build, full stub web e2e, extension e2e, restore prod dist (one container).
     cmds:
       - task: _format:check
       - task: _ci:pr:parallel
@@ -146,6 +148,7 @@ tasks:
       - task: _web:e2e:build-dist
       - task: _web:test:e2e:parallel
       - task: _web:e2e:restore-prod-dist
+      - task: _extension:test:e2e
 
   _ci:pr:parallel:
     desc: Lint/test ‖ production web build after wasm is ready.
@@ -160,13 +163,14 @@ tasks:
       - task: _ci:pr:parallel
 
   _ci:main:
-    desc: Main gate — format, wasm, verify ‖ build, stub e2e, restore prod dist.
+    desc: Main gate — format, wasm, verify ‖ build, stub web e2e, extension e2e, restore prod dist.
     cmds:
       - task: _ci:main:build
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
       - task: _web:e2e:build-dist
       - task: _web:test:e2e:parallel
       - task: _web:e2e:restore-prod-dist
+      - task: _extension:test:e2e
 
   _ci:nightly:e2e:
     desc: Nightly live sync e2e after full main build in one container.

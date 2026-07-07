@@ -1,0 +1,15 @@
+version: "3"
+
+includes:
+  wasm:
+    taskfile: .task/wasm.yml
+    dir: "{{.REPO_ROOT}}"
+    flatten: true
+  web:
+    taskfile: .task/web.yml
+    dir: "{{.REPO_ROOT}}"
+    flatten: true
+  extension:
+    taskfile: .task/extension.yml
+    dir: "{{.REPO_ROOT}}"
+    flatten: true
