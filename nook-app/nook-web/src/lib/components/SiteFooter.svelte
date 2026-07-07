@@ -15,7 +15,7 @@
   </a>
   <span aria-hidden="true">·</span>
   <a
-    href={appPath('/privacy')}
+    href={appPath('/privacy.html')}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-privacy-link"
   >
@@ -23,7 +23,7 @@
   </a>
   <span aria-hidden="true">·</span>
   <a
-    href={appPath('/terms')}
+    href={appPath('/terms.html')}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-terms-link"
   >
