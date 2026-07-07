@@ -1155,3 +1155,104 @@ pub(crate) fn security_conflicts_to_vec(
         })
         .collect()
 }
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct NookVaultAccessReport {
+    device_id: String,
+    auth_id: String,
+    key_status: String,
+    key_explanation: String,
+    current_epoch: Option<String>,
+    auth_key_ids_json: String,
+    epoch_history_json: String,
+    secrets_json: String,
+    events_json: String,
+    warnings_json: String,
+}
+
+#[wasm_bindgen]
+impl NookVaultAccessReport {
+    #[wasm_bindgen(getter, js_name = deviceId)]
+    pub fn device_id(&self) -> String {
+        self.device_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = authId)]
+    pub fn auth_id(&self) -> String {
+        self.auth_id.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = keyStatus)]
+    pub fn key_status(&self) -> String {
+        self.key_status.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = keyExplanation)]
+    pub fn key_explanation(&self) -> String {
+        self.key_explanation.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = currentEpoch)]
+    pub fn current_epoch(&self) -> Option<String> {
+        self.current_epoch.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = authKeyIdsJson)]
+    pub fn auth_key_ids_json(&self) -> String {
+        self.auth_key_ids_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = epochHistoryJson)]
+    pub fn epoch_history_json(&self) -> String {
+        self.epoch_history_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = secretsJson)]
+    pub fn secrets_json(&self) -> String {
+        self.secrets_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = eventsJson)]
+    pub fn events_json(&self) -> String {
+        self.events_json.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = warningsJson)]
+    pub fn warnings_json(&self) -> String {
+        self.warnings_json.clone()
+    }
+
+    pub(crate) fn from_core(
+        report: nook_core::VaultAccessDiagnosticsReport,
+    ) -> Result<Self, NookError> {
+        let auth_key_ids_json = serde_json::to_string(
+            &report
+                .auth_key_ids
+                .iter()
+                .map(|auth_id| auth_id.as_str().to_owned())
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let epoch_history_json = serde_json::to_string(&report.epoch_history)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let secrets_json = serde_json::to_string(&report.secrets)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let events_json = serde_json::to_string(&report.events)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let warnings_json = serde_json::to_string(&report.warnings)
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        Ok(Self {
+            device_id: report.key_access.device_id.as_str().to_owned(),
+            auth_id: report.key_access.auth_id.as_str().to_owned(),
+            key_status: report.key_access.status.as_str().to_owned(),
+            key_explanation: report.key_access.explanation,
+            current_epoch: report.current_epoch,
+            auth_key_ids_json,
+            epoch_history_json,
+            secrets_json,
+            events_json,
+            warnings_json,
+        })
+    }
+}

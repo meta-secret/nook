@@ -20,6 +20,7 @@
 
 mod connect;
 mod device_protection;
+mod diagnostics;
 mod event_log;
 mod multi_device;
 mod password;
