@@ -23,10 +23,11 @@ use crate::storage::local_folder::{
     LocalFolderEventWrite, read_local_folder_event_files, write_local_folder_event_files,
 };
 use nook_core::{
-    AppendEventInput, EventId, SigningIdentity, VaultEvent, VaultOperation,
-    apply_user_records_to_armored_session, build_signed_event, members_checkpoint_hash_from_roster,
-    project_vault, rewrap_vault_meta_for_epoch, stored_vault_to_import_event,
-    union_remote_events_and_heads, verify_stored_vault_import,
+    AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
+    VaultOperation, apply_user_records_to_armored_session, build_signed_event,
+    classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
+    rewrap_vault_meta_for_epoch, stored_vault_to_import_event, union_remote_events_and_heads,
+    verify_stored_vault_import,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -339,6 +340,71 @@ impl NookVaultManager {
         Ok(())
     }
 
+    fn provider_store_mismatch_error(
+        provider_label: &str,
+        local_store_id: &str,
+        remote_store_id: &str,
+    ) -> NookError {
+        NookError::Database(format!(
+            "{provider_label} already contains another vault (local store_id {local_store_id}, provider store_id {remote_store_id}). Choose which vault to use before syncing."
+        ))
+    }
+
+    fn provider_multiple_stores_error(provider_label: &str, store_ids: &[String]) -> NookError {
+        NookError::Database(format!(
+            "{provider_label} contains multiple vault event logs (store_id: {}). Use a dedicated provider path for one vault before syncing.",
+            store_ids.join(", ")
+        ))
+    }
+
+    fn guard_remote_event_log_classification(
+        provider_label: &str,
+        classification: &RemoteEventLogClassification,
+    ) -> Result<(), NookError> {
+        match classification {
+            RemoteEventLogClassification::Empty
+            | RemoteEventLogClassification::SameStore { .. } => Ok(()),
+            RemoteEventLogClassification::DifferentStore {
+                local_store_id,
+                remote_store_id,
+            } => Err(Self::provider_store_mismatch_error(
+                provider_label,
+                local_store_id,
+                remote_store_id,
+            )),
+            RemoteEventLogClassification::MultipleStores { store_ids } => Err(
+                Self::provider_multiple_stores_error(provider_label, store_ids),
+            ),
+        }
+    }
+
+    async fn fetch_current_provider_events(
+        &self,
+        event_ids: impl IntoIterator<Item = EventId>,
+    ) -> Result<Vec<(EventId, Vec<u8>)>, NookError> {
+        let mut events = Vec::new();
+        for event_id in event_ids {
+            let bytes = self.fetch_current_provider_event(&event_id).await?;
+            events.push((event_id, bytes));
+        }
+        Ok(events)
+    }
+
+    async fn guard_current_provider_writable_for_active_store(
+        &self,
+        remote_ids: &BTreeSet<EventId>,
+    ) -> Result<(), NookError> {
+        if self.vault.store_id.trim().is_empty() || remote_ids.is_empty() {
+            return Ok(());
+        }
+        let remote_events = self
+            .fetch_current_provider_events(remote_ids.iter().cloned())
+            .await?;
+        let classification =
+            classify_remote_event_log(&remote_events, Some(self.vault.store_id.as_str()))?;
+        Self::guard_remote_event_log_classification("Sync provider", &classification)
+    }
+
     pub(in crate::manager) async fn flush_sync_event_outbox(&mut self) -> Result<(), NookError> {
         if self.storage.mode != nook_core::StorageMode::Local {
             return self.flush_event_outbox().await;
@@ -361,6 +427,8 @@ impl NookVaultManager {
         }
         let provider_id = self.local_cache_ref();
         let mut remote_ids = self.list_current_provider_event_ids().await?;
+        self.guard_current_provider_writable_for_active_store(&remote_ids)
+            .await?;
         let pending = load_outbox(&provider_id).await?;
         for (raw_id, bytes) in pending {
             let event_id = EventId::parse(&raw_id)?;
@@ -397,8 +465,7 @@ impl NookVaultManager {
         if self.vault.store_id.is_empty() {
             let mut discovered_store_ids = BTreeSet::new();
             let mut fetched = Vec::new();
-            for event_id in remote_ids {
-                let bytes = self.fetch_current_provider_event(&event_id).await?;
+            for (event_id, bytes) in self.fetch_current_provider_events(remote_ids).await? {
                 let store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
                 let store_id = store_id.as_str().to_owned();
                 discovered_store_ids.insert(store_id.clone());
@@ -429,11 +496,14 @@ impl NookVaultManager {
                 .event_ids()
                 .into_iter()
                 .collect();
-            for event_id in remote_ids {
+            let fetched = self.fetch_current_provider_events(remote_ids).await?;
+            let classification =
+                classify_remote_event_log(&fetched, Some(self.vault.store_id.as_str()))?;
+            Self::guard_remote_event_log_classification("Sync provider", &classification)?;
+            for (event_id, bytes) in fetched {
                 if local_ids.contains(&event_id) {
                     continue;
                 }
-                let bytes = self.fetch_current_provider_event(&event_id).await?;
                 if !nook_core::remote_event_belongs_to_store(
                     &event_id,
                     &bytes,
@@ -536,6 +606,9 @@ impl NookVaultManager {
                 .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect();
         } else {
+            let classification =
+                classify_remote_event_log(&parsed_records, Some(self.vault.store_id.as_str()))?;
+            Self::guard_remote_event_log_classification("Backup folder", &classification)?;
             for (event_id, bytes) in parsed_records {
                 if !nook_core::remote_event_belongs_to_store(
                     &event_id,

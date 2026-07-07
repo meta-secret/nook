@@ -10,6 +10,23 @@ use crate::vault_event_graph::{EventGraph, EventInsertStatus};
 use crate::vault_ids::StoreId;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Provider event-log classification before a connect/sync path mutates remote
+/// state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteEventLogClassification {
+    Empty,
+    SameStore {
+        store_id: String,
+    },
+    DifferentStore {
+        local_store_id: String,
+        remote_store_id: String,
+    },
+    MultipleStores {
+        store_ids: Vec<String>,
+    },
+}
+
 /// Local event persistence surface (`IndexedDB` / provider adapters implement I/O).
 #[derive(Debug, Clone, Default)]
 pub struct LocalEventStore {
@@ -185,6 +202,55 @@ pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> VaultResult<St
     Ok(event.body.store_id)
 }
 
+/// Classify remote provider events before any local event is written back.
+///
+/// Providers should fail closed when they contain another logical vault. An
+/// empty active `store_id` means the device may adopt a single provider vault,
+/// but multiple provider vaults are ambiguous and must not be auto-merged.
+pub fn classify_remote_event_log(
+    remote_events: &[(EventId, Vec<u8>)],
+    active_store_id: Option<&str>,
+) -> VaultResult<RemoteEventLogClassification> {
+    let mut remote_store_ids = BTreeSet::new();
+    for (event_id, bytes) in remote_events {
+        remote_store_ids.insert(remote_event_store_id(event_id, bytes)?.as_str().to_owned());
+    }
+
+    if remote_store_ids.is_empty() {
+        return Ok(RemoteEventLogClassification::Empty);
+    }
+
+    let active_store_id = active_store_id
+        .map(str::trim)
+        .filter(|store_id| !store_id.is_empty());
+
+    if remote_store_ids.len() > 1 {
+        return Ok(RemoteEventLogClassification::MultipleStores {
+            store_ids: remote_store_ids.into_iter().collect(),
+        });
+    }
+
+    let remote_store_id =
+        remote_store_ids
+            .into_iter()
+            .next()
+            .ok_or_else(|| EventError::MissingEvent {
+                event_id: "provider-store-id".to_owned(),
+            })?;
+
+    match active_store_id {
+        Some(local_store_id) if local_store_id != remote_store_id => {
+            Ok(RemoteEventLogClassification::DifferentStore {
+                local_store_id: local_store_id.to_owned(),
+                remote_store_id,
+            })
+        }
+        _ => Ok(RemoteEventLogClassification::SameStore {
+            store_id: remote_store_id,
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,6 +318,10 @@ mod tests {
             }],
         };
         VaultEvent::sign(body, signing_key)
+    }
+
+    fn remote_record(event: &VaultEvent) -> VaultResult<(EventId, Vec<u8>)> {
+        Ok((event.id()?, serialize_event_storage_yaml(event)?))
     }
 
     #[test]
@@ -392,6 +462,92 @@ mod tests {
         assert!(matches!(
             err,
             crate::VaultError::Event(crate::EventError::RemoteEventIdMismatch { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn classify_remote_event_log_allows_empty_provider() -> VaultResult<()> {
+        assert_eq!(
+            classify_remote_event_log(&[], Some(STORE))?,
+            RemoteEventLogClassification::Empty
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn classify_remote_event_log_allows_same_store() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let genesis = genesis(&signing_key)?;
+        let remote = vec![remote_record(&genesis)?];
+
+        assert_eq!(
+            classify_remote_event_log(&remote, Some(STORE))?,
+            RemoteEventLogClassification::SameStore {
+                store_id: STORE.to_owned()
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn classify_remote_event_log_adopts_single_store_when_local_empty() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let remote = vec![remote_record(&genesis_for_store(
+            &signing_key,
+            "store_otherstore1",
+        )?)?];
+
+        assert_eq!(
+            classify_remote_event_log(&remote, None)?,
+            RemoteEventLogClassification::SameStore {
+                store_id: "store_otherstore1".to_owned()
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn classify_remote_event_log_blocks_different_store() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let remote = vec![remote_record(&genesis_for_store(
+            &signing_key,
+            "store_otherstore1",
+        )?)?];
+
+        assert_eq!(
+            classify_remote_event_log(&remote, Some(STORE))?,
+            RemoteEventLogClassification::DifferentStore {
+                local_store_id: STORE.to_owned(),
+                remote_store_id: "store_otherstore1".to_owned()
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn classify_remote_event_log_blocks_multiple_stores() -> VaultResult<()> {
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let local = remote_record(&genesis(&signing_key)?)?;
+        let remote = remote_record(&genesis_for_store(&signing_key, "store_otherstore1")?)?;
+
+        assert_eq!(
+            classify_remote_event_log(&[local, remote], Some(STORE))?,
+            RemoteEventLogClassification::MultipleStores {
+                store_ids: vec!["store_otherstore1".to_owned(), STORE.to_owned()]
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn classify_remote_event_log_fails_closed_on_unreadable_event() -> VaultResult<()> {
+        let event_id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+        let err = classify_remote_event_log(&[(event_id, b"not event yaml".to_vec())], Some(STORE))
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            crate::VaultError::Event(crate::EventError::ParseRemoteEvent(_))
         ));
         Ok(())
     }

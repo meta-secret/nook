@@ -409,7 +409,10 @@ export async function connectAndSyncStagedProvider(
       state.errorMsg = 'Choose a cloud sync provider.'
       return
     }
-    await state.syncProviderById(provider.id, { quiet: true })
+    await state.syncProviderById(provider.id, {
+      quiet: true,
+      propagateError: true,
+    })
     state.loginSetupType = undefined
     state.addProviderOpen = false
   } catch (e: unknown) {
