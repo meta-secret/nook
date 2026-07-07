@@ -2,6 +2,30 @@
 
 Use this checklist for every change that lands on `main`. **AI agents must follow [coding-bro.md](coding-bro.md)** — the default implement-to-merge pipeline — and the detailed [agent pipeline](#agent-pipeline) below. Do not stop at push.
 
+## PR-first agent contract
+
+For implementation tasks, the agent's default job is not "make local edits"; it
+is "land a reviewed, green PR." Start by establishing the PR path, then keep
+ownership until merge or an explicit blocked handoff:
+
+1. **Prepare the PR path first** — fetch `origin/main`, create a feature branch,
+   and define the PR title/body/scope before coding.
+2. **Implement functionality** — make the requested code/docs/tests changes on
+   the feature branch with focused local checks while iterating.
+3. **Push and create/update the PR** — push a coherent commit and open the PR;
+   later fixes update that same PR.
+4. **Monitor the PR** — watch GitHub Actions, required deployments, and review
+   feedback until the PR is genuinely ready.
+5. **Fix failed GitHub Actions** — inspect failed logs, consult app logs for
+   web/e2e failures, fix locally, push the completed fix, and re-watch CI until
+   green.
+6. **Address comments** — reply to actionable human, CodeRabbit, and automated
+   comments with the fix, validation, or no-change rationale, then push any
+   needed changes and re-watch checks.
+7. **Merge when ready and green** — after the branch is current with
+   `origin/main`, all required checks/deployments are green, and comments are
+   handled, squash-merge the PR when the user asked for merge-on-green.
+
 ## ⛔ SQUASH MERGE ONLY
 
 **Every PR merged into `main` MUST be squash-merged.**
@@ -23,19 +47,21 @@ Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for auto
 
 ```mermaid
 flowchart TD
-  Z[0 Fetch origin/main] --> A[1 Branch + implement]
-  A --> CR[2 CodeRabbit when useful]
-  CR --> E[3 Push + open/update PR]
-  E --> B[4 Local validation: check / e2e / ci:pr]
-  E --> F[5 Monitor PR CI + review]
+  Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
+  A --> I[2 Implement]
+  I --> CR[3 CodeRabbit when useful]
+  CR --> E[4 Push + open/update PR]
+  E --> B[5 Local validation: check / e2e / ci:pr]
+  E --> F[6 Monitor PR CI + review]
   B --> G{Local + remote green?}
   F --> G
-  G -->|no| H[6 Read app logs + fix]
-  H --> PUSH[7 Push completed fix]
+  G -->|no| H[7 Read app logs + fix]
+  H --> PUSH[8 Push completed fix]
   PUSH --> B
   PUSH --> F
-  G -->|yes| I[Squash merge PR]
-  I --> J[Report task duration]
+  G -->|yes| C[9 Address comments]
+  C --> M[Squash merge PR]
+  M --> J[Report task duration]
   J --> K[Done]
 ```
 
@@ -50,9 +76,15 @@ git checkout -b <branch-name> origin/main
 
 Never commit directly on `main`.
 
-### 1. Implement
+### 1. Prepare the PR path
 
-### 2. CodeRabbit review when useful
+Before editing, decide the branch name and PR scope/title/body. The PR may be
+opened after the first coherent commit, but the work should already be organized
+around getting that PR green and merged.
+
+### 2. Implement
+
+### 3. CodeRabbit review when useful
 
 For nontrivial agent-authored changes, run a CodeRabbit local review before the
 final local gate:
@@ -68,20 +100,20 @@ inspection, or `.cortex` architecture rules. Skip it for trivial docs/mechanical
 changes or when authentication/rate limits block it, and say so in the PR
 handoff. See [coderabbit.md](coderabbit.md).
 
-### 3. Push at the final-validation boundary
+### 4. Push at the final-validation boundary
 
-When functionality for the current iteration is complete, commit and push/open or
+When the branch has a coherent implementation commit, commit and push/open or
 update the PR **before** starting the long final local gate. This lets remote CI
 and local Docker validation run in the same wall-clock window. This is not a
 license to push half-finished work: use scoped local checks while implementing,
-and push only when the iteration is ready for final validation.
+and push only when the PR branch is ready for final validation.
 
 ```bash
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-### 4. Local checks
+### 5. Local checks
 
 **Remote CI is cold and heavy** — fresh runners pull Docker images and run the
 full prepared test set from scratch (**5+ minutes** plus queue). **Local Docker
@@ -131,7 +163,7 @@ After a remote failure, fix the root cause, push the completed fix, and run
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
-### 4.1. Local e2e (debug and final validation)
+### 5.1. Local e2e (debug and final validation)
 
 PR CI runs the full local-provider **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` in the parallel local gate for changes that touch:
 
@@ -155,7 +187,7 @@ task web:test:e2e:parallel
 
 Skip e2e for small, isolated Rust-only or docs-only changes.
 
-### 5. Monitor CI and review until green
+### 6. Monitor CI and review until green
 
 `pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full local-provider e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
 
@@ -188,7 +220,7 @@ git push origin HEAD
 gh pr checks <number> --watch
 ```
 
-### 5.1. Address review comments
+### 6.1. Address review comments
 
 Actionable PR feedback is part of the PR gate, whether it comes from a human
 reviewer, CodeRabbit, or another automated reviewer. Follow
@@ -229,7 +261,7 @@ comments as a substitute for unthreaded CodeRabbit summary items; track those in
 the checklist/final handoff and let pushed code plus CodeRabbit re-review update
 the PR state.
 
-### 6. Fix loop on failure
+### 7. Fix loop on failure
 
 Investigation order: **test output** → **static analysis** → **app logs** (most
 important after the first two). See
@@ -248,7 +280,7 @@ If the failure was obviously fmt/lint-only, `task format:check` + the relevant
 lint/test subset can prove the fix. For broader failures, use `task ci:pr` as
 the local gate on the latest pushed head before merge or handoff.
 
-### 7. Merge and finish
+### 8. Merge and finish
 
 When **all PR checks pass**, the branch is current with `origin/main`, and the
 user asked you to merge (or the task implies merge-on-green):
@@ -259,7 +291,7 @@ gh pr merge <number> --squash
 
 After merge, `main.yml` runs full local-provider **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
-### 8. Task completion report
+### 9. Task completion report
 
 Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
 
@@ -296,7 +328,7 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 6. On failure: fix → push completed fix → run the required local gate while CI refreshes.
 7. **Squash merge** into `main` when every remote check is green.
 8. Delete the branch (optional).
-9. **Report task duration** in the final message (see [§ Task completion report](#8-task-completion-report)).
+9. **Report task duration** in the final message (see [§ Task completion report](#9-task-completion-report)).
 
 ## CLI reference
 
