@@ -121,6 +121,14 @@ then repairs the provider by uploading any local event-store events missing from
 that provider. During pull, fetched remote events are hash/signature-validated
 and ignored when their signed body belongs to another `store_id`.
 
+Provider connect and sync paths must classify the provider event set before
+writing outbox or repair events. Empty providers may be initialized from the
+active local vault, and a provider with exactly the active `store_id` may be
+union-synced. A provider with a different `store_id`, multiple discovered
+`store_id`s, unreadable event files, or invalid event bytes must fail closed
+before any write; the user must choose an explicit recovery/import path instead
+of letting the current local vault silently take over provider data.
+
 Event-log provider sync never writes the materialized projection. Normal
 provider fan-out appends YAML event files and repairs missing provider events
 from the local event store.

@@ -142,7 +142,8 @@ pub use vault_event_builder::{
 pub use vault_event_graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use vault_event_session::VaultEventSession;
 pub use vault_event_store::{
-    LocalEventStore, remote_event_belongs_to_store, remote_event_store_id, union_remote_events,
+    LocalEventStore, RemoteEventLogClassification, classify_remote_event_log,
+    remote_event_belongs_to_store, remote_event_store_id, union_remote_events,
     union_remote_events_and_heads,
 };
 pub use vault_format::{
