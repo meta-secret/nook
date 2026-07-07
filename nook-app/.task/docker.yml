@@ -21,13 +21,15 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        git_commit_id="${GIT_COMMIT_ID:-$(git rev-parse HEAD)}";
+        test -n "$git_commit_id";
         if [ -n "${GITHUB_TOKEN:-}" ]; then
           registry="${TOOLCHAIN_REGISTRY%%/*}";
           user="${GITHUB_ACTOR:-github-actions[bot]}";
           printf "%s" "$GITHUB_TOKEN" | {{.DOCKER}} login "$registry" -u "$user" --password-stdin;
         fi;
         for attempt in 1 2 3; do
-          if TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${GIT_COMMIT_ID}" TOOLCHAIN_PUSH=1
+          if TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${git_commit_id}" TOOLCHAIN_PUSH=1
             {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push; then
             exit 0;
           fi;
