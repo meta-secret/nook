@@ -1277,7 +1277,7 @@ export class VaultState {
   /** Sync local event log with one provider. */
   async syncProviderById(
     providerId: string,
-    options?: { quiet?: boolean },
+    options?: { quiet?: boolean; propagateError?: boolean },
   ): Promise<void> {
     return syncActions.syncProviderById(this, providerId, options)
   }

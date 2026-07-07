@@ -442,7 +442,7 @@ export function clearRemoteVaultRecovery(state: VaultState) {
 export async function syncProviderById(
   state: VaultState,
   providerId: string,
-  options?: { quiet?: boolean },
+  options?: { quiet?: boolean; propagateError?: boolean },
 ): Promise<void> {
   if (!state.manager) return
   if (state.syncBlocked) return
@@ -501,6 +501,9 @@ export async function syncProviderById(
     if (!options?.quiet) {
       state.errorMsg =
         e instanceof Error ? e.message : 'Sync failed for state provider.'
+    }
+    if (options?.propagateError) {
+      throw e
     }
   } finally {
     if (state.isAuthenticated) {
