@@ -80,7 +80,7 @@ export function createLocalE2eGoogleDriveVaultStub(
     getFileName: () => fileName,
     async install(
       page: Page,
-      opts?: { vaultYaml?: string; fileName?: string },
+      opts?: { vaultYaml?: string; fileName?: string; accessToken?: string },
     ) {
       if (opts?.vaultYaml !== undefined) {
         vaultYaml = opts.vaultYaml
@@ -92,8 +92,17 @@ export function createLocalE2eGoogleDriveVaultStub(
       if (opts?.fileName) {
         fileName = opts.fileName
       }
+      const accessToken = opts?.accessToken
 
       await page.route('https://www.googleapis.com/**', async (route) => {
+        if (accessToken) {
+          const authorization = route.request().headers().authorization ?? ''
+          if (authorization !== `Bearer ${accessToken}`) {
+            await route.fallback()
+            return
+          }
+        }
+
         const request = route.request()
         const url = request.url().split('?')[0]!
         const method = request.method()

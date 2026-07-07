@@ -271,9 +271,12 @@ gh pr create --title "…" --body "…"
 gh pr checks <number> --watch
 ```
 
-Before merge, verify the PR branch is current with the base branch. A green
-check set on an out-of-date branch is not enough: GitHub may still block merge
-or required deployments until `main` has been merged into the PR branch.
+Before every merge attempt, verify the PR branch is current with the latest base
+branch. A green check set on an out-of-date branch is not enough: GitHub may
+still block merge with an "Update branch" requirement, `mergeStateStatus:
+BLOCKED`, or a missing active `github-pages` deployment until `main` has been
+merged into the PR branch. When a green PR cannot merge, treat stale `main` as
+the first thing to prove or fix before investigating other branch rules.
 
 ```bash
 git fetch origin main

@@ -153,7 +153,7 @@ export function createLocalE2eFileSyncVaultStub(
     getFileName: () => fileName,
     async install(
       page: Page,
-      opts?: { vaultYaml?: string; fileName?: string },
+      opts?: { vaultYaml?: string; fileName?: string; accessToken?: string },
     ) {
       if (opts?.fileName) {
         fileName = opts.fileName
@@ -165,8 +165,17 @@ export function createLocalE2eFileSyncVaultStub(
           fileId = `e2e-file-vault-${fileName.replace(/\W/g, '-')}`
         }
       }
+      const accessToken = opts?.accessToken
 
       await page.route('https://www.googleapis.com/**', async (route) => {
+        if (accessToken) {
+          const authorization = route.request().headers().authorization ?? ''
+          if (authorization !== `Bearer ${accessToken}`) {
+            await route.fallback()
+            return
+          }
+        }
+
         if (offlinePages.has(page)) {
           await route.fulfill({
             status: 503,

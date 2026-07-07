@@ -199,11 +199,14 @@ gh pr checks <number> --watch          # blocks until done
 gh pr view <number> --json statusCheckRollup -q '.statusCheckRollup[] | "\(.name): \(.state) \(.conclusion // "pending")"'
 ```
 
-Before treating a PR as mergeable, verify the branch is not stale against
-`origin/main`. GitHub can show green checks while still blocking the merge with
-an "Update branch" requirement or a missing active deployment because the green
-run belongs to an older base. Fetch `main`, compare divergence, and update the
-PR branch when it is behind:
+Before treating a PR as mergeable, **always verify the branch against the latest
+`origin/main`**. Do this every time, even when all visible checks are green. If a
+green PR cannot merge, assume the first and most likely blocker is that `main`
+advanced and the PR branch is stale. GitHub may surface that stale-branch state
+as an "Update branch" requirement, `mergeStateStatus: BLOCKED`, or a missing
+active `github-pages` deployment because the green run belongs to an older base.
+Fetch `main`, compare divergence, and update the PR branch before chasing other
+ruleset or deployment explanations:
 
 ```bash
 git fetch origin main
@@ -212,7 +215,9 @@ gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRol
 ```
 
 If the branch is behind `origin/main`, merge the base branch into the PR branch,
-push, then re-watch CI and deployment status from the new head SHA:
+push, then re-watch CI and deployment status from the new head SHA. Do not
+attempt to merge, enable auto-merge, or diagnose deployment policy until this
+freshness check passes:
 
 ```bash
 git merge origin/main --no-edit

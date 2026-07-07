@@ -1,6 +1,14 @@
 version: '3'
 
 tasks:
+  wasm:test:
+    desc: Run nook-wasm wasm-bindgen tests in Node.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _wasm:test }
+
   wasm:build:
     desc: Build nook-wasm for the web app in Docker.
     deps:
@@ -58,7 +66,20 @@ tasks:
           echo "$desired" > "$stamp";
         fi'
 
-  wasm:test:browser:
-    desc: Run nook-wasm wasm-bindgen tests in headless Chrome (needs chromedriver).
+  _wasm:test:
+    desc: Run nook-wasm wasm-bindgen tests in Node.
     cmds:
-      - cd "{{.APP_ROOT}}" && wasm-pack test --chrome --headless nook-wasm
+      - cd "{{.APP_ROOT}}" && wasm-pack test --node nook-wasm
+
+  wasm:test:browser:
+    desc: Run nook-wasm wasm-bindgen tests in headless Chrome (manual/debug).
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _wasm:test:browser }
+
+  _wasm:test:browser:
+    desc: Run nook-wasm wasm-bindgen tests in headless Chrome (manual/debug).
+    cmds:
+      - cd "{{.APP_ROOT}}" && wasm-pack test --chrome --headless nook-wasm --features browser-wasm-tests

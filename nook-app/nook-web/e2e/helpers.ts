@@ -2981,7 +2981,7 @@ export async function waitForLocalVaultState(
 /** Install oauth-file REST responses with the file-backed provider by default. */
 export async function installOauthFileRemoteForLocalE2e(
   page: Page,
-  opts: { fileName: string; vaultYaml?: string },
+  opts: { fileName: string; vaultYaml?: string; accessToken?: string },
   existingStub?: E2eOauthFileStub,
 ) {
   const stub =
@@ -2993,6 +2993,7 @@ export async function installOauthFileRemoteForLocalE2e(
   await stub.install(page, {
     vaultYaml: opts.vaultYaml,
     fileName: opts.fileName,
+    accessToken: opts.accessToken,
   })
 }
 
@@ -3280,6 +3281,7 @@ export async function reloadUnlockLocalVaultWithSync(
       {
         fileName: E2E_OAUTH_ONBOARD_PROVIDER.fileName,
         vaultYaml,
+        accessToken: E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
       },
       sharedStub,
     )
@@ -3293,6 +3295,7 @@ export async function reloadUnlockLocalVaultWithSync(
       {
         fileName: E2E_OAUTH_ONBOARD_PROVIDER.fileName,
         vaultYaml,
+        accessToken: E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
       },
       sharedStub,
     )
@@ -3445,6 +3448,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
       {
         fileName: provider.fileName,
         vaultYaml,
+        accessToken: provider.accessToken,
       },
       sharedStub,
     )
@@ -3485,6 +3489,7 @@ export async function reloadUnlockWithSyncProvider(
         {
           fileName: provider.fileName,
           vaultYaml,
+          accessToken: provider.accessToken,
         },
         sharedStub,
       )
@@ -3500,6 +3505,7 @@ export async function reloadUnlockWithSyncProvider(
         {
           fileName: provider.fileName,
           vaultYaml,
+          accessToken: provider.accessToken,
         },
         sharedStub,
       )

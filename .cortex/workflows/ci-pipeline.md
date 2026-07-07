@@ -6,8 +6,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
-| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, build, **full local-provider e2e**, Pages deploy, push toolchain  | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, wasm-bindgen tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
+| [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Pages deploy, push toolchain | No                                        |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
@@ -115,7 +115,7 @@ All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo
 
 ```bash
 # Minimum local final gate after final-validation push
-task check                          # format, clippy, unit tests, web build (dev/no-opt wasm)
+task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 
 # Full PR CI mirror — parallel local gate; mandatory before merge/handoff after broad remote failure
 WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build → full local-provider e2e
@@ -123,6 +123,10 @@ WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build → full loc
 # E2e projects
 task web:test:e2e                   # full local-provider e2e (PR/main gate)
 task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
+
+# WASM tests
+task wasm:test                      # wasm-bindgen smoke tests in Node (PR/main gate)
+task wasm:test:browser              # browser-only wasm tests (manual/debug)
 
 # Single spec — preferred during fix/debug (E2E_SPEC paths relative to nook-app/nook-web/)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
