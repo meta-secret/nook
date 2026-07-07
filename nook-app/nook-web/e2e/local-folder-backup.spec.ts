@@ -386,9 +386,14 @@ test.describe('local folder backup provider', () => {
     await page.getByTestId('settings-connect-local-folder-btn').click()
     await waitForVaultOperationsIdle(page)
 
-    await expect(page.getByTestId('vault-error')).toContainText(
-      'Backup folder already contains another vault',
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible()
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).toContainText(
+      'Different vault on sync provider',
     )
+    await expect(
+      page.getByTestId('sync-conflict-import-new-vault-btn'),
+    ).toBeVisible()
+    await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
     const eventsAfterSecondConnect = await page.evaluate(
       () =>
         (
