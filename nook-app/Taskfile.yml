@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   REPO_ROOT:
-    sh: git rev-parse --show-toplevel
+    sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   APP_ROOT: '{{.REPO_ROOT}}/nook-app'
   WEB_ROOT: '{{.APP_ROOT}}/nook-web'
   EXTENSION_ROOT: '{{.APP_ROOT}}/nook-web-extension'
@@ -22,7 +22,7 @@ vars:
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   GIT_COMMIT_ID:
-    sh: cd "{{.REPO_ROOT}}" && git rev-parse HEAD
+    sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}

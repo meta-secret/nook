@@ -9,10 +9,20 @@ tasks:
       - task: docker:task
         vars: { TASK: _wasm:build }
 
+  wasm:build:fast:
+    desc: Build nook-wasm for the web app in a mounted Docker container without wasm-opt (local iteration).
+    cmds:
+      - task: docker:wasm:build:fast
+
   _wasm:build:
     desc: Build nook-wasm for the web app when sources changed (skips if image-seeded pkg is current).
     cmds:
       - task: _wasm:build:run
+
+  _wasm:build:fast:
+    desc: Build nook-wasm for the web app when sources changed, skipping wasm-opt.
+    cmds:
+      - task: _wasm:build:fast:run
 
   _wasm:build:run:
     internal: true
@@ -26,11 +36,32 @@ tasks:
           | xargs -0 sha256sum \
           | sha256sum \
           | cut -d" " -f1)";
+        desired="$current optimized";
         stored="";
         if [ -f "$stamp" ]; then stored="$(cat "$stamp")"; fi;
-        if [ ! -f "$out" ] || [ "$current" != "$stored" ]; then
+        if [ ! -f "$out" ] || [ "$desired" != "$stored" ]; then
           cd "{{.APP_ROOT}}" && wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm;
-          echo "$current" > "$stamp";
+          echo "$desired" > "$stamp";
+        fi'
+
+  _wasm:build:fast:run:
+    internal: true
+    cmds:
+      - >-
+        sh -c 'out="{{.WEB_ROOT}}/src/lib/nook-wasm/nook_wasm_bg.wasm";
+        stamp="{{.WEB_ROOT}}/src/lib/nook-wasm/.wasm-source-sha256";
+        current="$(find "{{.APP_ROOT}}/nook-wasm/src" "{{.APP_ROOT}}/nook-core/src" "{{.APP_ROOT}}/nook-core/locales" "{{.APP_ROOT}}/nook-auth/src" \
+          \( -name "*.rs" -o -name "*.json" \) -print0 \
+          | LC_ALL=C sort -z \
+          | xargs -0 sha256sum \
+          | sha256sum \
+          | cut -d" " -f1)";
+        desired="$current no-opt";
+        stored="";
+        if [ -f "$stamp" ]; then stored="$(cat "$stamp")"; fi;
+        if [ ! -f "$out" ] || [ "$desired" != "$stored" ]; then
+          cd "{{.APP_ROOT}}" && wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm --no-opt;
+          echo "$desired" > "$stamp";
         fi'
 
   wasm:test:browser:
