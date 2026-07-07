@@ -11,9 +11,11 @@ FROM nook-base AS chef-planner
 WORKDIR /meta-secret/nook/nook-app
 
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
-COPY nook-app/nook-auth nook-auth
-COPY nook-app/nook-core nook-core
-COPY nook-app/nook-wasm nook-wasm
+COPY nook-app/nook-auth/Cargo.toml nook-auth/Cargo.toml
+COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
+COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
+RUN mkdir -p nook-auth/src nook-core/src nook-wasm/src \
+    && touch nook-auth/src/lib.rs nook-core/src/lib.rs nook-wasm/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Shared rust dependency cache (chef cook + fetch once) ---
