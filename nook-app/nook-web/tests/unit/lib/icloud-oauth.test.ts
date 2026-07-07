@@ -238,6 +238,43 @@ describe('icloud-oauth', () => {
       })
     })
 
+    it('waits before the native CloudKit click stores a token', async () => {
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      const signInButton = document.querySelector<HTMLButtonElement>(
+        '#apple-sign-in-button button',
+      )
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await prepareICloudSignInControl()
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      signInButton?.addEventListener('click', () => {
+        config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+          ckWebAuthToken: 'native-click-token',
+        })
+        resolveSignIn({ lookupInfo: {} })
+      })
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+      })
+      await vi.waitFor(() => {
+        expect(whenUserSignsIn).toHaveBeenCalledOnce()
+      })
+      signInButton?.click()
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'native-click-token',
+      })
+      expect(setUpAuth).toHaveBeenCalledTimes(1)
+    })
+
     it('keeps waiting for the token when CloudKit wraps the auth challenge as UNKNOWN_ERROR', async () => {
       const setUpAuth = vi.fn().mockResolvedValue(undefined)
       const whenUserSignsIn = vi.fn().mockRejectedValue({
