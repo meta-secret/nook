@@ -9,6 +9,7 @@ import initNookWasm, {
   resolveAppLocaleFromTags,
   translateFromCatalog,
 } from '$lib/nook-wasm/nook_wasm'
+import { HELP_SECTIONS } from '$lib/help-content'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -50,6 +51,51 @@ describe('locale', () => {
       expect(
         lookupTranslation(catalog, 'provider_picker.google_drive_desc'),
       ).toBeTypeOf('string')
+    }
+  })
+
+  test('catalogs include complete help page strings', () => {
+    const commonHelpKeys = [
+      'help.title',
+      'help.subtitle',
+      'help.in_this_guide',
+      'help.jump_to_section',
+      'help.diagram.device',
+      'help.diagram.local_projection',
+      'help.diagram.event_store',
+      'help.diagram.device_keys',
+      'help.diagram.sync',
+      'help.diagram.nook_log',
+      'help.diagram.provider_events',
+      'help.diagram.set_union',
+      'legal.privacy_policy',
+      'legal.terms_of_service',
+    ]
+
+    for (const locale of ['en', 'ru'] as const) {
+      const catalog = getTranslationCatalog(locale)
+      for (const key of commonHelpKeys) {
+        expect(lookupTranslation(catalog, key), `${locale}:${key}`).toBeTypeOf(
+          'string',
+        )
+      }
+      for (const section of HELP_SECTIONS) {
+        const prefix = `help.sections.${section.id}`
+        expect(
+          lookupTranslation(catalog, `${prefix}.title`),
+          `${locale}:${prefix}.title`,
+        ).toBeTypeOf('string')
+        expect(
+          lookupTranslation(catalog, `${prefix}.summary`),
+          `${locale}:${prefix}.summary`,
+        ).toBeTypeOf('string')
+        for (let index = 1; index <= section.bulletCount; index += 1) {
+          expect(
+            lookupTranslation(catalog, `${prefix}.bullet${index}`),
+            `${locale}:${prefix}.bullet${index}`,
+          ).toBeTypeOf('string')
+        }
+      }
     }
   })
 

@@ -253,9 +253,82 @@
     "no_passwords": "None"
   },
   "help": {
-    "title": "Nook Architecture & Help",
-    "subtitle": "How Nook keeps your vault encrypted and under your control.",
-    "close": "Close Help"
+    "title": "Your vault, optional sync replicas",
+    "subtitle": "One encrypted vault on this device — sync providers keep copies in sync.",
+    "close": "Close Help",
+    "in_this_guide": "In this guide",
+    "jump_to_section": "Jump to section…",
+    "diagram": {
+      "device": "This browser (working copy)",
+      "local_projection": "Local encrypted projection",
+      "event_store": "Event store",
+      "device_keys": "Device keys unlock",
+      "sync": "Sync providers (replicas)",
+      "nook_log": "nook-log/v1/events",
+      "provider_events": "Provider event files",
+      "set_union": "set union"
+    },
+    "sections": {
+      "local-first": {
+        "title": "Your vault",
+        "summary": "A vault is one encrypted database. It always starts in this browser; sync providers are optional replicas — not separate vaults.",
+        "bullet1": "Create a vault here, then add GitHub or Drive in Settings to replicate it.",
+        "bullet2": "Unlock with device keys (default) or a backup password from Settings.",
+        "bullet3": "Secrets are encrypted before they are saved or synced anywhere.",
+        "bullet4": "No Nook account or central server holds your data."
+      },
+      "unlock": {
+        "title": "Unlocking the vault",
+        "summary": "The master password decrypts the vault. Device keys remain for quick unlock and multi-device approval.",
+        "bullet1": "Create a master password when you set up a new vault.",
+        "bullet2": "Optional backup passwords add recovery options and power onboarding QR codes.",
+        "bullet3": "Each browser can keep its own device key for passwordless unlock after approval.",
+        "bullet4": "Losing every password and every approved device means the vault cannot be recovered."
+      },
+      "sync": {
+        "title": "Sync providers",
+        "summary": "Connect GitHub or Google Drive to push and pull immutable vault events — credentials move ciphertext only.",
+        "bullet1": "Add sync providers in Settings. Local storage stays the canonical copy.",
+        "bullet2": "Use Sync now or Sync all to reconcile with a provider manually.",
+        "bullet3": "After you save a secret, Nook fans out to every connected provider in the background.",
+        "bullet4": "A provider PAT or OAuth token can read/write the encrypted file — it cannot decrypt secrets."
+      },
+      "conflicts": {
+        "title": "Sync conflicts",
+        "summary": "Event-log vaults merge by appending immutable events.",
+        "bullet1": "New vaults use an append-only event log — concurrent edits on different devices usually merge automatically.",
+        "bullet2": "The local YAML projection cache stays in this browser; providers sync event files under nook-log/v1/events/.",
+        "bullet3": "When concurrent replacements touch the same secret, Nook keeps the candidates until you choose the version to keep.",
+        "bullet4": "After resolution, sync continues normally to all providers."
+      },
+      "onboard": {
+        "title": "Onboard another browser",
+        "summary": "Generate a QR code that points a new device at a sync provider copy, then share the vault password separately.",
+        "bullet1": "Pick a connected sync provider (for example GitHub) on the Onboard tab.",
+        "bullet2": "Confirm a vault password entry — the QR encrypts provider access, not the password itself.",
+        "bullet3": "The new browser downloads the vault from the provider into its local cache, then unlocks with the password you share.",
+        "bullet4": "Onboarding skips the manual join-approval round trip when a password envelope is used."
+      },
+      "join": {
+        "title": "Adding another device (approval flow)",
+        "summary": "Without a QR code, a new browser sends a join request that an approved device must accept.",
+        "bullet1": "Open Nook in the new browser and connect to the same sync provider.",
+        "bullet2": "Review the pending join on a device that already has access.",
+        "bullet3": "Approve it — the new browser receives vault keys and can unlock."
+      },
+      "technical": {
+        "title": "Technical details",
+        "summary": "Security-sensitive work runs in a Rust core compiled to WebAssembly inside your browser.",
+        "bullet1": "Each browser creates a public/private keypair; private keys never leave the device.",
+        "bullet2": "Secrets are typed YAML records encrypted independently with age.",
+        "bullet3": "Sync providers store pretty-printed YAML event files, not plaintext secrets or mutable vault snapshots.",
+        "bullet4": "Decrypted secrets exist only in the active browser session."
+      }
+    }
+  },
+  "legal": {
+    "privacy_policy": "Privacy Policy",
+    "terms_of_service": "Terms of Service"
   },
   "device_protection": {
     "title": "Protect this browser",

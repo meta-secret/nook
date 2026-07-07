@@ -235,11 +235,11 @@
             type="button"
             class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
             aria-label={colorMode === 'dark'
-              ? 'Switch to light mode'
-              : 'Switch to dark mode'}
+              ? vault.t('app.switch_light')
+              : vault.t('app.switch_dark')}
             title={colorMode === 'dark'
-              ? 'Switch to light mode'
-              : 'Switch to dark mode'}
+              ? vault.t('app.switch_light')
+              : vault.t('app.switch_dark')}
             data-testid="theme-toggle-btn"
             onclick={toggleColorMode}
           >
@@ -257,8 +257,8 @@
             class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background {vault.isAuthenticated
               ? 'w-10'
               : 'px-3.5'}"
-            aria-label="Nook on GitHub — open source"
-            title="Nook is open source on GitHub"
+            aria-label={vault.t('app.github_aria')}
+            title={vault.t('app.github_title')}
             data-testid="github-source-link"
           >
             <svg
@@ -286,7 +286,7 @@
               onclick={navigateHome}
             >
               <ArrowLeft class="size-4" />
-              <span class="hidden sm:inline">Back</span>
+              <span class="hidden sm:inline">{vault.t('app.back')}</span>
             </Button>
           {:else if vault.helpOpen}
             <Button
@@ -298,7 +298,7 @@
               onclick={() => vault.closeHelp()}
             >
               <ArrowLeft class="size-4" />
-              <span class="hidden sm:inline">Back</span>
+              <span class="hidden sm:inline">{vault.t('app.back')}</span>
             </Button>
           {:else}
             <Button
@@ -310,7 +310,7 @@
               onclick={() => vault.openHelp()}
             >
               <BookOpen class="size-4" />
-              <span class="hidden sm:inline">Help</span>
+              <span class="hidden sm:inline">{vault.t('app.help')}</span>
             </Button>
           {/if}
         </div>
@@ -330,7 +330,7 @@
         <LegalDocumentPage pageId={legalPage} onClose={navigateHome} />
       {:else if vault.helpOpen}
         <div class="space-y-4">
-          <HelpPage onClose={() => vault.closeHelp()} {colorMode} />
+          <HelpPage {vault} onClose={() => vault.closeHelp()} {colorMode} />
           <VaultStatusBar
             {vault}
             storageMode={vault.storageMode}
