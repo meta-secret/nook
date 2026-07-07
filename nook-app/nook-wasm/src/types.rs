@@ -376,6 +376,15 @@ impl NookPasskeySetup {
     pub fn prf_input(&self) -> Vec<u8> {
         self.prf_input.clone()
     }
+
+    #[wasm_bindgen(js_name = creationOptions)]
+    pub fn creation_options(
+        &self,
+        rp_id: &str,
+        rp_name: &str,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
+        crate::passkey_browser::creation_options(rp_id, rp_name, &self.user_handle, &self.prf_input)
+    }
 }
 
 #[wasm_bindgen]
@@ -406,6 +415,14 @@ impl NookPasskeyUnlockOptions {
     #[wasm_bindgen(getter, js_name = prfInput)]
     pub fn prf_input(&self) -> Vec<u8> {
         self.prf_input.clone()
+    }
+
+    #[wasm_bindgen(js_name = requestOptions)]
+    pub fn request_options(
+        &self,
+        rp_id: &str,
+    ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
+        crate::passkey_browser::request_options(rp_id, &self.credential_id, &self.prf_input)
     }
 }
 

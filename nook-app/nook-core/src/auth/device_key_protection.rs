@@ -1,8 +1,9 @@
 //! Passkey-PRF wrapping for the browser-persisted X25519 device identity.
 //!
-//! `WebAuthn` stays in the presentation layer. This module accepts the 32-byte
-//! PRF output, derives a domain-separated wrapping key, and owns the versioned
-//! authenticated-encryption format persisted by the WASM storage adapter.
+//! Browser `navigator.credentials` calls stay in the presentation layer. This
+//! module accepts the 32-byte PRF output, derives a domain-separated wrapping
+//! key, and owns the versioned authenticated-encryption format persisted by the
+//! WASM storage adapter.
 
 use aes_gcm::{
     Aes256Gcm,
