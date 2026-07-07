@@ -39,5 +39,6 @@ Does not apply to:
 
 ## Validation
 
-Run the smallest relevant checks first. For implementation tasks, finish with
-`task check` before push.
+Run the smallest relevant checks first. For implementation tasks, push/open or
+update the PR when the iteration is ready for final validation, then finish with
+`task check` while remote CI runs.

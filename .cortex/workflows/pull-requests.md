@@ -25,14 +25,15 @@ Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for auto
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + implement]
   A --> CR[2 CodeRabbit when useful]
-  CR --> B[3 Local validation: check / e2e / ci:pr]
-  B --> E[4 Push + open PR when ready]
+  CR --> E[3 Push + open/update PR]
+  E --> B[4 Local validation: check / e2e / ci:pr]
   E --> F[5 Monitor PR CI + review]
-  F --> G{All checks green?}
+  B --> G{Local + remote green?}
+  F --> G
   G -->|no| H[6 Read app logs + fix]
-  H --> FULL[7 task ci:pr locally until green]
-  FULL --> PUSH[8 Push + monitor]
-  PUSH --> G
+  H --> PUSH[7 Push completed fix]
+  PUSH --> B
+  PUSH --> F
   G -->|yes| I[Squash merge PR]
   I --> J[Report task duration]
   J --> K[Done]
@@ -67,11 +68,29 @@ inspection, or `.cortex` architecture rules. Skip it for trivial docs/mechanical
 changes or when authentication/rate limits block it, and say so in the PR
 handoff. See [coderabbit.md](coderabbit.md).
 
-### 3. Local checks
+### 3. Push at the final-validation boundary
 
-**Remote CI is cold and heavy** — fresh runners pull Docker images and run the full prepared test set from scratch (**5+ minutes** plus queue). **Local Docker uses cached images** and is strongly preferred for checking tests, fixing issues, and iterating. Push only when local gates pass; remote CI validates a clean environment for the PR.
+When functionality for the current iteration is complete, commit and push/open or
+update the PR **before** starting the long final local gate. This lets remote CI
+and local Docker validation run in the same wall-clock window. This is not a
+license to push half-finished work: use scoped local checks while implementing,
+and push only when the iteration is ready for final validation.
 
-**Minimum before push / opening a PR:**
+```bash
+git push -u origin HEAD
+gh pr create --title "…" --body "…"
+```
+
+### 4. Local checks
+
+**Remote CI is cold and heavy** — fresh runners pull Docker images and run the
+full prepared test set from scratch (**5+ minutes** plus queue). **Local Docker
+uses cached images** and is strongly preferred for checking tests, fixing issues,
+and iterating. Once the iteration is ready for final validation, push first and
+run the local gate immediately while remote CI runs. Remote CI validates a clean
+environment for the PR; local Docker remains the primary diagnostic loop.
+
+**Minimum local final gate before merge or handoff:**
 
 ```bash
 task format:check    # or task format after edits
@@ -92,26 +111,29 @@ task rust:coverage:check                  # nook-core + nook-auth tests + line c
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-**Full PR CI mirror** — run before push when web/vault flows change; **mandatory after any remote CI failure**, before the next push:
+**Full PR CI mirror** — include in the parallel local gate when web/vault flows change; **mandatory before merge/handoff** after any broad remote CI failure:
 
 ```bash
 task ci:pr    # prepare → verify ‖ web build → full local-provider e2e
 ```
 
-Run `task ci:pr` in a loop after a remote failure: fix, re-run until green, then commit and push. This matches what `pr.yml` runs (minus Cloudflare deploy).
+After a remote failure, fix the root cause, push the completed fix, and run
+`task ci:pr` locally while the refreshed remote run executes. This matches what
+`pr.yml` runs (minus Cloudflare deploy).
 
 | When                            | Command                                 | Why                                                        |
 | ------------------------------- | --------------------------------------- | ---------------------------------------------------------- |
 | While debugging e2e             | `E2E_SPEC=… task web:test:e2e:file`     | Fast feedback — one spec, not the full suite               |
-| Before push / open PR           | `task check` (+ scoped e2e when needed) | Cached local Docker; **must finish before push**           |
-| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr`     | Full local-provider e2e or PR mirror locally before push   |
-| After **any** remote CI failure | `task ci:pr` until green                | Full PR gates locally; **must finish before the fix push** |
+| Final validation boundary       | `git push` / `gh pr create`            | Start remote CI before long local checks                   |
+| Normal final local gate         | `task check` (+ scoped e2e when needed) | Cached local Docker; runs in parallel with remote CI       |
+| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr`     | Full local-provider e2e or PR mirror locally               |
+| After broad remote CI failure   | `task ci:pr`                           | Full PR gates locally before merge/handoff                 |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
-### 4. Local e2e (debug and pre-push validation)
+### 4.1. Local e2e (debug and final validation)
 
-PR CI runs the full local-provider **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` before pushing changes that touch:
+PR CI runs the full local-provider **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` in the parallel local gate for changes that touch:
 
 - vault sync, join, or enrollment flows
 - login / unlock / password envelope UI
@@ -123,7 +145,7 @@ PR CI runs the full local-provider **e2e** Playwright project. Use a single spec
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-**Before push — full local-provider project or PR mirror:**
+**Final local gate — full local-provider project or PR mirror:**
 
 ```bash
 task web:test:e2e          # full local-provider e2e project in Docker
@@ -133,18 +155,9 @@ task web:test:e2e:parallel
 
 Skip e2e for small, isolated Rust-only or docs-only changes.
 
-### 5. Push and open a PR
-
-Push only after local checks pass and the change is ready — include scoped e2e or `task ci:pr` when the touch surface warrants it.
-
-```bash
-git push -u origin HEAD
-gh pr create --title "…" --body "…"
-```
+### 5. Monitor CI and review until green
 
 `pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full local-provider e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
-
-### 6. Monitor CI and review until green
 
 **Do not stop after opening the PR.** Poll checks until every required job finishes:
 
@@ -175,7 +188,7 @@ git push origin HEAD
 gh pr checks <number> --watch
 ```
 
-### 6.1. Address review comments
+### 5.1. Address review comments
 
 Actionable PR feedback is part of the PR gate, whether it comes from a human
 reviewer, CodeRabbit, or another automated reviewer. Follow
@@ -216,7 +229,7 @@ comments as a substitute for unthreaded CodeRabbit summary items; track those in
 the checklist/final handoff and let pushed code plus CodeRabbit re-review update
 the PR state.
 
-### 7. Fix loop on failure
+### 6. Fix loop on failure
 
 Investigation order: **test output** → **static analysis** → **app logs** (most
 important after the first two). See
@@ -227,12 +240,15 @@ important after the first two). See
    Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` /
    `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
-4. **Run full local PR CI and repeat until green:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
-5. Commit, push, return to step 6.
+4. Push the completed fix so remote CI restarts.
+5. **Run full local PR CI while remote CI runs:** `task ci:pr` (not just `task check` — remote failure means the gap is likely e2e, web build, or a gate `check` skips).
+6. Return to step 5 and wait for both local and remote green.
 
-If the failure was obviously fmt/lint-only, `task format:check` + the relevant lint/test subset can unblock a quick fix — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
+If the failure was obviously fmt/lint-only, `task format:check` + the relevant
+lint/test subset can prove the fix. For broader failures, use `task ci:pr` as
+the local gate on the latest pushed head before merge or handoff.
 
-### 8. Merge and finish
+### 7. Merge and finish
 
 When **all PR checks pass**, the branch is current with `origin/main`, and the
 user asked you to merge (or the task implies merge-on-green):
@@ -243,7 +259,7 @@ gh pr merge <number> --squash
 
 After merge, `main.yml` runs full local-provider **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
 
-### 9. Task completion report
+### 8. Task completion report
 
 Every agent turn that **finishes a user-assigned task** must end with a short **completion report** that includes **how long the work took**.
 
@@ -274,13 +290,13 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 
 1. Fetch `origin/main`; branch from it.
 2. Implement; run CodeRabbit when useful for nontrivial agent-authored changes.
-3. Run `task check` (or scoped subset) before the first push.
-4. Push; open PR with summary and test plan.
+3. Push/open/update the PR when the iteration is ready for final validation.
+4. Run `task check` (or scoped subset) while remote CI runs.
 5. Monitor CI and PR review until green.
-6. On failure: fix → `task ci:pr` locally until green → push → monitor again.
+6. On failure: fix → push completed fix → run the required local gate while CI refreshes.
 7. **Squash merge** into `main` when every remote check is green.
 8. Delete the branch (optional).
-9. **Report task duration** in the final message (see [§ Task completion report](#9-task-completion-report)).
+9. **Report task duration** in the final message (see [§ Task completion report](#8-task-completion-report)).
 
 ## CLI reference
 

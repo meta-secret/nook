@@ -58,5 +58,6 @@ Does not apply to:
 ## Validation
 
 For documentation-only captures, verify links and skill metadata. For code
-refactors using a dynamic skill, run the smallest relevant checks first and
-finish with `task check` before push.
+refactors using a dynamic skill, run the smallest relevant checks first, push or
+update the PR when the iteration is ready for final validation, and finish with
+`task check` while remote CI runs.
