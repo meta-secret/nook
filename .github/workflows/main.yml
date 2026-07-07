@@ -49,6 +49,8 @@ jobs:
         run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=prod
         env:
           CI: true
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUSH_TOOLCHAIN: "1"
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 

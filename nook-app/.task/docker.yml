@@ -19,9 +19,22 @@ tasks:
       # Gate on PUSH_TOOLCHAIN (set by CI). TOOLCHAIN_PUSH is the bake flag that enables the
       # registry tag + cache-to; local dev never sets it, so it only ever pulls the cache.
       - >-
-        sh -c 'test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${GIT_COMMIT_ID}" TOOLCHAIN_PUSH=1
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push'
+        bash -c 'set -euo pipefail;
+        test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
+        if [ -n "${GITHUB_TOKEN:-}" ]; then
+          registry="${TOOLCHAIN_REGISTRY%%/*}";
+          user="${GITHUB_ACTOR:-github-actions[bot]}";
+          printf "%s" "$GITHUB_TOKEN" | {{.DOCKER}} login "$registry" -u "$user" --password-stdin;
+        fi;
+        for attempt in 1 2 3; do
+          if TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${GIT_COMMIT_ID}" TOOLCHAIN_PUSH=1
+            {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task docker:push: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'
 
   docker:task:
     internal: true

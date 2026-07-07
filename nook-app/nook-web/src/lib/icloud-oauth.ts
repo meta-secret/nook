@@ -41,18 +41,24 @@ type CloudKitAuthError = {
   message?: string
   name?: string
   reason?: string
+  redirectURL?: string
   serverErrorCode?: string | number
   status?: string | number
   statusCode?: string | number
   statusText?: string
+  uuid?: string
 }
 
 type CloudKitAuthErrorDetails = {
   code?: string
   message?: string
+  redirectURLPresent?: boolean
+  redirectURLOrigin?: string
+  redirectURLPathname?: string
   reason?: string
   status?: number
   statusText?: string
+  uuidPresent?: boolean
 }
 
 type CloudKitContainer = {
@@ -105,6 +111,10 @@ function currentBrowserDiagnostics(): {
   origin: string
   hostname: string
   pathname: string
+  protocol: string
+  isSecureContext: boolean
+  topLevel: boolean
+  visibilityState: DocumentVisibilityState
   userAgent: string
   cookieNames: string[]
 } {
@@ -112,11 +122,35 @@ function currentBrowserDiagnostics(): {
     origin: window.location.origin,
     hostname: window.location.hostname,
     pathname: window.location.pathname,
+    protocol: window.location.protocol,
+    isSecureContext: window.isSecureContext,
+    topLevel: window.top === window.self,
+    visibilityState: document.visibilityState,
     userAgent: navigator.userAgent,
     cookieNames: document.cookie
       .split(';')
       .map((part) => part.trim().split('=')[0])
       .filter(Boolean),
+  }
+}
+
+function webAuthTokenStorageDiagnostics(): {
+  expectedKeyPresent: boolean
+  storedKeyCount: number
+  storedKeys: string[]
+} {
+  const storedKeys: string[] = []
+  for (let index = 0; index < sessionStorage.length; index += 1) {
+    const key = sessionStorage.key(index)
+    if (key?.startsWith(ICLOUD_AUTH_TOKEN_STORAGE_PREFIX)) {
+      storedKeys.push(key)
+    }
+  }
+  const expectedKey = `${ICLOUD_AUTH_TOKEN_STORAGE_PREFIX}${ICLOUD_CONTAINER_ID}`
+  return {
+    expectedKeyPresent: sessionStorage.getItem(expectedKey) != null,
+    storedKeyCount: storedKeys.length,
+    storedKeys,
   }
 }
 
@@ -131,6 +165,56 @@ function iCloudConfigDiagnostics(): {
     environment: ICLOUD_ENVIRONMENT,
     apiTokenConfigured: Boolean(ICLOUD_API_TOKEN.trim()),
     apiTokenLength: ICLOUD_API_TOKEN.trim().length,
+  }
+}
+
+function elementDiagnostics(element: Element | null): {
+  present: boolean
+  tag?: string
+  id?: string
+  className?: string
+  role?: string
+  childElementCount?: number
+  textLength?: number
+} {
+  if (!element) {
+    return { present: false }
+  }
+  return {
+    present: true,
+    tag: element.tagName,
+    id: element.id || undefined,
+    className:
+      typeof element.className === 'string' && element.className
+        ? element.className
+        : undefined,
+    role: element.getAttribute('role') ?? undefined,
+    childElementCount: element.childElementCount,
+    textLength: element.textContent?.trim().length ?? 0,
+  }
+}
+
+function cloudKitSignInControlDiagnostics(): {
+  mount: ReturnType<typeof elementDiagnostics>
+  control: ReturnType<typeof elementDiagnostics>
+  signOutMount: ReturnType<typeof elementDiagnostics>
+} {
+  const mount =
+    typeof document === 'undefined'
+      ? null
+      : document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID)
+  const control =
+    mount?.querySelector<HTMLElement>(
+      'button, [role="button"], iframe, a, .apple-auth-button',
+    ) ?? null
+  const signOutMount =
+    typeof document === 'undefined'
+      ? null
+      : document.getElementById(CLOUDKIT_SIGN_OUT_BUTTON_ID)
+  return {
+    mount: elementDiagnostics(mount),
+    control: elementDiagnostics(control),
+    signOutMount: elementDiagnostics(signOutMount),
   }
 }
 
@@ -389,6 +473,8 @@ function waitForStoredWebAuthToken(
       log.warn('CloudKit web auth token wait timed out', {
         timeoutMs,
         ...currentBrowserDiagnostics(),
+        storage: webAuthTokenStorageDiagnostics(),
+        control: cloudKitSignInControlDiagnostics(),
       })
       reject(cloudKitSignInTimeoutError())
     }, timeoutMs)
@@ -421,6 +507,19 @@ function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
   }
   if (error != undefined && typeof error === 'object') {
     const authError = error as CloudKitAuthError
+    let redirectURLOrigin: string | undefined
+    let redirectURLPathname: string | undefined
+    const redirectURL = stringValue(authError.redirectURL)
+    if (redirectURL) {
+      try {
+        const parsed = new URL(redirectURL)
+        redirectURLOrigin = parsed.origin
+        redirectURLPathname = parsed.pathname
+      } catch {
+        redirectURLOrigin = undefined
+        redirectURLPathname = undefined
+      }
+    }
     return {
       code:
         stringValue(authError.code) ??
@@ -428,10 +527,14 @@ function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
         stringValue(authError.serverErrorCode) ??
         stringValue(authError.name),
       message: stringValue(authError.message),
+      redirectURLPresent: Boolean(redirectURL),
+      redirectURLOrigin,
+      redirectURLPathname,
       reason: stringValue(authError.reason) ?? stringValue(authError._reason),
       status:
         numericStatus(authError.status) ?? numericStatus(authError.statusCode),
       statusText: stringValue(authError.statusText),
+      uuidPresent: Boolean(stringValue(authError.uuid)),
     }
   }
   return {}
@@ -513,8 +616,14 @@ function logCloudKitAuthFailure(message: string, error: unknown): void {
     code: details.code,
     reason: details.reason,
     message: details.message,
+    redirectURLPresent: details.redirectURLPresent,
+    redirectURLOrigin: details.redirectURLOrigin,
+    redirectURLPathname: details.redirectURLPathname,
     status: details.status,
     statusText: details.statusText,
+    uuidPresent: details.uuidPresent,
+    storage: webAuthTokenStorageDiagnostics(),
+    control: cloudKitSignInControlDiagnostics(),
   })
 }
 
@@ -571,6 +680,7 @@ function setUpCloudKitAuth(
     grabAuthToken: true,
     persist: true,
     hasSignInMount: hasCloudKitSignInControl(),
+    control: cloudKitSignInControlDiagnostics(),
   })
   authSetupPromise = container
     .setUpAuth({
@@ -582,6 +692,8 @@ function setUpCloudKitAuth(
       log.info('CloudKit setUpAuth completed', {
         signedIn: Boolean(userIdentity),
         token: tokenDiagnostics(readStoredWebAuthToken()),
+        storage: webAuthTokenStorageDiagnostics(),
+        control: cloudKitSignInControlDiagnostics(),
       })
       return userIdentity
     })
@@ -590,6 +702,8 @@ function setUpCloudKitAuth(
         log.info('CloudKit auth setup waiting for Apple sign-in', {
           details: cloudKitAuthErrorDetails(error),
           hasSignInMount: hasCloudKitSignInControl(),
+          storage: webAuthTokenStorageDiagnostics(),
+          control: cloudKitSignInControlDiagnostics(),
         })
         authSetupUserIdentity = undefined
         return undefined
@@ -610,6 +724,8 @@ export async function prepareICloudSignInControl(): Promise<void> {
     log.info('CloudKit sign-in control ready', {
       hasSignInMount: hasCloudKitSignInControl(),
       token: tokenDiagnostics(readStoredWebAuthToken()),
+      storage: webAuthTokenStorageDiagnostics(),
+      control: cloudKitSignInControlDiagnostics(),
     })
   } catch (error) {
     logCloudKitAuthFailure('CloudKit auth setup failed', error)
@@ -633,6 +749,7 @@ function clickCloudKitSignInButton(): void {
     mountTag: mount?.tagName,
     controlTag: control.tagName,
     controlRole: control.getAttribute('role') ?? undefined,
+    control: cloudKitSignInControlDiagnostics(),
   })
   control.click()
 }
@@ -671,6 +788,8 @@ async function waitForCloudKitSignIn(
     timeoutMs,
     clickSignInControl: options.clickSignInControl !== false,
     tokenBeforeWait: tokenDiagnostics(readStoredWebAuthToken()),
+    storage: webAuthTokenStorageDiagnostics(),
+    control: cloudKitSignInControlDiagnostics(),
   })
   const tokenPromise = waitForStoredWebAuthToken(timeoutMs)
   const signInPromise = container
@@ -680,6 +799,7 @@ async function waitForCloudKitSignIn(
       log.info('CloudKit whenUserSignsIn resolved', {
         signedIn: Boolean(userIdentity),
         token: tokenDiagnostics(readStoredWebAuthToken()),
+        storage: webAuthTokenStorageDiagnostics(),
       })
       return userIdentity
     })
@@ -688,6 +808,8 @@ async function waitForCloudKitSignIn(
         log.info('CloudKit sign-in callback waiting for web auth token', {
           details: cloudKitAuthErrorDetails(error),
           hasSignInMount: hasCloudKitSignInControl(),
+          storage: webAuthTokenStorageDiagnostics(),
+          control: cloudKitSignInControlDiagnostics(),
         })
         return undefined
       }

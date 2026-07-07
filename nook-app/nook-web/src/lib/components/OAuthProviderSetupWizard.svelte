@@ -5,9 +5,12 @@
   import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
   import type { OAuthFilePreset } from '$lib/auth-providers'
   import { DEFAULT_DRIVE_BACKUP_NAME } from '$lib/auth-providers'
+  import { createLogger } from '$lib/log'
   import { resolveOAuthOriginSupport } from '$lib/oauth-origin'
   import { cn } from '$lib/utils'
   import type { VaultState } from '$lib/vault.svelte'
+
+  const log = createLogger('icloud-oauth')
 
   let {
     vault,
@@ -56,6 +59,7 @@
   let icloudSignInPrepareStarted = $state(false)
 
   function watchICloudSignInIntent(node: HTMLElement) {
+    let deferredSignInPending = false
     const handleClick = (event: MouseEvent) => {
       if (
         !isICloud ||
@@ -66,7 +70,40 @@
       ) {
         return
       }
-      void vault.signInWithICloud({ clickPreparedControl: false })
+      log.info('CloudKit native sign-in click observed', {
+        eventPhase: event.eventPhase,
+        targetTag:
+          event.target instanceof Element ? event.target.tagName : undefined,
+        currentTargetTag:
+          event.currentTarget instanceof Element
+            ? event.currentTarget.tagName
+            : undefined,
+        isTrusted: event.isTrusted,
+        defaultPrevented: event.defaultPrevented,
+      })
+      if (deferredSignInPending) {
+        log.info('CloudKit native sign-in click ignored: wait already pending')
+        return
+      }
+      deferredSignInPending = true
+      window.setTimeout(() => {
+        deferredSignInPending = false
+        if (
+          !isICloud ||
+          !vault.icloudOAuthReady ||
+          vault.icloudOAuthBusy ||
+          oauthSignedIn
+        ) {
+          log.info('CloudKit native sign-in deferred wait skipped', {
+            ready: vault.icloudOAuthReady,
+            busy: vault.icloudOAuthBusy,
+            signedIn: oauthSignedIn,
+          })
+          return
+        }
+        log.info('CloudKit native sign-in deferred wait started')
+        void vault.signInWithICloud({ clickPreparedControl: false })
+      }, 0)
     }
     node.addEventListener('click', handleClick, { capture: true })
     return {
