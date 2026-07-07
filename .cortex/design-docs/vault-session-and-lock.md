@@ -93,6 +93,7 @@ Legacy `encrypted_db` migrates to `vault:{store_id}` on first load. Code: `nook-
 | **Create a vault** | Login → **Create vault** (starts in this browser) |
 | **Replicate this vault** | Settings → Sync providers → Add GitHub / Drive |
 | **Open a vault from elsewhere** | Login → **Connect sync provider** or **Import as new vault** |
+| **Local folder contains multiple vault logs** | Choose a dedicated folder for one vault; Nook shows the detected `store_id`s and refuses to sync until the provider path is unambiguous |
 
 If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **import as new vault** or keep one copy — Nook refuses to merge unrelated databases ([unified-vault.md](unified-vault.md) §5).
 
