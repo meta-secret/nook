@@ -167,6 +167,42 @@ describe('icloud-oauth', () => {
       })
     })
 
+    it('can wait for the visible CloudKit control without clicking it', async () => {
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      const signInButton = document.querySelector<HTMLButtonElement>(
+        '#apple-sign-in-button button',
+      )
+      const clickSpy = vi.fn()
+      signInButton?.addEventListener('click', clickSpy)
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+      })
+
+      expect(clickSpy).not.toHaveBeenCalled()
+      expect(whenUserSignsIn).toHaveBeenCalledOnce()
+
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'visible-control-token',
+      })
+      resolveSignIn({ lookupInfo: {} })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'visible-control-token',
+      })
+    })
+
     it('fails when CloudKit sign-in never completes', async () => {
       const setUpAuth = vi.fn().mockResolvedValue(undefined)
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))

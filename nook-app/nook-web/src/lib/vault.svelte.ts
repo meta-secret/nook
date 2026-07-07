@@ -436,8 +436,10 @@ export class VaultState {
     return oauthActions.prepareICloudSignIn(this)
   }
 
-  async signInWithICloud(): Promise<void> {
-    return oauthActions.signInWithICloud(this)
+  async signInWithICloud(options?: {
+    clickPreparedControl?: boolean
+  }): Promise<void> {
+    return oauthActions.signInWithICloud(this, options)
   }
 
   async chooseLocalFolderBackupDirectory(): Promise<void> {

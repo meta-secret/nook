@@ -70,7 +70,10 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
   }
 }
 
-export async function signInWithICloud(state: VaultState): Promise<void> {
+export async function signInWithICloud(
+  state: VaultState,
+  options: { clickPreparedControl?: boolean } = {},
+): Promise<void> {
   if (!isICloudOAuthConfigured()) {
     state.errorMsg = state.t('provider_setup.icloud_oauth_unconfigured')
     return
@@ -93,7 +96,9 @@ export async function signInWithICloud(state: VaultState): Promise<void> {
     if (!wasReady) {
       throw new Error('Apple sign-in is ready. Click Sign in with Apple again.')
     }
-    const tokenRequest = requestPreparedICloudWebAuthToken()
+    const tokenRequest = requestPreparedICloudWebAuthToken({
+      clickSignInControl: options.clickPreparedControl,
+    })
     const tokens = await tokenRequest
     await applyICloudOAuthTokens(state, tokens)
   } catch (error) {
