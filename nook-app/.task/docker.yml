@@ -29,8 +29,7 @@ tasks:
           printf "%s" "$GITHUB_TOKEN" | {{.DOCKER}} login "$registry" -u "$user" --password-stdin;
         fi;
         for attempt in 1 2 3; do
-          if TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${git_commit_id}" TOOLCHAIN_PUSH=1
-            {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push; then
+          if env TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${git_commit_id}" TOOLCHAIN_PUSH=1 {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
