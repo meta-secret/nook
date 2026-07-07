@@ -1,7 +1,7 @@
 //! In-memory vault database errors.
 
 use super::vault_format::VaultFormatError;
-use nook_auth::{SecretPayloadError, ValidationError, VaultCryptoError};
+use nook_auth2::{SecretPayloadError, ValidationError, VaultCryptoError};
 use thiserror::Error;
 
 pub type DatabaseResult<T> = Result<T, DatabaseError>;

@@ -1284,7 +1284,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nook-auth"
+name = "nook-auth2"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -1316,7 +1316,7 @@ dependencies = [
  "getrandom",
  "hex",
  "hkdf",
- "nook-auth",
+ "nook-auth2",
  "pbkdf2 0.13.0",
  "percent-encoding",
  "rand_core",

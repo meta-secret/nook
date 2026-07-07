@@ -133,8 +133,8 @@ For scoped changes, faster subsets are acceptable when the touch surface is narr
 
 ```bash
 task web:check && task web:test           # web-only
-task rust:test                            # nook-core + nook-auth nextest only (no coverage gate)
-task rust:coverage:check                  # nook-core + nook-auth tests + line coverage floor
+task rust:test                            # nook-core + nook-auth2 nextest only (no coverage gate)
+task rust:coverage:check                  # nook-core + nook-auth2 tests + line coverage floor
 ```
 
 **E2e debug — one spec at a time.** During a fix/debug session, run individual specs instead of the full suite:

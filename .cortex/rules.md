@@ -76,11 +76,11 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 
 ### Line coverage threshold (90%)
 
-`nook-core + nook-auth` line coverage is measured with **`cargo llvm-cov nextest`** and checked against a committed **90%** floor:
+`nook-core + nook-auth2` line coverage is measured with **`cargo llvm-cov nextest`** and checked against a committed **90%** floor:
 
 | Artifact                        | Purpose                                                                                                                               |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-app/nook-core/coverage-floor.json` | Minimum **line** coverage % for `nook-core + nook-auth` (currently **90**)                                                            |
+| `nook-app/nook-core/coverage-floor.json` | Minimum **line** coverage % for `nook-core + nook-auth2` (currently **90**)                                                            |
 | `task rust:coverage:check`      | CI/local gate — runs the warmed `cargo llvm-cov nextest` in-image and compares measured vs floor (part of `task check`, `task ci:pr`) |
 | `task rust:coverage`            | Report only (no threshold check)                                                                                                      |
 | `task rust:coverage:update`     | Optional — rewrite floor file to measured % (user approval only)                                                                      |
@@ -94,7 +94,7 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 
 Fast iteration without coverage instrumentation: `task rust:test` (nextest only).
 
-- **Vault domain logic:** Add or update tests in `nook-core` or `nook-auth`, depending on the owning boundary (`task rust:test` / `cd nook-app && cargo nextest run -p nook-core -p nook-auth --profile ci`). Prefer colocated module unit tests for pure functions; use `tests/event_log_workflow.rs` and siblings for multi-device / provider scenarios.
+- **Vault domain logic:** Add or update tests in `nook-core` or `nook-auth2`, depending on the owning boundary (`task rust:test` / `cd nook-app && cargo nextest run -p nook-core -p nook-auth2 --profile ci`). Prefer colocated module unit tests for pure functions; use `tests/event_log_workflow.rs` and siblings for multi-device / provider scenarios.
 - **Complex sync cases:** Event-sourcing merge (causal DAG, not scalar vector clocks), concurrent append, out-of-order delivery, join heads, replacement/security conflicts — must have dedicated Rust tests. See [design-docs/vault-event-log.md](design-docs/vault-event-log.md).
 - **Type safety in tests and code:** Prefer newtypes (`EventId`, `KeyEpoch`, `StoreId`, `DevicePublicKey`, …) over raw `String` / `u32` in `nook-core` domain APIs. A bare `String` does not carry meaning; the compiler cannot catch swapped arguments. Use serde-transparent wrappers so wire JSON stays unchanged. Version fields (`VaultEventSchemaVersion`, …) must be newtypes — the app keeps multiple schema versions and each struct must declare which version it speaks. Full inventory: [design-docs/typed-newtypes.md](design-docs/typed-newtypes.md). WASM getters may still return `String`; parse before calling core. No type-state for its own sake.
 - **UI / integration:** Playwright e2e in `nook-app/nook-web/e2e/` — `task web:test:e2e` on PR and main CI (no PAT); live sync via `task web:test:e2e:sync-live` nightly. See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
