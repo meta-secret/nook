@@ -1,6 +1,7 @@
 //! Vault storage formats, event log, projection, ids, and session persistence.
 
 pub(crate) mod database;
+pub(crate) mod vault_access_diagnostics;
 pub(crate) mod vault_connect;
 pub(crate) mod vault_epoch;
 pub(crate) mod vault_event;
