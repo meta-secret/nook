@@ -15,6 +15,7 @@ mod conversion;
 mod error_mapping;
 mod logger;
 mod manager;
+mod passkey_browser;
 mod storage;
 mod sync_io;
 mod types;
@@ -215,6 +216,16 @@ pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
 #[wasm_bindgen(js_name = generateId)]
 pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_id()?.to_string())
+}
+
+#[wasm_bindgen(js_name = buildPasskeyPrfRequestOptions)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn build_passkey_prf_request_options(
+    rp_id: &str,
+    credential_id: Vec<u8>,
+    prf_input: Vec<u8>,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    passkey_browser::request_options(rp_id, &credential_id, &prf_input)
 }
 
 #[wasm_bindgen(js_name = generateSecretId)]

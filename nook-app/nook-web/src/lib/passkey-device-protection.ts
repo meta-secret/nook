@@ -1,4 +1,7 @@
-import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
+import {
+  buildPasskeyPrfRequestOptions,
+  type NookVaultManager,
+} from '$lib/nook-wasm/nook_wasm'
 
 type PrfResults = {
   enabled?: boolean
@@ -23,19 +26,6 @@ function requirePasskeySupport(): void {
   }
 }
 
-function randomChallenge(): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(32))
-}
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '')
-}
-
 function prfOutput(
   credential: CredentialWithPrf,
   requireEnabled = false,
@@ -55,29 +45,11 @@ function prfOutput(
 }
 
 async function evaluatePrf(
-  credentialId: Uint8Array,
-  input: Uint8Array,
+  options: CredentialRequestOptions,
 ): Promise<Uint8Array> {
-  const credential = (await navigator.credentials.get({
-    publicKey: {
-      challenge: randomChallenge(),
-      rpId: location.hostname,
-      allowCredentials: [
-        {
-          type: 'public-key',
-          id: credentialId,
-        },
-      ],
-      userVerification: 'required',
-      extensions: {
-        prf: {
-          evalByCredential: {
-            [base64Url(credentialId)]: { first: input },
-          },
-        },
-      },
-    },
-  } as CredentialRequestOptions)) as CredentialWithPrf | undefined
+  const credential = (await navigator.credentials.get(options)) as
+    | CredentialWithPrf
+    | undefined
 
   if (!credential) throw new Error('Passkey authorization was cancelled.')
   const output = prfOutput(credential)
@@ -89,7 +61,8 @@ async function evaluatePrf(
 
 /**
  * Create a discoverable passkey and let Rust/WASM wrap the device age key.
- * JavaScript handles only WebAuthn; key derivation and AES-GCM stay in Rust.
+ * JavaScript handles only the browser platform call; option construction,
+ * key derivation, and AES-GCM stay in Rust.
  */
 export async function setupDeviceProtection(
   manager: NookVaultManager,
@@ -98,33 +71,25 @@ export async function setupDeviceProtection(
   const setup = await manager.beginDeviceProtection()
   const userHandle = new Uint8Array(setup.userHandle)
   const input = new Uint8Array(setup.prfInput)
+  const creationOptions = setup.creationOptions(
+    location.hostname,
+    'Nook',
+  ) as CredentialCreationOptions
   let output: Uint8Array | undefined = undefined
   try {
-    const credential = (await navigator.credentials.create({
-      publicKey: {
-        challenge: randomChallenge(),
-        rp: { id: location.hostname, name: 'Nook' },
-        user: {
-          id: userHandle,
-          name: 'Nook device',
-          displayName: 'Nook device',
-        },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-        authenticatorSelection: {
-          residentKey: 'required',
-          userVerification: 'required',
-        },
-        attestation: 'none',
-        extensions: {
-          prf: { eval: { first: input } },
-        },
-      },
-    } as CredentialCreationOptions)) as CredentialWithPrf | undefined
+    const credential = (await navigator.credentials.create(creationOptions)) as
+      | CredentialWithPrf
+      | undefined
 
     if (!credential) throw new Error('Passkey creation was cancelled.')
     output = prfOutput(credential, true)
     const credentialId = new Uint8Array(credential.rawId)
-    if (!output) output = await evaluatePrf(credentialId, input)
+    const requestOptions = buildPasskeyPrfRequestOptions(
+      location.hostname,
+      credentialId,
+      input,
+    ) as CredentialRequestOptions
+    if (!output) output = await evaluatePrf(requestOptions)
     await manager.finishDeviceProtection(
       credentialId,
       userHandle,
@@ -147,9 +112,12 @@ export async function unlockDeviceProtection(
   const options = await manager.passkeyUnlockOptions()
   const credentialId = new Uint8Array(options.credentialId)
   const input = new Uint8Array(options.prfInput)
+  const requestOptions = options.requestOptions(
+    location.hostname,
+  ) as CredentialRequestOptions
   let output: Uint8Array | undefined = undefined
   try {
-    output = await evaluatePrf(credentialId, input)
+    output = await evaluatePrf(requestOptions)
     await manager.unlockDeviceIdentity(output)
   } finally {
     output?.fill(0)

@@ -52,10 +52,22 @@ Both keys are generated together on genesis (`generate_vault_keys()`).
 ### 2.1 Local device-key protection
 
 Before any provider credential or device-key operation, the browser runs
-WebAuthn with required user verification and the PRF extension. TypeScript owns
-only `navigator.credentials.create/get`; it passes the 32-byte PRF result to
-WASM. Rust derives an AES-256-GCM key with HKDF-SHA256 and unwraps the age
-identity. Nook never stores a password or encryption key in WebAuthn `user.id`.
+WebAuthn with required user verification and the PRF extension. Rust/WASM builds
+the `navigator.credentials.create/get` option payloads with
+`1Password/passkey-rs` `passkey-types`, including PRF extension inputs.
+TypeScript owns only the browser platform call itself and extraction of the
+returned PRF extension result; it passes the 32-byte PRF output to WASM. Rust
+derives an AES-256-GCM key with HKDF-SHA256 and unwraps the age identity. Nook
+never stores a password or encryption key in WebAuthn `user.id`.
+
+Issue #201 proved the current browser boundary for `1Password/passkey-rs`:
+`passkey-client` can run a WebAuthn client when Rust also owns an
+`Authenticator`/`CredentialStore`, and its PRF support is useful for request
+types. It cannot invoke the browser/OS platform passkey provider because
+browsers expose that provider only through `navigator.credentials`. Nook must
+therefore keep a thin TypeScript bridge for the real platform ceremony while
+keeping option construction, wrapping, unwrapping, persistence, validation, and
+zeroization in Rust/WASM/core.
 
 Existing plaintext `device_identity_secret` records are migrated in place:
 WASM writes and verifies `device_identity_wrapped`, then deletes the legacy

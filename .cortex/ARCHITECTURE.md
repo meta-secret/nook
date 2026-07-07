@@ -70,7 +70,7 @@ root/
 
 - **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
-- **Device protection:** Persist/migrate the wrapped identity and expose typed setup/unlock values to the web layer.
+- **Device protection:** Persist/migrate the wrapped identity, build WebAuthn PRF option payloads with `1Password/passkey-rs` `passkey-types`, and expose typed setup/unlock values to the web layer.
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
@@ -79,7 +79,7 @@ root/
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
 - **`auth-providers.ts`:** IndexedDB persistence for storage/sync providers — see [auth-providers.md](design-docs/auth-providers.md) (migrating to [unified-vault.md](design-docs/unified-vault.md)).
-- **`passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. It passes PRF output to WASM and performs no encryption.
+- **`passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter. Rust/WASM builds the PRF option payloads; TypeScript invokes `navigator.credentials`, extracts the returned PRF output, and performs no encryption.
 - **`DeviceProtectionGate`:** Mandatory passkey setup/unlock before provider credentials or device keys are loaded.
 - **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
 - **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
@@ -100,7 +100,7 @@ root/
 ### Connect (multi-device)
 
 ```
-[Svelte] → navigator.credentials.get({ extensions: { prf: … } })
+[Svelte] → WASM-built passkey options → navigator.credentials.get()
          → NookVaultManager.unlockDeviceIdentity(prf_output)
               → HKDF-SHA256 → AES-256-GCM unwrap of device identity
          → VaultState.loadDb()
