@@ -14,6 +14,7 @@
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
+  import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
   import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
   import LocalOnlyVaultWarningBanner from '$lib/components/LocalOnlyVaultWarningBanner.svelte'
@@ -600,6 +601,16 @@
         onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
         onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
         onImportAsNewVault={() => vault.resolveSyncConflictImportRemote()}
+      />
+    {/if}
+
+    {#if vault.localFolderMultipleVaultsIssue}
+      <LocalFolderMultipleVaultsDialog
+        {vault}
+        issue={vault.localFolderMultipleVaultsIssue}
+        onChooseFolder={() => vault.chooseReplacementLocalFolderForIssue()}
+        onDisconnect={() => vault.disconnectLocalFolderMultipleVaultsProvider()}
+        onDismiss={() => vault.dismissLocalFolderMultipleVaultsIssue()}
       />
     {/if}
 

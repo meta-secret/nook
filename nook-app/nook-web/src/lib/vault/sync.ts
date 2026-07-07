@@ -14,6 +14,14 @@ const log = createLogger('vault-sync')
 /** Pending user choice when local and remote vaults diverge. */
 export type PendingSyncConflict = NookPendingSyncConflict
 
+/** A local folder was chosen at a level that contains event logs for many vaults. */
+export type LocalFolderMultipleVaultsIssue = {
+  providerId: string
+  providerLabel: string
+  storeIds: string[]
+  message: string
+}
+
 async function readLocalVaultBlob(): Promise<string> {
   return readLocalVaultYaml()
 }
@@ -38,6 +46,39 @@ function syncError(context: string, error: unknown) {
     error: error instanceof Error ? error.message : String(error),
     ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
   })
+}
+
+function parseMultipleVaultStoreIds(message: string): string[] | undefined {
+  const match = message.match(
+    /contains multiple vault event logs \(store_id:\s*([^)]+)\)/i,
+  )
+  if (!match?.[1]) {
+    return undefined
+  }
+  const storeIds = match[1]
+    .split(',')
+    .map((storeId) => storeId.trim())
+    .filter((storeId) => storeId.length > 0)
+  return storeIds.length > 1 ? storeIds : undefined
+}
+
+function localFolderMultipleVaultsIssueFromError(
+  provider: StorageProvider,
+  error: unknown,
+): LocalFolderMultipleVaultsIssue | undefined {
+  if (provider.type !== 'local-folder') return undefined
+
+  const message = error instanceof Error ? error.message : String(error)
+  if (!/multiple vault event logs/i.test(message)) {
+    return undefined
+  }
+
+  return {
+    providerId: provider.id,
+    providerLabel: provider.label,
+    storeIds: parseMultipleVaultStoreIds(message) ?? [],
+    message,
+  }
 }
 
 export async function syncLocalFolderProvider(
@@ -278,6 +319,17 @@ export function stageSyncConflict(
   })
 }
 
+function stageLocalFolderMultipleVaultsIssue(
+  state: VaultState,
+  issue: LocalFolderMultipleVaultsIssue,
+) {
+  state.localFolderMultipleVaultsIssue = issue
+  log.warn('local folder contains multiple vault logs', {
+    provider: issue.providerLabel,
+    storeIds: issue.storeIds,
+  })
+}
+
 /** Finish connect/sync that was paused when the conflict dialog opened. */
 async function resumeConnectAfterSyncConflict(
   state: VaultState,
@@ -498,9 +550,19 @@ export async function syncProviderById(
     return
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e)
+    const localFolderIssue = localFolderMultipleVaultsIssueFromError(
+      provider,
+      e,
+    )
+    if (localFolderIssue) {
+      stageLocalFolderMultipleVaultsIssue(state, localFolderIssue)
+    }
     if (!options?.quiet) {
-      state.errorMsg =
-        e instanceof Error ? e.message : 'Sync failed for state provider.'
+      state.errorMsg = localFolderIssue
+        ? state.t('auth_storage.local_folder_multiple_vaults_short')
+        : e instanceof Error
+          ? e.message
+          : 'Sync failed for state provider.'
     }
     if (options?.propagateError) {
       throw e

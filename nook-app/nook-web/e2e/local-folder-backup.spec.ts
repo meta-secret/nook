@@ -11,6 +11,8 @@ import {
   waitForVaultOperationsIdle,
 } from './helpers'
 
+type LocalFolderRecord = { path: string; content: string }
+
 async function installLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
     const storageKey = '__nookE2eLocalFolderFiles'
@@ -75,6 +77,18 @@ async function installLocalFolderPickerMock(page: Page) {
           this.directories.set(head, child)
         }
         child.seed(tail.join('/'), content)
+      }
+
+      clear() {
+        this.directories.clear()
+        this.files.clear()
+      }
+
+      replace(records: Array<{ path: string; content: string }>) {
+        this.clear()
+        for (const record of records) {
+          this.seed(record.path, record.content)
+        }
       }
 
       async queryPermission() {
@@ -145,6 +159,12 @@ async function installLocalFolderPickerMock(page: Page) {
     Object.assign(window, {
       showDirectoryPicker: async () => root,
       __nookE2eLocalFolderSnapshot: () => root.snapshot(),
+      __nookE2eSetLocalFolderSnapshot: (
+        records: Array<{ path: string; content: string }>,
+      ) => {
+        root.replace(records)
+        writeSnapshot(root.snapshot())
+      },
     })
   })
 }
@@ -156,6 +176,61 @@ async function installUnsupportedLocalFolderPickerMock(page: Page) {
       value: undefined,
     })
   })
+}
+
+async function localFolderSnapshot(page: Page): Promise<LocalFolderRecord[]> {
+  return page.evaluate(
+    () =>
+      (
+        window as Window & {
+          __nookE2eLocalFolderSnapshot?: () => LocalFolderRecord[]
+        }
+      ).__nookE2eLocalFolderSnapshot?.() ?? [],
+  )
+}
+
+async function setLocalFolderSnapshot(
+  page: Page,
+  records: LocalFolderRecord[],
+) {
+  await page.evaluate((nextRecords) => {
+    ;(
+      window as Window & {
+        __nookE2eSetLocalFolderSnapshot?: (records: LocalFolderRecord[]) => void
+      }
+    ).__nookE2eSetLocalFolderSnapshot?.(nextRecords)
+  }, records)
+}
+
+function eventLogRecords(records: LocalFolderRecord[]): LocalFolderRecord[] {
+  return records.filter((record) =>
+    /^nook-log\/v1\/events\/[A-Za-z0-9_-]{43}\.yaml$/.test(record.path),
+  )
+}
+
+async function waitForLocalFolderEventRecords(
+  page: Page,
+): Promise<LocalFolderRecord[]> {
+  await expect
+    .poll(async () => eventLogRecords(await localFolderSnapshot(page)).length, {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0)
+  return eventLogRecords(await localFolderSnapshot(page))
+}
+
+async function connectLocalFolderProviderFromSettings(page: Page) {
+  await openStorageSettings(page)
+  await expandSettingsSection(page, 'storage')
+  await page.getByTestId('add-provider-btn').first().click()
+  await page.getByTestId('provider-option-local-folder').click()
+  await expect(page.getByTestId('local-folder-setup')).toBeVisible()
+  await page.getByTestId('settings-choose-local-folder-btn').click()
+  await expect(page.getByTestId('settings-local-folder-selected')).toHaveText(
+    'Nook Backup',
+  )
+  await page.getByTestId('settings-connect-local-folder-btn').click()
+  await waitForVaultOperationsIdle(page)
 }
 
 test.describe('local folder backup provider', () => {
@@ -326,5 +401,68 @@ test.describe('local folder backup provider', () => {
         ).__nookE2eLocalFolderSnapshot?.() ?? [],
     )
     expect(eventsAfterSecondConnect).toEqual(eventsBeforeSecondConnect)
+  })
+
+  test('shows a resolution path when a folder contains multiple vault logs', async ({
+    page,
+  }) => {
+    await installPasskeyMock(page)
+    await installLocalFolderPickerMock(page)
+    await page.goto('/')
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+
+    await connectLocalFolderProviderFromSettings(page)
+    await assertVaultReady(page)
+    await page.getByTestId('vault-secrets-tab').click()
+    await addSecret(
+      page,
+      uniqueSecretKey('folder-multi-first'),
+      'folder-multi-first-value',
+    )
+    const firstBackup = await waitForLocalFolderEventRecords(page)
+
+    await setLocalFolderSnapshot(page, [])
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+    await connectLocalFolderProviderFromSettings(page)
+    await assertVaultReady(page)
+    await page.getByTestId('vault-secrets-tab').click()
+    await addSecret(
+      page,
+      uniqueSecretKey('folder-multi-second'),
+      'folder-multi-second-value',
+    )
+    const secondBackup = await waitForLocalFolderEventRecords(page)
+    const mixedFolder = [...firstBackup, ...secondBackup].sort((left, right) =>
+      left.path.localeCompare(right.path),
+    )
+
+    await setLocalFolderSnapshot(page, mixedFolder)
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+    await connectLocalFolderProviderFromSettings(page)
+
+    const dialog = page.getByTestId('local-folder-multiple-vaults-dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('Folder has multiple vaults')
+    await expect(
+      page.getByTestId('local-folder-multiple-vaults-store-id'),
+    ).toHaveCount(2)
+    await expect(page.getByTestId('vault-error')).toContainText(
+      'Choose a folder with one vault backup before syncing.',
+    )
+    expect(await localFolderSnapshot(page)).toEqual(mixedFolder)
+
+    await page
+      .getByTestId('local-folder-multiple-vaults-choose-folder-btn')
+      .click()
+    await expect(page.getByTestId('local-folder-setup')).toBeVisible()
+    await expect(
+      page.getByTestId('settings-choose-local-folder-btn'),
+    ).toBeVisible()
   })
 })
