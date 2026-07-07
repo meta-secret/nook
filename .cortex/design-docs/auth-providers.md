@@ -150,6 +150,16 @@ Identity Services in the browser; the current Google web client is configured
 for `http://localhost:5173` and `https://nokey.sh`. Nook's CloudKit JS token is
 configured for `https://nokey.sh`.
 
+Google/Auth Platform branding should use `https://nokey.sh/about.html` as the
+public app home page. The root path (`/`) is the product entry point and may show
+the passkey/device-protection gate immediately. Do not user-agent fork the root
+path for Googlebot; a bot-only version is cloaking-prone and makes OAuth review
+behavior differ from real user behavior. The static about page is intentionally
+curl-visible, sitemap-listed, and linked from the footer so crawlers and human
+reviewers can read the same public description. `robots.txt` should allow the
+public about/legal pages and assets while disallowing `/`, because the root path
+is an app shell rather than the public branding page.
+
 PR previews deploy to Cloudflare Pages aliases such as
 `https://pr-191.nook-1n8.pages.dev/`. The browser origin is the exact
 scheme/host/port tuple, for example `https://pr-191.nook-1n8.pages.dev`.

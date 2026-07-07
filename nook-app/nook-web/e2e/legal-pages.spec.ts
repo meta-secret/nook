@@ -27,6 +27,11 @@ test.describe('legal pages', () => {
 
   test('shows footer links on the home page', async ({ page }) => {
     await page.goto('/')
+    await expect(page.getByTestId('product-intro')).toBeVisible()
+    await expect(page.getByTestId('footer-about-link')).toHaveAttribute(
+      'href',
+      '/about.html',
+    )
     await expect(page.getByTestId('footer-privacy-link')).toHaveAttribute(
       'href',
       '/privacy',
@@ -35,6 +40,17 @@ test.describe('legal pages', () => {
       'href',
       '/terms',
     )
+  })
+
+  test('serves static public about page without the app bundle', async ({
+    page,
+  }) => {
+    await page.goto('/about.html')
+    await expect(page.locator('h1')).toHaveText('Nook')
+    await expect(page.locator('body')).toContainText(
+      'client-side password and secrets manager',
+    )
+    await expect(page.locator('#app')).toHaveCount(0)
   })
 
   test('returns to home from legal page back button', async ({ page }) => {

@@ -7,9 +7,9 @@ export type SitemapEntry = {
   priority: string
 }
 
-/** Public SPA routes suitable for search indexing (keep in sync with LEGAL_PAGES paths). */
+/** Public routes suitable for search indexing (keep in sync with LEGAL_PAGES paths). */
 export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
-  { path: '/', changefreq: 'weekly', priority: '1.0' },
+  { path: '/about.html', changefreq: 'weekly', priority: '1.0' },
   { path: '/privacy', changefreq: 'monthly', priority: '0.6' },
   { path: '/terms', changefreq: 'monthly', priority: '0.6' },
 ]
@@ -64,7 +64,17 @@ ${body}
 export function buildRobotsTxt(siteUrl: string): string {
   const base = siteUrl.replace(/\/$/, '')
   return `User-agent: *
-Allow: /
+Allow: /about.html
+Allow: /privacy
+Allow: /terms
+Allow: /assets/
+Allow: /favicon.png
+Allow: /nook-logo-dark.png
+Allow: /nook-logo-light.png
+Allow: /nook-logo-dark-transparent.png
+Allow: /robots.txt
+Allow: /sitemap.xml
+Disallow: /
 
 Sitemap: ${base}/sitemap.xml
 `
