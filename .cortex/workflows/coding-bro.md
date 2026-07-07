@@ -4,6 +4,38 @@
 
 Use this pipeline for **every coding request** unless the user explicitly wants a read-only answer, review-only feedback, or a question with no code changes.
 
+## PR-first mandate
+
+AI agents must treat every implementation task as PR-bound from the start. The
+first operational step is to establish the PR path: fetch `origin/main`, create
+a feature branch, and plan the PR title/body/scope before editing. Open or
+update the PR as soon as there is a coherent commit to show, then keep working
+on that same PR branch.
+
+Do not treat implementation as complete after local edits, a push, or a PR link.
+The agent owns the loop through GitHub Actions, deployment gates, review
+comments, fixes, re-pushes, and squash merge when the user asked for
+merge-on-green.
+
+Default PR-first loop:
+
+1. **Prepare the PR path** — fetch `origin/main`, create a feature branch, and
+   decide whether this will be a draft or normal PR.
+2. **Implement functionality** — make scoped changes on the feature branch with
+   focused local checks while iterating.
+3. **Push and create/update the PR** — once the branch has a coherent commit,
+   push it and open the PR; subsequent fixes update the same PR.
+4. **Monitor the PR** — watch GitHub Actions, deployment gates, and PR review
+   comments instead of stopping after the PR link exists.
+5. **Fix red CI until green** — inspect failed logs, check app logs for web/e2e
+   failures, fix locally, push the completed fix, and re-watch refreshed checks.
+6. **Address comments** — reply to actionable human, CodeRabbit, and automated
+   review comments with the fix, validation, or no-change rationale before
+   resolving/considering them complete.
+7. **Merge when ready** — when the branch is current, all required checks and
+   deployments are green, and review comments are handled, squash-merge the PR
+   if the user asked for merge-on-green.
+
 ## Testing strategy — parallel final validation
 
 **GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, run the full prepared test set (`task ci:pr` on PRs). Expect **5+ minutes** per run plus queue time. A failing fmt, clippy, unit test, or e2e spec burns that entire cycle — do not use remote CI as the primary debug loop.
@@ -24,16 +56,20 @@ After targeted fixes pass and the iteration is ready for final validation, push/
 
 Default agent flow:
 
-1. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
-2. **Run CodeRabbit when it adds signal** — for nontrivial agent-authored changes, run `coderabbit review --agent --type uncommitted`, fix valid `critical`/`major` findings, and re-run once after meaningful fixes. See [coderabbit.md](coderabbit.md).
-3. **Push before long final local checks** — once the iteration is functionally complete, commit, push, and open/update the PR.
-4. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
-5. **Monitor remote CI and PR review in parallel** — watch checks on the PR while local validation runs; use CodeRabbit PR commands from [coderabbit.md](coderabbit.md) when a refreshed GitHub-side review is useful after new commits.
-6. **On any local or remote failure** — read **app logs** (`nook-app-logs.json` attachment,
+1. **Prepare the PR path first** — fetch `origin/main`, branch from it, and plan
+   the PR title/scope before editing.
+2. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
+3. **Run CodeRabbit when it adds signal** — for nontrivial agent-authored changes, run `coderabbit review --agent --type uncommitted`, fix valid `critical`/`major` findings, and re-run once after meaningful fixes. See [coderabbit.md](coderabbit.md).
+4. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
+5. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
+6. **Monitor remote CI and PR review in parallel** — watch checks on the PR while local validation runs; use CodeRabbit PR commands from [coderabbit.md](coderabbit.md) when a refreshed GitHub-side review is useful after new commits.
+7. **On any local or remote failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
    debugging) → commit and push the completed fix → run local validation in
    parallel with the refreshed remote checks.
-7. **Merge** — before merging, verify the PR branch is not stale against
+8. **Address actionable PR comments** — reply with the fix, validation, or
+   no-change rationale, push any needed changes, and re-watch CI/review.
+9. **Merge** — before merging, verify the PR branch is not stale against
    `origin/main`; update it and re-watch CI if needed. Squash merge only when
    **every** remote check is green on the updated branch.
 
@@ -56,15 +92,17 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 
 0. **Prompt** — User gives a task description.
 1. **Fetch repository** — Sync with remote before branching.
-2. **Branch from `origin/main`** — Never commit on `main`. Create a feature branch for the work.
+2. **Branch from `origin/main` and prepare the PR** — Never commit on `main`.
+   Create a feature branch for the work and keep the PR title/body/scope in
+   mind from the first implementation step.
 3. **Implement** — Make the requested change. Follow [rules.md](../rules.md) and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md).
    If part of the requested functionality is too large, risky, blocked, or out
    of scope, follow [issues.md](issues.md) before handoff: update or create the
    aggregate GitHub issue and focused sub-issues for the missing work.
 4. **CodeRabbit review when useful** — For nontrivial agent-authored code, run `coderabbit review --agent --type uncommitted` before final validation. Fix valid high-severity findings and do not let CodeRabbit override `.cortex`, tests, or repo architecture. See [coderabbit.md](coderabbit.md).
-5. **Push and open/update PR** — Commit and push when the iteration is ready for
-   final validation. If no PR exists, open it before starting the long local
-   final gate so remote CI can run in parallel.
+5. **Push and open/update PR** — Commit and push as soon as the branch has a
+   coherent implementation commit. If no PR exists, open it before starting the
+   long local final gate so remote CI can run in parallel.
 6. **Local validation + remote monitoring** — Immediately run `task check` (or a
    scoped subset) and relevant e2e while watching the PR checks. Prefer local
    Docker (cached images) for diagnosis and iteration; use remote CI as the
@@ -81,13 +119,17 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    logs** (Playwright `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) →
    fix → run targeted local checks while debugging → commit and push the
    completed fix → run the required local gate while monitoring refreshed CI.
-9. **Repeat** — Return to step 8 until every remote check is green.
-10. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
+9. **Address PR comments** — Inspect human, CodeRabbit, and automated feedback;
+   reply with the fix, validation, or no-change rationale, push changes when
+   needed, and re-watch checks.
+10. **Repeat** — Return to step 8 until every remote check is green and comments
+    are handled.
+11. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
 
 ```mermaid
 flowchart TD
   P[0 Prompt] --> F[1 Fetch origin/main]
-  F --> B[2 Branch from origin/main]
+  F --> B[2 Branch + prepare PR]
   B --> I[3 Implement]
   I --> CR[4 CodeRabbit when useful]
   CR --> PU[5 Push + open/update PR]
@@ -95,7 +137,8 @@ flowchart TD
   PU --> PR[7 Monitor CI + PR review]
   L --> G{Local + remote green?}
   PR --> G
-  G -->|yes| M[10 Squash merge]
+  G -->|yes| C[9 Address comments]
+  C --> M[11 Squash merge]
   G -->|no| FIX[8 Read app logs + fix]
   FIX --> PUSH[Push completed fix]
   PUSH --> L
@@ -213,7 +256,7 @@ lint/test subset can prove the fix. For broader failures, use `task ci:pr` as
 the local gate after pushing the completed fix, and do not merge or hand off
 until the latest head has both local and remote green.
 
-See [pull-requests.md § Local checks](pull-requests.md#4-local-checks) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
+See [pull-requests.md § Local checks](pull-requests.md#5-local-checks) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 5–7 — Push, open PR, monitor
 
@@ -242,7 +285,7 @@ git push origin HEAD
 gh pr checks <number> --watch
 ```
 
-### 10 — Merge
+### 11 — Merge
 
 When all checks pass and the user asked to merge (or the task implies merge-on-green):
 

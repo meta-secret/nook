@@ -42,7 +42,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, per-test e2e log attachments).
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default agent workflow** (fetch → branch → implement → push at final-validation boundary → local and remote checks in parallel → fix loop → merge). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → push/open PR → monitor CI/review → fix loop → address comments → squash merge when green). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/coderabbit.md](workflows/coderabbit.md) — CodeRabbit CLI / PR-review workflow for agent pre-commit review loops and GitHub-side review control.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
