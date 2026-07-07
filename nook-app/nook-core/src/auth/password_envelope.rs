@@ -1,6 +1,6 @@
 //! Compatibility exports for password-backed vault key envelopes.
 
-pub use nook_auth::{
+pub use nook_auth2::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
     PasswordUnlockEntry, VaultUnlock, attach_password_envelope,
     attach_password_envelope_with_work_factor, create_password_entry,

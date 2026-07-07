@@ -31,7 +31,7 @@ RUN rm -rf \
     Cargo.toml \
     docker \
     docker-bake.hcl \
-    nook-auth \
+    nook-auth2 \
     nook-core \
     nook-wasm \
     nook-web \

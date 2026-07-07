@@ -1,10 +1,10 @@
 //! Compatibility exports for portable vault key-access primitives.
 //!
-//! The reusable device/member/password primitives live in `nook-auth`. This
+//! The reusable device/member/password primitives live in `nook-auth2`. This
 //! module keeps `nook-core`'s existing public API stable and owns the small
 //! adapter that replays core event-log operations into auth metadata state.
 
-pub use nook_auth::{
+pub use nook_auth2::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
     MemberEntry, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState, approve_join_request,
     assess_connect_access, auth_record, build_members_records, create_join_request_record,
@@ -32,7 +32,7 @@ pub fn apply_vault_meta_operation(
     state: &mut VaultMetaState,
     operation: &VaultOperation,
     requested_at: &str,
-) -> nook_auth::MultiDeviceResult<()> {
+) -> nook_auth2::MultiDeviceResult<()> {
     match operation {
         VaultOperation::JoinRequested {
             device_id,
@@ -90,13 +90,13 @@ pub fn apply_vault_meta_operation(
 pub fn materialize_vault_meta_from_graph(
     graph: &crate::vault_event_graph::EventGraph,
     state: &mut VaultMetaState,
-) -> nook_auth::MultiDeviceResult<()> {
+) -> nook_auth2::MultiDeviceResult<()> {
     let order = graph
         .topological_order()
-        .map_err(|e| nook_auth::MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
+        .map_err(|e| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
     for event_id in order {
         let event = graph.get(&event_id).ok_or_else(|| {
-            nook_auth::MultiDeviceError::InvalidDeviceIdentity(format!(
+            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
                 "Missing event {event_id} in graph."
             ))
         })?;

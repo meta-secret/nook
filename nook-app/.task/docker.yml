@@ -135,7 +135,7 @@ tasks:
         {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web-extension/dist" "{{.EXTENSION_ROOT}}/dist"'
 
   docker:extract:coverage:
-    desc: Copy nook-core + nook-auth coverage artifacts from the sealed Docker image to the host.
+    desc: Copy nook-core + nook-auth2 coverage artifacts from the sealed Docker image to the host.
     vars:
       COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
     cmds:
