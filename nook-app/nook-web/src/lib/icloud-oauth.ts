@@ -112,6 +112,11 @@ function storeCloudKitWebAuthToken(
 
 const cloudKitAuthTokenStore: CloudKitAuthTokenStore = {
   putToken(containerIdentifier, authToken) {
+    log.debug('CloudKit putToken', {
+      container: containerIdentifier,
+      tokenType: typeof authToken,
+      hasValue: authToken != null,
+    })
     storeCloudKitWebAuthToken(containerIdentifier, authToken)
   },
   getToken(containerIdentifier) {
@@ -208,7 +213,13 @@ function normalizeWebAuthToken(stored: unknown): string | undefined {
   }
   if (stored != undefined && typeof stored === 'object') {
     const record = stored as Record<string, unknown>
-    for (const key of ['token', 'ckWebAuthToken', 'value']) {
+    for (const key of [
+      'token',
+      'ckWebAuthToken',
+      'webAuthToken',
+      'authToken',
+      'value',
+    ]) {
       const candidate = record[key]
       if (typeof candidate === 'string' && candidate.trim()) {
         return candidate.trim()
@@ -238,16 +249,42 @@ function waitForStoredWebAuthToken(
 
   return new Promise((resolve, reject) => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined
-    const listener = (token: string) => {
+    let pollId: ReturnType<typeof setInterval> | undefined = undefined
+    let settled = false
+
+    const cleanup = () => {
+      settled = true
       if (timeoutId !== undefined) {
         clearTimeout(timeoutId)
       }
+      if (pollId !== undefined) {
+        clearInterval(pollId)
+      }
       webAuthTokenListeners.delete(listener)
+    }
+
+    const listener = (token: string) => {
+      if (settled) {
+        return
+      }
+      cleanup()
       resolve(token)
     }
     webAuthTokenListeners.add(listener)
+
+    // Fallback: poll cookies / session storage so we detect tokens that
+    // CloudKit JS stored outside the custom authTokenStore (e.g. via
+    // cookie or a direct sessionStorage write after a SDK update).
+    pollId = setInterval(() => {
+      const token = readStoredWebAuthToken()
+      if (token) {
+        cleanup()
+        resolve(token)
+      }
+    }, 500)
+
     timeoutId = setTimeout(() => {
-      webAuthTokenListeners.delete(listener)
+      cleanup()
       reject(cloudKitSignInTimeoutError())
     }, timeoutMs)
   })
@@ -516,9 +553,21 @@ async function waitForCloudKitSignIn(
   }
   try {
     await Promise.race([tokenPromise, signInPromise])
+    // After the race, the token may already be in cookies or session
+    // storage even when putToken was not called (CloudKit JS may bypass
+    // the custom authTokenStore).  Check directly before blocking on
+    // tokenPromise so we don't wait for the full timeout.
+    const immediateToken = readStoredWebAuthToken()
+    if (immediateToken) {
+      return authSetupUserIdentity ?? {}
+    }
     await tokenPromise
     return authSetupUserIdentity ?? {}
   } catch (error) {
+    // Allow a fresh setUpAuth attempt on the next user interaction so
+    // retries do not reuse a stale cached promise.
+    authSetupPromise = undefined
+    authSetupUserIdentity = undefined
     logCloudKitAuthFailure('CloudKit sign-in failed', error)
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }

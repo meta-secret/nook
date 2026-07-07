@@ -376,5 +376,90 @@ describe('icloud-oauth', () => {
       )
       expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
+
+    it('detects tokens stored directly in session storage via polling fallback', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 5000 })
+      await vi.waitFor(() => {
+        expect(whenUserSignsIn).toHaveBeenCalled()
+      })
+
+      // Simulate CloudKit JS writing the token directly to session storage
+      // (bypassing the custom authTokenStore putToken callback).
+      sessionStorage.setItem(
+        `nook.icloud.webAuthToken.${ICLOUD_CONTAINER_ID}`,
+        JSON.stringify('cookie-fallback-token'),
+      )
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'cookie-fallback-token',
+      })
+    })
+
+    it('normalizes tokens with webAuthToken key', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 500 })
+      await vi.waitFor(() => {
+        expect(window.CloudKit!.configure).toHaveBeenCalled()
+        expect(whenUserSignsIn).toHaveBeenCalled()
+      })
+
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        webAuthToken: 'alt-format-token',
+      })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'alt-format-token',
+      })
+    })
+
+    it('allows retry after a sign-in timeout by resetting auth state', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      // First attempt times out.
+      await expect(
+        requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
+      ).rejects.toThrow('Apple sign-in did not complete.')
+
+      // Second attempt should re-run setUpAuth (not reuse stale promise).
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth: vi.fn().mockResolvedValue(undefined),
+        whenUserSignsIn: vi.fn().mockReturnValue(signInPromise),
+      })
+
+      const pending = requestICloudWebAuthToken({ signInTimeoutMs: 5000 })
+
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'retry-token',
+      })
+      resolveSignIn({ lookupInfo: {} })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'retry-token',
+      })
+    })
   })
 })
