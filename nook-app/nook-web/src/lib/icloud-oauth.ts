@@ -11,11 +11,13 @@ import {
   ICLOUD_CONTAINER_ID,
   ICLOUD_ENVIRONMENT,
 } from '$lib/icloud-oauth-config'
+import { createLogger } from '$lib/log'
 
 const CLOUDKIT_SCRIPT_URL = 'https://cdn.apple-cloudkit.com/ck/2/cloudkit.js'
 const CLOUDKIT_SIGN_IN_BUTTON_ID = 'apple-sign-in-button'
 const CLOUDKIT_SIGN_OUT_BUTTON_ID = 'apple-sign-out-button'
 export const ICLOUD_SIGN_IN_TIMEOUT_MS = 60_000
+const log = createLogger('icloud-oauth')
 
 export type ICloudOAuthTokens = {
   accessToken: string
@@ -34,7 +36,23 @@ type CloudKitUserIdentity = {
 
 type CloudKitAuthError = {
   _reason?: string
+  code?: string | number
+  errorCode?: string | number
   message?: string
+  name?: string
+  reason?: string
+  serverErrorCode?: string | number
+  status?: string | number
+  statusCode?: string | number
+  statusText?: string
+}
+
+type CloudKitAuthErrorDetails = {
+  code?: string
+  message?: string
+  reason?: string
+  status?: number
+  statusText?: string
 }
 
 type CloudKitContainer = {
@@ -235,20 +253,124 @@ function waitForStoredWebAuthToken(
   })
 }
 
-function cloudKitAuthErrorMessage(error: unknown): string {
+function stringValue(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return undefined
+  }
+  const text = String(value).trim()
+  return text || undefined
+}
+
+function numericStatus(value: unknown): number | undefined {
+  const text = stringValue(value)
+  if (!text) {
+    return undefined
+  }
+  const status = Number(text)
+  return Number.isInteger(status) ? status : undefined
+}
+
+function cloudKitAuthErrorDetails(error: unknown): CloudKitAuthErrorDetails {
   if (error instanceof Error) {
-    return error.message
+    return {
+      code: error.name && error.name !== 'Error' ? error.name : undefined,
+      message: stringValue(error.message),
+    }
   }
   if (error != undefined && typeof error === 'object') {
     const authError = error as CloudKitAuthError
-    if (authError._reason?.trim()) {
-      return authError._reason.trim()
-    }
-    if (authError.message?.trim()) {
-      return authError.message.trim()
+    return {
+      code:
+        stringValue(authError.code) ??
+        stringValue(authError.errorCode) ??
+        stringValue(authError.serverErrorCode) ??
+        stringValue(authError.name),
+      message: stringValue(authError.message),
+      reason: stringValue(authError.reason) ?? stringValue(authError._reason),
+      status:
+        numericStatus(authError.status) ?? numericStatus(authError.statusCode),
+      statusText: stringValue(authError.statusText),
     }
   }
-  return 'iCloud sign-in failed.'
+  return {}
+}
+
+function hasErrorToken(
+  details: CloudKitAuthErrorDetails,
+  predicate: (value: string) => boolean,
+): boolean {
+  return [details.code, details.message, details.reason, details.statusText]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => predicate(value.toUpperCase()))
+}
+
+function isAuthRequiredCloudKitError(
+  details: CloudKitAuthErrorDetails,
+): boolean {
+  return hasErrorToken(details, (value) =>
+    [
+      'AUTHENTICATION_REQUIRED',
+      'REQUEST NEEDS AUTHORIZATION',
+      'NEEDS AUTHORIZATION',
+    ].some((token) => value.includes(token)),
+  )
+}
+
+function hasCloudKitSignInControl(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) !== null
+  )
+}
+
+function isExpectedSignInSetupFailure(error: unknown): boolean {
+  const details = cloudKitAuthErrorDetails(error)
+  if (isAuthRequiredCloudKitError(details)) {
+    return true
+  }
+  const isOpaqueUnknown = hasErrorToken(details, (value) =>
+    value.includes('UNKNOWN_ERROR'),
+  )
+  return isOpaqueUnknown && hasCloudKitSignInControl()
+}
+
+function cloudKitAuthErrorMessage(error: unknown): string {
+  const details = cloudKitAuthErrorDetails(error)
+  if (isAuthRequiredCloudKitError(details)) {
+    return 'Apple sign-in is required. Click Sign in with Apple to continue.'
+  }
+  const isMisdirectedRequest =
+    details.status === 421 ||
+    hasErrorToken(
+      details,
+      (value) => value.includes('421') || value.includes('MISDIRECTED'),
+    )
+  if (isMisdirectedRequest) {
+    return 'Apple CloudKit returned 421 during sign-in. Click Sign in with Apple; if it repeats after login, check that the production iCloud container, API token, and allowed origin for https://nokey.sh match in CloudKit Console.'
+  }
+  const isUnknownCloudKitError = hasErrorToken(details, (value) =>
+    value.includes('UNKNOWN_ERROR'),
+  )
+  if (isUnknownCloudKitError) {
+    return 'Apple CloudKit returned UNKNOWN_ERROR during sign-in. Check that the iCloud API token is enabled for this production container and that https://nokey.sh is an allowed web origin.'
+  }
+  return (
+    details.reason ??
+    details.message ??
+    details.statusText ??
+    'iCloud sign-in failed.'
+  )
+}
+
+function logCloudKitAuthFailure(message: string, error: unknown): void {
+  const details = cloudKitAuthErrorDetails(error)
+  log.warn(message, {
+    code: details.code,
+    reason: details.reason,
+    message: details.message,
+    status: details.status,
+    statusText: details.statusText,
+  })
 }
 
 function cloudKitSignInTimeoutError(): Error {
@@ -300,6 +422,13 @@ function setUpCloudKitAuth(
       return userIdentity
     })
     .catch((error: unknown) => {
+      if (isExpectedSignInSetupFailure(error)) {
+        log.debug('CloudKit auth setup waiting for Apple sign-in', {
+          details: cloudKitAuthErrorDetails(error),
+        })
+        authSetupUserIdentity = undefined
+        return undefined
+      }
       authSetupPromise = undefined
       authSetupUserIdentity = undefined
       throw error
@@ -313,6 +442,7 @@ export async function prepareICloudSignInControl(): Promise<void> {
   try {
     await setUpCloudKitAuth(container)
   } catch (error) {
+    logCloudKitAuthFailure('CloudKit auth setup failed', error)
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
 }
@@ -374,6 +504,7 @@ async function waitForCloudKitSignIn(
     await tokenPromise
     return authSetupUserIdentity ?? {}
   } catch (error) {
+    logCloudKitAuthFailure('CloudKit sign-in failed', error)
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
 }
@@ -408,6 +539,7 @@ export async function requestICloudWebAuthToken(
   try {
     userIdentity = await setUpCloudKitAuth(container)
   } catch (error) {
+    logCloudKitAuthFailure('CloudKit auth setup failed', error)
     throw new Error(cloudKitAuthErrorMessage(error), { cause: error })
   }
 

@@ -216,5 +216,84 @@ describe('icloud-oauth', () => {
       ).rejects.toThrow('Apple sign-in did not complete.')
       expect(whenUserSignsIn).toHaveBeenCalled()
     })
+
+    it('treats CloudKit auth-required setup as a prepared sign-in control', async () => {
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      const setUpAuth = vi.fn().mockRejectedValue({
+        reason: 'request needs authorization',
+        serverErrorCode: 'AUTHENTICATION_REQUIRED',
+        status: 421,
+      })
+      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await expect(prepareICloudSignInControl()).resolves.toBeUndefined()
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+      })
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'auth-required-token',
+      })
+      resolveSignIn({ lookupInfo: {} })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'auth-required-token',
+      })
+      expect(whenUserSignsIn).toHaveBeenCalledOnce()
+    })
+
+    it('treats opaque CloudKit UNKNOWN_ERROR setup as prepared when the sign-in control exists', async () => {
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      const setUpAuth = vi.fn().mockRejectedValue({
+        _reason: 'UNKNOWN_ERROR',
+      })
+      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await expect(prepareICloudSignInControl()).resolves.toBeUndefined()
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+      })
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'opaque-setup-token',
+      })
+      resolveSignIn({ lookupInfo: {} })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'opaque-setup-token',
+      })
+      expect(whenUserSignsIn).toHaveBeenCalledOnce()
+    })
+
+    it('expands opaque CloudKit UNKNOWN_ERROR auth failures without a sign-in control', async () => {
+      document.body.innerHTML = '<div id="apple-sign-out-button"></div>'
+      const setUpAuth = vi.fn().mockRejectedValue({
+        _reason: 'UNKNOWN_ERROR',
+      })
+      const whenUserSignsIn = vi.fn()
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await expect(prepareICloudSignInControl()).rejects.toThrow(
+        'Apple CloudKit returned UNKNOWN_ERROR during sign-in.',
+      )
+      expect(whenUserSignsIn).not.toHaveBeenCalled()
+    })
   })
 })
