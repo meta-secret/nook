@@ -22,7 +22,7 @@ RUN case "$WASM_BUILD_MODE" in \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
     && wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm $wasm_opt_flag \
-    && ( current="$(find nook-wasm/src nook-core/src nook-core/locales nook-auth/src \
+    && ( current="$(find nook-wasm/src nook-core/src nook-core/locales nook-auth2/src \
            \( -name '*.rs' -o -name '*.json' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \

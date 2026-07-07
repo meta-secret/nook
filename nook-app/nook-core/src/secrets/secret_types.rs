@@ -1,6 +1,6 @@
 //! Typed plaintext secret payloads.
 //!
-//! `nook-auth` owns `SecretType` plus the opaque stored row shape because auth
+//! `nook-auth2` owns `SecretType` plus the opaque stored row shape because auth
 //! metadata shares the same YAML row boundary. `nook-core` owns the plaintext
 //! password-manager payloads and session records.
 
@@ -10,7 +10,7 @@ use crate::vault_wire::SecretPayloadYaml;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-pub use nook_auth::{SecretType, StoredRecordPayload, StoredSecretRecord};
+pub use nook_auth2::{SecretType, StoredRecordPayload, StoredSecretRecord};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]

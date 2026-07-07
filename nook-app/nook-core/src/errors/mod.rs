@@ -9,7 +9,7 @@ mod vault_sync;
 
 pub use database::{DatabaseError, DatabaseResult};
 pub use event::EventError;
-pub use nook_auth::{
+pub use nook_auth2::{
     AgeCryptoError, DeviceKeyProtectionError, EnrollmentError, MultiDeviceError, MultiDeviceResult,
     PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
     ValidationResult, VaultCryptoError,

@@ -257,9 +257,9 @@ self-enrolment path as QR.
 
 ---
 
-## 6. Auth API (`nook-auth`)
+## 6. Auth API (`nook-auth2`)
 
-`nook-auth` owns password entries and other vault key-access mechanisms. The
+`nook-auth2` owns password entries and other vault key-access mechanisms. The
 same APIs are re-exported through `nook-core` for existing callers, while sync
 provider credentials remain outside the auth crate.
 
@@ -273,7 +273,7 @@ provider credentials remain outside the auth crate.
 | `read_vault_password_entries(yaml)`                                                  | Reads current entries and legacy password-envelope fields.  |
 | `VaultOperation::{PasswordAdded, PasswordRotated, PasswordRemoved}`                  | Event-log operations for password credential changes.       |
 
-All scrypt work happens in portable Rust (`nook-auth`, Wasm-compatible).
+All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).
 
 ---
 

@@ -170,7 +170,7 @@ jobs:
 
           mkdir -p coverage
           {
-            echo "### nook-core + nook-auth coverage"
+            echo "### nook-core + nook-auth2 coverage"
             echo
             echo "| Metric | Lines |"
             echo "| --- | ---: |"
@@ -207,7 +207,7 @@ jobs:
             const verdict = process.env.STATUS === 'passed' ? 'PASS' : 'FAIL'
             const body = [
               marker,
-              '### nook-core + nook-auth coverage',
+              '### nook-core + nook-auth2 coverage',
               '',
               `${verdict}: line coverage ${process.env.STATUS}: ${process.env.CURRENT}% (floor ${process.env.FLOOR}%)`,
               '',

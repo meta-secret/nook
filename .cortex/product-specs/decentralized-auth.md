@@ -2,7 +2,7 @@
 
 Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries. **Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata. The immutable event log (`nook-log/v1/events/`) is the provider source of truth; `nook-projection.yaml` is only the local projection/import format.
 
-**Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §2 (`nook-auth` boundary), §4 (storage table), §3 (connect flow).
+**Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §2 (`nook-auth2` boundary), §4 (storage table), §3 (connect flow).
 
 ---
 
@@ -181,9 +181,9 @@ another valid path.
 
 ---
 
-## 5. Auth API (`nook-auth/src/auth/multi_device.rs`)
+## 5. Auth API (`nook-auth2/src/auth/multi_device.rs`)
 
-`nook-auth` is the source of truth for these portable key-access primitives.
+`nook-auth2` is the source of truth for these portable key-access primitives.
 `nook-core` re-exports them for compatibility and adds event-log adapters where
 core event types are required.
 

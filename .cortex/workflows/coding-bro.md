@@ -196,7 +196,7 @@ Scoped subsets when the touch surface is narrow:
 
 ```bash
 task web:check && task web:test    # web-only
-task rust:test                     # nook-core + nook-auth only
+task rust:test                     # nook-core + nook-auth2 only
 ```
 
 **E2e during fix/debug — one spec at a time.** Do not wait for the full suite while iterating. Run the failing or touched spec only:
