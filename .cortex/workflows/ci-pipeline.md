@@ -115,10 +115,10 @@ All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo
 
 ```bash
 # Minimum before every agent push
-task check                          # format, clippy, unit tests, web build
+task check                          # format, clippy, unit tests, web build (dev/no-opt wasm)
 
 # Full PR CI mirror — before opening PR; mandatory after any remote CI failure
-task ci:pr                          # prepare → verify ‖ build → full local-provider e2e
+WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build → full local-provider e2e
 
 # E2e projects
 task web:test:e2e                   # full local-provider e2e (PR/main gate)

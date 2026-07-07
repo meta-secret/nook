@@ -46,7 +46,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check, build, e2e, and push toolchain
-        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
+        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=prod
         env:
           CI: true
           PUSH_TOOLCHAIN: "1"
@@ -93,7 +93,7 @@ jobs:
           node-version: "24"
 
       - name: Resolve toolchain image
-        run: task setup
+        run: task setup WASM_BUILD_MODE=prod
         env:
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
@@ -103,6 +103,7 @@ jobs:
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ github.workspace }}
           VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
+          WASM_BUILD_MODE: prod
           VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}-fix
           NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}

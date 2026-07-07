@@ -8,7 +8,7 @@
 
 ## 2. Dev Server and Build
 
-- Start Vite dev server: `task web:dev` (Docker; port 5173). For fast WASM iteration, use `task web:dev:fast` to skip `wasm-opt` during the initial generated-pkg refresh; it expects the `nook-web:local` image to already exist, so run `task setup` once first on a fresh machine.
+- Start Vite dev server: `task web:dev` (Docker; port 5173). It uses the default dev/no-opt WASM mode; `task web:dev:fast` is an explicit alias for the same local-iteration behavior and expects the `nook-web:local` image to already exist, so run `task setup` once first on a fresh machine.
 - Build the production assets: `task web:build` (outputs to `nook-app/nook-web/dist/`).
 - The Svelte config is located in `svelte.config.js` and Vite config in `vite.config.ts`.
 
