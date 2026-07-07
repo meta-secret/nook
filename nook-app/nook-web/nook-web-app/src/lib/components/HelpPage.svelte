@@ -12,11 +12,14 @@
     CardTitle,
   } from '$lib/components/ui/card'
   import type { MermaidTheme } from '$lib/mermaid-diagram'
+  import type { VaultState } from '$lib/vault.svelte'
 
   let {
+    vault,
     onClose,
     colorMode = 'dark',
   }: {
+    vault: VaultState
     onClose: () => void
     colorMode?: MermaidTheme
   } = $props()
@@ -49,11 +52,10 @@
             class="text-base font-semibold tracking-tight text-foreground inline-flex items-center gap-1.5"
           >
             <BookOpen class="size-4 shrink-0" />
-            Your vault, optional sync replicas
+            {vault.t('help.title')}
           </CardTitle>
           <CardDescription class="text-pretty text-xs leading-snug">
-            One encrypted vault on this device — sync providers keep copies in
-            sync.
+            {vault.t('help.subtitle')}
           </CardDescription>
         </div>
         <Button
@@ -65,7 +67,7 @@
           onclick={onClose}
         >
           <ChevronLeft class="size-3.5" />
-          Back
+          {vault.t('common.back')}
         </Button>
       </div>
     </CardHeader>
@@ -76,7 +78,7 @@
           for="help-section-select"
           class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
         >
-          In this guide
+          {vault.t('help.in_this_guide')}
         </label>
         <div class="relative">
           <select
@@ -85,9 +87,13 @@
             data-testid="help-navigation"
             onchange={handleSectionJump}
           >
-            <option value="" selected disabled>Jump to section…</option>
+            <option value="" selected disabled>
+              {vault.t('help.jump_to_section')}
+            </option>
             {#each HELP_SECTIONS as section (section.id)}
-              <option value={section.id}>{section.title}</option>
+              <option value={section.id}>
+                {vault.t(`help.sections.${section.id}.title`)}
+              </option>
             {/each}
           </select>
           <ChevronDown
@@ -105,21 +111,23 @@
             data-testid="help-section-{section.id}"
           >
             <h2 class="text-sm font-semibold leading-tight text-foreground">
-              {section.title}
+              {vault.t(`help.sections.${section.id}.title`)}
             </h2>
             <p class="text-sm leading-snug text-muted-foreground text-pretty">
-              {section.summary}
+              {vault.t(`help.sections.${section.id}.summary`)}
             </p>
             <ul
               class="list-disc space-y-0.5 pl-4 text-sm leading-snug text-muted-foreground text-pretty"
             >
-              {#each section.bullets as bullet, index (section.id + index)}
-                <li>{bullet}</li>
+              {#each Array.from({ length: section.bulletCount }, (_, index) => index + 1) as bulletNumber (section.id + bulletNumber)}
+                <li>
+                  {vault.t(`help.sections.${section.id}.bullet${bulletNumber}`)}
+                </li>
               {/each}
             </ul>
             {#if section.diagram}
               <HelpMermaidDiagram
-                source={section.diagram}
+                source={section.diagram(vault.t)}
                 sectionId={section.id}
                 theme={colorMode}
               />
@@ -136,14 +144,14 @@
           href={appPath('/privacy.html')}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
-          Privacy Policy
+          {vault.t('legal.privacy_policy')}
         </a>
         <span aria-hidden="true">·</span>
         <a
           href={appPath('/terms.html')}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
-          Terms of Service
+          {vault.t('legal.terms_of_service')}
         </a>
       </nav>
     </CardContent>
