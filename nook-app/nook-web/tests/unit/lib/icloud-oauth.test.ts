@@ -203,6 +203,34 @@ describe('icloud-oauth', () => {
       })
     })
 
+    it('keeps waiting for the token when CloudKit wraps the auth challenge as UNKNOWN_ERROR', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockRejectedValue({
+        _reason: 'UNKNOWN_ERROR',
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+      })
+      await vi.waitFor(() => {
+        expect(whenUserSignsIn).toHaveBeenCalledOnce()
+      })
+
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'opaque-callback-token',
+      })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'opaque-callback-token',
+      })
+    })
+
     it('fails when CloudKit sign-in never completes', async () => {
       const setUpAuth = vi.fn().mockResolvedValue(undefined)
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
@@ -215,6 +243,24 @@ describe('icloud-oauth', () => {
         requestICloudWebAuthToken({ signInTimeoutMs: 1 }),
       ).rejects.toThrow('Apple sign-in did not complete.')
       expect(whenUserSignsIn).toHaveBeenCalled()
+    })
+
+    it('treats bare CloudKit 421 setup responses as sign-in required', async () => {
+      document.body.innerHTML = '<div id="apple-sign-out-button"></div>'
+      const setUpAuth = vi.fn().mockRejectedValue({
+        status: 421,
+        statusText: 'Misdirected Request',
+      })
+      const whenUserSignsIn = vi.fn()
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await expect(prepareICloudSignInControl()).rejects.toThrow(
+        'Apple sign-in is required.',
+      )
+      expect(whenUserSignsIn).not.toHaveBeenCalled()
     })
 
     it('treats CloudKit auth-required setup as a prepared sign-in control', async () => {

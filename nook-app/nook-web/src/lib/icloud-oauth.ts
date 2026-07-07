@@ -307,6 +307,9 @@ function hasErrorToken(
 function isAuthRequiredCloudKitError(
   details: CloudKitAuthErrorDetails,
 ): boolean {
+  if (details.status === 421) {
+    return true
+  }
   return hasErrorToken(details, (value) =>
     [
       'AUTHENTICATION_REQUIRED',
@@ -319,14 +322,14 @@ function isAuthRequiredCloudKitError(
 function hasCloudKitSignInControl(): boolean {
   return (
     typeof document !== 'undefined' &&
-    document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID) !== null
+    Boolean(document.getElementById(CLOUDKIT_SIGN_IN_BUTTON_ID))
   )
 }
 
 function isExpectedSignInSetupFailure(error: unknown): boolean {
   const details = cloudKitAuthErrorDetails(error)
   if (isAuthRequiredCloudKitError(details)) {
-    return true
+    return hasCloudKitSignInControl()
   }
   const isOpaqueUnknown = hasErrorToken(details, (value) =>
     value.includes('UNKNOWN_ERROR'),
@@ -346,7 +349,7 @@ function cloudKitAuthErrorMessage(error: unknown): string {
       (value) => value.includes('421') || value.includes('MISDIRECTED'),
     )
   if (isMisdirectedRequest) {
-    return 'Apple CloudKit returned 421 during sign-in. Click Sign in with Apple; if it repeats after login, check that the production iCloud container, API token, and allowed origin for https://nokey.sh match in CloudKit Console.'
+    return 'Apple sign-in is required. Click Sign in with Apple to continue.'
   }
   const isUnknownCloudKitError = hasErrorToken(details, (value) =>
     value.includes('UNKNOWN_ERROR'),
@@ -489,10 +492,21 @@ async function waitForCloudKitSignIn(
   options: Pick<ICloudWebAuthTokenRequestOptions, 'clickSignInControl'> = {},
 ): Promise<CloudKitUserIdentity> {
   const tokenPromise = waitForStoredWebAuthToken(timeoutMs)
-  const signInPromise = container.whenUserSignsIn().then((userIdentity) => {
-    authSetupUserIdentity = userIdentity
-    return userIdentity
-  })
+  const signInPromise = container
+    .whenUserSignsIn()
+    .then((userIdentity) => {
+      authSetupUserIdentity = userIdentity
+      return userIdentity
+    })
+    .catch((error: unknown) => {
+      if (isExpectedSignInSetupFailure(error)) {
+        log.debug('CloudKit sign-in callback waiting for web auth token', {
+          details: cloudKitAuthErrorDetails(error),
+        })
+        return undefined
+      }
+      throw error
+    })
   signInPromise.catch(() => {
     // The CloudKit token store can resolve first; keep later callback failures handled.
   })
