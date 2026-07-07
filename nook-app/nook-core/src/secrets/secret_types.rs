@@ -1,55 +1,16 @@
-//! Typed secret payloads and on-disk record shapes.
+//! Typed plaintext secret payloads.
 //!
-//! - `SecretType` — the tag stored alongside each record so the UI knows which
-//!   schema the (encrypted) payload follows after decryption.
-//! - `LoginSecret`, `ApiKeySecret`, `SeedPhraseSecret`, `SecureNoteSecret` —
-//!   the concrete payload shapes Nook currently supports. Adding a new shape
-//!   means a new variant + struct here, plus a `from_yaml` arm.
-//! - `SecretValue` — typed enum over the shapes; the in-memory
-//!   representation that flows through the wasm bridge.
-//! - `SecretRecord` — `(id, type, data)` plaintext triple for the session.
-//! - `StoredSecretRecord` — the on-disk shape: same triple but `value` is an
-//!   age-encrypted ciphertext string. Sorted, written to vault YAML.
+//! `nook-auth` owns `SecretType` plus the opaque stored row shape because auth
+//! metadata shares the same YAML row boundary. `nook-core` owns the plaintext
+//! password-manager payloads and session records.
 
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use zeroize::Zeroize;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum SecretType {
-    Login,
-    ApiKey,
-    SeedPhrase,
-    SecureNote,
-}
-
-impl SecretType {
-    pub fn parse(value: &str) -> SecretPayloadResult<Self> {
-        match value {
-            "login" => Ok(Self::Login),
-            "api-key" => Ok(Self::ApiKey),
-            "seed-phrase" => Ok(Self::SeedPhrase),
-            "secure-note" => Ok(Self::SecureNote),
-            _ => Err(SecretPayloadError::UnknownSecretType {
-                value: value.to_owned(),
-            }),
-        }
-    }
-
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Login => "login",
-            Self::ApiKey => "api-key",
-            Self::SeedPhrase => "seed-phrase",
-            Self::SecureNote => "secure-note",
-        }
-    }
-}
+pub use nook_auth::{SecretType, StoredRecordPayload, StoredSecretRecord};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -178,54 +139,4 @@ impl SecretRecord {
     pub(crate) fn zeroize_plaintext(&mut self) {
         self.data.zeroize_plaintext();
     }
-}
-
-/// Opaque on-disk payload — user secrets are age-armored YAML; auth/join/member rows use JSON or nested armor.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct StoredRecordPayload(String);
-
-impl StoredRecordPayload {
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[must_use]
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-
-    #[must_use]
-    pub fn from_trusted(value: String) -> Self {
-        Self(value)
-    }
-
-    #[must_use]
-    pub fn from_age_armored(value: crate::AgeArmoredCiphertext) -> Self {
-        Self(value.into_inner())
-    }
-}
-
-impl fmt::Display for StoredRecordPayload {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl AsRef<str> for StoredRecordPayload {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-/// One record on disk — label is plaintext, `value` is an opaque encrypted or JSON payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StoredSecretRecord {
-    #[serde(rename = "id")]
-    pub key: SecretId,
-    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
-    pub secret_type: Option<SecretType>,
-    #[serde(rename = "data")]
-    pub value: StoredRecordPayload,
 }

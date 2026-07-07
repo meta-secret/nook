@@ -1,7 +1,6 @@
 //! Key-epoch rotation errors.
 
-use super::multi_device::MultiDeviceError;
-use super::vault_crypto::VaultCryptoError;
+use nook_auth::{MultiDeviceError, VaultCryptoError};
 use thiserror::Error;
 
 pub type VaultEpochResult<T> = Result<T, VaultEpochError>;

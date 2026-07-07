@@ -1284,6 +1284,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-auth"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "age",
+ "base64 0.22.1",
+ "getrandom",
+ "hex",
+ "hkdf",
+ "pbkdf2 0.13.0",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
 name = "nook-core"
 version = "0.1.0"
 dependencies = [
@@ -1295,6 +1316,7 @@ dependencies = [
  "getrandom",
  "hex",
  "hkdf",
+ "nook-auth",
  "pbkdf2 0.13.0",
  "percent-encoding",
  "rand_core",

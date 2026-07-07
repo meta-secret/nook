@@ -66,7 +66,7 @@ tasks:
         vars: { TASK: _rust:test }
 
   rust:coverage:
-    desc: Report nook-core line coverage (cargo llvm-cov + nextest).
+    desc: Report nook-core + nook-auth line coverage (cargo llvm-cov + nextest).
     deps:
       - setup
     cmds:
@@ -74,7 +74,7 @@ tasks:
         vars: { TASK: _rust:coverage }
 
   rust:coverage:check:
-    desc: Enforce nook-core 90% line coverage threshold.
+    desc: Enforce nook-core + nook-auth 90% line coverage threshold.
     deps:
       - setup
     cmds:
@@ -90,7 +90,7 @@ tasks:
         vars: { TASK: _rust:coverage:update }
 
   rust:coverage:export:
-    desc: Export nook-core coverage summary, JSON, and LCOV artifacts from Docker.
+    desc: Export nook-core + nook-auth coverage summary, JSON, and LCOV artifacts from Docker.
     deps:
       - setup
     cmds:
@@ -115,7 +115,7 @@ tasks:
   _test:
     desc: Run all test suites.
     cmds:
-      # nook-core tests + coverage floor run at IMAGE BUILD time (nook-app/nook-core/Dockerfile builder-debug),
+      # nook-core + nook-auth tests and coverage floor run at IMAGE BUILD time (nook-app/nook-core/Dockerfile builder-debug),
       # so the image would not exist if they failed — only web tests run at task runtime.
       - task: _web:check
       - task: _web:test
@@ -156,30 +156,30 @@ tasks:
       - task: _extension:format:check
 
   _test:parallel:
-    desc: svelte-check, vitest, and extension check when wasm is already built (nook-core tests+coverage ran at image build).
+    desc: svelte-check, vitest, and extension check when wasm is already built (nook-core + nook-auth tests/coverage ran at image build).
     deps:
       - _web:check:parallel
       - _web:test:parallel
       - _extension:check
 
   _rust:test:parallel:
-    desc: Run nook-core tests when deps are already built (ci:pr parallel track).
+    desc: Run nook-core + nook-auth tests when deps are already built (ci:pr parallel track).
     cmds:
       - task: _rust:test:run
 
   _rust:test:run:
     internal: true
-    desc: Run nook-core tests via cargo-nextest (ci profile, no coverage gate).
+    desc: Run nook-core + nook-auth tests via cargo-nextest (ci profile, no coverage gate).
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo nextest run -p nook-core --profile ci
+      - cd "{{.APP_ROOT}}" && cargo nextest run -p nook-core -p nook-auth --profile ci
 
   _rust:coverage:
-    desc: Print nook-core line coverage summary (no floor enforcement).
+    desc: Print nook-core + nook-auth line coverage summary (no floor enforcement).
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only
+      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth --summary-only
 
   _rust:coverage:check:
-    desc: Run nook-core coverage in Docker and let cargo-llvm-cov enforce the line floor.
+    desc: Run nook-core + nook-auth coverage in Docker and let cargo-llvm-cov enforce the line floor.
     vars:
       FLOOR:
         sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-core/coverage-floor.json
@@ -187,14 +187,14 @@ tasks:
       # Same cargo-llvm-cov subcommand warmed in nook-app/nook-core/Dockerfile (builder-debug), so the coverage
       # build is a cache hit — no dep recompile at runtime. cargo-llvm-cov enforces the threshold
       # itself via --fail-under-lines (non-zero exit if below); no output parsing.
-      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only --fail-under-lines {{.FLOOR}}
+      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth --summary-only --fail-under-lines {{.FLOOR}}
 
   _rust:coverage:update:
-    desc: Print measured nook-core line coverage as JSON so the floor can be bumped (apply on host).
+    desc: Print measured nook-core + nook-auth line coverage as JSON so the floor can be bumped (apply on host).
     cmds:
       # Emit machine-readable coverage; --fail-under-lines with the current floor still gates, while
       # the JSON summary gives the exact measured line% to copy into {{.APP_ROOT}}/nook-core/coverage-floor.json.
-      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --json --summary-only
+      - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth --json --summary-only
 
   _format:
     desc: Format all projects, then print the changes as a git diff (sealed image — apply on host).
@@ -218,17 +218,17 @@ tasks:
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
 
   _rust:build:
-    desc: Build the native Rust crate (wasm is built via _wasm:build).
+    desc: Build the native Rust crates (wasm is built via _wasm:build).
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo build -p nook-core
+      - cd "{{.APP_ROOT}}" && cargo build -p nook-core -p nook-auth
 
   _rust:test:
-    desc: Test nook-core (wasm is covered by web e2e).
+    desc: Test nook-core + nook-auth (wasm is covered by web e2e).
     cmds:
       - task: _rust:test:run
 
   _rust:lint:
-    desc: Lint nook-core on host and nook-wasm for wasm32.
+    desc: Lint nook-core + nook-auth on host and nook-wasm for wasm32.
     cmds:
-      - cd "{{.APP_ROOT}}" && cargo clippy -p nook-core --all-targets -- -D warnings
+      - cd "{{.APP_ROOT}}" && cargo clippy -p nook-core -p nook-auth --all-targets -- -D warnings
       - cd "{{.APP_ROOT}}" && cargo clippy --release --target wasm32-unknown-unknown -p nook-wasm -- -D warnings

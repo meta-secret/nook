@@ -1,7 +1,7 @@
 {
   "lines_percent": 90.0,
-  "package": "nook-core",
-  "tool": "cargo llvm-cov nextest --profile ci",
+  "package": "nook-core+nook-auth",
+  "tool": "cargo llvm-cov nextest --profile ci -p nook-core -p nook-auth",
   "updated": "2026-06-30",
-  "note": "Minimum line coverage for nook-core (90%). CI fails below this threshold. When measured coverage is under 90%, agents should add Rust tests in the same task."
+  "note": "Minimum line coverage for nook-core plus nook-auth (90%). CI fails below this threshold. When measured coverage is under 90%, agents should add Rust tests in the same task."
 }

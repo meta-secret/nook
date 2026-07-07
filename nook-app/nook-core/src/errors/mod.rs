@@ -1,31 +1,20 @@
 //! Typed errors for the vault stack.
 
-mod age_crypto;
 mod database;
-mod device_key_protection;
-mod enrollment;
 mod event;
-mod multi_device;
-mod password;
-mod secret_payload;
 mod session;
-mod validation;
-mod vault_crypto;
 mod vault_epoch;
 mod vault_format;
 mod vault_sync;
 
-pub use age_crypto::AgeCryptoError;
 pub use database::{DatabaseError, DatabaseResult};
-pub use device_key_protection::{DeviceKeyProtectionError, DeviceKeyProtectionResult};
-pub use enrollment::{EnrollmentError, EnrollmentResult};
 pub use event::EventError;
-pub use multi_device::{MultiDeviceError, MultiDeviceResult};
-pub use password::{PasswordError, PasswordResult};
-pub use secret_payload::{SecretPayloadError, SecretPayloadResult};
+pub use nook_auth::{
+    AgeCryptoError, DeviceKeyProtectionError, EnrollmentError, MultiDeviceError, MultiDeviceResult,
+    PasswordError, PasswordResult, SecretPayloadError, SecretPayloadResult, ValidationError,
+    ValidationResult, VaultCryptoError,
+};
 pub use session::{SessionError, SessionResult};
-pub use validation::{ValidationError, ValidationResult};
-pub use vault_crypto::{VaultCryptoError, VaultCryptoResult};
 pub use vault_epoch::{VaultEpochError, VaultEpochResult};
 pub use vault_format::{VaultFormatError, VaultFormatResult};
 pub use vault_sync::VaultSyncError;

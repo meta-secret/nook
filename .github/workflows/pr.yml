@@ -113,12 +113,12 @@ jobs:
               auto_inactive: false,
             })
 
-      - name: Export PR nook-core coverage
+      - name: Export PR nook-core/auth coverage
         run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
         env:
           CI: true
 
-      - name: Export base nook-core coverage
+      - name: Export base nook-core/auth coverage
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
@@ -143,7 +143,7 @@ jobs:
             task docker:extract:coverage COVERAGE_OUT_DIR="$base_coverage_out"
           )
 
-      - name: Summarize nook-core coverage
+      - name: Summarize nook-core/auth coverage
         id: coverage
         run: |
           set -euo pipefail
@@ -170,7 +170,7 @@ jobs:
 
           mkdir -p coverage
           {
-            echo "### nook-core coverage"
+            echo "### nook-core + nook-auth coverage"
             echo
             echo "| Metric | Lines |"
             echo "| --- | ---: |"
@@ -183,7 +183,7 @@ jobs:
           } > coverage/nook-core-summary.md
           cat coverage/nook-core-summary.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload nook-core coverage artifact
+      - name: Upload nook-core/auth coverage artifact
         uses: actions/upload-artifact@v7
         with:
           name: nook-core-coverage
@@ -192,7 +192,7 @@ jobs:
             coverage/base
             coverage/nook-core-summary.md
 
-      - name: Comment nook-core coverage on PR
+      - name: Comment nook-core/auth coverage on PR
         uses: actions/github-script@v9
         env:
           CURRENT: ${{ steps.coverage.outputs.current }}
@@ -207,7 +207,7 @@ jobs:
             const verdict = process.env.STATUS === 'passed' ? 'PASS' : 'FAIL'
             const body = [
               marker,
-              '### nook-core coverage',
+              '### nook-core + nook-auth coverage',
               '',
               `${verdict}: line coverage ${process.env.STATUS}: ${process.env.CURRENT}% (floor ${process.env.FLOOR}%)`,
               '',

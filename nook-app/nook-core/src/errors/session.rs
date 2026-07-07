@@ -1,8 +1,6 @@
 //! Incremental secret mutation errors.
 
-use super::secret_payload::SecretPayloadError;
-use super::validation::ValidationError;
-use super::vault_crypto::VaultCryptoError;
+use nook_auth::{SecretPayloadError, ValidationError, VaultCryptoError};
 use thiserror::Error;
 
 pub type SessionResult<T> = Result<T, SessionError>;
