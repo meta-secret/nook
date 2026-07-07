@@ -56,27 +56,17 @@
   let icloudSignInPrepareStarted = $state(false)
 
   function watchICloudSignInIntent(node: HTMLElement) {
-    let forwardingCloudKitClick = false
     const handleClick = (event: MouseEvent) => {
-      if (forwardingCloudKitClick) {
-        return
-      }
       if (
         !isICloud ||
         !vault.icloudOAuthReady ||
         vault.icloudOAuthBusy ||
-        oauthSignedIn
+        oauthSignedIn ||
+        event.defaultPrevented
       ) {
         return
       }
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      forwardingCloudKitClick = true
-      try {
-        void vault.signInWithICloud({ clickPreparedControl: true })
-      } finally {
-        forwardingCloudKitClick = false
-      }
+      void vault.signInWithICloud({ clickPreparedControl: false })
     }
     node.addEventListener('click', handleClick, { capture: true })
     return {
