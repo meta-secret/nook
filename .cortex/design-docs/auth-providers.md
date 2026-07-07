@@ -193,6 +193,21 @@ click path, control shape, sanitized redirect metadata, and token-storage
 presence under the `icloud-oauth` scope; debug from those entries before
 rewriting the provider flow.
 
+When reproducing production auth from the shell, include the browser origin:
+
+```sh
+curl -H 'Origin: https://nokey.sh' \
+  'https://api.apple-cloudkit.com/database/1/iCloud.metasecret.project.com/production/public/users/current?ckAPIToken=...'
+```
+
+Without the `Origin` header, Apple may report `AUTHENTICATION_FAILED` even when
+the same token is valid for the registered web origin. With the registered
+origin, unauthenticated production requests should return
+`AUTHENTICATION_REQUIRED` plus a `redirectURL`. If CloudKit JS wraps that
+challenge as `UNKNOWN_ERROR` after the real Apple click, Nook falls back to the
+Web Services challenge, opens the returned Apple sign-in URL, and listens for
+the `ckWebAuthToken` postMessage.
+
 Preferred future options:
 
 | Option | Summary | Trade-off |
