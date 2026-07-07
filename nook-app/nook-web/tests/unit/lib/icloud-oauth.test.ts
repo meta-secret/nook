@@ -303,6 +303,94 @@ describe('icloud-oauth', () => {
       })
     })
 
+    it('falls back to CloudKit web auth redirect when CloudKit JS hides the auth challenge', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockRejectedValue({
+        _reason: 'UNKNOWN_ERROR',
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+      const close = vi.fn()
+      const open = vi.fn().mockReturnValue({ close })
+      vi.stubGlobal('open', open)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              uuid: 'challenge-id',
+              serverErrorCode: 'AUTHENTICATION_REQUIRED',
+              reason: 'request needs authorization',
+              redirectURL:
+                'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=test',
+            }),
+            { status: 421, headers: { 'content-type': 'application/json' } },
+          ),
+        ),
+      )
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken({
+        clickSignInControl: false,
+        signInTimeoutMs: 5000,
+      })
+
+      await vi.waitFor(() => {
+        expect(open).toHaveBeenCalledWith(
+          'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=test',
+          'nook-icloud-auth',
+          'popup,width=520,height=720',
+        )
+      })
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://idmsa.apple.com',
+          data: { ckWebAuthToken: 'direct-web-auth-token' },
+        }),
+      )
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'direct-web-auth-token',
+      })
+      expect(close).toHaveBeenCalledOnce()
+    })
+
+    it('surfaces an invalid CloudKit API token from the direct auth challenge', async () => {
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockRejectedValue({
+        _reason: 'UNKNOWN_ERROR',
+      })
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              uuid: 'invalid-token-id',
+              serverErrorCode: 'AUTHENTICATION_FAILED',
+              reason:
+                'Authentication failed, please check you have the correct API Token for this container',
+            }),
+            { status: 401, headers: { 'content-type': 'application/json' } },
+          ),
+        ),
+      )
+
+      await prepareICloudSignInControl()
+
+      await expect(
+        requestPreparedICloudWebAuthToken({
+          clickSignInControl: false,
+          signInTimeoutMs: 5000,
+        }),
+      ).rejects.toThrow('Apple rejected the iCloud API token')
+    })
+
     it('fails when CloudKit sign-in never completes', async () => {
       const setUpAuth = vi.fn().mockResolvedValue(undefined)
       const whenUserSignsIn = vi.fn().mockReturnValue(new Promise(() => {}))
