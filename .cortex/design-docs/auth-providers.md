@@ -184,6 +184,15 @@ entry point, add that exact origin both in Google Cloud Console and in
 `oauth-origin.ts`; adding `https://nook-1n8.pages.dev` does not authorize
 subdomains like `https://pr-191.nook-1n8.pages.dev`.
 
+For CloudKit JS diagnostics, a `421` response from `/public/users/caller`
+usually means CloudKit issued the unauthenticated web-auth challenge; it is not
+by itself proof that the API token or origin is wrong. The failure signal is
+whether the real Apple-controlled sign-in click produces a `ckWebAuthToken`
+through CloudKit's token store, cookie, or session storage. Nook logs the native
+click path, control shape, sanitized redirect metadata, and token-storage
+presence under the `icloud-oauth` scope; debug from those entries before
+rewriting the provider flow.
+
 Preferred future options:
 
 | Option | Summary | Trade-off |
