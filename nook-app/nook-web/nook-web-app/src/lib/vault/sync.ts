@@ -81,6 +81,60 @@ function localFolderMultipleVaultsIssueFromError(
   }
 }
 
+type ProviderStoreMismatch = {
+  localStoreId: string
+  remoteStoreId: string
+}
+
+export function providerStoreMismatchFromError(
+  error: unknown,
+): ProviderStoreMismatch | undefined {
+  const message = error instanceof Error ? error.message : String(error)
+  const match = message.match(
+    /already contains another vault\s*\(local store_id\s+([^,\s)]+),\s*provider store_id\s+([^)]+)\)/i,
+  )
+  if (!match?.[1] || !match[2]) {
+    return undefined
+  }
+  return {
+    localStoreId: match[1].trim(),
+    remoteStoreId: match[2].trim(),
+  }
+}
+
+async function stageProviderStoreMismatchConflict(
+  state: VaultState,
+  provider: StorageProvider,
+  error: unknown,
+): Promise<boolean> {
+  const mismatch = providerStoreMismatchFromError(error)
+  if (!mismatch) return false
+
+  const localYaml = await readLocalVaultBlob().catch(() => '')
+  const args =
+    provider.type === 'local-folder'
+      ? (['local-folder', '', ''] as const)
+      : state.providerWasmArgs(provider)
+  await state.stageVaultSyncConflict({
+    providerId: provider.id,
+    providerLabel: provider.label,
+    localYaml,
+    remoteYaml: '',
+    mode: args[0],
+    pat: args[1],
+    repo: args[2],
+    kind: 'store_id',
+    localStoreId: mismatch.localStoreId,
+    remoteStoreId: mismatch.remoteStoreId,
+  })
+  log.warn('provider store mismatch staged', {
+    provider: provider.label,
+    localStoreId: mismatch.localStoreId,
+    remoteStoreId: mismatch.remoteStoreId,
+  })
+  return true
+}
+
 export async function syncLocalFolderProvider(
   state: VaultState,
   provider: StorageProvider,
@@ -365,11 +419,37 @@ export async function resolveSyncConflictImportRemote(
   state.isVerifying = true
   state.errorMsg = ''
   let providerId: string | undefined
+  let importedAsSeparateVault = false
   try {
-    const importedStoreId = await importLocalVaultBlob(
-      conflict.remoteYaml,
-      conflict.providerLabel ?? undefined,
-    )
+    let importedStoreId: string
+    if (conflict.remoteYaml.trim()) {
+      importedStoreId = await importLocalVaultBlob(
+        conflict.remoteYaml,
+        conflict.providerLabel ?? undefined,
+      )
+    } else {
+      if (!state.manager) {
+        throw new Error('Vault manager is not initialized.')
+      }
+      const provider = state.providers.find((p) => p.id === conflict.providerId)
+      if (provider?.type === 'local-folder') {
+        const handleId = provider.localFolder?.handleId
+        if (!handleId) {
+          throw new Error(state.t('auth_storage.local_folder_choose_err'))
+        }
+        importedStoreId = (await state.enqueueStorage(() =>
+          state.manager!.importLocalFolderEventLogAsLocalVault(handleId),
+        )) as string
+      } else {
+        importedStoreId = (await state.enqueueStorage(() =>
+          state.manager!.importProviderEventLogAsLocalVault(
+            conflict.mode,
+            conflict.pat,
+            conflict.repo,
+          ),
+        )) as string
+      }
+    }
     state.activeVaultStoreId = importedStoreId
     state.selectedLoginVaultStoreId = importedStoreId
     if (state.manager) {
@@ -378,14 +458,29 @@ export async function resolveSyncConflictImportRemote(
     state.localVaultPresent = true
     await localLoginActions.refreshLocalVaultCatalog(state)
     providerId = await state.ensureProviderSavedAfterConflict(conflict)
-    await state.updateProviderSyncMetadata(
-      providerId,
-      conflict.remoteYaml,
-      conflict.remoteRevision,
-    )
+    if (conflict.remoteYaml.trim()) {
+      await state.updateProviderSyncMetadata(
+        providerId,
+        conflict.remoteYaml,
+        conflict.remoteRevision,
+      )
+    } else {
+      state.providers = state.providers.map((provider) =>
+        provider.id === providerId
+          ? {
+              ...provider,
+              storeId: importedStoreId,
+              lastSyncedAt: new Date().toISOString(),
+            }
+          : provider,
+      )
+      await state.persistProviders()
+    }
     state.clearPendingSyncConflict()
     state.finishStagedProviderConnectAfterConflict(conflict)
     await state.syncActiveVaultStoreIdToAuth()
+    importedAsSeparateVault = true
+    state.clearUnlockedSession()
     state.showSuccess(
       state.t('auth_storage.sync_conflict_imported_vault', {
         provider: conflict.providerLabel,
@@ -398,7 +493,7 @@ export async function resolveSyncConflictImportRemote(
   } finally {
     state.isVerifying = false
   }
-  if (providerId) {
+  if (providerId && !importedAsSeparateVault) {
     await resumeConnectAfterSyncConflict(state, providerId)
   }
 }
@@ -550,6 +645,11 @@ export async function syncProviderById(
     return
   } catch (e: unknown) {
     syncError(`provider sync (${provider.label})`, e)
+    const stagedStoreMismatch = await stageProviderStoreMismatchConflict(
+      state,
+      provider,
+      e,
+    )
     const localFolderIssue = localFolderMultipleVaultsIssueFromError(
       provider,
       e,
@@ -558,13 +658,17 @@ export async function syncProviderById(
       stageLocalFolderMultipleVaultsIssue(state, localFolderIssue)
     }
     if (!options?.quiet) {
-      state.errorMsg = localFolderIssue
-        ? state.t('auth_storage.local_folder_multiple_vaults_short')
-        : e instanceof Error
-          ? e.message
-          : 'Sync failed for state provider.'
+      state.errorMsg = stagedStoreMismatch
+        ? state.t('auth_storage.sync_conflict_store_id_banner', {
+            provider: provider.label,
+          })
+        : localFolderIssue
+          ? state.t('auth_storage.local_folder_multiple_vaults_short')
+          : e instanceof Error
+            ? e.message
+            : 'Sync failed for state provider.'
     }
-    if (options?.propagateError) {
+    if (options?.propagateError && !stagedStoreMismatch) {
       throw e
     }
   } finally {

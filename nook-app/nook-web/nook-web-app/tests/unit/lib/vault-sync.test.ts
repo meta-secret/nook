@@ -4,7 +4,11 @@ import {
   NookPendingSyncConflict,
   NookRuntimeConfig,
 } from '$lib/nook-wasm/nook_wasm'
-import { syncConflictLabel, type PendingSyncConflict } from '$lib/vault/sync'
+import {
+  providerStoreMismatchFromError,
+  syncConflictLabel,
+  type PendingSyncConflict,
+} from '$lib/vault/sync'
 
 function buildConflict(kind?: string): PendingSyncConflict {
   return new NookPendingSyncConflict(
@@ -71,6 +75,27 @@ describe('syncConflictLabel', () => {
   test('uses the store-id conflict banner for store mismatches', () => {
     expect(labelFor(buildConflict('store_id'))).toBe(
       'auth_storage.sync_conflict_store_id_banner:GitHub',
+    )
+  })
+})
+
+describe('providerStoreMismatchFromError', () => {
+  test('extracts local and provider store ids from event-log mismatch errors', () => {
+    expect(
+      providerStoreMismatchFromError(
+        new Error(
+          'Sync provider already contains another vault (local store_id store_local12345, provider store_id store_remote1234). Choose which vault to use before syncing.',
+        ),
+      ),
+    ).toEqual({
+      localStoreId: 'store_local12345',
+      remoteStoreId: 'store_remote1234',
+    })
+  })
+
+  test('ignores unrelated errors', () => {
+    expect(providerStoreMismatchFromError(new Error('network failed'))).toBe(
+      undefined,
     )
   })
 })
