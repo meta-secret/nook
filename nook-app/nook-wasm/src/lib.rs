@@ -27,8 +27,8 @@ pub use types::{
     NookEnrollmentIssueInput, NookEnrollmentProvider, NookJoinRequest, NookPasskeySetup,
     NookPasskeyUnlockOptions, NookPasswordEntrySummary, NookPendingSyncConflict,
     NookReplacementConflict, NookRuntimeConfig, NookSecretFormFields, NookSecurityConflict,
-    NookStorageConnectArgs, NookStorageProviderKind, NookStorageProviderTypeUtil, NookVaultMember,
-    NookVaultSyncResult,
+    NookStorageConnectArgs, NookStorageProviderKind, NookStorageProviderTypeUtil,
+    NookVaultAccessReport, NookVaultMember, NookVaultSyncResult,
 };
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;

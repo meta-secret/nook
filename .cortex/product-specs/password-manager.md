@@ -130,6 +130,28 @@ Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && c
 - **Key generation:** 32-byte random DEC via `generate_dec()`; distributed per-device in vault `auth:` section.
 - **Incremental save path:** WASM keeps `stored_armored: HashMap<key, armored_value>`. Saves serialize the cache to YAML without re-encrypting unchanged records.
 
+### Vault access diagnostics
+
+Nook exposes a Rust-owned diagnostic report for explaining encrypted vault
+access without exposing plaintext secrets or key material. The report uses the
+same `auth:` envelope parsing, device identity, and `secrets_key` decrypt path
+as normal unlock, then returns only safe metadata:
+
+- opaque, non-sensitive device/session identifiers and key-access status
+  (`enrolled_decryptable`, `auth_row_missing`, `join_pending`,
+  `device_identity_mismatch`, `envelope_decrypt_failed`,
+  `unsupported_epoch`, or `corrupt_ciphertext`);
+- auth key ids that have vault-key envelopes;
+- per-secret decryptability status and explanation;
+- current/known key epochs and event-payload epoch status when the event log is
+  available.
+
+Diagnostics never return `secrets_key`, `members_key`, private device identity,
+passkey PRF output, password material, decrypted secret values, or identifiers
+derived from private device identity or vault keys. Sync-provider credentials
+remain outside the report because providers only replicate encrypted data; they
+do not grant vault access.
+
 ---
 
 ## 5. Rust Domain Modules (`nook-core`)

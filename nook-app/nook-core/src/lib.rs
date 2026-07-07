@@ -20,9 +20,9 @@ pub(crate) use sync::{
     vault_sync_store,
 };
 pub(crate) use vault::{
-    database, vault_connect, vault_epoch, vault_event, vault_event_builder, vault_event_graph,
-    vault_event_session, vault_event_store, vault_format, vault_ids, vault_import,
-    vault_projection, vault_session, vault_session_cache, vault_wire,
+    database, vault_access_diagnostics, vault_connect, vault_epoch, vault_event,
+    vault_event_builder, vault_event_graph, vault_event_session, vault_event_store, vault_format,
+    vault_ids, vault_import, vault_projection, vault_session, vault_session_cache, vault_wire,
 };
 
 pub use bip39::{
@@ -115,6 +115,11 @@ pub use validation::{
     sync_provider_target_key, validate_connect, validate_drive_backup_name, validate_github_pat,
     validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
     validate_storage_mode,
+};
+pub use vault_access_diagnostics::{
+    VaultAccessDiagnosticsReport, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
+    VaultEventPayloadAccessDiagnostic, VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus,
+    VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic, diagnose_vault_access,
 };
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,
