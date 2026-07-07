@@ -4,11 +4,13 @@
 
 Use this pipeline for **every coding request** unless the user explicitly wants a read-only answer, review-only feedback, or a question with no code changes.
 
-## Testing strategy — local first, remote validates
+## Testing strategy — parallel final validation
 
 **GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, run the full prepared test set (`task ci:pr` on PRs). Expect **5+ minutes** per run plus queue time. A failing fmt, clippy, unit test, or e2e spec burns that entire cycle — do not use remote CI as the primary debug loop.
 
-**Local Docker is warm and fast.** The same Task commands run against **cached** toolchain images on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating. Validate locally first; **push only when the change is ready** and local gates pass. GitHub Actions then confirms a clean environment for the PR — it is validation, not the first test pass.
+**Local Docker is warm and fast.** The same Task commands run against **cached** toolchain images on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating.
+
+When functionality for the current iteration is complete, **commit and push/open/update the PR before starting the long final local gate**, then immediately run the local gate while GitHub Actions starts remotely. This is for final-validation parallelism, not half-finished work: do scoped local checks while implementing, push only when the iteration is ready for final validation, and do not merge until the latest branch has both passing local validation and green remote checks.
 
 **Debug e2e one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
 
@@ -18,23 +20,26 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 E2E_SPEC="e2e/connect.spec.ts e2e/login-unlock-flow.spec.ts" task web:test:e2e:file
 ```
 
-After targeted fixes pass, run the relevant project or full PR mirror once before pushing (`task web:test:e2e:pr`, `task ci:pr`).
+After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the relevant project or full PR mirror locally while remote CI runs (`task web:test:e2e:pr`, `task ci:pr`).
 
 Default agent flow:
 
 1. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
 2. **Run CodeRabbit when it adds signal** — for nontrivial agent-authored changes, run `coderabbit review --agent --type uncommitted`, fix valid `critical`/`major` findings, and re-run once after meaningful fixes. See [coderabbit.md](coderabbit.md).
-3. **Validate locally before push** — `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
-4. **Push when ready** — commit, push, and open the PR only after local gates pass.
-5. **Monitor remote CI and PR review** — watch checks on the PR; use CodeRabbit PR commands from [coderabbit.md](coderabbit.md) when a refreshed GitHub-side review is useful after new commits.
-6. **On any remote failure** — read **app logs** (`nook-app-logs.json` attachment,
+3. **Push before long final local checks** — once the iteration is functionally complete, commit, push, and open/update the PR.
+4. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
+5. **Monitor remote CI and PR review in parallel** — watch checks on the PR while local validation runs; use CodeRabbit PR commands from [coderabbit.md](coderabbit.md) when a refreshed GitHub-side review is useful after new commits.
+6. **On any local or remote failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
-   debugging) → run `task ci:pr` until green → push again.
+   debugging) → commit and push the completed fix → run local validation in
+   parallel with the refreshed remote checks.
 7. **Merge** — before merging, verify the PR branch is not stale against
    `origin/main`; update it and re-watch CI if needed. Squash merge only when
    **every** remote check is green on the updated branch.
 
-Never push twice in a row after a remote red build without a passing `task ci:pr` locally first.
+Never merge until the latest pushed branch is green remotely and has passed the
+required local gate for the change. After a remote red build, the next push must
+be a completed fix, not an exploratory checkpoint.
 
 ## Debug information — always check app logs
 
@@ -57,8 +62,14 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    of scope, follow [issues.md](issues.md) before handoff: update or create the
    aggregate GitHub issue and focused sub-issues for the missing work.
 4. **CodeRabbit review when useful** — For nontrivial agent-authored code, run `coderabbit review --agent --type uncommitted` before final validation. Fix valid high-severity findings and do not let CodeRabbit override `.cortex`, tests, or repo architecture. See [coderabbit.md](coderabbit.md).
-5. **Local validation** — Run `task check` (or a scoped subset) and relevant e2e before push. Prefer local Docker (cached images) over remote CI for iteration. During debug, run specs one at a time with `E2E_SPEC=… task web:test:e2e:file`.
-6. **Push and open PR** — Commit, push, and open the PR **only when local checks pass** and the change is ready. Remote CI validates a clean environment — it is not the first test pass.
+5. **Push and open/update PR** — Commit and push when the iteration is ready for
+   final validation. If no PR exists, open it before starting the long local
+   final gate so remote CI can run in parallel.
+6. **Local validation + remote monitoring** — Immediately run `task check` (or a
+   scoped subset) and relevant e2e while watching the PR checks. Prefer local
+   Docker (cached images) for diagnosis and iteration; use remote CI as the
+   clean-run gate. During debug, run specs one at a time with
+   `E2E_SPEC=… task web:test:e2e:file`.
 7. **Monitor CI and PR review** — Watch remote checks until every required job
    finishes. If an agent pushes new commits and CodeRabbit's GitHub-side review
    needs a refresh, post `@coderabbitai review` (focused) or `@coderabbitai full
@@ -66,9 +77,10 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    GitHub does not mark the PR branch stale/out-of-date; if it is stale, merge
    `origin/main` into the PR branch, push, and re-watch the refreshed
    checks/deployment gate.
-8. **Fix loop on failure** — If CI fails: read **app logs** (Playwright
-   `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) → fix → run `task ci:pr`
-   locally → fix → re-run `task ci:pr` until green → commit → push → monitor again.
+8. **Fix loop on failure** — If local or remote validation fails: read **app
+   logs** (Playwright `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) →
+   fix → run targeted local checks while debugging → commit and push the
+   completed fix → run the required local gate while monitoring refreshed CI.
 9. **Repeat** — Return to step 8 until every remote check is green.
 10. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
 
@@ -78,15 +90,16 @@ flowchart TD
   F --> B[2 Branch from origin/main]
   B --> I[3 Implement]
   I --> CR[4 CodeRabbit when useful]
-  CR --> L[5 Local validation: check / e2e / ci:pr]
-  L --> PU[6 Push + open PR when ready]
+  CR --> PU[5 Push + open/update PR]
+  PU --> L[6 Local validation: check / e2e / ci:pr]
   PU --> PR[7 Monitor CI + PR review]
-  PR --> G{All checks green?}
+  L --> G{Local + remote green?}
+  PR --> G
   G -->|yes| M[10 Squash merge]
   G -->|no| FIX[8 Read app logs + fix]
-  FIX --> FULL[Run task ci:pr locally until green]
-  FULL --> PUSH[Push + monitor]
-  PUSH --> G
+  FIX --> PUSH[Push completed fix]
+  PUSH --> L
+  PUSH --> PR
   M --> D[Duration report]
 ```
 
@@ -120,11 +133,16 @@ Fix valid `critical` and `major` findings, consider behaviorally meaningful
 docs/mechanical changes or when auth/rate limits block it; report that decision
 in the handoff. Full rules: [coderabbit.md](coderabbit.md).
 
-### 5 — Local validation (before push)
+### 5–7 — Push, validate locally, and monitor remotely
 
-**Why local first:** GitHub Actions runners download Docker images and run the full prepared test set from scratch every time. Locally, toolchain images are **already cached** — the same gates finish much faster. Use local Task commands to check code and fix issues; push only when ready.
+**Why push before the long final gate:** GitHub Actions runners download Docker
+images and run the full prepared test set from scratch every time. Locally,
+toolchain images are **already cached** — the same gates finish much faster. Use
+local Task commands for implementation/debug loops. Once the current iteration is
+functionally complete, commit and push/open/update the PR, then run the local
+final gate immediately while remote CI runs.
 
-**Minimum before every push** (must finish before push):
+**Minimum local final gate** (must finish before merge or handoff):
 
 ```bash
 task format:check    # or task format after edits
@@ -145,7 +163,8 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 E2E_SPEC=e2e/multi-device-local.spec.ts task web:test:e2e:file
 ```
 
-After single-spec fixes pass, run the relevant project or full PR mirror once before pushing:
+After single-spec fixes pass and the iteration is functionally complete, push the
+branch/PR and run the relevant project or full PR mirror while remote CI runs:
 
 ```bash
 task web:test:e2e                # full local-provider e2e project
@@ -154,22 +173,24 @@ task ci:pr                       # full PR mirror; mandatory after a prior CI fa
 
 ```text
 implement → fix → E2E_SPEC=… task web:test:e2e:file   (fast debug loop)
-           → task check / web:test:e2e / task ci:pr     (before push)
-           → commit → push → gh pr create               (when local gates pass)
+           → commit → push → gh pr create/update        (final-validation boundary)
+           → task check / web:test:e2e / task ci:pr     (parallel with remote CI)
 ```
 
-Add `task web:test:e2e` or `task ci:pr` before the first push when the change touches vault sync, login/unlock, multi-step web flows, or Playwright helpers. Skip e2e for isolated Rust-only or docs-only changes.
+Add `task web:test:e2e` or `task ci:pr` to the parallel local gate when the
+change touches vault sync, login/unlock, multi-step web flows, or Playwright
+helpers. Skip e2e for isolated Rust-only or docs-only changes.
 
 ### 8 — Full local loop (after any remote CI failure)
 
-**Mandatory before every push that follows a red remote build:**
+**Mandatory after every red remote build before merge/handoff:**
 
 ```bash
 gh run view <run-id> --log-failed   # CI job output
 # For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
 task ci:pr                          # full PR mirror
-# fix, re-run task ci:pr until green, then commit and push
+# fix, push the completed fix, and run the local gate while CI refreshes
 gh pr checks <number> --watch
 ```
 
@@ -181,19 +202,25 @@ E2e helpers when debugging web flows:
 # One spec — preferred during fix/debug (fast feedback)
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 
-# Full stub e2e project — before push or after remote e2e failure
+# Full stub e2e project — final local gate or after remote e2e failure
 task web:test:e2e
 # or, after task check already built wasm + dist:
 task web:test:e2e:parallel
 ```
 
-If the failure was obviously fmt/lint-only, `task format:check` plus the relevant lint/test subset can unblock a quick fix — but **never push twice in a row** without escalating to `task ci:pr` after the first remote red build.
+If the failure was obviously fmt/lint-only, `task format:check` plus the relevant
+lint/test subset can prove the fix. For broader failures, use `task ci:pr` as
+the local gate after pushing the completed fix, and do not merge or hand off
+until the latest head has both local and remote green.
 
-See [pull-requests.md § Local checks](pull-requests.md#3-local-checks) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
+See [pull-requests.md § Local checks](pull-requests.md#4-local-checks) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
-### 6–7 — Push, open PR, monitor
+### 5–7 — Push, open PR, monitor
 
-Push only after local checks pass and the change is ready — include scoped e2e or `task ci:pr` when the touch surface warrants it (see step 5).
+Push once the current iteration is functionally complete and ready for final
+validation. Then run the local gate immediately while monitoring remote CI.
+Include scoped e2e or `task ci:pr` when the touch surface warrants it (see step
+5).
 
 ```bash
 git push -u origin HEAD
@@ -233,11 +260,11 @@ When [`main.yml`](../../.github/workflows/main.yml) or [`e2e-nightly.yml`](../..
 
 - **Never push directly to `main`.** Branch → PR → squash merge.
 - **Never stop after push.** Monitor CI through merge or explicit handoff.
-- **Prefer local Docker over remote CI for iteration** — cached images, faster feedback; push only when locally ready.
+- **Prefer local Docker over remote CI for iteration** — cached images, faster feedback; push at the final-validation boundary, then run local and remote checks in parallel.
 - **During e2e debug, run one spec at a time** (`E2E_SPEC=… task web:test:e2e:file`) — do not re-run the full suite after every fix.
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call
   `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
-- **Never push after remote failure without a green `task ci:pr` locally** (unless the failure was trivial fmt/lint and you verified with the matching subset).
+- **Never merge after remote failure without green local validation on the latest head** (`task ci:pr` for broad failures; a matching subset is enough for trivial fmt/lint).
 - **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
 - **Never hide deferred scope** — if requested functionality is not fully
   implemented because it is large, risky, blocked, or out of scope, manage it in

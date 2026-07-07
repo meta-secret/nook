@@ -8,8 +8,9 @@
 ## 2. Compiling for the web
 - Invoke wasm-pack from the **Rust workspace root** (`nook-app`) so chef-cached `target/` is reused:
   `cd nook-app && wasm-pack build nook-wasm --target web --out-dir ../nook-web/src/lib/nook-wasm --out-name nook_wasm`
-- **Docker bake** runs wasm-pack once (release + `wasm-opt`) in `builder-wasm` and stamps `.wasm-source-sha256` beside the pkg. In-container `task _wasm:build` skips when that hash matches — do not rely on file mtimes (COPY makes sources look newer than the baked wasm pkg).
-- **CI** (`_ci:pr`, `_ci:main`) does not call `_wasm:build`; the sealed nook-web image already ships the optimized pkg from bake.
+- **Build mode:** `WASM_BUILD_MODE` defaults to `dev`, which runs release `wasm-pack` with `--no-opt` and stamps `.wasm-source-sha256` with `no-opt`. `WASM_BUILD_MODE=prod` runs the Binaryen `wasm-opt` pass and stamps `optimized`. Local `task check`, `task setup`, `task web:dev`, and `task wasm:build` use dev mode unless explicitly overridden; CI workflows pass `WASM_BUILD_MODE=prod`.
+- **Fast local iteration:** `task wasm:build:fast` regenerates the web pkg on the mounted worktree in dev/no-opt mode. It uses the existing `nook-web:local` image and bind-mounts the worktree; run `task setup` once first if that image does not exist. `task wasm:build:prod` is the explicit optimized local path.
+- **CI** (`_ci:pr`, `_ci:main`) does not rely on defaults; GitHub workflows call Task with `WASM_BUILD_MODE=prod` so the sealed nook-web image carries the optimized pkg from bake.
 - The Docker image installs `wasm-pack` via the [official init script](https://wasm-bindgen.github.io/wasm-pack/installer/) (pinned with `VERSION`). `wasm-pack build` installs the matching `wasm-bindgen-cli` itself — not `cargo install`. **Binaryen (`wasm-opt`) is baked into the base image** (pinned `BINARYEN_VERSION`, installed to `/usr/local/bin`) so wasm-pack runs post-link optimization with a correct, local `wasm-opt` and never downloads it at build time (a modern version is required — old Debian binaryen corrupts `externref` tables).
 
 ## 3. Session state (`NookVaultManager`)

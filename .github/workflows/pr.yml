@@ -35,7 +35,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify and build preview
-        run: task ci:pr VITE_BASE=/
+        run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
         env:
           CI: true
 
@@ -51,7 +51,7 @@ jobs:
           # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
           # print the container output (it holds the real error) before failing the step.
           set +e
-          out="$(task ci:pr:deploy-preview VITE_BASE=/ 2>&1)"
+          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=prod 2>&1)"
           status=$?
           set -e
           echo "$out"
@@ -71,7 +71,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-        run: task ci:pr:comment-preview
+        run: task ci:pr:comment-preview WASM_BUILD_MODE=prod
 
       - name: Record github-pages deployment
         if: steps.deploy.outcome == 'success'
@@ -135,7 +135,7 @@ jobs:
           # already verifies this branch's current Dockerfile/task plumbing.
           (
             cd ../nook-base-coverage
-            task setup VITE_BASE=/
+            task setup VITE_BASE=/ WASM_BUILD_MODE=prod
           )
           base_coverage_out="$PWD/coverage/base"
           (

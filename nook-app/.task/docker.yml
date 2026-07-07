@@ -29,11 +29,13 @@ tasks:
     env:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
         -e NOOK_GITHUB_PAT
@@ -53,6 +55,22 @@ tasks:
         {{.DOCKER_IMAGE}}
         task {{.TASK}}
 
+  docker:wasm:build:fast:
+    internal: true
+    # Mounted fast path: uses the existing image toolchain, writes generated wasm pkg to the host,
+    # and avoids `task setup` so Docker bake does not rebuild the optimized wasm first.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        -e REPO_ROOT=/meta-secret/nook
+        -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e WASM_BUILD_MODE=dev
+        -v "{{.REPO_ROOT}}:/meta-secret/nook"
+        -w /meta-secret/nook
+        {{.DOCKER_IMAGE}}
+        task _wasm:build:fast
+
   docker:e2e:run:
     desc: Run Playwright in Docker — Vite dev server stays on 127.0.0.1:5173 inside the container (no -p publish).
     internal: true
@@ -61,11 +79,13 @@ tasks:
       VITE_BASE: '{{.VITE_BASE}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
       E2E_SPEC: '{{.E2E_SPEC}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
         --ipc=host
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}"
         -e NOOK_GITHUB_PAT
@@ -121,12 +141,15 @@ tasks:
 
   docker:web:dev:
     internal: true
-    # The ONLY mounted task: the repo is bind-mounted for Vite hot-reload. node_modules is an
+    # Mounted for Vite hot-reload. node_modules is an
     # anonymous volume (host has none) and bun install + wasm build run in the command.
     cmds:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        -e REPO_ROOT=/meta-secret/nook
+        -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
         -p 5173:5173
         -v "{{.REPO_ROOT}}:/meta-secret/nook"
@@ -134,3 +157,21 @@ tasks:
         -w /meta-secret/nook
         {{.DOCKER_IMAGE}}
         sh -c "cd nook-app/nook-web && bun install && task _web:dev"
+
+  docker:web:dev:fast:
+    internal: true
+    # Fast mounted dev path: same as docker:web:dev, but skips wasm-opt during the initial wasm build.
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        -e REPO_ROOT=/meta-secret/nook
+        -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
+        -e WASM_BUILD_MODE=dev
+        -e VITE_BASE="{{.VITE_BASE}}"
+        -p 5173:5173
+        -v "{{.REPO_ROOT}}:/meta-secret/nook"
+        -v /meta-secret/nook/nook-app/nook-web/node_modules
+        -w /meta-secret/nook
+        {{.DOCKER_IMAGE}}
+        sh -c "cd nook-app/nook-web && bun install && task _web:dev:fast"

@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   REPO_ROOT:
-    sh: git rev-parse --show-toplevel
+    sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   APP_ROOT: '{{.REPO_ROOT}}/nook-app'
   WEB_ROOT: '{{.APP_ROOT}}/nook-web'
   EXTENSION_ROOT: '{{.APP_ROOT}}/nook-web-extension'
@@ -22,7 +22,8 @@ vars:
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   GIT_COMMIT_ID:
-    sh: cd "{{.REPO_ROOT}}" && git rev-parse HEAD
+    sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
+  WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
@@ -33,6 +34,7 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/docker/toolchain.docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-web/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
+    --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
   # ci sets TOOLCHAIN_REGISTRY so bake reuses GHCR :buildcache; dev builds locally.
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
@@ -80,6 +82,7 @@ tasks:
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
       VITE_BASE: '{{.VITE_BASE}}'
     cmds:
       # buildx bake can flake when parallel targets load the same Dockerfile (e.g. builder-deps +

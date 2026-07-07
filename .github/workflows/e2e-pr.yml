@@ -72,13 +72,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (format, wasm, verify, web)
-        run: task ci:main:build VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
+        run: task ci:main:build VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
         env:
           CI: true
 
       - name: E2e (e2e-pr)
         if: inputs.suite == 'e2e-pr' || inputs.suite == 'local'
-        run: task web:test:e2e:pr:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
+        run: task web:test:e2e:pr:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
         env:
           CI: true
 
@@ -86,13 +86,13 @@ jobs:
         if: >-
           inputs.suite == 'all' || inputs.suite == 'e2e' ||
           inputs.suite == 'sync-stub'
-        run: task web:test:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500
+        run: task web:test:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
         env:
           CI: true
 
       - name: E2e (sync-live)
         if: inputs.suite == 'all' || inputs.suite == 'sync-live'
-        run: task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+        run: task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000 WASM_BUILD_MODE=prod
         env:
           CI: true
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}

@@ -346,5 +346,6 @@ When `Option<T>` is still acceptable (do not force an enum):
 
 ## Validation
 
-Run the smallest relevant Rust and web checks for the touched boundary first.
-For implementation tasks, finish with `task check` before push.
+Run the smallest relevant Rust and web checks for the touched boundary first. For
+implementation tasks, push or update the PR when the iteration is ready for
+final validation, then finish with `task check` while remote CI runs.

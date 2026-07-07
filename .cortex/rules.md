@@ -87,7 +87,7 @@ When adding or changing domain logic, **add Rust tests first** (or in the same P
 
 **Agent rules:**
 
-1. Run `task rust:coverage:check` (or `task check`) before push — coverage **below 90% fails the build**.
+1. Run `task rust:coverage:check` (or `task check`) on the latest pushed head before merge or handoff — coverage **below 90% fails the build**.
 2. When measured coverage is **under 90%**, **add Rust tests** in the same task before finishing (prioritize new/changed domain code).
 3. At or above 90%, do **not** chase marginal line coverage — focus tests on behavior and invariants instead.
 4. Change `lines_percent` in `coverage-floor.json` only with explicit user approval.
@@ -119,10 +119,10 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Svelte project dependencies must be managed using Bun.
   - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
 - **Harness Verification:**
-  - All linting, formatting, testing, and production building must run inside the Docker builder image using Taskfile targets.
+  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. Local `task check` uses the default dev/no-opt WASM mode; CI/deploy validation passes `WASM_BUILD_MODE=prod` explicitly.
   - Before committing, developers must run:
     1. `task format` - Automatically formats all Rust and JS/TS/Svelte files.
-    2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and production builds.
+    2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and web builds.
 
 ### Docker daemon — never kill it
 
@@ -154,7 +154,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > Linear `main` history is a project requirement, not a preference.
 
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
-- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, local checks, push, open PR, monitor CI, fix loop, squash merge.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, push/open/update PR at the final-validation boundary, run local and remote checks in parallel, fix loop, squash merge.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open a pull request.** After pushing a branch, create a PR with a summary and test plan; do not merge or push to `main` yourself unless the user explicitly asks.
 - **Squash merge when closing a PR.** When merging (yourself or via `gh`), use **Squash and merge** only:
@@ -162,4 +162,4 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Verify before requesting review.** Run `task format` and `task check` on the branch before opening or updating the PR.
+- **Verify before requesting review.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head before merge or handoff.
