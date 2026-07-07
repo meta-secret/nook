@@ -178,7 +178,11 @@ export async function installSyncRemote(
   if (backend === 'file') {
     await (
       target.stub as ReturnType<typeof createLocalE2eFileSyncVaultStub>
-    ).install(page, { fileName: target.repoName, vaultYaml })
+    ).install(page, {
+      fileName: target.repoName,
+      vaultYaml,
+      accessToken: target.pat,
+    })
     return
   }
   if (backend === 'icloud') {
@@ -307,6 +311,7 @@ export async function connectSyncGenesisDevice(
       await remote.install(page, {
         fileName: target.repoName,
         vaultYaml: genesisYaml,
+        accessToken: target.pat,
       })
     }
     await reloadUnlockWithSyncProvider(page, {
@@ -350,7 +355,10 @@ export async function connectSyncJoinerDevice(
       await import('./helpers')
     await assertGenesisVaultOnSyncRemote(remote)
     if (remote) {
-      await remote.install(page, { fileName: target.repoName })
+      await remote.install(page, {
+        fileName: target.repoName,
+        accessToken: target.pat,
+      })
     }
     await connectLocalE2eJoinerDevice(page, target.repoName, target.pat)
     return

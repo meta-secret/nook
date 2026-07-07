@@ -349,8 +349,7 @@ pub(crate) async fn delete_device_identity_for_recovery() -> Result<(), NookErro
     idb_delete_key(DEVICE_ID_KEY).await
 }
 
-#[cfg(target_arch = "wasm32")]
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod device_identity_storage_tests {
     use super::*;
     use wasm_bindgen_test::*;

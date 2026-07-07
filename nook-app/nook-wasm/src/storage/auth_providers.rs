@@ -167,8 +167,7 @@ pub(crate) async fn delete_auth_providers_db() -> Result<(), NookError> {
         .map_err(|e| idb_err("nook_auth delete error", e))
 }
 
-#[cfg(target_arch = "wasm32")]
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
     use super::*;
     use nook_core::{OAuthFileConfigData, StorageProviderData};

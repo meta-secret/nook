@@ -156,10 +156,11 @@ tasks:
       - task: _extension:format:check
 
   _test:parallel:
-    desc: svelte-check, vitest, and extension check when wasm is already built (nook-core + nook-auth tests/coverage ran at image build).
+    desc: svelte-check, vitest, wasm-bindgen tests, and extension check when wasm is already built (nook-core + nook-auth tests/coverage ran at image build).
     deps:
       - _web:check:parallel
       - _web:test:parallel
+      - _wasm:test
       - _extension:check
 
   _rust:test:parallel:

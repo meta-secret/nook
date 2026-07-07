@@ -39,5 +39,8 @@ zeroize = "1.9.0"
 [dev-dependencies]
 wasm-bindgen-test = "0.3.50"
 
+[features]
+browser-wasm-tests = []
+
 [lints]
 workspace = true
