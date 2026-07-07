@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Nook privacy policy for the open-source, client-side password and secrets manager."
+    />
+    <link rel="canonical" href="https://nokey.sh/privacy.html" />
+    <title>Nook Privacy Policy</title>
+    <style>
+      :root {
+        color-scheme: dark light;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', 'Courier New', monospace;
+        background: #07080a;
+        color: #f5f5f7;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #07080a;
+        color: #f5f5f7;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        box-sizing: border-box;
+        margin: 0 auto;
+        max-width: 920px;
+        padding: 32px 24px 48px;
+      }
+
+      header,
+      footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 700;
+      }
+
+      .brand img {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+      }
+
+      nav,
+      footer {
+        color: #a8a8b3;
+        font-size: 14px;
+      }
+
+      nav,
+      footer div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+
+      main {
+        padding: 72px 0 56px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(38px, 7vw, 64px);
+        line-height: 1;
+      }
+
+      h2 {
+        margin: 38px 0 12px;
+        font-size: 22px;
+      }
+
+      p,
+      li {
+        color: #d8d8df;
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      ul {
+        padding-left: 24px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        color: #d8d8df;
+      }
+
+      th,
+      td {
+        border: 1px solid #2a2b31;
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: #f5f5f7;
+      }
+
+      code {
+        color: #f5f5f7;
+      }
+
+      .updated {
+        color: #a8a8b3;
+        font-weight: 700;
+      }
+
+      footer {
+        border-top: 1px solid #222329;
+        padding-top: 22px;
+      }
+
+      @media (max-width: 700px) {
+        header,
+        footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        main {
+          padding-top: 54px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <a class="brand" href="/">
+          <img src="/nook-logo-dark.png" alt="" />
+          <span>Nook</span>
+        </a>
+        <nav aria-label="Public pages">
+          <a href="/about.html">About</a>
+          <a href="/terms.html">Terms</a>
+          <a href="https://github.com/meta-secret/nook">GitHub</a>
+        </nav>
+      </header>
+
+      <main>
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: June 27, 2026</p>
+
+        <h2>1. Introduction</h2>
+        <p>
+          Nook is an open-source, client-side password and secrets manager. This
+          policy describes how the Nook web application handles information when
+          you use it in your browser.
+        </p>
+        <p>
+          Nook is designed as a zero-knowledge, local-first vault. We do not
+          operate a central Nook account service, and we do not receive or store
+          your decrypted secrets on our servers.
+        </p>
+
+        <h2>2. Summary</h2>
+        <ul>
+          <li>
+            Your vault is encrypted in your browser before it is saved or
+            synced.
+          </li>
+          <li>
+            Plaintext secrets exist only in your browser's memory while the
+            vault is unlocked.
+          </li>
+          <li>
+            Sync providers receive encrypted vault files only, under credentials
+            you choose.
+          </li>
+          <li>
+            Nook does not include advertising or third-party analytics in the
+            core open-source application.
+          </li>
+        </ul>
+
+        <h2>3. Information stored on your device</h2>
+        <p>
+          When you use Nook, data is stored locally in your browser, including:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Encrypted vault (<code>nook_db</code>)</td>
+              <td>
+                Your secrets, device roster, and vault metadata, encrypted
+                before storage.
+              </td>
+            </tr>
+            <tr>
+              <td>Device identity key</td>
+              <td>
+                Cryptographic key for this browser/device to participate in the
+                vault.
+              </td>
+            </tr>
+            <tr>
+              <td>Sync provider settings (<code>nook_auth</code>)</td>
+              <td>
+                Labels and credentials you save so Nook can read and write
+                encrypted vault replicas.
+              </td>
+            </tr>
+            <tr>
+              <td>Preferences and session flags</td>
+              <td>
+                Locale, theme, locked state, and related browser-local UI
+                settings.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          You can remove this data by clearing site data for Nook in your
+          browser or clearing the browser profile. If you clear local data
+          without a sync provider replica, you may lose access to your vault.
+        </p>
+
+        <h2>4. Information we do not collect</h2>
+        <p>Nook does not:</p>
+        <ul>
+          <li>Create or manage a Nook user account on our servers.</li>
+          <li>
+            Upload decrypted passwords, notes, seed phrases, or API keys to
+            Nook-operated servers.
+          </li>
+          <li>Host or recover your vault on your behalf.</li>
+          <li>Have access to your encryption keys in plaintext.</li>
+        </ul>
+
+        <h2>5. Google Drive optional sync</h2>
+        <p>
+          If you choose Sign in with Google, Nook uses Google Identity Services
+          in the browser to obtain an OAuth access token with the
+          <code>https://www.googleapis.com/auth/drive.appdata</code> scope. That
+          scope lets Nook store and read an encrypted vault file in a hidden
+          Google Drive application data folder associated with your Google
+          account.
+        </p>
+        <ul>
+          <li>The OAuth token is stored only in your browser.</li>
+          <li>
+            Nook may read your Google account email address to show "Signed in
+            as" in the UI.
+          </li>
+          <li>
+            Nook sends ciphertext only to Google Drive, not plaintext secrets.
+          </li>
+        </ul>
+        <p>
+          Google's handling of your account is governed by
+          <a href="https://policies.google.com/privacy"
+            >Google's Privacy Policy</a
+          >. You can revoke Nook's access in your
+          <a href="https://myaccount.google.com/permissions"
+            >Google Account permissions</a
+          >.
+        </p>
+
+        <h2>6. GitHub optional sync</h2>
+        <p>
+          If you connect GitHub, you provide a personal access token and
+          repository name. Nook stores the token in your browser and uses
+          GitHub's API to read and write an encrypted vault file in a repository
+          you control. Nook sends ciphertext only to GitHub, not plaintext
+          secrets.
+        </p>
+
+        <h2>7. Multi-device and backup passwords</h2>
+        <p>
+          Nook supports optional backup passwords and device enrollment so other
+          browsers can join your vault. Enrollment flows may use QR codes or
+          links that carry provider connection details and password-entry
+          identifiers. Share these only with devices and people you trust.
+        </p>
+
+        <h2>8. Security</h2>
+        <p>
+          Nook uses modern encryption for vault contents. Lock vault clears
+          decrypted data from memory but leaves encrypted data and saved
+          provider tokens on disk until you remove them. Nook is early-stage
+          software; do not use it as your only copy of important credentials
+          unless you also maintain independent backups.
+        </p>
+
+        <h2>9. Children's privacy</h2>
+        <p>
+          Nook is not directed at children under 13 or the minimum age in your
+          jurisdiction. We do not knowingly collect personal information from
+          children.
+        </p>
+
+        <h2>10. Changes</h2>
+        <p>
+          We may update this policy as Nook evolves. Material changes should be
+          reflected in the copy hosted at the URL registered in Google Cloud
+          Console.
+        </p>
+
+        <h2>11. Open source</h2>
+        <p>
+          Nook's source code is available under the MIT License at
+          <a href="https://github.com/meta-secret/nook"
+            >github.com/meta-secret/nook</a
+          >.
+        </p>
+
+        <h2>12. Contact</h2>
+        <p>
+          For privacy questions, use
+          <a href="https://github.com/meta-secret/nook/issues">GitHub issues</a>
+          or visit <a href="https://nokey.sh">nokey.sh</a>.
+        </p>
+      </main>
+
+      <footer>
+        <span>Client-side encrypted vaults. No central account service.</span>
+        <div>
+          <a href="/about.html">About</a>
+          <a href="/terms.html">Terms</a>
+          <a href="https://github.com/meta-secret/nook">Source</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

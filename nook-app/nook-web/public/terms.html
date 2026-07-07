@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Nook terms of service for the open-source, client-side password and secrets manager."
+    />
+    <link rel="canonical" href="https://nokey.sh/terms.html" />
+    <title>Nook Terms of Service</title>
+    <style>
+      :root {
+        color-scheme: dark light;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', 'Courier New', monospace;
+        background: #07080a;
+        color: #f5f5f7;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #07080a;
+        color: #f5f5f7;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        box-sizing: border-box;
+        margin: 0 auto;
+        max-width: 920px;
+        padding: 32px 24px 48px;
+      }
+
+      header,
+      footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 700;
+      }
+
+      .brand img {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+      }
+
+      nav,
+      footer {
+        color: #a8a8b3;
+        font-size: 14px;
+      }
+
+      nav,
+      footer div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+
+      main {
+        padding: 72px 0 56px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(38px, 7vw, 64px);
+        line-height: 1;
+      }
+
+      h2 {
+        margin: 38px 0 12px;
+        font-size: 22px;
+      }
+
+      p,
+      li {
+        color: #d8d8df;
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      ul {
+        padding-left: 24px;
+      }
+
+      .updated {
+        color: #a8a8b3;
+        font-weight: 700;
+      }
+
+      footer {
+        border-top: 1px solid #222329;
+        padding-top: 22px;
+      }
+
+      @media (max-width: 700px) {
+        header,
+        footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        main {
+          padding-top: 54px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <a class="brand" href="/">
+          <img src="/nook-logo-dark.png" alt="" />
+          <span>Nook</span>
+        </a>
+        <nav aria-label="Public pages">
+          <a href="/about.html">About</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="https://github.com/meta-secret/nook">GitHub</a>
+        </nav>
+      </header>
+
+      <main>
+        <h1>Terms of Service</h1>
+        <p class="updated">Last updated: June 27, 2026</p>
+
+        <h2>1. Agreement</h2>
+        <p>
+          By using the Nook web application, you agree to these Terms of
+          Service. If you do not agree, do not use the application.
+        </p>
+
+        <h2>2. The software</h2>
+        <p>
+          Nook is open-source client-side software provided under the
+          <a href="https://github.com/meta-secret/nook/blob/main/LICENSE"
+            >MIT License</a
+          >. The hosted web app at
+          <a href="https://nokey.sh">https://nokey.sh</a>
+          is a convenience deployment of that software; you may also self-host
+          or build from source.
+        </p>
+
+        <h2>3. No warranty</h2>
+        <p>
+          Nook is provided "as is" and "as available", without warranty of any
+          kind, express or implied. The project is early-stage software. See the
+          repository README for current limitations.
+        </p>
+
+        <h2>4. Your responsibilities</h2>
+        <p>You are responsible for:</p>
+        <ul>
+          <li>
+            Backing up your vault and any sync provider replicas you rely on.
+          </li>
+          <li>
+            Protecting your device, browser profile, backup passwords, and sync
+            provider credentials.
+          </li>
+          <li>
+            Complying with Google, GitHub, and any other third-party terms when
+            you use those integrations.
+          </li>
+          <li>
+            Sharing enrollment links and QR codes only with devices and people
+            you trust.
+          </li>
+        </ul>
+        <p>
+          If you clear browser data or lose access to your sync providers
+          without independent backups, you may permanently lose access to your
+          vault. Nook cannot recover your secrets.
+        </p>
+
+        <h2>5. Acceptable use</h2>
+        <p>
+          You agree not to use Nook to violate applicable law or the terms of
+          services you connect, including Google Drive and GitHub. You must not
+          attempt to interfere with the application, other users' systems, or
+          connected third-party services.
+        </p>
+
+        <h2>6. Third-party services</h2>
+        <p>
+          Optional sync uses third-party APIs. Those services are governed by
+          their own terms and privacy policies. Nook is not responsible for
+          third-party outages, policy changes, or data handling outside the
+          encrypted vault files you store there.
+        </p>
+
+        <h2>7. Limitation of liability</h2>
+        <p>
+          To the fullest extent permitted by law, the Nook authors and
+          contributors are not liable for any loss of data, unauthorized access,
+          device loss, misconfiguration, browser clearing, sync conflicts, or
+          other damages arising from your use of the software.
+        </p>
+
+        <h2>8. Changes</h2>
+        <p>
+          We may update these terms as the project evolves. Continued use after
+          changes constitutes acceptance of the revised terms.
+        </p>
+
+        <h2>9. Contact</h2>
+        <p>
+          Questions about these terms can be opened in
+          <a href="https://github.com/meta-secret/nook/issues">GitHub issues</a>
+          or sent through the project site at
+          <a href="https://nokey.sh">nokey.sh</a>.
+        </p>
+      </main>
+
+      <footer>
+        <span>Client-side encrypted vaults. No central account service.</span>
+        <div>
+          <a href="/about.html">About</a>
+          <a href="/privacy.html">Privacy</a>
+          <a href="https://github.com/meta-secret/nook">Source</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

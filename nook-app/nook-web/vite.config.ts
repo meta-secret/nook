@@ -16,7 +16,7 @@ const viteBase =
 function spaFallback(): Plugin {
   return {
     name: 'spa-fallback',
-    closeBundle() {
+    writeBundle() {
       const outDir = join(process.cwd(), 'dist')
       copyFileSync(join(outDir, 'index.html'), join(outDir, '404.html'))
     },
@@ -27,7 +27,7 @@ function spaFallback(): Plugin {
 function seoStaticFiles(): Plugin {
   return {
     name: 'seo-static-files',
-    closeBundle() {
+    writeBundle() {
       const outDir = join(process.cwd(), 'dist')
       const siteUrl = siteUrlFromEnv(process.env)
       writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(siteUrl))

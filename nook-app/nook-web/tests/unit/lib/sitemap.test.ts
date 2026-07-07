@@ -10,7 +10,7 @@ import {
 describe('sitemap', () => {
   test('lists public about and legal pages', () => {
     const paths = PUBLIC_SITEMAP_ENTRIES.map((entry) => entry.path)
-    expect(paths).toEqual(['/about.html', '/privacy', '/terms'])
+    expect(paths).toEqual(['/about.html', '/privacy.html', '/terms.html'])
   })
 
   test('buildSitemapXml emits valid loc tags for nokey.sh', () => {
@@ -19,8 +19,8 @@ describe('sitemap', () => {
       new Date('2026-06-28T12:00:00Z'),
     )
     expect(xml).toContain('<loc>https://nokey.sh/about.html</loc>')
-    expect(xml).toContain('<loc>https://nokey.sh/privacy</loc>')
-    expect(xml).toContain('<loc>https://nokey.sh/terms</loc>')
+    expect(xml).toContain('<loc>https://nokey.sh/privacy.html</loc>')
+    expect(xml).toContain('<loc>https://nokey.sh/terms.html</loc>')
     expect(xml).toContain('<lastmod>2026-06-28</lastmod>')
   })
 
@@ -33,8 +33,8 @@ describe('sitemap', () => {
   test('buildRobotsTxt keeps app root out of crawler entry points', () => {
     const robots = buildRobotsTxt('https://nokey.sh')
     expect(robots).toContain('Allow: /about.html')
-    expect(robots).toContain('Allow: /privacy')
-    expect(robots).toContain('Allow: /terms')
+    expect(robots).toContain('Allow: /privacy.html')
+    expect(robots).toContain('Allow: /terms.html')
     expect(robots).toContain('Allow: /assets/')
     expect(robots).toContain('Disallow: /')
   })
@@ -46,8 +46,8 @@ describe('sitemap', () => {
   })
 
   test('absoluteSiteUrl normalizes trailing slashes', () => {
-    expect(absoluteSiteUrl('https://nokey.sh/', '/privacy')).toBe(
-      'https://nokey.sh/privacy',
+    expect(absoluteSiteUrl('https://nokey.sh/', '/privacy.html')).toBe(
+      'https://nokey.sh/privacy.html',
     )
   })
 })
