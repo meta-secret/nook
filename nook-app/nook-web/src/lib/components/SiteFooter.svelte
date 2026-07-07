@@ -7,6 +7,14 @@
   data-testid="site-footer"
 >
   <a
+    href={appPath('/about.html')}
+    class="underline-offset-4 hover:text-foreground hover:underline"
+    data-testid="footer-about-link"
+  >
+    About
+  </a>
+  <span aria-hidden="true">·</span>
+  <a
     href={appPath('/privacy')}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-privacy-link"

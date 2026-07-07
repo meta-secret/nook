@@ -11,7 +11,7 @@
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
-  import PublicHome from '$lib/components/PublicHome.svelte'
+  import ProductIntro from '$lib/components/ProductIntro.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
@@ -349,9 +349,11 @@
         </div>
       {:else if !vault.isAuthenticated}
         <div class="space-y-6">
-          <PublicHome {colorMode} onOpenHelp={() => vault.openHelp()} />
           {#if !vault.deviceProtectionReady}
             <DeviceProtectionGate {vault} />
+            <div class="mx-auto w-full max-w-lg">
+              <ProductIntro {vault} onOpenHelp={() => vault.openHelp()} />
+            </div>
           {:else if vault.providersLoaded}
             <LoginGate
               {vault}
