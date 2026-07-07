@@ -601,6 +601,7 @@
         onKeepLocal={() => vault.resolveSyncConflictKeepLocal()}
         onKeepRemote={() => vault.resolveSyncConflictKeepRemote()}
         onImportAsNewVault={() => vault.resolveSyncConflictImportRemote()}
+        onCancel={() => vault.clearPendingSyncConflict()}
       />
     {/if}
 

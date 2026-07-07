@@ -18,6 +18,7 @@
     onKeepLocal,
     onKeepRemote,
     onImportAsNewVault,
+    onCancel,
   }: {
     vault: VaultState
     conflict: PendingSyncConflict
@@ -25,8 +26,12 @@
     onKeepLocal: () => void | Promise<void>
     onKeepRemote: () => void | Promise<void>
     onImportAsNewVault?: () => void | Promise<void>
+    onCancel?: () => void | Promise<void>
   } = $props()
 
+  const isEventLogStoreMismatch = $derived(
+    conflict.kind === 'store_id' && !conflict.remoteYaml.trim(),
+  )
   const versionLabel = $derived(
     conflict.kind === 'store_id'
       ? `${conflict.localStoreId ?? '?'} / ${conflict.remoteStoreId ?? '?'}`
@@ -36,11 +41,16 @@
   )
   const conflictDescription = $derived(
     conflict.kind === 'store_id'
-      ? vault.t('auth_storage.sync_conflict_store_id_desc', {
-          provider: conflict.providerLabel,
-          localStore: conflict.localStoreId ?? '?',
-          remoteStore: conflict.remoteStoreId ?? '?',
-        })
+      ? vault.t(
+          isEventLogStoreMismatch
+            ? 'auth_storage.sync_conflict_store_id_event_desc'
+            : 'auth_storage.sync_conflict_store_id_desc',
+          {
+            provider: conflict.providerLabel,
+            localStore: conflict.localStoreId ?? '?',
+            remoteStore: conflict.remoteStoreId ?? '?',
+          },
+        )
       : vault.t('auth_storage.sync_conflict_desc', {
           provider: conflict.providerLabel,
           version: versionLabel,
@@ -151,33 +161,46 @@
             {vault.t('auth_storage.sync_conflict_import_new_vault')}
           </Button>
         {/if}
-        <Button
-          type="button"
-          variant="outline"
-          class="sm:min-w-[160px]"
-          data-testid="sync-conflict-keep-remote-btn"
-          disabled={isBusy}
-          onclick={() => void onKeepRemote()}
-        >
-          {#if isBusy}
-            <RefreshCw class="size-4 animate-spin" />
-          {/if}
-          {vault.t('auth_storage.sync_conflict_keep_remote', {
-            provider: conflict.providerLabel,
-          })}
-        </Button>
-        <Button
-          type="button"
-          class="sm:min-w-[160px]"
-          data-testid="sync-conflict-keep-local-btn"
-          disabled={isBusy}
-          onclick={() => void onKeepLocal()}
-        >
-          {#if isBusy}
-            <RefreshCw class="size-4 animate-spin" />
-          {/if}
-          {vault.t('auth_storage.sync_conflict_keep_local')}
-        </Button>
+        {#if isEventLogStoreMismatch}
+          <Button
+            type="button"
+            variant="outline"
+            class="sm:min-w-[160px]"
+            data-testid="sync-conflict-cancel-btn"
+            disabled={isBusy}
+            onclick={() => void onCancel?.()}
+          >
+            {vault.t('auth_storage.sync_conflict_choose_different_provider')}
+          </Button>
+        {:else}
+          <Button
+            type="button"
+            variant="outline"
+            class="sm:min-w-[160px]"
+            data-testid="sync-conflict-keep-remote-btn"
+            disabled={isBusy}
+            onclick={() => void onKeepRemote()}
+          >
+            {#if isBusy}
+              <RefreshCw class="size-4 animate-spin" />
+            {/if}
+            {vault.t('auth_storage.sync_conflict_keep_remote', {
+              provider: conflict.providerLabel,
+            })}
+          </Button>
+          <Button
+            type="button"
+            class="sm:min-w-[160px]"
+            data-testid="sync-conflict-keep-local-btn"
+            disabled={isBusy}
+            onclick={() => void onKeepLocal()}
+          >
+            {#if isBusy}
+              <RefreshCw class="size-4 animate-spin" />
+            {/if}
+            {vault.t('auth_storage.sync_conflict_keep_local')}
+          </Button>
+        {/if}
       </div>
     </CardContent>
   </Card>
