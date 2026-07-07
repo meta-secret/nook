@@ -145,6 +145,7 @@ function currentBrowserDiagnostics(): {
   hostname: string
   pathname: string
   protocol: string
+  isBrave: boolean
   isSecureContext: boolean
   topLevel: boolean
   visibilityState: DocumentVisibilityState
@@ -156,6 +157,7 @@ function currentBrowserDiagnostics(): {
     hostname: window.location.hostname,
     pathname: window.location.pathname,
     protocol: window.location.protocol,
+    isBrave: isBraveBrowser(),
     isSecureContext: window.isSecureContext,
     topLevel: window.top === window.self,
     visibilityState: document.visibilityState,
@@ -165,6 +167,10 @@ function currentBrowserDiagnostics(): {
       .map((part) => part.trim().split('=')[0])
       .filter(Boolean),
   }
+}
+
+function isBraveBrowser(): boolean {
+  return Boolean((navigator as Navigator & { brave?: unknown }).brave)
 }
 
 function webAuthTokenStorageDiagnostics(): {
@@ -940,13 +946,24 @@ async function waitForCloudKitSignIn(
   timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
   options: Pick<ICloudWebAuthTokenRequestOptions, 'clickSignInControl'> = {},
 ): Promise<CloudKitUserIdentity> {
+  const shouldClickSignInControl = options.clickSignInControl !== false
+  const useDirectAuthWithoutNativeClick =
+    shouldClickSignInControl && isBraveBrowser()
   log.info('CloudKit sign-in wait started', {
     timeoutMs,
-    clickSignInControl: options.clickSignInControl !== false,
+    clickSignInControl: shouldClickSignInControl,
+    directAuthWithoutNativeClick: useDirectAuthWithoutNativeClick,
     tokenBeforeWait: tokenDiagnostics(readStoredWebAuthToken()),
     storage: webAuthTokenStorageDiagnostics(),
     control: cloudKitSignInControlDiagnostics(),
   })
+  if (useDirectAuthWithoutNativeClick) {
+    await requestDirectCloudKitWebAuthToken(timeoutMs)
+    log.info('CloudKit sign-in succeeded through direct primary auth', {
+      token: tokenDiagnostics(readStoredWebAuthToken()),
+    })
+    return authSetupUserIdentity ?? {}
+  }
   const tokenPromise = waitForStoredWebAuthToken(timeoutMs)
   let sawExpectedSignInFailure = false
   const signInPromise = container
@@ -976,7 +993,7 @@ async function waitForCloudKitSignIn(
   signInPromise.catch(() => {
     // The CloudKit token store can resolve first; keep later callback failures handled.
   })
-  if (options.clickSignInControl !== false) {
+  if (shouldClickSignInControl) {
     clickCloudKitSignInButton()
   }
   try {

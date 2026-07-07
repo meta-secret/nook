@@ -50,6 +50,7 @@ describe('icloud-oauth', () => {
 
     afterEach(() => {
       vi.unstubAllGlobals()
+      Reflect.deleteProperty(navigator, 'brave')
       document.body.innerHTML = ''
       sessionStorage.clear()
     })
@@ -353,6 +354,68 @@ describe('icloud-oauth', () => {
 
       await expect(pending).resolves.toEqual({
         accessToken: 'direct-web-auth-token',
+      })
+      expect(close).toHaveBeenCalledOnce()
+    })
+
+    it('uses direct web auth as the primary Brave flow to avoid duplicate Apple windows', async () => {
+      Object.defineProperty(navigator, 'brave', {
+        configurable: true,
+        value: {},
+      })
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn()
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+      const nativeClick = vi.fn()
+      document
+        .querySelector('#apple-sign-in-button button')
+        ?.addEventListener('click', nativeClick)
+      const close = vi.fn()
+      const open = vi.fn().mockReturnValue({ close })
+      vi.stubGlobal('open', open)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              uuid: 'challenge-id',
+              serverErrorCode: 'AUTHENTICATION_REQUIRED',
+              reason: 'request needs authorization',
+              redirectURL:
+                'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=brave',
+            }),
+            { status: 421, headers: { 'content-type': 'application/json' } },
+          ),
+        ),
+      )
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken({
+        signInTimeoutMs: 5000,
+      })
+
+      await vi.waitFor(() => {
+        expect(open).toHaveBeenCalledWith(
+          'https://idmsa.apple.com/IDMSWebAuth/auth?oauth_token=brave',
+          'nook-icloud-auth',
+          'popup,width=520,height=720',
+        )
+      })
+      expect(nativeClick).not.toHaveBeenCalled()
+      expect(whenUserSignsIn).not.toHaveBeenCalled()
+      expect(open).toHaveBeenCalledOnce()
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://idmsa.apple.com',
+          data: { ckWebAuthToken: 'brave-direct-token' },
+        }),
+      )
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'brave-direct-token',
       })
       expect(close).toHaveBeenCalledOnce()
     })
