@@ -72,10 +72,16 @@ fn creation_options_struct(
                 display_name: "Nook device".to_owned(),
             },
             challenge: random_challenge()?.to_vec().into(),
-            pub_key_cred_params: vec![PublicKeyCredentialParameters {
-                ty: PublicKeyCredentialType::PublicKey,
-                alg: iana::Algorithm::ES256,
-            }],
+            pub_key_cred_params: vec![
+                PublicKeyCredentialParameters {
+                    ty: PublicKeyCredentialType::PublicKey,
+                    alg: iana::Algorithm::ES256,
+                },
+                PublicKeyCredentialParameters {
+                    ty: PublicKeyCredentialType::PublicKey,
+                    alg: iana::Algorithm::RS256,
+                },
+            ],
             timeout: None,
             exclude_credentials: None,
             authenticator_selection: Some(AuthenticatorSelectionCriteria {
@@ -170,7 +176,14 @@ mod tests {
         assert_eq!(json["publicKey"]["rp"]["id"], "localhost");
         assert_eq!(json["publicKey"]["rp"]["name"], "Nook");
         assert_eq!(json["publicKey"]["user"]["name"], "Nook device");
-        assert_eq!(json["publicKey"]["pubKeyCredParams"][0]["alg"], -7);
+        let algorithms = json["publicKey"]["pubKeyCredParams"]
+            .as_array()
+            .expect("credential parameters")
+            .iter()
+            .map(|param| param["alg"].as_i64().expect("credential algorithm"))
+            .collect::<Vec<_>>();
+        assert!(algorithms.contains(&-7));
+        assert!(algorithms.contains(&-257));
         assert_eq!(
             json["publicKey"]["authenticatorSelection"]["residentKey"],
             "required"
