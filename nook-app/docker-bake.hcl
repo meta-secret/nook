@@ -5,8 +5,8 @@
 //   nook-app/nook-core/docker-bake.hcl          -> builder-deps, builder-debug
 //   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm      (FROM builder-debug)
 //   nook-app/docker/toolchain.docker-bake.hcl   -> web-deps, _toolchain-common (parallel web + rust merge)
-//   nook-app/nook-web/docker-bake.hcl           -> _nook-web-common  (FROM toolchain + workspace source)
-// Callers (Taskfile `setup`, nook-app/.task/docker.yml) pass all files via the NOOK_BAKE_FILES list.
+//   nook-app/nook-web/nook-web-app/docker-bake.hcl -> _nook-web-common  (FROM toolchain + workspace source)
+// Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
 // LINEAR CHAIN (rust): nook-base -> builder-deps -> builder-debug -> builder-wasm -> toolchain ->
 // nook-web. The web branch (web-deps) is a PARALLEL bake target off nook-base; toolchain merges
@@ -59,7 +59,7 @@ group "builders" {
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
-// _nook-web-common lives in nook-app/nook-web/docker-bake.hcl.
+// _nook-web-common lives in nook-app/nook-web/nook-web-app/docker-bake.hcl.
 target "nook-web" {
   inherits = ["_nook-web-common"]
   tags     = [DOCKER_IMAGE]

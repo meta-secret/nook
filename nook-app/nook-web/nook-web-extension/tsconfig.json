@@ -1,0 +1,24 @@
+{
+  "extends": "../nook-web-app/node_modules/@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["svelte"],
+    "allowJs": true,
+    "checkJs": false,
+    "moduleDetection": "force"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.svelte",
+    "../nook-web-shared/src/**/*.ts",
+    "../nook-web-shared/src/**/*.svelte",
+    "../nook-web-app/src/lib/nook-wasm/**/*.d.ts"
+  ]
+}

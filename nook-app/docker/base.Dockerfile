@@ -77,7 +77,7 @@ COPY --from=cargo-chef /usr/local/cargo/bin/cargo-chef /usr/local/cargo/bin/carg
 # shared base. Docker layer caching makes reusing this base cheap, so a big stable base is fine —
 # and it means neither a Rust source edit NOR a JS dep bump ever re-runs the browser download; it
 # only rebuilds when the base itself changes (base image / pinned Playwright version). Pinned to the
-# same Playwright version as nook-app/nook-web/package.json (@playwright/test) — bump both together.
+# same Playwright version as nook-app/nook-web/nook-web-app/package.json (@playwright/test) — bump both together.
 RUN bunx playwright@1.55.0 install-deps chromium \
     && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
     && bunx playwright@1.55.0 install chromium \
