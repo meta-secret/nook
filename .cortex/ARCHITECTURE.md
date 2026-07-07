@@ -22,6 +22,7 @@ root/
     ├── .cargo/
     ├── .config/
     ├── docker/              (shared app/toolchain image definitions)
+    ├── nook-auth/
     ├── nook-core/
     ├── nook-wasm/
     ├── nook-web/
@@ -43,22 +44,37 @@ root/
                                v (core domain dependencies)
 +-------------------------------------------------------------+
 |                         nook-core                           |
-|   (Rust domain: crypto, formats, validation, passwords)       |
+|   (Rust domain: vault formats, events, sync, secrets)        |
++-------------------------------------------------------------+
+                               |
+                               v (portable security/key access)
++-------------------------------------------------------------+
+|                         nook-auth                           |
+|     (Rust auth: device identity, envelopes, vault keys)      |
 +-------------------------------------------------------------+
 ```
 
 ### Dependency Enforcements
 
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
-2. **Platform Portability:** `nook-core` compiles on native and `wasm32-unknown-unknown`. No browser APIs in `nook-core`; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
+2. **Platform Portability:** `nook-auth` and `nook-core` compile on native and `wasm32-unknown-unknown`. No browser APIs in either crate; simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
 ---
 
 ## 2. Package Responsibilities & Layers
 
-### A. `nook-core` (The Domain Core)
+### A. `nook-auth` (Portable Vault Security / Key Access)
 
-- **`src/auth/`:** Device identity protection, enrollment, multi-device roster/auth records, and password unlock envelopes.
+- **Device identities:** X25519 identity generation, device fingerprints, auth ids, and age envelopes.
+- **Device-key protection:** Passkey PRF result validation plus HKDF/AES-GCM wrapping for the browser-persisted identity. Browser/WebAuthn ceremonies stay outside this crate.
+- **Credential envelopes:** `auth:` rows, `password_entries`, enrollment payloads, member roster encryption, and key-resolution helpers for `secrets_key` and `members_key`.
+- **Key material and row types:** Portable newtypes for vault key material, auth/member ids, age-armored ciphertext, signing public keys, and the opaque `StoredSecretRecord` row shape shared by user secrets and auth metadata.
+- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser APIs, or sync reconciliation. Sync provider credentials authorize replica access only; they are not vault unlock credentials.
+- **Portability:** Compiles on native and `wasm32-unknown-unknown` so browser, extension, CLI, server, mobile, HSM, YubiKey, and future quorum-recovery adapters can share the same key-access semantics.
+
+### B. `nook-core` (The Domain Core)
+
+- **`src/auth/`:** Compatibility re-exports for `nook-auth` plus the core-only adapter that replays vault event operations into auth metadata state.
 - **`src/crypto/`:** Canonical event signing/hashing, vault encryption, key-epoch re-encryption, and signing identity helpers.
 - **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
 - **`src/sync/`:** Storage-provider validation/configuration, credential sealing, provider snapshot migration, and vault reconciliation.
@@ -66,15 +82,15 @@ root/
 - **Root exports:** `nook-app/nook-core/src/lib.rs` keeps the public `nook_core::...` API stable and exposes private compatibility aliases for older internal `crate::vault_event`-style paths. New files should live under the domain group, not directly under `src/`.
 - **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
 
-### B. `nook-wasm` (The Bridge Layer)
+### C. `nook-wasm` (The Bridge Layer)
 
 - **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
 - **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
-- **Device protection:** Persist/migrate the wrapped identity, build WebAuthn PRF option payloads with `1Password/passkey-rs` `passkey-types`, and expose typed setup/unlock values to the web layer.
+- **Device protection:** Persist/migrate the wrapped identity, build WebAuthn PRF option payloads with `1Password/passkey-rs` `passkey-types`, and expose typed setup/unlock values to the web layer. Delegates portable key wrapping and auth metadata behavior to `nook-auth` through `nook-core`.
 - **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
 - **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
 
-### C. `nook-web` (The Web Presentation Layer)
+### D. `nook-web` (The Web Presentation Layer)
 
 - **Svelte 5 components:** Layout, forms, vault list UI.
 - **`VaultState` (`vault.svelte.ts`):** Reactive shell — calls WASM, holds `secrets` for reactivity, auth provider state.
@@ -86,7 +102,7 @@ root/
 - **`nook.ts`:** WASM loader + sync result mapping; vault secrets are `NookSecretRecord` wasm objects (no TS schema mirror).
 - **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
 
-### D. `nook-web-extension` (The Browser Extension Layer)
+### E. `nook-web-extension` (The Browser Extension Layer)
 
 - **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web-extension/dist`; source lives under `nook-app/nook-web-extension/src`.
 - **Separate product surface:** Popup UI, service worker, content scripts, and future autofill flows stay out of `nook-web` so extension-only browser privileges and page-injection code do not leak into the web app.
@@ -178,7 +194,7 @@ members:  members_key-encrypted catalog entries
 
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nook-core` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
+| `nook-core` / `nook-auth` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web`  | Playwright e2e: `task web:test:e2e` (PR/main stub suite), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |
 

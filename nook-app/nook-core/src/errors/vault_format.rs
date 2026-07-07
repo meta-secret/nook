@@ -1,6 +1,6 @@
 //! On-disk vault YAML format errors.
 
-use super::validation::ValidationError;
+use nook_auth::ValidationError;
 use thiserror::Error;
 
 pub type VaultFormatResult<T> = Result<T, VaultFormatError>;

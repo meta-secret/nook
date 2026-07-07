@@ -138,12 +138,14 @@ task ci:nightly:e2e                 # prepare + build + sync-live
 task web:test:e2e:github            # → sync-live
 ```
 
-## nook-core coverage export
+## nook-core + nook-auth coverage export
 
-The `nook-core` coverage gate runs during the Docker image build in
-`nook-app/nook-core/Dockerfile` (`builder-debug`). That single `cargo llvm-cov nextest`
-run both enforces the committed floor and writes reusable artifacts to
-`/opt/nook/coverage/nook-core` in the image.
+The `nook-core + nook-auth` coverage gate runs during the Docker image build in
+`nook-app/nook-core/Dockerfile` (`builder-debug`). The source-sensitive layers are
+ordered by Rust dependency edge: `nook-auth` is copied, linted, and coverage-tested
+before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
+`cargo llvm-cov report -p nook-core -p nook-auth` enforces the committed floor
+and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
 PR coverage export must remain a copy-out step: `task docker:extract:coverage`
 creates a stopped container from the already-built `nook-web:local` image and
@@ -213,7 +215,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | `NOOK_GITHUB_PAT`                                   | sync-live e2e **and** ci-fix PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; PR CI then records that preview as a successful `github-pages` GitHub deployment for ruleset enforcement                                         |
-| `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core coverage comment                                                                                                             |
+| `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core + nook-auth coverage comment                                                                                                 |
 | `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml)                                                                                                                            |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.

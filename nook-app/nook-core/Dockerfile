@@ -11,6 +11,7 @@ FROM nook-base AS chef-planner
 WORKDIR /meta-secret/nook/nook-app
 
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
+COPY nook-app/nook-auth nook-auth
 COPY nook-app/nook-core nook-core
 COPY nook-app/nook-wasm nook-wasm
 RUN cargo chef prepare --recipe-path recipe.json
@@ -24,6 +25,7 @@ COPY nook-app/.cargo .cargo
 COPY nook-app/.config .config
 COPY --from=chef-planner /meta-secret/nook/nook-app/recipe.json ./recipe.json
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
+COPY nook-app/nook-auth/Cargo.toml nook-auth/Cargo.toml
 COPY nook-app/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
 # wasm deps via cargo-chef (the wasm build in nook-app/nook-wasm/Dockerfile reuses these). Separate RUNs so
@@ -35,12 +37,16 @@ RUN cargo fetch --locked
 # cargo-chef rewrites workspace versions to 0.0.1, so its cooked native artifacts are NOT reused by
 # `cargo nextest`/`clippy` once the true lockfile is in place (see cargo-chef#305) — so we warm the
 # native deps here instead of with chef. Stub in dummy crate roots so the workspace resolves,
-# compile the deps, then drop the stub crate artifacts — real source then recompiles nook-core
-# alone (deps stay warm). Kept as separate cache layers.
-RUN mkdir -p nook-core/src nook-wasm/src
+# compile the deps, and keep the stubs for unselected workspace packages. Real crate source is
+# copied over the stubs in builder-debug in dependency order (nook-auth -> nook-core -> nook-wasm).
+# Kept as separate cache layers.
+RUN mkdir -p nook-auth/src nook-core/src nook-wasm/src
+RUN echo '' > nook-auth/src/lib.rs
 RUN echo '' > nook-core/src/lib.rs
 RUN echo '' > nook-wasm/src/lib.rs
+RUN cargo nextest run --no-run -p nook-auth --profile ci
 RUN cargo nextest run --no-run -p nook-core --profile ci
+RUN cargo clippy -p nook-auth --all-targets -- -D warnings
 RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # Also warm the COVERAGE-instrumented deps: cargo-llvm-cov builds with -Cinstrument-coverage +
 # cfg(coverage) into its own target/llvm-cov-target dir — a distinct fingerprint AND location from
@@ -48,8 +54,8 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # recompiles every dependency with instrumentation. --no-report skips report merge; --no-tests=pass
 # tolerates the stub crate having zero tests (nextest exits 4 otherwise). This warms the instrumented
 # deps so builder-debug's real coverage step is a cache hit.
+RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth --no-tests=pass
 RUN cargo llvm-cov nextest --no-report --profile ci -p nook-core --no-tests=pass
-RUN rm -rf nook-core/src nook-wasm/src
 
 # --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---
 FROM builder-deps AS builder-debug
@@ -57,22 +63,26 @@ FROM builder-deps AS builder-debug
 WORKDIR /meta-secret/nook/nook-app
 
 COPY nook-app/Cargo.toml nook-app/Cargo.lock ./
-COPY nook-app/nook-core nook-core
-COPY nook-app/nook-wasm nook-wasm
 COPY nook-app/.config .config
-# nook-core verify, all as BUILD steps (fail the image build on any regression). This layer is
-# invalidated only on a nook-core source change; deps stay warm from builder-deps, so each step
-# recompiles nook-core alone.
+
+# Source-sensitive verification layers are ordered by Rust dependency edge. A nook-core-only change
+# can reuse the nook-auth clippy and coverage-test layers; a nook-wasm-only change can reuse both.
+COPY nook-app/nook-auth nook-auth
+RUN cargo clippy -p nook-auth --all-targets -- -D warnings
+RUN cargo llvm-cov nextest --profile ci -p nook-auth --no-report
+
+COPY nook-app/nook-core nook-core
 RUN cargo clippy -p nook-core --all-targets -- -D warnings
-# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov compiles + runs the
-# nook-core tests with instrumentation and enforces the committed line floor via --fail-under-lines
-# (read from nook-app/nook-core/coverage-floor.json). If coverage drops below the floor the build fails. The
-# same run also bakes the coverage artifacts that PR CI copies out later; export must not rerun the
-# Rust tests.
+# Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth
+# above, then runs nook-core with --no-clean so the final report combines both crates while preserving
+# cacheable auth coverage. The same run also bakes the coverage artifacts that PR CI copies out later;
+# export must not rerun the Rust tests.
 RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
-    && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only --fail-under-lines "$FLOOR" \
-    && cargo llvm-cov report --summary-only > /opt/nook/coverage/nook-core/summary.txt \
-    && cargo llvm-cov report --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
-    && cargo llvm-cov report --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
+    && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-auth --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && cargo llvm-cov report -p nook-core -p nook-auth --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
+    && cargo llvm-cov report -p nook-core -p nook-auth --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json
+
+COPY nook-app/nook-wasm nook-wasm

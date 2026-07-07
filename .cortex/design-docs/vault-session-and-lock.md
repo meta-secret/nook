@@ -17,6 +17,12 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, an
 | **Unlocked session** | WASM typed `Database` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
 | **Lock** | End session; return to login gate | N/A |
 
+`nook-auth` owns the portable security/key-access primitives behind these rows:
+device identities, `auth:` envelopes, `password_entries`, member roster
+encryption, passkey-PRF result wrapping, and vault key resolution. Sync
+providers remain separate replica credentials and do not define how a vault is
+unlocked.
+
 ```mermaid
 flowchart TB
   subgraph user["User (mental model)"]
@@ -109,3 +115,4 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 - Lock must clear WASM session state — never rely on hiding UI alone.
 - The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey authorization again.
 - Sync provider tokens in `nook_auth` remain after lock — they are storage credentials, not vault keys.
+- Vault authentication/authorization belongs to `nook-auth`; sync provider replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.
