@@ -56,8 +56,11 @@
   let icloudSignInPrepareStarted = $state(false)
 
   function watchICloudSignInIntent(node: HTMLElement) {
-    let signInIntentTimer: ReturnType<typeof setTimeout> | undefined = undefined
-    const startWaitingForToken = () => {
+    let forwardingCloudKitClick = false
+    const handleClick = (event: MouseEvent) => {
+      if (forwardingCloudKitClick) {
+        return
+      }
       if (
         !isICloud ||
         !vault.icloudOAuthReady ||
@@ -66,23 +69,18 @@
       ) {
         return
       }
-      void vault.signInWithICloud({ clickPreparedControl: false })
-    }
-    const handleClick = () => {
-      if (signInIntentTimer !== undefined) {
-        clearTimeout(signInIntentTimer)
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      forwardingCloudKitClick = true
+      try {
+        void vault.signInWithICloud({ clickPreparedControl: true })
+      } finally {
+        forwardingCloudKitClick = false
       }
-      signInIntentTimer = setTimeout(() => {
-        signInIntentTimer = undefined
-        startWaitingForToken()
-      }, 0)
     }
     node.addEventListener('click', handleClick, { capture: true })
     return {
       destroy() {
-        if (signInIntentTimer !== undefined) {
-          clearTimeout(signInIntentTimer)
-        }
         node.removeEventListener('click', handleClick, { capture: true })
       },
     }

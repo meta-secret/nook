@@ -167,6 +167,41 @@ describe('icloud-oauth', () => {
       })
     })
 
+    it('clicks the CloudKit-generated Apple auth div', async () => {
+      document.body.innerHTML =
+        '<div id="apple-sign-in-button"><div class="apple-auth-button">Sign in</div></div><div id="apple-sign-out-button"></div>'
+      let resolveSignIn: (value: unknown) => void = () => {}
+      const signInPromise = new Promise((resolve) => {
+        resolveSignIn = resolve
+      })
+      const signInControl = document.querySelector<HTMLElement>(
+        '#apple-sign-in-button .apple-auth-button',
+      )
+      const clickSpy = vi.fn()
+      signInControl?.addEventListener('click', clickSpy)
+      const setUpAuth = vi.fn().mockResolvedValue(undefined)
+      const whenUserSignsIn = vi.fn().mockReturnValue(signInPromise)
+      vi.mocked(window.CloudKit!.getDefaultContainer).mockReturnValue({
+        setUpAuth,
+        whenUserSignsIn,
+      })
+
+      await prepareICloudSignInControl()
+      const pending = requestPreparedICloudWebAuthToken()
+
+      expect(clickSpy).toHaveBeenCalledOnce()
+
+      const config = vi.mocked(window.CloudKit!.configure).mock.calls[0]![0]
+      config.services?.authTokenStore?.putToken(ICLOUD_CONTAINER_ID, {
+        ckWebAuthToken: 'cloudkit-div-token',
+      })
+      resolveSignIn({ lookupInfo: {} })
+
+      await expect(pending).resolves.toEqual({
+        accessToken: 'cloudkit-div-token',
+      })
+    })
+
     it('can wait for the visible CloudKit control without clicking it', async () => {
       let resolveSignIn: (value: unknown) => void = () => {}
       const signInPromise = new Promise((resolve) => {
