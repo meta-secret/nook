@@ -55,6 +55,27 @@
   let syncStepOpen = $state(false)
   let icloudSignInPrepareStarted = $state(false)
 
+  function watchICloudSignInIntent(node: HTMLElement) {
+    const startWaitingForToken = () => {
+      if (
+        !isICloud ||
+        !vault.icloudOAuthReady ||
+        vault.icloudOAuthBusy ||
+        oauthSignedIn
+      ) {
+        return
+      }
+      void vault.signInWithICloud({ clickPreparedControl: false })
+    }
+    const handleClick = () => startWaitingForToken()
+    node.addEventListener('click', handleClick, { capture: true })
+    return {
+      destroy() {
+        node.removeEventListener('click', handleClick, { capture: true })
+      },
+    }
+  }
+
   $effect(() => {
     if (oauthSignedIn) {
       connectionStepOpen = false
@@ -177,27 +198,47 @@
         </p>
       </div>
 
-      <button
-        type="button"
-        class={cn(
-          buttonVariants({ variant: 'default', size: 'sm' }),
-          'w-full sm:w-auto',
-        )}
-        data-testid={isICloud ? 'icloud-sign-in-btn' : 'google-sign-in-btn'}
-        disabled={oauthBusy || oauthOriginUnsupported || icloudSignInPreparing}
-        onclick={() =>
-          void (isICloud ? vault.signInWithICloud() : vault.signInWithGoogle())}
-      >
-        {#if oauthBusy || icloudSignInPreparing}
-          {isICloud
-            ? vault.t('provider_setup.icloud_signing_in')
-            : vault.t('provider_setup.google_signing_in')}
-        {:else if isICloud}
-          {vault.t('provider_setup.sign_in_with_icloud')}
-        {:else}
-          {vault.t('provider_setup.sign_in_with_google')}
-        {/if}
-      </button>
+      {#if isICloud}
+        <div
+          class={cn(
+            'apple-cloudkit-control relative min-h-9 w-full sm:w-fit',
+            (oauthBusy || icloudSignInPreparing || oauthOriginUnsupported) &&
+              'pointer-events-none opacity-60',
+          )}
+          data-testid="icloud-sign-in-btn"
+          use:watchICloudSignInIntent
+        >
+          <div id="apple-sign-in-button"></div>
+          <div id="apple-sign-out-button" class="hidden"></div>
+          {#if oauthBusy || icloudSignInPreparing}
+            <div
+              class={cn(
+                buttonVariants({ variant: 'default', size: 'sm' }),
+                'absolute inset-0 w-full sm:w-auto',
+              )}
+            >
+              {vault.t('provider_setup.icloud_signing_in')}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <button
+          type="button"
+          class={cn(
+            buttonVariants({ variant: 'default', size: 'sm' }),
+            'w-full sm:w-auto',
+          )}
+          data-testid="google-sign-in-btn"
+          disabled={oauthBusy || oauthOriginUnsupported}
+          onclick={() => void vault.signInWithGoogle()}
+        >
+          {#if oauthBusy}
+            {vault.t('provider_setup.google_signing_in')}
+          {:else}
+            {vault.t('provider_setup.sign_in_with_google')}
+          {/if}
+        </button>
+      {/if}
 
       {#if oauthOriginUnsupported}
         <p
@@ -283,3 +324,12 @@
     </SetupWizardStep>
   </div>
 </div>
+
+<style>
+  .apple-cloudkit-control :global(button),
+  .apple-cloudkit-control :global(a),
+  .apple-cloudkit-control :global(iframe) {
+    max-width: 100%;
+    min-height: 2.25rem;
+  }
+</style>

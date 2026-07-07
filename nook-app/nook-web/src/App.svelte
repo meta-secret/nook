@@ -648,9 +648,5 @@
         </div>
       </div>
     {/if}
-
-    <!-- CloudKit JS mounts Sign in with Apple controls here (icloud-oauth.ts). -->
-    <div id="apple-sign-in-button" class="sr-only" aria-hidden="true"></div>
-    <div id="apple-sign-out-button" class="sr-only" aria-hidden="true"></div>
   </main>
 {/if}

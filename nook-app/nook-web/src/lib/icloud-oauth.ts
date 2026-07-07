@@ -24,6 +24,7 @@ export type ICloudOAuthTokens = {
 
 type ICloudWebAuthTokenRequestOptions = {
   signInTimeoutMs?: number
+  clickSignInControl?: boolean
 }
 
 type CloudKitUserIdentity = {
@@ -355,6 +356,7 @@ function requireStoredWebAuthToken(
 async function waitForCloudKitSignIn(
   container: CloudKitContainer,
   timeoutMs = ICLOUD_SIGN_IN_TIMEOUT_MS,
+  options: Pick<ICloudWebAuthTokenRequestOptions, 'clickSignInControl'> = {},
 ): Promise<CloudKitUserIdentity> {
   const tokenPromise = waitForStoredWebAuthToken(timeoutMs)
   const signInPromise = container.whenUserSignsIn().then((userIdentity) => {
@@ -364,7 +366,9 @@ async function waitForCloudKitSignIn(
   signInPromise.catch(() => {
     // The CloudKit token store can resolve first; keep later callback failures handled.
   })
-  clickCloudKitSignInButton()
+  if (options.clickSignInControl !== false) {
+    clickCloudKitSignInButton()
+  }
   try {
     await Promise.race([tokenPromise, signInPromise])
     await tokenPromise
@@ -388,9 +392,11 @@ export function requestPreparedICloudWebAuthToken(
     return Promise.resolve(requireStoredWebAuthToken())
   }
   const container = window.CloudKit.getDefaultContainer()
-  return waitForCloudKitSignIn(container, options.signInTimeoutMs).then(
-    (identity) => requireStoredWebAuthToken(identity),
-  )
+  return waitForCloudKitSignIn(
+    container,
+    options.signInTimeoutMs,
+    options,
+  ).then((identity) => requireStoredWebAuthToken(identity))
 }
 
 export async function requestICloudWebAuthToken(
@@ -406,7 +412,7 @@ export async function requestICloudWebAuthToken(
   }
 
   if (!userIdentity) {
-    await waitForCloudKitSignIn(container, options.signInTimeoutMs)
+    await waitForCloudKitSignIn(container, options.signInTimeoutMs, options)
   }
 
   return requireStoredWebAuthToken()

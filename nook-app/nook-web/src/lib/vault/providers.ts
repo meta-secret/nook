@@ -36,6 +36,12 @@ function vaultStoreIdForProviderSave(state: VaultState): string | undefined {
   )
 }
 
+function resetICloudSignInState(state: VaultState) {
+  state.icloudOAuthPreparing = false
+  state.icloudOAuthReady = false
+  state.icloudOAuthBusy = false
+}
+
 export async function loadProviders(
   state: VaultState,
   options?: { ensureLocalRow?: boolean },
@@ -154,6 +160,9 @@ export function beginProviderSetup(
     type === 'oauth-file' ? DEFAULT_DRIVE_BACKUP_NAME : DEFAULT_GITHUB_REPO
   if (type === 'oauth-file') {
     const preset = oauthPreset ?? 'google-drive'
+    if (preset === 'icloud') {
+      resetICloudSignInState(state)
+    }
     state.oauthSetupPreset = preset
     state.oauthFile = {
       preset,
@@ -180,6 +189,7 @@ export function beginAddProvider(state: VaultState) {
 }
 
 export function cancelAddProvider(state: VaultState) {
+  resetICloudSignInState(state)
   state.addProviderOpen = false
   state.loginSetupType = undefined
   state.applyActiveProviderCredentials()
@@ -187,6 +197,7 @@ export function cancelAddProvider(state: VaultState) {
 }
 
 export function cancelProviderSetup(state: VaultState) {
+  resetICloudSignInState(state)
   if (state.addProviderOpen && state.loginSetupType !== undefined) {
     const setupType = state.loginSetupType
     state.loginSetupType = undefined
