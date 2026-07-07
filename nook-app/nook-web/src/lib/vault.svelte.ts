@@ -43,6 +43,7 @@ import {
   DEFAULT_GITHUB_REPO,
   formatDriveStorageRef,
   GITHUB_PROVIDER_TYPE,
+  LOCAL_FOLDER_PROVIDER_TYPE,
   loadAuthProviders,
   LOCAL_PROVIDER_TYPE,
   NookStorageProviderKind,
@@ -59,6 +60,7 @@ import {
 } from '$lib/auth-providers'
 import { createLogger } from '$lib/log'
 import type { PendingSyncConflict } from '$lib/vault/sync'
+import type { LocalFolderMultipleVaultsIssue } from '$lib/vault/sync'
 import {
   createVaultIdleSessionTracker,
   type VaultIdleSessionTracker,
@@ -199,6 +201,10 @@ export class VaultState {
   >([])
   /** User must pick local vs remote before editing when versions match but content differs. */
   pendingSyncConflict = $state<PendingSyncConflict | undefined>(undefined)
+  /** Local-folder provider points at a folder that contains several vault event logs. */
+  localFolderMultipleVaultsIssue = $state<
+    LocalFolderMultipleVaultsIssue | undefined
+  >(undefined)
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== undefined
@@ -1427,6 +1433,32 @@ export class VaultState {
 
   clearPendingSyncConflict() {
     this.pendingSyncConflict = undefined
+  }
+
+  dismissLocalFolderMultipleVaultsIssue() {
+    this.localFolderMultipleVaultsIssue = undefined
+  }
+
+  async disconnectLocalFolderMultipleVaultsProvider(): Promise<void> {
+    const issue = this.localFolderMultipleVaultsIssue
+    if (!issue) return
+    this.localFolderMultipleVaultsIssue = undefined
+    await this.removeProvider(issue.providerId)
+  }
+
+  async chooseReplacementLocalFolderForIssue(): Promise<void> {
+    const issue = this.localFolderMultipleVaultsIssue
+    if (!issue) return
+    this.localFolderMultipleVaultsIssue = undefined
+    if (this.providers.some((provider) => provider.id === issue.providerId)) {
+      await this.removeProvider(issue.providerId)
+    }
+    this.errorMsg = ''
+    this.settingsOpen = true
+    this.settingsSection = 'admin'
+    this.adminAccordionSection = 'storage'
+    this.beginAddProvider()
+    this.beginProviderSetup(LOCAL_FOLDER_PROVIDER_TYPE)
   }
 
   /** E2E / dev: open the conflict dialog without reaching remote storage. */
