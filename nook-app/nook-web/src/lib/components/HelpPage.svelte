@@ -133,14 +133,14 @@
         aria-label="Legal"
       >
         <a
-          href={appPath('/privacy')}
+          href={appPath('/privacy.html')}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
           Privacy Policy
         </a>
         <span aria-hidden="true">·</span>
         <a
-          href={appPath('/terms')}
+          href={appPath('/terms.html')}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
           Terms of Service

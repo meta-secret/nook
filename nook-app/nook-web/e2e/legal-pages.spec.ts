@@ -1,28 +1,22 @@
 import { expect, test } from './fixtures'
 
 test.describe('legal pages', () => {
-  test('renders privacy policy at /privacy', async ({ page }) => {
-    await page.goto('/privacy')
-    await expect(page.getByTestId('legal-document-page')).toHaveAttribute(
-      'data-legal-page',
-      'privacy',
-    )
-    await expect(page.getByTestId('legal-document-body')).toContainText(
-      'zero-knowledge',
-    )
-    await expect(page).toHaveTitle(/Privacy Policy · Nook/)
+  test('serves static privacy policy at /privacy.html', async ({ page }) => {
+    await page.goto('/privacy.html')
+    await expect(page.locator('h1')).toHaveText('Privacy Policy')
+    await expect(page.locator('body')).toContainText('zero-knowledge')
+    await expect(page.locator('#app')).toHaveCount(0)
+    await expect(page).toHaveTitle(/Nook Privacy Policy/)
   })
 
-  test('renders terms at /terms and links between documents', async ({
+  test('serves static terms at /terms.html and links between documents', async ({
     page,
   }) => {
-    await page.goto('/terms')
-    await expect(page.getByTestId('legal-document-body')).toContainText('as is')
-    await page.getByTestId('legal-document-related-link').click()
-    await expect(page.getByTestId('legal-document-page')).toHaveAttribute(
-      'data-legal-page',
-      'privacy',
-    )
+    await page.goto('/terms.html')
+    await expect(page.locator('h1')).toHaveText('Terms of Service')
+    await expect(page.locator('body')).toContainText('as is')
+    await page.locator('header a[href="/privacy.html"]').click()
+    await expect(page.locator('h1')).toHaveText('Privacy Policy')
   })
 
   test('shows footer links on the home page', async ({ page }) => {
@@ -34,11 +28,11 @@ test.describe('legal pages', () => {
     )
     await expect(page.getByTestId('footer-privacy-link')).toHaveAttribute(
       'href',
-      '/privacy',
+      '/privacy.html',
     )
     await expect(page.getByTestId('footer-terms-link')).toHaveAttribute(
       'href',
-      '/terms',
+      '/terms.html',
     )
   })
 
@@ -53,10 +47,11 @@ test.describe('legal pages', () => {
     await expect(page.locator('#app')).toHaveCount(0)
   })
 
-  test('returns to home from legal page back button', async ({ page }) => {
-    await page.goto('/privacy')
-    await page.getByTestId('legal-document-back-btn').click()
-    await expect(page.getByTestId('legal-document-page')).not.toBeVisible()
+  test('returns to home from static legal page brand link', async ({
+    page,
+  }) => {
+    await page.goto('/privacy.html')
+    await page.locator('header a.brand').click()
     await expect(page).toHaveURL('/')
   })
 })

@@ -10,8 +10,8 @@ export type SitemapEntry = {
 /** Public routes suitable for search indexing (keep in sync with LEGAL_PAGES paths). */
 export const PUBLIC_SITEMAP_ENTRIES: SitemapEntry[] = [
   { path: '/about.html', changefreq: 'weekly', priority: '1.0' },
-  { path: '/privacy', changefreq: 'monthly', priority: '0.6' },
-  { path: '/terms', changefreq: 'monthly', priority: '0.6' },
+  { path: '/privacy.html', changefreq: 'monthly', priority: '0.6' },
+  { path: '/terms.html', changefreq: 'monthly', priority: '0.6' },
 ]
 
 export function siteUrlFromEnv(
@@ -65,8 +65,8 @@ export function buildRobotsTxt(siteUrl: string): string {
   const base = siteUrl.replace(/\/$/, '')
   return `User-agent: *
 Allow: /about.html
-Allow: /privacy
-Allow: /terms
+Allow: /privacy.html
+Allow: /terms.html
 Allow: /assets/
 Allow: /favicon.png
 Allow: /nook-logo-dark.png
