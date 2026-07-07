@@ -96,31 +96,34 @@ test.describe('file sync provider event log', () => {
   })
 
   test('replicates secure-note events across primary and per-device file backups', async () => {
-    const vault1 = createIsolatedFileTarget('file-repl-vault1', 'vault1')
-    const vault1Backup = createIsolatedFileTarget(
-      'file-repl-vault1-backup',
-      'vault1-backup',
+    const commonVault = createIsolatedFileTarget(
+      'file-repl-common-vault',
+      'common-vault',
+    )
+    const commonVaultBackup = createIsolatedFileTarget(
+      'file-repl-common-vault-backup',
+      'common-vault-backup',
     )
     const vault2Backup = createIsolatedFileTarget(
       'file-repl-vault2-backup',
       'vault2-backup',
     )
 
-    await connectSyncGenesisDevice(deviceA, vault1)
+    await connectSyncGenesisDevice(deviceA, commonVault)
     await assertVaultReady(deviceA)
-    await waitForFileEvents(vault1, 1)
+    await waitForFileEvents(commonVault, 1)
 
-    await addFileBackupProvider(deviceA, vault1Backup, {
-      id: 'e2e-vault1-backup',
-      label: 'File vault1-backup',
+    await addFileBackupProvider(deviceA, commonVaultBackup, {
+      id: 'e2e-common-vault-backup',
+      label: 'File common-vault-backup',
       minProviderCount: 2,
     })
-    await expectFileTargetsToHaveSameEvents([vault1, vault1Backup])
+    await expectFileTargetsToHaveSameEvents([commonVault, commonVaultBackup])
 
-    await connectSyncJoinerDevice(deviceB, vault1)
-    const join = await sendJoinRequestLocalE2e(deviceB, vault1.stub!)
-    await approveJoinFromBanner(deviceA, join.deviceId, vault1, 2)
-    await waitForJoinerVaultReady(deviceB, vault1)
+    await connectSyncJoinerDevice(deviceB, commonVault)
+    const join = await sendJoinRequestLocalE2e(deviceB, commonVault.stub!)
+    await approveJoinFromBanner(deviceA, join.deviceId, commonVault, 2)
+    await waitForJoinerVaultReady(deviceB, commonVault)
     await assertVaultReady(deviceB)
 
     await addFileBackupProvider(deviceB, vault2Backup, {
@@ -134,7 +137,7 @@ test.describe('file sync provider event log', () => {
     await addSecureNote(deviceA, noteTitle, noteBody)
     await flushFileProviders(deviceA)
     await waitForSyncRemoteState(
-      vault1,
+      commonVault,
       (snapshot) =>
         snapshot.secretIds.length >= 1 && snapshot.raw.includes('secure-note'),
     )
@@ -146,8 +149,8 @@ test.describe('file sync provider event log', () => {
     )
 
     await expectFileTargetsToHaveSameEvents([
-      vault1,
-      vault1Backup,
+      commonVault,
+      commonVaultBackup,
       vault2Backup,
     ])
   })

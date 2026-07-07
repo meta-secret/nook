@@ -168,9 +168,9 @@ fn two_device_genesis_append_and_union() -> VaultResult<()> {
 fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()> {
     let mut device1 = EventLogDevice::genesis("device 1")?;
     let mut providers: ProviderBuckets = HashMap::from([
-        ("vault1".to_owned(), nook_core::LocalEventStore::new()),
+        ("common-vault".to_owned(), nook_core::LocalEventStore::new()),
         (
-            "vault1-backup".to_owned(),
+            "common-vault-backup".to_owned(),
             nook_core::LocalEventStore::new(),
         ),
         (
@@ -180,50 +180,53 @@ fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()>
     ]);
 
     // Device 1 creates the primary file-sync target and its local-file backup.
-    write_all_device_events_to_provider(&device1, &mut providers, "vault1")?;
-    write_all_device_events_to_provider(&device1, &mut providers, "vault1-backup")?;
-    expect_provider_event_sets_equal(&providers, &["vault1", "vault1-backup"])?;
+    write_all_device_events_to_provider(&device1, &mut providers, "common-vault")?;
+    write_all_device_events_to_provider(&device1, &mut providers, "common-vault-backup")?;
+    expect_provider_event_sets_equal(&providers, &["common-vault", "common-vault-backup"])?;
 
-    // Device 2 onboards through vault1, then device 1 approves that request.
+    // Device 2 onboards through the shared vault, then device 1 approves that request.
     let mut device2 = EventLogDevice::replica_of(&device1)?;
-    pull_provider_into_device(&mut device2, &providers, "vault1")?;
+    pull_provider_into_device(&mut device2, &providers, "common-vault")?;
     let device2_identity = device2.identity.clone();
     let join = request_join(&mut device2, &device2_identity)?;
-    write_all_device_events_to_provider(&device2, &mut providers, "vault1")?;
-    pull_provider_into_device(&mut device1, &providers, "vault1")?;
+    write_all_device_events_to_provider(&device2, &mut providers, "common-vault")?;
+    pull_provider_into_device(&mut device1, &providers, "common-vault")?;
     approve_join(&mut device1, &join)?;
-    write_all_device_events_to_provider(&device1, &mut providers, "vault1")?;
-    pull_provider_into_device(&mut device2, &providers, "vault1")?;
+    write_all_device_events_to_provider(&device1, &mut providers, "common-vault")?;
+    pull_provider_into_device(&mut device2, &providers, "common-vault")?;
 
     // Device 2 creates its own backup from the same replicated event graph.
     write_all_device_events_to_provider(&device2, &mut providers, "vault2-backup")?;
 
     // A secure note saved on device 1 fans out to its primary and backup targets,
-    // then device 2 pulls it from vault1 and fans out to its backup.
+    // then device 2 pulls it from the shared vault and fans out to its backup.
     append_secure_note(
         &mut device1,
         "secret_replicaten",
         "Replication proof",
         "created on device 1",
     )?;
-    write_all_device_events_to_provider(&device1, &mut providers, "vault1")?;
-    write_all_device_events_to_provider(&device1, &mut providers, "vault1-backup")?;
-    pull_provider_into_device(&mut device2, &providers, "vault1")?;
+    write_all_device_events_to_provider(&device1, &mut providers, "common-vault")?;
+    write_all_device_events_to_provider(&device1, &mut providers, "common-vault-backup")?;
+    pull_provider_into_device(&mut device2, &providers, "common-vault")?;
     write_all_device_events_to_provider(&device2, &mut providers, "vault2-backup")?;
 
-    expect_provider_event_sets_equal(&providers, &["vault1", "vault1-backup", "vault2-backup"])?;
-    let vault1_events = providers
-        .get("vault1")
+    expect_provider_event_sets_equal(
+        &providers,
+        &["common-vault", "common-vault-backup", "vault2-backup"],
+    )?;
+    let common_vault_events = providers
+        .get("common-vault")
         .ok_or(EventError::MissingProviderBucket)?
         .event_ids();
     assert_eq!(
-        vault1_events.len(),
+        common_vault_events.len(),
         4,
         "genesis + join request + join approval + secure note"
     );
     assert!(
         live_secret_ids(&device2)?.contains("secret_replicaten"),
-        "device 2 did not materialize the secure note after pulling vault1"
+        "device 2 did not materialize the secure note after pulling the shared vault"
     );
     Ok(())
 }
