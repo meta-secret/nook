@@ -206,7 +206,10 @@ origin, unauthenticated production requests should return
 `AUTHENTICATION_REQUIRED` plus a `redirectURL`. If CloudKit JS wraps that
 challenge as `UNKNOWN_ERROR` after the real Apple click, Nook falls back to the
 Web Services challenge, opens the returned Apple sign-in URL, and listens for
-the `ckWebAuthToken` postMessage.
+the `ckWebAuthToken` postMessage. Brave can open CloudKit JS's Apple window and
+the direct fallback window at the same time, so Brave uses the direct Web
+Services challenge as its primary sign-in path instead of forwarding the native
+CloudKit button click.
 
 Preferred future options:
 
