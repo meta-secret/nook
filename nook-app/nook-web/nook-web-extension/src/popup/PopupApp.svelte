@@ -5,6 +5,7 @@
     PasswordFormSummary,
     ScanPasswordFieldsResponse,
   } from '../../../nook-web-shared/src/extension/runtime-messages'
+  import type { ExtensionI18n } from '../lib/i18n'
   import {
     generateSuggestedPassword,
     setupExtensionDeviceProtection,
@@ -65,13 +66,15 @@
         generatedPassword?: string | undefined
       }
 
+  let { i18n }: { i18n: ExtensionI18n } = $props()
+
   let setupState = $state<ExtensionSetupState>({
     status: 'not-set-up',
     deviceLabel: defaultDeviceLabel(),
   })
   let scanState = $state<ScanState>({
     status: 'loading',
-    tabTitle: 'Checking this page',
+    tabTitle: '',
   })
   let setupAttemptId = 0
 
@@ -98,11 +101,7 @@
   }
 
   function requestedConsentScopes(): ExtensionConsentScope[] {
-    return [
-      'vault-access',
-      'password-filling',
-      'sync-provider-credentials',
-    ]
+    return ['vault-access', 'password-filling', 'sync-provider-credentials']
   }
 
   function randomNonce() {
@@ -242,17 +241,17 @@
   async function loadPopup() {
     scanState = {
       status: 'loading',
-      tabTitle: 'Checking this page',
+      tabTitle: i18n.t('extension.popup.checking_this_page'),
     }
 
     const activeTab = await queryActiveTab()
-    const tabTitle = activeTab?.title ?? 'Current page'
+    const tabTitle = activeTab?.title ?? i18n.t('extension.popup.current_page')
 
     if (typeof activeTab?.id !== 'number') {
       scanState = {
         status: 'unavailable',
         tabTitle,
-        message: 'Open a web page to scan for password fields.',
+        message: i18n.t('extension.popup.open_web_page'),
       }
       return
     }
@@ -263,7 +262,7 @@
       scanState = {
         status: 'unavailable',
         tabTitle,
-        message: 'Nook cannot inspect this page.',
+        message: i18n.t('extension.popup.cannot_inspect_page'),
       }
       return
     }
@@ -356,19 +355,23 @@
     <NookIcon src="../icons/nook.png" alt="" class="popup-logo" />
     <div>
       <h1>Nook</h1>
-      <p>{setupState.deviceLabel}</p>
+      <p>
+        {setupState.status === 'ready'
+          ? scanState.tabTitle || i18n.t('extension.popup.checking_this_page')
+          : setupState.deviceLabel}
+      </p>
     </div>
     {#if setupState.status === 'ready'}
       <button
         class="scan-button"
         type="button"
         data-testid="scan-active-tab"
-        aria-label="Scan active tab"
+        aria-label={i18n.t('extension.popup.scan_active_tab')}
         onclick={() => {
           void loadPopup()
         }}
       >
-        Scan
+        {i18n.t('extension.popup.scan')}
       </button>
     {/if}
   </header>
@@ -412,11 +415,7 @@
         Creating this extension's own device key and protecting it with this
         browser profile's passkey before pairing with nokey.sh.
       </p>
-      <button
-        class="primary-button"
-        type="button"
-        disabled
-      >
+      <button class="primary-button" type="button" disabled>
         Waiting for passkey
       </button>
       <button class="secondary-button" type="button" onclick={resetSetup}>
@@ -489,45 +488,59 @@
 
     <section class="status-panel" aria-live="polite">
       <div>
-        <span class="metric-label">Password fields</span>
-        <strong data-testid="password-field-count"
+        <span class="metric-label"
+          >{i18n.t('extension.popup.password_fields')}</span
+        >
+        <strong
+          data-testid="password-field-count"
           >{scanState.status === 'ready'
             ? scanState.summary.passwordFieldCount
             : '-'}</strong
         >
       </div>
       <div>
-        <span class="metric-label">Login fields</span>
-        <strong data-testid="username-field-count"
+        <span class="metric-label"
+          >{i18n.t('extension.popup.login_fields')}</span
+        >
+        <strong
+          data-testid="username-field-count"
           >{scanState.status === 'ready'
             ? scanState.summary.usernameFieldCount
             : '-'}</strong
         >
       </div>
       <div>
-        <span class="metric-label">Forms</span>
+        <span class="metric-label">{i18n.t('extension.popup.forms')}</span>
         <strong data-testid="form-count"
-          >{scanState.status === 'ready' ? scanState.summary.formCount : '-'}</strong
+          >{scanState.status === 'ready'
+            ? scanState.summary.formCount
+            : '-'}</strong
         >
       </div>
     </section>
 
     {#if scanState.status === 'loading'}
-      <p class="status-message">Scanning the active tab.</p>
+      <p class="status-message">
+        {i18n.t('extension.popup.scanning_active_tab')}
+      </p>
     {:else if scanState.status === 'unavailable'}
       <p class="status-message">{scanState.message}</p>
     {:else if scanState.summary.passwordFieldCount > 0}
-      <p class="status-message">Nook found password fields on this page.</p>
+      <p class="status-message">
+        {i18n.t('extension.popup.found_password_fields')}
+      </p>
       {#if scanState.generatedPassword}
         <section class="password-suggestion">
-          <span>Suggested password</span>
+          <span>{i18n.t('extension.popup.suggested_password')}</span>
           <code data-testid="suggested-password"
             >{scanState.generatedPassword}</code
           >
         </section>
       {/if}
     {:else}
-      <p class="status-message">No password fields detected on this page.</p>
+      <p class="status-message">
+        {i18n.t('extension.popup.no_password_fields')}
+      </p>
     {/if}
   {/if}
 </main>

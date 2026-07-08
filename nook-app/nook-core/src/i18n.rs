@@ -211,6 +211,28 @@ mod tests {
     }
 
     #[test]
+    fn test_extension_catalog_keys_and_english_fallback() {
+        assert_eq!(
+            translate("en", "extension.popup.password_fields"),
+            "Password fields"
+        );
+        assert_eq!(
+            translate("ru", "extension.popup.password_fields"),
+            "Поля пароля"
+        );
+        assert_eq!(
+            translate("ru", "extension.setup.profile_title"),
+            "Расширение Nook - этот профиль браузера"
+        );
+
+        let stale_ru = r#"{"extension":{"popup":{"scan":"Сканировать"}}}"#;
+        assert_eq!(
+            translate_from_catalog(stale_ru, "ru", "extension.popup.suggested_password"),
+            "Suggested password"
+        );
+    }
+
+    #[test]
     fn test_parse_app_locale_accepts_exact_supported_values() {
         assert_eq!(parse_app_locale("en"), Some("en"));
         assert_eq!(parse_app_locale("ru"), Some("ru"));
