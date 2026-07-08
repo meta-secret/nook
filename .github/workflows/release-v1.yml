@@ -38,7 +38,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check, build, and e2e
-        run: task ci:main VITE_BASE=${{ env.CI_RELEASE_V1_VITE_BASE }} VITE_SITE_URL=${{ env.CI_RELEASE_V1_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_V1_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
+        run: task ci:main VITE_BASE=${{ env.CI_RELEASE_V1_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
         env:
           CI: true
           VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS }}
