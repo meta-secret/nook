@@ -147,8 +147,9 @@ Version-based sync is in `nook-app/nook-core/src/vault_sync.rs`. UI uses local-f
 
 Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
 Identity Services in the browser; the current Google web client is configured
-for `http://localhost:5173` and `https://nokey.sh`. Nook's CloudKit JS token is
-configured for `https://nokey.sh`.
+for `http://localhost:5173`, `https://nokey.sh`, and
+`https://v1.nokey.sh`. Nook's CloudKit JS token is configured for
+`https://nokey.sh` and `https://v1.nokey.sh`.
 
 Google/Auth Platform branding should use `https://nokey.sh/about.html` as the
 public app home page. The root path (`/`) is the product entry point and may show

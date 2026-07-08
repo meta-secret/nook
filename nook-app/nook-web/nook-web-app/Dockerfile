@@ -17,6 +17,8 @@ FROM toolchain AS nook-web
 
 # Production Vite base path (GitHub Pages / Cloudflare use "/").
 ARG VITE_BASE=/
+ARG VITE_SITE_URL=
+ARG VITE_PUBLIC_APP_URL=
 
 WORKDIR /meta-secret/nook
 
@@ -61,7 +63,11 @@ RUN git init -q \
 # every container. The Cloudflare preview deploy and GitHub Pages extraction read
 # nook-app/nook-web/nook-web-app/dist; the extension bundle can be extracted from
 # nook-app/nook-web/nook-web-extension/dist for manual browser loading.
-RUN cd nook-app/nook-web/nook-web-app && VITE_BASE="${VITE_BASE}" bun run build
+RUN cd nook-app/nook-web/nook-web-app \
+    && VITE_BASE="${VITE_BASE}" \
+    VITE_SITE_URL="${VITE_SITE_URL}" \
+    VITE_PUBLIC_APP_URL="${VITE_PUBLIC_APP_URL}" \
+    bun run build
 RUN cd nook-app/nook-web/nook-web-extension && bun run build
 
 # No ENTRYPOINT: the image is sealed (source + deps + warm target/ baked in), so `docker run`

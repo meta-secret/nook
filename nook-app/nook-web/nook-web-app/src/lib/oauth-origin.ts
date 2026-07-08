@@ -12,8 +12,12 @@ const GOOGLE_AUTHORIZED_ORIGINS = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'https://nokey.sh',
+  'https://v1.nokey.sh',
 ])
-const ICLOUD_AUTHORIZED_ORIGINS = new Set(['https://nokey.sh'])
+const ICLOUD_AUTHORIZED_ORIGINS = new Set([
+  'https://nokey.sh',
+  'https://v1.nokey.sh',
+])
 const CLOUDFLARE_PR_PREVIEW_HOST = /^pr-\d+\.nook-1n8\.pages\.dev$/i
 
 function currentLocation(): BrowserLocation | undefined {

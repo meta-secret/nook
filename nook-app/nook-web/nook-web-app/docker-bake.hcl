@@ -7,13 +7,23 @@ variable "VITE_BASE" {
   default = "/"
 }
 
+variable "VITE_SITE_URL" {
+  default = ""
+}
+
+variable "VITE_PUBLIC_APP_URL" {
+  default = ""
+}
+
 target "_nook-web-common" {
   context    = "."
   dockerfile = "nook-app/nook-web/nook-web-app/Dockerfile"
   target     = "nook-web"
   platforms  = ["linux/amd64"]
   args = {
-    VITE_BASE = VITE_BASE
+    VITE_BASE           = VITE_BASE
+    VITE_SITE_URL       = VITE_SITE_URL
+    VITE_PUBLIC_APP_URL = VITE_PUBLIC_APP_URL
   }
   contexts = {
     toolchain = "target:toolchain"

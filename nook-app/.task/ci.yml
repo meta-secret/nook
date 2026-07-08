@@ -92,6 +92,14 @@ tasks:
       - task: docker:task
         vars: { TASK: _deploy-preview }
 
+  ci:cloudflare:deploy:
+    desc: Deploy nook-app/nook-web/dist to Cloudflare Pages for the configured branch.
+    deps:
+      - setup
+    cmds:
+      - task: docker:task
+        vars: { TASK: _deploy-cloudflare }
+
   ci:pr:comment-preview:
     desc: Comment or update Cloudflare preview URL on the PR (runs in container; needs GITHUB_TOKEN + PR number).
     deps:
@@ -188,6 +196,11 @@ tasks:
   _deploy-preview:
     desc: Deploy nook-app/nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-preview-url.
     cmds:
+      - task: _deploy-cloudflare
+
+  _deploy-cloudflare:
+    desc: Deploy nook-app/nook-web/dist to Cloudflare Pages; writes URL to .cloudflare-deploy-url and .cloudflare-preview-url.
+    cmds:
       # Cloudflare does NOT support running Wrangler under the Bun runtime: `bunx wrangler` crashes
       # (e.g. TypeError from node:timers/promises) and propagates an opaque non-zero exit (201 in CI).
       # The image has no npm/npx, so we install wrangler with bun (package manager only) into a temp
@@ -199,6 +212,8 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
+        project="${CF_PAGES_PROJECT_NAME:-nook}";
+        production_branch="${CF_PAGES_PRODUCTION_BRANCH:-main}";
         if [ ! -d "{{.WEB_ROOT}}/dist" ]; then
           echo "error: nook-app/nook-web/dist not found — run the web build before deploy" >&2;
           exit 1;
@@ -206,11 +221,11 @@ tasks:
         wr_dir="$(mktemp -d)";
         ( cd "$wr_dir" && printf "{\"name\":\"nook-wrangler\"}" > package.json && bun add wrangler@4 >/dev/null 2>&1 );
         wrangler() { node "$wr_dir/node_modules/.bin/wrangler" "$@"; };
-        wrangler pages project create nook --production-branch=main >/dev/null 2>&1 || true;
+        wrangler pages project create "$project" --production-branch="$production_branch" >/dev/null 2>&1 || true;
         set +e;
         deploy_output="$(
           wrangler pages deploy "{{.WEB_ROOT}}/dist" \
-            --project-name=nook \
+            --project-name="$project" \
             --branch="${CF_PAGES_BRANCH}" \
             --commit-dirty=true 2>&1
         )";
@@ -238,6 +253,7 @@ tasks:
           echo "Could not parse Cloudflare deployment URL from wrangler output" >&2;
           exit 1;
         fi;
+        echo "$deployment_url" > "{{.REPO_ROOT}}/.cloudflare-deploy-url";
         echo "$deployment_url" > "{{.REPO_ROOT}}/.cloudflare-preview-url";
         echo "NOOK_PREVIEW_URL=$deployment_url"'
 
