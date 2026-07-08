@@ -212,6 +212,53 @@ impl NookVaultManager {
         Ok(self.get_records()?)
     }
 
+    #[wasm_bindgen(js_name = approveExtensionDevice)]
+    pub async fn approve_extension_device(
+        &mut self,
+        join_device_id: String,
+        join_public_key: String,
+        join_signing_public_key: String,
+        label: String,
+    ) -> Result<Vec<NookSecretRecord>, JsError> {
+        let identity = self.device_identity()?;
+        let records = self.stored_records_snapshot();
+        let join = nook_core::JoinRequest {
+            device_id: nook_core::DeviceId::parse(&join_device_id)?,
+            public_key: nook_core::DevicePublicKey::parse(&join_public_key)?,
+            signing_public_key: nook_core::DeviceSigningPublicKey::parse(&join_signing_public_key)?,
+            requested_at: wasm_iso_timestamp(),
+        };
+        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
+        let (auth_record, _join_key, member_records) = nook_core::approve_join_request(
+            &secrets_key,
+            &members_key,
+            &join,
+            &identity,
+            &records,
+        )?;
+        self.vault.meta.apply_record(&auth_record);
+        apply_member_records(&mut self.vault.meta, &member_records);
+        let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
+            device_id: join.device_id.clone(),
+            encryption_public_key: join.public_key.clone(),
+            signing_public_key: join.signing_public_key.clone(),
+            label: nook_core::MemberLabel::from_trusted(label),
+            secrets_key_ciphertext: envelopes.secrets_key.clone(),
+            members_key_ciphertext: envelopes.members_key.clone(),
+        }])
+        .await?;
+        Ok(self.get_records()?)
+    }
+
+    #[wasm_bindgen(js_name = deviceSigningPublicKey)]
+    pub async fn device_signing_public_key_js(&mut self) -> Result<String, JsError> {
+        let signing = self.ensure_signing_identity().await?;
+        Ok(hex::encode(signing.verifying_key().as_bytes()))
+    }
+
     pub async fn deny_join_request(
         &mut self,
         join_device_id: String,

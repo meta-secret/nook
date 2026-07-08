@@ -76,6 +76,7 @@ async function evaluatePrf(
 export type ExtensionDeviceProtectionResult = {
   deviceId: string
   devicePublicKey: string
+  deviceSigningPublicKey: string
 }
 
 export async function setupExtensionDeviceProtection(): Promise<ExtensionDeviceProtectionResult> {
@@ -118,6 +119,7 @@ export async function setupExtensionDeviceProtection(): Promise<ExtensionDeviceP
     return {
       deviceId: manager.device_id,
       devicePublicKey: manager.device_public_key,
+      deviceSigningPublicKey: await manager.deviceSigningPublicKey(),
     }
   } finally {
     output?.fill(0)

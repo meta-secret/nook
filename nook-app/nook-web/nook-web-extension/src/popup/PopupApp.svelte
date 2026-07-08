@@ -26,6 +26,7 @@
         deviceLabel: string
         deviceId: string
         devicePublicKey: string
+        deviceSigningPublicKey: string
         requestNonce: string
         requestUrl: string
         requestedScopes: ExtensionConsentScope[]
@@ -118,6 +119,7 @@
   function extensionConnectRequestUrl(input: {
     deviceId: string
     devicePublicKey: string
+    deviceSigningPublicKey: string
     deviceLabel: string
     requestNonce: string
     requestedScopes: ExtensionConsentScope[]
@@ -125,6 +127,10 @@
     const url = new URL(extensionConnectUrl)
     url.searchParams.set('device_id', input.deviceId)
     url.searchParams.set('device_public_key', input.devicePublicKey)
+    url.searchParams.set(
+      'device_signing_public_key',
+      input.deviceSigningPublicKey,
+    )
     url.searchParams.set('device_label', input.deviceLabel)
     url.searchParams.set('nonce', input.requestNonce)
     url.searchParams.set('scopes', input.requestedScopes.join(','))
@@ -154,6 +160,7 @@
       return (
         typeof candidate.deviceId === 'string' &&
         typeof candidate.devicePublicKey === 'string' &&
+        typeof candidate.deviceSigningPublicKey === 'string' &&
         typeof candidate.requestNonce === 'string' &&
         typeof candidate.requestUrl === 'string' &&
         isConsentScopeArray(candidate.requestedScopes)
@@ -291,6 +298,7 @@
         deviceLabel: setupState.deviceLabel,
         deviceId: device.deviceId,
         devicePublicKey: device.devicePublicKey,
+        deviceSigningPublicKey: device.deviceSigningPublicKey,
         requestNonce,
         requestUrl: extensionConnectRequestUrl({
           ...device,
