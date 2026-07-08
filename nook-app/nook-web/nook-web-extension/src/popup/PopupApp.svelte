@@ -186,6 +186,11 @@
   }
 
   async function loadPopup() {
+    scanState = {
+      status: 'loading',
+      tabTitle: 'Checking this page',
+    }
+
     const activeTab = await queryActiveTab()
     const tabTitle = activeTab?.title ?? 'Current page'
 
