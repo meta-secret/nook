@@ -239,7 +239,7 @@
   <div class="mt-4 space-y-2">
     <p class="text-sm font-medium text-foreground">Requested access</p>
     <ul class="grid gap-2" data-testid="extension-connect-scopes">
-      {#each request.scopes as scope}
+      {#each request.scopes as scope (scope)}
         <li
           class="flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-2 text-sm text-foreground"
         >
