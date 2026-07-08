@@ -14,6 +14,19 @@ type CredentialWithPrf = PublicKeyCredential & {
   }
 }
 
+export class PasskeyPrfUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PasskeyPrfUnavailableError'
+  }
+}
+
+export function isPasskeyPrfUnavailableError(
+  error: unknown,
+): error is PasskeyPrfUnavailableError {
+  return error instanceof PasskeyPrfUnavailableError
+}
+
 function requirePasskeySupport(): void {
   if (
     !window.isSecureContext ||
@@ -32,7 +45,7 @@ function prfOutput(
 ): Uint8Array | undefined {
   const prf = credential.getClientExtensionResults().prf
   if (requireEnabled && prf?.enabled !== true) {
-    throw new Error(
+    throw new PasskeyPrfUnavailableError(
       'This authenticator does not support the WebAuthn PRF extension required to protect device keys.',
     )
   }
@@ -54,7 +67,9 @@ async function evaluatePrf(
   if (!credential) throw new Error('Passkey authorization was cancelled.')
   const output = prfOutput(credential)
   if (!output) {
-    throw new Error('The passkey did not return the required PRF output.')
+    throw new PasskeyPrfUnavailableError(
+      'The passkey did not return the required PRF output.',
+    )
   }
   return output
 }

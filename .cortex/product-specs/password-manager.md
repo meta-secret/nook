@@ -40,12 +40,12 @@ keys.
 ```
 
 ### A. Login & Storage Provider Flow
-1. **Device protection gate:** Before provider credentials or device keys are loaded, the user creates or authorizes a passkey with WebAuthn PRF.
+1. **Device protection gate:** Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable.
 2. **Login gate (vault locked):** If no saved providers exist, the user sees a provider list (Local, GitHub). This is the primary entry point — not a settings page.
 3. **First-time setup:** User picks a storage provider. GitHub requires a one-time PAT entry; local needs no credentials. On successful connect, the provider (including a device-sealed GitHub PAT) is saved to IndexedDB (`nook_auth`). The vault is created with **device keys** as the default unlock method.
 4. **Return visits:** After passkey authorization, the vault may auto-unlock when device keys work. Otherwise the login gate shows the storage provider and unlock methods — device keys (default) or a labelled backup password when the vault has `password_entries`. See [auth-providers.md](../design-docs/auth-providers.md) §3.
 5. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
-6. **Encryption keys (auto-managed):** Before first connect, the user creates a passkey. The WebAuthn PRF result is passed to Rust/WASM, which derives an AES key and stores the device private key as `device_identity_wrapped`. On connect, vault keys are generated and written to the vault file. GitHub only stores the encrypted vault file.
+6. **Encryption keys (auto-managed):** Before first connect, the user creates passkey-PRF protection or, when PRF is unavailable, a local PIN wrapper. Rust/WASM derives the AES key and stores the device private key as `device_identity_wrapped`. On connect, vault keys are generated and written to the vault file. GitHub only stores the encrypted vault file.
 7. **Vault connection:** Rust validates storage mode and PAT before I/O, loads/decrypts the vault, or initializes empty storage.
 8. **Future:** Sync providers replicate one local vault with version-based reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
 
@@ -105,7 +105,7 @@ Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && c
 ### C. Local Storage Adapter (IndexedDB)
 - **Database Name:** `nook_db`, version `1`, store `vault`
 - **Records:**
-  - `device_identity_wrapped` — versioned AES-256-GCM-wrapped age X25519 identity plus WebAuthn PRF metadata (never synced).
+  - `device_identity_wrapped` — versioned AES-256-GCM-wrapped age X25519 identity plus WebAuthn PRF or PIN metadata (never synced).
   - `device_identity_secret` — legacy plaintext record, deleted after successful passkey migration.
   - `device_id` — short fingerprint for UI.
   - `encrypted_db` — local copy of vault YAML (local storage mode).
