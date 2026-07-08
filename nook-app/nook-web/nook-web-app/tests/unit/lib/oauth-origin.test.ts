@@ -19,7 +19,7 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport(
         'google-drive',
-        loc('https://dev.nokey.sh', 'dev.nokey.sh'),
+        loc('https://nokey-sh.pages.dev', 'nokey-sh.pages.dev'),
       ).supported,
     ).toBe(true)
     expect(
@@ -44,7 +44,7 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport(
         'icloud',
-        loc('https://dev.nokey.sh', 'dev.nokey.sh'),
+        loc('https://nokey-sh.pages.dev', 'nokey-sh.pages.dev'),
       ).supported,
     ).toBe(true)
   })
