@@ -71,8 +71,16 @@ impl NookVaultManager {
             let credential = passkey_browser::get_credential(&request_options).await?;
             passkey_browser::require_prf_output(&credential)?
         };
-        self.finish_device_protection(credential_id, user_handle, prf_input, prf_output)
-            .await
+        let mut prf_output = prf_output;
+        let result = self
+            .save_passkey_derived_identity(&credential_id, &user_handle, &prf_input, &prf_output)
+            .await;
+        prf_output.zeroize();
+        let device_id = result?;
+        let updated_label =
+            passkey_browser::passkey_label_with_device_id(passkey_label, &device_id);
+        passkey_browser::signal_current_user_details(rp_id, &user_handle, &updated_label).await;
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = finishDeviceProtection)]
@@ -87,7 +95,7 @@ impl NookVaultManager {
             .save_passkey_derived_identity(&credential_id, &user_handle, &prf_input, &prf_output)
             .await;
         prf_output.zeroize();
-        result.map_err(Into::into)
+        result.map(|_| ()).map_err(Into::into)
     }
 
     #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskey)]
@@ -116,7 +124,7 @@ impl NookVaultManager {
             .save_passkey_derived_identity(&credential_id, &user_handle, &prf_input, &prf_output)
             .await;
         prf_output.zeroize();
-        result.map_err(Into::into)
+        result.map(|_| ()).map_err(Into::into)
     }
 
     #[wasm_bindgen(js_name = finishPinDeviceProtection)]
@@ -241,7 +249,7 @@ impl NookVaultManager {
         user_handle: &[u8],
         prf_input: &[u8],
         prf_output: &[u8],
-    ) -> Result<(), NookError> {
+    ) -> Result<String, NookError> {
         let identity_secret =
             nook_core::derive_device_identity_from_passkey_prf(user_handle, prf_output)?;
         let identity = nook_core::DeviceIdentity::from_secret_str(&identity_secret)?;
@@ -254,6 +262,6 @@ impl NookVaultManager {
         indexed_db::save_wrapped_device_identity(&device_id, &record).await?;
         self.device.id = device_id;
         self.device.identity_private_key = identity_secret.into_inner();
-        Ok(())
+        Ok(self.device.id.clone())
     }
 }

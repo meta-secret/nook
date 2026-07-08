@@ -21,7 +21,7 @@ use passkey_types::{
     },
 };
 use serde::Serialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Write as _};
 use wasm_bindgen::{JsCast, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
@@ -37,7 +37,8 @@ pub(crate) fn creation_options(
     user_handle: &[u8],
     prf_input: &[u8],
 ) -> Result<JsValue, JsError> {
-    let options = creation_options_struct(rp_id, rp_name, passkey_label, user_handle, prf_input)?;
+    let passkey_label = passkey_label_with_passkey_handle(passkey_label, user_handle);
+    let options = creation_options_struct(rp_id, rp_name, &passkey_label, user_handle, prf_input)?;
     to_browser_value(&options).map_err(|error| {
         JsError::new(&format!(
             "Failed to build passkey creation options: {error}"
@@ -75,9 +76,22 @@ pub(crate) async fn get_credential(options: &JsValue) -> Result<JsValue, JsError
     credential_ceremony("get", options).await
 }
 
+pub(crate) async fn signal_current_user_details(
+    rp_id: &str,
+    user_handle: &[u8],
+    passkey_label: &str,
+) {
+    let _ = try_signal_current_user_details(rp_id, user_handle, passkey_label).await;
+}
+
 pub(crate) fn credential_id(credential: &JsValue) -> Result<Vec<u8>, JsError> {
     let raw_id = get_required(credential, "rawId")?;
     bytes_from_js_value(&raw_id, "passkey rawId")
+}
+
+pub(crate) fn passkey_label_with_device_id(passkey_label: &str, device_id: &str) -> String {
+    let label = normalized_passkey_label(passkey_label);
+    format!("{label} - device {}", short_text_id(device_id))
 }
 
 pub(crate) fn assertion_user_handle(credential: &JsValue) -> Result<Vec<u8>, JsError> {
@@ -187,6 +201,64 @@ async fn credential_ceremony(method: &str, options: &JsValue) -> Result<JsValue,
         )));
     }
     Ok(credential)
+}
+
+async fn try_signal_current_user_details(
+    rp_id: &str,
+    user_handle: &[u8],
+    passkey_label: &str,
+) -> Result<(), JsError> {
+    let public_key_credential = js_sys::Reflect::get(
+        js_sys::global().as_ref(),
+        &JsValue::from_str("PublicKeyCredential"),
+    )
+    .map_err(|_| JsError::new("Failed to inspect browser passkey support"))?;
+    if is_absent(&public_key_credential) {
+        return Ok(());
+    }
+
+    let method_value = get_optional(&public_key_credential, "signalCurrentUserDetails")?;
+    if is_absent(&method_value) {
+        return Ok(());
+    }
+    let method_fn: js_sys::Function = method_value.dyn_into().map_err(|_| {
+        JsError::new("PublicKeyCredential.signalCurrentUserDetails is not callable")
+    })?;
+
+    let label = normalized_passkey_label(passkey_label);
+    let details = js_sys::Object::new();
+    js_sys::Reflect::set(
+        details.as_ref(),
+        &JsValue::from_str("rpId"),
+        &JsValue::from_str(rp_id),
+    )
+    .map_err(|_| JsError::new("Failed to set passkey rpId detail"))?;
+    js_sys::Reflect::set(
+        details.as_ref(),
+        &JsValue::from_str("userId"),
+        js_sys::Uint8Array::from(user_handle).as_ref(),
+    )
+    .map_err(|_| JsError::new("Failed to set passkey userId detail"))?;
+    js_sys::Reflect::set(
+        details.as_ref(),
+        &JsValue::from_str("name"),
+        &JsValue::from_str(&label),
+    )
+    .map_err(|_| JsError::new("Failed to set passkey name detail"))?;
+    js_sys::Reflect::set(
+        details.as_ref(),
+        &JsValue::from_str("displayName"),
+        &JsValue::from_str(&label),
+    )
+    .map_err(|_| JsError::new("Failed to set passkey displayName detail"))?;
+
+    let promise = method_fn
+        .call1(&public_key_credential, details.as_ref())
+        .map_err(|_| JsError::new("Failed to signal updated passkey details"))?;
+    JsFuture::from(js_sys::Promise::from(promise))
+        .await
+        .map_err(|_| JsError::new("Updated passkey details were rejected"))?;
+    Ok(())
 }
 
 fn normalize_webauthn_binary_fields(value: &JsValue) -> Result<(), JsError> {
@@ -355,6 +427,52 @@ fn normalized_passkey_label(label: &str) -> String {
     } else {
         trimmed.to_owned()
     }
+}
+
+fn passkey_label_with_passkey_handle(passkey_label: &str, user_handle: &[u8]) -> String {
+    let label = normalized_passkey_label(passkey_label);
+    format!("{label} - passkey {}", short_byte_id(user_handle))
+}
+
+fn short_byte_id(bytes: &[u8]) -> String {
+    const PREFIX_LEN: usize = 4;
+    const SUFFIX_LEN: usize = 2;
+
+    if bytes.len() <= PREFIX_LEN + SUFFIX_LEN {
+        let mut output = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            let _ = write!(&mut output, "{byte:02x}");
+        }
+        return output;
+    }
+
+    let mut output = String::with_capacity((PREFIX_LEN + SUFFIX_LEN) * 2 + 3);
+    for byte in bytes.iter().take(PREFIX_LEN) {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output.push_str("...");
+    for byte in bytes.iter().skip(bytes.len() - SUFFIX_LEN) {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    output
+}
+
+fn short_text_id(value: &str) -> String {
+    const PREFIX_LEN: usize = 6;
+    const SUFFIX_LEN: usize = 4;
+
+    let trimmed = value.trim();
+    let chars = trimmed.chars().collect::<Vec<_>>();
+    if chars.len() <= PREFIX_LEN + SUFFIX_LEN + 3 {
+        return trimmed.to_owned();
+    }
+
+    let prefix = chars.iter().take(PREFIX_LEN).collect::<String>();
+    let suffix = chars
+        .iter()
+        .skip(chars.len() - SUFFIX_LEN)
+        .collect::<String>();
+    format!("{prefix}...{suffix}")
 }
 
 fn request_options_struct(
@@ -555,6 +673,10 @@ mod wasm_tests {
         let prf = get(&extensions, "prf");
         let eval = get(&prf, "eval");
 
+        assert_eq!(
+            get(&user, "displayName").as_string().as_deref(),
+            Some("Nook device - passkey 08080808...0808"),
+        );
         assert_uint8_array(&get(&public_key, "challenge"), 32);
         assert_uint8_array(&get(&user, "id"), 32);
         assert_uint8_array(&get(&eval, "first"), 32);

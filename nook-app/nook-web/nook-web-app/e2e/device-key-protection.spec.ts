@@ -86,11 +86,13 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('login-gate')).toBeVisible()
+    const deviceId = await readDeviceId(page)
+    const shortDeviceId = `${deviceId.slice(0, 6)}...${deviceId.slice(-4)}`
     await expect
       .poll(() =>
         page.evaluate(() => localStorage.getItem('nook_e2e_passkey_label')),
       )
-      .toBe('Work laptop')
+      .toBe(`Work laptop - device ${shortDeviceId}`)
 
     const wrapped = await readPersistedDeviceIdentity(page)
 

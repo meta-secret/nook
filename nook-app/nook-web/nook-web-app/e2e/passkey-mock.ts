@@ -35,6 +35,32 @@ export function installMockPasskeyRuntime() {
       },
     }),
   })
+  Object.defineProperty(window, 'PublicKeyCredential', {
+    configurable: true,
+    value: {
+      signalCurrentUserDetails: async (details: {
+        displayName?: string
+        name?: string
+        rpId?: string
+        userId?: ArrayBuffer | ArrayBufferView
+      }) => {
+        localStorage.setItem(
+          'nook_e2e_passkey_label',
+          details.displayName ?? details.name ?? '',
+        )
+        localStorage.setItem(
+          'nook_e2e_passkey_signal_rp_id',
+          details.rpId ?? '',
+        )
+        if (details.userId) {
+          localStorage.setItem(
+            'nook_e2e_passkey_signal_user_id',
+            JSON.stringify(Array.from(bytesFrom(details.userId))),
+          )
+        }
+      },
+    },
+  })
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
     value: {
