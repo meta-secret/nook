@@ -69,9 +69,10 @@ then deploying the built `dist` to the `nook` Cloudflare Pages project with
 The Cloudflare branch alias for `release/v1` is `release-v1.nook.pages.dev`.
 The public domain `v1.nokey.sh` must stay attached to that branch alias through
 a proxied Cloudflare DNS record so it does not drift to the Pages production
-branch. The build passes `VITE_SITE_URL=https://v1.nokey.sh` and
+branch. The deploy build passes `VITE_SITE_URL=https://v1.nokey.sh` and
 `VITE_PUBLIC_APP_URL=https://v1.nokey.sh` so generated release metadata and
-enrollment links use the pinned host.
+enrollment links use the pinned host while the pre-deploy e2e gate keeps local
+Playwright URLs.
 
 Maintenance rule: `release/v1` should only receive cherry-picked critical fixes
 from `main`; do not continue normal feature development there. If a future app
