@@ -35,11 +35,7 @@ describe('extension connect route parsing', () => {
       extensionRuntimeId: 'ext-123',
       deviceLabel: 'Nook Extension',
       nonce: 'n-1',
-      scopes: [
-        'vault-access',
-        'password-filling',
-        'sync-provider-credentials',
-      ],
+      scopes: ['vault-access', 'password-filling', 'sync-provider-credentials'],
     })
   })
 

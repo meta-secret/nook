@@ -134,11 +134,7 @@ async function sendPairingGrantFromPopup(popupPage: Page) {
       vaultStoreId: 'store-e2e',
       vaultName: 'Personal',
       approvedAt: '2026-07-07T00:00:00.000Z',
-      scopes: [
-        'vault-access',
-        'password-filling',
-        'sync-provider-credentials',
-      ],
+      scopes: ['vault-access', 'password-filling', 'sync-provider-credentials'],
       providers: [
         {
           id: 'local-e2e',
@@ -236,7 +232,9 @@ test('loads the extension and scans a login form from the popup', async ({
     await expect
       .poll(async () => {
         const storage = await readExtensionStorage(context)
-        return Boolean(storage[pairingGrantStorageKey] && storage[setupStorageKey])
+        return Boolean(
+          storage[pairingGrantStorageKey] && storage[setupStorageKey],
+        )
       })
       .toBe(true)
 
@@ -245,9 +243,7 @@ test('loads the extension and scans a login form from the popup', async ({
       'ready',
     )
     await expect(popupPage.getByText('Personal')).toBeVisible()
-    await expect(
-      popupPage.getByText('1 sync provider granted'),
-    ).toBeVisible()
+    await expect(popupPage.getByText('1 sync provider granted')).toBeVisible()
 
     await loginPage.bringToFront()
     await popupPage.evaluate(() => {

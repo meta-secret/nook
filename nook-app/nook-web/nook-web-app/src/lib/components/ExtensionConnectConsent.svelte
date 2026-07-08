@@ -87,27 +87,23 @@
     }
 
     return new Promise((resolve, reject) => {
-      runtime.sendMessage?.(
-        request.extensionRuntimeId,
-        message,
-        (response) => {
-          const runtimeError = runtime.lastError?.message
-          if (runtimeError) {
-            reject(new Error(runtimeError))
-            return
-          }
-          if (
-            typeof response === 'object' &&
-            response !== null &&
-            'ok' in response &&
-            (response as { ok?: unknown }).ok === true
-          ) {
-            resolve()
-            return
-          }
-          reject(new Error('The extension did not accept the pairing grant.'))
-        },
-      )
+      runtime.sendMessage?.(request.extensionRuntimeId, message, (response) => {
+        const runtimeError = runtime.lastError?.message
+        if (runtimeError) {
+          reject(new Error(runtimeError))
+          return
+        }
+        if (
+          typeof response === 'object' &&
+          response !== null &&
+          'ok' in response &&
+          (response as { ok?: unknown }).ok === true
+        ) {
+          resolve()
+          return
+        }
+        reject(new Error('The extension did not accept the pairing grant.'))
+      })
     })
   }
 
@@ -202,7 +198,9 @@
     class="mt-4 grid gap-3 rounded-lg border border-border/50 bg-background/60 p-3"
   >
     <div>
-      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <p
+        class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+      >
         Extension device
       </p>
       <p class="mt-1 text-sm font-semibold text-foreground">

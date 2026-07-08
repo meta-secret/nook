@@ -34,9 +34,7 @@ function requirePasskeySupport(): void {
     typeof PublicKeyCredential === 'undefined' ||
     !navigator.credentials
   ) {
-    throw new Error(
-      'Passkeys require a supported browser in a secure context.',
-    )
+    throw new Error('Passkeys require a supported browser in a secure context.')
   }
 }
 
