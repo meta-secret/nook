@@ -17,6 +17,32 @@ async function clickDeviceProtectionSetup(
   await setupButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
+async function readPersistedDeviceIdentity(
+  page: import('@playwright/test').Page,
+): Promise<string | undefined> {
+  const persisted = await page.evaluate(
+    () =>
+      new Promise<{ wrapped: string | undefined }>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction('vault', 'readonly')
+          const store = transaction.objectStore('vault')
+          const wrappedRequest = store.get('device_identity_wrapped')
+          transaction.onerror = () => reject(transaction.error)
+          transaction.oncomplete = () => {
+            db.close()
+            resolve({
+              wrapped: wrappedRequest.result as string | undefined,
+            })
+          }
+        }
+      }),
+  )
+  return persisted.wrapped
+}
+
 test.describe('passkey device-key protection', () => {
   test('wraps the device identity and requires passkey authorization after reload', async ({
     page,
@@ -30,29 +56,10 @@ test.describe('passkey device-key protection', () => {
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('login-gate')).toBeVisible()
 
-    const persisted = await page.evaluate(
-      () =>
-        new Promise<{ wrapped: string | undefined }>((resolve, reject) => {
-          const request = indexedDB.open('nook_db')
-          request.onerror = () => reject(request.error)
-          request.onsuccess = () => {
-            const db = request.result
-            const transaction = db.transaction('vault', 'readonly')
-            const store = transaction.objectStore('vault')
-            const wrappedRequest = store.get('device_identity_wrapped')
-            transaction.onerror = () => reject(transaction.error)
-            transaction.oncomplete = () => {
-              db.close()
-              resolve({
-                wrapped: wrappedRequest.result as string | undefined,
-              })
-            }
-          }
-        }),
-    )
+    const wrapped = await readPersistedDeviceIdentity(page)
 
-    expect(persisted.wrapped).toBeDefined()
-    expect(persisted.wrapped).not.toContain('AGE-SECRET-KEY-')
+    expect(wrapped).toBeDefined()
+    expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
     await createLocalVaultOnLogin(page, 'Passkey test vault')
     await page.getByTestId('header-lock-vault-btn').click()
@@ -66,7 +73,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
   })
 
-  test('fails closed when the authenticator does not support PRF', async ({
+  test('falls back to PIN wrapping when the authenticator does not support PRF', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -77,9 +84,39 @@ test.describe('passkey device-key protection', () => {
     await clickDeviceProtectionSetup(page)
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
-      'does not support the WebAuthn PRF extension',
+      'does not support WebAuthn PRF',
     )
-    await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    await page.getByTestId('device-protection-pin-input').fill('123456')
+    await page.getByTestId('device-protection-pin-confirm').fill('123456')
+    await page.getByTestId('device-protection-pin-setup-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+
+    const wrapped = await readPersistedDeviceIdentity(page)
+    expect(wrapped).toBeDefined()
+    expect(wrapped).toContain('"protection":"pin"')
+    expect(wrapped).not.toContain('AGE-SECRET-KEY-')
+
+    await createLocalVaultOnLogin(page, 'PIN fallback vault')
+    await page.getByTestId('header-lock-vault-btn').click()
+    await expect(
+      page.getByTestId('device-protection-pin-unlock-btn'),
+    ).toBeVisible()
+    await page.getByTestId('device-protection-pin-unlock-input').fill('000000')
+    await page.getByTestId('device-protection-pin-unlock-btn').click()
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'did not decrypt',
+    )
+    await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
+    await page.getByTestId('device-protection-pin-unlock-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+
+    await page.reload()
+    await expect(
+      page.getByTestId('device-protection-pin-unlock-btn'),
+    ).toBeVisible()
+    await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
+    await page.getByTestId('device-protection-pin-unlock-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
   })
 
   test('keeps setup recoverable after passkey cancellation', async ({

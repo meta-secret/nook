@@ -21,6 +21,9 @@ pub enum DeviceKeyProtectionError {
     #[error("Passkey PRF output must contain exactly 32 bytes.")]
     PrfOutputInvalid,
 
+    #[error("PIN must contain at least 6 characters.")]
+    PinTooShort,
+
     #[error("Unsupported device-key protection version: {0}.")]
     UnsupportedVersion(u32),
 
@@ -39,7 +42,7 @@ pub enum DeviceKeyProtectionError {
     #[error("Failed to encrypt the device identity.")]
     Encrypt,
 
-    #[error("Passkey authorization did not decrypt the device identity.")]
+    #[error("Device-key authorization did not decrypt the device identity.")]
     Decrypt,
 
     #[error("Decrypted device identity is invalid.")]

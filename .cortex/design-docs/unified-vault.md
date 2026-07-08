@@ -58,7 +58,7 @@ flowchart TB
 | Key | Value | Notes |
 |-----|-------|-------|
 | `encrypted_db` | UTF-8 vault YAML | **Authoritative local copy** — always present after first setup |
-| `device_identity_wrapped` | Versioned AES-256-GCM ciphertext + WebAuthn PRF metadata | Never synced; legacy `device_identity_secret` is deleted after migration |
+| `device_identity_wrapped` | Versioned AES-256-GCM ciphertext + WebAuthn PRF or PIN metadata | Never synced; legacy `device_identity_secret` is deleted after migration |
 | `device_id` | Short fingerprint | UI only |
 
 The local vault is created on first setup and persists regardless of which sync providers are connected.

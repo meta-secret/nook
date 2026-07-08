@@ -13,13 +13,13 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, an
 | **Vault** | One logical encrypted database identified by `store_id` in YAML | Yes — encrypted blob on disk |
 | **Local vault cache** | Authoritative copies in `nook_db` as `vault:{store_id}` blobs + registry | Yes |
 | **Sync provider** | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth` | Yes — credentials only |
-| **Device identity** | Passkey-wrapped X25519 key in `nook_db.device_identity_wrapped` | Ciphertext persists; plaintext does not |
+| **Device identity** | Passkey-PRF or PIN-wrapped X25519 key in `nook_db.device_identity_wrapped` | Ciphertext persists; plaintext does not |
 | **Unlocked session** | WASM typed `Database` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
 | **Lock** | End session; return to login gate | N/A |
 
 `nook-auth2` owns the portable security/key-access primitives behind these rows:
 device identities, `auth:` envelopes, `password_entries`, member roster
-encryption, passkey-PRF result wrapping, and vault key resolution. Sync
+encryption, passkey-PRF/PIN wrapping, and vault key resolution. Sync
 providers remain separate replica credentials and do not define how a vault is
 unlocked.
 
@@ -54,14 +54,14 @@ flowchart TB
 |------------------|-------------|
 | `isAuthenticated`, `secrets[]` | `nook_db` vault blobs + registry |
 | WASM typed `Database` via `resetVaultSession()` | `nook_db.device_identity_wrapped` |
-| WASM device identity via `lockDeviceIdentity()` | WebAuthn credential in the platform authenticator |
+| WASM device identity via `lockDeviceIdentity()` | WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms |
 | Pending joins / roster UI cache | `nook_auth` sync provider list + tokens |
 | Settings / help panels | Password entries inside encrypted YAML |
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
 After lock, the app first shows **`DeviceProtectionGate`**. Successful passkey
-authorization restores the identity in WASM memory, then the app shows
+authorization or PIN fallback restores the identity in WASM memory, then the app shows
 **`LoginGate`**:
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
@@ -114,6 +114,6 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 ## 6. Security notes
 
 - Lock must clear WASM session state — never rely on hiding UI alone.
-- The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey authorization again.
+- The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey or PIN authorization again depending on the stored wrapper.
 - Sync provider tokens in `nook_auth` remain after lock — they are storage credentials, not vault keys.
 - Vault authentication/authorization belongs to `nook-auth2`; sync provider replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.

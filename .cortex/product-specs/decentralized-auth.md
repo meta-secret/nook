@@ -22,6 +22,7 @@ flowchart TB
   subgraph local["Local only (IndexedDB)"]
     DI["Wrapped device identity<br/>(AES-256-GCM ciphertext)"]
     PK["Passkey PRF<br/>(platform authenticator)"]
+    PIN["PIN fallback<br/>(user-entered, not persisted)"]
     DID["device_id fingerprint<br/>(16 hex, UI only)"]
   end
 
@@ -33,6 +34,7 @@ flowchart TB
   end
 
   PK -->|"PRF output → HKDF → unwrap"| DI
+  PIN -->|"PIN → PBKDF2-SHA256 → unwrap"| DI
   DI -->|"authorized X25519 key unwraps own auth row"| AUTH
   AUTH -->|"VaultCrypto(secrets_key)"| SEC
   AUTH -->|"VaultCrypto(members_key)"| MEM
@@ -45,6 +47,7 @@ flowchart TB
 | **members_key** | Symmetric key — encrypts each `{pk_id, pk}` entry in `members:` | Per-device age envelope in `auth.members_key` |
 | **Device identity** | X25519 keypair — unwraps this device's auth envelopes | AES-256-GCM ciphertext in IndexedDB; plaintext only in an authorized WASM session |
 | **Passkey PRF** | Produces the secret input used by HKDF to unwrap the device identity | Browser/platform authenticator; never persisted by Nook |
+| **PIN fallback** | Local fallback secret for platforms that do not return WebAuthn PRF | User-entered at setup/unlock; never persisted by Nook |
 | **pk_id** | SHA256(public key), 64 hex | `auth:` row id and `members:` row id |
 
 Both keys are generated together on genesis (`generate_vault_keys()`).
@@ -71,10 +74,15 @@ zeroization in Rust/WASM/core.
 
 Existing plaintext `device_identity_secret` records are migrated in place:
 WASM writes and verifies `device_identity_wrapped`, then deletes the legacy
-record. Unsupported authenticators fail closed. Losing the passkey requires a
-destructive local identity reset; encrypted local vault blobs are preserved,
-but saved sync credentials are removed because they were sealed to the old
-identity.
+record. When WebAuthn PRF is unavailable, Nook offers a local PIN-derived
+wrapping mode instead of returning to plaintext storage. PIN mode uses a
+versioned `device_identity_wrapped` record with PBKDF2-SHA256 parameters
+authenticated by AES-256-GCM metadata. It protects passive browser-storage
+copies from immediate plaintext key disclosure, but weak PINs have offline
+guessing risk if an attacker copies IndexedDB. Losing the passkey or forgetting
+the PIN requires a destructive local identity reset; encrypted local vault blobs
+are preserved, but saved sync credentials are removed because they were sealed
+to the old identity.
 
 ### 2.2 Browser and authenticator support (2026-07-03)
 
@@ -90,10 +98,12 @@ actual extension result as authoritative:
 - WebViews and mobile passkey providers vary. Nook does not maintain a
   user-agent allowlist.
 
-At registration Nook requires `getClientExtensionResults().prf.enabled ===
-true`; at authorization it requires a 32-byte `prf.results.first`. Missing
-support leaves the setup/unlock gate visible with an explicit error and never
-falls back to plaintext.
+At registration Nook prefers `getClientExtensionResults().prf.enabled ===
+true`; at authorization it requires a 32-byte `prf.results.first` for PRF-backed
+records. Missing support switches first-time setup to the PIN fallback and never
+falls back to plaintext. Returning browsers inspect the persisted
+`device_identity_wrapped` version to choose passkey or PIN authorization without
+user-agent guesses.
 
 References: [WebAuthn PRF specification](https://www.w3.org/TR/webauthn-3/#prf-extension),
 [Chromium intent to ship](https://groups.google.com/a/chromium.org/g/blink-dev/c/iTNOgLwD2bI),

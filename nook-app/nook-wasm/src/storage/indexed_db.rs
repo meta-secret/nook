@@ -17,7 +17,7 @@
 //!   previous active blob.
 //! - `encrypted_db` — legacy single-vault key (migrated on first read).
 //! - `device_id` / `device_identity_wrapped` — stable browser device identity
-//!   encrypted with a passkey-PRF-derived key.
+//!   encrypted with a passkey-PRF-derived or PIN-derived key.
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
 
 use crate::NookError;
@@ -269,10 +269,11 @@ pub(crate) async fn save_vault_blob(store_id: &str, content: &str) -> Result<(),
 }
 
 pub(crate) async fn device_identity_protection_status() -> Result<&'static str, NookError> {
-    if idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await?.is_some() {
-        return Ok("passkey");
-    }
-    Ok("missing")
+    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+        return Ok("missing");
+    };
+    let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
+    Ok(wrapped.protection_mode())
 }
 
 pub(crate) async fn load_wrapped_device_identity()
