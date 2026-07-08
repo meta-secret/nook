@@ -27,19 +27,16 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = beginDeviceProtection)]
     pub async fn begin_device_protection(&mut self) -> Result<NookPasskeySetup, JsError> {
-        if self.device.identity_private_key.is_empty() {
-            if matches!(
+        if self.device.identity_private_key.is_empty()
+            && matches!(
                 indexed_db::device_identity_protection_status().await?,
                 "passkey" | "pin"
-            ) {
-                return Err(NookError::Decryption(
-                    "errors.device_protection.authorization_required".to_owned(),
-                )
-                .into());
-            }
-            let identity = nook_core::DeviceIdentity::generate()?;
-            self.device.id = identity.device_id().to_string();
-            self.device.identity_private_key = identity.secret_string().into_inner();
+            )
+        {
+            return Err(NookError::Decryption(
+                "errors.device_protection.authorization_required".to_owned(),
+            )
+            .into());
         }
 
         let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
@@ -54,16 +51,48 @@ impl NookVaultManager {
         prf_input: Vec<u8>,
         mut prf_output: Vec<u8>,
     ) -> Result<(), JsError> {
-        let result = async {
-            let identity = self.device_identity()?;
-            let record = nook_core::wrap_device_identity(
-                &identity.secret_string(),
+        let result: Result<(), NookError> = async {
+            let identity_secret =
+                nook_core::derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
+            let identity = nook_core::DeviceIdentity::from_secret_str(&identity_secret)?;
+            let record = nook_core::passkey_derived_device_identity_record(
                 &credential_id,
                 &user_handle,
                 &prf_input,
-                &prf_output,
             )?;
-            indexed_db::save_wrapped_device_identity(&self.device.id, &record).await
+            let device_id = identity.device_id().to_string();
+            indexed_db::save_wrapped_device_identity(&device_id, &record).await?;
+            self.device.id = device_id;
+            self.device.identity_private_key = identity_secret.into_inner();
+            Ok(())
+        }
+        .await;
+        prf_output.zeroize();
+        result.map_err(Into::into)
+    }
+
+    #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskey)]
+    pub async fn recover_device_protection_with_passkey(
+        &mut self,
+        credential_id: Vec<u8>,
+        user_handle: Vec<u8>,
+        mut prf_output: Vec<u8>,
+    ) -> Result<(), JsError> {
+        let result: Result<(), NookError> = async {
+            let prf_input = nook_core::deterministic_passkey_prf_input();
+            let identity_secret =
+                nook_core::derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
+            let identity = nook_core::DeviceIdentity::from_secret_str(&identity_secret)?;
+            let record = nook_core::passkey_derived_device_identity_record(
+                &credential_id,
+                &user_handle,
+                &prf_input,
+            )?;
+            let device_id = identity.device_id().to_string();
+            indexed_db::save_wrapped_device_identity(&device_id, &record).await?;
+            self.device.id = device_id;
+            self.device.identity_private_key = identity_secret.into_inner();
+            Ok(())
         }
         .await;
         prf_output.zeroize();
@@ -114,7 +143,9 @@ impl NookVaultManager {
                 .ok_or_else(|| {
                     NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
                 })?;
-            let secret = nook_core::unwrap_device_identity(&record, &prf_output)?;
+            let user_handle = record.user_handle_bytes()?;
+            let secret =
+                nook_core::derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
             let identity = nook_core::DeviceIdentity::from_secret_str(&secret)?;
             if identity.device_id().as_str() != stored_device_id {
                 return Err(NookError::Decryption(

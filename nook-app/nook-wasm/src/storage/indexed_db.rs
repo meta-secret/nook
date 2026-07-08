@@ -17,7 +17,7 @@
 //!   previous active blob.
 //! - `encrypted_db` — legacy single-vault key (migrated on first read).
 //! - `device_id` / `device_identity_wrapped` — stable browser device identity
-//!   encrypted with a passkey-PRF-derived or PIN-derived key.
+//!   metadata for passkey-derived identities or PIN-encrypted identity records.
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
 
 use crate::NookError;
@@ -358,36 +358,36 @@ mod device_identity_storage_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    async fn verified_wrapped_identity_round_trips() {
+    async fn verified_passkey_identity_metadata_round_trips() {
         let _ = rexie::Rexie::delete("nook_db").await;
-        let identity = nook_core::DeviceIdentity::generate().expect("identity");
-        let secret = identity.secret_string();
         assert_eq!(
             device_identity_protection_status().await.expect("status"),
             "missing"
         );
 
         let setup = nook_core::DeviceKeyProtectionSetup::generate().expect("setup");
-        let prf_output = [21u8; 32];
-        let wrapped = nook_core::wrap_device_identity(
-            &secret,
+        let secret =
+            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])
+                .expect("derive identity");
+        let identity = nook_core::DeviceIdentity::from_secret_str(&secret).expect("identity");
+        let wrapped = nook_core::passkey_derived_device_identity_record(
             &[7u8; 32],
             setup.user_handle(),
             setup.prf_input(),
-            &prf_output,
         )
-        .expect("wrap");
+        .expect("record");
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped)
             .await
-            .expect("persist wrapped identity");
+            .expect("persist identity metadata");
 
         let (_, reloaded) = load_wrapped_device_identity()
             .await
             .expect("load")
             .expect("record");
+        assert_eq!(reloaded.protection_mode(), "passkey");
         assert_eq!(
-            nook_core::unwrap_device_identity(&reloaded, &prf_output).expect("unwrap"),
-            secret
+            reloaded.user_handle_bytes().expect("user handle"),
+            setup.user_handle()
         );
     }
 }

@@ -1,4 +1,5 @@
 import {
+  buildPasskeyRecoveryRequestOptions,
   buildPasskeyPrfRequestOptions,
   type NookVaultManager,
 } from '$lib/nook-wasm/nook_wasm'
@@ -12,6 +13,10 @@ type CredentialWithPrf = PublicKeyCredential & {
   getClientExtensionResults(): AuthenticationExtensionsClientOutputs & {
     prf?: PrfResults
   }
+}
+
+type AssertionCredentialWithPrf = CredentialWithPrf & {
+  response: AuthenticatorAssertionResponse
 }
 
 export class PasskeyPrfUnavailableError extends Error {
@@ -60,11 +65,7 @@ function prfOutput(
 async function evaluatePrf(
   options: CredentialRequestOptions,
 ): Promise<Uint8Array> {
-  const credential = (await navigator.credentials.get(options)) as
-    | CredentialWithPrf
-    | undefined
-
-  if (!credential) throw new Error('Passkey authorization was cancelled.')
+  const credential = await getPasskeyCredential(options)
   const output = prfOutput(credential)
   if (!output) {
     throw new PasskeyPrfUnavailableError(
@@ -72,6 +73,17 @@ async function evaluatePrf(
     )
   }
   return output
+}
+
+async function getPasskeyCredential(
+  options: CredentialRequestOptions,
+): Promise<AssertionCredentialWithPrf> {
+  const credential = (await navigator.credentials.get(options)) as
+    | AssertionCredentialWithPrf
+    | undefined
+
+  if (!credential) throw new Error('Passkey authorization was cancelled.')
+  return credential
 }
 
 /**
@@ -139,5 +151,44 @@ export async function unlockDeviceProtection(
     input.fill(0)
     credentialId.fill(0)
     options.free()
+  }
+}
+
+/** Select an existing discoverable Nook passkey and rebuild this device root. */
+export async function recoverDeviceProtectionWithPasskey(
+  manager: NookVaultManager,
+): Promise<void> {
+  requirePasskeySupport()
+  const requestOptions = buildPasskeyRecoveryRequestOptions(
+    location.hostname,
+  ) as CredentialRequestOptions
+  let output: Uint8Array | undefined = undefined
+  let userHandle: Uint8Array | undefined = undefined
+  try {
+    const credential = await getPasskeyCredential(requestOptions)
+    output = prfOutput(credential)
+    if (!output) {
+      throw new PasskeyPrfUnavailableError(
+        'The passkey did not return the required PRF output.',
+      )
+    }
+    const rawUserHandle = credential.response.userHandle ?? undefined
+    if (!rawUserHandle) {
+      throw new Error('The selected passkey did not return a user handle.')
+    }
+    userHandle = new Uint8Array(rawUserHandle)
+    const credentialId = new Uint8Array(credential.rawId)
+    try {
+      await manager.recoverDeviceProtectionWithPasskey(
+        credentialId,
+        userHandle,
+        output,
+      )
+    } finally {
+      credentialId.fill(0)
+    }
+  } finally {
+    output?.fill(0)
+    userHandle?.fill(0)
   }
 }

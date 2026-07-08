@@ -160,8 +160,9 @@ The complete vault also contains:
 Important boundaries:
 
 - Secret data and vault keys are never sent to storage in plaintext.
-- Device private keys stay in that browser's IndexedDB as authenticated
-  ciphertext and require passkey authorization before use.
+- Passkey-protected device identities are derived in-session from WebAuthn PRF
+  output and the passkey `userHandle`; PIN fallback identities stay in
+  IndexedDB as authenticated ciphertext.
 - GitHub receives the encrypted vault file. The GitHub personal access token is
   sealed to the device identity before it is saved in browser IndexedDB.
 - The item `id` and `type`, vault membership identifiers, and the existence and size

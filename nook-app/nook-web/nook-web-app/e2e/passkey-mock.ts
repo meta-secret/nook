@@ -1,6 +1,15 @@
 /** Deterministic WebAuthn PRF mock used by browser-flow tests. */
 export function installMockPasskeyRuntime() {
   const credentialId = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
+  const saved = window.name.startsWith('nook-e2e-passkey:')
+    ? window.name.slice('nook-e2e-passkey:'.length)
+    : undefined
+  let userHandle = saved
+    ? Uint8Array.from(JSON.parse(saved) as number[])
+    : Uint8Array.from({ length: 32 }, (_, index) => 0xf0 - index)
+  const saveUserHandle = () => {
+    window.name = `nook-e2e-passkey:${JSON.stringify(Array.from(userHandle))}`
+  }
   const derive = (source: ArrayBuffer | ArrayBufferView) => {
     const bytes =
       source instanceof ArrayBuffer
@@ -8,11 +17,17 @@ export function installMockPasskeyRuntime() {
         : new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
     return Uint8Array.from(bytes, (byte) => byte ^ 0xa5).buffer
   }
+  const bytesFrom = (source: ArrayBuffer | ArrayBufferView) =>
+    source instanceof ArrayBuffer
+      ? Uint8Array.from(new Uint8Array(source))
+      : Uint8Array.from(
+          new Uint8Array(source.buffer, source.byteOffset, source.byteLength),
+        )
   const result = (first: ArrayBuffer | ArrayBufferView, enabled: boolean) => ({
     id: 'nook-e2e-passkey',
     rawId: credentialId.buffer.slice(0),
     type: 'public-key',
-    response: {},
+    response: { userHandle: userHandle.buffer.slice(0) },
     getClientExtensionResults: () => ({
       prf: {
         enabled,
@@ -25,6 +40,7 @@ export function installMockPasskeyRuntime() {
     value: {
       create: async (options: {
         publicKey?: {
+          user?: { id?: ArrayBuffer | ArrayBufferView }
           extensions?: {
             prf?: { eval?: { first?: ArrayBuffer | ArrayBufferView } }
           }
@@ -36,6 +52,11 @@ export function installMockPasskeyRuntime() {
             'The operation was cancelled.',
             'NotAllowedError',
           )
+        }
+        const createdUserHandle = options.publicKey?.user?.id
+        if (createdUserHandle) {
+          userHandle = bytesFrom(createdUserHandle)
+          saveUserHandle()
         }
         const first = options.publicKey?.extensions?.prf?.eval?.first
         if (!first) throw new Error('Missing E2E PRF create input')

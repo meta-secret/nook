@@ -1290,6 +1290,7 @@ dependencies = [
  "aes-gcm",
  "age",
  "base64 0.22.1",
+ "bech32",
  "getrandom",
  "hex",
  "hkdf",

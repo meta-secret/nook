@@ -119,6 +119,20 @@
           ? vault.t('device_protection.authorizing')
           : vault.t('device_protection.setup_action')}
       </Button>
+      <Button
+        class="w-full"
+        variant="outline"
+        disabled={vault.isVerifying}
+        data-testid="device-protection-existing-passkey-btn"
+        onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+      >
+        {vault.isVerifying
+          ? vault.t('device_protection.authorizing')
+          : vault.t('device_protection.existing_passkey_action')}
+      </Button>
+      <p class="text-center text-xs text-muted-foreground">
+        {vault.t('device_protection.existing_passkey_hint')}
+      </p>
     {:else if vault.deviceProtectionStatus === 'pin'}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">

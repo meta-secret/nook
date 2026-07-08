@@ -339,6 +339,8 @@
     "pin_unlock_description": "Enter this browser's PIN before Nook can use the private device key stored here.",
     "unavailable_description": "Device-key protection could not be initialized. Refresh and try again in a supported browser.",
     "setup_action": "Protect with a passkey",
+    "existing_passkey_action": "Use existing passkey",
+    "existing_passkey_hint": "Choose a Nook passkey already saved by this browser or operating system.",
     "unlock_action": "Unlock with passkey",
     "pin_setup_action": "Protect with PIN",
     "pin_unlock_action": "Unlock with PIN",

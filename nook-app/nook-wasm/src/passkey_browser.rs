@@ -50,6 +50,16 @@ pub(crate) fn request_options(
         .map_err(|error| JsError::new(&format!("Failed to build passkey request options: {error}")))
 }
 
+pub(crate) fn recovery_options(rp_id: &str) -> Result<JsValue, JsError> {
+    let prf_input = nook_core::deterministic_passkey_prf_input();
+    let options = recovery_options_struct(rp_id, &prf_input)?;
+    to_browser_value(&options).map_err(|error| {
+        JsError::new(&format!(
+            "Failed to build passkey recovery options: {error}"
+        ))
+    })
+}
+
 fn to_browser_value<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
     let value =
         value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))?;
@@ -219,6 +229,25 @@ fn request_options_struct(
     })
 }
 
+fn recovery_options_struct(
+    rp_id: &str,
+    prf_input: &[u8],
+) -> Result<CredentialRequestOptions, JsError> {
+    Ok(CredentialRequestOptions {
+        public_key: PublicKeyCredentialRequestOptions {
+            challenge: random_challenge()?.to_vec().into(),
+            timeout: None,
+            rp_id: Some(rp_id.to_owned()),
+            allow_credentials: None,
+            user_verification: UserVerificationRequirement::Required,
+            hints: None,
+            attestation: AttestationConveyancePreference::None,
+            attestation_formats: None,
+            extensions: Some(prf_extension(prf_input, None)),
+        },
+    })
+}
+
 fn prf_extension(
     prf_input: &[u8],
     credential_id: Option<&[u8]>,
@@ -325,6 +354,23 @@ mod tests {
             32
         );
     }
+
+    #[test]
+    fn recovery_options_use_discoverable_credentials_and_global_prf_input() {
+        let value = recovery_options_struct("localhost", &[9; 32]).unwrap();
+        let json = to_json(&value);
+
+        assert_eq!(json["publicKey"]["rpId"], "localhost");
+        assert!(json["publicKey"]["allowCredentials"].is_null());
+        assert_eq!(json["publicKey"]["userVerification"], "required");
+        assert_eq!(
+            json["publicKey"]["extensions"]["prf"]["eval"]["first"]
+                .as_array()
+                .expect("first prf input")
+                .len(),
+            32
+        );
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
@@ -372,5 +418,17 @@ mod wasm_tests {
         assert_uint8_array(&get(&public_key, "challenge"), 32);
         assert_uint8_array(&get(&first_credential, "id"), 32);
         assert_uint8_array(&get(&keyed_eval, "first"), 32);
+    }
+
+    #[wasm_bindgen_test]
+    fn recovery_options_serialize_webauthn_bytes_as_uint8_arrays() {
+        let options = recovery_options("localhost").unwrap();
+        let public_key = get(&options, "publicKey");
+        let extensions = get(&public_key, "extensions");
+        let prf = get(&extensions, "prf");
+        let eval = get(&prf, "eval");
+
+        assert_uint8_array(&get(&public_key, "challenge"), 32);
+        assert_uint8_array(&get(&eval, "first"), 32);
     }
 }
