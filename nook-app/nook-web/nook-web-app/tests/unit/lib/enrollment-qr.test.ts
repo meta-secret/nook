@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { createEnrollmentQrOptions, enrollmentQrSize } from '$lib/enrollment-qr'
 
 describe('createEnrollmentQrOptions', () => {
-  test('configures a styled high-correction enrollment QR', () => {
+  test('configures a styled enrollment QR with quartile correction', () => {
     const link = 'https://nook.example/#enroll=abc123'
     const options = createEnrollmentQrOptions(link)
 
