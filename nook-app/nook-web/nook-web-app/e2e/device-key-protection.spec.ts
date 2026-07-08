@@ -1,12 +1,11 @@
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
 
-async function clickDeviceProtectionSetup(
-  page: import('@playwright/test').Page,
-) {
+async function clickDeviceProtectionSetup(page: Page) {
   const setupButton = page.getByTestId('device-protection-setup-btn')
   await expect(setupButton).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -17,34 +16,65 @@ async function clickDeviceProtectionSetup(
   await setupButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
-async function readPersistedDeviceIdentity(
-  page: import('@playwright/test').Page,
-): Promise<string | undefined> {
-  const persisted = await page.evaluate(
-    () =>
-      new Promise<{ wrapped: string | undefined }>((resolve, reject) => {
+async function readVaultValue<T>(
+  page: Page,
+  key: string,
+): Promise<T | undefined> {
+  return page.evaluate(
+    (valueKey) =>
+      new Promise<T | undefined>((resolve, reject) => {
         const request = indexedDB.open('nook_db')
         request.onerror = () => reject(request.error)
         request.onsuccess = () => {
           const db = request.result
           const transaction = db.transaction('vault', 'readonly')
           const store = transaction.objectStore('vault')
-          const wrappedRequest = store.get('device_identity_wrapped')
+          const valueRequest = store.get(valueKey)
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
-            resolve({
-              wrapped: wrappedRequest.result as string | undefined,
-            })
+            resolve(valueRequest.result as T | undefined)
+          }
+        }
+      }),
+    key,
+  )
+}
+
+async function readPersistedDeviceIdentity(
+  page: Page,
+): Promise<string | undefined> {
+  return readVaultValue<string>(page, 'device_identity_wrapped')
+}
+
+async function readDeviceId(page: Page): Promise<string | undefined> {
+  return readVaultValue<string>(page, 'device_id')
+}
+
+async function clearDeviceMetadata(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction('vault', 'readwrite')
+          const store = transaction.objectStore('vault')
+          store.delete('device_id')
+          store.delete('device_identity_wrapped')
+          transaction.onerror = () => reject(transaction.error)
+          transaction.oncomplete = () => {
+            db.close()
+            resolve()
           }
         }
       }),
   )
-  return persisted.wrapped
 }
 
 test.describe('passkey device-key protection', () => {
-  test('wraps the device identity and requires passkey authorization after reload', async ({
+  test('derives the device identity and requires passkey authorization after reload', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -53,12 +83,22 @@ test.describe('passkey device-key protection', () => {
     await page.goto('/')
 
     await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('login-gate')).toBeVisible()
+    const deviceId = await readDeviceId(page)
+    const shortDeviceId = `${deviceId.slice(0, 6)}...${deviceId.slice(-4)}`
+    await expect
+      .poll(() =>
+        page.evaluate(() => localStorage.getItem('nook_e2e_passkey_label')),
+      )
+      .toBe(`Work laptop - device ${shortDeviceId}`)
 
     const wrapped = await readPersistedDeviceIdentity(page)
 
     expect(wrapped).toBeDefined()
+    expect(wrapped).toContain('"protection":"passkey-derived"')
+    expect(wrapped).not.toContain('"ciphertext"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
     await createLocalVaultOnLogin(page, 'Passkey test vault')
@@ -71,6 +111,32 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
     await page.getByTestId('device-protection-unlock-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
+  })
+
+  test('recovers the same device identity from an existing passkey after local metadata is cleared', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.goto('/')
+
+    await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    await clickDeviceProtectionSetup(page)
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+
+    const originalDeviceId = await readDeviceId(page)
+    await clearDeviceMetadata(page)
+
+    await page.reload()
+    await expect(
+      page.getByTestId('device-protection-existing-passkey-btn'),
+    ).toBeVisible()
+    await page.getByTestId('device-protection-existing-passkey-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+
+    const recoveredDeviceId = await readDeviceId(page)
+    expect(recoveredDeviceId).toBe(originalDeviceId)
   })
 
   test('falls back to PIN wrapping when the authenticator does not support PRF', async ({

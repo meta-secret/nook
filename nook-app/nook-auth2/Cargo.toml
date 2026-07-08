@@ -10,6 +10,7 @@ repository.workspace = true
 aes-gcm = { version = "0.11.0", default-features = false, features = ["aes", "alloc"] }
 age = { version = "0.11.3", features = ["armor"] }
 base64 = "0.22"
+bech32 = "0.9.1"
 getrandom = "0.2.17"
 hex = "0.4.3"
 hkdf = "0.12.4"

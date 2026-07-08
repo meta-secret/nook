@@ -67,6 +67,7 @@ import {
 } from '$lib/vault-idle-session'
 import {
   isPasskeyPrfUnavailableError,
+  recoverDeviceProtectionWithPasskey as recoverExistingPasskeyProtection,
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from '$lib/passkey-device-protection'
@@ -641,7 +642,7 @@ export class VaultState {
           return
         } else {
           await this.enqueueStorage(() =>
-            createPasskeyProtection(this.manager!),
+            createPasskeyProtection(this.manager!, ''),
           )
         }
         deviceIdentityUnlocked = true
@@ -740,13 +741,15 @@ export class VaultState {
     this.devicePublicKey = identity.devicePublicKey
   }
 
-  async setupDeviceProtection() {
+  async setupDeviceProtection(passkeyLabel = '') {
     if (!this.manager || this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     let deviceIdentityUnlocked = false
     try {
-      await this.enqueueStorage(() => createPasskeyProtection(this.manager!))
+      await this.enqueueStorage(() =>
+        createPasskeyProtection(this.manager!, passkeyLabel),
+      )
       deviceIdentityUnlocked = true
       this.deviceAuthorizationInProgress = true
       this.deviceProtectionLockedMode = 'passkey'
@@ -766,6 +769,43 @@ export class VaultState {
       }
       this.errorMsg =
         error instanceof Error ? error.message : 'Failed to create passkey.'
+    } finally {
+      this.deviceAuthorizationInProgress = false
+      this.isVerifying = false
+      this.isInitializing = false
+    }
+  }
+
+  async recoverDeviceProtectionWithPasskey() {
+    if (!this.manager || this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    let deviceIdentityUnlocked = false
+    try {
+      await this.enqueueStorage(() =>
+        recoverExistingPasskeyProtection(this.manager!),
+      )
+      deviceIdentityUnlocked = true
+      this.deviceAuthorizationInProgress = true
+      this.deviceProtectionLockedMode = 'passkey'
+      await this.continueInitializationAfterDeviceUnlock()
+      this.deviceProtectionStatus = 'unlocked'
+    } catch (error) {
+      if (isPasskeyPrfUnavailableError(error)) {
+        this.deviceProtectionStatus = 'pin-setup'
+        this.errorMsg = this.t('device_protection.recovery_pin_fallback_ready')
+        return
+      }
+      if (
+        this.deviceProtectionStatus === 'unlocked' ||
+        deviceIdentityUnlocked
+      ) {
+        void this.lockDeviceProtection()
+      }
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to use existing passkey.'
     } finally {
       this.deviceAuthorizationInProgress = false
       this.isVerifying = false

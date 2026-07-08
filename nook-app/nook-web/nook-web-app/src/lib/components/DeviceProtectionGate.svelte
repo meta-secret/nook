@@ -13,6 +13,7 @@
   let { vault }: { vault: VaultState } = $props()
   let pin = $state('')
   let pinConfirm = $state('')
+  let passkeyLabel = $state('')
 
   const needsSetup = $derived(
     vault.deviceProtectionStatus === 'missing' ||
@@ -112,8 +113,38 @@
       <Button
         class="w-full"
         disabled={vault.isVerifying}
+        data-testid="device-protection-existing-passkey-btn"
+        onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+      >
+        {vault.isVerifying
+          ? vault.t('device_protection.authorizing')
+          : vault.t('device_protection.existing_passkey_action')}
+      </Button>
+      <p class="text-center text-xs text-muted-foreground">
+        {vault.t('device_protection.existing_passkey_hint')}
+      </p>
+
+      <div class="space-y-2 pt-2">
+        <label class="block text-sm font-medium" for="device-protection-label">
+          {vault.t('device_protection.passkey_label')}
+        </label>
+        <input
+          id="device-protection-label"
+          class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+          type="text"
+          autocomplete="off"
+          placeholder={vault.t('device_protection.passkey_label_placeholder')}
+          bind:value={passkeyLabel}
+          disabled={vault.isVerifying}
+          data-testid="device-protection-label-input"
+        />
+      </div>
+      <Button
+        class="w-full"
+        variant="outline"
+        disabled={vault.isVerifying}
         data-testid="device-protection-setup-btn"
-        onclick={() => vault.setupDeviceProtection()}
+        onclick={() => vault.setupDeviceProtection(passkeyLabel)}
       >
         {vault.isVerifying
           ? vault.t('device_protection.authorizing')

@@ -20,7 +20,9 @@ Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** 
 ```mermaid
 flowchart TB
   subgraph local["Local only (IndexedDB)"]
-    DI["Wrapped device identity<br/>(AES-256-GCM ciphertext)"]
+    PM["Passkey metadata<br/>(credential id + userHandle)"]
+    DI["Device identity<br/>(derived in session)"]
+    PI["PIN-wrapped device identity<br/>(AES-256-GCM ciphertext)"]
     PK["Passkey PRF<br/>(platform authenticator)"]
     PIN["PIN fallback<br/>(user-entered, not persisted)"]
     DID["device_id fingerprint<br/>(16 hex, UI only)"]
@@ -33,8 +35,10 @@ flowchart TB
     MEM["members: pk_id + ciphertext<br/>(members_key-encrypted pk_id + pk)"]
   end
 
-  PK -->|"PRF output → HKDF → unwrap"| DI
-  PIN -->|"PIN → PBKDF2-SHA256 → unwrap"| DI
+  PM -->|"userHandle"| DI
+  PK -->|"fixed PRF input → PRF output → HKDF"| DI
+  PIN -->|"PIN → PBKDF2-SHA256 → unwrap"| PI
+  PI -->|"authorized X25519 key"| DI
   DI -->|"authorized X25519 key unwraps own auth row"| AUTH
   AUTH -->|"VaultCrypto(secrets_key)"| SEC
   AUTH -->|"VaultCrypto(members_key)"| MEM
@@ -45,8 +49,9 @@ flowchart TB
 |---|---|---|
 | **secrets_key** | Symmetric key — encrypts all secret *values* in `secrets:` | Per-device age envelope in `auth.secrets_key` |
 | **members_key** | Symmetric key — encrypts each `{pk_id, pk}` entry in `members:` | Per-device age envelope in `auth.members_key` |
-| **Device identity** | X25519 keypair — unwraps this device's auth envelopes | AES-256-GCM ciphertext in IndexedDB; plaintext only in an authorized WASM session |
-| **Passkey PRF** | Produces the secret input used by HKDF to unwrap the device identity | Browser/platform authenticator; never persisted by Nook |
+| **Device identity** | X25519 keypair — unwraps this device's auth envelopes | For passkey mode, derived in-session from WebAuthn PRF output + `userHandle`; for PIN fallback, AES-256-GCM ciphertext in IndexedDB |
+| **Passkey PRF** | Produces the secret input used by HKDF to derive the device identity | Browser/platform authenticator; never persisted by Nook |
+| **Passkey metadata** | Credential id, `userHandle`, and deterministic PRF input needed to re-prompt the passkey | IndexedDB `device_identity_wrapped`; no age secret ciphertext in passkey mode |
 | **PIN fallback** | Local fallback secret for platforms that do not return WebAuthn PRF | User-entered at setup/unlock; never persisted by Nook |
 | **pk_id** | SHA256(public key), 64 hex | `auth:` row id and `members:` row id |
 
@@ -60,8 +65,10 @@ the `navigator.credentials.create/get` option payloads with
 `1Password/passkey-rs` `passkey-types`, including PRF extension inputs.
 TypeScript owns only the browser platform call itself and extraction of the
 returned PRF extension result; it passes the 32-byte PRF output to WASM. Rust
-derives an AES-256-GCM key with HKDF-SHA256 and unwraps the age identity. Nook
-never stores a password or encryption key in WebAuthn `user.id`.
+uses a versioned fixed PRF input for passkey mode, then derives the X25519 age
+identity from the PRF output and the passkey `userHandle` with HKDF-SHA256. Nook
+never stores a password or encryption key in WebAuthn `user.id`; the
+`userHandle` is a non-secret account binding and HKDF salt.
 
 Issue #201 proved the current browser boundary for `1Password/passkey-rs`:
 `passkey-client` can run a WebAuthn client when Rust also owns an
@@ -72,17 +79,26 @@ therefore keep a thin TypeScript bridge for the real platform ceremony while
 keeping option construction, wrapping, unwrapping, persistence, validation, and
 zeroization in Rust/WASM/core.
 
+Passkey-backed Local Mode is deterministic: choosing the same discoverable Nook
+passkey returns the same `userHandle`, and evaluating the PRF with Nook's fixed
+domain-separated input returns the material needed to derive the same device
+identity. This lets a user clear Nook's IndexedDB metadata, choose the existing
+passkey again, and recover the same `device_id` without creating duplicate
+`nokey.sh / Nook device` passkeys. The persisted passkey record stores only
+prompting metadata (`credentialId`, `userHandle`, `prfInput`, `kdf`) and no
+encrypted age secret.
+
 Existing plaintext `device_identity_secret` records are migrated in place:
-WASM writes and verifies `device_identity_wrapped`, then deletes the legacy
-record. When WebAuthn PRF is unavailable, Nook offers a local PIN-derived
-wrapping mode instead of returning to plaintext storage. PIN mode uses a
-versioned `device_identity_wrapped` record with PBKDF2-SHA256 parameters
-authenticated by AES-256-GCM metadata. It protects passive browser-storage
-copies from immediate plaintext key disclosure, but weak PINs have offline
-guessing risk if an attacker copies IndexedDB. Losing the passkey or forgetting
-the PIN requires a destructive local identity reset; encrypted local vault blobs
-are preserved, but saved sync credentials are removed because they were sealed
-to the old identity.
+WASM replaces them with deterministic passkey metadata or a PIN-wrapped record,
+then deletes the legacy plaintext. When WebAuthn PRF is unavailable, Nook offers
+a local PIN-derived wrapping mode instead of returning to plaintext storage. PIN
+mode uses a versioned `device_identity_wrapped` record with PBKDF2-SHA256
+parameters authenticated by AES-256-GCM metadata. It protects passive
+browser-storage copies from immediate plaintext key disclosure, but weak PINs
+have offline guessing risk if an attacker copies IndexedDB. Forgetting the PIN
+requires a destructive local identity reset; encrypted local vault blobs are
+preserved, but saved sync credentials are removed because they were sealed to
+the old identity.
 
 ### 2.2 Browser and authenticator support (2026-07-03)
 
@@ -103,7 +119,8 @@ true`; at authorization it requires a 32-byte `prf.results.first` for PRF-backed
 records. Missing support switches first-time setup to the PIN fallback and never
 falls back to plaintext. Returning browsers inspect the persisted
 `device_identity_wrapped` version to choose passkey or PIN authorization without
-user-agent guesses.
+user-agent guesses; browsers with no local passkey metadata can use the
+discoverable passkey chooser to rebuild the deterministic passkey record.
 
 References: [WebAuthn PRF specification](https://www.w3.org/TR/webauthn-3/#prf-extension),
 [Chromium intent to ship](https://groups.google.com/a/chromium.org/g/blink-dev/c/iTNOgLwD2bI),

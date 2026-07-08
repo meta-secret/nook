@@ -228,6 +228,13 @@ pub fn build_passkey_prf_request_options(
     passkey_browser::request_options(rp_id, &credential_id, &prf_input)
 }
 
+#[wasm_bindgen(js_name = buildPasskeyRecoveryRequestOptions)]
+pub fn build_passkey_recovery_request_options(
+    rp_id: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    passkey_browser::recovery_options(rp_id)
+}
+
 #[wasm_bindgen(js_name = generateSecretId)]
 pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::generate_secret_id()?.to_string())

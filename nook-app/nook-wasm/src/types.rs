@@ -383,7 +383,13 @@ impl NookPasskeySetup {
         rp_id: &str,
         rp_name: &str,
     ) -> Result<wasm_bindgen::JsValue, wasm_bindgen::JsError> {
-        crate::passkey_browser::creation_options(rp_id, rp_name, &self.user_handle, &self.prf_input)
+        crate::passkey_browser::creation_options(
+            rp_id,
+            rp_name,
+            crate::passkey_browser::DEFAULT_PASSKEY_LABEL,
+            &self.user_handle,
+            &self.prf_input,
+        )
     }
 }
 
