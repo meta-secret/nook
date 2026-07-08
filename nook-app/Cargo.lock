@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "nook-auth2"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "age",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "nook-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "age",
@@ -1333,7 +1333,7 @@ dependencies = [
 
 [[package]]
 name = "nook-wasm"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "base64 0.21.7",
  "coset",

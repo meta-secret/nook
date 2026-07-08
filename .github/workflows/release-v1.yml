@@ -1,0 +1,105 @@
+# Release v1: verify the pinned release branch and deploy it to Cloudflare Pages.
+
+name: Release v1
+
+on:
+  push:
+    branches: [release/v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+  packages: read
+
+concurrency:
+  group: release-v1
+  cancel-in-progress: true
+
+env:
+  CI_RELEASE_V1_URL: https://v1.nokey.sh
+  CI_RELEASE_V1_VITE_BASE: /
+  CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS: "500"
+
+jobs:
+  deploy:
+    name: Verify and deploy v1
+    runs-on: nook
+    environment:
+      name: v1
+      url: ${{ steps.deploy.outputs.release_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check, build, and e2e
+        run: task ci:main VITE_BASE=${{ env.CI_RELEASE_V1_VITE_BASE }} VITE_SITE_URL=${{ env.CI_RELEASE_V1_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_V1_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
+        env:
+          CI: true
+          VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS }}
+
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          CF_PAGES_BRANCH: release/v1
+          CF_PAGES_PROJECT_NAME: nook
+        run: |
+          set +e
+          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_RELEASE_V1_VITE_BASE }} VITE_SITE_URL=${{ env.CI_RELEASE_V1_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_V1_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_V1_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod 2>&1)"
+          status=$?
+          set -e
+          echo "$out"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Cloudflare v1 deploy failed (exit $status)"
+            exit "$status"
+          fi
+          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
+          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+          if [ -z "$url" ]; then
+            echo "::error::Cloudflare deploy succeeded but did not emit release URL"
+            exit 1
+          fi
+          echo "pages_url=$url" >> "$GITHUB_OUTPUT"
+          echo "release_url=${{ env.CI_RELEASE_V1_URL }}" >> "$GITHUB_OUTPUT"
+
+      - name: Record v1 deployment
+        uses: actions/github-script@v9
+        env:
+          RELEASE_URL: ${{ env.CI_RELEASE_V1_URL }}
+          PAGES_URL: ${{ steps.deploy.outputs.pages_url }}
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'v1',
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: false,
+              production_environment: true,
+              description: 'Pinned v1 release',
+              payload: {
+                release_url: process.env.RELEASE_URL,
+                pages_url: process.env.PAGES_URL,
+              },
+            })
+
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment: 'v1',
+              environment_url: process.env.RELEASE_URL,
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'v1 release deployed to Cloudflare Pages',
+              auto_inactive: false,
+            })
