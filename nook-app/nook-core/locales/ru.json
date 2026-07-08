@@ -820,6 +820,36 @@
       }
     }
   },
+  "extension": {
+    "manifest": {
+      "name": "Пароли Nook",
+      "description": "Браузерное расширение Nook для поиска полей пароля и будущего автозаполнения.",
+      "default_title": "Nook"
+    },
+    "setup": {
+      "profile_title": "Расширение Nook - этот профиль браузера",
+      "state": "Состояние расширения",
+      "not_set_up": "не настроено",
+      "connect_nook": "Подключить Nook",
+      "passkey_device_description": "Защитите этот профиль браузера устройством расширения на основе passkey перед подключением Nook.",
+      "set_up_extension": "Настроить расширение"
+    },
+    "popup": {
+      "checking_this_page": "Проверяем эту страницу",
+      "current_page": "Текущая страница",
+      "open_web_page": "Откройте веб-страницу, чтобы найти поля пароля.",
+      "cannot_inspect_page": "Nook не может проверить эту страницу.",
+      "scan_active_tab": "Сканировать активную вкладку",
+      "scan": "Сканировать",
+      "password_fields": "Поля пароля",
+      "login_fields": "Поля логина",
+      "forms": "Формы",
+      "scanning_active_tab": "Сканируем активную вкладку.",
+      "found_password_fields": "Nook нашел поля пароля на этой странице.",
+      "no_password_fields": "Поля пароля на этой странице не найдены.",
+      "suggested_password": "Предложенный пароль"
+    }
+  },
   "legal": {
     "privacy_policy": "Политика конфиденциальности",
     "terms_of_service": "Условия обслуживания"

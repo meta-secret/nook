@@ -819,6 +819,36 @@
     "enrolled_date_prefix": "Enrolled ",
     "recently": "recently"
   },
+  "extension": {
+    "manifest": {
+      "name": "Nook Passwords",
+      "description": "Nook browser companion for password form detection and future autofill.",
+      "default_title": "Nook"
+    },
+    "setup": {
+      "profile_title": "Nook Extension - this browser profile",
+      "state": "Extension state",
+      "not_set_up": "not set up",
+      "connect_nook": "Connect Nook",
+      "passkey_device_description": "Protect this browser profile with a passkey-backed extension device before connecting Nook.",
+      "set_up_extension": "Set up extension"
+    },
+    "popup": {
+      "checking_this_page": "Checking this page",
+      "current_page": "Current page",
+      "open_web_page": "Open a web page to scan for password fields.",
+      "cannot_inspect_page": "Nook cannot inspect this page.",
+      "scan_active_tab": "Scan active tab",
+      "scan": "Scan",
+      "password_fields": "Password fields",
+      "login_fields": "Login fields",
+      "forms": "Forms",
+      "scanning_active_tab": "Scanning the active tab.",
+      "found_password_fields": "Nook found password fields on this page.",
+      "no_password_fields": "No password fields detected on this page.",
+      "suggested_password": "Suggested password"
+    }
+  },
   "app": {
     "switch_light": "Switch to light mode",
     "switch_dark": "Switch to dark mode",

@@ -151,7 +151,26 @@ test('loads the extension and scans a login form from the popup', async ({
 
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
+    await expect(popupPage.locator('html')).toHaveAttribute('lang', 'en')
     await expect(popupPage.getByRole('heading', { name: 'Nook' })).toBeVisible()
+    await expect(
+      popupPage.getByRole('button', { name: 'Scan active tab' }),
+    ).toBeVisible()
+    await expect(popupPage.getByText('Password fields')).toBeVisible()
+    await expect(popupPage.getByText('Login fields')).toBeVisible()
+    await expect(popupPage.getByText('Forms')).toBeVisible()
+
+    await popupPage.evaluate(() => {
+      localStorage.setItem('nook_locale', 'ru')
+    })
+    await popupPage.reload()
+    await expect(popupPage.locator('html')).toHaveAttribute('lang', 'ru')
+    await expect(
+      popupPage.getByRole('button', { name: 'Сканировать активную вкладку' }),
+    ).toBeVisible()
+    await expect(popupPage.getByText('Поля пароля')).toBeVisible()
+    await expect(popupPage.getByText('Поля логина')).toBeVisible()
+    await expect(popupPage.getByText('Формы')).toBeVisible()
 
     await loginPage.bringToFront()
     await popupPage.evaluate(() => {
@@ -163,9 +182,8 @@ test('loads the extension and scans a login form from the popup', async ({
     await expect(popupPage.getByTestId('password-field-count')).toHaveText('1')
     await expect(popupPage.getByTestId('username-field-count')).toHaveText('1')
     await expect(popupPage.getByTestId('form-count')).toHaveText('1')
-    await expect(
-      popupPage.getByText('Nook found password fields'),
-    ).toBeVisible()
+    await expect(popupPage.getByText('Nook нашел поля пароля')).toBeVisible()
+    await expect(popupPage.getByText('Предложенный пароль')).toBeVisible()
     await expect(popupPage.getByTestId('suggested-password')).toContainText(
       /[A-Za-z0-9]/,
     )
