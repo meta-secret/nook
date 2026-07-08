@@ -12,7 +12,7 @@
 }
 
 body {
-  width: 320px;
+  width: 360px;
   margin: 0;
 }
 
@@ -62,6 +62,8 @@ body {
   font: inherit;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.2;
+  max-width: 104px;
   padding: 7px 9px;
 }
 

@@ -33,6 +33,10 @@ declare namespace chrome {
     }
   }
 
+  namespace i18n {
+    function getUILanguage(): string
+  }
+
   namespace tabs {
     type Tab = {
       id?: number
