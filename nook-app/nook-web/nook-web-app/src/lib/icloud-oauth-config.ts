@@ -2,7 +2,7 @@
  * Nook iCloud CloudKit — browser-only web auth (CloudKit JS).
  *
  * CloudKit Console → Production → iCloud.metasecret.project.com:
- * - API token (Settings → Tokens & Keys), allowed origins https://nokey.sh and https://v1.nokey.sh
+ * - API token (Settings -> Tokens & Keys), allowed origins https://nokey.sh and https://dev.nokey.sh
  * - Schema: NookVault record type with content (String), deployed to Production
  * - Sign in with Apple via CloudKit JS setUpAuth (Post Message callback)
  */

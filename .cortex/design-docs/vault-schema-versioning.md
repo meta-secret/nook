@@ -14,7 +14,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 
 | Axis | Examples | Owned by |
 |------|----------|----------|
-| **App semver** | `nokey.sh` latest, `v1.nokey.sh` pinned rollback | CI / Cloudflare Pages |
+| **App semver** | `nokey.sh` stable, `dev.nokey.sh` current development | CI / GitHub Pages + Cloudflare Pages |
 | **Projection `schema_version`** | `1` today in `nook-projection.yaml` cache | `nook-core` `vault_format.rs` |
 | **Event `schema_version`** | `2` on signed YAML event bodies | `nook-core` `vault_event.rs` |
 | **Password envelope `version`** | Crypto wrap inside `password_entries` | `password_envelope.rs` |
@@ -30,7 +30,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 | Lazy migration on connect | **Done** | `import_stored_vault_to_event_log` → `vault-imported` genesis event |
 | IndexedDB parity | **Done** | Same backup + event store keys for local-only users |
 | Migration status events | **Done** | `MIGRATION_START` / `MIGRATION_SUCCESS` on WASM status channel |
-| `v1.nokey.sh` app rollback | **Done** | `release/v1` branch deploys to Cloudflare Pages with a `v1` GitHub deployment environment |
+| `nokey.sh` stable app rollback | **Done** | `release/v1` branch deploys the stable GitHub Pages artifact |
 | Migration wizard UX | **Deferred** | Connect-time import is automatic; optional explicit gate later |
 | `nook-vault.v2.yaml` side-by-side files | **Not planned** | Event log replaces scalar blob versioning |
 
@@ -58,27 +58,29 @@ providers, `NookVaultEvent` records on iCloud) only.
 
 Opening a projection with `schema_version > 1` fails with an actionable error (upgrade the app).
 
-## v1 pinned release
+## v1 stable release
 
-`v1.nokey.sh` is the pinned first-release channel. It is built from the
+`nokey.sh` is the stable first-release channel. It is built from the
 `release/v1` branch by `.github/workflows/release-v1.yml`, using the same
 production Docker gate as `main` (`task ci:main ... WASM_BUILD_MODE=prod`) and
-then deploying the built `dist` to the `nook` Cloudflare Pages project with
-`CF_PAGES_BRANCH=release/v1`.
+then deploying a stable `dist` artifact to GitHub Pages. The deploy build passes
+`VITE_SITE_URL=https://nokey.sh` and
+`VITE_PUBLIC_APP_URL=https://nokey.sh` so generated release metadata and
+enrollment links use the stable root host while the pre-deploy e2e gate keeps
+local Playwright URLs.
 
-The Cloudflare branch alias for `release/v1` is
-`release-v1.nook-1n8.pages.dev`.
-The public domain `v1.nokey.sh` must stay attached to that branch alias through
-a proxied Cloudflare DNS record so it does not drift to the Pages production
-branch. The deploy build passes `VITE_SITE_URL=https://v1.nokey.sh` and
-`VITE_PUBLIC_APP_URL=https://v1.nokey.sh` so generated release metadata and
-enrollment links use the pinned host while the pre-deploy e2e gate keeps local
-Playwright URLs.
+`dev.nokey.sh` is the active development channel for `main`. `.github/workflows/main.yml`
+keeps the normal main verification and toolchain publish path, then deploys a
+development artifact to the `nook` Cloudflare Pages project with
+`CF_PAGES_BRANCH=main`. Cloudflare emits the branch alias
+`main.nook-1n8.pages.dev`; the public domain `dev.nokey.sh` must stay attached
+to the Pages project/branch through a proxied Cloudflare DNS record.
 
 Maintenance rule: `release/v1` should only receive cherry-picked critical fixes
 from `main`; do not continue normal feature development there. If a future app
-version changes event or projection compatibility, keep `v1.nokey.sh` available
-until the migration/rollback policy for existing vaults is explicit.
+version changes event or projection compatibility, keep `nokey.sh` on the
+compatible stable branch until the migration/rollback policy for existing vaults
+is explicit.
 
 ## Deferred (#52 non-goals retained)
 
