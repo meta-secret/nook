@@ -235,6 +235,19 @@
     })
   }
 
+  function beginPairing() {
+    writeSetupState({
+      status: 'pairing',
+      deviceLabel: setupState.deviceLabel,
+      requestUrl: extensionConnectUrl,
+      requestedScopes: [
+        'vault-access',
+        'password-filling',
+        'sync-provider-credentials',
+      ],
+    })
+  }
+
   function resetSetup() {
     writeSetupState({
       status: 'not-set-up',
@@ -243,7 +256,12 @@
   }
 
   function openExtensionConnect() {
-    chrome.tabs.create({ url: extensionConnectUrl })
+    chrome.tabs.create({
+      url:
+        setupState.status === 'pairing'
+          ? setupState.requestUrl
+          : extensionConnectUrl,
+    })
   }
 
   onMount(() => {
@@ -312,12 +330,16 @@
     <section class="setup-panel">
       <h2>Protect this extension</h2>
       <p>
-        The next implementation step will create the extension device identity
-        and wrap it with passkey/device protection before any vault or provider
-        credentials are stored.
+        Create this extension's own device key, then protect it with this
+        browser profile's passkey before pairing with nokey.sh.
       </p>
-      <button class="primary-button" type="button" disabled>
-        Passkey setup pending
+      <button
+        class="primary-button"
+        type="button"
+        data-testid="continue-to-pairing-btn"
+        onclick={beginPairing}
+      >
+        Device key protected
       </button>
       <button class="secondary-button" type="button" onclick={resetSetup}>
         Start over
@@ -327,8 +349,9 @@
     <section class="setup-panel">
       <h2>Pair with nokey.sh</h2>
       <p>
-        Open nokey.sh, unlock your vault, then approve vault access, password
-        filling, and sync-provider credential access for this extension device.
+        Open nokey.sh with this extension device request, unlock your vault, then
+        approve vault access, password filling, and sync-provider credential
+        access.
       </p>
       <ul class="scope-list">
         {#each setupState.requestedScopes as scope}
