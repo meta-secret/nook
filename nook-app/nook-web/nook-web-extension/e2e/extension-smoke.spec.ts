@@ -15,8 +15,17 @@ type StoredPasswordSummary = {
   formCount?: number
 }
 
+type SeededExtensionSetupState = {
+  status: 'ready'
+  deviceLabel: string
+  pairedVaults: string[]
+  selectedVaultName: string
+  syncStatus: string
+}
+
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const extensionDir = path.join(rootDir, 'dist')
+const setupStorageKey = 'nook:extension-setup'
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
@@ -104,6 +113,30 @@ async function readExtensionStorage(context: BrowserContext) {
   )
 }
 
+async function writeExtensionSetupState(
+  context: BrowserContext,
+  setupState: SeededExtensionSetupState,
+) {
+  const worker = await getServiceWorker(context)
+  await worker.evaluate(
+    ([storageKey, state]) =>
+      new Promise<void>((resolve) => {
+        const browserGlobal = globalThis as unknown as {
+          chrome: {
+            storage: {
+              local: {
+                set(items: Record<string, unknown>, callback: () => void): void
+              }
+            }
+          }
+        }
+
+        browserGlobal.chrome.storage.local.set({ [storageKey]: state }, resolve)
+      }),
+    [setupStorageKey, setupState] as const,
+  )
+}
+
 async function hasStoredLoginSummary(context: BrowserContext) {
   const storage = await readExtensionStorage(context)
   return Object.values(storage).some((value) => {
@@ -151,7 +184,34 @@ test('loads the extension and scans a login form from the popup', async ({
 
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
-    await expect(popupPage.getByRole('heading', { name: 'Nook' })).toBeVisible()
+    await expect(
+      popupPage.getByRole('heading', { name: 'Nook', exact: true }),
+    ).toBeVisible()
+    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
+      'not set up',
+    )
+    await expect(
+      popupPage.getByText('separate passkey-protected extension device'),
+    ).toBeVisible()
+    await expect(popupPage.getByTestId('set-up-extension-btn')).toBeVisible()
+    await popupPage.getByTestId('set-up-extension-btn').click()
+    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
+      'protecting',
+    )
+    await expect(popupPage.getByText('Passkey setup pending')).toBeVisible()
+
+    await writeExtensionSetupState(context, {
+      status: 'ready',
+      deviceLabel: 'Nook Extension - Chromium test profile',
+      pairedVaults: ['Personal'],
+      selectedVaultName: 'Personal',
+      syncStatus: 'Idle',
+    })
+    await popupPage.reload()
+    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
+      'ready',
+    )
+    await expect(popupPage.getByText('Personal')).toBeVisible()
 
     await loginPage.bringToFront()
     await popupPage.evaluate(() => {

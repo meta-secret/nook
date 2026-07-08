@@ -5,6 +5,12 @@ separate from `nook-web` so the extension can grow extension-specific surfaces
 such as content scripts, autofill, and background coordination without coupling
 those concerns to the web app shell.
 
+The extension first-run model is specified in
+[`.cortex/product-specs/browser-extension.md`](../../../.cortex/product-specs/browser-extension.md).
+The short version: the extension becomes its own passkey-protected Nook device
+and pairs through `https://nokey.sh/extension-connect`; it does not borrow or
+scrape the `nokey.sh` web app device key.
+
 Build it through Docker-backed Taskfile commands from the repo root or `nook-app/`:
 
 ```bash

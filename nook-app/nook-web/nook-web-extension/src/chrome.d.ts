@@ -45,6 +45,8 @@ declare namespace chrome {
       callback: (tabs: Tab[]) => void,
     ): void
 
+    function create(createProperties: { url: string }): void
+
     function sendMessage<TResponse = unknown>(
       tabId: number,
       message: unknown,
