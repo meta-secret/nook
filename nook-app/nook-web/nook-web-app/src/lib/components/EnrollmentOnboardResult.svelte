@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { Check, Copy, RefreshCw } from '@lucide/svelte'
+  import { Check, Copy } from '@lucide/svelte'
+  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
     vault,
     enrollmentLink,
-    qrDataUrlPromise,
     instruction = '',
     issuedSuffix = '',
     linkTitle,
@@ -18,7 +18,6 @@
   }: {
     vault: VaultState
     enrollmentLink: string
-    qrDataUrlPromise: Promise<string>
     instruction?: string
     issuedSuffix?: string
     linkTitle: string
@@ -60,27 +59,10 @@
   {/if}
 
   <div class="flex justify-center">
-    {#await qrDataUrlPromise}
-      <div
-        class="flex h-[240px] w-[240px] flex-col items-center justify-center gap-2 rounded-md border border-border bg-muted/20"
-        data-testid="enrollment-qr-loading"
-      >
-        <RefreshCw class="size-8 animate-spin text-muted-foreground" />
-        <span class="text-xs text-muted-foreground"
-          >{vault.t('onboard_device.generating_qr')}</span
-        >
-      </div>
-    {:then qrDataUrl}
-      {#if qrDataUrl}
-        <img
-          src={qrDataUrl}
-          alt="Onboarding QR"
-          class="rounded-md border border-border"
-          width="240"
-          height="240"
-        />
-      {/if}
-    {/await}
+    <EnrollmentQrCode
+      {enrollmentLink}
+      loadingLabel={vault.t('onboard_device.generating_qr')}
+    />
   </div>
 
   <div class="space-y-2">
