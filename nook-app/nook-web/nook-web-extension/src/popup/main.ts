@@ -7,12 +7,17 @@ async function main() {
   const target = document.getElementById('app')
 
   if (target) {
-    mount(PopupApp, {
-      target,
-      props: {
-        i18n: await initializeExtensionI18n(),
-      },
-    })
+    try {
+      mount(PopupApp, {
+        target,
+        props: {
+          i18n: await initializeExtensionI18n(),
+        },
+      })
+    } catch (error) {
+      console.error('Failed to initialize extension i18n:', error)
+      target.textContent = 'Failed to load extension'
+    }
   }
 }
 

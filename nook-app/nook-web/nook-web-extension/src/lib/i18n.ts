@@ -68,7 +68,7 @@ export async function initializeExtensionI18n(): Promise<ExtensionI18n> {
       let text = translateFromExtensionCatalog(catalog, locale, key)
       if (replacements) {
         for (const [name, value] of Object.entries(replacements)) {
-          text = text.replace(`{${name}}`, value)
+          text = text.replaceAll(`{${name}}`, value)
         }
       }
       return text
