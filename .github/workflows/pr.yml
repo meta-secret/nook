@@ -66,12 +66,35 @@ jobs:
 
       - name: Comment preview URL on PR
         if: steps.deploy.outcome == 'success'
+        uses: actions/github-script@v9
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
-        run: task ci:pr:comment-preview WASM_BUILD_MODE=prod
+        with:
+          script: |
+            const marker = '### Preview deployed'
+            const body = `${marker}\n\n${process.env.PREVIEW_URL}`
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100,
+            })
+            const existing = comments.find((comment) => comment.body?.startsWith(marker))
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              })
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              })
+            }
 
       - name: Record github-pages deployment
         if: steps.deploy.outcome == 'success'
@@ -118,12 +141,38 @@ jobs:
         env:
           CI: true
 
-      - name: Export base nook-core/auth coverage
+      - name: Detect nook-core/auth coverage input changes
+        id: coverage-inputs
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
           git fetch origin "+$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
+          changed_count="$(
+            git diff --name-only "origin/$BASE_REF" HEAD -- \
+              nook-app/.cargo \
+              nook-app/Cargo.lock \
+              nook-app/Cargo.toml \
+              nook-app/docker-bake.hcl \
+              'nook-app/docker/*.Dockerfile' \
+              'nook-app/docker/*docker-bake*.hcl' \
+              nook-app/nook-auth2 \
+              nook-app/nook-core \
+              | wc -l \
+              | tr -d ' '
+          )"
+          if [ "$changed_count" -gt 0 ]; then
+            echo "rust_coverage_inputs_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust_coverage_inputs_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Export base nook-core/auth coverage
+        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'true'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
           git worktree prune
           rm -rf ../nook-base-coverage
           git worktree add --detach ../nook-base-coverage "origin/$BASE_REF"
@@ -142,6 +191,14 @@ jobs:
             cd ../nook-base-coverage
             task docker:extract:coverage COVERAGE_OUT_DIR="$base_coverage_out"
           )
+
+      - name: Reuse current coverage as base
+        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'false'
+        run: |
+          set -euo pipefail
+          rm -rf coverage/base
+          mkdir -p coverage/base
+          cp -a coverage/current/. coverage/base/
 
       - name: Summarize nook-core/auth coverage
         id: coverage

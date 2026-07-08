@@ -22,11 +22,28 @@ const headers = {
   'Content-Type': 'application/json',
 }
 
+async function expectJson<T>(response: Response): Promise<T> {
+  const text = await response.text()
+  if (!response.ok) {
+    throw new Error(`GitHub API request failed (${response.status}): ${text}`)
+  }
+  return JSON.parse(text) as T
+}
+
+async function expectOk(response: Response): Promise<void> {
+  const text = await response.text()
+  if (!response.ok) {
+    throw new Error(`GitHub API request failed (${response.status}): ${text}`)
+  }
+}
+
 const listComments = () =>
   fetch(
     `https://api.github.com/repos/${owner}/${repo}/issues/${issue_number}/comments`,
     { headers },
-  ).then((r) => r.json()) as Promise<Array<{ id: number; body: string }>>
+  ).then((response) =>
+    expectJson<Array<{ id: number; body: string }>>(response),
+  )
 
 const updateComment = (comment_id: number) =>
   fetch(
@@ -36,7 +53,7 @@ const updateComment = (comment_id: number) =>
       headers,
       body: JSON.stringify({ body }),
     },
-  )
+  ).then(expectOk)
 
 const createComment = () =>
   fetch(
@@ -46,7 +63,7 @@ const createComment = () =>
       headers,
       body: JSON.stringify({ body }),
     },
-  )
+  ).then(expectOk)
 
 const comments = await listComments()
 const existing = comments.find((c) => c.body.startsWith('### Preview deployed'))

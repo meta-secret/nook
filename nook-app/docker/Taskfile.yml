@@ -123,7 +123,7 @@ tasks:
         task {{.TASK}}
 
   docker:extract:dist:
-    desc: Copy the nook-web image's built nook-app/nook-web/nook-web-app/dist to the host (for GitHub Pages upload on main).
+    desc: Copy the nook-web image's built nook-app/nook-web/nook-web-app/dist to the host (for GitHub Pages upload on release branches).
     cmds:
       - >-
         sh -c 'rm -rf "{{.WEB_ROOT}}/dist";

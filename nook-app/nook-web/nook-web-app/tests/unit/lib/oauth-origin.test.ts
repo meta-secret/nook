@@ -9,7 +9,7 @@ function loc(origin: string, hostname: string) {
 }
 
 describe('oauth origin support', () => {
-  test('allows the configured Google production, release, and local origins', () => {
+  test('allows the configured Google stable, development, and local origins', () => {
     expect(
       resolveOAuthOriginSupport(
         'google-drive',
@@ -19,7 +19,7 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport(
         'google-drive',
-        loc('https://v1.nokey.sh', 'v1.nokey.sh'),
+        loc('https://dev.nokey.sh', 'dev.nokey.sh'),
       ).supported,
     ).toBe(true)
     expect(
@@ -36,7 +36,7 @@ describe('oauth origin support', () => {
     ).toBe(true)
   })
 
-  test('allows the configured iCloud production and release origins', () => {
+  test('allows the configured iCloud stable and development origins', () => {
     expect(
       resolveOAuthOriginSupport('icloud', loc('https://nokey.sh', 'nokey.sh'))
         .supported,
@@ -44,7 +44,7 @@ describe('oauth origin support', () => {
     expect(
       resolveOAuthOriginSupport(
         'icloud',
-        loc('https://v1.nokey.sh', 'v1.nokey.sh'),
+        loc('https://dev.nokey.sh', 'dev.nokey.sh'),
       ).supported,
     ).toBe(true)
   })
