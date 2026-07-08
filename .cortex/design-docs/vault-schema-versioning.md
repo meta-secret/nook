@@ -66,7 +66,8 @@ production Docker gate as `main` (`task ci:main ... WASM_BUILD_MODE=prod`) and
 then deploying the built `dist` to the `nook` Cloudflare Pages project with
 `CF_PAGES_BRANCH=release/v1`.
 
-The Cloudflare branch alias for `release/v1` is `release-v1.nook.pages.dev`.
+The Cloudflare branch alias for `release/v1` is
+`release-v1.nook-1n8.pages.dev`.
 The public domain `v1.nokey.sh` must stay attached to that branch alias through
 a proxied Cloudflare DNS record so it does not drift to the Pages production
 branch. The deploy build passes `VITE_SITE_URL=https://v1.nokey.sh` and
