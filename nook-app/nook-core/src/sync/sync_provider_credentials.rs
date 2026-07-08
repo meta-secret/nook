@@ -2,7 +2,8 @@
 //! snapshot (`githubPat`, OAuth `accessToken` / `refreshToken`).
 
 use crate::{
-    AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, errors::MultiDeviceResult,
+    AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey,
+    encrypt_for_recipient, errors::MultiDeviceResult,
 };
 
 /// Marker substring present in every age-armored credential ciphertext.
@@ -31,6 +32,29 @@ fn seal_required(identity: &DeviceIdentity, field: &mut String) -> MultiDeviceRe
     Ok(())
 }
 
+fn seal_optional_for_public_key(
+    public_key: &DevicePublicKey,
+    field: &mut Option<String>,
+) -> MultiDeviceResult<()> {
+    let Some(text) = field.clone() else {
+        return Ok(());
+    };
+    if !text.is_empty() && !is_sealed_credential(&text) {
+        *field = Some(encrypt_for_recipient(text.as_bytes(), public_key)?.into_inner());
+    }
+    Ok(())
+}
+
+fn seal_required_for_public_key(
+    public_key: &DevicePublicKey,
+    field: &mut String,
+) -> MultiDeviceResult<()> {
+    if !field.is_empty() && !is_sealed_credential(field) {
+        *field = encrypt_for_recipient(field.as_bytes(), public_key)?.into_inner();
+    }
+    Ok(())
+}
+
 /// Seal every credential field in `snapshot` with `identity` (in place).
 pub fn seal_provider_credentials(
     identity: &DeviceIdentity,
@@ -41,6 +65,22 @@ pub fn seal_provider_credentials(
         if let Some(oauth) = provider.oauth_file.as_mut() {
             seal_required(identity, &mut oauth.access_token)?;
             seal_optional(identity, &mut oauth.refresh_token)?;
+        }
+    }
+    Ok(())
+}
+
+/// Seal every plaintext credential field in `snapshot` for another device's
+/// public key (in place), without requiring the recipient device's private key.
+pub fn seal_provider_credentials_for_public_key(
+    public_key: &DevicePublicKey,
+    snapshot: &mut AuthProvidersSnapshotData,
+) -> MultiDeviceResult<()> {
+    for provider in &mut snapshot.providers {
+        seal_optional_for_public_key(public_key, &mut provider.github_pat)?;
+        if let Some(oauth) = provider.oauth_file.as_mut() {
+            seal_required_for_public_key(public_key, &mut oauth.access_token)?;
+            seal_optional_for_public_key(public_key, &mut oauth.refresh_token)?;
         }
     }
     Ok(())
@@ -219,5 +259,20 @@ mod tests {
         let mut snapshot = github_snapshot("github_pat_11SECRET");
         seal_provider_credentials(&owner, &mut snapshot).unwrap();
         assert!(open_provider_credentials(&other, &mut snapshot).is_err());
+    }
+
+    #[test]
+    fn seal_for_public_key_opens_on_recipient_device() {
+        let extension = DeviceIdentity::generate().unwrap();
+        let pat = "github_pat_11EXTENSIONgrant";
+        let mut snapshot = github_snapshot(pat);
+        seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot).unwrap();
+        let stored = snapshot.providers[0].github_pat.as_ref().unwrap();
+        assert!(is_sealed_credential(stored));
+        assert!(!stored.contains(pat));
+
+        let mut opened = snapshot;
+        assert!(!open_provider_credentials(&extension, &mut opened).unwrap());
+        assert_eq!(opened.providers[0].github_pat.as_deref(), Some(pat));
     }
 }

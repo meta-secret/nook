@@ -573,6 +573,21 @@ pub async fn save_auth_providers(
     Ok(())
 }
 
+/// Seal credential fields in a snapshot for another device's public key without
+/// persisting. Used by extension pairing before handing granted provider rows
+/// to the extension's own storage.
+#[wasm_bindgen(js_name = sealAuthProvidersForDevicePublicKey)]
+pub fn seal_auth_providers_for_device_public_key(
+    device_public_key: &str,
+    snapshot: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let public_key = nook_core::DevicePublicKey::parse(device_public_key)?;
+    let mut snapshot: nook_core::AuthProvidersSnapshotData =
+        serde_wasm_bindgen::from_value(snapshot)?;
+    nook_core::seal_provider_credentials_for_public_key(&public_key, &mut snapshot)?;
+    Ok(to_js_value(&snapshot)?)
+}
+
 /// Delete the `nook_auth` `IndexedDB` database (used on full sign-out / reset).
 #[wasm_bindgen(js_name = deleteAuthProvidersDb)]
 pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {

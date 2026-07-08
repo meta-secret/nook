@@ -1,10 +1,32 @@
 export {}
 
 import {
+  isExtensionPairingApprovedMessage,
   isRuntimeMessage,
   tabStorageKey,
   type TabPasswordFormSummary,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { extensionPairingGrantStorageItems } from './pairing-grants'
+
+function isNokeySender(sender: chrome.runtime.MessageSender): boolean {
+  if (!sender.url) return false
+  try {
+    return new URL(sender.url).origin === 'https://nokey.sh'
+  } catch {
+    return false
+  }
+}
+
+function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
+  if (!sender.url) return false
+  try {
+    return (
+      new URL(sender.url).origin === `chrome-extension://${chrome.runtime.id}`
+    )
+  } catch {
+    return false
+  }
+}
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason !== 'install') {
@@ -19,6 +41,21 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!isRuntimeMessage(message)) {
     return false
+  }
+
+  if (isExtensionPairingApprovedMessage(message)) {
+    if (!isExtensionPageSender(sender)) {
+      sendResponse({ ok: false, reason: 'forbidden-sender' })
+      return false
+    }
+
+    chrome.storage.local.set(
+      extensionPairingGrantStorageItems(message.payload),
+      () => {
+        sendResponse({ ok: true })
+      },
+    )
+    return true
   }
 
   if (message.type === 'nook:password-fields-detected') {
@@ -54,3 +91,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return false
 })
+
+chrome.runtime.onMessageExternal.addListener(
+  (message, sender, sendResponse) => {
+    if (!isExtensionPairingApprovedMessage(message) || !isNokeySender(sender)) {
+      sendResponse({ ok: false, reason: 'invalid-pairing-grant' })
+      return false
+    }
+
+    chrome.storage.local.set(
+      extensionPairingGrantStorageItems(message.payload),
+      () => {
+        sendResponse({ ok: true })
+      },
+    )
+    return true
+  },
+)

@@ -1,8 +1,15 @@
-import { expect, test, chromium, type BrowserContext } from '@playwright/test'
+import {
+  expect,
+  test,
+  chromium,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test'
 import { mkdir } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { ExtensionPairingApprovedMessage } from '../../nook-web-shared/src/extension/runtime-messages'
 
 type TestServer = {
   origin: string
@@ -17,6 +24,8 @@ type StoredPasswordSummary = {
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const extensionDir = path.join(rootDir, 'dist')
+const setupStorageKey = 'nook:extension-setup'
+const pairingGrantStorageKey = 'nook:extension-pairing-grant:store-e2e'
 
 async function startLoginServer(): Promise<TestServer> {
   const server = createServer((request, response) => {
@@ -116,6 +125,63 @@ async function hasStoredLoginSummary(context: BrowserContext) {
   })
 }
 
+async function sendPairingGrantFromPopup(popupPage: Page) {
+  const message: ExtensionPairingApprovedMessage = {
+    type: 'nook:extension-pairing-approved',
+    payload: {
+      deviceId: 'device-e2e',
+      deviceLabel: 'Nook Extension - Chromium test profile',
+      vaultStoreId: 'store-e2e',
+      vaultName: 'Personal',
+      approvedAt: '2026-07-07T00:00:00.000Z',
+      scopes: ['vault-access', 'password-filling', 'sync-provider-credentials'],
+      providers: [
+        {
+          id: 'local-e2e',
+          type: 'local',
+          label: 'This device',
+          createdAt: '2026-07-07T00:00:00.000Z',
+        },
+      ],
+    },
+  }
+
+  await popupPage.evaluate(
+    (grantMessage) =>
+      new Promise<void>((resolve, reject) => {
+        const browserGlobal = globalThis as unknown as {
+          chrome: {
+            runtime: {
+              lastError?: { message?: string }
+              sendMessage(
+                message: unknown,
+                callback: (response?: unknown) => void,
+              ): void
+            }
+          }
+        }
+
+        browserGlobal.chrome.runtime.sendMessage(grantMessage, (response) => {
+          if (browserGlobal.chrome.runtime.lastError?.message) {
+            reject(new Error(browserGlobal.chrome.runtime.lastError.message))
+            return
+          }
+          if (
+            typeof response === 'object' &&
+            response !== null &&
+            'ok' in response &&
+            (response as { ok?: unknown }).ok === true
+          ) {
+            resolve()
+            return
+          }
+          reject(new Error('Pairing grant was not accepted by extension.'))
+        })
+      }),
+    message,
+  )
+}
+
 test('loads the extension and scans a login form from the popup', async ({
   browserName,
 }, testInfo) => {
@@ -152,7 +218,33 @@ test('loads the extension and scans a login form from the popup', async ({
     const popupPage = await context.newPage()
     await popupPage.goto(`chrome-extension://${extensionId}/popup/index.html`)
     await expect(popupPage.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(popupPage.getByRole('heading', { name: 'Nook' })).toBeVisible()
+    await expect(
+      popupPage.getByRole('heading', { name: 'Nook', exact: true }),
+    ).toBeVisible()
+    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
+      'not set up',
+    )
+    await expect(
+      popupPage.getByText('separate passkey-protected extension device'),
+    ).toBeVisible()
+    await expect(popupPage.getByTestId('set-up-extension-btn')).toBeVisible()
+
+    await sendPairingGrantFromPopup(popupPage)
+    await expect
+      .poll(async () => {
+        const storage = await readExtensionStorage(context)
+        return Boolean(
+          storage[pairingGrantStorageKey] && storage[setupStorageKey],
+        )
+      })
+      .toBe(true)
+
+    await popupPage.reload()
+    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
+      'ready',
+    )
+    await expect(popupPage.getByText('Personal')).toBeVisible()
+    await expect(popupPage.getByText('1 sync provider granted')).toBeVisible()
     await expect(
       popupPage.getByRole('button', { name: 'Scan active tab' }),
     ).toBeVisible()

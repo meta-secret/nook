@@ -6,9 +6,57 @@
     ScanPasswordFieldsResponse,
   } from '../../../nook-web-shared/src/extension/runtime-messages'
   import type { ExtensionI18n } from '../lib/i18n'
-  import { generateSuggestedPassword } from '../lib/nook-wasm'
+  import {
+    generateSuggestedPassword,
+    setupExtensionDeviceProtection,
+  } from '../lib/nook-wasm'
 
-  type PopupState =
+  const setupStorageKey = 'nook:extension-setup'
+  const extensionConnectUrl = 'https://nokey.sh/extension-connect'
+
+  type ExtensionConsentScope =
+    | 'vault-access'
+    | 'password-filling'
+    | 'sync-provider-credentials'
+
+  type ExtensionSetupState =
+    | { status: 'not-set-up'; deviceLabel: string }
+    | { status: 'protecting'; deviceLabel: string }
+    | {
+        status: 'pairing'
+        deviceLabel: string
+        deviceId: string
+        devicePublicKey: string
+        deviceSigningPublicKey: string
+        requestNonce: string
+        requestUrl: string
+        requestedScopes: ExtensionConsentScope[]
+      }
+    | {
+        status: 'pairing-failed'
+        deviceLabel: string
+        message: string
+      }
+    | {
+        status: 'locked'
+        deviceLabel: string
+        pairedVaults: string[]
+        selectedVaultName?: string | undefined
+      }
+    | {
+        status: 'ready'
+        deviceLabel: string
+        pairedVaults: string[]
+        selectedVaultName?: string | undefined
+        syncStatus: string
+      }
+    | {
+        status: 'revoked'
+        deviceLabel: string
+        message: string
+      }
+
+  type ScanState =
     | { status: 'loading'; tabTitle: string }
     | { status: 'unavailable'; tabTitle: string; message: string }
     | {
@@ -20,10 +68,150 @@
 
   let { i18n }: { i18n: ExtensionI18n } = $props()
 
-  let state = $state<PopupState>({
+  let setupState = $state<ExtensionSetupState>({
+    status: 'not-set-up',
+    deviceLabel: defaultDeviceLabel(),
+  })
+  let scanState = $state<ScanState>({
     status: 'loading',
     tabTitle: '',
   })
+  let setupAttemptId = 0
+
+  const statusText = $derived(setupState.status.replaceAll('-', ' '))
+
+  function defaultDeviceLabel() {
+    return 'Nook Extension - this browser profile'
+  }
+
+  function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every((item) => typeof item === 'string')
+  }
+
+  function isConsentScope(value: unknown): value is ExtensionConsentScope {
+    return (
+      value === 'vault-access' ||
+      value === 'password-filling' ||
+      value === 'sync-provider-credentials'
+    )
+  }
+
+  function isConsentScopeArray(value: unknown): value is ExtensionConsentScope[] {
+    return Array.isArray(value) && value.every(isConsentScope)
+  }
+
+  function requestedConsentScopes(): ExtensionConsentScope[] {
+    return ['vault-access', 'password-filling', 'sync-provider-credentials']
+  }
+
+  function randomNonce() {
+    if (typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    )
+  }
+
+  function extensionConnectRequestUrl(input: {
+    deviceId: string
+    devicePublicKey: string
+    deviceSigningPublicKey: string
+    extensionRuntimeId: string
+    deviceLabel: string
+    requestNonce: string
+    requestedScopes: ExtensionConsentScope[]
+  }) {
+    const url = new URL(extensionConnectUrl)
+    url.searchParams.set('device_id', input.deviceId)
+    url.searchParams.set('device_public_key', input.devicePublicKey)
+    url.searchParams.set(
+      'device_signing_public_key',
+      input.deviceSigningPublicKey,
+    )
+    url.searchParams.set('extension_id', input.extensionRuntimeId)
+    url.searchParams.set('device_label', input.deviceLabel)
+    url.searchParams.set('nonce', input.requestNonce)
+    url.searchParams.set('scopes', input.requestedScopes.join(','))
+    return url.toString()
+  }
+
+  function isExtensionSetupState(
+    value: unknown,
+  ): value is ExtensionSetupState {
+    if (typeof value !== 'object' || !value || !('status' in value)) {
+      return false
+    }
+
+    const candidate = value as Record<string, unknown>
+    if (typeof candidate.deviceLabel !== 'string') {
+      return false
+    }
+
+    if (
+      candidate.status === 'not-set-up' ||
+      candidate.status === 'protecting'
+    ) {
+      return true
+    }
+
+    if (candidate.status === 'pairing') {
+      return (
+        typeof candidate.deviceId === 'string' &&
+        typeof candidate.devicePublicKey === 'string' &&
+        typeof candidate.deviceSigningPublicKey === 'string' &&
+        typeof candidate.requestNonce === 'string' &&
+        typeof candidate.requestUrl === 'string' &&
+        isConsentScopeArray(candidate.requestedScopes)
+      )
+    }
+
+    if (
+      candidate.status === 'pairing-failed' ||
+      candidate.status === 'revoked'
+    ) {
+      return typeof candidate.message === 'string'
+    }
+
+    if (candidate.status === 'locked') {
+      return (
+        isStringArray(candidate.pairedVaults) &&
+        (candidate.selectedVaultName === undefined ||
+          typeof candidate.selectedVaultName === 'string')
+      )
+    }
+
+    if (candidate.status === 'ready') {
+      return (
+        isStringArray(candidate.pairedVaults) &&
+        (candidate.selectedVaultName === undefined ||
+          typeof candidate.selectedVaultName === 'string') &&
+        typeof candidate.syncStatus === 'string'
+      )
+    }
+
+    return false
+  }
+
+  function readSetupState(): Promise<ExtensionSetupState> {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(setupStorageKey, (items) => {
+        const value = items[setupStorageKey]
+        resolve(
+          isExtensionSetupState(value)
+            ? value
+            : { status: 'not-set-up', deviceLabel: defaultDeviceLabel() },
+        )
+      })
+    })
+  }
+
+  function writeSetupState(nextState: ExtensionSetupState) {
+    setupState = nextState
+    chrome.storage.local.set({ [setupStorageKey]: nextState })
+  }
 
   function queryActiveTab(): Promise<chrome.tabs.Tab | undefined> {
     return new Promise((resolve) => {
@@ -51,11 +239,16 @@
   }
 
   async function loadPopup() {
+    scanState = {
+      status: 'loading',
+      tabTitle: i18n.t('extension.popup.checking_this_page'),
+    }
+
     const activeTab = await queryActiveTab()
     const tabTitle = activeTab?.title ?? i18n.t('extension.popup.current_page')
 
     if (typeof activeTab?.id !== 'number') {
-      state = {
+      scanState = {
         status: 'unavailable',
         tabTitle,
         message: i18n.t('extension.popup.open_web_page'),
@@ -66,7 +259,7 @@
     const response = await scanTab(activeTab.id)
 
     if (!response.ok || !response.summary) {
-      state = {
+      scanState = {
         status: 'unavailable',
         tabTitle,
         message: i18n.t('extension.popup.cannot_inspect_page'),
@@ -74,22 +267,86 @@
       return
     }
 
-    state = {
+    scanState = {
       status: 'ready',
       tabTitle,
       summary: response.summary,
     }
 
     if (response.summary.passwordFieldCount > 0) {
-      state = {
-        ...state,
+      scanState = {
+        ...scanState,
         generatedPassword: await generateSuggestedPassword(),
       }
     }
   }
 
+  async function startExtensionSetup() {
+    const attemptId = setupAttemptId + 1
+    setupAttemptId = attemptId
+    writeSetupState({
+      status: 'protecting',
+      deviceLabel: setupState.deviceLabel,
+    })
+
+    try {
+      const device = await setupExtensionDeviceProtection()
+      if (attemptId !== setupAttemptId) return
+      const requestedScopes = requestedConsentScopes()
+      const requestNonce = randomNonce()
+      writeSetupState({
+        status: 'pairing',
+        deviceLabel: setupState.deviceLabel,
+        deviceId: device.deviceId,
+        devicePublicKey: device.devicePublicKey,
+        deviceSigningPublicKey: device.deviceSigningPublicKey,
+        requestNonce,
+        requestUrl: extensionConnectRequestUrl({
+          ...device,
+          extensionRuntimeId: chrome.runtime.id,
+          deviceLabel: setupState.deviceLabel,
+          requestNonce,
+          requestedScopes,
+        }),
+        requestedScopes,
+      })
+    } catch (error) {
+      if (attemptId !== setupAttemptId) return
+      writeSetupState({
+        status: 'pairing-failed',
+        deviceLabel: setupState.deviceLabel,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Passkey setup failed before the extension could pair.',
+      })
+    }
+  }
+
+  function resetSetup() {
+    setupAttemptId += 1
+    writeSetupState({
+      status: 'not-set-up',
+      deviceLabel: defaultDeviceLabel(),
+    })
+  }
+
+  function openExtensionConnect() {
+    chrome.tabs.create({
+      url:
+        setupState.status === 'pairing'
+          ? setupState.requestUrl
+          : extensionConnectUrl,
+    })
+  }
+
   onMount(() => {
-    void loadPopup()
+    void (async () => {
+      setupState = await readSetupState()
+      if (setupState.status === 'ready') {
+        await loadPopup()
+      }
+    })()
   })
 </script>
 
@@ -98,63 +355,192 @@
     <NookIcon src="../icons/nook.png" alt="" class="popup-logo" />
     <div>
       <h1>Nook</h1>
-      <p>{state.tabTitle || i18n.t('extension.popup.checking_this_page')}</p>
+      <p>
+        {setupState.status === 'ready'
+          ? scanState.tabTitle || i18n.t('extension.popup.checking_this_page')
+          : setupState.deviceLabel}
+      </p>
     </div>
-    <button
-      class="scan-button"
-      type="button"
-      data-testid="scan-active-tab"
-      aria-label={i18n.t('extension.popup.scan_active_tab')}
-      onclick={() => {
-        void loadPopup()
-      }}
-    >
-      {i18n.t('extension.popup.scan')}
-    </button>
+    {#if setupState.status === 'ready'}
+      <button
+        class="scan-button"
+        type="button"
+        data-testid="scan-active-tab"
+        aria-label={i18n.t('extension.popup.scan_active_tab')}
+        onclick={() => {
+          void loadPopup()
+        }}
+      >
+        {i18n.t('extension.popup.scan')}
+      </button>
+    {/if}
   </header>
 
-  <section class="status-panel" aria-live="polite">
+  <section class="extension-state" aria-live="polite">
     <div>
-      <span class="metric-label"
-        >{i18n.t('extension.popup.password_fields')}</span
-      >
-      <strong
-        data-testid="password-field-count"
-        >{state.status === 'ready'
-          ? state.summary.passwordFieldCount
-          : '-'}</strong
-      >
+      <span class="metric-label">Extension state</span>
+      <strong data-testid="extension-setup-state">{statusText}</strong>
     </div>
-    <div>
-      <span class="metric-label">{i18n.t('extension.popup.login_fields')}</span>
-      <strong
-        data-testid="username-field-count"
-        >{state.status === 'ready' ? state.summary.usernameFieldCount : '-'}</strong
-      >
-    </div>
-    <div>
-      <span class="metric-label">{i18n.t('extension.popup.forms')}</span>
-      <strong data-testid="form-count"
-        >{state.status === 'ready' ? state.summary.formCount : '-'}</strong
-      >
-    </div>
+    {#if setupState.status === 'ready' || setupState.status === 'locked'}
+      <div>
+        <span class="metric-label">Vaults</span>
+        <strong>{setupState.pairedVaults.length}</strong>
+      </div>
+    {/if}
   </section>
 
-  {#if state.status === 'loading'}
-    <p class="status-message">{i18n.t('extension.popup.scanning_active_tab')}</p>
-  {:else if state.status === 'unavailable'}
-    <p class="status-message">{state.message}</p>
-  {:else if state.summary.passwordFieldCount > 0}
-    <p class="status-message">
-      {i18n.t('extension.popup.found_password_fields')}
-    </p>
-    {#if state.generatedPassword}
-      <section class="password-suggestion">
-        <span>{i18n.t('extension.popup.suggested_password')}</span>
-        <code data-testid="suggested-password">{state.generatedPassword}</code>
-      </section>
-    {/if}
+  {#if setupState.status === 'not-set-up'}
+    <section class="setup-panel">
+      <h2>Connect Nook</h2>
+      <p>
+        This creates a separate passkey-protected extension device for this
+        browser profile. The extension will not reuse the device key from an open
+        nokey.sh tab.
+      </p>
+      <button
+        class="primary-button"
+        type="button"
+        data-testid="set-up-extension-btn"
+        onclick={() => {
+          void startExtensionSetup()
+        }}
+      >
+        Set up extension
+      </button>
+    </section>
+  {:else if setupState.status === 'protecting'}
+    <section class="setup-panel">
+      <h2>Protect this extension</h2>
+      <p>
+        Creating this extension's own device key and protecting it with this
+        browser profile's passkey before pairing with nokey.sh.
+      </p>
+      <button class="primary-button" type="button" disabled>
+        Waiting for passkey
+      </button>
+      <button class="secondary-button" type="button" onclick={resetSetup}>
+        Start over
+      </button>
+    </section>
+  {:else if setupState.status === 'pairing'}
+    <section class="setup-panel">
+      <h2>Pair with nokey.sh</h2>
+      <p>
+        Open nokey.sh with this extension device request, unlock your vault, then
+        approve vault access, password filling, and sync-provider credential
+        access.
+      </p>
+      <p class="request-detail">
+        Device request: <code>{setupState.deviceId}</code>
+      </p>
+      <ul class="scope-list">
+        {#each setupState.requestedScopes as scope}
+          <li>{scope.replaceAll('-', ' ')}</li>
+        {/each}
+      </ul>
+      <button
+        class="primary-button"
+        type="button"
+        data-testid="open-extension-connect-btn"
+        onclick={openExtensionConnect}
+      >
+        Open nokey.sh
+      </button>
+    </section>
+  {:else if setupState.status === 'pairing-failed'}
+    <section class="setup-panel warning">
+      <h2>Pairing failed</h2>
+      <p>{setupState.message}</p>
+      <button class="secondary-button" type="button" onclick={resetSetup}>
+        Reset setup
+      </button>
+    </section>
+  {:else if setupState.status === 'locked'}
+    <section class="setup-panel">
+      <h2>Extension locked</h2>
+      <p>
+        This extension is paired as a durable Nook device. Unlock with passkey
+        before vaults, sync providers, or filling actions are available.
+      </p>
+      <button class="primary-button" type="button" disabled>
+        Unlock pending
+      </button>
+    </section>
+  {:else if setupState.status === 'revoked'}
+    <section class="setup-panel warning">
+      <h2>Extension revoked</h2>
+      <p>{setupState.message}</p>
+      <button class="primary-button" type="button" onclick={resetSetup}>
+        Pair again
+      </button>
+    </section>
   {:else}
-    <p class="status-message">{i18n.t('extension.popup.no_password_fields')}</p>
+    <section class="vault-panel">
+      <div>
+        <span class="metric-label">Selected vault</span>
+        <strong>{setupState.selectedVaultName ?? 'Default vault'}</strong>
+      </div>
+      <div>
+        <span class="metric-label">Sync</span>
+        <strong>{setupState.syncStatus}</strong>
+      </div>
+    </section>
+
+    <section class="status-panel" aria-live="polite">
+      <div>
+        <span class="metric-label"
+          >{i18n.t('extension.popup.password_fields')}</span
+        >
+        <strong
+          data-testid="password-field-count"
+          >{scanState.status === 'ready'
+            ? scanState.summary.passwordFieldCount
+            : '-'}</strong
+        >
+      </div>
+      <div>
+        <span class="metric-label"
+          >{i18n.t('extension.popup.login_fields')}</span
+        >
+        <strong
+          data-testid="username-field-count"
+          >{scanState.status === 'ready'
+            ? scanState.summary.usernameFieldCount
+            : '-'}</strong
+        >
+      </div>
+      <div>
+        <span class="metric-label">{i18n.t('extension.popup.forms')}</span>
+        <strong data-testid="form-count"
+          >{scanState.status === 'ready'
+            ? scanState.summary.formCount
+            : '-'}</strong
+        >
+      </div>
+    </section>
+
+    {#if scanState.status === 'loading'}
+      <p class="status-message">
+        {i18n.t('extension.popup.scanning_active_tab')}
+      </p>
+    {:else if scanState.status === 'unavailable'}
+      <p class="status-message">{scanState.message}</p>
+    {:else if scanState.summary.passwordFieldCount > 0}
+      <p class="status-message">
+        {i18n.t('extension.popup.found_password_fields')}
+      </p>
+      {#if scanState.generatedPassword}
+        <section class="password-suggestion">
+          <span>{i18n.t('extension.popup.suggested_password')}</span>
+          <code data-testid="suggested-password"
+            >{scanState.generatedPassword}</code
+          >
+        </section>
+      {/if}
+    {:else}
+      <p class="status-message">
+        {i18n.t('extension.popup.no_password_fields')}
+      </p>
+    {/if}
   {/if}
 </main>

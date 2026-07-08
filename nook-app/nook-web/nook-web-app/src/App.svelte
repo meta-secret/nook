@@ -13,6 +13,7 @@
   import LoginGate from '$lib/components/LoginGate.svelte'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
+  import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
@@ -34,6 +35,11 @@
     type LegalPageId,
   } from '$lib/legal-content'
   import { isAppLogsPath } from '$lib/app-logs-api'
+  import {
+    extensionConnectRequestFromLocation,
+    isExtensionConnectPath,
+    type ExtensionConnectRequest,
+  } from '$lib/extension-connect'
   import type { VaultItemType } from '$lib/nook'
 
   const vault = new VaultState()
@@ -55,11 +61,25 @@
       ? isAppLogsPath(window.location.pathname)
       : false,
   )
+  let extensionConnectRoute = $state<boolean>(
+    typeof window !== 'undefined'
+      ? isExtensionConnectPath(window.location.pathname)
+      : false,
+  )
+  let extensionConnectRequest = $state<ExtensionConnectRequest | undefined>(
+    typeof window !== 'undefined'
+      ? extensionConnectRequestFromLocation(window.location)
+      : undefined,
+  )
 
   function syncRoute() {
     legalPage = getLegalPageFromPath(window.location.pathname)
     logsPage = isLogsPath(window.location.pathname)
     appLogsPage = isAppLogsPath(window.location.pathname)
+    extensionConnectRoute = isExtensionConnectPath(window.location.pathname)
+    extensionConnectRequest = extensionConnectRequestFromLocation(
+      window.location,
+    )
   }
 
   function conflictCandidates(
@@ -91,6 +111,8 @@
     legalPage = undefined
     logsPage = false
     appLogsPage = false
+    extensionConnectRoute = false
+    extensionConnectRequest = undefined
   }
 
   onMount(() => {
@@ -141,6 +163,10 @@
       document.title = 'Application logs · Nook'
       return
     }
+    if (extensionConnectRoute) {
+      document.title = 'Approve extension · Nook'
+      return
+    }
     document.title = 'Nook'
   })
 
@@ -183,6 +209,13 @@
     secretsAddOpen
       ? 'min-h-[calc(100svh-5rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]'
       : 'min-h-[calc(100svh-11rem)] sm:min-h-0 sm:h-[min(40rem,calc(100svh-7rem))]',
+  )
+  const shellSpacing = $derived(
+    legalPage || logsPage || extensionConnectRoute
+      ? 'py-5 sm:py-6'
+      : vault.isAuthenticated
+        ? authenticatedShellSpacing
+        : 'py-5 sm:py-6',
   )
 </script>
 
@@ -276,7 +309,7 @@
             >
           </a>
 
-          {#if legalPage || logsPage}
+          {#if legalPage || logsPage || extensionConnectRoute}
             <Button
               type="button"
               variant="outline"
@@ -317,13 +350,7 @@
       </div>
     </header>
 
-    <div
-      class="mx-auto px-4 sm:px-6 {shellWidth} {legalPage || logsPage
-        ? 'py-5 sm:py-6'
-        : vault.isAuthenticated
-          ? authenticatedShellSpacing
-          : 'py-5 sm:py-6'}"
-    >
+    <div class="mx-auto px-4 sm:px-6 {shellWidth} {shellSpacing}">
       {#if logsPage}
         <LogsPage onClose={navigateHome} />
       {:else if legalPage}
@@ -348,8 +375,40 @@
             onDismissError={() => vault.dismissError()}
           />
         </div>
+      {:else if extensionConnectRoute && !extensionConnectRequest}
+        <section
+          class="mx-auto max-w-2xl rounded-xl border border-destructive/30 bg-card p-4 shadow-sm sm:p-5"
+          data-testid="extension-connect-invalid"
+        >
+          <h1 class="text-lg font-semibold text-foreground">
+            Invalid extension request
+          </h1>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Open this pairing screen from the Nook extension after its passkey
+            setup finishes. The request must include the extension device id,
+            encryption key, signing key, extension id, nonce, and requested
+            access.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            class="mt-4"
+            onclick={navigateHome}
+          >
+            Return to Nook
+          </Button>
+        </section>
       {:else if !vault.isAuthenticated}
         <div class="space-y-6">
+          {#if extensionConnectRequest}
+            <div class="mx-auto w-full max-w-2xl">
+              <ExtensionConnectConsent
+                {vault}
+                request={extensionConnectRequest}
+                onClose={navigateHome}
+              />
+            </div>
+          {/if}
           {#if !vault.deviceProtectionReady}
             <DeviceProtectionGate {vault} />
             <div class="mx-auto w-full max-w-lg">
@@ -399,6 +458,27 @@
               onDismissError={() => vault.dismissError()}
             />
           {/if}
+        </div>
+      {:else if extensionConnectRequest}
+        <div class="mx-auto w-full max-w-2xl space-y-4">
+          <ExtensionConnectConsent
+            {vault}
+            request={extensionConnectRequest}
+            onClose={navigateHome}
+          />
+          <VaultStatusBar
+            {vault}
+            storageMode={vault.storageMode}
+            githubRepo={vault.githubRepo}
+            lastSyncedAt={vault.lastSyncedAt}
+            isSyncing={vault.isSyncActivityVisible}
+            successMsg={vault.successMsg}
+            errorMsg={vault.errorMsg}
+            {appVersion}
+            onRefresh={() => vault.manualSync()}
+            onDismissSuccess={() => vault.dismissSuccess()}
+            onDismissError={() => vault.dismissError()}
+          />
         </div>
       {:else if vault.isAuthenticated}
         <div
@@ -573,7 +653,7 @@
       {/if}
     </div>
 
-    {#if !legalPage && !logsPage}
+    {#if !legalPage && !logsPage && !extensionConnectRoute}
       <SiteFooter />
     {/if}
 
