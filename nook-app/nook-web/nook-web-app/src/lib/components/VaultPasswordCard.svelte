@@ -12,7 +12,6 @@
   } from '@lucide/svelte'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import { Button } from '$lib/components/ui/button'
-  import QRCode from 'qrcode'
   import { buildEnrollmentLink } from '$lib/enrollment-code'
   import {
     isVaultPasswordLongEnough,
@@ -83,18 +82,6 @@
   const enrollmentLink = $derived.by(() =>
     enrollmentCode ? buildEnrollmentLink(enrollmentCode) : '',
   )
-  const qrDataUrlPromise = $derived.by(() => {
-    if (!enrollmentCode || typeof window === 'undefined') {
-      return Promise.resolve('')
-    }
-    return QRCode.toDataURL(enrollmentLink, {
-      errorCorrectionLevel: 'H',
-      margin: 1,
-      width: 240,
-      color: { dark: '#111317', light: '#ffffff' },
-    }).catch(() => '')
-  })
-
   const issuedAgo = $derived.by(() => {
     if (!issuedAt) return ''
     const ms = Date.parse(issuedAt)
@@ -554,7 +541,6 @@
         <EnrollmentOnboardResult
           {vault}
           {enrollmentLink}
-          {qrDataUrlPromise}
           instruction={vault.t('vault_passwords.scan_qr_desc')}
           issuedSuffix={issuedAgo ? `(${issuedAgo})` : ''}
           linkTitle={vault.t('vault_passwords.link_title')}

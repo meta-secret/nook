@@ -8,7 +8,6 @@
     RefreshCw,
     ShieldCheck,
   } from '@lucide/svelte'
-  import QRCode from 'qrcode'
   import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
   import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
@@ -137,17 +136,6 @@
   const issuedAt = $derived.by(() => {
     if (!enrollmentCode) return ''
     return peekEnrollmentIssuedAt(enrollmentCode) ?? ''
-  })
-  const qrDataUrlPromise = $derived.by(() => {
-    if (!enrollmentCode || typeof window === 'undefined') {
-      return Promise.resolve('')
-    }
-    return QRCode.toDataURL(enrollmentLink, {
-      errorCorrectionLevel: 'H',
-      margin: 1,
-      width: 240,
-      color: { dark: '#111317', light: '#ffffff' },
-    }).catch(() => '')
   })
   const showGenerating = $derived(
     (isGenerating || isBusy) && !enrollmentCode && !localError,
@@ -684,7 +672,6 @@
     <EnrollmentOnboardResult
       {vault}
       {enrollmentLink}
-      {qrDataUrlPromise}
       instruction={vault.t('onboard_device.ready_desc')}
       issuedSuffix={issuedAt
         ? vault.t('onboard_device.issued_time', {
