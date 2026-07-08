@@ -1,6 +1,7 @@
 //! Passkey-PRF setup, unlock, and recovery orchestration.
 
 use super::NookVaultManager;
+use crate::passkey_browser;
 use crate::storage::{auth_providers, indexed_db};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
 use wasm_bindgen::JsError;
@@ -43,6 +44,30 @@ impl NookVaultManager {
         Ok(NookPasskeySetup::from_core(&setup))
     }
 
+    #[wasm_bindgen(js_name = setupDeviceProtectionWithPasskey)]
+    pub async fn setup_device_protection_with_passkey(
+        &mut self,
+        rp_id: &str,
+        rp_name: &str,
+    ) -> Result<(), JsError> {
+        let setup = self.begin_device_protection().await?;
+        let user_handle = setup.user_handle();
+        let prf_input = setup.prf_input();
+        let creation_options = setup.creation_options(rp_id, rp_name)?;
+        let credential = passkey_browser::create_credential(&creation_options).await?;
+        let credential_id = passkey_browser::credential_id(&credential)?;
+        let prf_output = if let Some(output) = passkey_browser::prf_output(&credential, true)? {
+            output
+        } else {
+            let request_options =
+                passkey_browser::request_options(rp_id, &credential_id, &prf_input)?;
+            let credential = passkey_browser::get_credential(&request_options).await?;
+            passkey_browser::require_prf_output(&credential)?
+        };
+        self.finish_device_protection(credential_id, user_handle, prf_input, prf_output)
+            .await
+    }
+
     #[wasm_bindgen(js_name = finishDeviceProtection)]
     pub async fn finish_device_protection(
         &mut self,
@@ -73,6 +98,20 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskey)]
     pub async fn recover_device_protection_with_passkey(
+        &mut self,
+        rp_id: &str,
+    ) -> Result<(), JsError> {
+        let request_options = passkey_browser::recovery_options(rp_id)?;
+        let credential = passkey_browser::get_credential(&request_options).await?;
+        let credential_id = passkey_browser::credential_id(&credential)?;
+        let user_handle = passkey_browser::assertion_user_handle(&credential)?;
+        let prf_output = passkey_browser::require_prf_output(&credential)?;
+        self.recover_device_protection_with_passkey_material(credential_id, user_handle, prf_output)
+            .await
+    }
+
+    #[wasm_bindgen(js_name = recoverDeviceProtectionWithPasskeyMaterial)]
+    pub async fn recover_device_protection_with_passkey_material(
         &mut self,
         credential_id: Vec<u8>,
         user_handle: Vec<u8>,
@@ -133,6 +172,18 @@ impl NookVaultManager {
                 NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
             })?;
         Ok(NookPasskeyUnlockOptions::from_core(&record)?)
+    }
+
+    #[wasm_bindgen(js_name = unlockDeviceProtectionWithPasskey)]
+    pub async fn unlock_device_protection_with_passkey(
+        &mut self,
+        rp_id: &str,
+    ) -> Result<(), JsError> {
+        let options = self.passkey_unlock_options().await?;
+        let request_options = options.request_options(rp_id)?;
+        let credential = passkey_browser::get_credential(&request_options).await?;
+        let prf_output = passkey_browser::require_prf_output(&credential)?;
+        self.unlock_device_identity(prf_output).await
     }
 
     #[wasm_bindgen(js_name = unlockDeviceIdentity)]

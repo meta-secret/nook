@@ -1,10 +1,10 @@
-//! Browser `WebAuthn` option builders backed by `1Password/passkey-rs` types.
+//! Browser `WebAuthn` option builders and credential ceremonies.
 //!
 //! `passkey-client` can model a `WebAuthn` client when Rust also owns the
 //! authenticator. Browsers do not expose the platform passkey provider as a Rust
-//! `Authenticator`, so the actual `navigator.credentials.create/get` call stays
-//! in the web layer. This module keeps the request shape and PRF inputs in
-//! Rust/WASM using `passkey-types`.
+//! `Authenticator`, so this module calls `navigator.credentials.create/get`
+//! through the browser JS API while keeping request shape, PRF extraction, and
+//! passkey metadata parsing in Rust/WASM.
 
 use coset::iana;
 use getrandom::getrandom;
@@ -22,7 +22,10 @@ use passkey_types::{
 };
 use serde::Serialize;
 use std::collections::HashMap;
-use wasm_bindgen::{JsError, JsValue};
+use wasm_bindgen::{JsCast, JsError, JsValue};
+use wasm_bindgen_futures::JsFuture;
+
+pub(crate) const PASSKEY_PRF_UNAVAILABLE: &str = "PASSKEY_PRF_UNAVAILABLE";
 
 const CHALLENGE_LEN: usize = 32;
 
@@ -60,12 +63,128 @@ pub(crate) fn recovery_options(rp_id: &str) -> Result<JsValue, JsError> {
     })
 }
 
+pub(crate) async fn create_credential(options: &JsValue) -> Result<JsValue, JsError> {
+    require_passkey_support()?;
+    credential_ceremony("create", options).await
+}
+
+pub(crate) async fn get_credential(options: &JsValue) -> Result<JsValue, JsError> {
+    require_passkey_support()?;
+    credential_ceremony("get", options).await
+}
+
+pub(crate) fn credential_id(credential: &JsValue) -> Result<Vec<u8>, JsError> {
+    let raw_id = get_required(credential, "rawId")?;
+    bytes_from_js_value(&raw_id, "passkey rawId")
+}
+
+pub(crate) fn assertion_user_handle(credential: &JsValue) -> Result<Vec<u8>, JsError> {
+    let response = get_required(credential, "response")?;
+    let user_handle = get_required(&response, "userHandle")?;
+    bytes_from_js_value(&user_handle, "passkey userHandle")
+}
+
+pub(crate) fn prf_output(
+    credential: &JsValue,
+    require_enabled: bool,
+) -> Result<Option<Vec<u8>>, JsError> {
+    let extension_results = call_method0(credential, "getClientExtensionResults")?;
+    let prf = get_optional(&extension_results, "prf")?;
+    if is_absent(&prf) {
+        if require_enabled {
+            return Err(prf_unavailable(
+                "This authenticator does not support the WebAuthn PRF extension required to protect device keys.",
+            ));
+        }
+        return Ok(None);
+    }
+    if require_enabled && get_optional(&prf, "enabled")?.as_bool() != Some(true) {
+        return Err(prf_unavailable(
+            "This authenticator does not support the WebAuthn PRF extension required to protect device keys.",
+        ));
+    }
+
+    let results = get_optional(&prf, "results")?;
+    if is_absent(&results) {
+        return Ok(None);
+    }
+    let first = get_optional(&results, "first")?;
+    if is_absent(&first) {
+        return Ok(None);
+    }
+    Ok(Some(bytes_from_js_value(&first, "passkey PRF output")?))
+}
+
+pub(crate) fn require_prf_output(credential: &JsValue) -> Result<Vec<u8>, JsError> {
+    prf_output(credential, false)?
+        .ok_or_else(|| prf_unavailable("The passkey did not return the required PRF output."))
+}
+
+pub(crate) fn prf_unavailable(message: &str) -> JsError {
+    JsError::new(&format!("{PASSKEY_PRF_UNAVAILABLE}: {message}"))
+}
+
 fn to_browser_value<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
     let value =
         value.serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))?;
     normalize_webauthn_binary_fields(&value)
         .map_err(|_| serde_wasm_bindgen::Error::new("Failed to normalize passkey binary fields"))?;
     Ok(value)
+}
+
+fn require_passkey_support() -> Result<(), JsError> {
+    let window = gloo_utils::window();
+    if js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("isSecureContext"))
+        .ok()
+        .and_then(|value| value.as_bool())
+        != Some(true)
+    {
+        return Err(JsError::new(
+            "Passkeys require a secure context (HTTPS or localhost).",
+        ));
+    }
+
+    let public_key_credential = js_sys::Reflect::get(
+        js_sys::global().as_ref(),
+        &JsValue::from_str("PublicKeyCredential"),
+    )
+    .map_err(|_| JsError::new("Failed to inspect browser passkey support"))?;
+    if is_absent(&public_key_credential) {
+        return Err(JsError::new("Passkeys require a supported browser."));
+    }
+
+    let navigator = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("navigator"))
+        .map_err(|_| JsError::new("Failed to inspect browser navigator"))?;
+    let credentials = get_optional(&navigator, "credentials")?;
+    if is_absent(&credentials) {
+        return Err(JsError::new(
+            "Passkeys require navigator.credentials support.",
+        ));
+    }
+    Ok(())
+}
+
+async fn credential_ceremony(method: &str, options: &JsValue) -> Result<JsValue, JsError> {
+    let window = gloo_utils::window();
+    let navigator = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("navigator"))
+        .map_err(|_| JsError::new("Failed to inspect browser navigator"))?;
+    let credentials = get_required(&navigator, "credentials")?;
+    let method_value = get_required(&credentials, method)?;
+    let method_fn: js_sys::Function = method_value
+        .dyn_into()
+        .map_err(|_| JsError::new(&format!("navigator.credentials.{method} is not callable")))?;
+    let promise = method_fn
+        .call1(&credentials, options)
+        .map_err(|_| JsError::new(&format!("Failed to start passkey {method} ceremony")))?;
+    let credential = JsFuture::from(js_sys::Promise::from(promise))
+        .await
+        .map_err(|_| JsError::new(&format!("Passkey {method} ceremony failed")))?;
+    if is_absent(&credential) {
+        return Err(JsError::new(&format!(
+            "Passkey {method} ceremony was cancelled."
+        )));
+    }
+    Ok(credential)
 }
 
 fn normalize_webauthn_binary_fields(value: &JsValue) -> Result<(), JsError> {
@@ -139,6 +258,27 @@ fn set_uint8_array_field(target: &JsValue, field: &str) -> Result<(), JsError> {
     js_sys::Reflect::set(target, &JsValue::from_str(field), typed_array.as_ref())
         .map_err(|_| JsError::new(&format!("Failed to normalize passkey binary field {field}")))?;
     Ok(())
+}
+
+fn call_method0(target: &JsValue, method: &str) -> Result<JsValue, JsError> {
+    let method_value = get_required(target, method)?;
+    let method_fn: js_sys::Function = method_value
+        .dyn_into()
+        .map_err(|_| JsError::new(&format!("passkey method {method} is not callable")))?;
+    method_fn
+        .call0(target)
+        .map_err(|_| JsError::new(&format!("Failed to call passkey method {method}")))
+}
+
+fn bytes_from_js_value(value: &JsValue, name: &str) -> Result<Vec<u8>, JsError> {
+    if is_absent(value) {
+        return Err(JsError::new(&format!("Missing {name}")));
+    }
+    let bytes = js_sys::Uint8Array::new(value);
+    if bytes.length() == 0 {
+        return Err(JsError::new(&format!("Empty {name}")));
+    }
+    Ok(bytes.to_vec())
 }
 
 fn get_required(target: &JsValue, field: &str) -> Result<JsValue, JsError> {

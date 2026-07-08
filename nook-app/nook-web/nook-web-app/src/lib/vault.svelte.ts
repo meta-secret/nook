@@ -756,7 +756,7 @@ export class VaultState {
     } catch (error) {
       if (isPasskeyPrfUnavailableError(error)) {
         this.deviceProtectionStatus = 'pin-setup'
-        this.errorMsg = this.t('device_protection.recovery_pin_fallback_ready')
+        this.errorMsg = this.t('device_protection.pin_fallback_ready')
         return
       }
       if (
@@ -791,7 +791,7 @@ export class VaultState {
     } catch (error) {
       if (isPasskeyPrfUnavailableError(error)) {
         this.deviceProtectionStatus = 'pin-setup'
-        this.errorMsg = this.t('device_protection.pin_fallback_ready')
+        this.errorMsg = this.t('device_protection.recovery_pin_fallback_ready')
         return
       }
       if (
