@@ -28,7 +28,6 @@
     isReady = true
 
     return () => {
-      container?.replaceChildren()
       qrCode = undefined
     }
   })
