@@ -12,6 +12,7 @@ declare namespace chrome {
     }
 
     const lastError: { message?: string } | undefined
+    const id: string
 
     function sendMessage<TResponse = unknown>(
       message: unknown,
@@ -23,6 +24,16 @@ declare namespace chrome {
     }
 
     const onMessage: {
+      addListener(
+        listener: (
+          message: unknown,
+          sender: MessageSender,
+          sendResponse: (response?: unknown) => void,
+        ) => boolean | void,
+      ): void
+    }
+
+    const onMessageExternal: {
       addListener(
         listener: (
           message: unknown,

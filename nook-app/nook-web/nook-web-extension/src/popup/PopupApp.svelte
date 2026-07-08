@@ -120,6 +120,7 @@
     deviceId: string
     devicePublicKey: string
     deviceSigningPublicKey: string
+    extensionRuntimeId: string
     deviceLabel: string
     requestNonce: string
     requestedScopes: ExtensionConsentScope[]
@@ -131,6 +132,7 @@
       'device_signing_public_key',
       input.deviceSigningPublicKey,
     )
+    url.searchParams.set('extension_id', input.extensionRuntimeId)
     url.searchParams.set('device_label', input.deviceLabel)
     url.searchParams.set('nonce', input.requestNonce)
     url.searchParams.set('scopes', input.requestedScopes.join(','))
@@ -302,6 +304,7 @@
         requestNonce,
         requestUrl: extensionConnectRequestUrl({
           ...device,
+          extensionRuntimeId: chrome.runtime.id,
           deviceLabel: setupState.deviceLabel,
           requestNonce,
           requestedScopes,

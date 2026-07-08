@@ -14,6 +14,7 @@ import {
   providerDefaultLabel as providerDefaultLabelCore,
   providerStorageDetail as providerStorageDetailCore,
   saveAuthProviders as saveAuthProvidersWasm,
+  sealAuthProvidersForDevicePublicKey as sealAuthProvidersForDevicePublicKeyWasm,
   wasmStorageModeForProvider as wasmStorageModeForProviderCore,
   type NookAuthProvidersSnapshot,
   type NookLoadedAuthProviders,
@@ -108,6 +109,16 @@ export async function saveAuthProviders(
   snapshot: AuthProvidersSnapshot,
 ): Promise<void> {
   await saveAuthProvidersWasm(manager, toPlain(snapshot))
+}
+
+export function sealAuthProvidersForDevicePublicKey(
+  devicePublicKey: string,
+  snapshot: AuthProvidersSnapshot,
+): AuthProvidersSnapshot {
+  return sealAuthProvidersForDevicePublicKeyWasm(
+    devicePublicKey,
+    toPlain(snapshot),
+  ) as AuthProvidersSnapshot
 }
 
 export function wasmStorageModeForProvider(

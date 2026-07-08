@@ -23,6 +23,9 @@ export type ExtensionManifest = {
     js: string[]
     run_at: 'document_idle'
   }>
+  externally_connectable: {
+    matches: string[]
+  }
   icons: ManifestIconSet
   permissions: Array<'activeTab' | 'storage'>
   host_permissions: string[]
@@ -63,6 +66,9 @@ export function createManifest(version: string): ExtensionManifest {
         run_at: 'document_idle',
       },
     ],
+    externally_connectable: {
+      matches: ['https://nokey.sh/*'],
+    },
     icons: iconSet,
     permissions: ['activeTab', 'storage'],
     host_permissions: ['<all_urls>'],

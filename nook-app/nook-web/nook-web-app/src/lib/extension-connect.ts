@@ -11,6 +11,7 @@ export type ExtensionConnectRequest = {
   deviceId: string
   devicePublicKey: string
   deviceSigningPublicKey: string
+  extensionRuntimeId: string
   deviceLabel: string
   nonce: string
   scopes: ExtensionConnectScope[]
@@ -48,6 +49,7 @@ export function extensionConnectRequestFromLocation(
   const devicePublicKey = params.get('device_public_key')?.trim() ?? ''
   const deviceSigningPublicKey =
     params.get('device_signing_public_key')?.trim() ?? ''
+  const extensionRuntimeId = params.get('extension_id')?.trim() ?? ''
   const deviceLabel =
     params.get('device_label')?.trim() ??
     'Nook Extension - this browser profile'
@@ -58,6 +60,7 @@ export function extensionConnectRequestFromLocation(
     !deviceId ||
     !devicePublicKey ||
     !deviceSigningPublicKey ||
+    !extensionRuntimeId ||
     !nonce ||
     scopes.length === 0
   ) {
@@ -68,6 +71,7 @@ export function extensionConnectRequestFromLocation(
     deviceId,
     devicePublicKey,
     deviceSigningPublicKey,
+    extensionRuntimeId,
     deviceLabel,
     nonce,
     scopes,

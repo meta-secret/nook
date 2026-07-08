@@ -386,7 +386,8 @@
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">
             Open this pairing screen from the Nook extension after its passkey
             setup finishes. The request must include the extension device id,
-            encryption key, signing key, nonce, and requested access.
+            encryption key, signing key, extension id, nonce, and requested
+            access.
           </p>
           <Button
             type="button"
