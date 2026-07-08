@@ -194,18 +194,6 @@ test('loads the extension and scans a login form from the popup', async ({
       popupPage.getByText('separate passkey-protected extension device'),
     ).toBeVisible()
     await expect(popupPage.getByTestId('set-up-extension-btn')).toBeVisible()
-    await popupPage.getByTestId('set-up-extension-btn').click()
-    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
-      'protecting',
-    )
-    await expect(popupPage.getByTestId('continue-to-pairing-btn')).toBeEnabled()
-    await popupPage.getByTestId('continue-to-pairing-btn').click()
-    await expect(popupPage.getByTestId('extension-setup-state')).toHaveText(
-      'pairing',
-    )
-    await expect(
-      popupPage.getByTestId('open-extension-connect-btn'),
-    ).toBeEnabled()
 
     await writeExtensionSetupState(context, {
       status: 'ready',

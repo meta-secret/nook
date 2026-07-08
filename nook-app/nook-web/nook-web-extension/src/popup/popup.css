@@ -170,6 +170,18 @@ body {
   line-height: 1.35;
 }
 
+.setup-panel .request-detail {
+  overflow-wrap: anywhere;
+  color: #5b665f;
+  font-size: 11px;
+}
+
+.request-detail code {
+  color: #17201a;
+  font-family:
+    'SFMono-Regular', Consolas, 'Liberation Mono', ui-monospace, monospace;
+}
+
 .primary-button,
 .secondary-button {
   appearance: none;

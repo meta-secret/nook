@@ -5,7 +5,10 @@
     PasswordFormSummary,
     ScanPasswordFieldsResponse,
   } from '../../../nook-web-shared/src/extension/runtime-messages'
-  import { generateSuggestedPassword } from '../lib/nook-wasm'
+  import {
+    generateSuggestedPassword,
+    setupExtensionDeviceProtection,
+  } from '../lib/nook-wasm'
 
   const setupStorageKey = 'nook:extension-setup'
   const extensionConnectUrl = 'https://nokey.sh/extension-connect'
@@ -21,6 +24,9 @@
     | {
         status: 'pairing'
         deviceLabel: string
+        deviceId: string
+        devicePublicKey: string
+        requestNonce: string
         requestUrl: string
         requestedScopes: ExtensionConsentScope[]
       }
@@ -66,6 +72,7 @@
     status: 'loading',
     tabTitle: 'Checking this page',
   })
+  let setupAttemptId = 0
 
   const statusText = $derived(setupState.status.replaceAll('-', ' '))
 
@@ -89,6 +96,41 @@
     return Array.isArray(value) && value.every(isConsentScope)
   }
 
+  function requestedConsentScopes(): ExtensionConsentScope[] {
+    return [
+      'vault-access',
+      'password-filling',
+      'sync-provider-credentials',
+    ]
+  }
+
+  function randomNonce() {
+    if (typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+    const bytes = new Uint8Array(16)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    )
+  }
+
+  function extensionConnectRequestUrl(input: {
+    deviceId: string
+    devicePublicKey: string
+    deviceLabel: string
+    requestNonce: string
+    requestedScopes: ExtensionConsentScope[]
+  }) {
+    const url = new URL(extensionConnectUrl)
+    url.searchParams.set('device_id', input.deviceId)
+    url.searchParams.set('device_public_key', input.devicePublicKey)
+    url.searchParams.set('device_label', input.deviceLabel)
+    url.searchParams.set('nonce', input.requestNonce)
+    url.searchParams.set('scopes', input.requestedScopes.join(','))
+    return url.toString()
+  }
+
   function isExtensionSetupState(
     value: unknown,
   ): value is ExtensionSetupState {
@@ -110,6 +152,9 @@
 
     if (candidate.status === 'pairing') {
       return (
+        typeof candidate.deviceId === 'string' &&
+        typeof candidate.devicePublicKey === 'string' &&
+        typeof candidate.requestNonce === 'string' &&
         typeof candidate.requestUrl === 'string' &&
         isConsentScopeArray(candidate.requestedScopes)
       )
@@ -228,27 +273,48 @@
     }
   }
 
-  function showProtectionStep() {
+  async function startExtensionSetup() {
+    const attemptId = setupAttemptId + 1
+    setupAttemptId = attemptId
     writeSetupState({
       status: 'protecting',
       deviceLabel: setupState.deviceLabel,
     })
-  }
 
-  function beginPairing() {
-    writeSetupState({
-      status: 'pairing',
-      deviceLabel: setupState.deviceLabel,
-      requestUrl: extensionConnectUrl,
-      requestedScopes: [
-        'vault-access',
-        'password-filling',
-        'sync-provider-credentials',
-      ],
-    })
+    try {
+      const device = await setupExtensionDeviceProtection()
+      if (attemptId !== setupAttemptId) return
+      const requestedScopes = requestedConsentScopes()
+      const requestNonce = randomNonce()
+      writeSetupState({
+        status: 'pairing',
+        deviceLabel: setupState.deviceLabel,
+        deviceId: device.deviceId,
+        devicePublicKey: device.devicePublicKey,
+        requestNonce,
+        requestUrl: extensionConnectRequestUrl({
+          ...device,
+          deviceLabel: setupState.deviceLabel,
+          requestNonce,
+          requestedScopes,
+        }),
+        requestedScopes,
+      })
+    } catch (error) {
+      if (attemptId !== setupAttemptId) return
+      writeSetupState({
+        status: 'pairing-failed',
+        deviceLabel: setupState.deviceLabel,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Passkey setup failed before the extension could pair.',
+      })
+    }
   }
 
   function resetSetup() {
+    setupAttemptId += 1
     writeSetupState({
       status: 'not-set-up',
       deviceLabel: defaultDeviceLabel(),
@@ -321,7 +387,9 @@
         class="primary-button"
         type="button"
         data-testid="set-up-extension-btn"
-        onclick={showProtectionStep}
+        onclick={() => {
+          void startExtensionSetup()
+        }}
       >
         Set up extension
       </button>
@@ -330,16 +398,15 @@
     <section class="setup-panel">
       <h2>Protect this extension</h2>
       <p>
-        Create this extension's own device key, then protect it with this
+        Creating this extension's own device key and protecting it with this
         browser profile's passkey before pairing with nokey.sh.
       </p>
       <button
         class="primary-button"
         type="button"
-        data-testid="continue-to-pairing-btn"
-        onclick={beginPairing}
+        disabled
       >
-        Device key protected
+        Waiting for passkey
       </button>
       <button class="secondary-button" type="button" onclick={resetSetup}>
         Start over
@@ -352,6 +419,9 @@
         Open nokey.sh with this extension device request, unlock your vault, then
         approve vault access, password filling, and sync-provider credential
         access.
+      </p>
+      <p class="request-detail">
+        Device request: <code>{setupState.deviceId}</code>
       </p>
       <ul class="scope-list">
         {#each setupState.requestedScopes as scope}
