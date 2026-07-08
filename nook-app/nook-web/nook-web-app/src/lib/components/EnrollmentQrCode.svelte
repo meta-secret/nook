@@ -2,10 +2,7 @@
   import { onMount } from 'svelte'
   import { RefreshCw } from '@lucide/svelte'
   import QRCodeStyling from 'qr-code-styling'
-  import {
-    createEnrollmentQrOptions,
-    enrollmentQrSize,
-  } from '$lib/enrollment-qr'
+  import { createEnrollmentQrOptions } from '$lib/enrollment-qr'
 
   let {
     enrollmentLink,
@@ -39,8 +36,7 @@
 </script>
 
 <div
-  class="relative flex items-center justify-center rounded-lg border border-border/70 bg-white p-2 shadow-sm shadow-black/10"
-  style={`width: ${enrollmentQrSize}px; height: ${enrollmentQrSize}px;`}
+  class="relative flex aspect-square w-full max-w-[360px] items-center justify-center rounded-xl border border-border/70 bg-white p-3 shadow-sm shadow-black/10"
   data-testid="enrollment-qr"
   aria-label="Onboarding QR"
 >
