@@ -66,6 +66,7 @@ import {
   type VaultIdleSessionTracker,
 } from '$lib/vault-idle-session'
 import {
+  isPasskeyPrfUnavailableError,
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from '$lib/passkey-device-protection'
@@ -159,8 +160,16 @@ export class VaultState {
 
   manager = $state<NookVaultManager | undefined>(undefined)
   deviceProtectionStatus = $state<
-    'loading' | 'missing' | 'plaintext' | 'passkey' | 'unlocked' | 'error'
+    | 'loading'
+    | 'missing'
+    | 'plaintext'
+    | 'passkey'
+    | 'pin'
+    | 'pin-setup'
+    | 'unlocked'
+    | 'error'
   >('loading')
+  deviceProtectionLockedMode = $state<'passkey' | 'pin'>('passkey')
   isAuthenticated = $state(false)
   /** True when the login gate should explain that the last lock was due to idle timeout. */
   sessionExpiredByIdle = $state(false)
@@ -612,7 +621,13 @@ export class VaultState {
           | 'missing'
           | 'plaintext'
           | 'passkey'
+          | 'pin'
           | 'unlocked'
+      if (this.deviceProtectionStatus === 'pin') {
+        this.deviceProtectionLockedMode = 'pin'
+      } else if (this.deviceProtectionStatus === 'passkey') {
+        this.deviceProtectionLockedMode = 'passkey'
+      }
 
       const autoAuthorizeE2e =
         this.runtimeConfig.e2eExposeVault &&
@@ -622,6 +637,8 @@ export class VaultState {
           await this.enqueueStorage(() =>
             authorizePasskeyProtection(this.manager!),
           )
+        } else if (this.deviceProtectionStatus === 'pin') {
+          return
         } else {
           await this.enqueueStorage(() =>
             createPasskeyProtection(this.manager!),
@@ -732,6 +749,45 @@ export class VaultState {
       await this.enqueueStorage(() => createPasskeyProtection(this.manager!))
       deviceIdentityUnlocked = true
       this.deviceAuthorizationInProgress = true
+      this.deviceProtectionLockedMode = 'passkey'
+      await this.continueInitializationAfterDeviceUnlock()
+      this.deviceProtectionStatus = 'unlocked'
+    } catch (error) {
+      if (isPasskeyPrfUnavailableError(error)) {
+        this.deviceProtectionStatus = 'pin-setup'
+        this.errorMsg = this.t('device_protection.pin_fallback_ready')
+        return
+      }
+      if (
+        this.deviceProtectionStatus === 'unlocked' ||
+        deviceIdentityUnlocked
+      ) {
+        void this.lockDeviceProtection()
+      }
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Failed to create passkey.'
+    } finally {
+      this.deviceAuthorizationInProgress = false
+      this.isVerifying = false
+      this.isInitializing = false
+    }
+  }
+
+  async setupPinDeviceProtection(pin: string, confirmPin: string) {
+    if (!this.manager || this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    let deviceIdentityUnlocked = false
+    try {
+      if (pin !== confirmPin) {
+        throw new Error(this.t('device_protection.pin_mismatch'))
+      }
+      await this.enqueueStorage(() =>
+        this.manager!.finishPinDeviceProtection(pin),
+      )
+      deviceIdentityUnlocked = true
+      this.deviceAuthorizationInProgress = true
+      this.deviceProtectionLockedMode = 'pin'
       await this.continueInitializationAfterDeviceUnlock()
       this.deviceProtectionStatus = 'unlocked'
     } catch (error) {
@@ -742,7 +798,7 @@ export class VaultState {
         void this.lockDeviceProtection()
       }
       this.errorMsg =
-        error instanceof Error ? error.message : 'Failed to create passkey.'
+        error instanceof Error ? error.message : 'Failed to create PIN.'
     } finally {
       this.deviceAuthorizationInProgress = false
       this.isVerifying = false
@@ -759,6 +815,7 @@ export class VaultState {
       await this.enqueueStorage(() => authorizePasskeyProtection(this.manager!))
       deviceIdentityUnlocked = true
       this.deviceAuthorizationInProgress = true
+      this.deviceProtectionLockedMode = 'passkey'
       await this.continueInitializationAfterDeviceUnlock()
       this.deviceProtectionStatus = 'unlocked'
     } catch (error) {
@@ -777,6 +834,36 @@ export class VaultState {
     }
   }
 
+  async unlockPinDeviceProtection(pin: string) {
+    if (!this.manager || this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    let deviceIdentityUnlocked = false
+    try {
+      await this.enqueueStorage(() =>
+        this.manager!.unlockPinDeviceIdentity(pin),
+      )
+      deviceIdentityUnlocked = true
+      this.deviceAuthorizationInProgress = true
+      this.deviceProtectionLockedMode = 'pin'
+      await this.continueInitializationAfterDeviceUnlock()
+      this.deviceProtectionStatus = 'unlocked'
+    } catch (error) {
+      if (
+        this.deviceProtectionStatus === 'unlocked' ||
+        deviceIdentityUnlocked
+      ) {
+        void this.lockDeviceProtection()
+      }
+      this.errorMsg =
+        error instanceof Error ? error.message : 'PIN authorization failed.'
+    } finally {
+      this.deviceAuthorizationInProgress = false
+      this.isVerifying = false
+      this.isInitializing = false
+    }
+  }
+
   async resetDeviceProtectionForRecovery() {
     if (!this.manager || this.isVerifying) return
     this.isVerifying = true
@@ -784,6 +871,7 @@ export class VaultState {
     try {
       await this.manager.resetDeviceProtectionForRecovery()
       this.deviceProtectionStatus = 'missing'
+      this.deviceProtectionLockedMode = 'passkey'
       this.deviceId = ''
       this.devicePublicKey = ''
       this.providers = []
@@ -900,7 +988,7 @@ export class VaultState {
   }
 
   lockDeviceProtection(): Promise<void> {
-    this.deviceProtectionStatus = 'passkey'
+    this.deviceProtectionStatus = this.deviceProtectionLockedMode
     this.deviceAuthorizationInProgress = false
     this.deviceId = ''
     this.devicePublicKey = ''

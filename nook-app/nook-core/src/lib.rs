@@ -34,7 +34,7 @@ pub use database::Database;
 pub use device_key_protection::{
     DEVICE_KEY_PROTECTION_VERSION, DeviceKeyProtectionSetup, WrappedDeviceIdentity,
     parse_wrapped_device_identity, serialize_wrapped_device_identity, unwrap_device_identity,
-    wrap_device_identity,
+    unwrap_device_identity_with_pin, wrap_device_identity, wrap_device_identity_with_pin,
 };
 pub use enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,

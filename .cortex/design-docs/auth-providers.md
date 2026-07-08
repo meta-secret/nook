@@ -55,7 +55,7 @@ interface StorageProvider {
 
 **Credentials are sealed at rest with the device key.** Secret fields — `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed inside `save_auth_providers` and unsealed inside the `load_auth_providers` pipeline. Non-secret fields (labels, repo, timestamps) stay plaintext. Crypto never lives in TypeScript (see [rules.md §1](../rules.md)).
 
-**Device key = existing device identity.** No new key is minted for provider storage. The wasm layer reuses this browser's **age X25519 device identity** (`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). The identity must first be authorized with the saved passkey's WebAuthn PRF result. Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which the load path uses to distinguish sealed vs legacy-plaintext fields).
+**Device key = existing device identity.** No new key is minted for provider storage. The wasm layer reuses this browser's **age X25519 device identity** (`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). The identity must first be authorized with the saved passkey's WebAuthn PRF result, or with the local PIN fallback on PRF-missing platforms. Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which the load path uses to distinguish sealed vs legacy-plaintext fields).
 
 **Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`had_plaintext` upgrade path).
 
@@ -85,7 +85,7 @@ stateDiagram-v2
 
 | Component | When shown | Purpose |
 |-----------|------------|---------|
-| `DeviceProtectionGate` | Device identity locked or needs migration | Create/authorize passkey before loading device-sealed data |
+| `DeviceProtectionGate` | Device identity locked or needs migration | Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data |
 | `LoginGate` | Vault locked | Get started chooser, unlock local cache, connect sync provider, enrollment |
 | `SecretVault` | Authenticated | Primary app — secrets CRUD |
 | `AuthStorage` | Settings → Sync providers | Manage replica targets for **current** vault |
@@ -137,7 +137,7 @@ Version-based sync is in `nook-app/nook-core/src/vault_sync.rs`. UI uses local-f
 ## 6. Security notes
 
 - Provider credentials (GitHub PAT, OAuth access/refresh tokens) are **sealed with the device's age X25519 identity** (in Rust/WASM) before hitting IndexedDB — never stored as plaintext. A raw `nook_auth` dump exposes age-armored ciphertext, not tokens.
-- The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped` with AES-256-GCM. The wrapping key is derived in Rust/WASM from a WebAuthn PRF result with HKDF-SHA256; neither the PRF result nor derived key is persisted.
+- The device secret is itself wrapped at rest in `nook_db.device_identity_wrapped` with AES-256-GCM. The preferred wrapping key is derived in Rust/WASM from a WebAuthn PRF result with HKDF-SHA256. On PRF-missing platforms, a versioned PIN fallback uses PBKDF2-SHA256 parameters authenticated in the wrapped record. Neither PRF output, PIN, nor derived key is persisted.
 - This protects passive copies of both IndexedDB databases. Code already executing in the page after authorization can use the in-memory identity; code before authorization can request a user-verifying passkey ceremony. Passkey protection is therefore not a substitute for XSS prevention.
 - GitHub PAT in IndexedDB is **storage convenience**, not vault encryption. Compromise exposes GitHub repo access, not plaintext vault secrets (still independently encrypted in the vault file).
 - Reusing the existing device identity means no extra key material and no new key-management surface; the same identity already gates vault-key envelopes.

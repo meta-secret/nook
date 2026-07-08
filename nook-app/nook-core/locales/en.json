@@ -335,12 +335,23 @@
     "setup_description": "Create a passkey to encrypt this browser's private device key. Your browser or operating system protects the passkey.",
     "migration_description": "Your existing device key needs a one-time security upgrade. Create a passkey to encrypt it without changing vault access.",
     "unlock_description": "Authorize with your passkey before Nook can use this browser's private device key.",
+    "pin_setup_description": "This platform did not provide WebAuthn PRF. Set a local PIN to encrypt this browser's private device key instead.",
+    "pin_unlock_description": "Enter this browser's PIN before Nook can use the private device key stored here.",
     "unavailable_description": "Device-key protection could not be initialized. Refresh and try again in a supported browser.",
     "setup_action": "Protect with a passkey",
     "unlock_action": "Unlock with passkey",
+    "pin_setup_action": "Protect with PIN",
+    "pin_unlock_action": "Unlock with PIN",
+    "pin_label": "PIN",
+    "pin_confirm_label": "Confirm PIN",
+    "pin_mismatch": "PINs do not match.",
+    "pin_fallback_ready": "This platform does not support WebAuthn PRF. Use a local PIN to protect this browser's key.",
+    "pin_security_note": "Use at least 6 characters. A weak PIN can be guessed offline if someone copies this browser storage.",
     "authorizing": "Waiting for passkey…",
     "recovery_warning": "If this passkey is unavailable, reset this browser's device identity. Saved sync connections will be removed; local encrypted vaults remain.",
+    "pin_recovery_warning": "If this PIN is forgotten, reset this browser's device identity. Saved sync connections will be removed; local encrypted vaults remain.",
     "recovery_action": "I can't use this passkey",
+    "pin_recovery_action": "I forgot this PIN",
     "recovery_confirm": "Reset this browser's device identity? Saved sync connections will be removed. Local encrypted vaults will remain, but you may need a vault password or another enrolled device to regain access.",
     "recovery_complete": "Device identity reset. Create a new passkey to continue."
   },
@@ -363,7 +374,7 @@
     },
     "google_sign_in_required": "Sign in with Google before unlocking.",
     "device_protection": {
-      "authorization_required": "Authorize with your passkey before using this browser's device key."
+      "authorization_required": "Authorize before using this browser's device key."
     },
     "vault": {
       "decryption_failed": "Decryption failed. Please check your password.",
