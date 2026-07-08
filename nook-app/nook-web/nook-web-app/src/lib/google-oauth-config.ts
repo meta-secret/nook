@@ -5,7 +5,7 @@
  * callback or backend token exchange.
  *
  * Google Cloud Console → Credentials → OAuth client (Web application):
- * - Authorized JavaScript origins: http://localhost:5173, https://nokey.sh, https://dev.nokey.sh
+ * - Authorized JavaScript origins: http://localhost:5173, https://nokey.sh, https://nokey-sh.pages.dev
  * - OAuth consent screen scope: https://www.googleapis.com/auth/drive.appdata
  *
  * Redirect URIs are not used by the GIS token client flow.

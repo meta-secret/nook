@@ -24,7 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CI_MAIN_DEV_URL: https://dev.nokey.sh
+  CI_MAIN_DEV_URL: https://nokey-sh.pages.dev
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
   CI_MAIN_GITHUB_POLL_MS: "3000"
@@ -64,7 +64,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CF_PAGES_BRANCH: main
-          CF_PAGES_PROJECT_NAME: nook
+          CF_PAGES_PROJECT_NAME: nokey-sh
         run: |
           set +e
           out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod 2>&1)"
