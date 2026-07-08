@@ -26,16 +26,18 @@ use wasm_bindgen::{JsCast, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 pub(crate) const PASSKEY_PRF_UNAVAILABLE: &str = "PASSKEY_PRF_UNAVAILABLE";
+pub(crate) const DEFAULT_PASSKEY_LABEL: &str = "Nook device";
 
 const CHALLENGE_LEN: usize = 32;
 
 pub(crate) fn creation_options(
     rp_id: &str,
     rp_name: &str,
+    passkey_label: &str,
     user_handle: &[u8],
     prf_input: &[u8],
 ) -> Result<JsValue, JsError> {
-    let options = creation_options_struct(rp_id, rp_name, user_handle, prf_input)?;
+    let options = creation_options_struct(rp_id, rp_name, passkey_label, user_handle, prf_input)?;
     to_browser_value(&options).map_err(|error| {
         JsError::new(&format!(
             "Failed to build passkey creation options: {error}"
@@ -303,9 +305,11 @@ fn is_absent(value: &JsValue) -> bool {
 fn creation_options_struct(
     rp_id: &str,
     rp_name: &str,
+    passkey_label: &str,
     user_handle: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialCreationOptions, JsError> {
+    let passkey_label = normalized_passkey_label(passkey_label);
     Ok(CredentialCreationOptions {
         public_key: PublicKeyCredentialCreationOptions {
             rp: PublicKeyCredentialRpEntity {
@@ -314,8 +318,8 @@ fn creation_options_struct(
             },
             user: PublicKeyCredentialUserEntity {
                 id: user_handle.to_vec().into(),
-                name: "Nook device".to_owned(),
-                display_name: "Nook device".to_owned(),
+                name: passkey_label.clone(),
+                display_name: passkey_label,
             },
             challenge: random_challenge()?.to_vec().into(),
             pub_key_cred_params: vec![
@@ -342,6 +346,15 @@ fn creation_options_struct(
             extensions: Some(prf_extension(prf_input, None)),
         },
     })
+}
+
+fn normalized_passkey_label(label: &str) -> String {
+    let trimmed = label.trim();
+    if trimmed.is_empty() {
+        DEFAULT_PASSKEY_LABEL.to_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }
 
 fn request_options_struct(
@@ -435,12 +448,15 @@ mod tests {
 
     #[test]
     fn creation_options_use_passkey_prf_types() {
-        let value = creation_options_struct("localhost", "Nook", &[8; 32], &[9; 32]).unwrap();
+        let value =
+            creation_options_struct("localhost", "Nook", "Kitchen laptop", &[8; 32], &[9; 32])
+                .unwrap();
         let json = to_json(&value);
 
         assert_eq!(json["publicKey"]["rp"]["id"], "localhost");
         assert_eq!(json["publicKey"]["rp"]["name"], "Nook");
-        assert_eq!(json["publicKey"]["user"]["name"], "Nook device");
+        assert_eq!(json["publicKey"]["user"]["name"], "Kitchen laptop");
+        assert_eq!(json["publicKey"]["user"]["displayName"], "Kitchen laptop");
         let algorithms = json["publicKey"]["pubKeyCredParams"]
             .as_array()
             .expect("credential parameters")
@@ -531,7 +547,8 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn creation_options_serialize_webauthn_bytes_as_uint8_arrays() {
-        let options = creation_options("localhost", "Nook", &[8; 32], &[9; 32]).unwrap();
+        let options =
+            creation_options("localhost", "Nook", "Nook device", &[8; 32], &[9; 32]).unwrap();
         let public_key = get(&options, "publicKey");
         let user = get(&public_key, "user");
         let extensions = get(&public_key, "extensions");

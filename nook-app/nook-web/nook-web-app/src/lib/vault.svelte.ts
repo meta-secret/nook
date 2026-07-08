@@ -642,7 +642,7 @@ export class VaultState {
           return
         } else {
           await this.enqueueStorage(() =>
-            createPasskeyProtection(this.manager!),
+            createPasskeyProtection(this.manager!, ''),
           )
         }
         deviceIdentityUnlocked = true
@@ -741,13 +741,15 @@ export class VaultState {
     this.devicePublicKey = identity.devicePublicKey
   }
 
-  async setupDeviceProtection() {
+  async setupDeviceProtection(passkeyLabel = '') {
     if (!this.manager || this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     let deviceIdentityUnlocked = false
     try {
-      await this.enqueueStorage(() => createPasskeyProtection(this.manager!))
+      await this.enqueueStorage(() =>
+        createPasskeyProtection(this.manager!, passkeyLabel),
+      )
       deviceIdentityUnlocked = true
       this.deviceAuthorizationInProgress = true
       this.deviceProtectionLockedMode = 'passkey'

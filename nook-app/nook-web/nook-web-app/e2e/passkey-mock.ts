@@ -40,7 +40,11 @@ export function installMockPasskeyRuntime() {
     value: {
       create: async (options: {
         publicKey?: {
-          user?: { id?: ArrayBuffer | ArrayBufferView }
+          user?: {
+            displayName?: string
+            id?: ArrayBuffer | ArrayBufferView
+            name?: string
+          }
           extensions?: {
             prf?: { eval?: { first?: ArrayBuffer | ArrayBufferView } }
           }
@@ -58,6 +62,12 @@ export function installMockPasskeyRuntime() {
           userHandle = bytesFrom(createdUserHandle)
           saveUserHandle()
         }
+        localStorage.setItem(
+          'nook_e2e_passkey_label',
+          options.publicKey?.user?.displayName ??
+            options.publicKey?.user?.name ??
+            '',
+        )
         const first = options.publicKey?.extensions?.prf?.eval?.first
         if (!first) throw new Error('Missing E2E PRF create input')
         return result(first, mode !== 'unsupported')

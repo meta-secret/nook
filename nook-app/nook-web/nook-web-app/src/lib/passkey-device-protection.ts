@@ -10,8 +10,13 @@ export function isPasskeyPrfUnavailableError(error: unknown): boolean {
 
 export async function setupDeviceProtection(
   manager: NookVaultManager,
+  passkeyLabel: string,
 ): Promise<void> {
-  await manager.setupDeviceProtectionWithPasskey(location.hostname, 'Nook')
+  await manager.setupDeviceProtectionWithPasskey(
+    location.hostname,
+    'Nook',
+    passkeyLabel,
+  )
 }
 
 export async function unlockDeviceProtection(

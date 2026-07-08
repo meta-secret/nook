@@ -49,11 +49,18 @@ impl NookVaultManager {
         &mut self,
         rp_id: &str,
         rp_name: &str,
+        passkey_label: &str,
     ) -> Result<(), JsError> {
         let setup = self.begin_device_protection().await?;
         let user_handle = setup.user_handle();
         let prf_input = setup.prf_input();
-        let creation_options = setup.creation_options(rp_id, rp_name)?;
+        let creation_options = passkey_browser::creation_options(
+            rp_id,
+            rp_name,
+            passkey_label,
+            &user_handle,
+            &prf_input,
+        )?;
         let credential = passkey_browser::create_credential(&creation_options).await?;
         let credential_id = passkey_browser::credential_id(&credential)?;
         let prf_output = if let Some(output) = passkey_browser::prf_output(&credential, true)? {
@@ -76,22 +83,9 @@ impl NookVaultManager {
         prf_input: Vec<u8>,
         mut prf_output: Vec<u8>,
     ) -> Result<(), JsError> {
-        let result: Result<(), NookError> = async {
-            let identity_secret =
-                nook_core::derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
-            let identity = nook_core::DeviceIdentity::from_secret_str(&identity_secret)?;
-            let record = nook_core::passkey_derived_device_identity_record(
-                &credential_id,
-                &user_handle,
-                &prf_input,
-            )?;
-            let device_id = identity.device_id().to_string();
-            indexed_db::save_wrapped_device_identity(&device_id, &record).await?;
-            self.device.id = device_id;
-            self.device.identity_private_key = identity_secret.into_inner();
-            Ok(())
-        }
-        .await;
+        let result = self
+            .save_passkey_derived_identity(&credential_id, &user_handle, &prf_input, &prf_output)
+            .await;
         prf_output.zeroize();
         result.map_err(Into::into)
     }
@@ -117,23 +111,10 @@ impl NookVaultManager {
         user_handle: Vec<u8>,
         mut prf_output: Vec<u8>,
     ) -> Result<(), JsError> {
-        let result: Result<(), NookError> = async {
-            let prf_input = nook_core::deterministic_passkey_prf_input();
-            let identity_secret =
-                nook_core::derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
-            let identity = nook_core::DeviceIdentity::from_secret_str(&identity_secret)?;
-            let record = nook_core::passkey_derived_device_identity_record(
-                &credential_id,
-                &user_handle,
-                &prf_input,
-            )?;
-            let device_id = identity.device_id().to_string();
-            indexed_db::save_wrapped_device_identity(&device_id, &record).await?;
-            self.device.id = device_id;
-            self.device.identity_private_key = identity_secret.into_inner();
-            Ok(())
-        }
-        .await;
+        let prf_input = nook_core::deterministic_passkey_prf_input();
+        let result = self
+            .save_passkey_derived_identity(&credential_id, &user_handle, &prf_input, &prf_output)
+            .await;
         prf_output.zeroize();
         result.map_err(Into::into)
     }
@@ -249,6 +230,30 @@ impl NookVaultManager {
         self.storage.mode = nook_core::StorageMode::Local;
         indexed_db::delete_device_identity_for_recovery().await?;
         auth_providers::delete_auth_providers_db().await?;
+        Ok(())
+    }
+}
+
+impl NookVaultManager {
+    async fn save_passkey_derived_identity(
+        &mut self,
+        credential_id: &[u8],
+        user_handle: &[u8],
+        prf_input: &[u8],
+        prf_output: &[u8],
+    ) -> Result<(), NookError> {
+        let identity_secret =
+            nook_core::derive_device_identity_from_passkey_prf(user_handle, prf_output)?;
+        let identity = nook_core::DeviceIdentity::from_secret_str(&identity_secret)?;
+        let record = nook_core::passkey_derived_device_identity_record(
+            credential_id,
+            user_handle,
+            prf_input,
+        )?;
+        let device_id = identity.device_id().to_string();
+        indexed_db::save_wrapped_device_identity(&device_id, &record).await?;
+        self.device.id = device_id;
+        self.device.identity_private_key = identity_secret.into_inner();
         Ok(())
     }
 }
