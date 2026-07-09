@@ -26,7 +26,7 @@ concurrency:
 env:
   CI_MAIN_DEV_DOMAIN: dev.nokey.sh
   CI_MAIN_DEV_URL: https://dev.nokey.sh
-  CI_MAIN_CF_PAGES_PROJECT: nook
+  CI_MAIN_CF_PAGES_PROJECT: nokey-sh
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
   CI_MAIN_GITHUB_POLL_MS: "3000"
@@ -89,7 +89,7 @@ jobs:
           fi
           echo "pages_url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Configure dev.nokey.sh on Cloudflare Pages
+      - name: Verify dev.nokey.sh on Cloudflare Pages
         id: configure-dev-domain
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
@@ -142,14 +142,16 @@ jobs:
           records_json="$(
             api_json "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$DEV_DOMAIN"
           )"
-          record_payload="$(jq -nc --arg name "$DEV_DOMAIN" --arg content "$pages_host" '{type: "CNAME", name: $name, content: $content, ttl: 1, proxied: true}')"
-          record_id="$(printf '%s' "$records_json" | jq -r '.result[0].id // empty')"
-          if [ -n "$record_id" ]; then
-            api_json -X PUT --data "$record_payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" >/dev/null
-          else
-            api_json -X POST --data "$record_payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" >/dev/null
+          record_ok="$(
+            printf '%s' "$records_json" \
+              | jq -r --arg content "$pages_host" '[.result[]? | select(.type == "CNAME" and .content == $content)] | length'
+          )"
+          if [ "$record_ok" = "0" ]; then
+            echo "::error::Missing Cloudflare DNS record: create proxied CNAME $DEV_DOMAIN -> $pages_host"
+            exit 1
           fi
 
+          curl --retry 30 --retry-all-errors --retry-delay 10 -fsSI "https://$DEV_DOMAIN/" >/dev/null
           echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
 
       - name: Record development deployment
