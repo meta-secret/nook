@@ -223,7 +223,9 @@ impl NookVaultManager {
                     ],
                 };
                 let member_records = nook_core::build_members_records(&roster, &members_key)?;
-                self.vault.meta.remove_key(&nook_core::join_record_key(&join.device_id));
+                self.vault
+                    .meta
+                    .remove_key(&nook_core::join_record_key(&join.device_id));
                 apply_member_records(&mut self.vault.meta, &member_records);
                 operations.push(nook_core::VaultOperation::NexusParticipantEnrolled {
                     device_id: join.device_id.clone(),
@@ -244,11 +246,7 @@ impl NookVaultManager {
         &mut self,
         roster: &[nook_core::VaultMember],
     ) -> Result<Option<nook_core::VaultOperation>, NookError> {
-        let policy = self
-            .vault
-            .architecture
-            .nexus
-            .unwrap_or_default();
+        let policy = self.vault.architecture.nexus.unwrap_or_default();
         if roster.len() < usize::from(policy.required_participants) {
             return Ok(None);
         }
@@ -289,7 +287,9 @@ impl NookVaultManager {
         if let Some(nexus) = self.vault.architecture.nexus.as_mut() {
             nexus.ready_participants = u8::try_from(shares.len()).unwrap_or(u8::MAX);
         }
-        Ok(Some(nook_core::VaultOperation::NexusSharesIssued { shares }))
+        Ok(Some(nook_core::VaultOperation::NexusSharesIssued {
+            shares,
+        }))
     }
 
     #[wasm_bindgen(js_name = approveExtensionDevice)]

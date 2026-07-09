@@ -118,10 +118,7 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
 
 /// Reconstruct a nexus vault session when enough participant identities can
 /// open their encrypted shares.
-pub fn load_nexus_vault(
-    content: &str,
-    identities: &[DeviceIdentity],
-) -> VaultResult<LoadedVault> {
+pub fn load_nexus_vault(content: &str, identities: &[DeviceIdentity]) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
     if architecture.vault_type != VaultType::Nexus {

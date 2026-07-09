@@ -424,9 +424,7 @@ pub struct SharedStorageGrantRequest {
 #[serde(tag = "kind")]
 pub enum SharedStorageGrantOutcome {
     #[serde(rename = "granted")]
-    Granted {
-        note: String,
-    },
+    Granted { note: String },
     #[serde(rename = "manual-grant-required")]
     ManualGrantRequired {
         #[serde(rename = "instructionsKey")]
@@ -687,8 +685,7 @@ mod tests {
         assert_eq!(
             outcome,
             SharedStorageGrantOutcome::ManualGrantRequired {
-                instructions_key: "architecture_modes.shared_grant_manual_instructions"
-                    .to_owned(),
+                instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
             }
         );
