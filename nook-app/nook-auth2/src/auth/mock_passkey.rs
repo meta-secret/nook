@@ -30,6 +30,9 @@ pub enum MockPasskeyError {
     #[error("No matching mock passkey credential was found.")]
     NoMatchingCredential,
 
+    #[error("Multiple discoverable mock passkey credentials match the RP id.")]
+    AmbiguousDiscoverableCredential,
+
     #[error("Mock passkey credential belongs to a different RP id.")]
     RpIdMismatch,
 
@@ -350,12 +353,18 @@ impl MemoryPasskeyAuthenticator {
         request: &MockPasskeyAssertionRequest,
     ) -> MockPasskeyResult<Vec<u8>> {
         if request.allow_credentials.is_empty() {
-            return self
+            let mut candidates = self
                 .credentials
                 .values()
-                .find(|credential| credential.rp_id == request.rp_id)
-                .map(|credential| credential.credential_id.clone())
-                .ok_or(MockPasskeyError::NoMatchingCredential);
+                .filter(|credential| credential.rp_id == request.rp_id)
+                .map(|credential| credential.credential_id.clone());
+            let credential_id = candidates
+                .next()
+                .ok_or(MockPasskeyError::NoMatchingCredential)?;
+            if candidates.next().is_some() {
+                return Err(MockPasskeyError::AmbiguousDiscoverableCredential);
+            }
+            return Ok(credential_id);
         }
 
         let mut saw_wrong_rp = false;
@@ -618,6 +627,37 @@ mod tests {
                 .unwrap()
                 .sign_count(),
             1
+        );
+    }
+
+    #[test]
+    fn discoverable_assertion_rejects_ambiguous_same_rp_credentials() {
+        let mut authenticator = MemoryPasskeyAuthenticator::new();
+        let first = approved_registration(&mut authenticator, vec![1; 32]);
+        let second = approved_registration(&mut authenticator, vec![2; 32]);
+
+        let result = authenticator.authenticate(
+            &MockPasskeyAssertionRequest::discoverable(RP_ID, deterministic_passkey_prf_input()),
+            MockPasskeyUserAuthorization::Approved,
+        );
+
+        assert!(matches!(
+            result,
+            Err(MockPasskeyError::AmbiguousDiscoverableCredential)
+        ));
+        assert_eq!(
+            authenticator
+                .credential(first.credential_id())
+                .unwrap()
+                .sign_count(),
+            0
+        );
+        assert_eq!(
+            authenticator
+                .credential(second.credential_id())
+                .unwrap()
+                .sign_count(),
+            0
         );
     }
 
