@@ -3,8 +3,8 @@ use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
     PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultArchitecture,
-    VaultUnlock,
-    is_auth_stored_record, is_join_stored_record, is_members_stored_record,
+    VaultUnlock, is_auth_stored_record, is_join_stored_record, is_members_stored_record,
+    is_nexus_share_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +47,7 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
         || first_line.starts_with("auth:")
         || first_line.starts_with("joins:")
         || first_line.starts_with("members:")
+        || first_line.starts_with("nexus_shares:")
         || first_line.starts_with("unlock:")
         || first_line.starts_with("password_envelope:")
     {
@@ -123,6 +124,8 @@ struct StoredVaultYaml {
     joins: Vec<StoredSecretRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     members: Vec<MembersYamlRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    nexus_shares: Vec<StoredSecretRecord>,
     /// Optional backup passwords — coexist with `auth:` device-key unlock.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     password_entries: Vec<PasswordUnlockEntry>,
@@ -201,6 +204,8 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
             });
         } else if is_auth_stored_record(record) {
             vault.auth.push(stored_record_to_auth(record));
+        } else if is_nexus_share_stored_record(record) {
+            vault.nexus_shares.push(record.clone());
         } else {
             vault.secrets.push(record.clone());
         }
@@ -494,6 +499,7 @@ pub fn deserialize_stored_yaml_with_unlock(
     records.extend(vault.auth.into_iter().map(auth_to_stored_record));
     records.extend(vault.joins);
     records.extend(vault.members.into_iter().map(members_to_stored_record));
+    records.extend(vault.nexus_shares);
     Ok((records, unlock))
 }
 
@@ -913,7 +919,10 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
         .unwrap();
         assert!(yaml.as_str().contains("architecture:"));
         assert!(yaml.as_str().contains("device_mode: anti-hacker"));
-        assert_eq!(read_vault_architecture(yaml.as_str()).unwrap(), architecture);
+        assert_eq!(
+            read_vault_architecture(yaml.as_str()).unwrap(),
+            architecture
+        );
     }
 
     #[test]
@@ -929,6 +938,106 @@ architecture:
 secrets: []
 ";
         assert!(read_vault_architecture(invalid).is_err());
+    }
+
+    #[test]
+    fn unknown_architecture_mode_reports_stable_validation_key() {
+        use std::error::Error;
+
+        let invalid = "\
+schema_version: 1
+store_id: store_SMypl8K0w9Y
+architecture:
+  device_mode: future-device-mode
+  vault_type: simple
+  replication_type: personal
+secrets: []
+";
+        let error = read_vault_architecture(invalid).unwrap_err();
+        let source = error.source().unwrap().to_string();
+        assert!(
+            source.contains("errors.validation.unknown_device_mode:future-device-mode"),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml() {
+        let credential_id = vec![7u8; 48];
+        let user_handle = vec![8u8; 32];
+        let prf_input = crate::deterministic_passkey_prf_input();
+        let prf_output = [10u8; 32];
+        let material = crate::finish_passkey_wrapped_device_identity(
+            &credential_id,
+            &user_handle,
+            &prf_input,
+            &prf_output,
+        )
+        .unwrap();
+        let local_record = crate::serialize_wrapped_device_identity(material.record()).unwrap();
+        assert!(local_record.contains("ciphertext"));
+        assert!(local_record.contains("nonce"));
+        assert!(local_record.contains("hkdfSalt"));
+
+        let architecture = VaultArchitecture {
+            device_mode: crate::DeviceMode::AntiHacker,
+            ..VaultArchitecture::default_legacy()
+        };
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &sample_records(),
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("Anti-hacker vault"),
+            Some(1),
+            &architecture,
+        )
+        .unwrap();
+        let stored = yaml.as_str();
+
+        assert!(stored.contains("device_mode: anti-hacker"));
+        assert!(!stored.contains("passkey-wrapped-local"));
+        assert!(!stored.contains("credentialId"));
+        assert!(!stored.contains("userHandle"));
+        assert!(!stored.contains("prfInput"));
+        assert!(!stored.contains("hkdfSalt"));
+        assert!(!stored.contains("nonce"));
+        assert!(!stored.contains("ciphertext"));
+        assert!(!stored.contains("AGE-SECRET-KEY-"));
+    }
+
+    #[test]
+    fn nexus_share_records_roundtrip_in_dedicated_yaml_section() {
+        let keys = crate::generate_vault_keys().unwrap();
+        let first = crate::DeviceIdentity::generate().unwrap();
+        let second = crate::DeviceIdentity::generate().unwrap();
+        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
+        let architecture = VaultArchitecture::nexus_personal(
+            crate::DeviceMode::Standard,
+            crate::NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &shares,
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("Nexus vault"),
+            Some(1),
+            &architecture,
+        )
+        .unwrap();
+        assert!(yaml.as_str().contains("nexus_shares:"));
+        assert!(!yaml.as_str().contains("auth:"));
+        assert!(yaml.as_str().contains("secrets: []"));
+
+        let parsed = deserialize_stored_yaml(yaml.as_str()).unwrap();
+        assert_eq!(parsed, shares);
+        assert!(parsed.iter().all(crate::is_nexus_share_stored_record));
     }
 
     #[test]

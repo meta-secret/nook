@@ -79,11 +79,13 @@ describe('vault architecture adapter', () => {
       supportsShared: true,
       sharedJoinerIdentity: 'email',
     })
-    expect(validateProviderReplication(googleDriveProvider(), 'shared')).toEqual(
-      driveCapability,
-    )
+    expect(
+      validateProviderReplication(googleDriveProvider(), 'shared'),
+    ).toEqual(driveCapability)
 
-    expect(() => validateProviderReplication(githubProvider(), 'shared')).toThrow(
+    expect(() =>
+      validateProviderReplication(githubProvider(), 'shared'),
+    ).toThrow(
       /errors\.validation\.unsupported_provider_replication:github::shared/,
     )
   })

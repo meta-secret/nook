@@ -188,6 +188,7 @@ export async function loadDb(state: VaultState) {
 }
 
 function editBlockedMessage(state: VaultState): string {
+  if (state.editBlockReason) return state.editBlockReason
   return state.securityConflicts.length > 0
     ? state.t('auth_storage.security_conflict_edits')
     : state.t('auth_storage.sync_blocked_edits')

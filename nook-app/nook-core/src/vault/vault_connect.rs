@@ -2,8 +2,8 @@
 
 use crate::errors::VaultResult;
 use crate::{
-    ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultCrypto, VaultMetaState,
-    VaultArchitecture, VaultUnlock, assess_connect_access, deserialize_stored,
+    ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
+    VaultCrypto, VaultMetaState, VaultType, VaultUnlock, assess_connect_access, deserialize_stored,
     detect_stored_format, resolve_members_key, resolve_secrets_key, user_stored_records,
     vault_has_multi_device_records,
 };
@@ -96,7 +96,15 @@ pub fn access_status_for_vault_content(
 /// Decrypt and hydrate an in-memory session from stored vault YAML.
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
+    let architecture = crate::read_vault_architecture(content)?;
     let stored_records = deserialize_stored(content, format)?;
+    if architecture.vault_type == VaultType::Nexus {
+        return Err(crate::MultiDeviceError::NotEnoughNexusShares {
+            threshold: architecture.nexus.unwrap_or_default().threshold,
+            available: 1,
+        }
+        .into());
+    }
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
     let crypto = VaultCrypto::new(&secrets_key)?;
@@ -147,8 +155,9 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
 mod tests {
     use super::*;
     use crate::{
-        VaultResult, generate_store_id, generate_vault_keys, genesis_auth_record,
-        genesis_members_records, serialize_stored_yaml_with_unlock,
+        DeviceMode, NexusPolicy, ReplicationType, VaultResult, generate_store_id,
+        generate_vault_keys, genesis_auth_record, genesis_members_records,
+        serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_name_architecture,
     };
 
     #[test]
@@ -189,6 +198,40 @@ mod tests {
         assert_eq!(loaded.secrets_key, keys.secrets_key);
         assert!(loaded.database.list().is_empty());
         assert!(loaded.meta.auth.len() + loaded.meta.members.len() >= 2);
+        Ok(())
+    }
+
+    #[test]
+    fn nexus_yaml_rejects_single_device_full_envelope_unlock_path() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let records = vec![genesis_auth_record(
+            &identity,
+            &keys.secrets_key,
+            &keys.members_key,
+        )?];
+        let architecture = VaultArchitecture {
+            device_mode: DeviceMode::Standard,
+            vault_type: VaultType::Nexus,
+            replication_type: ReplicationType::Personal,
+            nexus: Some(NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            }),
+        };
+        let store_id = generate_store_id()?;
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            Some(store_id.as_str()),
+            None,
+            None,
+            &architecture,
+        )?;
+
+        assert!(load_stored_vault(yaml.as_str(), &identity).is_err());
         Ok(())
     }
 }

@@ -3,13 +3,13 @@ import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import {
   NookEnrollmentIssueInput,
-  NookEnrollmentProvider,
   StorageProviderType,
   decryptEnrollmentPayload,
+  enrollmentProviderForArchitecture,
   encryptEnrollmentPayload,
   hasActiveLocalVault,
 } from '$lib/nook-wasm/nook_wasm'
-import type { StorageProvider } from '$lib/auth-providers'
+import type { OAuthFilePreset, StorageProvider } from '$lib/auth-providers'
 
 const log = createLogger('vault-password')
 
@@ -239,6 +239,18 @@ function applySavedEnrollmentProvider(
   state.oauthFile = undefined
 }
 
+function findSharedGrantProvider(
+  providers: StorageProvider[],
+  preset: string,
+): StorageProvider | undefined {
+  return providers.find(
+    (provider) =>
+      provider.type === 'oauth-file' &&
+      provider.oauthFile?.preset === preset &&
+      Boolean(provider.oauthFile.accessToken?.trim()),
+  )
+}
+
 async function localVaultHasPasswordEntries(
   state: VaultState,
 ): Promise<boolean> {
@@ -286,6 +298,42 @@ export async function connectWithEnrollmentCode(
       state.githubRepo = githubRepo
       state.loginSetupType = 'github'
       enrollmentStorageArgs = ['github', githubPat, githubRepo]
+    } else if (payload.provider.isSharedProviderGrant) {
+      const preset = (payload.provider.oauthPreset ??
+        'google-drive') as OAuthFilePreset
+      await state.loadProviders()
+      const provider = findSharedGrantProvider(state.providers, preset)
+      if (!provider) {
+        throw new Error(
+          'Shared-provider enrollment requires this browser to have matching provider access before connecting.',
+        )
+      }
+      applySavedEnrollmentProvider(state, provider)
+      enrollmentStorageArgs = state.providerWasmArgs(provider)
+    } else if (payload.provider.type === StorageProviderType.OauthFile) {
+      const oauthProvider: StorageProvider = {
+        id: 'enrollment-oauth',
+        type: 'oauth-file',
+        label: 'Enrollment OAuth provider',
+        oauthFile: {
+          preset: (payload.provider.oauthPreset ??
+            'google-drive') as OAuthFilePreset,
+          accessToken: payload.provider.oauthAccessToken ?? '',
+          refreshToken: payload.provider.oauthRefreshToken ?? undefined,
+          expiresAt: payload.provider.oauthExpiresAt ?? undefined,
+          fileId: payload.provider.oauthFileId ?? undefined,
+          fileName: payload.provider.oauthFileName ?? undefined,
+          accountEmail: payload.provider.oauthAccountEmail ?? undefined,
+        },
+        createdAt: isoTimestamp(),
+      }
+      state.storageMode = 'oauth-file'
+      state.loginSetupType = 'oauth-file'
+      state.oauthFile = oauthProvider.oauthFile
+      state.githubPat = ''
+      state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo
+      state.localFolder = undefined
+      enrollmentStorageArgs = state.providerWasmArgs(oauthProvider)
     } else {
       await state.loadProviders()
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state)
@@ -419,12 +467,6 @@ export async function issueEnrollmentCode(
     }
     if (
       selectedProvider.type === 'github' &&
-      isSharedReplication
-    ) {
-      throw new Error('GitHub does not support shared-provider onboarding yet.')
-    }
-    if (
-      selectedProvider.type === 'github' &&
       !isSharedReplication &&
       (!githubPat || !githubRepo)
     ) {
@@ -432,16 +474,11 @@ export async function issueEnrollmentCode(
         'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
       )
     }
-    const provider = isSharedReplication
-      ? NookEnrollmentProvider.sharedProviderGrant(
-          selectedProvider.type,
-          selectedProvider.oauthFile?.preset ?? undefined,
-          'email',
-          sharedJoinerIdentity,
-        )
-      : selectedProvider.type === 'github'
-        ? NookEnrollmentProvider.github(githubRepo, githubPat)
-        : NookEnrollmentProvider.local()
+    const provider = enrollmentProviderForArchitecture(
+      selectedProvider,
+      state.vaultArchitecture,
+      isSharedReplication ? sharedJoinerIdentity : undefined,
+    )
     const payload = new NookEnrollmentIssueInput(
       provider,
       entryId,

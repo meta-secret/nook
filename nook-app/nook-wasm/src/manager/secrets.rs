@@ -60,6 +60,16 @@ impl NookVaultManager {
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("ADD_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
+        if !self
+            .vault
+            .architecture
+            .can_create_secret_with_records(&self.stored_records_snapshot())
+        {
+            return Err(NookError::Database(
+                "Nexus vault is not ready for secret creation.".to_owned(),
+            )
+            .into());
+        }
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
@@ -108,6 +118,16 @@ impl NookVaultManager {
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("REPLACE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
+        if !self
+            .vault
+            .architecture
+            .can_create_secret_with_records(&self.stored_records_snapshot())
+        {
+            return Err(NookError::Database(
+                "Nexus vault is not ready for secret creation.".to_owned(),
+            )
+            .into());
+        }
         let secret_type = nook_core::SecretType::parse(&secret_type)?;
         let crypto = self
             .vault

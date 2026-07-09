@@ -48,11 +48,20 @@ onboarding code is produced.
 
 ## Nexus Lifecycle
 
-`vault_type=nexus` currently establishes the product contract and readiness
-gate. A nexus vault requires a threshold policy and blocks first secret creation
-until all required participants are ready. Low-level SLIP-0039 share generation,
-combination, and recovery envelope implementation remains owned by the quorum
-work tracked from #259/#261/#262; do not duplicate that primitive in UI code.
+`vault_type=nexus` stores encrypted `nexus_share:{device_id}` records in the
+top-level `nexus_shares:` YAML section. The vault key bundle is split across
+participant shares with a threshold policy, and the normal single-device auth
+envelope path must not unlock a nexus vault.
+
+A nexus vault blocks secret creation until the manager can see enough actual
+share records for the configured policy. UI metadata such as
+`ready_participants` is only presentation state; Svelte must call WASM/Rust for
+readiness so stale metadata cannot enable writes.
+
+The current implementation provides the encrypted share record model and
+fail-closed creation gate. Higher-level ceremony UX for distributing,
+rotating, or recovering shares should build on these records rather than
+placing share math in TypeScript.
 
 ## Web Boundary
 

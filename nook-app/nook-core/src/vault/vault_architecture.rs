@@ -6,12 +6,14 @@
 //! for decisions instead of re-encoding the matrix in TypeScript.
 
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{OauthFilePreset, StorageProviderType};
-use serde::{Deserialize, Serialize};
+use crate::{
+    OauthFilePreset, StorageProviderType, StoredSecretRecord, is_nexus_share_stored_record,
+};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum DeviceMode {
     /// Passkey PRF deterministically derives the local age/device identity.
@@ -41,8 +43,18 @@ impl DeviceMode {
     }
 }
 
+impl<'de> Deserialize<'de> for DeviceMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
+}
+
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum VaultType {
     /// Existing per-device full vault-key envelope model.
@@ -72,8 +84,18 @@ impl VaultType {
     }
 }
 
+impl<'de> Deserialize<'de> for VaultType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
+}
+
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReplicationType {
     /// Same owner / highly trusted devices may reuse sync-provider credentials.
@@ -81,6 +103,16 @@ pub enum ReplicationType {
     Personal,
     /// Joiners use their own provider account and require a provider grant.
     Shared,
+}
+
+impl<'de> Deserialize<'de> for ReplicationType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
 }
 
 impl ReplicationType {
@@ -280,6 +312,22 @@ impl VaultArchitecture {
     }
 
     #[must_use]
+    pub fn can_create_secret_with_records(&self, records: &[StoredSecretRecord]) -> bool {
+        match self.vault_type {
+            VaultType::Simple => true,
+            VaultType::Nexus => {
+                let policy = self.nexus.unwrap_or_default();
+                policy.validate().is_ok()
+                    && records
+                        .iter()
+                        .filter(|record| is_nexus_share_stored_record(record))
+                        .count()
+                        >= usize::from(policy.required_participants)
+            }
+        }
+    }
+
+    #[must_use]
     pub fn is_nexus_ready(&self) -> bool {
         self.vault_type == VaultType::Nexus && self.nexus.unwrap_or_default().is_ready()
     }
@@ -374,12 +422,8 @@ mod tests {
 
     #[test]
     fn provider_capability_matrix_is_fail_closed() {
-        validate_provider_replication(
-            StorageProviderType::Github,
-            None,
-            ReplicationType::Personal,
-        )
-        .unwrap();
+        validate_provider_replication(StorageProviderType::Github, None, ReplicationType::Personal)
+            .unwrap();
         assert!(
             validate_provider_replication(
                 StorageProviderType::Github,
@@ -411,6 +455,68 @@ mod tests {
     }
 
     #[test]
+    fn grouped_architecture_matrix_validates_provider_replication() {
+        let simple_personal = VaultArchitecture::simple_personal(DeviceMode::Standard);
+        validate_architecture_for_provider(&simple_personal, StorageProviderType::Github, None)
+            .unwrap();
+        validate_architecture_for_provider(
+            &simple_personal,
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::GoogleDrive),
+        )
+        .unwrap();
+
+        let simple_shared = VaultArchitecture {
+            replication_type: ReplicationType::Shared,
+            ..VaultArchitecture::default_legacy()
+        };
+        assert!(
+            validate_architecture_for_provider(&simple_shared, StorageProviderType::Github, None)
+                .is_err()
+        );
+        validate_architecture_for_provider(
+            &simple_shared,
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::GoogleDrive),
+        )
+        .unwrap();
+
+        let nexus_ready = VaultArchitecture::nexus_personal(
+            DeviceMode::AntiHacker,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+        validate_architecture_for_provider(&nexus_ready, StorageProviderType::Github, None)
+            .unwrap();
+
+        let nexus_shared = VaultArchitecture {
+            replication_type: ReplicationType::Shared,
+            ..nexus_ready
+        };
+        validate_architecture_for_provider(
+            &nexus_shared,
+            StorageProviderType::OauthFile,
+            Some(OauthFilePreset::GoogleDrive),
+        )
+        .unwrap();
+        assert!(
+            validate_architecture_for_provider(&nexus_shared, StorageProviderType::Github, None)
+                .is_err()
+        );
+        assert!(
+            validate_architecture_for_provider(
+                &nexus_shared,
+                StorageProviderType::OauthFile,
+                Some(OauthFilePreset::ICloud),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn onboarding_type_is_derived_from_replication_type() {
         let personal = VaultArchitecture::simple_personal(DeviceMode::Standard);
         assert_eq!(
@@ -422,7 +528,10 @@ mod tests {
             replication_type: ReplicationType::Shared,
             ..VaultArchitecture::default_legacy()
         };
-        assert_eq!(shared.onboarding_type(), OnboardingType::SharedProviderGrant);
+        assert_eq!(
+            shared.onboarding_type(),
+            OnboardingType::SharedProviderGrant
+        );
     }
 
     #[test]
@@ -458,5 +567,26 @@ mod tests {
             },
         );
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn nexus_secret_creation_requires_actual_share_records() {
+        let keys = crate::generate_vault_keys().unwrap();
+        let first = crate::DeviceIdentity::generate().unwrap();
+        let second = crate::DeviceIdentity::generate().unwrap();
+        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
+        let ready = VaultArchitecture::nexus_personal(
+            DeviceMode::Standard,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+
+        assert!(ready.can_create_secret());
+        assert!(!ready.can_create_secret_with_records(&[]));
+        assert!(!ready.can_create_secret_with_records(&shares[..1]));
+        assert!(ready.can_create_secret_with_records(&shares));
     }
 }

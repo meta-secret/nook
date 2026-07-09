@@ -8,14 +8,15 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::ValidationResult;
+use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
-    LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, StorageMode, StorageProviderType,
-    SyncProviderTarget, ProviderReplicationCapability, ReplicationType,
-    format_drive_storage_ref_raw, mask_github_pat, provider_replication_capability,
-    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
-    validate_provider_replication,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, EnrollmentProvider, GithubPatMask,
+    GithubSyncTarget, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
+    ProviderReplicationCapability, ReplicationType, StorageMode, StorageProviderType,
+    SyncProviderTarget, VaultArchitecture, format_drive_storage_ref_raw, mask_github_pat,
+    provider_replication_capability, storage_mode_for_provider, sync_provider_default_label,
+    sync_provider_target_key, validate_github_pat, validate_github_repo_name,
+    validate_oauth_access_token, validate_provider_replication,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -226,6 +227,62 @@ pub fn validate_provider_row_replication(
             .map(|oauth| oauth.preset.as_str()),
     )?;
     validate_provider_replication(provider_type, oauth_preset, replication_type)
+}
+
+pub fn enrollment_provider_for_architecture(
+    provider: &StorageProviderData,
+    architecture: &VaultArchitecture,
+    shared_joiner_identity: Option<&str>,
+) -> ValidationResult<EnrollmentProvider> {
+    let capability = validate_provider_row_replication(provider, architecture.replication_type)?;
+    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    match architecture.replication_type {
+        ReplicationType::Personal => match provider_type {
+            StorageProviderType::Local | StorageProviderType::LocalFolder => {
+                Ok(EnrollmentProvider::Local)
+            }
+            StorageProviderType::Github => Ok(EnrollmentProvider::Github {
+                pat: validate_github_pat(provider.github_pat.as_deref().unwrap_or_default())?
+                    .as_str()
+                    .to_owned(),
+                repo: validate_github_repo_name(
+                    provider.github_repo.as_deref().unwrap_or_default(),
+                )?
+                .as_str()
+                .to_owned(),
+            }),
+            StorageProviderType::OauthFile => {
+                let oauth = provider
+                    .oauth_file
+                    .as_ref()
+                    .ok_or(ValidationError::OauthAccessTokenEmpty)?;
+                let preset = OauthFilePreset::parse(&oauth.preset)?;
+                Ok(EnrollmentProvider::OauthFile {
+                    preset: preset.as_str().to_owned(),
+                    access_token: validate_oauth_access_token(&oauth.access_token)?
+                        .as_str()
+                        .to_owned(),
+                    refresh_token: oauth.refresh_token.clone(),
+                    expires_at: oauth.expires_at.clone(),
+                    file_id: oauth.file_id.clone(),
+                    file_name: oauth.file_name.clone(),
+                    account_email: oauth.account_email.clone(),
+                })
+            }
+        },
+        ReplicationType::Shared => Ok(EnrollmentProvider::SharedProviderGrant {
+            sync_provider_type: capability.provider_type,
+            oauth_preset: capability.oauth_preset,
+            joiner_identity_kind: capability
+                .shared_joiner_identity
+                .map_or_else(|| "email".to_owned(), |kind| kind.as_str().to_owned()),
+            joiner_identity: shared_joiner_identity
+                .map(str::trim)
+                .filter(|identity| !identity.is_empty())
+                .ok_or(ValidationError::OauthAccessTokenEmpty)?
+                .to_owned(),
+        }),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1213,9 +1270,7 @@ mod tests {
     #[test]
     fn provider_row_replication_capability_matches_provider_preset() {
         let github = github_provider("gh", "nook", "pat");
-        assert!(
-            validate_provider_row_replication(&github, ReplicationType::Personal).is_ok()
-        );
+        assert!(validate_provider_row_replication(&github, ReplicationType::Personal).is_ok());
         assert!(validate_provider_row_replication(&github, ReplicationType::Shared).is_err());
 
         let gdrive = StorageProviderData {
@@ -1244,6 +1299,50 @@ mod tests {
         assert_eq!(
             capability.shared_joiner_identity,
             Some(crate::SharedJoinerIdentityKind::Email)
+        );
+    }
+
+    #[test]
+    fn enrollment_provider_builder_enforces_replication_before_payload_creation() {
+        let shared = VaultArchitecture {
+            replication_type: ReplicationType::Shared,
+            ..VaultArchitecture::default_legacy()
+        };
+        let github = github_provider("gh", "nook", "github_pat_123");
+        assert!(enrollment_provider_for_architecture(&github, &shared, Some("a@b.com")).is_err());
+
+        let gdrive = oauth_provider(
+            "drive",
+            OauthFilePreset::GoogleDrive.as_str(),
+            Some("file-123"),
+            "nook.yaml",
+        );
+        let grant =
+            enrollment_provider_for_architecture(&gdrive, &shared, Some("joiner@example.com"))
+                .unwrap();
+        assert_eq!(
+            grant,
+            EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+            }
+        );
+
+        let personal = VaultArchitecture::default_legacy();
+        let provider = enrollment_provider_for_architecture(&gdrive, &personal, None).unwrap();
+        assert_eq!(
+            provider,
+            EnrollmentProvider::OauthFile {
+                preset: "google-drive".to_owned(),
+                access_token: "token".to_owned(),
+                refresh_token: None,
+                expires_at: None,
+                file_id: Some("file-123".to_owned()),
+                file_name: Some("nook.yaml".to_owned()),
+                account_email: None,
+            }
         );
     }
 }

@@ -54,7 +54,9 @@ export function canCreateSecret(architecture: VaultArchitecture): boolean {
 export function providerReplicationCapability(
   provider: StorageProvider,
 ): ProviderReplicationCapability {
-  return wasmProviderReplicationCapability(provider) as ProviderReplicationCapability
+  return wasmProviderReplicationCapability(
+    provider,
+  ) as ProviderReplicationCapability
 }
 
 export function validateProviderReplication(

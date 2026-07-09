@@ -651,7 +651,9 @@
               bind:value={vault.sharedJoinerIdentity}
               autocomplete="email"
               disabled={isBusy || isGenerating}
-              placeholder={vault.t('onboard_device.shared_identity_placeholder')}
+              placeholder={vault.t(
+                'onboard_device.shared_identity_placeholder',
+              )}
               data-testid="shared-joiner-identity-input"
             />
             <p class="text-xs text-muted-foreground">

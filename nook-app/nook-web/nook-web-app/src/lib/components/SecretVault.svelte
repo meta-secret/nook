@@ -7,6 +7,7 @@
     Braces,
     Sprout,
     StickyNote,
+    TriangleAlert,
   } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
@@ -19,6 +20,7 @@
     vault,
     isSaving,
     editsBlocked = false,
+    editBlockReason = undefined,
     secrets = [] as NookSecretRecord[],
     onAddSecret,
     onReplaceSecret,
@@ -29,6 +31,7 @@
     vault: VaultState
     isSaving: boolean
     editsBlocked?: boolean
+    editBlockReason?: string | undefined
     secrets?: NookSecretRecord[]
     onAddSecret: (
       id: string,
@@ -218,9 +221,7 @@
             class="flex-1 border-border/40 bg-background/70 text-foreground hover:bg-accent sm:flex-none sm:bg-background"
             data-testid="add-secret-btn"
             disabled={editsBlocked}
-            title={editsBlocked
-              ? vault.t('auth_storage.sync_blocked_edits')
-              : undefined}
+            title={editsBlocked ? editBlockReason : undefined}
             onclick={openAddSecret}
           >
             <Plus class="size-3.5" />
@@ -228,6 +229,18 @@
           </Button>
         </div>
       </div>
+
+      {#if editsBlocked && editBlockReason}
+        <div
+          class="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+          data-testid="secret-edit-blocked-banner"
+        >
+          <TriangleAlert class="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <p class="text-pretty text-xs text-muted-foreground">
+            {editBlockReason}
+          </p>
+        </div>
+      {/if}
 
       <div class="relative">
         <Search class="absolute left-3 top-3 size-4 text-muted-foreground/60" />

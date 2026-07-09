@@ -131,7 +131,7 @@
         aria-label={vault.t('device_protection.mode_group_label')}
         data-testid="mode-group-device"
       >
-        {#each deviceModes as mode}
+        {#each deviceModes as mode (mode)}
           <button
             type="button"
             class={[
@@ -147,7 +147,9 @@
             }}
           >
             <span class="block font-medium">
-              {vault.t(`device_protection.mode_${mode.replace('-', '_')}_title`)}
+              {vault.t(
+                `device_protection.mode_${mode.replace('-', '_')}_title`,
+              )}
             </span>
             <span class="mt-1 block text-xs text-muted-foreground">
               {vault.t(
