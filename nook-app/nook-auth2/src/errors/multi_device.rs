@@ -63,6 +63,27 @@ pub enum MultiDeviceError {
     #[error("No auth envelope found for device {device_id} (pk_id {pk_id})")]
     AuthEnvelopeNotFound { device_id: String, pk_id: String },
 
+    #[error("No nexus share found for device {device_id}.")]
+    NexusShareNotFound { device_id: String },
+
+    #[error("Invalid nexus threshold policy.")]
+    InvalidNexusThreshold,
+
+    #[error("Not enough nexus shares: need {threshold}, got {available}.")]
+    NotEnoughNexusShares { threshold: u8, available: usize },
+
+    #[error("Invalid nexus share record JSON")]
+    NexusShareJson(#[source] serde_json::Error),
+
+    #[error("Failed to serialize nexus share record")]
+    NexusShareSerialize(#[source] serde_json::Error),
+
+    #[error("Invalid nexus share payload")]
+    NexusSharePayload(#[source] serde_json::Error),
+
+    #[error("Invalid nexus share encoding.")]
+    InvalidNexusShareEncoding,
+
     #[error("Failed to build member roster record.")]
     MemberRosterBuildFailed,
 

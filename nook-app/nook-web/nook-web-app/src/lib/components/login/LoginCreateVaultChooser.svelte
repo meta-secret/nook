@@ -33,7 +33,7 @@
       <p class="text-sm font-semibold text-foreground">
         {vault.t('architecture_modes.vault_type_title')}
       </p>
-      {#each vaultTypes as mode}
+      {#each vaultTypes as mode (mode)}
         <button
           type="button"
           class={[
@@ -63,7 +63,7 @@
       <p class="text-sm font-semibold text-foreground">
         {vault.t('architecture_modes.replication_type_title')}
       </p>
-      {#each replicationTypes as mode}
+      {#each replicationTypes as mode (mode)}
         <button
           type="button"
           class={[
@@ -83,9 +83,7 @@
             {vault.t(`architecture_modes.replication_type_${mode}_title`)}
           </span>
           <span class="mt-1 block text-xs text-muted-foreground">
-            {vault.t(
-              `architecture_modes.replication_type_${mode}_description`,
-            )}
+            {vault.t(`architecture_modes.replication_type_${mode}_description`)}
           </span>
         </button>
       {/each}

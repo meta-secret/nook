@@ -20,9 +20,10 @@ pub(crate) use sync::{
     vault_sync_store,
 };
 pub(crate) use vault::{
-    database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch, vault_event,
-    vault_event_builder, vault_event_graph, vault_event_session, vault_event_store, vault_format,
-    vault_ids, vault_import, vault_projection, vault_session, vault_session_cache, vault_wire,
+    database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
+    vault_event, vault_event_builder, vault_event_graph, vault_event_session, vault_event_store,
+    vault_format, vault_ids, vault_import, vault_projection, vault_session, vault_session_cache,
+    vault_wire,
 };
 
 pub use bip39::{
@@ -34,15 +35,14 @@ pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
     PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationResolution,
-    WrappedDeviceIdentity,
-    derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
-    finish_passkey_device_identity, finish_passkey_device_identity_for_mode,
-    finish_passkey_wrapped_device_identity, parse_wrapped_device_identity,
-    passkey_assertion_request, passkey_derived_device_identity_record,
-    passkey_recovery_request, passkey_wrapped_device_identity_record,
-    recover_passkey_device_identity, resolve_passkey_registration,
-    serialize_wrapped_device_identity, unlock_passkey_device_identity,
-    unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
+    WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
+    deterministic_passkey_prf_input, finish_passkey_device_identity,
+    finish_passkey_device_identity_for_mode, finish_passkey_wrapped_device_identity,
+    parse_wrapped_device_identity, passkey_assertion_request,
+    passkey_derived_device_identity_record, passkey_recovery_request,
+    passkey_wrapped_device_identity_record, recover_passkey_device_identity,
+    resolve_passkey_registration, serialize_wrapped_device_identity,
+    unlock_passkey_device_identity, unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
 pub use enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,
@@ -74,18 +74,20 @@ pub use secret_view::build_secret_yaml;
 
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
-    apply_vault_meta_operation, approve_join_request, assess_connect_access, auth_record,
-    build_members_records, create_join_request_record, create_join_request_record_with_signing_key,
-    dec_auth_id, dec_auth_id_from_public_key, deny_join_request, device_is_enrolled,
-    encrypt_for_recipient, encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys,
-    ensure_self_in_roster, explain_connect_blocked, generate_dec, generate_id,
-    generate_symmetric_key, generate_vault_keys, genesis_auth_record, genesis_dec_record,
-    genesis_members_records, is_auth_id, is_auth_stored_record, is_dec_stored_record,
-    is_join_stored_record, is_members_stored_record, is_reserved_device_label,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, VaultKeys, VaultMember,
+    VaultMetaRecord, VaultMetaState, apply_vault_meta_operation, approve_join_request,
+    assess_connect_access, auth_record, build_members_records, create_join_request_record,
+    create_join_request_record_with_signing_key, create_nexus_share_records, dec_auth_id,
+    dec_auth_id_from_public_key, deny_join_request, device_is_enrolled, encrypt_for_recipient,
+    encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
+    explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
+    generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
+    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
+    is_members_stored_record, is_nexus_share_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
     member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
-    parse_auth_envelopes, parse_join_request, pending_join_for_device, rename_vault_member,
+    nexus_share_record_key, parse_auth_envelopes, parse_join_request, parse_nexus_share_envelope,
+    pending_join_for_device, reconstruct_nexus_vault_keys, rename_vault_member,
     replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
     resolve_secrets_key, revoke_vault_member, roster_add_member, user_stored_records,
     vault_has_multi_device_records,
@@ -114,10 +116,10 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
-    draft_storage_args, ensure_local_provider_row, find_duplicate_sync_provider,
-    localize_provider_label, migrate_provider_fields, normalize_auth_snapshot,
-    provider_replication_capability_for_row, provider_storage_detail, provider_target_key,
-    seed_provider_from_legacy_storage, storage_args_for_provider,
+    draft_storage_args, enrollment_provider_for_architecture, ensure_local_provider_row,
+    find_duplicate_sync_provider, localize_provider_label, migrate_provider_fields,
+    normalize_auth_snapshot, provider_replication_capability_for_row, provider_storage_detail,
+    provider_target_key, seed_provider_from_legacy_storage, storage_args_for_provider,
     validate_provider_row_replication, vault_storage_args,
 };
 pub use validation::{
@@ -174,10 +176,10 @@ pub use vault_event_store::{
 };
 pub use vault_format::{
     VaultFormat, current_vault_schema_version, default_vault_name_for_store_id, deserialize_stored,
-    deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,
-    read_vault_password_entries, read_vault_schema_version, read_vault_architecture,
-    read_vault_store_id, read_vault_unlock, read_vault_version, serialize_stored,
-    serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_and_name,
+    deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_architecture,
+    read_vault_name, read_vault_password_entries, read_vault_schema_version, read_vault_store_id,
+    read_vault_unlock, read_vault_version, serialize_stored, serialize_stored_yaml_with_unlock,
+    serialize_stored_yaml_with_unlock_and_name,
     serialize_stored_yaml_with_unlock_name_architecture, set_vault_name,
 };
 pub use vault_ids::{

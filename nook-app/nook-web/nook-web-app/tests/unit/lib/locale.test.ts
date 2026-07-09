@@ -52,7 +52,10 @@ describe('locale', () => {
         lookupTranslation(catalog, 'provider_picker.google_drive_desc'),
       ).toBeTypeOf('string')
       expect(
-        lookupTranslation(catalog, 'provider_picker.unsupported_replication_desc'),
+        lookupTranslation(
+          catalog,
+          'provider_picker.unsupported_replication_desc',
+        ),
       ).toBeTypeOf('string')
     }
   })
@@ -76,6 +79,7 @@ describe('locale', () => {
       'architecture_modes.replication_type_shared_description',
       'architecture_modes.nexus_gate_title',
       'architecture_modes.nexus_gate_description',
+      'architecture_modes.nexus_secret_creation_blocked',
       'onboard_device.shared_identity_label',
       'onboard_device.shared_identity_placeholder',
       'onboard_device.shared_identity_hint',

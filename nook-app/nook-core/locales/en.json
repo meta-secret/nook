@@ -377,7 +377,8 @@
     "replication_type_shared_title": "Shared",
     "replication_type_shared_description": "Joiners use their own provider account; the owner grants shared storage access.",
     "nexus_gate_title": "Nexus setup starts locked",
-    "nexus_gate_description": "Secret creation stays blocked until the required participants and encrypted shares are ready."
+    "nexus_gate_description": "Secret creation stays blocked until the required participants and encrypted shares are ready.",
+    "nexus_secret_creation_blocked": "Nexus secret creation is locked until the required encrypted key shares are present."
   },
   "errors": {
     "validation": {

@@ -123,7 +123,10 @@
           <span class="block truncate text-xs text-muted-foreground">
             {localFolderUnavailable
               ? vault.t('provider_picker.local_folder_unavailable_desc')
-              : description('provider_picker.local_folder_desc', 'local-folder')}
+              : description(
+                  'provider_picker.local_folder_desc',
+                  'local-folder',
+                )}
           </span>
         </span>
       </button>
@@ -165,7 +168,7 @@
           <span class="block text-sm font-semibold text-foreground"
             >{vault.t('provider_picker.google_drive')}</span
           >
-            <span class="block truncate text-xs text-muted-foreground">
+          <span class="block truncate text-xs text-muted-foreground">
             {description(
               'provider_picker.google_drive_desc',
               'oauth-file',
@@ -199,7 +202,7 @@
           <span class="block text-sm font-semibold text-foreground"
             >{vault.t('provider_picker.icloud')}</span
           >
-            <span class="block truncate text-xs text-muted-foreground">
+          <span class="block truncate text-xs text-muted-foreground">
             {description('provider_picker.icloud_desc', 'oauth-file', 'icloud')}
           </span>
         </span>
@@ -220,7 +223,7 @@
           <span class="block text-sm font-semibold text-foreground"
             >{vault.t('provider_picker.github')}</span
           >
-            <span class="block truncate text-xs text-muted-foreground">
+          <span class="block truncate text-xs text-muted-foreground">
             {description('provider_picker.github_desc', 'github')}
           </span>
         </span>

@@ -87,8 +87,11 @@ impl NookVaultManager {
             )?
         } else {
             let request = nook_core::PasskeyAssertionRequest::new(&credential_id, &prf_input)?;
-            let request_options =
-                passkey_browser::request_options(rp_id, request.credential_id(), request.prf_input())?;
+            let request_options = passkey_browser::request_options(
+                rp_id,
+                request.credential_id(),
+                request.prf_input(),
+            )?;
             let credential = passkey_browser::get_credential(&request_options).await?;
             let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
             nook_core::finish_passkey_device_identity_for_mode(

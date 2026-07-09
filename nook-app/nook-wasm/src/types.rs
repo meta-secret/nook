@@ -576,6 +576,29 @@ impl NookEnrollmentProvider {
         Self(nook_core::EnrollmentProvider::Github { pat, repo })
     }
 
+    #[wasm_bindgen(js_name = oauthFile)]
+    #[must_use]
+    #[allow(clippy::too_many_arguments)]
+    pub fn oauth_file(
+        preset: String,
+        access_token: String,
+        refresh_token: Option<String>,
+        expires_at: Option<String>,
+        file_id: Option<String>,
+        file_name: Option<String>,
+        account_email: Option<String>,
+    ) -> Self {
+        Self(nook_core::EnrollmentProvider::OauthFile {
+            preset,
+            access_token,
+            refresh_token,
+            expires_at,
+            file_id,
+            file_name,
+            account_email,
+        })
+    }
+
     #[wasm_bindgen(js_name = sharedProviderGrant)]
     #[must_use]
     pub fn shared_provider_grant(
@@ -606,10 +629,20 @@ impl NookEnrollmentProvider {
         match self.0 {
             nook_core::EnrollmentProvider::Local => nook_core::StorageProviderType::Local,
             nook_core::EnrollmentProvider::Github { .. } => nook_core::StorageProviderType::Github,
-            nook_core::EnrollmentProvider::SharedProviderGrant { .. } => {
+            nook_core::EnrollmentProvider::OauthFile { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => {
                 nook_core::StorageProviderType::OauthFile
             }
         }
+    }
+
+    #[wasm_bindgen(getter, js_name = isSharedProviderGrant)]
+    #[must_use]
+    pub fn is_shared_provider_grant(&self) -> bool {
+        matches!(
+            self.0,
+            nook_core::EnrollmentProvider::SharedProviderGrant { .. }
+        )
     }
 
     #[wasm_bindgen(getter, js_name = githubPat)]
@@ -617,6 +650,7 @@ impl NookEnrollmentProvider {
         match &self.0 {
             nook_core::EnrollmentProvider::Github { pat, .. } => Some(pat.clone()),
             nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::OauthFile { .. }
             | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
         }
     }
@@ -626,6 +660,82 @@ impl NookEnrollmentProvider {
         match &self.0 {
             nook_core::EnrollmentProvider::Github { repo, .. } => Some(repo.clone()),
             nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::OauthFile { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthPreset)]
+    pub fn oauth_preset(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { preset, .. } => Some(preset.clone()),
+            nook_core::EnrollmentProvider::SharedProviderGrant { oauth_preset, .. } => {
+                oauth_preset.clone()
+            }
+            nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
+                None
+            }
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthAccessToken)]
+    pub fn oauth_access_token(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { access_token, .. } => {
+                Some(access_token.clone())
+            }
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthRefreshToken)]
+    pub fn oauth_refresh_token(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { refresh_token, .. } => refresh_token.clone(),
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthExpiresAt)]
+    pub fn oauth_expires_at(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { expires_at, .. } => expires_at.clone(),
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthFileId)]
+    pub fn oauth_file_id(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { file_id, .. } => file_id.clone(),
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthFileName)]
+    pub fn oauth_file_name(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { file_name, .. } => file_name.clone(),
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = oauthAccountEmail)]
+    pub fn oauth_account_email(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::OauthFile { account_email, .. } => account_email.clone(),
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
             | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
         }
     }
@@ -637,9 +747,9 @@ impl NookEnrollmentProvider {
                 joiner_identity_kind,
                 ..
             } => Some(joiner_identity_kind.clone()),
-            nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
-                None
-            }
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::OauthFile { .. } => None,
         }
     }
 
@@ -649,9 +759,9 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::SharedProviderGrant {
                 joiner_identity, ..
             } => Some(joiner_identity.clone()),
-            nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
-                None
-            }
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::OauthFile { .. } => None,
         }
     }
 }

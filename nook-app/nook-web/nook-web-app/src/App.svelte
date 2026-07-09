@@ -593,6 +593,7 @@
                     {vault}
                     isSaving={vault.isSaving}
                     editsBlocked={vault.editsBlocked}
+                    editBlockReason={vault.editBlockReason}
                     secrets={vault.secrets}
                     onAddModeChange={(open, type = undefined) => {
                       secretsAddOpen = open

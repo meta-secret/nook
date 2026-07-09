@@ -239,11 +239,27 @@ export class VaultState {
   }
 
   get editsBlocked(): boolean {
+    return this.editBlockReason !== undefined
+  }
+
+  get architectureCanCreateSecret(): boolean {
     return (
-      this.syncBlocked ||
-      this.securityConflicts.length > 0 ||
-      !architectureCanCreateSecret(this.vaultArchitecture)
+      this.manager?.canCreateSecretForVaultArchitecture() ??
+      architectureCanCreateSecret(this.vaultArchitecture)
     )
+  }
+
+  get editBlockReason(): string | undefined {
+    if (this.securityConflicts.length > 0) {
+      return this.t('auth_storage.security_conflict_edits')
+    }
+    if (this.syncBlocked) {
+      return this.t('auth_storage.sync_blocked_edits')
+    }
+    if (!this.architectureCanCreateSecret) {
+      return this.t('architecture_modes.nexus_secret_creation_blocked')
+    }
+    return undefined
   }
 
   get deviceProtectionReady(): boolean {
@@ -778,7 +794,9 @@ export class VaultState {
   applyDraftVaultArchitecture() {
     this.vaultArchitecture = this.draftVaultArchitecture
     if (this.manager) {
-      this.manager.setVaultArchitectureJson(JSON.stringify(this.vaultArchitecture))
+      this.manager.setVaultArchitectureJson(
+        JSON.stringify(this.vaultArchitecture),
+      )
     }
   }
 
@@ -792,7 +810,10 @@ export class VaultState {
     this.draftReplicationType = this.vaultArchitecture.replication_type
   }
 
-  async setupDeviceProtection(passkeyLabel = '', deviceMode = this.draftDeviceMode) {
+  async setupDeviceProtection(
+    passkeyLabel = '',
+    deviceMode = this.draftDeviceMode,
+  ) {
     if (!this.manager || this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''

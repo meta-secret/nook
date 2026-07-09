@@ -50,7 +50,25 @@ const ENCODE_URI_COMPONENT: &AsciiSet = &CONTROLS
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum EnrollmentProvider {
     Local,
-    Github { pat: String, repo: String },
+    Github {
+        pat: String,
+        repo: String,
+    },
+    #[serde(rename = "oauth-file")]
+    OauthFile {
+        preset: String,
+        access_token: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        refresh_token: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expires_at: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        account_email: Option<String>,
+    },
     #[serde(rename = "shared-provider-grant")]
     SharedProviderGrant {
         sync_provider_type: String,
@@ -283,6 +301,18 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
             }
             Ok(())
         }
+        EnrollmentProvider::OauthFile {
+            preset,
+            access_token,
+            ..
+        } => {
+            if !matches!(preset.as_str(), "google-drive" | "icloud")
+                || access_token.trim().is_empty()
+            {
+                return Err(EnrollmentError::MalformedGithubProvider);
+            }
+            Ok(())
+        }
         EnrollmentProvider::SharedProviderGrant {
             sync_provider_type,
             oauth_preset,
@@ -471,6 +501,29 @@ mod tests {
         assert!(!serialized.contains("ya29."));
         assert!(!serialized.contains("github_pat_"));
         assert!(!serialized.contains("hunter2"));
+    }
+
+    #[test]
+    fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::OauthFile {
+                preset: "google-drive".to_owned(),
+                access_token: "ya29.secret".to_owned(),
+                refresh_token: Some("refresh.secret".to_owned()),
+                expires_at: Some("2026-07-09T00:00:00Z".to_owned()),
+                file_id: Some("drive-file-id".to_owned()),
+                file_name: Some("nook-backup.yaml".to_owned()),
+                account_email: Some("owner@example.com".to_owned()),
+            },
+            entry_id: "entry-oauth".to_owned(),
+            issued_at: "2026-07-09T00:00:00Z".to_owned(),
+        };
+        let code = encrypt_enrollment_payload(&input, "correct horse", "OAuth entry").unwrap();
+        assert!(!code.contains("ya29.secret"));
+        assert!(!code.contains("refresh.secret"));
+
+        let decrypted = decrypt_enrollment_payload(&code, "correct horse").unwrap();
+        assert_eq!(decrypted.provider, input.provider);
     }
 
     #[test]

@@ -441,7 +441,9 @@ pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
 }
 
 #[wasm_bindgen(js_name = validateVaultArchitecture)]
-pub fn validate_vault_architecture(architecture: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+pub fn validate_vault_architecture(
+    architecture: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
     let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
     architecture.validate()?;
     Ok(to_js_value(&architecture)?)
@@ -466,7 +468,9 @@ pub fn vault_architecture_can_create_secret(
 }
 
 #[wasm_bindgen(js_name = providerReplicationCapability)]
-pub fn provider_replication_capability(provider: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+pub fn provider_replication_capability(
+    provider: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
     let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
     Ok(to_js_value(
         &nook_core::provider_replication_capability_for_row(&provider)?,
@@ -484,6 +488,24 @@ pub fn validate_provider_replication(
         &provider,
         replication_type,
     )?)?)
+}
+
+#[wasm_bindgen(js_name = enrollmentProviderForArchitecture)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn enrollment_provider_for_architecture(
+    provider: JsValue,
+    architecture: JsValue,
+    shared_joiner_identity: Option<String>,
+) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    Ok(NookEnrollmentProvider::from_core(
+        nook_core::enrollment_provider_for_architecture(
+            &provider,
+            &architecture,
+            shared_joiner_identity.as_deref(),
+        )?,
+    ))
 }
 
 #[wasm_bindgen(js_name = wasmStorageArgs)]

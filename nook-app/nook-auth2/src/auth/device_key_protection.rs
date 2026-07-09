@@ -262,8 +262,8 @@ pub fn finish_passkey_wrapped_device_identity(
     prf_output: &[u8],
 ) -> DeviceKeyProtectionResult<PasskeyDeviceIdentityMaterial> {
     validate_recovery_inputs(user_handle, prf_output)?;
-    let identity = DeviceIdentity::generate()
-        .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
+    let identity =
+        DeviceIdentity::generate().map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
     let identity_secret = identity.secret_string();
     let record = passkey_wrapped_device_identity_record(
         credential_id,
@@ -318,7 +318,9 @@ pub fn unlock_passkey_device_identity(
         WrappedDeviceIdentity::PasskeyWrappedLocal(inner) => {
             unwrap_passkey_wrapped_device_identity(inner, prf_output)?
         }
-        WrappedDeviceIdentity::Pin(_) => return Err(DeviceKeyProtectionError::UnsupportedParameters),
+        WrappedDeviceIdentity::Pin(_) => {
+            return Err(DeviceKeyProtectionError::UnsupportedParameters);
+        }
     };
     let identity = DeviceIdentity::from_secret_str(&secret)
         .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
@@ -870,7 +872,10 @@ mod tests {
 
         assert_eq!(parsed.protection_mode(), "passkey");
         assert_eq!(parsed.device_mode(), "anti-hacker");
-        assert_eq!(record.version, PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION);
+        assert_eq!(
+            record.version,
+            PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION
+        );
         assert_eq!(parsed.credential_id_bytes().unwrap(), credential_id);
         assert_eq!(parsed.user_handle_bytes().unwrap(), user_handle);
         assert_eq!(parsed.prf_input_bytes().unwrap(), prf_input);
@@ -906,8 +911,8 @@ mod tests {
                 .is_err()
         );
 
-        let recovered = recover_passkey_device_identity(&credential_id, &user_handle, &prf_output)
-            .unwrap();
+        let recovered =
+            recover_passkey_device_identity(&credential_id, &user_handle, &prf_output).unwrap();
         assert_ne!(recovered.device_id(), material.device_id());
     }
 

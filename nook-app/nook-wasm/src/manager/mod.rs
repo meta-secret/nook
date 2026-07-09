@@ -245,9 +245,8 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = setVaultArchitectureJson)]
     pub fn set_vault_architecture_json(&mut self, architecture_json: &str) -> Result<(), JsError> {
-        let architecture: nook_core::VaultArchitecture =
-            serde_json::from_str(architecture_json)
-                .map_err(|error| JsError::new(&error.to_string()))?;
+        let architecture: nook_core::VaultArchitecture = serde_json::from_str(architecture_json)
+            .map_err(|error| JsError::new(&error.to_string()))?;
         architecture
             .validate()
             .map_err(|error| JsError::new(&error.to_string()))?;
@@ -257,7 +256,9 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = canCreateSecretForVaultArchitecture)]
     pub fn can_create_secret_for_vault_architecture(&self) -> bool {
-        self.vault.architecture.can_create_secret()
+        self.vault
+            .architecture
+            .can_create_secret_with_records(&self.stored_records_snapshot())
     }
 
     #[wasm_bindgen(getter, js_name = vaultName)]
@@ -345,16 +346,18 @@ impl NookVaultManager {
             ));
         }
         let records = self.vault.meta.to_stored_records();
-        Ok(nook_core::serialize_stored_yaml_with_unlock_name_architecture(
-            &records,
-            &self.vault.unlock,
-            &self.vault.password_entries,
-            Some(self.vault.store_id.as_str()),
-            self.vault.vault_name.as_deref(),
-            None,
-            &self.vault.architecture,
-        )?
-        .into_inner())
+        Ok(
+            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+                &records,
+                &self.vault.unlock,
+                &self.vault.password_entries,
+                Some(self.vault.store_id.as_str()),
+                self.vault.vault_name.as_deref(),
+                None,
+                &self.vault.architecture,
+            )?
+            .into_inner(),
+        )
     }
 
     pub(in crate::manager) fn local_cache_ref(&self) -> String {

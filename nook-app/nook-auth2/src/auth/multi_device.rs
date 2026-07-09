@@ -6,6 +6,7 @@ use crate::{
 };
 use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -18,7 +19,6 @@ pub fn generate_symmetric_key() -> MultiDeviceResult<SymmetricKey> {
 
 /// Compact, URL-safe random ID (64-bit, base64url, no padding — 11 chars).
 pub fn generate_id() -> MultiDeviceResult<CompactToken> {
-    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
     let mut bytes = [0u8; 8];
     getrandom::getrandom(&mut bytes).map_err(|e| MultiDeviceError::GenerateId(e.to_string()))?;
     CompactToken::parse(&URL_SAFE_NO_PAD.encode(bytes)).map_err(MultiDeviceError::Validation)
@@ -73,6 +73,13 @@ pub fn join_record_key(device_id: &DeviceId) -> String {
     device_id.to_string()
 }
 
+pub const NEXUS_SHARE_RECORD_PREFIX: &str = "nexus_share:";
+
+#[must_use]
+pub fn nexus_share_record_key(device_id: &DeviceId) -> String {
+    format!("{NEXUS_SHARE_RECORD_PREFIX}{device_id}")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuthEnvelopes {
     pub secrets_key: AgeArmoredCiphertext,
@@ -81,6 +88,42 @@ pub struct AuthEnvelopes {
 
 pub fn parse_auth_envelopes(value: &str) -> MultiDeviceResult<AuthEnvelopes> {
     serde_json::from_str(value).map_err(MultiDeviceError::AuthEnvelopeJson)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NexusShareEnvelope {
+    pub version: u32,
+    pub threshold: u8,
+    pub required_participants: u8,
+    pub share_index: u8,
+    pub ciphertext: AgeArmoredCiphertext,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct NexusSharePlaintext {
+    version: u32,
+    threshold: u8,
+    required_participants: u8,
+    share_index: u8,
+    share: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct NexusVaultKeysPlaintext {
+    secrets_key: String,
+    members_key: String,
+}
+
+pub fn parse_nexus_share_envelope(value: &str) -> MultiDeviceResult<NexusShareEnvelope> {
+    serde_json::from_str(value).map_err(MultiDeviceError::NexusShareJson)
+}
+
+#[must_use]
+pub fn is_nexus_share_stored_record(record: &StoredSecretRecord) -> bool {
+    matches!(
+        VaultMetaRecord::classify(record),
+        VaultMetaRecord::NexusShare(..)
+    )
 }
 
 #[must_use]
@@ -173,11 +216,19 @@ pub enum VaultMetaRecord {
     Join(DeviceId, JoinRequest),
     /// A roster entry, still encrypted with `members_key`.
     Member(AuthKeyId, StoredRecordPayload),
+    /// A threshold share of the vault key bundle, encrypted to one device.
+    NexusShare(DeviceId, NexusShareEnvelope),
 }
 
 impl VaultMetaRecord {
     #[must_use]
     pub fn classify(record: &StoredSecretRecord) -> Self {
+        if let Some(device_id_str) = record.key.as_str().strip_prefix(NEXUS_SHARE_RECORD_PREFIX)
+            && let Ok(device_id) = DeviceId::parse(device_id_str)
+            && let Ok(share) = parse_nexus_share_envelope(record.value.as_str())
+        {
+            return Self::NexusShare(device_id, share);
+        }
         if let Ok(join) = parse_join_request(record.value.as_str()) {
             return Self::Join(join.device_id.clone(), join);
         }
@@ -228,6 +279,13 @@ impl VaultMetaRecord {
                 secret_type: None,
                 value: payload.clone(),
             },
+            Self::NexusShare(device_id, share) => StoredSecretRecord {
+                key: SecretId::from_vault_record(&nexus_share_record_key(device_id)),
+                secret_type: None,
+                value: StoredRecordPayload::from_trusted(
+                    serde_json::to_string(share).map_err(MultiDeviceError::NexusShareSerialize)?,
+                ),
+            },
         })
     }
 }
@@ -246,6 +304,7 @@ pub struct VaultMetaState {
     pub auth: HashMap<AuthKeyId, AuthEnvelopes>,
     pub joins: HashMap<DeviceId, JoinRequest>,
     pub members: HashMap<AuthKeyId, StoredRecordPayload>,
+    pub nexus_shares: HashMap<DeviceId, NexusShareEnvelope>,
 }
 
 impl VaultMetaState {
@@ -255,6 +314,7 @@ impl VaultMetaState {
             && self.auth.is_empty()
             && self.joins.is_empty()
             && self.members.is_empty()
+            && self.nexus_shares.is_empty()
     }
 
     #[must_use]
@@ -281,6 +341,9 @@ impl VaultMetaState {
             VaultMetaRecord::Member(auth_id, payload) => {
                 self.members.insert(auth_id, payload);
             }
+            VaultMetaRecord::NexusShare(device_id, share) => {
+                self.nexus_shares.insert(device_id, share);
+            }
         }
     }
 
@@ -298,13 +361,22 @@ impl VaultMetaState {
         if let Ok(auth_id) = AuthKeyId::parse(key) {
             self.auth.remove(&auth_id);
         }
+        if let Some(device_id_str) = key.strip_prefix(NEXUS_SHARE_RECORD_PREFIX)
+            && let Ok(device_id) = DeviceId::parse(device_id_str)
+        {
+            self.nexus_shares.remove(&device_id);
+        }
         self.secrets.remove(&SecretId::from_vault_record(key));
     }
 
     #[must_use]
     pub fn to_stored_records(&self) -> Vec<StoredSecretRecord> {
         let mut records = Vec::with_capacity(
-            self.secrets.len() + self.auth.len() + self.joins.len() + self.members.len(),
+            self.secrets.len()
+                + self.auth.len()
+                + self.joins.len()
+                + self.members.len()
+                + self.nexus_shares.len(),
         );
         for (id, (secret_type, payload)) in &self.secrets {
             records.push(StoredSecretRecord {
@@ -333,6 +405,13 @@ impl VaultMetaState {
                 secret_type: None,
                 value: payload.clone(),
             });
+        }
+        for (device_id, share) in &self.nexus_shares {
+            if let Ok(record) =
+                VaultMetaRecord::NexusShare(device_id.clone(), share.clone()).to_stored()
+            {
+                records.push(record);
+            }
         }
         records.sort_by(|a, b| a.key.as_str().cmp(b.key.as_str()));
         records
@@ -948,6 +1027,221 @@ pub fn resolve_members_key(
     identity.decrypt_envelope(&envelopes.members_key)
 }
 
+pub fn create_nexus_share_records(
+    keys: &VaultKeys,
+    participants: &[DeviceIdentity],
+    threshold: u8,
+) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
+    let required_participants =
+        u8::try_from(participants.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
+    validate_nexus_threshold(threshold, required_participants)?;
+    let payload = serde_json::to_vec(&NexusVaultKeysPlaintext {
+        secrets_key: keys.secrets_key.as_str().to_owned(),
+        members_key: keys.members_key.as_str().to_owned(),
+    })
+    .map_err(MultiDeviceError::NexusSharePayload)?;
+    let shares = split_secret_bytes(&payload, threshold, required_participants)?;
+    participants
+        .iter()
+        .zip(shares)
+        .map(|(participant, share)| {
+            let plaintext = NexusSharePlaintext {
+                version: 1,
+                threshold,
+                required_participants,
+                share_index: share.index,
+                share: URL_SAFE_NO_PAD.encode(&share.bytes),
+            };
+            let json =
+                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::NexusSharePayload)?;
+            let envelope = NexusShareEnvelope {
+                version: 1,
+                threshold,
+                required_participants,
+                share_index: share.index,
+                ciphertext: encrypt_for_recipient(&json, &participant.public_key())?,
+            };
+            VaultMetaRecord::NexusShare(participant.device_id().clone(), envelope).to_stored()
+        })
+        .collect()
+}
+
+pub fn reconstruct_nexus_vault_keys(
+    records: &[StoredSecretRecord],
+    identities: &[DeviceIdentity],
+) -> MultiDeviceResult<VaultKeys> {
+    let mut shares = Vec::new();
+    let mut expected_threshold = None;
+    for identity in identities {
+        let record = records
+            .iter()
+            .find(|entry| entry.key.as_str() == nexus_share_record_key(identity.device_id()))
+            .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
+                device_id: identity.device_id().to_string(),
+            })?;
+        let envelope = parse_nexus_share_envelope(record.value.as_str())?;
+        let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
+        let plaintext: NexusSharePlaintext =
+            serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::NexusSharePayload)?;
+        if plaintext.threshold != envelope.threshold
+            || plaintext.required_participants != envelope.required_participants
+            || plaintext.share_index != envelope.share_index
+        {
+            return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        }
+        if let Some(threshold) = expected_threshold {
+            if threshold != plaintext.threshold {
+                return Err(MultiDeviceError::InvalidNexusThreshold);
+            }
+        } else {
+            expected_threshold = Some(plaintext.threshold);
+        }
+        let bytes = URL_SAFE_NO_PAD
+            .decode(plaintext.share.as_bytes())
+            .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+        shares.push(IndexedShare {
+            index: plaintext.share_index,
+            bytes,
+        });
+    }
+    let threshold = expected_threshold.ok_or(MultiDeviceError::NotEnoughNexusShares {
+        threshold: 1,
+        available: 0,
+    })?;
+    if shares.len() < usize::from(threshold) {
+        return Err(MultiDeviceError::NotEnoughNexusShares {
+            threshold,
+            available: shares.len(),
+        });
+    }
+    let reconstructed = reconstruct_secret_bytes(&shares[..usize::from(threshold)], threshold)?;
+    let payload: NexusVaultKeysPlaintext =
+        serde_json::from_slice(&reconstructed).map_err(MultiDeviceError::NexusSharePayload)?;
+    Ok(VaultKeys {
+        secrets_key: SymmetricKey::parse(&payload.secrets_key)
+            .map_err(MultiDeviceError::Validation)?,
+        members_key: SymmetricKey::parse(&payload.members_key)
+            .map_err(MultiDeviceError::Validation)?,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IndexedShare {
+    index: u8,
+    bytes: Vec<u8>,
+}
+
+fn validate_nexus_threshold(threshold: u8, required_participants: u8) -> MultiDeviceResult<()> {
+    if threshold <= 1 || required_participants == 0 || threshold > required_participants {
+        return Err(MultiDeviceError::InvalidNexusThreshold);
+    }
+    Ok(())
+}
+
+fn split_secret_bytes(
+    secret: &[u8],
+    threshold: u8,
+    required_participants: u8,
+) -> MultiDeviceResult<Vec<IndexedShare>> {
+    validate_nexus_threshold(threshold, required_participants)?;
+    let mut shares: Vec<IndexedShare> = (1..=required_participants)
+        .map(|index| IndexedShare {
+            index,
+            bytes: Vec::with_capacity(secret.len()),
+        })
+        .collect();
+    let degree = usize::from(threshold - 1);
+    for &byte in secret {
+        let mut coefficients = vec![0u8; degree];
+        getrandom::getrandom(&mut coefficients)
+            .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
+        for share in &mut shares {
+            let mut y = byte;
+            let mut power = 1u8;
+            for coefficient in &coefficients {
+                power = gf_mul(power, share.index);
+                y ^= gf_mul(*coefficient, power);
+            }
+            share.bytes.push(y);
+        }
+    }
+    Ok(shares)
+}
+
+fn reconstruct_secret_bytes(shares: &[IndexedShare], threshold: u8) -> MultiDeviceResult<Vec<u8>> {
+    if shares.len() < usize::from(threshold) {
+        return Err(MultiDeviceError::NotEnoughNexusShares {
+            threshold,
+            available: shares.len(),
+        });
+    }
+    let length = shares
+        .first()
+        .map(|share| share.bytes.len())
+        .ok_or(MultiDeviceError::InvalidNexusShareEncoding)?;
+    if shares
+        .iter()
+        .any(|share| share.index == 0 || share.bytes.len() != length)
+    {
+        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+    }
+    let mut secret = vec![0u8; length];
+    for (byte_index, secret_byte) in secret.iter_mut().enumerate().take(length) {
+        let mut value = 0u8;
+        for (i, share_i) in shares.iter().take(usize::from(threshold)).enumerate() {
+            let mut numerator = 1u8;
+            let mut denominator = 1u8;
+            for (j, share_j) in shares.iter().take(usize::from(threshold)).enumerate() {
+                if i == j {
+                    continue;
+                }
+                numerator = gf_mul(numerator, share_j.index);
+                denominator = gf_mul(denominator, share_i.index ^ share_j.index);
+            }
+            if denominator == 0 {
+                return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            }
+            let coefficient = gf_mul(numerator, gf_inv(denominator));
+            value ^= gf_mul(share_i.bytes[byte_index], coefficient);
+        }
+        *secret_byte = value;
+    }
+    Ok(secret)
+}
+
+fn gf_mul(mut a: u8, mut b: u8) -> u8 {
+    let mut product = 0u8;
+    while b != 0 {
+        if b & 1 != 0 {
+            product ^= a;
+        }
+        let carry = a & 0x80 != 0;
+        a <<= 1;
+        if carry {
+            a ^= 0x1b;
+        }
+        b >>= 1;
+    }
+    product
+}
+
+fn gf_pow(mut base: u8, mut exponent: u8) -> u8 {
+    let mut result = 1u8;
+    while exponent != 0 {
+        if exponent & 1 != 0 {
+            result = gf_mul(result, base);
+        }
+        base = gf_mul(base, base);
+        exponent >>= 1;
+    }
+    result
+}
+
+fn gf_inv(value: u8) -> u8 {
+    debug_assert_ne!(value, 0);
+    gf_pow(value, 254)
+}
+
 fn encrypt_with_recipient(
     plaintext: &[u8],
     recipient: &Recipient,
@@ -1083,6 +1377,12 @@ mod tests {
         let keys = generate_vault_keys().unwrap();
         let (genesis, mut records) = genesis_vault(&keys);
         let joiner = DeviceIdentity::generate().unwrap();
+        let nexus_participant = DeviceIdentity::generate().unwrap();
+        let nexus_record =
+            create_nexus_share_records(&keys, &[genesis.clone(), nexus_participant.clone()], 2)
+                .unwrap()
+                .pop()
+                .unwrap();
         let join_record = create_join_request_record_with_signing_key(
             &joiner,
             ENROLLED_AT,
@@ -1091,6 +1391,7 @@ mod tests {
         .unwrap();
         let user_secret = user_secret_record("secret_login001", "encrypted-user-secret");
         records.push(join_record.clone());
+        records.push(nexus_record.clone());
         records.push(user_secret.clone());
 
         let mut state = VaultMetaState::from_stored_records(&records);
@@ -1098,6 +1399,7 @@ mod tests {
         assert_eq!(state.auth.len(), 1);
         assert_eq!(state.joins.len(), 1);
         assert_eq!(state.members.len(), 1);
+        assert_eq!(state.nexus_shares.len(), 1);
         assert_eq!(
             state
                 .joins
@@ -1116,6 +1418,7 @@ mod tests {
         state.remove_key(genesis.auth_id().as_str());
         state.remove_key(&member_stored_key(&genesis.auth_id()));
         state.remove_key(joiner.device_id().as_str());
+        state.remove_key(nexus_record.key.as_str());
         assert!(state.is_empty());
 
         assert!(matches!(
@@ -1126,6 +1429,34 @@ mod tests {
             VaultMetaRecord::classify(&join_record),
             VaultMetaRecord::Join(_, _)
         ));
+        assert!(matches!(
+            VaultMetaRecord::classify(&nexus_record),
+            VaultMetaRecord::NexusShare(_, _)
+        ));
+    }
+
+    #[test]
+    fn nexus_threshold_shares_reconstruct_keys_without_full_device_envelopes() {
+        let keys = generate_vault_keys().unwrap();
+        let first = DeviceIdentity::generate().unwrap();
+        let second = DeviceIdentity::generate().unwrap();
+        let third = DeviceIdentity::generate().unwrap();
+        let records =
+            create_nexus_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)
+                .unwrap();
+
+        assert_eq!(records.len(), 3);
+        assert!(records.iter().all(is_nexus_share_stored_record));
+        assert!(records.iter().all(|record| !is_auth_stored_record(record)));
+        assert!(resolve_secrets_key(&records, &first).is_err());
+        assert!(reconstruct_nexus_vault_keys(&records, std::slice::from_ref(&first)).is_err());
+
+        let reconstructed =
+            reconstruct_nexus_vault_keys(&records, &[first.clone(), second.clone()]).unwrap();
+        assert_eq!(reconstructed, keys);
+
+        let alternate = reconstruct_nexus_vault_keys(&records, &[second, third]).unwrap();
+        assert_eq!(alternate, keys);
     }
 
     #[test]
