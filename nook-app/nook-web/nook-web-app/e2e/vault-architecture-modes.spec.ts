@@ -64,9 +64,16 @@ test.describe('vault architecture modes', () => {
   test('shows mode selectors and gates nexus secret creation setup', async ({
     page,
   }) => {
+    await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(page.getByTestId('mode-group-vault')).toBeVisible()
     await expect(page.getByTestId('mode-group-replication')).toBeVisible()
     await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
+
+    await page.getByTestId('mode-option-anti-hacker').click()
+    await expect(page.getByTestId('mode-option-anti-hacker')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
 
     await page.getByTestId('mode-option-nexus').click()
     await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
@@ -135,11 +142,14 @@ test.describe('vault architecture modes', () => {
       'Shared architecture drive connected',
     )
 
+    await expect(page.getByTestId('onboarding-type-label')).toContainText(
+      'Shared provider grant',
+    )
     await expect(page.getByTestId('shared-joiner-identity-input')).toBeVisible()
     await page.getByTestId('onboard-password-input').fill(ONBOARD_PASSWORD)
     await page.getByTestId('onboard-device-submit').click()
     await expect(page.getByTestId('onboard-error')).toContainText(
-      'Enter the joiner provider identity.',
+      /joiner provider identity/i,
     )
     await expect(page.getByTestId('onboarding-link-url')).toHaveCount(0)
 
@@ -150,6 +160,9 @@ test.describe('vault architecture modes', () => {
 
     const linkInput = page.getByTestId('onboarding-link-url')
     await expect(linkInput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('shared-grant-instructions')).toContainText(
+      SHARED_JOINER_IDENTITY,
+    )
     const link = (await linkInput.inputValue()).trim()
     const code = enrollmentCodeFromLink(link)
     const envelope = JSON.parse(

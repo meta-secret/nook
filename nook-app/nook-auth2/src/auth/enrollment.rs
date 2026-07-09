@@ -324,7 +324,7 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
                 || joiner_identity_kind.trim() != "email"
                 || !is_plausible_email(joiner_identity)
             {
-                return Err(EnrollmentError::MalformedGithubProvider);
+                return Err(EnrollmentError::MalformedSharedProviderGrant);
             }
             Ok(())
         }

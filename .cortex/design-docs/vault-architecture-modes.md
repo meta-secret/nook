@@ -48,20 +48,32 @@ onboarding code is produced.
 
 ## Nexus Lifecycle
 
-`vault_type=nexus` stores encrypted `nexus_share:{device_id}` records in the
-top-level `nexus_shares:` YAML section. The vault key bundle is split across
-participant shares with a threshold policy, and the normal single-device auth
-envelope path must not unlock a nexus vault.
+`vault_type=nexus` never writes per-device full vault-key auth envelopes for the
+protected key epoch. Genesis keeps vault keys in session memory and enrolls the
+first participant into the member roster only. As additional devices are
+approved, Rust issues encrypted `nexus_share:{device_id}` records once the
+configured `required_participants` count is reached.
 
-A nexus vault blocks secret creation until the manager can see enough actual
-share records for the configured policy. UI metadata such as
-`ready_participants` is only presentation state; Svelte must call WASM/Rust for
-readiness so stale metadata cannot enable writes.
+`load_stored_vault` rejects single-device unlock for nexus vaults. Threshold
+reconstruction uses `load_nexus_vault` with enough participant identities.
+Secret creation stays blocked until actual share records exist
+(`can_create_secret_with_records`); UI `ready_participants` is presentation
+only.
 
-The current implementation provides the encrypted share record model and
-fail-closed creation gate. Higher-level ceremony UX for distributing,
-rotating, or recovering shares should build on these records rather than
-placing share math in TypeScript.
+Share math is currently interim GF(256) Shamir inside `nook-auth2`. Product
+SLIP-0039 mnemonic primitives remain owned by #261 and should replace this
+encoding later without changing the architecture-mode contract.
+
+## Shared Replication Grant
+
+Shared onboarding collects the joiner provider identity (email for Google Drive)
+and embeds a `SharedProviderGrant` enrollment payload without owner credentials.
+`prepare_shared_storage_grant` owns the grant ceremony decision in Rust.
+
+Google Drive sync currently uses OAuth `drive.appdata`, which is not shareable
+through Drive `permissions.create`. Until shareable storage targets exist, the
+contract returns `ManualGrantRequired` with localized owner instructions. The
+joiner then signs into their own provider account before redeeming the code.
 
 ## Web Boundary
 

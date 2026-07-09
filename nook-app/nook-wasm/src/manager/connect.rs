@@ -332,9 +332,17 @@ impl NookVaultManager {
         self.vault.meta = nook_core::VaultMetaState::default();
         let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        let genesis =
-            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
-        self.vault.meta.apply_record(&genesis);
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let genesis =
+                    nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
+                self.vault.meta.apply_record(&genesis);
+            }
+            nook_core::VaultType::Nexus => {
+                // Nexus genesis keeps vault keys in session memory only. Shares
+                // are issued after the required participants are enrolled.
+            }
+        }
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.vault.meta.apply_record(&member);
         }

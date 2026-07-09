@@ -63,6 +63,8 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotatio
         | VaultOperation::SecretConflictResolved { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
+        | VaultOperation::NexusParticipantEnrolled { .. }
+        | VaultOperation::NexusSharesIssued { .. }
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::PasswordAdded { .. }

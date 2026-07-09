@@ -508,6 +508,14 @@ pub fn enrollment_provider_for_architecture(
     ))
 }
 
+#[wasm_bindgen(js_name = prepareSharedStorageGrant)]
+pub fn prepare_shared_storage_grant(request: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+    let request: nook_core::SharedStorageGrantRequest = serde_wasm_bindgen::from_value(request)?;
+    Ok(to_js_value(&nook_core::prepare_shared_storage_grant(
+        &request,
+    )?)?)
+}
+
 #[wasm_bindgen(js_name = wasmStorageArgs)]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub fn wasm_storage_args(

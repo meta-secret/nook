@@ -366,6 +366,11 @@
     "recovery_complete": "Device identity reset. Create a new passkey to continue."
   },
   "architecture_modes": {
+    "device_mode_title": "Device protection",
+    "device_mode_standard_title": "Standard",
+    "device_mode_standard_description": "Derive this browser's device key from the passkey. Convenient, and recoverable if browser storage is cleared.",
+    "device_mode_anti-hacker_title": "Anti-hacker",
+    "device_mode_anti-hacker_description": "Keep a wrapped device key in this browser only. Clearing site data can permanently lose local vault access.",
     "vault_type_title": "Vault type",
     "vault_type_simple_title": "Simple",
     "vault_type_simple_description": "Each enrolled device can open the vault with its own encrypted key envelope.",
@@ -376,6 +381,10 @@
     "replication_type_personal_description": "Trusted same-owner devices may receive sync-provider credentials during onboarding.",
     "replication_type_shared_title": "Shared",
     "replication_type_shared_description": "Joiners use their own provider account; the owner grants shared storage access.",
+    "onboarding_type_personal-credential-transfer_title": "Personal credential transfer",
+    "onboarding_type_shared-provider-grant_title": "Shared provider grant",
+    "shared_grant_manual_instructions": "Share the vault storage target with {email}, then have that person sign in with their own Google account before opening the onboarding link.",
+    "shared_grant_unsupported": "This provider cannot grant shared storage access.",
     "nexus_gate_title": "Nexus setup starts locked",
     "nexus_gate_description": "Secret creation stays blocked until the required participants and encrypted shares are ready.",
     "nexus_secret_creation_blocked": "Nexus secret creation is locked until the required encrypted key shares are present."
@@ -384,6 +393,8 @@
     "validation": {
       "github_pat_empty": "Enter a GitHub personal access token to connect.",
       "oauth_access_token_empty": "Sign in with Google to connect Google Drive.",
+      "shared_joiner_identity_required": "Enter the joiner provider identity before issuing an onboarding code.",
+      "shared_joiner_identity_invalid": "Enter a valid joiner email address.",
       "github_repo_length": "GitHub repository name must be 100 characters or fewer.",
       "github_repo_invalid": "Invalid GitHub repository name.",
       "github_repo_chars": "Repository name may only contain letters, numbers, dots, hyphens, and underscores.",

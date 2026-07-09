@@ -1,5 +1,6 @@
 import {
   defaultVaultArchitecture as wasmDefaultVaultArchitecture,
+  prepareSharedStorageGrant as wasmPrepareSharedStorageGrant,
   providerReplicationCapability as wasmProviderReplicationCapability,
   validateProviderReplication as wasmValidateProviderReplication,
   validateVaultArchitecture as wasmValidateVaultArchitecture,
@@ -67,4 +68,27 @@ export function validateProviderReplication(
     provider,
     replicationType,
   ) as ProviderReplicationCapability
+}
+
+export type SharedStorageGrantRequest = {
+  providerType: string
+  oauthPreset?: string
+  joinerIdentityKind: 'email'
+  joinerIdentity: string
+  storageTargetHint?: string
+}
+
+export type SharedStorageGrantOutcome =
+  | { kind: 'granted'; note: string }
+  | {
+      kind: 'manual-grant-required'
+      instructionsKey: string
+      joinerIdentity: string
+    }
+  | { kind: 'unsupported'; reasonKey: string }
+
+export function prepareSharedStorageGrant(
+  request: SharedStorageGrantRequest,
+): SharedStorageGrantOutcome {
+  return wasmPrepareSharedStorageGrant(request) as SharedStorageGrantOutcome
 }

@@ -94,19 +94,49 @@ pub fn access_status_for_vault_content(
 }
 
 /// Decrypt and hydrate an in-memory session from stored vault YAML.
+///
+/// Nexus vaults never unlock through per-device auth envelopes. A single
+/// identity is never enough for the default 2-of-N policy; use
+/// [`load_nexus_vault`] when enough participant identities are available.
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
     let stored_records = deserialize_stored(content, format)?;
     if architecture.vault_type == VaultType::Nexus {
+        let policy = architecture.nexus.unwrap_or_default();
+        let available = crate::count_nexus_share_records(&stored_records);
         return Err(crate::MultiDeviceError::NotEnoughNexusShares {
-            threshold: architecture.nexus.unwrap_or_default().threshold,
-            available: 1,
+            threshold: policy.threshold,
+            available,
         }
         .into());
     }
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
+    hydrate_loaded_vault(stored_records, secrets_key, members_key)
+}
+
+/// Reconstruct a nexus vault session when enough participant identities can
+/// open their encrypted shares.
+pub fn load_nexus_vault(
+    content: &str,
+    identities: &[DeviceIdentity],
+) -> VaultResult<LoadedVault> {
+    let format = detect_stored_format(content)?;
+    let architecture = crate::read_vault_architecture(content)?;
+    if architecture.vault_type != VaultType::Nexus {
+        return Err(crate::MultiDeviceError::InvalidNexusThreshold.into());
+    }
+    let stored_records = deserialize_stored(content, format)?;
+    let keys = crate::reconstruct_nexus_vault_keys(&stored_records, identities)?;
+    hydrate_loaded_vault(stored_records, keys.secrets_key, keys.members_key)
+}
+
+fn hydrate_loaded_vault(
+    stored_records: Vec<StoredSecretRecord>,
+    secrets_key: crate::SymmetricKey,
+    members_key: crate::SymmetricKey,
+) -> VaultResult<LoadedVault> {
     let crypto = VaultCrypto::new(&secrets_key)?;
     let meta = VaultMetaState::from_stored_records(&stored_records);
     let user_records = user_stored_records(&stored_records);
@@ -156,7 +186,7 @@ mod tests {
     use super::*;
     use crate::{
         DeviceMode, NexusPolicy, ReplicationType, VaultResult, generate_store_id,
-        generate_vault_keys, genesis_auth_record, genesis_members_records,
+        generate_vault_keys, genesis_auth_record, genesis_members_records, load_nexus_vault,
         serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_name_architecture,
     };
 
@@ -202,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn nexus_yaml_rejects_single_device_full_envelope_unlock_path() -> VaultResult<()> {
+    fn nexus_yaml_rejects_single_device_unlock_even_with_auth_envelopes() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
         let records = vec![genesis_auth_record(
@@ -231,7 +261,45 @@ mod tests {
             &architecture,
         )?;
 
-        assert!(load_stored_vault(yaml.as_str(), &identity).is_err());
+        assert!(
+            load_stored_vault(yaml.as_str(), &identity).is_err(),
+            "nexus vault must reject single-device unlock"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn nexus_yaml_reconstructs_with_threshold_identities() -> VaultResult<()> {
+        let keys = generate_vault_keys()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
+        let third = DeviceIdentity::generate()?;
+        let records =
+            crate::create_nexus_share_records(&keys, &[first.clone(), second.clone(), third], 2)?;
+        let architecture = VaultArchitecture::nexus_personal(
+            DeviceMode::Standard,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 3,
+                ready_participants: 3,
+            },
+        );
+        let store_id = generate_store_id()?;
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            Some(store_id.as_str()),
+            None,
+            None,
+            &architecture,
+        )?;
+
+        assert!(load_stored_vault(yaml.as_str(), &first).is_err());
+        let loaded = load_nexus_vault(yaml.as_str(), &[first, second])?;
+        assert_eq!(loaded.secrets_key, keys.secrets_key);
+        assert_eq!(loaded.members_key, keys.members_key);
+        assert_eq!(loaded.meta.nexus_shares.len(), 3);
         Ok(())
     }
 }

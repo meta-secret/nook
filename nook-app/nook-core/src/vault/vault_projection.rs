@@ -243,6 +243,8 @@ fn apply_operation(
         }
         VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
+        | VaultOperation::NexusParticipantEnrolled { .. }
+        | VaultOperation::NexusSharesIssued { .. }
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::DeviceRevoked { .. } => {}

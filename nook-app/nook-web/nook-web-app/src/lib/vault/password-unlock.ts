@@ -10,6 +10,7 @@ import {
   hasActiveLocalVault,
 } from '$lib/nook-wasm/nook_wasm'
 import type { OAuthFilePreset, StorageProvider } from '$lib/auth-providers'
+import { prepareSharedStorageGrant } from '$lib/vault-architecture'
 
 const log = createLogger('vault-password')
 
@@ -463,7 +464,9 @@ export async function issueEnrollmentCode(
     const isSharedReplication =
       state.vaultArchitecture.replication_type === 'shared'
     if (isSharedReplication && !sharedJoinerIdentity) {
-      throw new Error('Enter the joiner provider identity before issuing code.')
+      throw new Error(
+        state.t('errors.validation.shared_joiner_identity_required'),
+      )
     }
     if (
       selectedProvider.type === 'github' &&
@@ -473,6 +476,27 @@ export async function issueEnrollmentCode(
       throw new Error(
         'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
       )
+    }
+    state.sharedGrantInstructions = ''
+    if (isSharedReplication) {
+      const grant = prepareSharedStorageGrant({
+        providerType: selectedProvider.type,
+        oauthPreset: selectedProvider.oauthFile?.preset,
+        joinerIdentityKind: 'email',
+        joinerIdentity: sharedJoinerIdentity,
+        storageTargetHint:
+          selectedProvider.oauthFile?.fileName ??
+          selectedProvider.githubRepo ??
+          undefined,
+      })
+      if (grant.kind === 'unsupported') {
+        throw new Error(state.t(grant.reasonKey))
+      }
+      if (grant.kind === 'manual-grant-required') {
+        state.sharedGrantInstructions = state.t(grant.instructionsKey, {
+          email: grant.joinerIdentity,
+        })
+      }
     }
     const provider = enrollmentProviderForArchitecture(
       selectedProvider,

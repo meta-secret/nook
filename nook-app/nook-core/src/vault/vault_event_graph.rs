@@ -366,14 +366,18 @@ impl EventGraph {
                 authorized.insert(parent_event.body.actor_id.clone());
             }
             for operation in &parent_event.body.operations {
-                if let VaultOperation::JoinApproved {
-                    signing_public_key, ..
-                } = operation
-                    && !signing_public_key.is_empty()
-                {
-                    authorized.insert(SigningIdentity::actor_id_for_public_key_hex(
-                        signing_public_key.as_str(),
-                    )?);
+                match operation {
+                    VaultOperation::JoinApproved {
+                        signing_public_key, ..
+                    }
+                    | VaultOperation::NexusParticipantEnrolled {
+                        signing_public_key, ..
+                    } if !signing_public_key.is_empty() => {
+                        authorized.insert(SigningIdentity::actor_id_for_public_key_hex(
+                            signing_public_key.as_str(),
+                        )?);
+                    }
+                    _ => {}
                 }
             }
             stack.extend(parent_event.body.parents.iter().cloned());

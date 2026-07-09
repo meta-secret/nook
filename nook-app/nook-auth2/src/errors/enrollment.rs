@@ -39,6 +39,9 @@ pub enum EnrollmentError {
     #[error("GitHub provider in enrollment code is malformed.")]
     MalformedGithubProvider,
 
+    #[error("Shared provider grant in enrollment code is malformed.")]
+    MalformedSharedProviderGrant,
+
     #[error("Unsupported provider type: {provider_type}")]
     UnsupportedProviderType { provider_type: String },
 

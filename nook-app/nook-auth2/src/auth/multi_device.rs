@@ -562,7 +562,12 @@ pub fn merge_remote_join_records(state: &mut VaultMetaState, fresh_records: &[St
 
 #[must_use]
 pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
-    records.iter().any(is_auth_stored_record)
+    records.iter().any(|record| {
+        is_auth_stored_record(record)
+            || is_members_stored_record(record)
+            || is_nexus_share_stored_record(record)
+            || is_join_stored_record(record)
+    })
 }
 
 #[must_use]
@@ -1032,8 +1037,25 @@ pub fn create_nexus_share_records(
     participants: &[DeviceIdentity],
     threshold: u8,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
+    let recipients: Vec<(DeviceId, DevicePublicKey)> = participants
+        .iter()
+        .map(|participant| (participant.device_id().clone(), participant.public_key()))
+        .collect();
+    create_nexus_share_records_for_recipients(keys, &recipients, threshold)
+}
+
+/// Split vault keys into threshold shares encrypted to each recipient public key.
+///
+/// Interim GF(256) Shamir (byte-wise). Product SLIP-0039 mnemonic shares are
+/// owned by #261 and should replace this once wired; do not invent a second
+/// mnemonic format here.
+pub fn create_nexus_share_records_for_recipients(
+    keys: &VaultKeys,
+    recipients: &[(DeviceId, DevicePublicKey)],
+    threshold: u8,
+) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
     let required_participants =
-        u8::try_from(participants.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
+        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
     validate_nexus_threshold(threshold, required_participants)?;
     let payload = serde_json::to_vec(&NexusVaultKeysPlaintext {
         secrets_key: keys.secrets_key.as_str().to_owned(),
@@ -1041,10 +1063,10 @@ pub fn create_nexus_share_records(
     })
     .map_err(MultiDeviceError::NexusSharePayload)?;
     let shares = split_secret_bytes(&payload, threshold, required_participants)?;
-    participants
+    recipients
         .iter()
         .zip(shares)
-        .map(|(participant, share)| {
+        .map(|((device_id, public_key), share)| {
             let plaintext = NexusSharePlaintext {
                 version: 1,
                 threshold,
@@ -1059,11 +1081,19 @@ pub fn create_nexus_share_records(
                 threshold,
                 required_participants,
                 share_index: share.index,
-                ciphertext: encrypt_for_recipient(&json, &participant.public_key())?,
+                ciphertext: encrypt_for_recipient(&json, public_key)?,
             };
-            VaultMetaRecord::NexusShare(participant.device_id().clone(), envelope).to_stored()
+            VaultMetaRecord::NexusShare(device_id.clone(), envelope).to_stored()
         })
         .collect()
+}
+
+#[must_use]
+pub fn count_nexus_share_records(records: &[StoredSecretRecord]) -> usize {
+    records
+        .iter()
+        .filter(|record| is_nexus_share_stored_record(record))
+        .count()
 }
 
 pub fn reconstruct_nexus_vault_keys(

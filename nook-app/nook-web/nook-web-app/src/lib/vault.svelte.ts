@@ -202,6 +202,7 @@ export class VaultState {
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
   sharedJoinerIdentity = $state('')
+  sharedGrantInstructions = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
   /**
    * True from the moment this device sends a join request until it unlocks.

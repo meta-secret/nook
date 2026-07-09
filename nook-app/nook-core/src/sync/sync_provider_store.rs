@@ -279,7 +279,7 @@ pub fn enrollment_provider_for_architecture(
             joiner_identity: shared_joiner_identity
                 .map(str::trim)
                 .filter(|identity| !identity.is_empty())
-                .ok_or(ValidationError::OauthAccessTokenEmpty)?
+                .ok_or(ValidationError::SharedJoinerIdentityRequired)?
                 .to_owned(),
         }),
     }

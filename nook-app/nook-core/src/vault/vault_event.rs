@@ -61,6 +61,18 @@ impl EncryptedSecretPayload {
     }
 }
 
+/// One nexus share encrypted to a participant device, recorded in the event log.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub struct NexusShareIssuedPayload {
+    pub device_id: DeviceId,
+    pub version: u32,
+    pub threshold: u8,
+    pub required_participants: u8,
+    pub share_index: u8,
+    pub ciphertext: AgeArmoredCiphertext,
+}
+
 /// Atomic domain operations recorded in the immutable event log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -98,6 +110,21 @@ pub enum VaultOperation {
         label: MemberLabel,
         secrets_key_ciphertext: AgeArmoredCiphertext,
         members_key_ciphertext: AgeArmoredCiphertext,
+    },
+    /// Nexus participant enrolled without a full per-device vault-key envelope.
+    ///
+    /// Used when `vault_type=nexus`: the joiner is added to the roster, but
+    /// vault keys remain threshold-shared rather than encrypted in full to
+    /// each device.
+    NexusParticipantEnrolled {
+        device_id: DeviceId,
+        encryption_public_key: DevicePublicKey,
+        signing_public_key: DeviceSigningPublicKey,
+        label: MemberLabel,
+    },
+    /// Threshold shares of the vault key bundle, each encrypted to one device.
+    NexusSharesIssued {
+        shares: Vec<NexusShareIssuedPayload>,
     },
     JoinDenied {
         device_id: DeviceId,

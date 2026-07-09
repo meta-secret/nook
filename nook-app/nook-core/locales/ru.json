@@ -600,6 +600,11 @@
     "recovery_complete": "Идентификатор устройства сброшен. Создайте новый passkey, чтобы продолжить."
   },
   "architecture_modes": {
+    "device_mode_title": "Защита устройства",
+    "device_mode_standard_title": "Standard",
+    "device_mode_standard_description": "Ключ устройства выводится из passkey. Удобно и восстанавливаемо, если очистить хранилище браузера.",
+    "device_mode_anti-hacker_title": "Anti-hacker",
+    "device_mode_anti-hacker_description": "Обёрнутый ключ устройства хранится только в этом браузере. Очистка данных сайта может навсегда лишить локального доступа к сейфу.",
     "vault_type_title": "Тип сейфа",
     "vault_type_simple_title": "Simple",
     "vault_type_simple_description": "Каждое зарегистрированное устройство может открыть сейф своим зашифрованным конвертом ключей.",
@@ -610,6 +615,10 @@
     "replication_type_personal_description": "Доверенные устройства одного владельца могут получать учётные данные провайдера при регистрации.",
     "replication_type_shared_title": "Shared",
     "replication_type_shared_description": "Участники используют свой аккаунт провайдера; владелец выдаёт доступ к общему хранилищу.",
+    "onboarding_type_personal-credential-transfer_title": "Передача личных учётных данных",
+    "onboarding_type_shared-provider-grant_title": "Общий доступ провайдера",
+    "shared_grant_manual_instructions": "Откройте доступ к хранилищу сейфа для {email}, затем пусть этот человек войдёт в свой Google-аккаунт перед открытием ссылки регистрации.",
+    "shared_grant_unsupported": "Этот провайдер не может выдать общий доступ к хранилищу.",
     "nexus_gate_title": "Nexus начинается заблокированным",
     "nexus_gate_description": "Создание секретов остаётся заблокированным, пока нужные участники и зашифрованные доли не готовы.",
     "nexus_secret_creation_blocked": "Создание секретов Nexus заблокировано, пока не сохранены нужные зашифрованные доли ключей."
@@ -617,6 +626,8 @@
   "errors": {
     "validation": {
       "github_pat_empty": "Введите персональный токен доступа GitHub для подключения.",
+      "shared_joiner_identity_required": "Введите идентификатор провайдера участника перед выдачей кода регистрации.",
+      "shared_joiner_identity_invalid": "Введите корректный email участника.",
       "github_repo_length": "Имя репозитория GitHub должно содержать не более 100 символов.",
       "github_repo_invalid": "Недопустимое имя репозитория GitHub.",
       "github_repo_chars": "Имя репозитория может содержать только буквы, цифры, точки, дефисы и знаки подчеркивания.",
