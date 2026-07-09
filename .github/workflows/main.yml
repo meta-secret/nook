@@ -1,5 +1,5 @@
 # Main branch: one container for format/wasm/verify/build/e2e (task ci:main:publish);
-# deploy the development channel to GitHub Pages.
+# deploy the development channel to Cloudflare Pages.
 #
 # E2e on main uses the unified stub `e2e` project (no GitHub API). Live sync provider
 # tests run nightly — see e2e-nightly.yml.
@@ -26,6 +26,7 @@ concurrency:
 env:
   CI_MAIN_DEV_DOMAIN: dev.nokey.sh
   CI_MAIN_DEV_URL: https://dev.nokey.sh
+  CI_MAIN_CF_PAGES_PROJECT: nook
   CI_MAIN_VITE_BASE: /
   CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: "500"
   CI_MAIN_GITHUB_POLL_MS: "3000"
@@ -37,12 +38,11 @@ jobs:
     name: Check, build, e2e, and deploy dev
     runs-on: nook
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: development
+      url: https://dev.nokey.sh/
     permissions:
       contents: read
-      pages: write
-      id-token: write
+      deployments: write
       packages: write
     steps:
       - name: Checkout
@@ -63,26 +63,129 @@ jobs:
           PUSH_TOOLCHAIN: "1"
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
-      - name: Build development Pages artifact
-        run: task setup VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
+      - name: Deploy development to Cloudflare Pages
+        id: deploy-dev
         env:
-          CI: true
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          CF_PAGES_BRANCH: main
+          CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
+          CF_PAGES_PRODUCTION_BRANCH: main
+        run: |
+          set +e
+          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod 2>&1)"
+          status=$?
+          set -e
+          echo "$out"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Cloudflare development deploy failed (exit $status)"
+            exit "$status"
+          fi
+          clean="$(printf '%s' "$out" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')"
+          url="$(printf '%s' "$clean" | grep -oE 'NOOK_PREVIEW_URL=https://[^ ]+' | sed 's/NOOK_PREVIEW_URL=//' | tail -1)"
+          if [ -z "$url" ]; then
+            echo "::error::Cloudflare development deploy succeeded but did not emit deploy URL"
+            exit 1
+          fi
+          echo "pages_url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Extract dist from nook-web image
-        run: task docker:extract:dist
+      - name: Configure dev.nokey.sh on Cloudflare Pages
+        id: configure-dev-domain
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUD_FLARE_PAGES_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
+          CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
+          DEV_DOMAIN: ${{ env.CI_MAIN_DEV_DOMAIN }}
+          PAGES_URL: ${{ steps.deploy-dev.outputs.pages_url }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DEV_DOMAIN"
+          test -n "$PAGES_URL"
 
-      - name: Set development Pages custom domain
-        run: printf '%s\n' '${{ env.CI_MAIN_DEV_DOMAIN }}' > nook-app/nook-web/nook-web-app/dist/CNAME
+          api() {
+            curl -fsS \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              "$@"
+          }
+          api_json() {
+            response="$(api "$@")"
+            if ! printf '%s' "$response" | jq -e '.success == true' >/dev/null; then
+              printf '%s\n' "$response" | jq -r '.errors[]? | "Cloudflare API error: \(.code) \(.message)"' >&2 || true
+              printf '%s\n' "$response" >&2
+              return 1
+            fi
+            printf '%s' "$response"
+          }
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
+          pages_host="$(
+            node -e 'const host = new URL(process.argv[1]).hostname.split("."); if (host.length > 3) host.shift(); console.log(host.join("."));' "$PAGES_URL"
+          )"
+          zone_name="${DEV_DOMAIN#*.}"
+          echo "Cloudflare Pages host: $pages_host"
+          echo "Cloudflare zone: $zone_name"
+
+          domain_json="$(api_json "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PAGES_PROJECT_NAME/domains")"
+          domain_exists="$(printf '%s' "$domain_json" | jq -r --arg name "$DEV_DOMAIN" '[.result[]? | select(.name == $name)] | length')"
+          if [ "$domain_exists" = "0" ]; then
+            api_json -X POST \
+              --data "$(jq -nc --arg name "$DEV_DOMAIN" '{name: $name}')" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CF_PAGES_PROJECT_NAME/domains" >/dev/null
+          fi
+
+          zone_id="$(
+            api_json "https://api.cloudflare.com/client/v4/zones?name=$zone_name" \
+              | jq -er '.result[0].id'
+          )"
+          records_json="$(
+            api_json "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=$DEV_DOMAIN"
+          )"
+          record_payload="$(jq -nc --arg name "$DEV_DOMAIN" --arg content "$pages_host" '{type: "CNAME", name: $name, content: $content, ttl: 1, proxied: true}')"
+          record_id="$(printf '%s' "$records_json" | jq -r '.result[0].id // empty')"
+          if [ -n "$record_id" ]; then
+            api_json -X PUT --data "$record_payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$record_id" >/dev/null
+          else
+            api_json -X POST --data "$record_payload" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records" >/dev/null
+          fi
+
+          echo "dev_url=https://$DEV_DOMAIN/" >> "$GITHUB_OUTPUT"
+
+      - name: Record development deployment
+        uses: actions/github-script@v9
+        env:
+          DEV_URL: ${{ steps.configure-dev-domain.outputs.dev_url }}
+          PAGES_URL: ${{ steps.deploy-dev.outputs.pages_url }}
         with:
-          path: nook-app/nook-web/nook-web-app/dist
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'development',
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: false,
+              production_environment: false,
+              description: 'Development channel',
+              payload: {
+                dev_url: process.env.DEV_URL,
+                pages_url: process.env.PAGES_URL,
+              },
+            })
 
-      - name: Deploy development to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment: 'development',
+              environment_url: process.env.DEV_URL,
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: 'Development channel deployed to Cloudflare Pages',
+              auto_inactive: false,
+            })
 
   ci-fix:
     name: AI fix, PR, and merge
