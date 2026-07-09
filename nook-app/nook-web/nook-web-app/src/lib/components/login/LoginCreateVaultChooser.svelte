@@ -19,12 +19,92 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
+  const vaultTypes = ['simple', 'nexus'] as const
+  const replicationTypes = ['personal', 'shared'] as const
 </script>
 
 <div class="space-y-4" data-testid="login-create-vault-chooser">
   <p class="text-sm text-pretty text-muted-foreground">
     {vault.t('login.create_vault_intro')}
   </p>
+
+  <div class="grid gap-3 sm:grid-cols-2">
+    <div class="space-y-2" data-testid="mode-group-vault">
+      <p class="text-sm font-semibold text-foreground">
+        {vault.t('architecture_modes.vault_type_title')}
+      </p>
+      {#each vaultTypes as mode}
+        <button
+          type="button"
+          class={[
+            'w-full rounded-md border p-3 text-left text-sm transition-colors',
+            vault.draftVaultType === mode
+              ? 'border-primary bg-primary/10 text-foreground'
+              : 'border-border/60 bg-background hover:bg-muted/40',
+          ]}
+          aria-pressed={vault.draftVaultType === mode}
+          data-testid={`mode-option-${mode}`}
+          disabled={isBusy}
+          onclick={() => {
+            vault.draftVaultType = mode
+          }}
+        >
+          <span class="block font-medium">
+            {vault.t(`architecture_modes.vault_type_${mode}_title`)}
+          </span>
+          <span class="mt-1 block text-xs text-muted-foreground">
+            {vault.t(`architecture_modes.vault_type_${mode}_description`)}
+          </span>
+        </button>
+      {/each}
+    </div>
+
+    <div class="space-y-2" data-testid="mode-group-replication">
+      <p class="text-sm font-semibold text-foreground">
+        {vault.t('architecture_modes.replication_type_title')}
+      </p>
+      {#each replicationTypes as mode}
+        <button
+          type="button"
+          class={[
+            'w-full rounded-md border p-3 text-left text-sm transition-colors',
+            vault.draftReplicationType === mode
+              ? 'border-primary bg-primary/10 text-foreground'
+              : 'border-border/60 bg-background hover:bg-muted/40',
+          ]}
+          aria-pressed={vault.draftReplicationType === mode}
+          data-testid={`mode-option-${mode}`}
+          disabled={isBusy}
+          onclick={() => {
+            vault.draftReplicationType = mode
+          }}
+        >
+          <span class="block font-medium">
+            {vault.t(`architecture_modes.replication_type_${mode}_title`)}
+          </span>
+          <span class="mt-1 block text-xs text-muted-foreground">
+            {vault.t(
+              `architecture_modes.replication_type_${mode}_description`,
+            )}
+          </span>
+        </button>
+      {/each}
+    </div>
+  </div>
+
+  {#if vault.draftVaultType === 'nexus'}
+    <div
+      class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+      data-testid="nexus-readiness-gate"
+    >
+      <p class="font-medium">
+        {vault.t('architecture_modes.nexus_gate_title')}
+      </p>
+      <p class="mt-1 text-xs text-muted-foreground">
+        {vault.t('architecture_modes.nexus_gate_description')}
+      </p>
+    </div>
+  {/if}
 
   <div
     class="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3"

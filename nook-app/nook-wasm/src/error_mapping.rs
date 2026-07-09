@@ -53,6 +53,12 @@ impl From<nook_core::ValidationError> for NookError {
 
             ValidationError::OauthAccessTokenEmpty
             | ValidationError::UnknownStorageMode { .. }
+            | ValidationError::UnknownDeviceMode { .. }
+            | ValidationError::UnknownVaultType { .. }
+            | ValidationError::UnknownReplicationType { .. }
+            | ValidationError::UnsupportedProviderReplication { .. }
+            | ValidationError::SimpleVaultHasNexusPolicy
+            | ValidationError::InvalidNexusPolicy
             | ValidationError::SecretDataRequired
             | ValidationError::SecretIdRequired
             | ValidationError::SecretIdInvalid

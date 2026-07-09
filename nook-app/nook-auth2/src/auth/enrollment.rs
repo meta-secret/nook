@@ -51,6 +51,14 @@ const ENCODE_URI_COMPONENT: &AsciiSet = &CONTROLS
 pub enum EnrollmentProvider {
     Local,
     Github { pat: String, repo: String },
+    #[serde(rename = "shared-provider-grant")]
+    SharedProviderGrant {
+        sync_provider_type: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        oauth_preset: Option<String>,
+        joiner_identity_kind: String,
+        joiner_identity: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -275,7 +283,34 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
             }
             Ok(())
         }
+        EnrollmentProvider::SharedProviderGrant {
+            sync_provider_type,
+            oauth_preset,
+            joiner_identity_kind,
+            joiner_identity,
+        } => {
+            if sync_provider_type.trim() != "oauth-file"
+                || oauth_preset.as_deref().unwrap_or("google-drive") != "google-drive"
+                || joiner_identity_kind.trim() != "email"
+                || !is_plausible_email(joiner_identity)
+            {
+                return Err(EnrollmentError::MalformedGithubProvider);
+            }
+            Ok(())
+        }
     }
+}
+
+fn is_plausible_email(value: &str) -> bool {
+    let trimmed = value.trim();
+    let Some((local, domain)) = trimmed.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !trimmed.chars().any(char::is_whitespace)
 }
 
 fn derive_enrollment_key(password: &str, salt: &[u8], iterations: u32) -> [u8; KEY_LEN] {
@@ -413,5 +448,43 @@ mod tests {
         let code = encrypt_enrollment_payload(&input, "hunter2", "").unwrap();
         let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
         assert_eq!(decrypted.provider, EnrollmentProvider::Local);
+    }
+
+    #[test]
+    fn shared_provider_grant_roundtrips_without_provider_credentials() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+            },
+            entry_id: "entry-shared".to_owned(),
+            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+        };
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant").unwrap();
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
+        assert_eq!(decrypted.provider, input.provider);
+
+        let envelope = parse_enrollment_envelope(&code).unwrap();
+        let serialized = serde_json::to_string(&envelope).unwrap();
+        assert!(!serialized.contains("ya29."));
+        assert!(!serialized.contains("github_pat_"));
+        assert!(!serialized.contains("hunter2"));
+    }
+
+    #[test]
+    fn shared_provider_grant_rejects_unsupported_identity() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "github".to_owned(),
+                oauth_preset: None,
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+            },
+            entry_id: "entry-shared".to_owned(),
+            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+        };
+        assert!(encrypt_enrollment_payload(&input, "hunter2", "").is_err());
     }
 }

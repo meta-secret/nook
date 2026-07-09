@@ -36,7 +36,7 @@ use crate::storage::{
 };
 use crate::types::records_to_vec;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
 struct StorageSession {
@@ -84,6 +84,8 @@ struct VaultSessionState {
     vault_name: Option<String>,
     /// Monotonic vault revision - incremented on every save.
     vault_version: u64,
+    /// Grouped architecture modes persisted in vault YAML.
+    architecture: nook_core::VaultArchitecture,
 }
 
 impl Default for VaultSessionState {
@@ -100,6 +102,7 @@ impl Default for VaultSessionState {
             store_id: String::new(),
             vault_name: None,
             vault_version: 0,
+            architecture: nook_core::VaultArchitecture::default_legacy(),
         }
     }
 }
@@ -117,6 +120,7 @@ impl VaultSessionState {
         self.store_id.clear();
         self.vault_name = None;
         self.vault_version = 0;
+        self.architecture = nook_core::VaultArchitecture::default_legacy();
     }
 }
 
@@ -233,6 +237,29 @@ impl NookVaultManager {
         self.vault.vault_version
     }
 
+    #[wasm_bindgen(getter, js_name = vaultArchitectureJson)]
+    pub fn vault_architecture_json(&self) -> Result<String, JsError> {
+        serde_json::to_string(&self.vault.architecture)
+            .map_err(|error| JsError::new(&error.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = setVaultArchitectureJson)]
+    pub fn set_vault_architecture_json(&mut self, architecture_json: &str) -> Result<(), JsError> {
+        let architecture: nook_core::VaultArchitecture =
+            serde_json::from_str(architecture_json)
+                .map_err(|error| JsError::new(&error.to_string()))?;
+        architecture
+            .validate()
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        self.vault.architecture = architecture;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = canCreateSecretForVaultArchitecture)]
+    pub fn can_create_secret_for_vault_architecture(&self) -> bool {
+        self.vault.architecture.can_create_secret()
+    }
+
     #[wasm_bindgen(getter, js_name = vaultName)]
     pub fn vault_name(&self) -> Option<String> {
         self.vault.vault_name.clone()
@@ -318,13 +345,14 @@ impl NookVaultManager {
             ));
         }
         let records = self.vault.meta.to_stored_records();
-        Ok(nook_core::serialize_stored_yaml_with_unlock_and_name(
+        Ok(nook_core::serialize_stored_yaml_with_unlock_name_architecture(
             &records,
             &self.vault.unlock,
             &self.vault.password_entries,
             Some(self.vault.store_id.as_str()),
             self.vault.vault_name.as_deref(),
             None,
+            &self.vault.architecture,
         )?
         .into_inner())
     }
@@ -360,6 +388,7 @@ impl NookVaultManager {
             self.vault.store_id = metadata.store_id;
             self.vault.vault_name = Some(metadata.vault_name);
             self.vault.vault_version = metadata.version;
+            self.vault.architecture = metadata.architecture;
         }
     }
 

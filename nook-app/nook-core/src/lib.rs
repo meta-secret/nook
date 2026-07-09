@@ -20,7 +20,7 @@ pub(crate) use sync::{
     vault_sync_store,
 };
 pub(crate) use vault::{
-    database, vault_access_diagnostics, vault_connect, vault_epoch, vault_event,
+    database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch, vault_event,
     vault_event_builder, vault_event_graph, vault_event_session, vault_event_store, vault_format,
     vault_ids, vault_import, vault_projection, vault_session, vault_session_cache, vault_wire,
 };
@@ -33,10 +33,13 @@ pub use bip39::{
 pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyRecoveryRequest, PasskeyRegistrationResolution, WrappedDeviceIdentity,
+    PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationResolution,
+    WrappedDeviceIdentity,
     derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
-    finish_passkey_device_identity, parse_wrapped_device_identity, passkey_assertion_request,
-    passkey_derived_device_identity_record, passkey_recovery_request,
+    finish_passkey_device_identity, finish_passkey_device_identity_for_mode,
+    finish_passkey_wrapped_device_identity, parse_wrapped_device_identity,
+    passkey_assertion_request, passkey_derived_device_identity_record,
+    passkey_recovery_request, passkey_wrapped_device_identity_record,
     recover_passkey_device_identity, resolve_passkey_registration,
     serialize_wrapped_device_identity, unlock_passkey_device_identity,
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
@@ -113,8 +116,9 @@ pub use sync_provider_store::{
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
     draft_storage_args, ensure_local_provider_row, find_duplicate_sync_provider,
     localize_provider_label, migrate_provider_fields, normalize_auth_snapshot,
-    provider_storage_detail, provider_target_key, seed_provider_from_legacy_storage,
-    storage_args_for_provider, vault_storage_args,
+    provider_replication_capability_for_row, provider_storage_detail, provider_target_key,
+    seed_provider_from_legacy_storage, storage_args_for_provider,
+    validate_provider_row_replication, vault_storage_args,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, DriveBackupName,
@@ -132,6 +136,11 @@ pub use vault_access_diagnostics::{
     VaultAccessDiagnosticsReport, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
     VaultEventPayloadAccessDiagnostic, VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus,
     VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic, diagnose_vault_access,
+};
+pub use vault_architecture::{
+    DeviceMode, NexusPolicy, OnboardingType, ProviderReplicationCapability, ReplicationType,
+    SharedJoinerIdentityKind, VaultArchitecture, VaultType, provider_replication_capability,
+    validate_architecture_for_provider, validate_provider_replication,
 };
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,
@@ -166,9 +175,10 @@ pub use vault_event_store::{
 pub use vault_format::{
     VaultFormat, current_vault_schema_version, default_vault_name_for_store_id, deserialize_stored,
     deserialize_stored_yaml_with_unlock, detect_stored_format, read_vault_name,
-    read_vault_password_entries, read_vault_schema_version, read_vault_store_id, read_vault_unlock,
-    read_vault_version, serialize_stored, serialize_stored_yaml_with_unlock,
-    serialize_stored_yaml_with_unlock_and_name, set_vault_name,
+    read_vault_password_entries, read_vault_schema_version, read_vault_architecture,
+    read_vault_store_id, read_vault_unlock, read_vault_version, serialize_stored,
+    serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_and_name,
+    serialize_stored_yaml_with_unlock_name_architecture, set_vault_name,
 };
 pub use vault_ids::{
     AUTH_KEY_ID_PREFIX, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX, STORE_ID_PREFIX,

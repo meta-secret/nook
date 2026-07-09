@@ -12,8 +12,10 @@ use crate::errors::ValidationResult;
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
     LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, StorageMode, StorageProviderType,
-    SyncProviderTarget, format_drive_storage_ref_raw, mask_github_pat, storage_mode_for_provider,
-    sync_provider_default_label, sync_provider_target_key,
+    SyncProviderTarget, ProviderReplicationCapability, ReplicationType,
+    format_drive_storage_ref_raw, mask_github_pat, provider_replication_capability,
+    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
+    validate_provider_replication,
 };
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
@@ -197,6 +199,33 @@ pub fn storage_args_for_provider(
             })
         }
     }
+}
+
+pub fn provider_replication_capability_for_row(
+    provider: &StorageProviderData,
+) -> ValidationResult<ProviderReplicationCapability> {
+    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    let oauth_preset = parse_oauth_preset(
+        provider
+            .oauth_file
+            .as_ref()
+            .map(|oauth| oauth.preset.as_str()),
+    )?;
+    Ok(provider_replication_capability(provider_type, oauth_preset))
+}
+
+pub fn validate_provider_row_replication(
+    provider: &StorageProviderData,
+    replication_type: ReplicationType,
+) -> ValidationResult<ProviderReplicationCapability> {
+    let provider_type = StorageProviderType::parse(&provider.provider_type)?;
+    let oauth_preset = parse_oauth_preset(
+        provider
+            .oauth_file
+            .as_ref()
+            .map(|oauth| oauth.preset.as_str()),
+    )?;
+    validate_provider_replication(provider_type, oauth_preset, replication_type)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1178,6 +1207,43 @@ mod tests {
                 "t"
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn provider_row_replication_capability_matches_provider_preset() {
+        let github = github_provider("gh", "nook", "pat");
+        assert!(
+            validate_provider_row_replication(&github, ReplicationType::Personal).is_ok()
+        );
+        assert!(validate_provider_row_replication(&github, ReplicationType::Shared).is_err());
+
+        let gdrive = StorageProviderData {
+            id: "gd".to_owned(),
+            provider_type: "oauth-file".to_owned(),
+            label: "Google Drive".to_owned(),
+            github_pat: None,
+            github_repo: None,
+            oauth_file: Some(OAuthFileConfigData {
+                preset: "google-drive".to_owned(),
+                access_token: "tok".to_owned(),
+                account_email: Some("joiner@example.com".to_owned()),
+                ..OAuthFileConfigData::default()
+            }),
+            local_folder: None,
+            store_id: None,
+            last_synced_version: None,
+            last_synced_at: None,
+            last_sync_revision: None,
+            last_common_content_hash: None,
+            created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+        };
+        let capability =
+            validate_provider_row_replication(&gdrive, ReplicationType::Shared).unwrap();
+        assert!(capability.supports_shared);
+        assert_eq!(
+            capability.shared_joiner_identity,
+            Some(crate::SharedJoinerIdentityKind::Email)
         );
     }
 }
