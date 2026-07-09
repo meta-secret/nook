@@ -221,7 +221,16 @@ impl EventGraph {
     /// Validate all applicable events against actors authorized in their causal
     /// past. Pending events wait until all parents are present.
     pub fn validate_authorizations(&self) -> VaultResult<()> {
-        for event in self.applicable_events() {
+        let applicable = self.applicable_events();
+        if applicable
+            .iter()
+            .filter(|event| event.body.parents.is_empty())
+            .count()
+            > 1
+        {
+            return Err(EventError::MultipleGenesisRoots.into());
+        }
+        for event in applicable {
             self.validate_event_actor_authorized(event)?;
         }
         Ok(())
@@ -407,6 +416,8 @@ impl EventGraph {
 
     fn authorized_actors_before(&self, event: &VaultEvent) -> VaultResult<BTreeSet<AuthKeyId>> {
         let mut authorized = BTreeSet::new();
+        let mut actor_by_device = BTreeMap::new();
+        let mut revoked_devices = BTreeSet::new();
         let mut visited = BTreeSet::new();
         let mut stack = event.body.parents.clone();
 
@@ -429,14 +440,23 @@ impl EventGraph {
             for operation in &parent_event.body.operations {
                 match operation {
                     VaultOperation::JoinApproved {
-                        signing_public_key, ..
+                        device_id,
+                        signing_public_key,
+                        ..
                     }
                     | VaultOperation::NexusParticipantEnrolled {
-                        signing_public_key, ..
+                        device_id,
+                        signing_public_key,
+                        ..
                     } if !signing_public_key.is_empty() => {
-                        authorized.insert(SigningIdentity::actor_id_for_public_key_hex(
+                        let actor = SigningIdentity::actor_id_for_public_key_hex(
                             signing_public_key.as_str(),
-                        )?);
+                        )?;
+                        actor_by_device.insert(device_id.clone(), actor.clone());
+                        authorized.insert(actor);
+                    }
+                    VaultOperation::DeviceRevoked { device_id } => {
+                        revoked_devices.insert(device_id.clone());
                     }
                     _ => {}
                 }
@@ -444,6 +464,11 @@ impl EventGraph {
             stack.extend(parent_event.body.parents.iter().cloned());
         }
 
+        for device_id in revoked_devices {
+            if let Some(actor) = actor_by_device.get(&device_id) {
+                authorized.remove(actor);
+            }
+        }
         Ok(authorized)
     }
 }
@@ -825,6 +850,64 @@ mod tests {
 
         let child = signed_child(vec![approval_id], "secret_joiner0001", &joiner_key);
         assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
+        Ok(())
+    }
+
+    #[test]
+    fn revoked_actor_cannot_append_after_observing_revocation() -> VaultResult<()> {
+        let root_key = signing_key();
+        let joiner_key = signing_key();
+        let device_id = DeviceId::parse("0123456789abcdef").unwrap();
+        let mut graph = EventGraph::new();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+        graph.insert(genesis, STORE_STR)?;
+
+        let approval = signed_operation(
+            vec![genesis_id],
+            VaultOperation::JoinApproved {
+                device_id: device_id.clone(),
+                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("phone".to_owned()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
+                    "members-key".to_owned(),
+                ),
+            },
+            &root_key,
+        );
+        let approval_id = approval.id()?;
+        graph.insert(approval, STORE_STR)?;
+
+        let revoke = signed_operation(
+            vec![approval_id],
+            VaultOperation::DeviceRevoked { device_id },
+            &root_key,
+        );
+        let revoke_id = revoke.id()?;
+        graph.insert(revoke, STORE_STR)?;
+
+        let child = signed_child(vec![revoke_id], "secret_revoked0001", &joiner_key);
+        assert!(matches!(
+            graph.insert(child, STORE_STR)?,
+            EventInsertStatus::Quarantined(_)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn multiple_independent_genesis_roots_fail_closed() -> VaultResult<()> {
+        let first_key = signing_key();
+        let second_key = signing_key();
+        let mut graph = EventGraph::new();
+        graph.insert(genesis_event(&first_key), STORE_STR)?;
+        graph.insert(genesis_event(&second_key), STORE_STR)?;
+
+        assert!(matches!(
+            graph.topological_order(),
+            Err(VaultError::Event(EventError::MultipleGenesisRoots))
+        ));
         Ok(())
     }
 

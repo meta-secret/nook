@@ -108,6 +108,8 @@ export function createLocalE2eGoogleDriveVaultStub(
       }
     },
     getEventFileCount: () => allEventFiles().size,
+    getEventFileCountForParent: (parentId: string) =>
+      eventFilesFor(parentId).size,
     getEventFileContents: () => [...allEventFiles().values()],
     clearEventFiles: () => {
       eventFilesByParent.clear()
@@ -117,7 +119,12 @@ export function createLocalE2eGoogleDriveVaultStub(
     getFileName: () => fileName,
     async install(
       page: Page,
-      opts?: { vaultYaml?: string; fileName?: string; accessToken?: string },
+      opts?: {
+        vaultYaml?: string
+        fileName?: string
+        accessToken?: string
+        sharedPermissionStatus?: number
+      },
     ) {
       if (opts?.vaultYaml !== undefined) {
         vaultYaml = opts.vaultYaml
@@ -197,6 +204,18 @@ export function createLocalE2eGoogleDriveVaultStub(
             email = parsed.emailAddress?.trim() ?? ''
           } catch {
             email = ''
+          }
+          if (
+            opts?.sharedPermissionStatus &&
+            (opts.sharedPermissionStatus < 200 ||
+              opts.sharedPermissionStatus >= 300)
+          ) {
+            await route.fulfill({
+              status: opts.sharedPermissionStatus,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: { message: 'permission failed' } }),
+            })
+            return
           }
           const folder = sharedFolders.get(folderId)
           if (folder && email) {

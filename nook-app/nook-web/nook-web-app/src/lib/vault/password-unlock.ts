@@ -534,6 +534,7 @@ export async function issueEnrollmentCode(
     }
     state.sharedGrantInstructions = ''
     let sharedStorageTargetId: string | undefined
+    let enrollmentProviderRow = selectedProvider
     if (isSharedReplication) {
       const accessToken = selectedProvider.oauthFile?.accessToken?.trim()
       const grant = await prepareSharedStorageGrant({
@@ -556,29 +557,44 @@ export async function issueEnrollmentCode(
           email: sharedJoinerIdentity,
           folder: grant.storageTargetName ?? grant.storageTargetId,
         })
-        if (selectedProvider.oauthFile) {
-          const updatedOauth = {
-            ...selectedProvider.oauthFile,
-            folderId: grant.storageTargetId,
-            fileName:
-              grant.storageTargetName ?? selectedProvider.oauthFile.fileName,
-          }
-          state.oauthFile = updatedOauth
-          state.providers = state.providers.map((row) =>
-            row.id === selectedProvider.id
-              ? { ...row, oauthFile: updatedOauth }
-              : row,
-          )
-          await state.persistProviders()
-        }
       } else if (grant.kind === 'manual-grant-required') {
+        sharedStorageTargetId = grant.storageTargetId
         state.sharedGrantInstructions = state.t(grant.instructionsKey, {
           email: grant.joinerIdentity,
+          folder:
+            grant.storageTargetName ?? grant.storageTargetId ?? 'shared folder',
         })
+      }
+      if (sharedStorageTargetId && selectedProvider.oauthFile) {
+        const storageTargetName =
+          grant.kind === 'granted' || grant.kind === 'manual-grant-required'
+            ? grant.storageTargetName
+            : undefined
+        const updatedOauth = {
+          ...selectedProvider.oauthFile,
+          folderId: sharedStorageTargetId,
+          fileName: storageTargetName ?? selectedProvider.oauthFile.fileName,
+        }
+        enrollmentProviderRow = {
+          ...selectedProvider,
+          oauthFile: updatedOauth,
+        }
+        state.oauthFile = updatedOauth
+        state.providers = state.providers.map((row) =>
+          row.id === selectedProvider.id ? enrollmentProviderRow : row,
+        )
+        await state.persistProviders()
+
+        // A shared grant is not usable until the target contains the current
+        // vault event log. Await the Rust/WASM fan-out before emitting the code.
+        const targetArgs = state.providerWasmArgs(enrollmentProviderRow)
+        await state.enqueueStorage(() =>
+          state.manager!.flushEventOutboxForProvider(...targetArgs),
+        )
       }
     }
     const provider = enrollmentProviderForArchitecture(
-      selectedProvider,
+      enrollmentProviderRow,
       state.vaultArchitecture,
       isSharedReplication ? sharedJoinerIdentity : undefined,
       sharedStorageTargetId,

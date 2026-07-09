@@ -1,11 +1,16 @@
 import { beforeAll, describe, expect, test } from 'vitest'
-import initNookWasm from '$lib/nook-wasm/nook_wasm'
+import initNookWasm, {
+  enrollmentProviderForArchitecture,
+} from '$lib/nook-wasm/nook_wasm'
 import type { StorageProvider } from '$lib/auth-providers'
 import {
   canCreateSecret,
   defaultVaultArchitecture,
+  firstCompatibleProvider,
   onboardingType,
+  providerCapabilityLabelKey,
   providerReplicationCapability,
+  providerSupportsReplication,
   validateProviderReplication,
   validateVaultArchitecture,
   type VaultArchitecture,
@@ -88,5 +93,54 @@ describe('vault architecture adapter', () => {
     ).toThrow(
       /errors\.validation\.unsupported_provider_replication:github::shared/,
     )
+  })
+
+  test('provider presentation selects only rows Rust accepts for the vault mode', () => {
+    const github = githubProvider()
+    const drive = googleDriveProvider()
+    const providers = [github, drive]
+
+    expect(providerCapabilityLabelKey(github)).toBe(
+      'provider_picker.capability_personal_only',
+    )
+    expect(providerCapabilityLabelKey(drive)).toBe(
+      'provider_picker.capability_personal_shared',
+    )
+    expect(providerSupportsReplication(github, 'shared')).toBe(false)
+    expect(providerSupportsReplication(drive, 'shared')).toBe(true)
+    expect(firstCompatibleProvider(providers, 'shared', github.id)).toBe(drive)
+    expect(firstCompatibleProvider(providers, 'personal', github.id)).toBe(
+      github,
+    )
+    expect(
+      firstCompatibleProvider([github], 'shared', github.id),
+    ).toBeUndefined()
+  })
+
+  test('WASM refuses to emit a shared enrollment provider without a storage target', () => {
+    const architecture: VaultArchitecture = {
+      device_mode: 'standard',
+      vault_type: 'simple',
+      replication_type: 'shared',
+    }
+    const provider = googleDriveProvider()
+
+    expect(() =>
+      enrollmentProviderForArchitecture(
+        provider,
+        architecture,
+        'joiner@example.com',
+        undefined,
+      ),
+    ).toThrow(/shared_storage_target_required/)
+
+    const enrollmentProvider = enrollmentProviderForArchitecture(
+      provider,
+      architecture,
+      'joiner@example.com',
+      'shared-folder-abc',
+    )
+    expect(enrollmentProvider.isSharedProviderGrant).toBe(true)
+    expect(enrollmentProvider.sharedStorageTargetId).toBe('shared-folder-abc')
   })
 })

@@ -257,6 +257,14 @@ impl NookVaultManager {
         architecture
             .validate()
             .map_err(|error| JsError::new(&error.to_string()))?;
+        if !self.vault.store_id.is_empty() && architecture != self.vault.architecture {
+            return Err(JsError::new(
+                "Vault architecture is immutable after vault creation.",
+            ));
+        }
+        architecture
+            .validate_records(&self.stored_records_snapshot())
+            .map_err(|error| JsError::new(&error.to_string()))?;
         self.vault.architecture = architecture;
         Ok(())
     }

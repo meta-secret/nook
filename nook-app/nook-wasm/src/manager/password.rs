@@ -209,6 +209,9 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         self.vault
             .password_entries
             .retain(|entry| entry.id != entry_id);
@@ -222,6 +225,9 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         let entry_ids: Vec<String> = self
             .vault
             .password_entries
