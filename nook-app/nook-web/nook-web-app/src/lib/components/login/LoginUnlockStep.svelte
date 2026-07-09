@@ -51,9 +51,7 @@
       vault.nexusUnlockStatus === 'awaiting_shares' ||
       (vault.isNexusVault() && !vault.isAuthenticated),
   )
-  const hidePasswordUnlock = $derived(
-    showNexusCeremony || vault.isNexusVault(),
-  )
+  const hidePasswordUnlock = $derived(showNexusCeremony || vault.isNexusVault())
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">

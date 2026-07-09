@@ -178,13 +178,12 @@ export async function unlockWithNexusShares(
   state.isVerifying = true
   try {
     await state.initDeviceIdentity()
-    const openedSharesJson = JSON.stringify(opened.map((raw) => JSON.parse(raw)))
+    const openedSharesJson = JSON.stringify(
+      opened.map((raw) => JSON.parse(raw)),
+    )
     const connectArgs = state.connectStorageArgs()
     const rawRecords = (await state.enqueueStorage(() =>
-      state.manager!.connectWithNexusShares(
-        ...connectArgs,
-        openedSharesJson,
-      ),
+      state.manager!.connectWithNexusShares(...connectArgs, openedSharesJson),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
     state.markVaultUnlocked()

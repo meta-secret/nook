@@ -83,9 +83,11 @@ test.describe('nexus unlock ceremony', () => {
     await disableVaultIdleLock(deviceB)
 
     await deviceA.goto('/')
-    await expect(deviceA.getByTestId('login-create-vault-chooser')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
+    await expect(deviceA.getByTestId('login-create-vault-chooser')).toBeVisible(
+      {
+        timeout: UI_TIMEOUT_MS,
+      },
+    )
     await deviceA.getByTestId('mode-option-nexus').click()
     await expect(deviceA.getByTestId('nexus-readiness-gate')).toBeVisible()
     await createLocalVaultOnLogin(deviceA, 'Nexus ceremony vault')

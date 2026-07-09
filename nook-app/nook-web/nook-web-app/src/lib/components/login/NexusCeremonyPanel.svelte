@@ -128,8 +128,7 @@
           class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           readonly
           data-testid="nexus-local-share-output"
-          value={vault.nexusLocalShareContribution}
-        ></textarea>
+          value={vault.nexusLocalShareContribution}></textarea>
         <Button
           type="button"
           variant="outline"
@@ -162,8 +161,7 @@
         'architecture_modes.nexus_ceremony_paste_peer_placeholder',
       )}
       disabled={isBusy || awaitingShares}
-      bind:value={vault.nexusPeerShareContributions}
-    ></textarea>
+      bind:value={vault.nexusPeerShareContributions}></textarea>
   </div>
 
   <Button
