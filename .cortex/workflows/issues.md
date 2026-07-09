@@ -9,6 +9,13 @@ them carefully: search first, preserve existing ownership, prefer comments over
 destructive edits, and keep related work discoverable through one aggregate
 issue plus focused sub-issues.
 
+When the user asks to create issues for a feature, also apply
+[`dynamic-skills/feature-issue-planning.md`](../dynamic-skills/feature-issue-planning.md):
+every feature issue pack must have a milestone. GitHub's public docs do not
+document a hard limit on the number of milestones, but a milestone with more
+than 500 open issues cannot be manually prioritized, so split oversized feature
+packs before they approach that size.
+
 ## Trigger
 
 Before an agent says any of the following, it must run this workflow:
@@ -25,6 +32,10 @@ The workflow also applies when tests, review comments, or implementation work
 discover missing functionality that the current PR will not finish.
 
 ## Required Issue Shape
+
+Every feature issue pack needs a milestone first. The milestone is the feature
+container and progress boundary; labels remain filters, not the source of
+ownership. Assign the aggregate issue and all sub-issues to that milestone.
 
 Every broad problem needs one aggregate issue. The aggregate issue owns the
 overall goal, current status, links to PRs, and the list of sub-issues.
