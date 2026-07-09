@@ -10,12 +10,19 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::NookSecretRecord;
-use crate::conversion::{
-    LoadedVault, access_status_for_vault_content, content_requires_genesis, load_stored_vault,
-};
+use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
 use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+fn is_nexus_ceremony_required(err: &NookError) -> bool {
+    match err {
+        NookError::Encryption(message) | NookError::Database(message) => {
+            message.contains("opened-share ceremony") || message.contains("NexusCeremonyRequired")
+        }
+        _ => false,
+    }
+}
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -182,48 +189,7 @@ impl NookVaultManager {
         } else if event_log_only_remote {
             self.connect_event_log_only_remote(&identity).await?;
         } else if !content.trim().is_empty() {
-            if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
-                self.event_log.enabled = true;
-                let cache = crate::storage::indexed_db::load_from_indexed_db()
-                    .await?
-                    .filter(|value| !value.trim().is_empty())
-                    .unwrap_or_else(|| content.clone());
-                let LoadedVault {
-                    meta,
-                    secrets_key,
-                    members_key,
-                    ..
-                } = load_stored_vault(&cache, &identity)?;
-                self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-                self.vault.meta = meta;
-                self.capture_vault_unlock(&cache);
-                self.sync_events_from_current_provider().await?;
-                self.apply_event_projection_to_session().await?;
-            } else {
-                let format = nook_core::detect_stored_format(&content)?;
-                let records = nook_core::deserialize_stored(&content, format)?;
-                if let Some(message) = nook_core::explain_connect_blocked(&records, &identity) {
-                    return Err(NookError::Database(message).into());
-                }
-                let _ = self.status.tx.send("DECRYPT_START".to_owned());
-                let loaded = load_stored_vault(&content, &identity)?;
-                let LoadedVault {
-                    database,
-                    meta,
-                    secrets_key,
-                    members_key,
-                } = loaded;
-                self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-                self.vault.database = database;
-                self.vault.meta = meta;
-                self.maybe_sync_self_into_roster(&identity)?;
-                let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
-                self.vault.last_synced_content = content.clone();
-                let import_yaml = self.serialize_current_projection_yaml()?;
-                self.import_stored_vault_to_event_log(&import_yaml).await?;
-                self.event_log.enabled = true;
-                self.flush_event_outbox().await?;
-            }
+            self.connect_existing_content(&identity, &content).await?;
         }
 
         if use_genesis || remote_content_missing {
@@ -241,6 +207,73 @@ impl NookVaultManager {
             "connect complete"
         );
         Ok(records)
+    }
+
+    async fn connect_existing_content(
+        &mut self,
+        identity: &nook_core::DeviceIdentity,
+        content: &str,
+    ) -> Result<(), JsError> {
+        if self.event_log_has_events().await? || self.ensure_event_log_mode().await? {
+            self.event_log.enabled = true;
+            let cache = crate::storage::indexed_db::load_from_indexed_db()
+                .await?
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| content.to_owned());
+            match self.load_stored_vault_or_nexus_ceremony(&cache, identity) {
+                Ok(LoadedVault {
+                    meta,
+                    secrets_key,
+                    members_key,
+                    ..
+                }) => {
+                    self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
+                    self.vault.meta = meta;
+                    self.capture_vault_unlock(&cache);
+                    self.sync_events_from_current_provider().await?;
+                    self.apply_event_projection_to_session().await?;
+                    Ok(())
+                }
+                Err(err) if is_nexus_ceremony_required(&err) => {
+                    self.prepare_nexus_ceremony_session(&cache)?;
+                    Err(err.into())
+                }
+                Err(err) => Err(err.into()),
+            }
+        } else {
+            let format = nook_core::detect_stored_format(content)?;
+            let records = nook_core::deserialize_stored(content, format)?;
+            if let Some(message) = nook_core::explain_connect_blocked(&records, identity) {
+                return Err(NookError::Database(message).into());
+            }
+            let _ = self.status.tx.send("DECRYPT_START".to_owned());
+            match self.load_stored_vault_or_nexus_ceremony(content, identity) {
+                Ok(loaded) => {
+                    let LoadedVault {
+                        database,
+                        meta,
+                        secrets_key,
+                        members_key,
+                    } = loaded;
+                    self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
+                    self.vault.database = database;
+                    self.vault.meta = meta;
+                    self.maybe_sync_self_into_roster(identity)?;
+                    let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
+                    self.vault.last_synced_content = content.to_owned();
+                    let import_yaml = self.serialize_current_projection_yaml()?;
+                    self.import_stored_vault_to_event_log(&import_yaml).await?;
+                    self.event_log.enabled = true;
+                    self.flush_event_outbox().await?;
+                    Ok(())
+                }
+                Err(err) if is_nexus_ceremony_required(&err) => {
+                    self.prepare_nexus_ceremony_session(content)?;
+                    Err(err.into())
+                }
+                Err(err) => Err(err.into()),
+            }
+        }
     }
 
     async fn load_connect_content(&mut self) -> Result<(String, bool), NookError> {
@@ -306,21 +339,29 @@ impl NookVaultManager {
             return Err(NookError::Database(message));
         }
         let projection = self.serialize_current_projection_yaml()?;
-        let loaded = load_stored_vault(&projection, identity)?;
-        let LoadedVault {
-            database,
-            meta,
-            secrets_key,
-            members_key,
-        } = loaded;
-        self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-        self.vault.database = database;
-        self.vault.meta = meta;
-        self.event_log.enabled = true;
-        self.apply_event_projection_to_session().await?;
-        self.persist_projection_cache().await?;
-        let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
-        Ok(())
+        match self.load_stored_vault_or_nexus_ceremony(&projection, identity) {
+            Ok(loaded) => {
+                let LoadedVault {
+                    database,
+                    meta,
+                    secrets_key,
+                    members_key,
+                } = loaded;
+                self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
+                self.vault.database = database;
+                self.vault.meta = meta;
+                self.event_log.enabled = true;
+                self.apply_event_projection_to_session().await?;
+                self.persist_projection_cache().await?;
+                let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
+                Ok(())
+            }
+            Err(err) if is_nexus_ceremony_required(&err) => {
+                self.prepare_nexus_ceremony_session(&projection)?;
+                Err(err)
+            }
+            Err(err) => Err(err),
+        }
     }
 
     fn initialize_genesis_vault(
@@ -332,9 +373,17 @@ impl NookVaultManager {
         self.vault.meta = nook_core::VaultMetaState::default();
         let keys = nook_core::generate_vault_keys()?;
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        let genesis =
-            nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
-        self.vault.meta.apply_record(&genesis);
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let genesis =
+                    nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
+                self.vault.meta.apply_record(&genesis);
+            }
+            nook_core::VaultType::Nexus => {
+                // Nexus genesis keeps vault keys in session memory only. Shares
+                // are issued after the required participants are enrolled.
+            }
+        }
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
             self.vault.meta.apply_record(&member);
         }
@@ -352,8 +401,16 @@ impl NookVaultManager {
             let identity = self.device_identity()?;
             let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-            let genesis = nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-            self.vault.meta.apply_record(&genesis);
+            match self.vault.architecture.vault_type {
+                nook_core::VaultType::Simple => {
+                    let genesis =
+                        nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
+                    self.vault.meta.apply_record(&genesis);
+                }
+                nook_core::VaultType::Nexus => {
+                    // Nexus never writes per-device auth envelopes.
+                }
+            }
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
                 self.vault.meta.apply_record(&member);
             }

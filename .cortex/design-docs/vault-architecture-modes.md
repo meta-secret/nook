@@ -48,20 +48,54 @@ onboarding code is produced.
 
 ## Nexus Lifecycle
 
-`vault_type=nexus` stores encrypted `nexus_share:{device_id}` records in the
-top-level `nexus_shares:` YAML section. The vault key bundle is split across
-participant shares with a threshold policy, and the normal single-device auth
-envelope path must not unlock a nexus vault.
+`vault_type=nexus` never writes per-device full vault-key auth envelopes for the
+protected key epoch. Genesis keeps vault keys in session memory and enrolls the
+first participant into the member roster only. As additional devices are
+approved, Rust issues encrypted `nexus_share:{device_id}` records once the
+configured `required_participants` count is reached.
 
-A nexus vault blocks secret creation until the manager can see enough actual
-share records for the configured policy. UI metadata such as
-`ready_participants` is only presentation state; Svelte must call WASM/Rust for
-readiness so stale metadata cannot enable writes.
+Password unlock is forbidden as the sole unlock path for nexus vaults
+(`NexusPasswordUnlockForbidden`). Session hydrate from projection YAML also
+fails closed (`NexusCeremonyRequired`) and must never resolve auth envelopes.
 
-The current implementation provides the encrypted share record model and
-fail-closed creation gate. Higher-level ceremony UX for distributing,
-rotating, or recovering shares should build on these records rather than
-placing share math in TypeScript.
+Browser unlock is an opened-share ceremony: each device opens its local share
+into an `OpenedNexusShare` contribution (`open_nexus_share_for_identity` /
+WASM `openLocalNexusShare`), then the reconstructing device combines ≥
+threshold contributions (`reconstruct_nexus_vault_keys_from_opened` /
+WASM `connectWithNexusShares`). Peer `DeviceIdentity` secrets must never cross
+browsers.
+
+`load_stored_vault` rejects nexus unlock. `load_nexus_vault` (identities) is a
+native/test helper only; production browser paths use
+`load_nexus_vault_from_opened`. Secret creation stays blocked until actual
+share records exist (`can_create_secret_with_records`); UI
+`ready_participants` is presentation only.
+
+Share math is currently interim GF(256) Shamir inside `nook-auth2`. Product
+SLIP-0039 mnemonic primitives remain owned by #261 and should replace this
+encoding later without changing the architecture-mode contract.
+
+## Shared Replication Grant
+
+Shared onboarding collects the joiner provider identity (email for Google Drive)
+and embeds a `SharedProviderGrant` enrollment payload without owner credentials.
+Rust `prepare_shared_storage_grant` validates the request; WASM performs the
+real Google Drive grant when possible.
+
+**Personal** Google Drive vaults stay on OAuth `drive.appdata` (unchanged).
+
+**Shared** Google Drive vaults use a dedicated My Drive folder under
+`drive.file`:
+
+1. Owner: create folder → `permissions.create` for the joiner email (writer) →
+   return `Granted` with `storageTargetId` (folder id) and optional name.
+2. Enrollment embeds `storage_target_id` on `SharedProviderGrant` (no owner
+   tokens).
+3. Joiner: own OAuth with `drive.file`, redeem with the folder id, sync events
+   under that parent (not `appDataFolder`).
+
+`ManualGrantRequired` remains the fallback when the Drive API fails or the
+owner token lacks `drive.file`.
 
 ## Web Boundary
 

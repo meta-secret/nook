@@ -84,6 +84,7 @@ test.describe(`${providerLabel} vault`, () => {
     await installSyncRemote(vaultPage, target)
     await reconnectSyncVault(vaultPage)
     await assertVaultReady(vaultPage)
+    await waitForLoadedSyncProviders(vaultPage)
 
     const row = vaultPage.getByTestId('secret-row').filter({ hasText: key })
     await row.waitFor()

@@ -23,6 +23,7 @@ mod device_protection;
 mod diagnostics;
 mod event_log;
 mod multi_device;
+mod nexus;
 mod password;
 mod secrets;
 mod sync;
@@ -44,6 +45,8 @@ struct StorageSession {
     access_token: String,
     remote_ref: String,
     remote_path: String,
+    /// Google Drive event parent: appDataFolder (personal) or shared folder id.
+    drive_event_parent: nook_core::DriveEventParent,
     file_sha: Option<String>,
     /// Cached empty-repo listing from GitHub (`GET .../contents/` -> 404).
     github_root_empty: bool,
@@ -60,6 +63,7 @@ impl Default for StorageSession {
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),
+            drive_event_parent: nook_core::DriveEventParent::AppDataFolder,
             file_sha: None,
             github_root_empty: false,
             use_local_cache_for_connect: false,
@@ -109,6 +113,9 @@ impl Default for VaultSessionState {
 
 impl VaultSessionState {
     fn reset(&mut self) {
+        // Preserve architecture so nexus ceremony UI can detect vault type after
+        // lock without re-reading projection YAML first.
+        let architecture = self.architecture.clone();
         self.secrets_key.zeroize();
         self.members_key.zeroize();
         self.crypto = None;
@@ -120,7 +127,7 @@ impl VaultSessionState {
         self.store_id.clear();
         self.vault_name = None;
         self.vault_version = 0;
-        self.architecture = nook_core::VaultArchitecture::default_legacy();
+        self.architecture = architecture;
     }
 }
 
@@ -415,6 +422,9 @@ impl NookVaultManager {
         if self.vault.crypto.is_some() {
             return Ok(());
         }
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusCeremonyRequired.into());
+        }
         let identity = self.ensure_device_identity()?;
         if !self.vault.last_synced_content.trim().is_empty() {
             let (secrets_key, members_key) = nook_core::hydrate_keys_from_projection_yaml(
@@ -502,6 +512,7 @@ impl NookVaultManager {
         match mode {
             nook_core::StorageMode::Local => {
                 self.storage.access_token = String::new();
+                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
             }
             nook_core::StorageMode::Github => {
                 self.storage.access_token = nook_core::validate_github_pat(github_pat)?.to_string();
@@ -514,6 +525,7 @@ impl NookVaultManager {
                 }
                 self.storage.remote_ref = new_repo;
                 self.storage.remote_path.clear();
+                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
                 let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
                 ensure_github_repo_exists(&self.storage.access_token, &self.storage.remote_ref)
                     .await?;
@@ -523,10 +535,16 @@ impl NookVaultManager {
                     nook_core::validate_oauth_access_token(github_pat)?.to_string();
                 let (known_file_id, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
+                self.storage.drive_event_parent =
+                    nook_core::DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
                 let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
                 verify_drive_access(&self.storage.access_token).await?;
-                self.storage.remote_ref = known_file_id;
+                // Personal: optional vault yaml file id. Shared: folder id for events.
+                self.storage.remote_ref = match &self.storage.drive_event_parent {
+                    nook_core::DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
+                    nook_core::DriveEventParent::AppDataFolder => known_file_id,
+                };
             }
             nook_core::StorageMode::ICloud => {
                 self.storage.access_token =
@@ -535,6 +553,7 @@ impl NookVaultManager {
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
                 self.storage.remote_path = file_name.to_string();
                 self.storage.remote_ref = file_name.to_string();
+                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
             }
         }
 

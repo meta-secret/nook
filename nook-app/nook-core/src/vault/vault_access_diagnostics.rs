@@ -336,9 +336,11 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. } => 1,
         VaultOperation::JoinApproved { .. } => 2,
+        VaultOperation::NexusSharesIssued { shares } => shares.len(),
         VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretConflictResolved { .. }
         | VaultOperation::JoinRequested { .. }
+        | VaultOperation::NexusParticipantEnrolled { .. }
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::DeviceRevoked { .. }

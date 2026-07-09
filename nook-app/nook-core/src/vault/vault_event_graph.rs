@@ -249,7 +249,7 @@ impl EventGraph {
         if event.body.parents.is_empty() {
             return Ok(());
         }
-        if Self::is_self_signed_join_request(event)? {
+        if Self::is_self_signed_membership_event(event)? {
             return Ok(());
         }
         let authorized = self.authorized_actors_before(event)?;
@@ -316,14 +316,27 @@ impl EventGraph {
         true
     }
 
-    fn is_self_signed_join_request(event: &VaultEvent) -> VaultResult<bool> {
+    /// Allow an unauthorized actor to publish its own membership event when the
+    /// operation's signing key matches the event actor.
+    ///
+    /// Covers pending `JoinRequested` (approval flow) and password QR
+    /// self-enrol (`JoinApproved` / `NexusParticipantEnrolled`). Password
+    /// self-enrol is capability-gated by vault-key knowledge out of band; the
+    /// graph only checks the self-signature binding.
+    fn is_self_signed_membership_event(event: &VaultEvent) -> VaultResult<bool> {
         if event.body.operations.is_empty() {
             return Ok(false);
         }
         for operation in &event.body.operations {
-            let VaultOperation::JoinRequested {
+            let (VaultOperation::JoinRequested {
                 signing_public_key, ..
-            } = operation
+            }
+            | VaultOperation::JoinApproved {
+                signing_public_key, ..
+            }
+            | VaultOperation::NexusParticipantEnrolled {
+                signing_public_key, ..
+            }) = operation
             else {
                 return Ok(false);
             };
@@ -366,14 +379,18 @@ impl EventGraph {
                 authorized.insert(parent_event.body.actor_id.clone());
             }
             for operation in &parent_event.body.operations {
-                if let VaultOperation::JoinApproved {
-                    signing_public_key, ..
-                } = operation
-                    && !signing_public_key.is_empty()
-                {
-                    authorized.insert(SigningIdentity::actor_id_for_public_key_hex(
-                        signing_public_key.as_str(),
-                    )?);
+                match operation {
+                    VaultOperation::JoinApproved {
+                        signing_public_key, ..
+                    }
+                    | VaultOperation::NexusParticipantEnrolled {
+                        signing_public_key, ..
+                    } if !signing_public_key.is_empty() => {
+                        authorized.insert(SigningIdentity::actor_id_for_public_key_hex(
+                            signing_public_key.as_str(),
+                        )?);
+                    }
+                    _ => {}
                 }
             }
             stack.extend(parent_event.body.parents.iter().cloned());
@@ -698,6 +715,37 @@ mod tests {
             &joiner_key,
         );
         assert_eq!(graph.insert(join, STORE_STR)?, EventInsertStatus::Applied);
+        Ok(())
+    }
+
+    #[test]
+    fn self_signed_password_join_approval_is_allowed() -> VaultResult<()> {
+        let root_key = signing_key();
+        let joiner_key = signing_key();
+        let mut graph = EventGraph::new();
+        let genesis = genesis_event(&root_key);
+        let genesis_id = genesis.id()?;
+        graph.insert(genesis, STORE_STR)?;
+
+        let enrol = signed_operation(
+            vec![genesis_id],
+            VaultOperation::JoinApproved {
+                device_id: DeviceId::parse("0123456789abcdef").unwrap(),
+                encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
+                signing_public_key: public_key(&joiner_key),
+                label: MemberLabel::from_trusted("phone".to_owned()),
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted("secret-key".to_owned()),
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted(
+                    "members-key".to_owned(),
+                ),
+            },
+            &joiner_key,
+        );
+        let enrol_id = enrol.id()?;
+        assert_eq!(graph.insert(enrol, STORE_STR)?, EventInsertStatus::Applied);
+
+        let child = signed_child(vec![enrol_id], "secret_joiner0001", &joiner_key);
+        assert_eq!(graph.insert(child, STORE_STR)?, EventInsertStatus::Applied);
         Ok(())
     }
 

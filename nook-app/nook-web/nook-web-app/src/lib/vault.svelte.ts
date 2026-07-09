@@ -89,8 +89,10 @@ import * as syncActions from '$lib/vault/sync'
 import * as multiDeviceActions from '$lib/vault/multi-device'
 import * as secretsActions from '$lib/vault/secrets'
 import * as passwordUnlockActions from '$lib/vault/password-unlock'
+import * as nexusUnlockActions from '$lib/vault/nexus-unlock'
 import * as idleSessionActions from '$lib/vault/idle-session'
 import * as lifecycleActions from '$lib/vault/lifecycle'
+import type { NexusUnlockStatus } from '$lib/vault/nexus-unlock'
 
 const vaultLog = createLogger('vault')
 
@@ -202,6 +204,7 @@ export class VaultState {
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
   sharedJoinerIdentity = $state('')
+  sharedGrantInstructions = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
   /**
    * True from the moment this device sends a join request until it unlocks.
@@ -292,6 +295,13 @@ export class VaultState {
   loginUnlockMode = $state<'unknown' | 'keys' | 'password'>('unknown')
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false)
+  /** Nexus vault needs an opened-share ceremony instead of keys/password unlock. */
+  nexusCeremonyPrompt = $state(false)
+  nexusUnlockStatus = $state<NexusUnlockStatus>('not_nexus')
+  /** Local opened-share JSON contribution (sensitive — never log). */
+  nexusLocalShareContribution = $state('')
+  /** Peer opened-share JSON pasted into the ceremony UI. */
+  nexusPeerShareContributions = $state('')
   /** Remote vault file missing on storage — prompt before unlock. */
   remoteVaultRecoveryPrompt = $state<'none' | 'with_cache' | 'missing_only'>(
     'none',
@@ -375,7 +385,9 @@ export class VaultState {
         this.githubRepo,
         this.oauthFile?.preset ?? undefined,
         this.oauthFile?.accessToken ?? undefined,
-        this.oauthFile?.fileId ?? undefined,
+        this.oauthFile?.folderId?.trim()
+          ? `shared:${this.oauthFile.folderId.trim()}`
+          : (this.oauthFile?.fileId ?? undefined),
         this.oauthFile?.fileName ?? undefined,
       ),
     )
@@ -784,7 +796,7 @@ export class VaultState {
         this.draftVaultType === 'nexus'
           ? {
               threshold: 2,
-              required_participants: 3,
+              required_participants: 2,
               ready_participants: 0,
             }
           : undefined,
@@ -1227,6 +1239,10 @@ export class VaultState {
     this.selectedPasswordEntryId = undefined
     this.loginUnlockMode = 'unknown'
     this.loginPasswordPrompt = false
+    this.nexusCeremonyPrompt = false
+    this.nexusUnlockStatus = 'not_nexus'
+    this.nexusLocalShareContribution = ''
+    this.nexusPeerShareContributions = ''
   }
 
   ensureIdleSessionTracker() {
@@ -1284,7 +1300,14 @@ export class VaultState {
     this.settingsOpen = false
     this.enrollmentCode = ''
     this.errorMsg = ''
+    this.nexusLocalShareContribution = ''
+    this.nexusPeerShareContributions = ''
+    const wasNexus = this.vaultArchitecture.vault_type === 'nexus'
     this.resetVaultSessionState()
+    if (wasNexus) {
+      this.nexusCeremonyPrompt = true
+      this.nexusUnlockStatus = 'ceremony_required'
+    }
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
@@ -1941,6 +1964,30 @@ export class VaultState {
    */
   async unlockWithPassword(entryId: string, password: string): Promise<void> {
     return passwordUnlockActions.unlockWithPassword(this, entryId, password)
+  }
+
+  isNexusVault(): boolean {
+    return nexusUnlockActions.isNexusVault(this)
+  }
+
+  async getNexusUnlockStatus(): Promise<NexusUnlockStatus> {
+    return nexusUnlockActions.getNexusUnlockStatus(this)
+  }
+
+  async refreshNexusUnlockStatus(): Promise<NexusUnlockStatus> {
+    return nexusUnlockActions.refreshNexusUnlockStatus(this)
+  }
+
+  async openLocalNexusShare(): Promise<string> {
+    return nexusUnlockActions.openLocalNexusShare(this)
+  }
+
+  async unlockWithNexusShares(contributions: string[]): Promise<void> {
+    return nexusUnlockActions.unlockWithNexusShares(this, contributions)
+  }
+
+  isNexusCeremonyRequiredError(err: unknown): boolean {
+    return nexusUnlockActions.isNexusCeremonyRequiredError(err)
   }
 
   /**

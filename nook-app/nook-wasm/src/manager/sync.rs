@@ -8,8 +8,8 @@
 use super::NookVaultManager;
 use crate::NookVaultSyncResult;
 use crate::conversion::{
-    LoadedVault, access_status_for_vault_content, load_stored_vault, sync_result_access_status,
-    sync_result_session, sync_result_unchanged,
+    LoadedVault, access_status_for_vault_content, sync_result_access_status, sync_result_session,
+    sync_result_unchanged,
 };
 use crate::storage::event_db::is_event_log_mode;
 use wasm_bindgen::JsError;
@@ -41,8 +41,13 @@ impl NookVaultManager {
             self.event_log.enabled = true;
             let event_changed = self.sync_event_log_from_storage().await.unwrap_or(false);
             let changed = event_changed;
-            if changed {
-                self.persist_projection_cache().await?;
+            if self.vault.crypto.is_some() {
+                if changed {
+                    self.persist_projection_cache().await?;
+                }
+            } else {
+                // Locked nexus joiners still need share/join meta for ceremony.
+                let _ = self.materialize_vault_meta_from_events().await;
             }
             let result = sync_result_session(self, changed)?;
             tracing::debug!(
@@ -90,7 +95,7 @@ impl NookVaultManager {
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
 
         nook_core::merge_remote_join_records(&mut self.vault.meta, &fresh_records);
-        let loaded = load_stored_vault(&content, &identity)?;
+        let loaded = self.load_stored_vault_or_nexus_ceremony(&content, &identity)?;
         let LoadedVault {
             database,
             meta,

@@ -30,6 +30,7 @@
     type NookPasswordEntrySummary,
   } from '$lib/nook-wasm/nook_wasm'
   import type { VaultState } from '$lib/vault.svelte'
+  import { onboardingType } from '$lib/vault-architecture'
 
   let {
     vault,
@@ -86,6 +87,9 @@
   const hasSyncProviders = $derived(syncProviders.length > 0)
   const showSetup = $derived(setupType !== undefined)
   const addingProvider = $derived(addProviderOpen || showSetup)
+  const derivedOnboardingType = $derived(
+    onboardingType(vault.vaultArchitecture),
+  )
 
   let providerId = $state<string | undefined>(undefined)
   let passwordEntryId = $state<string | undefined>(undefined)
@@ -636,6 +640,15 @@
           />
         </div>
 
+        <p
+          class="text-xs text-muted-foreground"
+          data-testid="onboarding-type-label"
+        >
+          {vault.t(
+            `architecture_modes.onboarding_type_${derivedOnboardingType}_title`,
+          )}
+        </p>
+
         {#if vault.vaultArchitecture.replication_type === 'shared'}
           <div class="space-y-1.5">
             <label
@@ -715,5 +728,13 @@
       linkDescription={vault.t('onboard_device.link_desc')}
       passwordReminder={vault.t('onboard_device.share_password')}
     />
+    {#if vault.sharedGrantInstructions}
+      <div
+        class="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-foreground"
+        data-testid="shared-grant-instructions"
+      >
+        {vault.sharedGrantInstructions}
+      </div>
+    {/if}
   {/if}
 </section>

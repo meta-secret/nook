@@ -52,6 +52,8 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::DriveFileNameChars => NookError::Drive(err.to_string()),
 
             ValidationError::OauthAccessTokenEmpty
+            | ValidationError::SharedJoinerIdentityRequired
+            | ValidationError::SharedJoinerIdentityInvalid
             | ValidationError::UnknownStorageMode { .. }
             | ValidationError::UnknownDeviceMode { .. }
             | ValidationError::UnknownVaultType { .. }

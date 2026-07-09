@@ -84,6 +84,16 @@ pub enum MultiDeviceError {
     #[error("Invalid nexus share encoding.")]
     InvalidNexusShareEncoding,
 
+    #[error(
+        "Nexus vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
+    )]
+    NexusCeremonyRequired,
+
+    #[error(
+        "Password unlock is forbidden for nexus vaults; use the opened-share ceremony instead."
+    )]
+    NexusPasswordUnlockForbidden,
+
     #[error("Failed to build member roster record.")]
     MemberRosterBuildFailed,
 

@@ -1,18 +1,25 @@
 //! Restore vault encryption keys from the projection-cache YAML.
 
-use crate::errors::{EventError, VaultResult};
+use crate::errors::{EventError, MultiDeviceError, VaultResult};
 use crate::{
-    DeviceIdentity, deserialize_stored, detect_stored_format, resolve_members_key,
+    DeviceIdentity, VaultType, deserialize_stored, detect_stored_format, resolve_members_key,
     resolve_secrets_key,
 };
 
 /// Resolve `secrets_key` and `members_key` from a stored vault YAML projection cache.
+///
+/// Nexus vaults fail closed: auth envelopes must never unlock a nexus session.
+/// Browser unlock uses the opened-share ceremony instead.
 pub fn hydrate_keys_from_projection_yaml(
     yaml: &str,
     identity: &DeviceIdentity,
 ) -> VaultResult<(String, String)> {
     if yaml.trim().is_empty() {
         return Err(EventError::EmptyProjectionCache.into());
+    }
+    let architecture = crate::read_vault_architecture(yaml)?;
+    if architecture.vault_type == VaultType::Nexus {
+        return Err(MultiDeviceError::NexusCeremonyRequired.into());
     }
     let format = detect_stored_format(yaml)?;
     let records = deserialize_stored(yaml, format)?;
@@ -63,6 +70,49 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         assert!(hydrate_keys_from_projection_yaml("", &identity).is_err());
         assert!(hydrate_keys_from_projection_yaml("   ", &identity).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn hydrate_fails_closed_for_nexus_projection_yaml() -> VaultResult<()> {
+        use crate::{
+            DeviceMode, NexusPolicy, VaultArchitecture, VaultType, create_nexus_share_records,
+            generate_store_id, generate_vault_keys,
+            serialize_stored_yaml_with_unlock_name_architecture,
+        };
+
+        let keys = generate_vault_keys()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
+        let shares = create_nexus_share_records(&keys, &[first.clone(), second.clone()], 2)?;
+        let architecture = VaultArchitecture::nexus_personal(
+            DeviceMode::Standard,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+        assert_eq!(architecture.vault_type, VaultType::Nexus);
+        let store_id = generate_store_id()?;
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &shares,
+            &VaultUnlock::Keys,
+            &[],
+            Some(store_id.as_str()),
+            None,
+            None,
+            &architecture,
+        )?;
+
+        let err = hydrate_keys_from_projection_yaml(yaml.as_str(), &first).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                crate::VaultError::MultiDevice(crate::MultiDeviceError::NexusCeremonyRequired)
+            ),
+            "expected NexusCeremonyRequired, got {err:?}"
+        );
         Ok(())
     }
 }

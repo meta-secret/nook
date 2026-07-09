@@ -254,6 +254,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
           refreshToken: state.oauthFile?.refreshToken,
           expiresAt: state.oauthFile?.expiresAt,
           fileId: state.oauthFile?.fileId,
+          folderId: state.oauthFile?.folderId,
           accountEmail: state.oauthFile?.accountEmail,
           fileName: driveFile,
         }
@@ -352,6 +353,7 @@ export async function ensureProviderSaved(state: VaultState): Promise<boolean> {
         refreshToken: provider.oauthFile.refreshToken,
         expiresAt: provider.oauthFile.expiresAt ?? state.oauthFile!.expiresAt,
         fileId: state.oauthFile!.fileId,
+        folderId: state.oauthFile!.folderId ?? provider.oauthFile.folderId,
         fileName:
           provider.oauthFile.fileName?.trim() ||
           state.oauthFile!.fileName?.trim() ||
