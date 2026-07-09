@@ -288,6 +288,7 @@ impl NookVaultManager {
         self.storage.access_token.zeroize();
         self.storage.remote_ref.clear();
         self.storage.remote_path.clear();
+        self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
         self.storage.mode = nook_core::StorageMode::Local;
         indexed_db::delete_device_identity_for_recovery().await?;
         auth_providers::delete_auth_providers_db().await?;

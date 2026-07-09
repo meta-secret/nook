@@ -259,6 +259,10 @@ impl NookVaultManager {
             .load_password_unlock_records(&content, vault_missing)
             .await?;
 
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
+
         if records.is_empty() {
             return Err(
                 NookError::Database("No vault records found at this provider.".to_owned()).into(),
@@ -355,20 +359,13 @@ impl NookVaultManager {
         keys: &nook_core::VaultKeys,
         content: &str,
     ) -> Result<(), NookError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         if event_log_remote {
-            let signing = self.ensure_signing_identity().await?;
-            let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-                signing.verifying_key().as_bytes(),
-            ));
-            self.append_vault_operations(vec![nook_core::VaultOperation::JoinRequested {
-                device_id: identity.device_id().clone(),
-                encryption_public_key: identity.public_key().clone(),
-                signing_public_key: signing_pk,
-                label: nook_core::MemberLabel::from_trusted(String::new()),
-            }])
-            .await?;
-            self.flush_event_outbox().await?;
-            return self.persist_projection_cache().await;
+            return self
+                .persist_event_log_password_membership(records, identity, keys)
+                .await;
         }
 
         let auth_id =
@@ -413,5 +410,58 @@ impl NookVaultManager {
         self.import_stored_vault_to_event_log(import_yaml.as_str())
             .await?;
         self.flush_event_outbox().await
+    }
+
+    /// Password QR/self-enrol is one-step: the joiner already holds vault keys
+    /// from the envelope, so write membership directly. Do not leave a pending
+    /// `JoinRequested` that would require owner approval.
+    async fn persist_event_log_password_membership(
+        &mut self,
+        records: &[nook_core::StoredSecretRecord],
+        identity: &nook_core::DeviceIdentity,
+        keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
+        let signing = self.ensure_signing_identity().await?;
+        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing.verifying_key().as_bytes(),
+        ));
+        let existing_roster =
+            nook_core::resolve_member_roster(records, &keys.members_key).unwrap_or_default();
+        let updated_roster = nook_core::roster_add_member(
+            existing_roster,
+            nook_core::member_from_identity(identity, &wasm_iso_timestamp()),
+        );
+        let member_records = nook_core::build_members_records(&updated_roster, &keys.members_key)?;
+        for record in &member_records {
+            self.vault.meta.apply_record(record);
+        }
+
+        let operations = match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let auth_record =
+                    nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
+                let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+                self.vault.meta.apply_record(&auth_record);
+                vec![nook_core::VaultOperation::JoinApproved {
+                    device_id: identity.device_id().clone(),
+                    encryption_public_key: identity.public_key().clone(),
+                    signing_public_key: signing_pk,
+                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                    secrets_key_ciphertext: envelopes.secrets_key,
+                    members_key_ciphertext: envelopes.members_key,
+                }]
+            }
+            nook_core::VaultType::Nexus => {
+                vec![nook_core::VaultOperation::NexusParticipantEnrolled {
+                    device_id: identity.device_id().clone(),
+                    encryption_public_key: identity.public_key().clone(),
+                    signing_public_key: signing_pk,
+                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                }]
+            }
+        };
+        self.append_vault_operations(operations).await?;
+        self.flush_event_outbox().await?;
+        self.persist_projection_cache().await
     }
 }

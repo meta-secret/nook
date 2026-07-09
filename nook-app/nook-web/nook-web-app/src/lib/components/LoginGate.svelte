@@ -26,6 +26,7 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
+  import NexusCeremonyPanel from '$lib/components/login/NexusCeremonyPanel.svelte'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import {
     peekEnrollmentEntryId,
@@ -91,6 +92,12 @@
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== undefined)
   const showVaultPicker = $derived(vault.showLoginVaultPicker)
+  const showNexusCeremony = $derived(
+    !vault.isAuthenticated &&
+      (vault.nexusCeremonyPrompt ||
+        vault.nexusUnlockStatus === 'ceremony_required' ||
+        vault.nexusUnlockStatus === 'awaiting_shares'),
+  )
   const showLocalUnlock = $derived(
     vault.localVaultPresent &&
       !showSetup &&
@@ -154,6 +161,21 @@
   $effect(() => {
     if (showLocalUnlock) {
       void vault.prepareLocalLogin()
+    }
+  })
+
+  $effect(() => {
+    if (showLocalUnlock && vault.localVaultPresent) {
+      void vault.refreshNexusUnlockStatus()
+    }
+  })
+
+  $effect(() => {
+    if (
+      !vault.isAuthenticated &&
+      (vault.syncProviders.length > 0 || vault.localVaultPresent)
+    ) {
+      void vault.refreshNexusUnlockStatus()
     }
   })
 </script>
@@ -259,7 +281,9 @@
       </CardHeader>
 
       <CardContent class="px-6 pb-5 pt-4 sm:pb-6">
-        {#if showVaultPicker && onCreateDeviceVault}
+        {#if showNexusCeremony && !showVaultPicker}
+          <NexusCeremonyPanel {vault} {isVerifying} {isInitializing} />
+        {:else if showVaultPicker && onCreateDeviceVault}
           <LoginVaultPicker
             {vault}
             vaults={vault.localVaults}

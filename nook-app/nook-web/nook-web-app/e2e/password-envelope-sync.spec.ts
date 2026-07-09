@@ -186,7 +186,8 @@ test.describe('vault password envelope with sync provider', () => {
 
     const yaml = await waitForGithubVaultState(
       target,
-      (snapshot) => snapshot.memberPkIds.length >= 1,
+      (snapshot) =>
+        snapshot.memberPkIds.length >= 2 && snapshot.joinEntries.length === 0,
       { page: deviceB, timeoutMs: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
     expect(yaml.unlockMode).toBe('keys')

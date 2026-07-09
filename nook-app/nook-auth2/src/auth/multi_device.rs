@@ -108,6 +108,21 @@ struct NexusSharePlaintext {
     share: String,
 }
 
+/// Browser-safe contribution from one device that has opened its local nexus share.
+///
+/// Contains only the opened share bytes (base64url) and ceremony metadata — never a
+/// peer [`DeviceIdentity`] secret.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OpenedNexusShare {
+    pub version: u32,
+    pub threshold: u8,
+    pub required_participants: u8,
+    pub share_index: u8,
+    /// Base64url of share bytes (same encoding as the decrypted share plaintext).
+    pub share: String,
+    pub device_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct NexusVaultKeysPlaintext {
     secrets_key: String,
@@ -562,7 +577,12 @@ pub fn merge_remote_join_records(state: &mut VaultMetaState, fresh_records: &[St
 
 #[must_use]
 pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
-    records.iter().any(is_auth_stored_record)
+    records.iter().any(|record| {
+        is_auth_stored_record(record)
+            || is_members_stored_record(record)
+            || is_nexus_share_stored_record(record)
+            || is_join_stored_record(record)
+    })
 }
 
 #[must_use]
@@ -946,9 +966,25 @@ pub fn assess_connect_access(
 #[must_use]
 pub fn device_is_enrolled(records: &[StoredSecretRecord], identity: &DeviceIdentity) -> bool {
     let pk_id = identity.auth_id();
-    records
+    if records
         .iter()
         .any(|record| record.key.as_str() == pk_id.as_str() && is_auth_stored_record(record))
+    {
+        return true;
+    }
+    // Nexus participants are enrolled via member roster and/or share rows without
+    // a per-device auth envelope.
+    let member_key = member_stored_key(&pk_id);
+    if records
+        .iter()
+        .any(|record| record.key.as_str() == member_key && is_members_stored_record(record))
+    {
+        return true;
+    }
+    let share_key = nexus_share_record_key(identity.device_id());
+    records
+        .iter()
+        .any(|record| record.key.as_str() == share_key && is_nexus_share_stored_record(record))
 }
 
 #[must_use]
@@ -1032,8 +1068,25 @@ pub fn create_nexus_share_records(
     participants: &[DeviceIdentity],
     threshold: u8,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
+    let recipients: Vec<(DeviceId, DevicePublicKey)> = participants
+        .iter()
+        .map(|participant| (participant.device_id().clone(), participant.public_key()))
+        .collect();
+    create_nexus_share_records_for_recipients(keys, &recipients, threshold)
+}
+
+/// Split vault keys into threshold shares encrypted to each recipient public key.
+///
+/// Interim GF(256) Shamir (byte-wise). Product SLIP-0039 mnemonic shares are
+/// owned by #261 and should replace this once wired; do not invent a second
+/// mnemonic format here.
+pub fn create_nexus_share_records_for_recipients(
+    keys: &VaultKeys,
+    recipients: &[(DeviceId, DevicePublicKey)],
+    threshold: u8,
+) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
     let required_participants =
-        u8::try_from(participants.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
+        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
     validate_nexus_threshold(threshold, required_participants)?;
     let payload = serde_json::to_vec(&NexusVaultKeysPlaintext {
         secrets_key: keys.secrets_key.as_str().to_owned(),
@@ -1041,10 +1094,10 @@ pub fn create_nexus_share_records(
     })
     .map_err(MultiDeviceError::NexusSharePayload)?;
     let shares = split_secret_bytes(&payload, threshold, required_participants)?;
-    participants
+    recipients
         .iter()
         .zip(shares)
-        .map(|(participant, share)| {
+        .map(|((device_id, public_key), share)| {
             let plaintext = NexusSharePlaintext {
                 version: 1,
                 threshold,
@@ -1059,48 +1112,108 @@ pub fn create_nexus_share_records(
                 threshold,
                 required_participants,
                 share_index: share.index,
-                ciphertext: encrypt_for_recipient(&json, &participant.public_key())?,
+                ciphertext: encrypt_for_recipient(&json, public_key)?,
             };
-            VaultMetaRecord::NexusShare(participant.device_id().clone(), envelope).to_stored()
+            VaultMetaRecord::NexusShare(device_id.clone(), envelope).to_stored()
         })
         .collect()
 }
 
-pub fn reconstruct_nexus_vault_keys(
+#[must_use]
+pub fn count_nexus_share_records(records: &[StoredSecretRecord]) -> usize {
+    records
+        .iter()
+        .filter(|record| is_nexus_share_stored_record(record))
+        .count()
+}
+
+/// Open this device's encrypted nexus share into a browser-safe contribution.
+pub fn open_nexus_share_for_identity(
     records: &[StoredSecretRecord],
-    identities: &[DeviceIdentity],
+    identity: &DeviceIdentity,
+) -> MultiDeviceResult<OpenedNexusShare> {
+    let record = records
+        .iter()
+        .find(|entry| entry.key.as_str() == nexus_share_record_key(identity.device_id()))
+        .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
+            device_id: identity.device_id().to_string(),
+        })?;
+    let envelope = parse_nexus_share_envelope(record.value.as_str())?;
+    let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
+    let plaintext: NexusSharePlaintext =
+        serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::NexusSharePayload)?;
+    if plaintext.version != envelope.version
+        || plaintext.threshold != envelope.threshold
+        || plaintext.required_participants != envelope.required_participants
+        || plaintext.share_index != envelope.share_index
+    {
+        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+    }
+    // Reject malformed share encoding early so ceremony contributions are well-formed.
+    URL_SAFE_NO_PAD
+        .decode(plaintext.share.as_bytes())
+        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+    Ok(OpenedNexusShare {
+        version: plaintext.version,
+        threshold: plaintext.threshold,
+        required_participants: plaintext.required_participants,
+        share_index: plaintext.share_index,
+        share: plaintext.share,
+        device_id: identity.device_id().to_string(),
+    })
+}
+
+/// Reconstruct vault keys from opened-share ceremony contributions.
+///
+/// `records` are used to verify each contribution matches a stored nexus share
+/// envelope; peer device identities are never required.
+pub fn reconstruct_nexus_vault_keys_from_opened(
+    records: &[StoredSecretRecord],
+    opened: &[OpenedNexusShare],
 ) -> MultiDeviceResult<VaultKeys> {
     let mut shares = Vec::new();
     let mut expected_threshold = None;
-    for identity in identities {
+    let mut expected_required = None;
+    let mut seen_indexes = std::collections::BTreeSet::new();
+    for contribution in opened {
+        let device_id =
+            DeviceId::parse(&contribution.device_id).map_err(MultiDeviceError::Validation)?;
         let record = records
             .iter()
-            .find(|entry| entry.key.as_str() == nexus_share_record_key(identity.device_id()))
+            .find(|entry| entry.key.as_str() == nexus_share_record_key(&device_id))
             .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
-                device_id: identity.device_id().to_string(),
+                device_id: contribution.device_id.clone(),
             })?;
         let envelope = parse_nexus_share_envelope(record.value.as_str())?;
-        let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
-        let plaintext: NexusSharePlaintext =
-            serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::NexusSharePayload)?;
-        if plaintext.threshold != envelope.threshold
-            || plaintext.required_participants != envelope.required_participants
-            || plaintext.share_index != envelope.share_index
+        if contribution.version != envelope.version
+            || contribution.threshold != envelope.threshold
+            || contribution.required_participants != envelope.required_participants
+            || contribution.share_index != envelope.share_index
         {
             return Err(MultiDeviceError::InvalidNexusShareEncoding);
         }
         if let Some(threshold) = expected_threshold {
-            if threshold != plaintext.threshold {
+            if threshold != contribution.threshold {
                 return Err(MultiDeviceError::InvalidNexusThreshold);
             }
         } else {
-            expected_threshold = Some(plaintext.threshold);
+            expected_threshold = Some(contribution.threshold);
+        }
+        if let Some(required) = expected_required {
+            if required != contribution.required_participants {
+                return Err(MultiDeviceError::InvalidNexusThreshold);
+            }
+        } else {
+            expected_required = Some(contribution.required_participants);
+        }
+        if !seen_indexes.insert(contribution.share_index) {
+            return Err(MultiDeviceError::InvalidNexusShareEncoding);
         }
         let bytes = URL_SAFE_NO_PAD
-            .decode(plaintext.share.as_bytes())
+            .decode(contribution.share.as_bytes())
             .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
         shares.push(IndexedShare {
-            index: plaintext.share_index,
+            index: contribution.share_index,
             bytes,
         });
     }
@@ -1123,6 +1236,22 @@ pub fn reconstruct_nexus_vault_keys(
         members_key: SymmetricKey::parse(&payload.members_key)
             .map_err(MultiDeviceError::Validation)?,
     })
+}
+
+/// Native/test helper: open each identity's share locally, then reconstruct.
+///
+/// Browser unlock must use [`open_nexus_share_for_identity`] on each device and
+/// [`reconstruct_nexus_vault_keys_from_opened`] on the reconstructing device —
+/// never ship peer [`DeviceIdentity`] secrets across browsers.
+pub fn reconstruct_nexus_vault_keys(
+    records: &[StoredSecretRecord],
+    identities: &[DeviceIdentity],
+) -> MultiDeviceResult<VaultKeys> {
+    let opened = identities
+        .iter()
+        .map(|identity| open_nexus_share_for_identity(records, identity))
+        .collect::<MultiDeviceResult<Vec<_>>>()?;
+    reconstruct_nexus_vault_keys_from_opened(records, &opened)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1457,6 +1586,54 @@ mod tests {
 
         let alternate = reconstruct_nexus_vault_keys(&records, &[second, third]).unwrap();
         assert_eq!(alternate, keys);
+    }
+
+    #[test]
+    fn opened_nexus_shares_reconstruct_without_peer_identities() {
+        let keys = generate_vault_keys().unwrap();
+        let first = DeviceIdentity::generate().unwrap();
+        let second = DeviceIdentity::generate().unwrap();
+        let third = DeviceIdentity::generate().unwrap();
+        let records =
+            create_nexus_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)
+                .unwrap();
+
+        let opened_first = open_nexus_share_for_identity(&records, &first).unwrap();
+        let opened_second = open_nexus_share_for_identity(&records, &second).unwrap();
+        assert_eq!(opened_first.device_id, first.device_id().as_str());
+        assert_eq!(opened_second.threshold, 2);
+
+        assert!(
+            reconstruct_nexus_vault_keys_from_opened(&records, std::slice::from_ref(&opened_first))
+                .is_err()
+        );
+
+        let reconstructed =
+            reconstruct_nexus_vault_keys_from_opened(&records, &[opened_first, opened_second])
+                .unwrap();
+        assert_eq!(reconstructed, keys);
+
+        // Share-row enrollment counts as Ready without an auth envelope.
+        assert!(device_is_enrolled(&records, &first));
+        assert_eq!(
+            assess_connect_access(&records, &third),
+            ConnectAccessStatus::Ready
+        );
+        assert!(resolve_secrets_key(&records, &first).is_err());
+    }
+
+    #[test]
+    fn nexus_member_row_without_auth_counts_as_enrolled() {
+        let keys = generate_vault_keys().unwrap();
+        let participant = DeviceIdentity::generate().unwrap();
+        let members =
+            genesis_members_records(&participant, &keys.members_key, ENROLLED_AT).unwrap();
+        assert!(device_is_enrolled(&members, &participant));
+        assert_eq!(
+            assess_connect_access(&members, &participant),
+            ConnectAccessStatus::Ready
+        );
+        assert!(resolve_secrets_key(&members, &participant).is_err());
     }
 
     #[test]

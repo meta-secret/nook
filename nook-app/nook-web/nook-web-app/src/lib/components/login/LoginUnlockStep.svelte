@@ -4,6 +4,7 @@
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
+  import NexusCeremonyPanel from '$lib/components/login/NexusCeremonyPanel.svelte'
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
@@ -44,6 +45,13 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
+  const showNexusCeremony = $derived(
+    vault.nexusCeremonyPrompt ||
+      vault.nexusUnlockStatus === 'ceremony_required' ||
+      vault.nexusUnlockStatus === 'awaiting_shares' ||
+      (vault.isNexusVault() && !vault.isAuthenticated),
+  )
+  const hidePasswordUnlock = $derived(showNexusCeremony || vault.isNexusVault())
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
@@ -69,34 +77,40 @@
     </section>
   {/if}
 
-  <section
-    class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-    data-testid="login-unlock-section"
-  >
-    <div class="space-y-1">
-      <h3 class="text-sm font-semibold text-foreground">
-        {vault.t('login.unlock_section_title')}
-      </h3>
-      <p class="text-sm text-pretty text-muted-foreground">
-        {vault.t('login.unlock_section_description')}
-      </p>
-    </div>
+  {#if showNexusCeremony}
+    <NexusCeremonyPanel {vault} {isVerifying} {isInitializing} />
+  {:else}
+    <section
+      class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
+      data-testid="login-unlock-section"
+    >
+      <div class="space-y-1">
+        <h3 class="text-sm font-semibold text-foreground">
+          {vault.t('login.unlock_section_title')}
+        </h3>
+        <p class="text-sm text-pretty text-muted-foreground">
+          {vault.t('login.unlock_section_description')}
+        </p>
+      </div>
 
-    <LoginAuthorizationStep
-      {vault}
-      {passwordEntries}
-      bind:selectedPasswordEntryId
-      {isVerifying}
-      {isInitializing}
-      {isUnlocking}
-      loginPasswordPrompt={vault.loginPasswordPrompt}
-      onConsumeLoginPasswordPrompt={() => {
-        vault.loginPasswordPrompt = false
-      }}
-      {onUnlock}
-      {onUnlockWithPassword}
-    />
-  </section>
+      <LoginAuthorizationStep
+        {vault}
+        {passwordEntries}
+        bind:selectedPasswordEntryId
+        {isVerifying}
+        {isInitializing}
+        {isUnlocking}
+        loginPasswordPrompt={vault.loginPasswordPrompt}
+        onConsumeLoginPasswordPrompt={() => {
+          vault.loginPasswordPrompt = false
+        }}
+        {onUnlock}
+        onUnlockWithPassword={hidePasswordUnlock
+          ? undefined
+          : onUnlockWithPassword}
+      />
+    </section>
+  {/if}
 
   {#if onCreateAnotherVault || onImportFromSync}
     <section

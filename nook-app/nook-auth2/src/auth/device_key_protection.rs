@@ -413,13 +413,16 @@ impl WrappedDeviceIdentity {
         }
     }
 
+    /// Product `device_mode` for passkey-backed protection.
+    ///
+    /// PIN fallback is not a `device_mode` value (`standard` / `anti-hacker`);
+    /// callers that need the storage kind should use [`Self::protection_mode`].
     #[must_use]
-    pub fn device_mode(&self) -> &'static str {
+    pub fn device_mode(&self) -> Option<&'static str> {
         match self {
-            Self::PasskeyDerived(_) => PasskeyDeviceProtectionMode::Standard.as_str(),
-            Self::PasskeyWrappedLocal(_) | Self::Pin(_) => {
-                PasskeyDeviceProtectionMode::AntiHacker.as_str()
-            }
+            Self::PasskeyDerived(_) => Some(PasskeyDeviceProtectionMode::Standard.as_str()),
+            Self::PasskeyWrappedLocal(_) => Some(PasskeyDeviceProtectionMode::AntiHacker.as_str()),
+            Self::Pin(_) => None,
         }
     }
 }
@@ -871,7 +874,7 @@ mod tests {
         let record = passkey_wrapped_record(&parsed);
 
         assert_eq!(parsed.protection_mode(), "passkey");
-        assert_eq!(parsed.device_mode(), "anti-hacker");
+        assert_eq!(parsed.device_mode(), Some("anti-hacker"));
         assert_eq!(
             record.version,
             PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION

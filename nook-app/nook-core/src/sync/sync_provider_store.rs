@@ -39,6 +39,10 @@ pub struct OAuthFileConfigData {
     pub file_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_email: Option<String>,
+    /// Shared-replication My Drive folder id (`drive.file` scope). Personal
+    /// vaults leave this unset and continue using `drive.appdata`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder_id: Option<String>,
 }
 
 /// Browser-local File System Access folder handle metadata.
@@ -186,17 +190,20 @@ pub fn storage_args_for_provider(
             let file_name = oauth
                 .and_then(|oauth| non_empty(oauth.file_name.as_deref()))
                 .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
+            // Shared replication stores events under a My Drive folder id.
+            // Encode with the `shared:` prefix so prepare_storage can select
+            // drive.file parent vs personal appDataFolder without a 4th arg.
+            let storage_id = oauth
+                .and_then(|oauth| non_empty(oauth.folder_id.as_deref()))
+                .map(|folder_id| format!("shared:{folder_id}"))
+                .or_else(|| oauth.and_then(|oauth| non_empty(oauth.file_id.as_deref())))
+                .unwrap_or_default();
             Ok(StorageConnectArgs {
                 mode,
                 pat: oauth
                     .and_then(|oauth| non_empty(Some(oauth.access_token.as_str())))
                     .unwrap_or_default(),
-                repo: format_drive_storage_ref_raw(
-                    oauth
-                        .and_then(|oauth| oauth.file_id.as_deref())
-                        .unwrap_or_default(),
-                    &file_name,
-                ),
+                repo: format_drive_storage_ref_raw(&storage_id, &file_name),
             })
         }
     }
@@ -233,6 +240,20 @@ pub fn enrollment_provider_for_architecture(
     provider: &StorageProviderData,
     architecture: &VaultArchitecture,
     shared_joiner_identity: Option<&str>,
+) -> ValidationResult<EnrollmentProvider> {
+    enrollment_provider_for_architecture_with_storage_target(
+        provider,
+        architecture,
+        shared_joiner_identity,
+        None,
+    )
+}
+
+pub fn enrollment_provider_for_architecture_with_storage_target(
+    provider: &StorageProviderData,
+    architecture: &VaultArchitecture,
+    shared_joiner_identity: Option<&str>,
+    shared_storage_target_id: Option<&str>,
 ) -> ValidationResult<EnrollmentProvider> {
     let capability = validate_provider_row_replication(provider, architecture.replication_type)?;
     let provider_type = StorageProviderType::parse(&provider.provider_type)?;
@@ -279,8 +300,19 @@ pub fn enrollment_provider_for_architecture(
             joiner_identity: shared_joiner_identity
                 .map(str::trim)
                 .filter(|identity| !identity.is_empty())
-                .ok_or(ValidationError::OauthAccessTokenEmpty)?
+                .ok_or(ValidationError::SharedJoinerIdentityRequired)?
                 .to_owned(),
+            storage_target_id: shared_storage_target_id
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .map(str::to_owned)
+                .or_else(|| {
+                    provider
+                        .oauth_file
+                        .as_ref()
+                        .and_then(|oauth| oauth.folder_id.clone())
+                        .filter(|id| !id.trim().is_empty())
+                }),
         }),
     }
 }
@@ -570,6 +602,7 @@ pub fn migrate_provider_fields(
                         refresh_token: existing.and_then(|oauth| oauth.refresh_token.clone()),
                         expires_at: existing.and_then(|oauth| oauth.expires_at.clone()),
                         file_id: existing.and_then(|oauth| oauth.file_id.clone()),
+                        folder_id: existing.and_then(|oauth| oauth.folder_id.clone()),
                         account_email: existing.and_then(|oauth| oauth.account_email.clone()),
                         file_name: Some(DEFAULT_DRIVE_BACKUP_NAME.to_owned()),
                     }),
@@ -1327,6 +1360,25 @@ mod tests {
                 oauth_preset: Some("google-drive".to_owned()),
                 joiner_identity_kind: "email".to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: None,
+            }
+        );
+
+        let granted = enrollment_provider_for_architecture_with_storage_target(
+            &gdrive,
+            &shared,
+            Some("joiner@example.com"),
+            Some("shared-folder-xyz"),
+        )
+        .unwrap();
+        assert_eq!(
+            granted,
+            EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: Some("shared-folder-xyz".to_owned()),
             }
         );
 

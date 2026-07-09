@@ -57,6 +57,12 @@ pub enum ValidationError {
     #[error("errors.validation.oauth_access_token_empty")]
     OauthAccessTokenEmpty,
 
+    #[error("errors.validation.shared_joiner_identity_required")]
+    SharedJoinerIdentityRequired,
+
+    #[error("errors.validation.shared_joiner_identity_invalid")]
+    SharedJoinerIdentityInvalid,
+
     #[error("errors.validation.secret_data_required")]
     SecretDataRequired,
 
