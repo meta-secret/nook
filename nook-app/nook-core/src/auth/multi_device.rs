@@ -70,11 +70,8 @@ pub fn apply_vault_meta_operation(
                 },
             );
         }
-        VaultOperation::NexusParticipantEnrolled {
-            device_id,
-            encryption_public_key: _,
-            ..
-        } => {
+        VaultOperation::NexusParticipantEnrolled { device_id, .. }
+        | VaultOperation::JoinDenied { device_id } => {
             state.joins.remove(device_id);
         }
         VaultOperation::NexusSharesIssued { shares } => {
@@ -90,9 +87,6 @@ pub fn apply_vault_meta_operation(
                     },
                 );
             }
-        }
-        VaultOperation::JoinDenied { device_id } => {
-            state.joins.remove(device_id);
         }
         VaultOperation::VaultImported { .. }
         | VaultOperation::SecretCreated { .. }

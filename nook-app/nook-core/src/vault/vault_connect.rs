@@ -113,7 +113,7 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
     }
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
-    hydrate_loaded_vault(stored_records, secrets_key, members_key)
+    hydrate_loaded_vault(&stored_records, secrets_key, members_key)
 }
 
 /// Reconstruct a nexus vault session when enough participant identities can
@@ -129,17 +129,17 @@ pub fn load_nexus_vault(
     }
     let stored_records = deserialize_stored(content, format)?;
     let keys = crate::reconstruct_nexus_vault_keys(&stored_records, identities)?;
-    hydrate_loaded_vault(stored_records, keys.secrets_key, keys.members_key)
+    hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
 }
 
 fn hydrate_loaded_vault(
-    stored_records: Vec<StoredSecretRecord>,
+    stored_records: &[StoredSecretRecord],
     secrets_key: crate::SymmetricKey,
     members_key: crate::SymmetricKey,
 ) -> VaultResult<LoadedVault> {
     let crypto = VaultCrypto::new(&secrets_key)?;
-    let meta = VaultMetaState::from_stored_records(&stored_records);
-    let user_records = user_stored_records(&stored_records);
+    let meta = VaultMetaState::from_stored_records(stored_records);
+    let user_records = user_stored_records(stored_records);
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
     Ok(LoadedVault {
         database: db,
