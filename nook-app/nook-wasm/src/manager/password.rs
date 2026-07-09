@@ -96,6 +96,9 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         self.ensure_vault_crypto_from_cache().await?;
         if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
             return Err(NookError::Database(
@@ -168,6 +171,9 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         self.ensure_vault_crypto_from_cache().await?;
         if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
             return Err(NookError::Database(
@@ -452,12 +458,7 @@ impl NookVaultManager {
                 }]
             }
             nook_core::VaultType::Nexus => {
-                vec![nook_core::VaultOperation::NexusParticipantEnrolled {
-                    device_id: identity.device_id().clone(),
-                    encryption_public_key: identity.public_key().clone(),
-                    signing_public_key: signing_pk,
-                    label: nook_core::MemberLabel::from_trusted(String::new()),
-                }]
+                unreachable!("nexus password membership forbidden")
             }
         };
         self.append_vault_operations(operations).await?;
