@@ -162,7 +162,7 @@ export function createLocalE2eGoogleDriveVaultStub(
           url === 'https://www.googleapis.com/drive/v3/files' &&
           method === 'POST'
         ) {
-          let parsed: { name?: string; mimeType?: string } = {}
+          let parsed: { name?: string; mimeType?: string }
           try {
             parsed = JSON.parse(bodyText) as {
               name?: string
@@ -191,7 +191,7 @@ export function createLocalE2eGoogleDriveVaultStub(
         )
         if (permissionsMatch && method === 'POST') {
           const folderId = decodeURIComponent(permissionsMatch[1]!)
-          let email = ''
+          let email: string
           try {
             const parsed = JSON.parse(bodyText) as { emailAddress?: string }
             email = parsed.emailAddress?.trim() ?? ''
