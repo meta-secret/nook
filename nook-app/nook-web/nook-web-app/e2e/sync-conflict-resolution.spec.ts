@@ -61,12 +61,16 @@ test.describe('sync conflict resolution', () => {
 
     await setSecurityConflict(page, true)
 
-    await expect(page.getByText('Security conflict detected')).toBeVisible()
+    await expect(
+      page.getByText('Security conflict detected', { exact: true }),
+    ).toBeVisible()
     await expect(page.getByText('key epoch rotation')).toBeVisible()
     await expect(page.getByTestId('add-secret-btn')).toBeDisabled()
 
     await setSecurityConflict(page, false)
-    await expect(page.getByText('Security conflict detected')).toHaveCount(0)
+    await expect(
+      page.getByText('Security conflict detected', { exact: true }),
+    ).toHaveCount(0)
     await expect(page.getByTestId('add-secret-btn')).toBeEnabled({
       timeout: UI_TIMEOUT_MS,
     })
