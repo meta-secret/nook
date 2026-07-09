@@ -260,6 +260,15 @@ export function parseVaultEventLogSnapshot(
             })
           }
           break
+        case 'nexus-participant-enrolled':
+          if (operation.device_id) {
+            joins.delete(operation.device_id)
+            members.set(operation.device_id, {
+              pk_id: operation.device_id,
+              ciphertext: '',
+            })
+          }
+          break
         case 'join-denied':
           if (operation.device_id) joins.delete(operation.device_id)
           break

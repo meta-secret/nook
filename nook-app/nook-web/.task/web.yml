@@ -281,6 +281,8 @@ tasks:
 
   _web:test:e2e:file:
     desc: Run one or more Playwright e2e spec files (E2E_SPEC; skips vite when dist is fresh).
+    deps:
+      - _wasm:build
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"

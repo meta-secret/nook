@@ -54,8 +54,9 @@ actor id must be the SHA-256 digest of that Ed25519 public key, and the event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set. Non-genesis events are also checked against
 the event's causal past: an actor is accepted only if it is the import root, was
-introduced by a causally prior `join-approved`, or is publishing its own
-self-signed `join-requested` event.
+introduced by a causally prior `join-approved` / `nexus-participant-enrolled`,
+or is publishing its own self-signed membership event (`join-requested`,
+password QR `join-approved`, or `nexus-participant-enrolled`).
 
 ## Canonical encoding
 
