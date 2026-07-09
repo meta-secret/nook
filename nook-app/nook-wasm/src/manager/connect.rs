@@ -18,8 +18,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 fn is_nexus_ceremony_required(err: &NookError) -> bool {
     match err {
         NookError::Encryption(message) | NookError::Database(message) => {
-            message.contains("opened-share ceremony")
-                || message.contains("NexusCeremonyRequired")
+            message.contains("opened-share ceremony") || message.contains("NexusCeremonyRequired")
         }
         _ => false,
     }
