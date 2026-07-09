@@ -186,20 +186,20 @@ export async function unlockWithNexusShares(
       state.manager!.connectWithNexusShares(...connectArgs, openedSharesJson),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
-    state.markVaultUnlocked()
     state.nexusCeremonyPrompt = false
     state.nexusLocalShareContribution = ''
     state.nexusPeerShareContributions = ''
     state.nexusUnlockStatus = 'unlocked'
+    await state.ensureProviderSaved()
+    await state.loadProviders()
+    await state.refreshPasswordEntriesList()
+    void state.hydrateMultiDeviceState()
+    state.markVaultUnlocked()
     log.info('vault unlocked with nexus shares', {
       mode: state.storageMode,
       secrets: rawRecords.length,
       contributions: opened.length,
     })
-    await state.ensureProviderSaved()
-    await state.loadProviders()
-    await state.refreshPasswordEntriesList()
-    void state.hydrateMultiDeviceState()
     state.joinEnrollmentPrompt = 'none'
     state.loginPasswordPrompt = false
     state.showSuccess(state.t('toasts.vault_unlocked'))

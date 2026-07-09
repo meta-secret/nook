@@ -193,16 +193,16 @@ export async function unlockWithPassword(
       ),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
+    await state.ensureProviderSaved()
+    await state.loadProviders()
+    await state.refreshPasswordEntriesList()
+    void state.hydrateMultiDeviceState()
     state.markVaultUnlocked()
     log.info('vault unlocked with password', {
       mode: state.storageMode,
       secrets: rawRecords.length,
       entryId,
     })
-    await state.ensureProviderSaved()
-    await state.loadProviders()
-    await state.refreshPasswordEntriesList()
-    void state.hydrateMultiDeviceState()
     state.joinEnrollmentPrompt = 'none'
     state.loginPasswordPrompt = false
     state.showSuccess(state.t('toasts.vault_unlocked'))
@@ -414,11 +414,11 @@ export async function connectWithEnrollmentCode(
       ),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
-    state.markVaultUnlocked()
     await state.ensureProviderSaved()
     await state.loadProviders()
     await state.refreshPasswordEntriesList()
     void state.hydrateMultiDeviceState()
+    state.markVaultUnlocked()
     state.joinEnrollmentPrompt = 'none'
     state.loginEnrollmentCode = ''
     state.prefillEnrollmentCode = ''

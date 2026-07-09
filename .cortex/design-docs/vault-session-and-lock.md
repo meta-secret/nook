@@ -60,6 +60,8 @@ flowchart TB
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
+**Unlock ordering:** `markVaultUnlocked()` must run only after `loadProviders()` (and related provider hydrate). Fan-out after local save uses `syncProviders`; unlocking the UI earlier lets a fast edit (especially delete) push with an empty provider list and leave the remote event log stale. Delete/replace/add all `await runFanOutSyncAfterLocalSave()` so remote observers see the event before the handler returns.
+
 After lock, the app first shows **`DeviceProtectionGate`**. Successful passkey
 authorization or PIN fallback restores the identity in WASM memory, then the app shows
 **`LoginGate`**:
