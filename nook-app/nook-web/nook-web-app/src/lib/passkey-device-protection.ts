@@ -1,4 +1,5 @@
 import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
+import type { DeviceMode } from '$lib/vault-architecture'
 
 const PASSKEY_PRF_UNAVAILABLE = 'PASSKEY_PRF_UNAVAILABLE'
 
@@ -11,11 +12,13 @@ export function isPasskeyPrfUnavailableError(error: unknown): boolean {
 export async function setupDeviceProtection(
   manager: NookVaultManager,
   passkeyLabel: string,
+  deviceMode: DeviceMode = 'standard',
 ): Promise<void> {
-  await manager.setupDeviceProtectionWithPasskey(
+  await manager.setupDeviceProtectionWithPasskeyMode(
     location.hostname,
     'Nook',
     passkeyLabel,
+    deviceMode,
   )
 }
 

@@ -435,6 +435,57 @@ pub fn provider_wasm_args(
     Ok(nook_core::storage_args_for_provider(&provider)?.into())
 }
 
+#[wasm_bindgen(js_name = defaultVaultArchitecture)]
+pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
+    Ok(to_js_value(&nook_core::VaultArchitecture::default_legacy())?)
+}
+
+#[wasm_bindgen(js_name = validateVaultArchitecture)]
+pub fn validate_vault_architecture(architecture: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture.validate()?;
+    Ok(to_js_value(&architecture)?)
+}
+
+#[wasm_bindgen(js_name = vaultArchitectureOnboardingType)]
+pub fn vault_architecture_onboarding_type(
+    architecture: JsValue,
+) -> Result<String, wasm_bindgen::JsError> {
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture.validate()?;
+    Ok(architecture.onboarding_type().as_str().to_owned())
+}
+
+#[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]
+pub fn vault_architecture_can_create_secret(
+    architecture: JsValue,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture.validate()?;
+    Ok(architecture.can_create_secret())
+}
+
+#[wasm_bindgen(js_name = providerReplicationCapability)]
+pub fn provider_replication_capability(provider: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    Ok(to_js_value(
+        &nook_core::provider_replication_capability_for_row(&provider)?,
+    )?)
+}
+
+#[wasm_bindgen(js_name = validateProviderReplication)]
+pub fn validate_provider_replication(
+    provider: JsValue,
+    replication_type: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
+    Ok(to_js_value(&nook_core::validate_provider_row_replication(
+        &provider,
+        replication_type,
+    )?)?)
+}
+
 #[wasm_bindgen(js_name = wasmStorageArgs)]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub fn wasm_storage_args(

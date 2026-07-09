@@ -576,6 +576,22 @@ impl NookEnrollmentProvider {
         Self(nook_core::EnrollmentProvider::Github { pat, repo })
     }
 
+    #[wasm_bindgen(js_name = sharedProviderGrant)]
+    #[must_use]
+    pub fn shared_provider_grant(
+        sync_provider_type: String,
+        oauth_preset: Option<String>,
+        joiner_identity_kind: String,
+        joiner_identity: String,
+    ) -> Self {
+        Self(nook_core::EnrollmentProvider::SharedProviderGrant {
+            sync_provider_type,
+            oauth_preset,
+            joiner_identity_kind,
+            joiner_identity,
+        })
+    }
+
     pub(crate) fn from_core(provider: nook_core::EnrollmentProvider) -> Self {
         Self(provider)
     }
@@ -590,6 +606,9 @@ impl NookEnrollmentProvider {
         match self.0 {
             nook_core::EnrollmentProvider::Local => nook_core::StorageProviderType::Local,
             nook_core::EnrollmentProvider::Github { .. } => nook_core::StorageProviderType::Github,
+            nook_core::EnrollmentProvider::SharedProviderGrant { .. } => {
+                nook_core::StorageProviderType::OauthFile
+            }
         }
     }
 
@@ -597,7 +616,8 @@ impl NookEnrollmentProvider {
     pub fn github_pat(&self) -> Option<String> {
         match &self.0 {
             nook_core::EnrollmentProvider::Github { pat, .. } => Some(pat.clone()),
-            nook_core::EnrollmentProvider::Local => None,
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
         }
     }
 
@@ -605,7 +625,33 @@ impl NookEnrollmentProvider {
     pub fn github_repo(&self) -> Option<String> {
         match &self.0 {
             nook_core::EnrollmentProvider::Github { repo, .. } => Some(repo.clone()),
-            nook_core::EnrollmentProvider::Local => None,
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::SharedProviderGrant { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = sharedJoinerIdentityKind)]
+    pub fn shared_joiner_identity_kind(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::SharedProviderGrant {
+                joiner_identity_kind,
+                ..
+            } => Some(joiner_identity_kind.clone()),
+            nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
+                None
+            }
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
+    pub fn shared_joiner_identity(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::SharedProviderGrant {
+                joiner_identity, ..
+            } => Some(joiner_identity.clone()),
+            nook_core::EnrollmentProvider::Local | nook_core::EnrollmentProvider::Github { .. } => {
+                None
+            }
         }
     }
 }

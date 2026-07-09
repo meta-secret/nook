@@ -71,6 +71,15 @@ import {
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from '$lib/passkey-device-protection'
+import {
+  canCreateSecret as architectureCanCreateSecret,
+  defaultVaultArchitecture,
+  validateVaultArchitecture,
+  type DeviceMode,
+  type ReplicationType,
+  type VaultArchitecture,
+  type VaultType,
+} from '$lib/vault-architecture'
 
 import * as localeActions from '$lib/vault/locale'
 import * as oauthActions from '$lib/vault/oauth'
@@ -153,6 +162,10 @@ export class VaultState {
   localFolderBackupSupported = $state(
     typeof window !== 'undefined' && isLocalFolderBackupSupported(),
   )
+  vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture())
+  draftDeviceMode = $state<DeviceMode>('standard')
+  draftVaultType = $state<VaultType>('simple')
+  draftReplicationType = $state<ReplicationType>('personal')
   oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined)
   googleOAuthBusy = $state(false)
   icloudOAuthPreparing = $state(false)
@@ -188,6 +201,7 @@ export class VaultState {
   vaultMembers = $state<VaultMember[]>([])
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
+  sharedJoinerIdentity = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
   /**
    * True from the moment this device sends a join request until it unlocks.
@@ -225,7 +239,11 @@ export class VaultState {
   }
 
   get editsBlocked(): boolean {
-    return this.syncBlocked || this.securityConflicts.length > 0
+    return (
+      this.syncBlocked ||
+      this.securityConflicts.length > 0 ||
+      !architectureCanCreateSecret(this.vaultArchitecture)
+    )
   }
 
   get deviceProtectionReady(): boolean {
@@ -741,14 +759,47 @@ export class VaultState {
     this.devicePublicKey = identity.devicePublicKey
   }
 
-  async setupDeviceProtection(passkeyLabel = '') {
+  get draftVaultArchitecture(): VaultArchitecture {
+    return validateVaultArchitecture({
+      device_mode: this.draftDeviceMode,
+      vault_type: this.draftVaultType,
+      replication_type: this.draftReplicationType,
+      nexus:
+        this.draftVaultType === 'nexus'
+          ? {
+              threshold: 2,
+              required_participants: 3,
+              ready_participants: 0,
+            }
+          : undefined,
+    })
+  }
+
+  applyDraftVaultArchitecture() {
+    this.vaultArchitecture = this.draftVaultArchitecture
+    if (this.manager) {
+      this.manager.setVaultArchitectureJson(JSON.stringify(this.vaultArchitecture))
+    }
+  }
+
+  refreshVaultArchitectureFromManager() {
+    if (!this.manager) return
+    this.vaultArchitecture = validateVaultArchitecture(
+      JSON.parse(this.manager.vaultArchitectureJson) as VaultArchitecture,
+    )
+    this.draftDeviceMode = this.vaultArchitecture.device_mode
+    this.draftVaultType = this.vaultArchitecture.vault_type
+    this.draftReplicationType = this.vaultArchitecture.replication_type
+  }
+
+  async setupDeviceProtection(passkeyLabel = '', deviceMode = this.draftDeviceMode) {
     if (!this.manager || this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     let deviceIdentityUnlocked = false
     try {
       await this.enqueueStorage(() =>
-        createPasskeyProtection(this.manager!, passkeyLabel),
+        createPasskeyProtection(this.manager!, passkeyLabel, deviceMode),
       )
       deviceIdentityUnlocked = true
       this.deviceAuthorizationInProgress = true
@@ -1195,6 +1246,7 @@ export class VaultState {
     this.isAuthenticated = true
     this.awaitingJoinApproval = false
     this.sessionExpiredByIdle = false
+    this.refreshVaultArchitectureFromManager()
     vaultLog.info('vault session unlocked', { secrets: this.secrets.length })
   }
 

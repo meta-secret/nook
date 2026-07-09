@@ -2,7 +2,8 @@ use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
-    PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultUnlock,
+    PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultArchitecture,
+    VaultUnlock,
     is_auth_stored_record, is_join_stored_record, is_members_stored_record,
 };
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,7 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
         || first_line.starts_with("store_id:")
         || first_line.starts_with("schema_version:")
         || first_line.starts_with("vault_version:")
+        || first_line.starts_with("architecture:")
         || first_line.starts_with("auth:")
         || first_line.starts_with("joins:")
         || first_line.starts_with("members:")
@@ -106,6 +108,10 @@ struct StoredVaultYaml {
     /// legacy reads infer mode from `password_envelope` / `unlock.type: password`.
     #[serde(default, skip_serializing_if = "vault_unlock_is_keys")]
     unlock: VaultUnlock,
+    /// Grouped vault architecture modes. Missing on legacy files maps to the
+    /// current simple/personal/standard behavior.
+    #[serde(default, skip_serializing_if = "vault_architecture_is_default")]
+    architecture: VaultArchitecture,
     #[serde(default)]
     secrets: Vec<StoredSecretRecord>,
     /// Populated only when `unlock = Keys`. Strict mutex: writing this
@@ -212,6 +218,10 @@ fn vault_version_is_zero(version: &u64) -> bool {
     *version == 0
 }
 
+fn vault_architecture_is_default(architecture: &VaultArchitecture) -> bool {
+    architecture == &VaultArchitecture::default_legacy()
+}
+
 /// Maximum projection YAML schema this build reads and writes.
 pub const CURRENT_VAULT_SCHEMA_VERSION: u32 = 1;
 
@@ -303,12 +313,35 @@ pub fn serialize_stored_yaml_with_unlock_and_name(
     vault_name: Option<&str>,
     vault_version: Option<u64>,
 ) -> VaultFormatResult<VaultYamlBlob> {
+    serialize_stored_yaml_with_unlock_name_architecture(
+        records,
+        unlock,
+        password_entries,
+        store_id,
+        vault_name,
+        vault_version,
+        &VaultArchitecture::default_legacy(),
+    )
+}
+
+/// Serialize records together with unlock, name, and grouped architecture metadata.
+pub fn serialize_stored_yaml_with_unlock_name_architecture(
+    records: &[StoredSecretRecord],
+    unlock: &VaultUnlock,
+    password_entries: &[PasswordUnlockEntry],
+    store_id: Option<&str>,
+    vault_name: Option<&str>,
+    vault_version: Option<u64>,
+    architecture: &VaultArchitecture,
+) -> VaultFormatResult<VaultYamlBlob> {
+    architecture.validate()?;
     let mut vault = partition_yaml_records(records);
     vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
     vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.name = resolve_vault_name_for_write(vault_name);
     vault.unlock = normalize_unlock_for_write(unlock);
+    vault.architecture = architecture.clone();
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
     serde_yaml::to_string(&vault)
@@ -410,6 +443,23 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
         Some(id) => Ok(Some(crate::validate_store_id(&id)?.to_string())),
         None => Ok(None),
     }
+}
+
+/// Read grouped architecture metadata from on-disk YAML.
+///
+/// Legacy vaults that do not carry `architecture:` are explicitly treated as
+/// `standard` device mode, `simple` vault type, and `personal` replication.
+pub fn read_vault_architecture(stored: &str) -> VaultFormatResult<VaultArchitecture> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(VaultArchitecture::default_legacy());
+    }
+    detect_stored_format(trimmed)?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseArchitecture)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
+    vault.architecture.validate()?;
+    Ok(vault.architecture)
 }
 
 pub fn deserialize_stored_yaml(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
@@ -831,6 +881,54 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             read_vault_store_id(backfilled.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
+    }
+
+    #[test]
+    fn architecture_defaults_for_legacy_yaml_and_roundtrips_when_explicit() {
+        let legacy = "schema_version: 1\nstore_id: store_SMypl8K0w9Y\nsecrets: []\n";
+        assert_eq!(
+            read_vault_architecture(legacy).unwrap(),
+            VaultArchitecture::default_legacy()
+        );
+
+        let architecture = VaultArchitecture {
+            device_mode: crate::DeviceMode::AntiHacker,
+            vault_type: crate::VaultType::Nexus,
+            replication_type: crate::ReplicationType::Shared,
+            nexus: Some(crate::NexusPolicy {
+                threshold: 2,
+                required_participants: 3,
+                ready_participants: 3,
+            }),
+        };
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &sample_records(),
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("Team vault"),
+            Some(7),
+            &architecture,
+        )
+        .unwrap();
+        assert!(yaml.as_str().contains("architecture:"));
+        assert!(yaml.as_str().contains("device_mode: anti-hacker"));
+        assert_eq!(read_vault_architecture(yaml.as_str()).unwrap(), architecture);
+    }
+
+    #[test]
+    fn invalid_architecture_metadata_is_rejected() {
+        let invalid = "\
+schema_version: 1
+store_id: store_SMypl8K0w9Y
+architecture:
+  vault_type: simple
+  nexus:
+    threshold: 2
+    required_participants: 3
+secrets: []
+";
+        assert!(read_vault_architecture(invalid).is_err());
     }
 
     #[test]

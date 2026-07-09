@@ -3,8 +3,9 @@
 use crate::errors::VaultResult;
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultCrypto, VaultMetaState,
-    VaultUnlock, assess_connect_access, deserialize_stored, detect_stored_format,
-    resolve_members_key, resolve_secrets_key, user_stored_records, vault_has_multi_device_records,
+    VaultArchitecture, VaultUnlock, assess_connect_access, deserialize_stored,
+    detect_stored_format, resolve_members_key, resolve_secrets_key, user_stored_records,
+    vault_has_multi_device_records,
 };
 use std::fmt;
 
@@ -60,6 +61,7 @@ pub struct VaultContentMetadata {
     pub store_id: String,
     pub vault_name: String,
     pub version: u64,
+    pub architecture: VaultArchitecture,
 }
 
 /// Whether connect should bootstrap a genesis vault for this content.
@@ -130,12 +132,14 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
     let vault_name = crate::read_vault_name(content)?
         .unwrap_or_else(|| crate::default_vault_name_for_store_id(&store_id));
     let version = crate::read_vault_version(content).unwrap_or(0);
+    let architecture = crate::read_vault_architecture(content)?;
     Ok(VaultContentMetadata {
         unlock,
         password_entries,
         store_id,
         vault_name,
         version,
+        architecture,
     })
 }
 

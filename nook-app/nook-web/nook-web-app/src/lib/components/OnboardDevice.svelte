@@ -247,6 +247,13 @@
       localError = vault.t('onboard_device.enter_pw_err')
       return
     }
+    if (
+      vault.vaultArchitecture.replication_type === 'shared' &&
+      !vault.sharedJoinerIdentity.trim()
+    ) {
+      localError = vault.t('onboard_device.shared_identity_required')
+      return
+    }
     isGenerating = true
     try {
       await onIssueCode(selectedPassword.id, passwordInput, selectedProvider.id)
@@ -628,6 +635,30 @@
             data-testid="onboard-password-input"
           />
         </div>
+
+        {#if vault.vaultArchitecture.replication_type === 'shared'}
+          <div class="space-y-1.5">
+            <label
+              for="shared-joiner-identity"
+              class="text-xs font-medium text-foreground"
+            >
+              {vault.t('onboard_device.shared_identity_label')}
+            </label>
+            <input
+              id="shared-joiner-identity"
+              type="email"
+              class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring"
+              bind:value={vault.sharedJoinerIdentity}
+              autocomplete="email"
+              disabled={isBusy || isGenerating}
+              placeholder={vault.t('onboard_device.shared_identity_placeholder')}
+              data-testid="shared-joiner-identity-input"
+            />
+            <p class="text-xs text-muted-foreground">
+              {vault.t('onboard_device.shared_identity_hint')}
+            </p>
+          </div>
+        {/if}
 
         {#if localError}
           <p class="text-xs text-destructive" data-testid="onboard-error">

@@ -14,6 +14,7 @@
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
+  const deviceModes = ['standard', 'anti-hacker'] as const
 
   const needsSetup = $derived(
     vault.deviceProtectionStatus === 'missing' ||
@@ -124,6 +125,39 @@
         {vault.t('device_protection.existing_passkey_hint')}
       </p>
 
+      <div
+        class="grid gap-2 pt-2"
+        role="radiogroup"
+        aria-label={vault.t('device_protection.mode_group_label')}
+        data-testid="mode-group-device"
+      >
+        {#each deviceModes as mode}
+          <button
+            type="button"
+            class={[
+              'rounded-md border p-3 text-left text-sm transition-colors',
+              vault.draftDeviceMode === mode
+                ? 'border-primary bg-primary/10 text-foreground'
+                : 'border-border/60 bg-background hover:bg-muted/40',
+            ]}
+            aria-pressed={vault.draftDeviceMode === mode}
+            data-testid={`mode-option-${mode}`}
+            onclick={() => {
+              vault.draftDeviceMode = mode
+            }}
+          >
+            <span class="block font-medium">
+              {vault.t(`device_protection.mode_${mode.replace('-', '_')}_title`)}
+            </span>
+            <span class="mt-1 block text-xs text-muted-foreground">
+              {vault.t(
+                `device_protection.mode_${mode.replace('-', '_')}_description`,
+              )}
+            </span>
+          </button>
+        {/each}
+      </div>
+
       <div class="space-y-2 pt-2">
         <label class="block text-sm font-medium" for="device-protection-label">
           {vault.t('device_protection.passkey_label')}
@@ -144,7 +178,8 @@
         variant="outline"
         disabled={vault.isVerifying}
         data-testid="device-protection-setup-btn"
-        onclick={() => vault.setupDeviceProtection(passkeyLabel)}
+        onclick={() =>
+          vault.setupDeviceProtection(passkeyLabel, vault.draftDeviceMode)}
       >
         {vault.isVerifying
           ? vault.t('device_protection.authorizing')

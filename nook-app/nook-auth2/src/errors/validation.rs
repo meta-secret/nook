@@ -9,6 +9,30 @@ pub enum ValidationError {
     #[error("errors.validation.unknown_storage_mode:{mode}")]
     UnknownStorageMode { mode: String },
 
+    #[error("errors.validation.unknown_device_mode:{mode}")]
+    UnknownDeviceMode { mode: String },
+
+    #[error("errors.validation.unknown_vault_type:{vault_type}")]
+    UnknownVaultType { vault_type: String },
+
+    #[error("errors.validation.unknown_replication_type:{replication_type}")]
+    UnknownReplicationType { replication_type: String },
+
+    #[error(
+        "errors.validation.unsupported_provider_replication:{provider_type}:{oauth_preset}:{replication_type}"
+    )]
+    UnsupportedProviderReplication {
+        provider_type: String,
+        oauth_preset: String,
+        replication_type: String,
+    },
+
+    #[error("errors.validation.simple_vault_has_nexus_policy")]
+    SimpleVaultHasNexusPolicy,
+
+    #[error("errors.validation.invalid_nexus_policy")]
+    InvalidNexusPolicy,
+
     #[error("errors.validation.github_pat_empty")]
     GithubPatEmpty,
 

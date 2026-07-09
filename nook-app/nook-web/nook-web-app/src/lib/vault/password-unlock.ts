@@ -411,13 +411,35 @@ export async function issueEnrollmentCode(
     }
     const githubPat = selectedProvider.githubPat?.trim() ?? ''
     const githubRepo = selectedProvider.githubRepo?.trim() ?? ''
-    if (selectedProvider.type === 'github' && (!githubPat || !githubRepo)) {
+    const sharedJoinerIdentity = state.sharedJoinerIdentity.trim()
+    const isSharedReplication =
+      state.vaultArchitecture.replication_type === 'shared'
+    if (isSharedReplication && !sharedJoinerIdentity) {
+      throw new Error('Enter the joiner provider identity before issuing code.')
+    }
+    if (
+      selectedProvider.type === 'github' &&
+      isSharedReplication
+    ) {
+      throw new Error('GitHub does not support shared-provider onboarding yet.')
+    }
+    if (
+      selectedProvider.type === 'github' &&
+      !isSharedReplication &&
+      (!githubPat || !githubRepo)
+    ) {
       throw new Error(
         'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
       )
     }
-    const provider =
-      selectedProvider.type === 'github'
+    const provider = isSharedReplication
+      ? NookEnrollmentProvider.sharedProviderGrant(
+          selectedProvider.type,
+          selectedProvider.oauthFile?.preset ?? undefined,
+          'email',
+          sharedJoinerIdentity,
+        )
+      : selectedProvider.type === 'github'
         ? NookEnrollmentProvider.github(githubRepo, githubPat)
         : NookEnrollmentProvider.local()
     const payload = new NookEnrollmentIssueInput(

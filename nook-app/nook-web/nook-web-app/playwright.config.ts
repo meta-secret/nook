@@ -25,6 +25,7 @@ const PR_SPECS = [
   'device-key-protection.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',
+  'vault-architecture-modes.spec.ts',
   'idle-session-lock.spec.ts',
   'local-folder-backup.spec.ts',
   'onboard-providers.spec.ts',

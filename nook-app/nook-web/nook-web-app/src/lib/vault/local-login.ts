@@ -98,6 +98,7 @@ export async function createLocalVaultWithDeviceKeys(
 
   try {
     await state.initDeviceIdentity()
+    state.applyDraftVaultArchitecture()
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
       await prepareNewLocalVaultSlot()
