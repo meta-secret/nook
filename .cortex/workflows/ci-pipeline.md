@@ -181,8 +181,9 @@ gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into
 publish gate, `main.yml` deploys the Cloudflare artifact with
 `VITE_SITE_URL=https://dev.nokey.sh` and
 `VITE_PUBLIC_APP_URL=https://dev.nokey.sh`, ensures the Cloudflare Pages custom
-domain and proxied CNAME exist, and records a `development` deployment status
-whose URL is `https://dev.nokey.sh/`.
+domain exists, verifies the preconfigured Cloudflare DNS CNAME and HTTPS
+response, and records a `development` deployment status whose URL is
+`https://dev.nokey.sh/`.
 
 **Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is functionally complete, push/open/update the PR before the long final local gate, then run local validation while remote CI runs.
 

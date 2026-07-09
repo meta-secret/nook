@@ -74,7 +74,8 @@ keeps the normal main verification and toolchain publish path, then deploys a
 development artifact to Cloudflare Pages with
 `VITE_SITE_URL=https://dev.nokey.sh` and
 `VITE_PUBLIC_APP_URL=https://dev.nokey.sh`. The workflow also ensures the
-Cloudflare Pages custom domain and proxied CNAME for `dev.nokey.sh` exist.
+Cloudflare Pages custom domain exists and verifies the preconfigured
+Cloudflare DNS CNAME and HTTPS response for `dev.nokey.sh`.
 
 Maintenance rule: `release/v1` should only receive cherry-picked critical fixes
 from `main`; do not continue normal feature development there. If a future app
