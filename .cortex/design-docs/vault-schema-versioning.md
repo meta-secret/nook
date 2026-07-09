@@ -14,7 +14,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 
 | Axis | Examples | Owned by |
 |------|----------|----------|
-| **App semver** | `nokey.sh` stable, `nokey-sh.pages.dev` current development | CI / GitHub Pages + Cloudflare Pages |
+| **App semver** | `nokey.sh` stable, `dev.nokey.sh` current development | CI / GitHub Pages |
 | **Projection `schema_version`** | `1` today in `nook-projection.yaml` cache | `nook-core` `vault_format.rs` |
 | **Event `schema_version`** | `2` on signed YAML event bodies | `nook-core` `vault_event.rs` |
 | **Password envelope `version`** | Crypto wrap inside `password_entries` | `password_envelope.rs` |
@@ -69,12 +69,11 @@ then deploying a stable `dist` artifact to GitHub Pages. The deploy build passes
 enrollment links use the stable root host while the pre-deploy e2e gate keeps
 local Playwright URLs.
 
-`nokey-sh.pages.dev` is the active development channel for `main`. `.github/workflows/main.yml`
-keeps the normal main verification and toolchain publish path, then deploys a
-development artifact to the `nokey-sh` Cloudflare Pages project with
-`CF_PAGES_BRANCH=main`. Cloudflare serves the project at
-`https://nokey-sh.pages.dev`, avoiding a separate custom-domain DNS dependency
-for the development channel.
+`dev.nokey.sh` is the active development channel for `main`. `.github/workflows/main.yml`
+keeps the normal main verification and toolchain publish path, then builds a
+development artifact with `VITE_SITE_URL=https://dev.nokey.sh` and
+`VITE_PUBLIC_APP_URL=https://dev.nokey.sh`, writes the Pages custom-domain
+marker, and deploys it through GitHub Pages.
 
 Maintenance rule: `release/v1` should only receive cherry-picked critical fixes
 from `main`; do not continue normal feature development there. If a future app

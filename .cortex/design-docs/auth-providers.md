@@ -148,8 +148,8 @@ Version-based sync is in `nook-app/nook-core/src/vault_sync.rs`. UI uses local-f
 Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
 Identity Services in the browser; the current Google web client is configured
 for `http://localhost:5173`, `https://nokey.sh`, and
-`https://nokey-sh.pages.dev`. Nook's CloudKit JS token is configured for
-`https://nokey.sh` and `https://nokey-sh.pages.dev`.
+`https://dev.nokey.sh`. Nook's CloudKit JS token is configured for
+`https://nokey.sh` and `https://dev.nokey.sh`.
 
 Google/Auth Platform branding should use `https://nokey.sh/about.html` as the
 public app home page. The root path (`/`) is the product entry point and may show
@@ -178,8 +178,9 @@ Current fallback: [`oauth-origin.ts`](../../nook-app/nook-web/src/lib/oauth-orig
 detects Nook PR preview hosts (`pr-<number>.nook-1n8.pages.dev`) and disables
 Google Drive / iCloud sign-in with a clear message. Reviewers can still test
 local, local-folder, and GitHub providers on PR previews. Google Drive browser
-OAuth should be tested on `https://nokey.sh` or local dev until preview hosting
-uses a registered stable origin. If a stable Cloudflare origin such as
+OAuth should be tested on `https://nokey.sh`, `https://dev.nokey.sh`, or local
+dev until preview hosting uses a registered stable origin. If a stable
+Cloudflare origin such as
 `https://nook-1n8.pages.dev` or `https://preview.nokey.sh` becomes the preview
 entry point, add that exact origin both in Google Cloud Console and in
 `oauth-origin.ts`; adding `https://nook-1n8.pages.dev` does not authorize
