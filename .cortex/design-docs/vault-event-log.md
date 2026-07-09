@@ -55,8 +55,14 @@ signature must verify over the canonical body before a current-schema remote
 event enters the local event set. Non-genesis events are also checked against
 the event's causal past: an actor is accepted only if it is the import root, was
 introduced by a causally prior `join-approved` / `nexus-participant-enrolled`,
-or is publishing its own self-signed membership event (`join-requested`,
-password QR `join-approved`, or `nexus-participant-enrolled`).
+or is publishing its own self-signed membership event under a narrow policy:
+
+- `join-requested` — always allowed when self-signed (pending join);
+- `join-approved` — self-signed only for simple password QR self-enrol, and only
+  when causal ancestry has no nexus membership/share ops
+  (`nexus-participant-enrolled` / `nexus-shares-issued`);
+- `nexus-participant-enrolled` — never self-signed; must be signed by an
+  already-authorized actor (owner approval / genesis).
 
 ## Canonical encoding
 
