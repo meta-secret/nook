@@ -9,4 +9,5 @@ Product specs detail the user-facing and system-level requirements.
 | [decentralized-auth.md](decentralized-auth.md) | Multi-device keys, vault sections, join/approve/enroll flows | Verified |
 | [browser-extension.md](browser-extension.md) | Browser-extension first-run, passkey setup, and `nokey.sh` pairing UX | Draft |
 | [password-envelope.md](password-envelope.md) | Optional password envelope for `secrets_key`/`members_key` and one-step QR-based device join | Implemented (P1–P4) |
+| [slip39-recovery.md](slip39-recovery.md) | Fixed 2-of-3 SLIP-0039 device quorum recovery via session-only QR exchange | Draft |
 | [secure-notes.md](secure-notes.md) | Secure notes vault item type (free-form encrypted text) | Draft |

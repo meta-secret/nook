@@ -12,8 +12,10 @@ Current vaults keep **device-key auth as the baseline unlock path**:
   readable, but new backup passwords are written through `password_entries`
   alongside `auth:`.
 
-Future modes (hardware token, social recovery, …) plug in through the same
-unlock/credential model without changing encrypted secret payloads.
+Future modes (hardware token, SLIP-0039 device quorum recovery, …) plug in
+through the same unlock/credential model without changing encrypted secret
+payloads. See [slip39-recovery.md](slip39-recovery.md) for the fixed 2-of-3
+device recovery design.
 
 Password entries are the foundation of the one-step QR enrolment flow: an
 enrolled device emits a QR containing `{auth_provider_creds, password}`; a new
