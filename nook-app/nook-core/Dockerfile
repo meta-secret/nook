@@ -58,6 +58,12 @@ RUN cargo clippy -p nook-core --all-targets -- -D warnings
 # deps so builder-debug's real coverage step is a cache hit.
 RUN cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 --no-tests=pass
 RUN cargo llvm-cov nextest --no-report --profile ci -p nook-core --no-tests=pass
+# Warm the wasm32 DEBUG/TEST-profile dependencies used by `wasm-pack test --node` in CI. The
+# release-profile chef layers above cannot satisfy this separate target/wasm32-unknown-unknown/debug
+# artifact set. Keeping the warm-up here, before real sources are copied, makes it manifest-keyed;
+# source-only changes then rebuild the workspace crates but not the full wasm test dependency graph.
+# This is last so adding/changing the WASM test warm-up does not invalidate the native warm-up layers.
+RUN cargo test --target wasm32-unknown-unknown --no-run -p nook-wasm
 
 # --- Native verify warm-up (parallel with builder-wasm after builder-deps) ---
 FROM builder-deps AS builder-debug
