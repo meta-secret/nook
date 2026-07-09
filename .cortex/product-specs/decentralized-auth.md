@@ -2,7 +2,7 @@
 
 Nook vaults use **`secrets_key`** to encrypt user secrets and **`members_key`** to encrypt member catalog entries. **Per-device X25519 identities** distribute both keys across devices via event-sourced auth metadata. The immutable event log (`nook-log/v1/events/`) is the provider source of truth; `nook-projection.yaml` is only the local projection/import format.
 
-**Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §2 (`nook-auth2` boundary), §4 (storage table), §3 (connect flow).
+**Related:** [ARCHITECTURE.md](../ARCHITECTURE.md) §2 (`nook-auth2` boundary), §4 (storage table), §3 (connect flow), [slip39-recovery.md](slip39-recovery.md) (fixed 2-of-3 device quorum recovery).
 
 ---
 
@@ -233,7 +233,7 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 | Phase | Scope | Status |
 |---|---|---|
 | 5 | `secrets_key` + `members_key` auth, members roster | Done |
-| 6 | OOB key transfer UX (copy from enrolled device) | Planned |
+| 6 | Fixed 2-of-3 SLIP-0039 recovery via session-only QR exchange | Designed (#260); implementation split across #261-#265 |
 | 7 | Device-to-device messaging channel | Planned |
 
 ---

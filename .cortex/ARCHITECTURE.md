@@ -78,6 +78,7 @@ root/
 - **Device identities:** X25519 identity generation, device fingerprints, auth ids, and age envelopes.
 - **Device-key protection:** Passkey PRF result validation plus HKDF/AES-GCM wrapping for the browser-persisted identity. Browser/WebAuthn ceremonies stay outside this crate.
 - **Credential envelopes:** `auth:` rows, `password_entries`, enrollment payloads, member roster encryption, and key-resolution helpers for `secrets_key` and `members_key`.
+- **Quorum recovery:** Fixed-policy SLIP-0039 recovery roots, protected per-device shares, and recovery-envelope helpers for `secrets_key` and `members_key` live here; recovery request/response exchange state stays out of sync providers.
 - **Key material and row types:** Portable newtypes for vault key material, auth/member ids, age-armored ciphertext, signing public keys, and the opaque `StoredSecretRecord` row shape shared by user secrets and auth metadata.
 - **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser APIs, or sync reconciliation. Sync provider credentials authorize replica access only; they are not vault unlock credentials.
 - **Portability:** Compiles on native and `wasm32-unknown-unknown` so browser, extension, CLI, server, mobile, HSM, YubiKey, and future quorum-recovery adapters can share the same key-access semantics.
