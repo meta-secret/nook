@@ -9,21 +9,22 @@ import {
   expandSettingsSection,
   expectVaultPasswordStatus,
   openStorageSettings,
-  readLocalVaultYamlFromIdb,
   revealSecretInRow,
   seedSyncProvidersWhileUnlocked,
   selectLoginUnlockMethod,
-  installOauthFileRemoteForLocalE2e,
   submitOnboardEnrollmentCode,
   enrollmentCodeFromLink,
   uniqueSecretKey,
   openOnboardDevicePanel,
+  reloadUnlockLocalVaultWithSync,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
   waitForStorageChainIdle,
+  waitForSyncRemoteVaultState,
   waitForVaultUnlocked,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
+import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
 test.describe('vault password envelope (local)', () => {
   test.beforeEach(async ({ page }) => {
@@ -307,23 +308,27 @@ test.describe('enrollment link deep link (local)', () => {
 
     await openStorageSettings(pageA)
     await addVaultPassword(pageA, 'Link test', 'link-pass')
-    await seedSyncProvidersWhileUnlocked(pageA)
-    const vaultYaml = await readLocalVaultYamlFromIdb(pageA)
+
+    // Shared file-sync stub so device B sees the same event log device A flushed.
+    const stub = createLocalE2eFileSyncVaultStub(
+      '',
+      E2E_SYNC_ONBOARD_PROVIDER.fileName,
+    )
+    await reloadUnlockLocalVaultWithSync(pageA, stub)
+    await waitForSyncRemoteVaultState(
+      stub,
+      (snapshot) =>
+        snapshot.secretIds.length >= 1 && snapshot.hasPasswordEnvelope,
+    )
+
     await openOnboardDevicePanel(pageA)
     await submitOnboardEnrollmentCode(pageA, 'link-pass')
     const link = (await pageA.getByTestId('onboard-link').textContent())!.trim()
     expect(link).toContain('#enroll=')
 
-    await installOauthFileRemoteForLocalE2e(pageA, {
-      fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
-      vaultYaml,
-    })
-
-    // Same browser context shares IndexedDB where the local vault file lives.
     const pageB = await context.newPage()
-    await installOauthFileRemoteForLocalE2e(pageB, {
+    await stub.install(pageB, {
       fileName: E2E_SYNC_ONBOARD_PROVIDER.fileName,
-      vaultYaml,
     })
     await pageB.goto(link)
     await expect(pageB.getByTestId('login-gate')).toBeVisible({
