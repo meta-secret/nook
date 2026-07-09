@@ -46,9 +46,9 @@ pub use auth::mock_passkey::{
 };
 pub use auth::multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, VaultKeys, VaultMember,
-    VaultMetaRecord, VaultMetaState, approve_join_request, assess_connect_access, auth_record,
-    build_members_records, count_nexus_share_records, create_join_request_record,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, OpenedNexusShare, VaultKeys,
+    VaultMember, VaultMetaRecord, VaultMetaState, approve_join_request, assess_connect_access,
+    auth_record, build_members_records, count_nexus_share_records, create_join_request_record,
     create_join_request_record_with_signing_key, create_nexus_share_records,
     create_nexus_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
     deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
@@ -59,9 +59,10 @@ pub use auth::multi_device::{
     is_members_stored_record, is_nexus_share_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
     member_from_join, member_stored_key, merge_remote_join_records, nexus_share_record_key,
-    parse_auth_envelopes, parse_join_request, parse_nexus_share_envelope, pending_join_for_device,
-    reconstruct_nexus_vault_keys, rename_vault_member, replace_member_records, resolve_dec,
-    resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
+    open_nexus_share_for_identity, parse_auth_envelopes, parse_join_request,
+    parse_nexus_share_envelope, pending_join_for_device, reconstruct_nexus_vault_keys,
+    reconstruct_nexus_vault_keys_from_opened, rename_vault_member, replace_member_records,
+    resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
     revoke_vault_member, roster_add_member, user_stored_records, vault_has_multi_device_records,
 };
 pub use auth::password_envelope::{

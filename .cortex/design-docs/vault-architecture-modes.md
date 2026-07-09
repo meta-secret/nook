@@ -54,11 +54,22 @@ first participant into the member roster only. As additional devices are
 approved, Rust issues encrypted `nexus_share:{device_id}` records once the
 configured `required_participants` count is reached.
 
-`load_stored_vault` rejects single-device unlock for nexus vaults. Threshold
-reconstruction uses `load_nexus_vault` with enough participant identities.
-Secret creation stays blocked until actual share records exist
-(`can_create_secret_with_records`); UI `ready_participants` is presentation
-only.
+Password unlock is forbidden as the sole unlock path for nexus vaults
+(`NexusPasswordUnlockForbidden`). Session hydrate from projection YAML also
+fails closed (`NexusCeremonyRequired`) and must never resolve auth envelopes.
+
+Browser unlock is an opened-share ceremony: each device opens its local share
+into an `OpenedNexusShare` contribution (`open_nexus_share_for_identity` /
+WASM `openLocalNexusShare`), then the reconstructing device combines ≥
+threshold contributions (`reconstruct_nexus_vault_keys_from_opened` /
+WASM `connectWithNexusShares`). Peer `DeviceIdentity` secrets must never cross
+browsers.
+
+`load_stored_vault` rejects nexus unlock. `load_nexus_vault` (identities) is a
+native/test helper only; production browser paths use
+`load_nexus_vault_from_opened`. Secret creation stays blocked until actual
+share records exist (`can_create_secret_with_records`); UI
+`ready_participants` is presentation only.
 
 Share math is currently interim GF(256) Shamir inside `nook-auth2`. Product
 SLIP-0039 mnemonic primitives remain owned by #261 and should replace this
@@ -68,12 +79,23 @@ encoding later without changing the architecture-mode contract.
 
 Shared onboarding collects the joiner provider identity (email for Google Drive)
 and embeds a `SharedProviderGrant` enrollment payload without owner credentials.
-`prepare_shared_storage_grant` owns the grant ceremony decision in Rust.
+Rust `prepare_shared_storage_grant` validates the request; WASM performs the
+real Google Drive grant when possible.
 
-Google Drive sync currently uses OAuth `drive.appdata`, which is not shareable
-through Drive `permissions.create`. Until shareable storage targets exist, the
-contract returns `ManualGrantRequired` with localized owner instructions. The
-joiner then signs into their own provider account before redeeming the code.
+**Personal** Google Drive vaults stay on OAuth `drive.appdata` (unchanged).
+
+**Shared** Google Drive vaults use a dedicated My Drive folder under
+`drive.file`:
+
+1. Owner: create folder → `permissions.create` for the joiner email (writer) →
+   return `Granted` with `storageTargetId` (folder id) and optional name.
+2. Enrollment embeds `storage_target_id` on `SharedProviderGrant` (no owner
+   tokens).
+3. Joiner: own OAuth with `drive.file`, redeem with the folder id, sync events
+   under that parent (not `appDataFolder`).
+
+`ManualGrantRequired` remains the fallback when the Drive API fails or the
+owner token lacks `drive.file`.
 
 ## Web Boundary
 

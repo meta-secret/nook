@@ -6,6 +6,11 @@ import {
 } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import { syncLocalFolderProvider } from '$lib/vault/sync'
+import {
+  isNexusCeremonyRequiredError,
+  refreshNexusUnlockStatus,
+  surfaceNexusCeremonyIfNeeded,
+} from '$lib/vault/nexus-unlock'
 
 const log = createLogger('connect')
 
@@ -172,6 +177,16 @@ export async function loadDb(state: VaultState) {
     state.isAuthenticated = false
     const message = e instanceof Error ? e.message : String(e)
     log.warn('loadDb failed', message)
+    if (await surfaceNexusCeremonyIfNeeded(state, e)) {
+      state.refreshVaultArchitectureFromManager()
+      await refreshNexusUnlockStatus(state)
+      return
+    }
+    if (isNexusCeremonyRequiredError(e)) {
+      state.nexusCeremonyPrompt = true
+      state.errorMsg = ''
+      return
+    }
     state.errorMsg = state.resolveErrorMessage(message)
   } finally {
     if (state.isAuthenticated) {

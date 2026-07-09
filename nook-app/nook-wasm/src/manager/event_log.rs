@@ -309,6 +309,20 @@ impl NookVaultManager {
         Ok(())
     }
 
+    /// Materialize join/share meta from the local event graph without vault keys.
+    /// Used by locked nexus joiners before the opened-share ceremony.
+    pub(in crate::manager) async fn materialize_vault_meta_from_events(
+        &mut self,
+    ) -> Result<(), NookError> {
+        if self.vault.store_id.is_empty() {
+            return Ok(());
+        }
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        Ok(())
+    }
+
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.vault.meta.to_stored_records();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
@@ -531,8 +545,10 @@ impl NookVaultManager {
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
+            self.persist_projection_cache().await?;
         }
-        self.persist_projection_cache().await?;
+        // Locked nexus sessions keep share/join meta in memory for ceremony
+        // without rewriting a keyless projection cache.
         Ok(())
     }
 
@@ -686,7 +702,8 @@ impl NookVaultManager {
                 list_github_event_ids(&self.storage.access_token, &self.storage.remote_ref).await?
             }
             nook_core::StorageMode::GoogleDrive => {
-                list_drive_event_ids(&self.storage.access_token).await?
+                list_drive_event_ids(&self.storage.access_token, &self.storage.drive_event_parent)
+                    .await?
             }
             nook_core::StorageMode::ICloud => {
                 list_icloud_event_ids(&self.storage.access_token).await?
@@ -710,7 +727,12 @@ impl NookVaultManager {
                 .await
             }
             nook_core::StorageMode::GoogleDrive => {
-                fetch_drive_event(&self.storage.access_token, event_id).await
+                fetch_drive_event(
+                    &self.storage.access_token,
+                    &self.storage.drive_event_parent,
+                    event_id,
+                )
+                .await
             }
             nook_core::StorageMode::ICloud => {
                 fetch_icloud_event(&self.storage.access_token, event_id).await
@@ -734,11 +756,14 @@ impl NookVaultManager {
                 )
                 .await
             }
-            nook_core::StorageMode::GoogleDrive => {
-                put_drive_event_if_absent(&self.storage.access_token, event_id, bytes)
-                    .await
-                    .map(|_| ())
-            }
+            nook_core::StorageMode::GoogleDrive => put_drive_event_if_absent(
+                &self.storage.access_token,
+                &self.storage.drive_event_parent,
+                event_id,
+                bytes,
+            )
+            .await
+            .map(|_| ()),
             nook_core::StorageMode::ICloud => {
                 put_icloud_event_if_absent(&self.storage.access_token, event_id, bytes).await
             }

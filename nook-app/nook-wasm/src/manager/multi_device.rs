@@ -117,36 +117,75 @@ impl NookVaultManager {
 
         let format = nook_core::detect_stored_format(&content)?;
         let mut records = nook_core::deserialize_stored(&content, format)?;
-
-        let auth_id =
-            nook_core::SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
-        records.retain(|record| record.key != auth_id);
-        records.retain(|record| !nook_core::is_members_stored_record(record));
         let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
         let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
-        let (auth, members) = nook_core::enroll_device_with_keys(
-            &parsed_secrets,
-            &parsed_members,
-            &identity,
-            &wasm_iso_timestamp(),
-        )?;
-        records.push(auth);
-        records.extend(members);
+
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let auth_id = nook_core::SecretId::from_vault_record(
+                    nook_core::dec_auth_id(&identity).as_str(),
+                );
+                records.retain(|record| record.key != auth_id);
+                records.retain(|record| !nook_core::is_members_stored_record(record));
+                let (auth, members) = nook_core::enroll_device_with_keys(
+                    &parsed_secrets,
+                    &parsed_members,
+                    &identity,
+                    &wasm_iso_timestamp(),
+                )?;
+                records.push(auth);
+                records.extend(members);
+            }
+            nook_core::VaultType::Nexus => {
+                // Nexus enrollment is roster/participant only — never write auth envelopes.
+                let self_member_key = nook_core::SecretId::from_vault_record(
+                    &nook_core::member_stored_key(&identity.auth_id()),
+                );
+                records.retain(|record| {
+                    !nook_core::is_members_stored_record(record) || record.key != self_member_key
+                });
+                let existing_roster =
+                    nook_core::resolve_member_roster(&records, &parsed_members).unwrap_or_default();
+                let updated_roster = nook_core::roster_add_member(
+                    existing_roster,
+                    nook_core::member_from_identity(&identity, &wasm_iso_timestamp()),
+                );
+                records.retain(|record| !nook_core::is_members_stored_record(record));
+                records.extend(nook_core::build_members_records(
+                    &updated_roster,
+                    &parsed_members,
+                )?);
+            }
+        }
 
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.persist_vault_change(Vec::new()).await?;
+        self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
 
-        let updated = nook_core::serialize_stored(&records, format)?;
-        let loaded = load_stored_vault(updated.as_str(), &identity)?;
-        let LoadedVault {
-            database,
-            meta,
-            secrets_key: resolved_secrets_key,
-            members_key: resolved_members_key,
-        } = loaded;
-        self.apply_vault_keys(resolved_secrets_key.as_str(), resolved_members_key.as_str())?;
-        self.vault.database = database;
-        self.vault.meta = meta;
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let updated = nook_core::serialize_stored(&records, format)?;
+                let loaded = load_stored_vault(updated.as_str(), &identity)?;
+                let LoadedVault {
+                    database,
+                    meta,
+                    secrets_key: resolved_secrets_key,
+                    members_key: resolved_members_key,
+                } = loaded;
+                self.apply_vault_keys(
+                    resolved_secrets_key.as_str(),
+                    resolved_members_key.as_str(),
+                )?;
+                self.vault.database = database;
+                self.vault.meta = meta;
+            }
+            nook_core::VaultType::Nexus => {
+                let crypto = nook_core::VaultCrypto::new(&parsed_secrets)?;
+                let user_records = nook_core::user_stored_records(&records);
+                self.vault.database =
+                    nook_core::Database::from_stored_records_with_crypto(&user_records, &crypto)?;
+            }
+        }
         Ok(self.get_records()?)
     }
 
@@ -460,16 +499,32 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
         let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
-        let (auth, members) = nook_core::enroll_device_with_keys(
-            &parsed_secrets,
-            &parsed_members,
-            &identity,
-            &wasm_iso_timestamp(),
-        )?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
-        self.vault.meta.apply_record(&auth);
-        for member in &members {
-            self.vault.meta.apply_record(member);
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let (auth, members) = nook_core::enroll_device_with_keys(
+                    &parsed_secrets,
+                    &parsed_members,
+                    &identity,
+                    &wasm_iso_timestamp(),
+                )?;
+                self.vault.meta.apply_record(&auth);
+                for member in &members {
+                    self.vault.meta.apply_record(member);
+                }
+            }
+            nook_core::VaultType::Nexus => {
+                let records = self.stored_records_snapshot();
+                let existing_roster =
+                    nook_core::resolve_member_roster(&records, &parsed_members).unwrap_or_default();
+                let updated_roster = nook_core::roster_add_member(
+                    existing_roster,
+                    nook_core::member_from_identity(&identity, &wasm_iso_timestamp()),
+                );
+                let member_records =
+                    nook_core::build_members_records(&updated_roster, &parsed_members)?;
+                apply_member_records(&mut self.vault.meta, &member_records);
+            }
         }
         self.persist_vault_change(Vec::new()).await?;
         Ok(self.get_records()?)

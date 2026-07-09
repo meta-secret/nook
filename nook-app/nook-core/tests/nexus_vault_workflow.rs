@@ -1,9 +1,11 @@
 //! Nexus vault key-share lifecycle integration tests.
 
 use nook_core::{
-    DeviceIdentity, DeviceMode, NexusPolicy, VaultArchitecture, VaultFormat, VaultType,
-    VaultUnlock, create_nexus_share_records, generate_store_id, generate_vault_keys,
-    load_nexus_vault, load_stored_vault, serialize_stored_yaml_with_unlock_name_architecture,
+    DeviceIdentity, DeviceMode, MultiDeviceError, NexusPolicy, VaultArchitecture, VaultFormat,
+    VaultType, VaultUnlock, create_nexus_share_records, generate_store_id, generate_vault_keys,
+    load_nexus_vault, load_nexus_vault_from_opened, load_stored_vault,
+    open_nexus_share_for_identity, reconstruct_nexus_vault_keys_from_opened,
+    serialize_stored_yaml_with_unlock_name_architecture,
 };
 
 #[test]
@@ -40,13 +42,30 @@ fn nexus_threshold_shares_block_single_device_and_unlock_with_quorum() {
     )
     .unwrap();
 
-    assert!(load_stored_vault(yaml.as_str(), &first).is_err());
+    assert!(matches!(
+        load_stored_vault(yaml.as_str(), &first),
+        Err(nook_core::VaultError::MultiDevice(
+            MultiDeviceError::NexusCeremonyRequired
+        ))
+    ));
     assert!(load_nexus_vault(yaml.as_str(), std::slice::from_ref(&first)).is_err());
 
-    let loaded = load_nexus_vault(yaml.as_str(), &[first, second]).unwrap();
+    let loaded = load_nexus_vault(yaml.as_str(), &[first.clone(), second.clone()]).unwrap();
     assert_eq!(loaded.secrets_key, keys.secrets_key);
     assert_eq!(loaded.members_key, keys.members_key);
     assert_eq!(loaded.meta.nexus_shares.len(), 3);
     assert_eq!(architecture.vault_type, VaultType::Nexus);
     let _ = VaultFormat::Yaml;
+
+    // Browser path: open shares locally, reconstruct without peer identities.
+    let opened = [
+        open_nexus_share_for_identity(&shares, &first).unwrap(),
+        open_nexus_share_for_identity(&shares, &second).unwrap(),
+    ];
+    let from_opened = reconstruct_nexus_vault_keys_from_opened(&shares, &opened).unwrap();
+    assert_eq!(from_opened, keys);
+
+    let loaded_opened = load_nexus_vault_from_opened(yaml.as_str(), &opened).unwrap();
+    assert_eq!(loaded_opened.secrets_key, keys.secrets_key);
+    assert_eq!(loaded_opened.members_key, keys.members_key);
 }

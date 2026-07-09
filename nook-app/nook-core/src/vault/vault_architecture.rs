@@ -403,6 +403,10 @@ pub fn validate_architecture_for_provider(
 }
 
 /// Request to grant shared provider storage to a joiner identity.
+///
+/// `access_token` is optional at the Rust validation boundary. The WASM layer
+/// uses it to call Drive `files.create` + `permissions.create` and may upgrade
+/// a validated request into [`SharedStorageGrantOutcome::Granted`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedStorageGrantRequest {
@@ -413,18 +417,35 @@ pub struct SharedStorageGrantRequest {
     pub joiner_identity: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage_target_hint: Option<String>,
+    /// Owner OAuth access token (WASM Drive grant only; ignored by Rust).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
 }
 
 /// Outcome of preparing a shared storage grant.
 ///
-/// Google Drive currently uses `drive.appdata`, which is not shareable via
-/// Drive `permissions.create`. Until shareable storage targets exist, the
-/// contract returns [`SharedStorageGrantOutcome::ManualGrantRequired`].
+/// Rust validation is ceremony-agnostic: Google Drive shared replication is
+/// capable, so core returns [`SharedStorageGrantOutcome::ManualGrantRequired`]
+/// when no shareable folder id is produced here. The WASM layer performs the
+/// real `drive.file` folder create + `permissions.create` grant and returns
+/// [`SharedStorageGrantOutcome::Granted`] with `storage_target_id` on success.
+/// `ManualGrantRequired` remains the fallback when the Drive API fails or the
+/// token lacks `drive.file`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum SharedStorageGrantOutcome {
     #[serde(rename = "granted")]
-    Granted { note: String },
+    Granted {
+        note: String,
+        #[serde(rename = "storageTargetId")]
+        storage_target_id: String,
+        #[serde(
+            rename = "storageTargetName",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        storage_target_name: Option<String>,
+    },
     #[serde(rename = "manual-grant-required")]
     ManualGrantRequired {
         #[serde(rename = "instructionsKey")]
@@ -674,12 +695,15 @@ mod tests {
 
     #[test]
     fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony() {
+        // Core validates only; WASM upgrades ManualGrantRequired → Granted after
+        // Drive folder create + permissions.create succeed.
         let request = SharedStorageGrantRequest {
             provider_type: "oauth-file".to_owned(),
             oauth_preset: Some("google-drive".to_owned()),
             joiner_identity_kind: SharedJoinerIdentityKind::Email,
             joiner_identity: "joiner@example.com".to_owned(),
             storage_target_hint: None,
+            access_token: Some("ya29.owner-token".to_owned()),
         };
         let outcome = prepare_shared_storage_grant(&request).unwrap();
         assert_eq!(
@@ -705,5 +729,20 @@ mod tests {
             ..request
         };
         assert!(prepare_shared_storage_grant(&github).is_err());
+    }
+
+    #[test]
+    fn shared_storage_grant_granted_outcome_carries_storage_target() {
+        let granted = SharedStorageGrantOutcome::Granted {
+            note: "Shared Drive folder ready.".to_owned(),
+            storage_target_id: "folder-abc".to_owned(),
+            storage_target_name: Some("Nook shared vault".to_owned()),
+        };
+        let json = serde_json::to_value(&granted).unwrap();
+        assert_eq!(json["kind"], "granted");
+        assert_eq!(json["storageTargetId"], "folder-abc");
+        assert_eq!(json["storageTargetName"], "Nook shared vault");
+        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json).unwrap();
+        assert_eq!(roundtrip, granted);
     }
 }

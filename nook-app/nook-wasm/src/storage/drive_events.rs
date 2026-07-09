@@ -2,7 +2,7 @@
 
 use crate::NookError;
 use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
-use nook_core::{EventId, VaultEvent, parse_remote_event_storage_bytes};
+use nook_core::{DriveEventParent, EventId, VaultEvent, parse_remote_event_storage_bytes};
 
 const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
 const SHA256_BASE64URL_LEN: usize = 43;
@@ -14,13 +14,46 @@ fn is_sha256_base64url_digest(digest: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
 }
 
-pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, NookError> {
+fn parent_query_fragment(parent: &DriveEventParent) -> String {
+    match parent {
+        DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
+        DriveEventParent::SharedFolder { folder_id } => {
+            format!("'{}' in parents", folder_id.replace('\'', "\\'"))
+        }
+    }
+}
+
+fn list_spaces_query(parent: &DriveEventParent) -> Option<&'static str> {
+    match parent {
+        DriveEventParent::AppDataFolder => Some("appDataFolder"),
+        DriveEventParent::SharedFolder { .. } => None,
+    }
+}
+
+fn parent_id_for_create(parent: &DriveEventParent) -> &str {
+    match parent {
+        DriveEventParent::AppDataFolder => "appDataFolder",
+        DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
+    }
+}
+
+pub(crate) async fn list_drive_event_ids(
+    token: &str,
+    parent: &DriveEventParent,
+) -> Result<Vec<String>, NookError> {
     let token = token.trim();
-    let query = "name contains '.yaml' and 'appDataFolder' in parents and trashed=false";
-    let url = format!(
-        "https://www.googleapis.com/drive/v3/files?q={}&spaces=appDataFolder&fields=nextPageToken,files(id,name)&pageSize=1000",
-        urlencoding::encode(query)
+    let query = format!(
+        "name contains '.yaml' and {} and trashed=false",
+        parent_query_fragment(parent)
     );
+    let mut url = format!(
+        "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name)&pageSize=1000",
+        urlencoding::encode(&query)
+    );
+    if let Some(spaces) = list_spaces_query(parent) {
+        url.push_str("&spaces=");
+        url.push_str(spaces);
+    }
     let client = reqwest::Client::new();
     let mut event_ids = Vec::new();
     let mut page_token: Option<String> = None;
@@ -71,11 +104,16 @@ pub(crate) async fn list_drive_event_ids(token: &str) -> Result<Vec<String>, Noo
 
 pub(crate) async fn fetch_drive_event(
     token: &str,
+    parent: &DriveEventParent,
     event_id: &EventId,
 ) -> Result<Vec<u8>, NookError> {
     let token = token.trim();
-    let file_ids =
-        lookup_drive_event_file_ids(token, &format!("{}.yaml", event_id.encoded_digest())).await?;
+    let file_ids = lookup_drive_event_file_ids(
+        token,
+        parent,
+        &format!("{}.yaml", event_id.encoded_digest()),
+    )
+    .await?;
     if file_ids.is_empty() {
         return Err(NookError::Drive(DRIVE_EVENT_MISSING.to_owned()));
     }
@@ -108,16 +146,22 @@ pub(crate) async fn fetch_drive_event(
 
 async fn lookup_drive_event_file_ids(
     token: &str,
+    parent: &DriveEventParent,
     file_name: &str,
 ) -> Result<Vec<String>, NookError> {
     let query = format!(
-        "name = '{}' and 'appDataFolder' in parents and trashed=false",
-        file_name.replace('\'', "\\'")
+        "name = '{}' and {} and trashed=false",
+        file_name.replace('\'', "\\'"),
+        parent_query_fragment(parent)
     );
-    let list_url = format!(
-        "https://www.googleapis.com/drive/v3/files?q={}&spaces=appDataFolder&fields=files(id)",
+    let mut list_url = format!(
+        "https://www.googleapis.com/drive/v3/files?q={}&fields=files(id)",
         urlencoding::encode(&query)
     );
+    if let Some(spaces) = list_spaces_query(parent) {
+        list_url.push_str("&spaces=");
+        list_url.push_str(spaces);
+    }
     let client = reqwest::Client::new();
     let response = client
         .get(&list_url)
@@ -169,12 +213,13 @@ async fn download_drive_event_file(
 
 pub(crate) async fn put_drive_event_if_absent(
     token: &str,
+    parent: &DriveEventParent,
     event_id: &EventId,
     bytes: &[u8],
 ) -> Result<String, NookError> {
     let token = token.trim();
     let expected_event = parse_expected_event_storage_bytes(bytes, event_id, "Drive")?;
-    match fetch_drive_event(token, event_id).await {
+    match fetch_drive_event(token, parent, event_id).await {
         Ok(existing)
             if existing == bytes || event_storage_matches_expected(&existing, &expected_event) =>
         {
@@ -191,7 +236,7 @@ pub(crate) async fn put_drive_event_if_absent(
     let file_name = format!("{}.yaml", event_id.encoded_digest());
     let metadata = serde_json::json!({
         "name": file_name,
-        "parents": ["appDataFolder"],
+        "parents": [parent_id_for_create(parent)],
         "appProperties": {
             "event_id": event_id.as_str(),
         }

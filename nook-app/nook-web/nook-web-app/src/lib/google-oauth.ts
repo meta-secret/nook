@@ -1,16 +1,24 @@
 /**
- * Google Identity Services (GIS) token client for Drive app-data access.
+ * Google Identity Services (GIS) token client for Drive access.
  *
  * Browser-only — no server, no client secret, no redirect callback.
  * Access tokens are short-lived (~1h); silent refresh uses requestAccessToken
  * while the user's Google session is still active.
+ *
+ * Scopes:
+ * - Personal vaults: `drive.appdata` (hidden application data folder).
+ * - Shared vaults: `drive.file` (My Drive folder created/shared by Nook).
  */
 
 import type { OAuthFileConfig } from '$lib/auth-providers'
 import { GOOGLE_OAUTH_CLIENT_ID } from '$lib/google-oauth-config'
 
 const GIS_SCRIPT_URL = 'https://accounts.google.com/gsi/client'
-const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata'
+export const DRIVE_APPDATA_SCOPE =
+  'https://www.googleapis.com/auth/drive.appdata'
+export const DRIVE_FILE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+
+export type GoogleDriveOAuthScope = 'appdata' | 'file' | 'both'
 
 export type GoogleOAuthTokens = {
   accessToken: string
@@ -44,10 +52,15 @@ declare global {
   }
 }
 
-let tokenClient: TokenClient | undefined = undefined
+type TokenClientSlot = {
+  scopeKey: string
+  client: TokenClient
+}
+
+const tokenClients = new Map<string, TokenClientSlot>()
 let pendingResolve: ((response: GoogleTokenResponse) => void) | undefined =
   undefined
-let initPromise: Promise<void> | undefined = undefined
+let gisReadyPromise: Promise<void> | undefined = undefined
 
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim())
@@ -59,6 +72,18 @@ function googleClientId(): string {
     throw new Error('Google OAuth client id is not configured.')
   }
   return clientId
+}
+
+function scopeString(scope: GoogleDriveOAuthScope): string {
+  switch (scope) {
+    case 'file':
+      return DRIVE_FILE_SCOPE
+    case 'both':
+      return `${DRIVE_APPDATA_SCOPE} ${DRIVE_FILE_SCOPE}`
+    case 'appdata':
+    default:
+      return DRIVE_APPDATA_SCOPE
+  }
 }
 
 function loadGisScript(): Promise<void> {
@@ -88,25 +113,43 @@ function loadGisScript(): Promise<void> {
   })
 }
 
+async function ensureGisReady(): Promise<void> {
+  if (gisReadyPromise) {
+    return gisReadyPromise
+  }
+  gisReadyPromise = loadGisScript()
+  return gisReadyPromise
+}
+
+async function tokenClientForScope(
+  scope: GoogleDriveOAuthScope,
+): Promise<TokenClient> {
+  await ensureGisReady()
+  const key = scopeString(scope)
+  const existing = tokenClients.get(key)
+  if (existing) {
+    return existing.client
+  }
+  const client = window.google!.accounts.oauth2.initTokenClient({
+    client_id: googleClientId(),
+    scope: key,
+    callback: (response) => {
+      pendingResolve?.(response)
+      pendingResolve = undefined
+    },
+  })
+  tokenClients.set(key, { scopeKey: key, client })
+  return client
+}
+
+/** Personal vaults: initialize the default `drive.appdata` token client. */
 export async function initGoogleAuth(): Promise<void> {
-  if (tokenClient) {
-    return
-  }
-  if (initPromise) {
-    return initPromise
-  }
-  initPromise = (async () => {
-    await loadGisScript()
-    tokenClient = window.google!.accounts.oauth2.initTokenClient({
-      client_id: googleClientId(),
-      scope: DRIVE_APPDATA_SCOPE,
-      callback: (response) => {
-        pendingResolve?.(response)
-        pendingResolve = undefined
-      },
-    })
-  })()
-  return initPromise
+  await tokenClientForScope('appdata')
+}
+
+/** Shared vaults: initialize a `drive.file` token client. */
+export async function initGoogleSharedDriveAuth(): Promise<void> {
+  await tokenClientForScope('file')
 }
 
 function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
@@ -127,11 +170,10 @@ function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
 
 export async function requestGoogleAccessToken(options?: {
   prompt?: '' | 'none' | 'consent' | 'select_account'
+  scope?: GoogleDriveOAuthScope
 }): Promise<GoogleOAuthTokens> {
-  await initGoogleAuth()
-  if (!tokenClient) {
-    throw new Error('Google Auth is not initialized.')
-  }
+  const scope = options?.scope ?? 'appdata'
+  const client = await tokenClientForScope(scope)
 
   return new Promise((resolve, reject) => {
     pendingResolve = (response) => {
@@ -141,9 +183,19 @@ export async function requestGoogleAccessToken(options?: {
         reject(error)
       }
     }
-    tokenClient!.requestAccessToken(
+    client.requestAccessToken(
       options?.prompt !== undefined ? { prompt: options.prompt } : undefined,
     )
+  })
+}
+
+/** Request a token with `drive.file` for shared-replication vaults. */
+export async function requestGoogleDriveSharedAccess(options?: {
+  prompt?: '' | 'none' | 'consent' | 'select_account'
+}): Promise<GoogleOAuthTokens> {
+  return requestGoogleAccessToken({
+    prompt: options?.prompt ?? 'consent',
+    scope: 'file',
   })
 }
 
@@ -159,6 +211,7 @@ export function oauthTokensToConfig(
     fileName: existing?.fileName,
     accountEmail: existing?.accountEmail,
     refreshToken: existing?.refreshToken,
+    folderId: existing?.folderId,
   }
 }
 
@@ -178,7 +231,10 @@ export async function ensureValidOAuthFileConfig(
   if (!isOAuthAccessTokenExpired(config)) {
     return config
   }
-  const refreshed = await requestGoogleAccessToken({ prompt: '' })
+  const scope: GoogleDriveOAuthScope = config.folderId?.trim()
+    ? 'file'
+    : 'appdata'
+  const refreshed = await requestGoogleAccessToken({ prompt: '', scope })
   return oauthTokensToConfig(refreshed, config)
 }
 

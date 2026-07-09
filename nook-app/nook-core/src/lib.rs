@@ -74,8 +74,8 @@ pub use secret_view::build_secret_yaml;
 
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, VaultKeys, VaultMember,
-    VaultMetaRecord, VaultMetaState, apply_vault_meta_operation, approve_join_request,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, OpenedNexusShare, VaultKeys,
+    VaultMember, VaultMetaRecord, VaultMetaState, apply_vault_meta_operation, approve_join_request,
     assess_connect_access, auth_record, build_members_records, count_nexus_share_records,
     create_join_request_record, create_join_request_record_with_signing_key,
     create_nexus_share_records, create_nexus_share_records_for_recipients, dec_auth_id,
@@ -87,8 +87,9 @@ pub use multi_device::{
     is_members_stored_record, is_nexus_share_stored_record, is_reserved_device_label,
     is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
     member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
-    nexus_share_record_key, parse_auth_envelopes, parse_join_request, parse_nexus_share_envelope,
-    pending_join_for_device, reconstruct_nexus_vault_keys, rename_vault_member,
+    nexus_share_record_key, open_nexus_share_for_identity, parse_auth_envelopes,
+    parse_join_request, parse_nexus_share_envelope, pending_join_for_device,
+    reconstruct_nexus_vault_keys, reconstruct_nexus_vault_keys_from_opened, rename_vault_member,
     replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
     resolve_secrets_key, revoke_vault_member, roster_add_member, user_stored_records,
     vault_has_multi_device_records,
@@ -117,23 +118,24 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     AuthProvidersSnapshotData, LocalFolderConfigData, NormalizedAuthSnapshot, OAuthFileConfigData,
     ProviderLabelLabels, ProviderStorageDetailLabels, StorageConnectArgs, StorageProviderData,
-    draft_storage_args, enrollment_provider_for_architecture, ensure_local_provider_row,
+    draft_storage_args, enrollment_provider_for_architecture,
+    enrollment_provider_for_architecture_with_storage_target, ensure_local_provider_row,
     find_duplicate_sync_provider, localize_provider_label, migrate_provider_fields,
     normalize_auth_snapshot, provider_replication_capability_for_row, provider_storage_detail,
     provider_target_key, seed_provider_from_legacy_storage, storage_args_for_provider,
     validate_provider_row_replication, vault_storage_args,
 };
 pub use validation::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, DriveBackupName,
-    GithubPat, GithubPatMask, GithubRepoName, GithubSyncTarget, LocalFolderSyncTarget,
-    OauthAccessToken, OauthFilePreset, OauthFileSyncTarget, STORAGE_MODE_GITHUB,
-    STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget, filter_secrets,
-    format_drive_storage_ref, format_drive_storage_ref_raw, format_sync_provider_cache_ref,
-    has_provider_credentials, mask_github_pat, parse_drive_storage_ref,
-    staged_provider_default_label, storage_mode_for_provider, sync_provider_default_label,
-    sync_provider_target_key, validate_connect, validate_drive_backup_name, validate_github_pat,
-    validate_github_repo_name, validate_oauth_access_token, validate_secret_data,
-    validate_storage_mode,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,
+    DRIVE_STORAGE_REF_SEP, DriveBackupName, DriveEventParent, GithubPat, GithubPatMask,
+    GithubRepoName, GithubSyncTarget, LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset,
+    OauthFileSyncTarget, STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType,
+    SyncProviderTarget, filter_secrets, format_drive_storage_ref, format_drive_storage_ref_raw,
+    format_sync_provider_cache_ref, has_provider_credentials, mask_github_pat,
+    parse_drive_storage_ref, staged_provider_default_label, storage_mode_for_provider,
+    sync_provider_default_label, sync_provider_target_key, validate_connect,
+    validate_drive_backup_name, validate_github_pat, validate_github_repo_name,
+    validate_oauth_access_token, validate_secret_data, validate_storage_mode,
 };
 pub use vault_access_diagnostics::{
     VaultAccessDiagnosticsReport, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
@@ -149,7 +151,7 @@ pub use vault_architecture::{
 pub use vault_connect::{
     LoadedVault, VaultAccessStatus, VaultContentMetadata, access_status_for_vault_content,
     apply_member_records, capture_vault_unlock_from_content, content_requires_genesis,
-    load_nexus_vault, load_stored_vault,
+    load_nexus_vault, load_nexus_vault_from_opened, load_stored_vault,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch::{

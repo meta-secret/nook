@@ -48,6 +48,7 @@ const SYNC_PROVIDER_SPECS = [
   'onboarding-file-provider.spec.ts',
   'sync-fanout.spec.ts',
   'multi-device-local.spec.ts',
+  'nexus-unlock-ceremony.spec.ts',
   'sync-vault.spec.ts',
   'multi-device-sync.spec.ts',
   'password-envelope-sync.spec.ts',

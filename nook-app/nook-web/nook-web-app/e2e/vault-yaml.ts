@@ -44,6 +44,7 @@ type StoredVaultYaml = {
   members?: MembersYamlRecord[]
   unlock?: UnlockYaml
   password_entries?: PasswordEntryYaml[]
+  nexus_shares?: StoredSecretRecord[]
   /** Legacy field — pre-enum vaults wrote the envelope at the top level. */
   password_envelope?: PasswordEnvelopeYaml
 }
@@ -77,6 +78,7 @@ type VaultEventOperation = {
   created_at?: string
   envelope?: PasswordEnvelopeYaml
   password_entries?: PasswordEntryYaml[]
+  shares?: Array<{ device_id?: string; ciphertext?: string }>
 }
 
 type VaultEventYaml = {
@@ -90,6 +92,8 @@ export type VaultYamlSnapshot = {
   authPkIds: string[]
   joinEntries: Array<{ deviceId: string; publicKey: string }>
   memberPkIds: string[]
+  /** Count of nexus share records / issued share payloads observed. */
+  nexusShareCount: number
   unlockMode: 'keys' | 'password'
   hasPasswordEnvelope: boolean
   /**
@@ -137,6 +141,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const joinEntries = (vault.joins ?? []).map((record) =>
     parseJoinValue(record.id, record.data),
   )
+  const nexusShareCount = (vault.nexus_shares ?? []).length
 
   const passwordEntries = collectPasswordEntries(vault)
   const hasPasswordEnvelope = passwordEntries.length > 0
@@ -156,6 +161,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     authPkIds,
     joinEntries,
     memberPkIds,
+    nexusShareCount,
     unlockMode,
     hasPasswordEnvelope,
     passwordEnvelopeCiphertext,
@@ -199,6 +205,7 @@ export function parseVaultEventLogSnapshot(
   >()
   const members = new Map<string, { pk_id: string; ciphertext: string }>()
   const passwordEntries = new Map<string, PasswordEntryYaml>()
+  const nexusShares = new Map<string, StoredSecretRecord>()
 
   for (const event of sortEventYamls(eventYamls)) {
     for (const operation of event.operations ?? []) {
@@ -269,6 +276,17 @@ export function parseVaultEventLogSnapshot(
             })
           }
           break
+        case 'nexus-shares-issued':
+          for (const share of operation.shares ?? []) {
+            const deviceId = share.device_id?.trim()
+            if (!deviceId) continue
+            nexusShares.set(deviceId, {
+              id: `nexus_share:${deviceId}`,
+              type: 'secure-note',
+              data: share.ciphertext ?? '',
+            })
+          }
+          break
         case 'join-denied':
           if (operation.device_id) joins.delete(operation.device_id)
           break
@@ -322,6 +340,7 @@ export function parseVaultEventLogSnapshot(
       }),
     })),
     members: [...members.values()],
+    nexus_shares: [...nexusShares.values()],
     password_entries: [...passwordEntries.values()],
   })
 
@@ -372,9 +391,8 @@ export function assertJoinPendingYaml(
   if (!join.publicKey.startsWith('age1')) {
     throw new Error('Join request must include age1 public_key while pending')
   }
-  if (snapshot.authPkIds.length < 1) {
-    throw new Error('Vault must still have genesis auth while join is pending')
-  }
+  // Simple vaults keep genesis auth while a join is pending. Nexus genesis
+  // never writes auth envelopes, so an empty auth section is expected there.
 }
 
 export function assertEnrolledVaultYaml(

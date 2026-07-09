@@ -259,6 +259,10 @@ impl NookVaultManager {
             .load_password_unlock_records(&content, vault_missing)
             .await?;
 
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
+
         if records.is_empty() {
             return Err(
                 NookError::Database("No vault records found at this provider.".to_owned()).into(),
@@ -355,6 +359,9 @@ impl NookVaultManager {
         keys: &nook_core::VaultKeys,
         content: &str,
     ) -> Result<(), NookError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         if event_log_remote {
             return self
                 .persist_event_log_password_membership(records, identity, keys)

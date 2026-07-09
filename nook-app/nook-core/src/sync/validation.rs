@@ -415,6 +415,9 @@ pub fn validate_drive_backup_name(name: &str) -> ValidationResult<DriveBackupNam
 
 /// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
 /// or `fileName` alone when no cached file id exists yet.
+///
+/// Shared-replication folder ids are encoded as `shared:<folderId>` in the
+/// `fileId` slot so connect args stay a 3-tuple.
 pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveBackupName)> {
     if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
         Ok((
@@ -423,6 +426,52 @@ pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveBa
         ))
     } else {
         Ok((String::new(), validate_drive_backup_name(value)?))
+    }
+}
+
+/// Prefix used in Drive storage refs for shared My Drive folder parents.
+pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
+
+/// Where Google Drive event files live for the current vault.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DriveEventParent {
+    /// Personal vaults: hidden application data folder (`drive.appdata`).
+    AppDataFolder,
+    /// Shared vaults: a My Drive folder created under `drive.file`.
+    SharedFolder { folder_id: String },
+}
+
+impl DriveEventParent {
+    /// Parse the storage-id slot from [`parse_drive_storage_ref`].
+    #[must_use]
+    pub fn from_storage_id(storage_id: &str) -> Self {
+        let trimmed = storage_id.trim();
+        if let Some(folder_id) = trimmed.strip_prefix(DRIVE_SHARED_FOLDER_REF_PREFIX) {
+            let folder_id = folder_id.trim();
+            if !folder_id.is_empty() {
+                return Self::SharedFolder {
+                    folder_id: folder_id.to_owned(),
+                };
+            }
+        }
+        Self::AppDataFolder
+    }
+
+    #[must_use]
+    pub fn shared_folder_id(folder_id: &str) -> Self {
+        Self::SharedFolder {
+            folder_id: folder_id.trim().to_owned(),
+        }
+    }
+
+    #[must_use]
+    pub fn encode_storage_id(&self) -> String {
+        match self {
+            Self::AppDataFolder => String::new(),
+            Self::SharedFolder { folder_id } => {
+                format!("{DRIVE_SHARED_FOLDER_REF_PREFIX}{}", folder_id.trim())
+            }
+        }
     }
 }
 
@@ -1125,6 +1174,31 @@ mod tests {
         assert_eq!(
             format_sync_provider_cache_ref(StorageMode::GoogleDrive, "file-id", ""),
             "drive:file-id"
+        );
+    }
+
+    #[test]
+    fn drive_event_parent_parses_shared_folder_prefix() {
+        assert_eq!(
+            DriveEventParent::from_storage_id(""),
+            DriveEventParent::AppDataFolder
+        );
+        assert_eq!(
+            DriveEventParent::from_storage_id("legacy-file-id"),
+            DriveEventParent::AppDataFolder
+        );
+        assert_eq!(
+            DriveEventParent::from_storage_id("shared:folder-xyz"),
+            DriveEventParent::SharedFolder {
+                folder_id: "folder-xyz".to_owned(),
+            }
+        );
+        assert_eq!(
+            DriveEventParent::SharedFolder {
+                folder_id: "folder-xyz".to_owned(),
+            }
+            .encode_storage_id(),
+            "shared:folder-xyz"
         );
     }
 }

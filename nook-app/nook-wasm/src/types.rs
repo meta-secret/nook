@@ -39,6 +39,8 @@ export interface NookOAuthFileConfig {
   fileId?: string;
   fileName?: string;
   accountEmail?: string;
+  /** Shared-replication My Drive folder id (`drive.file`). */
+  folderId?: string;
 }
 
 export interface NookLocalFolderProviderConfig {
@@ -606,12 +608,14 @@ impl NookEnrollmentProvider {
         oauth_preset: Option<String>,
         joiner_identity_kind: String,
         joiner_identity: String,
+        storage_target_id: Option<String>,
     ) -> Self {
         Self(nook_core::EnrollmentProvider::SharedProviderGrant {
             sync_provider_type,
             oauth_preset,
             joiner_identity_kind,
             joiner_identity,
+            storage_target_id,
         })
     }
 
@@ -759,6 +763,18 @@ impl NookEnrollmentProvider {
             nook_core::EnrollmentProvider::SharedProviderGrant {
                 joiner_identity, ..
             } => Some(joiner_identity.clone()),
+            nook_core::EnrollmentProvider::Local
+            | nook_core::EnrollmentProvider::Github { .. }
+            | nook_core::EnrollmentProvider::OauthFile { .. } => None,
+        }
+    }
+
+    #[wasm_bindgen(getter, js_name = sharedStorageTargetId)]
+    pub fn shared_storage_target_id(&self) -> Option<String> {
+        match &self.0 {
+            nook_core::EnrollmentProvider::SharedProviderGrant {
+                storage_target_id, ..
+            } => storage_target_id.clone(),
             nook_core::EnrollmentProvider::Local
             | nook_core::EnrollmentProvider::Github { .. }
             | nook_core::EnrollmentProvider::OauthFile { .. } => None,

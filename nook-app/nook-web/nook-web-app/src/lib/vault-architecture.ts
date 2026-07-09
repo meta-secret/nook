@@ -76,10 +76,16 @@ export type SharedStorageGrantRequest = {
   joinerIdentityKind: 'email'
   joinerIdentity: string
   storageTargetHint?: string
+  accessToken?: string
 }
 
 export type SharedStorageGrantOutcome =
-  | { kind: 'granted'; note: string }
+  | {
+      kind: 'granted'
+      note: string
+      storageTargetId: string
+      storageTargetName?: string
+    }
   | {
       kind: 'manual-grant-required'
       instructionsKey: string
@@ -87,8 +93,10 @@ export type SharedStorageGrantOutcome =
     }
   | { kind: 'unsupported'; reasonKey: string }
 
-export function prepareSharedStorageGrant(
+export async function prepareSharedStorageGrant(
   request: SharedStorageGrantRequest,
-): SharedStorageGrantOutcome {
-  return wasmPrepareSharedStorageGrant(request) as SharedStorageGrantOutcome
+): Promise<SharedStorageGrantOutcome> {
+  return (await wasmPrepareSharedStorageGrant(
+    request,
+  )) as SharedStorageGrantOutcome
 }

@@ -212,7 +212,7 @@ export function createLocalE2eFileSyncVaultStub(
           if (
             eventDigest ||
             (decoded.includes("name contains '.yaml'") &&
-              decoded.includes("'appDataFolder' in parents"))
+              decoded.includes('in parents'))
           ) {
             await route.fulfill({
               status: 200,

@@ -101,23 +101,21 @@ pub fn access_status_for_vault_content(
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
-    let stored_records = deserialize_stored(content, format)?;
     if architecture.vault_type == VaultType::Nexus {
-        let policy = architecture.nexus.unwrap_or_default();
-        let available = crate::count_nexus_share_records(&stored_records);
-        return Err(crate::MultiDeviceError::NotEnoughNexusShares {
-            threshold: policy.threshold,
-            available,
-        }
-        .into());
+        return Err(crate::MultiDeviceError::NexusCeremonyRequired.into());
     }
+    let stored_records = deserialize_stored(content, format)?;
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
     hydrate_loaded_vault(&stored_records, secrets_key, members_key)
 }
 
-/// Reconstruct a nexus vault session when enough participant identities can
-/// open their encrypted shares.
+/// Native/test helper: reconstruct a nexus vault when enough participant
+/// identities can open their encrypted shares locally.
+///
+/// Browser unlock must not collect peer identities. Use
+/// [`crate::open_nexus_share_for_identity`] on each device and
+/// [`load_nexus_vault_from_opened`] on the reconstructing device.
 pub fn load_nexus_vault(content: &str, identities: &[DeviceIdentity]) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
@@ -126,6 +124,21 @@ pub fn load_nexus_vault(content: &str, identities: &[DeviceIdentity]) -> VaultRe
     }
     let stored_records = deserialize_stored(content, format)?;
     let keys = crate::reconstruct_nexus_vault_keys(&stored_records, identities)?;
+    hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
+}
+
+/// Reconstruct a nexus vault session from opened-share ceremony contributions.
+pub fn load_nexus_vault_from_opened(
+    content: &str,
+    opened: &[crate::OpenedNexusShare],
+) -> VaultResult<LoadedVault> {
+    let format = detect_stored_format(content)?;
+    let architecture = crate::read_vault_architecture(content)?;
+    if architecture.vault_type != VaultType::Nexus {
+        return Err(crate::MultiDeviceError::InvalidNexusThreshold.into());
+    }
+    let stored_records = deserialize_stored(content, format)?;
+    let keys = crate::reconstruct_nexus_vault_keys_from_opened(&stored_records, opened)?;
     hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
 }
 
