@@ -45,6 +45,9 @@ pub enum DeviceKeyProtectionError {
     #[error("Device-key authorization did not decrypt the device identity.")]
     Decrypt,
 
+    #[error("Protected device identity does not match the stored device id.")]
+    DeviceIdentityMismatch,
+
     #[error("Decrypted device identity is invalid.")]
     InvalidDeviceIdentity,
 
