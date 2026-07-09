@@ -6,6 +6,9 @@ license.workspace = true
 description.workspace = true
 repository.workspace = true
 
+[features]
+mock-passkey = ["nook-auth2/mock-passkey"]
+
 [dependencies]
 nook-auth2 = { path = "../nook-auth2" }
 serde = { version = "1.0.228", features = ["derive"] }

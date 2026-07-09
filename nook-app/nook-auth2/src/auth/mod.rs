@@ -2,5 +2,7 @@
 
 pub mod device_key_protection;
 pub mod enrollment;
+#[cfg(any(test, feature = "mock-passkey"))]
+pub mod mock_passkey;
 pub mod multi_device;
 pub mod password_envelope;

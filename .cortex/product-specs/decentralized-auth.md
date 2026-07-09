@@ -79,6 +79,20 @@ therefore keep a thin TypeScript bridge for the real platform ceremony while
 keeping option construction, wrapping, unwrapping, persistence, validation, and
 zeroization in Rust/WASM/core.
 
+For Rust tests and local tooling, Nook has an in-memory mock passkey
+authenticator in `nook-auth2` behind the `mock-passkey` feature and normal unit
+test builds. It stores resident credentials, requires an explicit
+approval/denial for registration and assertion, scopes lookup by RP id, and
+returns deterministic PRF output for the stored passkey. This emulator is only
+a portable test/dev provider; production browser passkeys still enter through
+`navigator.credentials`.
+
+The passkey material workflow is Rust-owned: registration PRF fallback,
+assertion request reconstruction, recovery metadata reconstruction, and unlock
+device-id verification live in `nook-auth2` and are unit-tested with the mock
+authenticator. `nook-wasm` should only adapt browser ceremonies and IndexedDB
+I/O around those core helpers.
+
 Passkey-backed Local Mode is deterministic: choosing the same discoverable Nook
 passkey returns the same `userHandle`, and evaluating the PRF with Nook's fixed
 domain-separated input returns the material needed to derive the same device

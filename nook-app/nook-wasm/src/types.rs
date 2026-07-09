@@ -404,9 +404,10 @@ impl NookPasskeyUnlockOptions {
     pub(crate) fn from_core(
         record: &nook_core::WrappedDeviceIdentity,
     ) -> Result<Self, nook_core::DeviceKeyProtectionError> {
+        let request = nook_core::passkey_assertion_request(record)?;
         Ok(Self {
-            credential_id: record.credential_id_bytes()?,
-            prf_input: record.prf_input_bytes()?,
+            credential_id: request.credential_id().to_vec(),
+            prf_input: request.prf_input().to_vec(),
         })
     }
 }

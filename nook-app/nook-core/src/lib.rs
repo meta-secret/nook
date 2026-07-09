@@ -32,9 +32,13 @@ pub use bip39::{
 };
 pub use database::Database;
 pub use device_key_protection::{
-    DeviceKeyProtectionSetup, WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
-    deterministic_passkey_prf_input, parse_wrapped_device_identity,
-    passkey_derived_device_identity_record, serialize_wrapped_device_identity,
+    DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
+    PasskeyRecoveryRequest, PasskeyRegistrationResolution, WrappedDeviceIdentity,
+    derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
+    finish_passkey_device_identity, parse_wrapped_device_identity, passkey_assertion_request,
+    passkey_derived_device_identity_record, passkey_recovery_request,
+    recover_passkey_device_identity, resolve_passkey_registration,
+    serialize_wrapped_device_identity, unlock_passkey_device_identity,
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
 pub use enrollment::{
@@ -52,6 +56,12 @@ pub use i18n::{
     get_translation_catalog, lookup_translation, merge_translation_catalogs, parse_app_locale,
     resolve_app_locale_from_tag, resolve_app_locale_from_tags, resolve_translation_catalog,
     translate, translate_from_catalog,
+};
+#[cfg(feature = "mock-passkey")]
+pub use nook_auth2::{
+    MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,
+    MockPasskeyError, MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyResult,
+    MockPasskeyUserAuthorization, StoredMockPasskey,
 };
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
