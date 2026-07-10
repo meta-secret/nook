@@ -97,16 +97,28 @@ export async function createFixPr(
   }
 }
 
+const DEFAULT_CHECKS_TIMEOUT_MS = 45 * 60 * 1000;
+
 export async function waitForPrChecks(
   octokit: Octokit,
   repoRef: RepoRef,
   prNumber: number,
   pollMs: number,
+  timeoutMs = Number(process.env.CI_FIX_CHECKS_TIMEOUT_MS ?? DEFAULT_CHECKS_TIMEOUT_MS),
 ): Promise<void> {
   log.info(`Waiting for PR #${prNumber} checks`);
   const { owner, repo } = repoRef;
+  const started = Date.now();
+  const effectiveTimeout =
+    Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_CHECKS_TIMEOUT_MS;
 
   while (true) {
+    if (Date.now() - started > effectiveTimeout) {
+      throw new Error(
+        `PR #${prNumber} checks timed out after ${Math.round(effectiveTimeout / 60000)}m (CI_FIX_CHECKS_TIMEOUT_MS)`,
+      );
+    }
+
     const { data: pr } = await octokit.rest.pulls.get({
       owner,
       repo,
