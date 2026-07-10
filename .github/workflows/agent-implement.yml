@@ -71,6 +71,14 @@ jobs:
         env:
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
+      - name: Verify checkout for agent bind-mount
+        run: |
+          set -euo pipefail
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE/.git"
+          git -C "$GITHUB_WORKSPACE" rev-parse --git-dir
+          git -C "$GITHUB_WORKSPACE" status -sb
+
       - name: Configure agent env
         env:
           EVENT_NAME: ${{ github.event_name }}
