@@ -163,6 +163,52 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
   })
 
+  test('renders wizard copy from the bundled locale catalogs', async ({
+    page,
+  }) => {
+    const chooser = page.getByTestId('login-create-vault-chooser')
+    await expect(chooser).toContainText(
+      'Set up your first vault in three short steps.',
+    )
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-vault'),
+    ).toContainText('Vault')
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-replication'),
+    ).toContainText('Replication')
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-create'),
+    ).toContainText('Create')
+    await expect(page.getByTestId('create-vault-wizard-vault')).toContainText(
+      'Choose a vault type',
+    )
+    await expect(page.getByTestId('create-vault-wizard-continue')).toHaveText(
+      'Continue',
+    )
+
+    await page.getByTestId('header-language-select').click()
+    await page.getByTestId('header-language-option-ru').click()
+
+    await expect(chooser).toContainText(
+      'Настройте первый сейф за три коротких шага.',
+    )
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-vault'),
+    ).toContainText('Сейф')
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-replication'),
+    ).toContainText('Репликация')
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-create'),
+    ).toContainText('Создание')
+    await expect(page.getByTestId('create-vault-wizard-vault')).toContainText(
+      'Выберите тип сейфа',
+    )
+    await expect(page.getByTestId('create-vault-wizard-continue')).toHaveText(
+      'Продолжить',
+    )
+  })
+
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
     page,
   }) => {
