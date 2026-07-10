@@ -2,12 +2,12 @@
 # and squash-merge after checks pass (same loop as main.yml ci-fix).
 #
 # Triggers:
-#   - issues labeled — only when the label being assigned is exactly `agent`
+#   - issues labeled — only when the label being assigned is exactly `ai-agent`
 #   - workflow_dispatch with a required free-text `prompt`
 #
 # Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a
 # user so pr.yml runs and branch protection does not require manual bot-approval).
-# Maintainers must create the repo label named `agent` (workflow does not auto-create it).
+# Maintainers must create the repo label named `ai-agent` (workflow does not auto-create it).
 
 name: Agent implement
 
@@ -35,7 +35,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' &&
        github.event.action == 'labeled' &&
-       github.event.label.name == 'agent' &&
+       github.event.label.name == 'ai-agent' &&
        github.event.issue.user.type != 'Bot')
     runs-on: nook
     timeout-minutes: 120
