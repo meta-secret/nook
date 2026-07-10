@@ -36,13 +36,13 @@
 </script>
 
 <div
-  class="relative flex aspect-square w-full max-w-[360px] items-center justify-center rounded-xl border border-border/70 bg-white p-2 shadow-sm shadow-black/10"
+  class="enrollment-qr-surface relative flex aspect-square w-full max-w-[360px] items-center justify-center rounded-xl border border-border/70 bg-white p-2 shadow-sm shadow-black/10"
   data-testid="enrollment-qr"
   aria-label="Onboarding QR"
 >
   <div
     bind:this={container}
-    class="h-full w-full overflow-hidden rounded-lg [&_svg]:block [&_svg]:h-full [&_svg]:w-full [&_svg]:origin-center [&_svg]:scale-[1.1]"
+    class="h-full w-full overflow-hidden rounded-lg bg-white [&_svg]:block [&_svg]:h-full [&_svg]:w-full [&_svg]:origin-center [&_svg]:scale-[1.1]"
     aria-hidden="true"
   ></div>
 
@@ -58,3 +58,20 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /*
+   * QR scanners need dark modules on a light quiet zone. Mobile browsers that
+   * force dark mode otherwise darken the SVG white fill and hide the pattern.
+   */
+  .enrollment-qr-surface {
+    color-scheme: light;
+    background-color: #ffffff;
+  }
+
+  .enrollment-qr-surface :global(svg) {
+    color-scheme: light;
+    background-color: #ffffff;
+    forced-color-adjust: none;
+  }
+</style>
