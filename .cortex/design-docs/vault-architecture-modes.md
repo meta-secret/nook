@@ -1,50 +1,48 @@
 # Vault Architecture Modes
 
-Nook's vault architecture modes are grouped, not a flat list of peer flags.
-Rust owns the compatibility matrix in `nook-core::vault_architecture`; WASM
-exports those decisions to the web layer.
+**Status:** Target design corrected; implementation migration pending.
 
-## Groups
+Nook's security choices belong to their owning lifecycle. Rust owns policy in
+`nook-core` / `nook-auth2`; WASM exposes typed decisions to the web layer.
+Vault creation chooses only the vault key-access model. Replication is a
+post-creation storage concern, not a vault mode.
+
+## Architecture Groups
 
 | Group | Values | Owner | Notes |
 | --- | --- | --- | --- |
-| `device_mode` | `standard`, `anti-hacker` | `nook-auth2` / `nook-core` | Per-device local age/device identity protection. |
-| `vault_type` | `simple`, `nexus` | `nook-core` | Vault key-access model. |
-| `replication_type` | `personal`, `shared` | `nook-core` | Sync-provider credential/account trust model. |
-| `onboarding_type` | derived | `nook-core` | Derived from `replication_type` and provider capability. |
-| `sync_provider_type` | provider-specific | `nook-core` | Capability declaration for personal/shared replication. |
+| `device_mode` | `standard`, `anti-hacker` | `nook-auth2` / `nook-core` | Per-device local identity protection. The UI calls the latter High security. |
+| `vault_type` | `simple`, `nexus` | `nook-core` | Vault key-access lifecycle. This is the only vault-type choice during creation. |
+| Nexus policy | participant count `N`, threshold `T` | `nook-auth2` / `nook-core` | Chosen only for Nexus genesis before vault keys exist. |
+| Sync provider | provider-specific connection | `nook-core` / `nook-wasm` | Optional post-genesis encrypted backup/replica transport. Not a vault mode or unlock factor. |
 
-## UX Screen And State Map
+`replication_type` and its derived `onboarding_type` are legacy implementation
+concepts. Provider account ownership or sharing capability belongs to an
+individual provider connection; it does not alter the vault's cryptographic
+access model.
 
-The five groups stay visually distinct even though Rust derives some of them.
-The web layer renders the current Rust/WASM decision; it does not maintain a
-second compatibility matrix.
+## Creation and Import UX
 
-Vault creation is a linear three-step wizard: choose the vault type, choose the
-replication type, then create or connect the vault. It shows one decision at a
-time, preserves earlier selections when navigating Back, and keeps progress
-visible throughout. Each choice uses a compact dropdown with only the selected
-mode's description below it. Derived onboarding and provider-capability details
-are omitted from vault creation and shown later only where the user can act on
-them.
+Creation and import are separate top-level workflows. Creation asks for vault
+type first and then branches because Simple and Nexus have fundamentally
+different lifecycles.
 
-| Stage / surface | Group shown | State and transition |
+| Stage / surface | Choice or state | Transition |
 | --- | --- | --- |
-| Device protection gate | 1. Device mode | Choose `standard` or `anti-hacker` while initializing this browser. The persisted choice is reused and is never requested again during vault creation. |
-| First-run create wizard, step 1 | 2. Vault type | Choose the fast `simple` path or `nexus`; choosing nexus immediately shows the pre-secret readiness gate. Continue advances to replication. |
-| First-run create wizard, step 2 | 3. Replication type | Choose `personal` or `shared` independently from vault key access. Back preserves the vault-type selection. |
-| First-run create wizard, step 3 | Vault action | Name and create the new local vault, or connect a provider for an existing vault. Back preserves both architecture selections. |
-| Provider picker | 5. Provider capability | Ask Rust/WASM for each provider capability and disable unsupported combinations before setup. |
-| Unlocked Onboard Device wizard | 4 + 5 | Show the derived onboarding ceremony, label saved providers as personal-only or shared-capable, and select only a provider Rust accepts for the vault replication mode. |
-| Unlocked provider management | 5 | Keep incompatible saved rows visible for explanation/removal, label their capability, and disable sync actions for the current vault mode. |
-| Nexus creation / unlocked vault | 2 + 4 | Secret creation remains blocked until encrypted participant shares satisfy the Rust-owned readiness rule. |
-| Nexus login | 2 + 4 | Replace password unlock with the dedicated opened-share ceremony. |
+| Device protection gate | Device mode | Initialize or authorize this browser's protected device identity once. Never ask again during vault creation. |
+| Create, step 1 | Vault type | Choose `simple` or `nexus`. There is no replication selector. |
+| Simple branch | Vault name/action | Create an empty local vault in memory and open it with this device's normal key access. Offer sync later in Settings. |
+| Nexus branch | Nexus policy | Choose participant count `N` and unlock threshold `T`; start reverse onboarding instead of creating/opening a vault. |
+| Nexus reverse onboarding | Participant public keys | Gather the configured roster through signed QR/link/paste responses. No provider is required. |
+| Nexus atomic genesis | Encrypted shares | Generate the Nexus root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically. |
+| Nexus open | Quorum contributions | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM. |
+| Import | Detected vault type | Fetch from a provider, then route Simple to its unlock/enrollment path or Nexus to quorum access. Provider login never opens Nexus. |
+| Unlocked provider management | Sync provider | Add/remove post-genesis backup replicas for the active vault. |
 
-Simple personal remains the default. Shared and nexus choices reveal their
-constraints in their respective wizard steps before provider setup or secret
-creation, so the low-friction path is not buried by the high-security ceremony.
+See [nexus-genesis.md](nexus-genesis.md) for the complete two-round ceremony and
+security invariants.
 
-## Defaults And Persistence
+## Defaults and Persistence
 
 Existing vault YAML with no `architecture:` field migrates in memory to:
 
@@ -52,98 +50,94 @@ Existing vault YAML with no `architecture:` field migrates in memory to:
 architecture:
   device_mode: standard
   vault_type: simple
-  replication_type: personal
 ```
 
-The default is omitted on write to keep legacy simple vault YAML compact.
-Non-default architecture metadata is persisted as a top-level `architecture:`
-field in projection YAML and is mirrored through the WASM session state.
-Architecture selection is immutable once a vault has a `store_id`; changing a
-simple vault into nexus (or the reverse) would reinterpret existing key-access
-records and is rejected instead of treated as an in-place migration.
+The default may be omitted on write to keep legacy Simple vault YAML compact.
+Non-default vault architecture metadata is persisted as a top-level
+`architecture:` field in projection YAML and mirrored through WASM session
+state. Vault type is immutable once a vault has a `store_id`; changing Simple
+to Nexus or Nexus to Simple would reinterpret key-access records and must fail.
 
-Device-local `anti-hacker` material never belongs in vault YAML, provider
+Legacy `replication_type` values must remain readable during migration but do
+not define new-vault behavior. New vault creation must stop asking for or
+writing a replication mode once the schema migration is implemented.
+
+Device-local High security material never belongs in vault YAML, provider
 snapshots, event logs, app logs, or onboarding payloads. The local record is the
 `passkey-wrapped-local` `device_identity_wrapped` IndexedDB value.
 
-## Provider Capability Matrix
+## Simple Lifecycle
 
-| Provider | Personal | Shared | Shared identity |
-| --- | --- | --- | --- |
-| Local browser storage | yes | no | n/a |
-| Local folder backup | yes | no | n/a |
-| GitHub | yes | no | n/a |
-| Google Drive OAuth file | yes | yes | email |
-| iCloud OAuth file | yes | no | n/a |
+Simple creation generates an empty vault locally and creates the normal
+device-key envelope for the initiating device. The vault is immediately
+openable on that device. Sync providers are optional and can be connected later
+as backup/replica targets.
 
-Unsupported provider/replication combinations fail closed in Rust before an
-onboarding code is produced.
+Importing a Simple vault retrieves encrypted data first, then uses an existing
+device envelope, password recovery, or explicit enrollment path. Provider
+credentials grant storage access only.
 
 ## Nexus Lifecycle
 
-`vault_type=nexus` never writes per-device full vault-key auth envelopes for the
-protected key epoch. Genesis keeps vault keys in session memory and enrolls the
-first participant into the member roster only. As additional devices are
-approved, Rust issues encrypted `nexus_share:{device_id}` records once the
-configured `required_participants` count is reached.
+Nexus setup is pre-genesis state. It gathers all configured participant public
+keys before generating the Nexus root or creating the vault. Genesis then
+issues the complete encrypted SLIP-0039 share set atomically. The initiator has
+no permanent threshold bypass and Nexus never writes a per-device full-key
+envelope.
 
-Password unlock is forbidden as the sole unlock path for nexus vaults
-(`NexusPasswordUnlockForbidden`). Session hydrate from projection YAML also
-fails closed (`NexusCeremonyRequired`) and must never resolve auth envelopes.
-Projection serialization and nexus load validate the records against the
-architecture: nexus rejects every full `auth:` key envelope, while simple
-rejects nexus shares. An issued nexus share set must be complete, have unique
-device ids and share indexes, and match the persisted threshold/participant
-policy. Share issuance is one atomic `NexusSharesIssued` operation after the
-required roster is ready; there is no persistable partial-share onboarding
-state. Partial, malformed-prefix, or mixed share generations fail closed.
+Password unlock is forbidden as the sole unlock path. Session hydrate from
+projection YAML must fail closed and never resolve a full-key auth envelope.
+Possession of the local cache or sync-provider credentials is insufficient.
 
-Browser unlock is an opened-share ceremony: each device opens its local share
-into an `OpenedNexusShare` contribution (`open_nexus_share_for_identity` /
-WASM `openLocalNexusShare`), then the reconstructing device combines ≥
-threshold contributions (`reconstruct_nexus_vault_keys_from_opened` /
-WASM `connectWithNexusShares`). Peer `DeviceIdentity` secrets must never cross
+An issued share set must be complete, use unique participant/share indexes, and
+match the persisted `T-of-N` policy. Partial, malformed-prefix, stale-generation,
+or mixed share sets fail closed. No Nexus vault session exists until actual
+share records exist and at least `T` participant contributions reconstruct the
+root. Gating only secret creation is insufficient.
+
+After genesis, browser unlock is an opened-share ceremony: each participating
+device opens its own protected local share into a session-bound contribution;
+the reconstructing device combines at least `T` distinct contributions inside
+Rust/WASM. Peer `DeviceIdentity` secrets and plaintext shares never cross
 browsers.
 
-`load_stored_vault` rejects nexus unlock. `load_nexus_vault` (identities) is a
-native/test helper only; production browser paths use
-`load_nexus_vault_from_opened`. Secret creation stays blocked until actual
-share records exist (`can_create_secret_with_records`); UI
-`ready_participants` is presentation only.
+Share math is currently interim GF(256) Shamir inside `nook-auth2`. The target
+Nexus protocol uses audited SLIP-0039 primitives with the user-selected
+`T-of-N` policy. This is distinct from the fixed-policy recovery flow in
+[slip39-recovery.md](../product-specs/slip39-recovery.md).
 
-Share math is currently interim GF(256) Shamir inside `nook-auth2`. Product
-SLIP-0039 mnemonic primitives remain owned by #261 and should replace this
-encoding later without changing the architecture-mode contract.
+Generic revocation/key rotation cannot leave the new epoch behind old shares or
+write a full current-device envelope. Nexus participant replacement therefore
+requires atomic roster replacement plus share rotation.
 
-Generic device revocation/key rotation is not valid for nexus because it would
-either write a full current-device key envelope or strand the new epoch behind
-old shares. Nexus revocation therefore fails closed until an atomic participant
-replacement plus share-rotation event is implemented.
+## Provider Capabilities
 
-## Shared Replication Grant
+Provider capability affects only storage setup and transport. Examples include
+whether a provider can use app-private storage, grant a shared folder, or bind
+a connection to an external account identity. Unsupported provider operations
+must fail closed in Rust, but they do not create a `personal` or `shared` vault
+mode.
 
-Shared onboarding collects the joiner provider identity (email for Google Drive)
-and embeds a `SharedProviderGrant` enrollment payload without owner credentials.
-Rust `prepare_shared_storage_grant` validates the request; WASM performs the
-real Google Drive grant when possible.
+The currently implemented Google Drive shared-folder grant remains a provider
+feature:
 
-**Personal** Google Drive vaults stay on OAuth `drive.appdata` (unchanged).
+1. the owner creates a folder and grants the joiner's external identity;
+2. the connection records the folder target without embedding owner tokens;
+3. the joiner uses its own OAuth account to access the same encrypted replica.
 
-**Shared** Google Drive vaults use a dedicated My Drive folder under
-`drive.file`:
-
-1. Owner: create folder → `permissions.create` for the joiner email (writer) →
-   return `Granted` with `storageTargetId` (folder id) and optional name.
-2. Enrollment embeds `storage_target_id` on `SharedProviderGrant` (no owner
-   tokens).
-3. Joiner: own OAuth with `drive.file`, redeem with the folder id, sync events
-   under that parent (not `appDataFolder`).
-
-`ManualGrantRequired` remains the fallback when the Drive API fails or the
-owner token lacks `drive.file`.
+This provider-account flow must not be used as Nexus membership or quorum.
 
 ## Web Boundary
 
-Svelte components may render mode choices and disabled reasons, but they must
-call WASM/Rust for validation, onboarding type, provider capability, and secret
-creation readiness. Do not recreate the matrix as independent TypeScript policy.
+Svelte may render vault type, Nexus policy, ceremony progress, and provider
+choices, but it must call Rust/WASM for policy validation, participant
+verification, share issuance, quorum access, and provider capability. Do not
+recreate the state machine or threshold rules in TypeScript.
+
+## Current Implementation Gap
+
+The milestone implementation currently persists `replication_type`, creates
+Nexus key material before the complete roster exists, and gates secret creation
+instead of vault existence/opening. Those behaviors describe current code, not
+the accepted target. Migration must update core persistence, event
+authorization, WASM APIs, Svelte flows, and tests together.

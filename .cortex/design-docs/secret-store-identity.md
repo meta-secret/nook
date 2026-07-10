@@ -56,10 +56,10 @@ auth:
 
 **Rules**
 
-1. **Genesis:** `store_{token}` assigned on first persist (`generate_store_id()`).
+1. **Genesis:** `store_{token}` assigned on first persist (`generate_store_id()`). Nexus assigns it only during atomic genesis after the complete participant roster is verified; a Nexus genesis draft has no `store_id`.
 2. **New secrets:** UI/WASM use `secret_{token}` via `generate_secret_id()`; e2e may still use human labels.
 3. **Auth rows:** `pk_id` is always `key_{sha256_hex}` on write.
-4. **Replication (future):** same `store_id` on every provider replica; mismatch → hard error.
+4. **Replication:** same `store_id` on every provider replica; mismatch → hard error. Replication is post-genesis storage and never creates Nexus membership or unlock authority.
 5. **Provider binding:** `StorageProvider.storeId` mirrors vault `store_id` after connect.
 
 ---

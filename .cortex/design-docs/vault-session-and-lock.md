@@ -15,6 +15,7 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, an
 | **Sync provider** | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth` | Yes — credentials only |
 | **Device identity** | Passkey-PRF or PIN-wrapped X25519 key in `nook_db.device_identity_wrapped` | Ciphertext persists; plaintext does not |
 | **Unlocked session** | WASM typed `Database` + Svelte `secrets[]` in memory | **No** — cleared on Lock |
+| **Nexus genesis draft** | Pre-vault policy and verified participant public keys | Not a vault or unlocked session; persistence policy is a separate decision |
 | **Lock** | End session; return to login gate | N/A |
 
 `nook-auth2` owns the portable security/key-access primitives behind these rows:
@@ -39,8 +40,10 @@ flowchart TB
 
 1. A **vault** is one `store_id` — one encrypted YAML file with its own secrets, devices, and version counter.
 2. A vault may **replicate to many sync providers** — each provider holds a copy of the same `store_id` blob; `vault_version` reconciles divergence ([unified-vault.md](unified-vault.md) §5).
-3. A user may **own many vaults** over time (work vs personal, migrated stores, etc.). Each vault is independent: different `store_id`, different unlock material, different provider set.
-4. **Lock** does not delete vaults or providers — it drops both the decrypted vault session and plaintext device identity from memory.
+3. A Nexus genesis draft is not registered as a vault and cannot be selected,
+   imported, opened, or synchronized before atomic genesis completes.
+4. A user may **own many vaults** over time (work vs personal, migrated stores, etc.). Each vault is independent: different `store_id`, different unlock material, different provider set.
+5. **Lock** does not delete vaults or providers — it drops both the decrypted vault session and plaintext device identity from memory.
 
 ---
 
@@ -86,7 +89,7 @@ passkey recovery action.
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
 - **Single local vault** → unlock with device keys and/or backup password.
-- **No local vault yet** → create on device or connect a sync provider to pull an existing vault.
+- **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Nexus starts the pre-vault reverse-onboarding ceremony in [nexus-genesis.md](nexus-genesis.md).
 
 The login vault surface presents **Open existing**, **Create new**, and **Import**
 as mutually exclusive workflows rather than consecutive sections. With local
@@ -116,6 +119,7 @@ Legacy `encrypted_db` migrates to `vault:{store_id}` on first load. Code: `nook-
 | User intent | Correct action |
 |-------------|----------------|
 | **Create a vault** | Login → **Create vault** (starts in this browser) |
+| **Create a Nexus vault** | Login → **Create vault** → Nexus policy and reverse onboarding; no provider until atomic genesis is complete |
 | **Replicate this vault** | Settings → Sync providers → Add GitHub / Drive |
 | **Open a vault from elsewhere** | Login → **Connect sync provider** or **Import as new vault** |
 | **Local folder contains multiple vault logs** | Choose a dedicated folder for one vault; Nook shows the detected `store_id`s and refuses to sync until the provider path is unambiguous |
@@ -142,3 +146,4 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 - The wrapped device key and encrypted blobs remain after lock; the plaintext device identity is zeroized and requires passkey or PIN authorization again depending on the stored wrapper.
 - Sync provider tokens in `nook_auth` remain after lock — they are storage credentials, not vault keys.
 - Vault authentication/authorization belongs to `nook-auth2`; sync provider replication belongs to `nook-core`/`nook-wasm` sync and storage adapters.
+- Nexus provider access never replaces participant quorum. Possessing a remote replica without `T` valid participant contributions must not produce an unlocked session.

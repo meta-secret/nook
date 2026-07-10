@@ -64,6 +64,17 @@ or is publishing its own self-signed membership event under a narrow policy:
 - `nexus-participant-enrolled` — never self-signed; must be signed by an
   already-authorized actor (owner approval / genesis).
 
+### Nexus genesis correction
+
+The target Nexus lifecycle does not build a vault roster incrementally through
+pre-genesis events. Participant public keys are collected in a separate typed
+genesis session before a `store_id`, vault event set, or authorized actor graph
+exists. Atomic Nexus genesis creates the initial authorized roster, policy, and
+complete encrypted share commitments together. The current
+`nexus-participant-enrolled` / `nexus-shares-issued` sequence is implementation
+debt and must not be treated as the target protocol. See
+[nexus-genesis.md](nexus-genesis.md).
+
 ## Canonical encoding
 
 Events are hashed and signed over **canonical JSON**:
