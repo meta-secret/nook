@@ -7,11 +7,13 @@
 ARG NODE_IMAGE=node:24-bookworm-slim
 ARG TASK_VERSION=3.42.1
 ARG DOCKER_STATIC_VERSION=27.5.1
+ARG BUILDX_VERSION=0.35.0
 
 FROM ${NODE_IMAGE}
 
 ARG TASK_VERSION
 ARG DOCKER_STATIC_VERSION
+ARG BUILDX_VERSION
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -25,6 +27,16 @@ RUN apt-get update \
 RUN curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_STATIC_VERSION}.tgz" \
     | tar xz --strip-components=1 -C /usr/local/bin docker/docker \
     && docker --version
+
+# Buildx is a separate CLI plugin in Docker's static distribution. Nook's Task
+# targets call `docker buildx bake`, so the agent image must carry the plugin
+# even though the daemon and BuildKit instance live on the host.
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+    && curl -fsSL \
+        "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" \
+        -o /usr/local/lib/docker/cli-plugins/docker-buildx \
+    && chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx \
+    && docker buildx version
 
 RUN curl -fsSL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin "v${TASK_VERSION}" \
     && task --version

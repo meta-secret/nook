@@ -18,6 +18,9 @@ The job runs `task setup` before you start (sealed **nook-web:local**). You run 
 **nook-ci-agent** container with the repo bind-mounted and the host Docker socket mounted
 (`/var/run/docker.sock` — sibling containers, not Docker-in-Docker). Prefer `task check` /
 `task ci:pr` so validation uses the host daemon and the sealed nook-web image.
+Use the repository Task targets for Docker validation; do not replace them with hand-written
+`docker run` commands. The Task targets provide the bind-mount paths and git metadata required
+by sibling containers on GitHub-hosted runners.
 
 ## Steps
 
