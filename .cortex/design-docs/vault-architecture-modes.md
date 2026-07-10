@@ -21,17 +21,16 @@ The web layer renders the current Rust/WASM decision; it does not maintain a
 second compatibility matrix.
 
 Selectable alternatives use compact dropdowns for vault and replication type,
-with only the selected mode's description shown below each control. Onboarding
-type and provider capability remain read-only derived summaries rather than
-additional selectors.
+with only the selected mode's description shown below each control. Derived
+onboarding and provider-capability details are omitted from vault creation and
+shown later only where the user can act on them.
 
 | Stage / surface | Group shown | State and transition |
 | --- | --- | --- |
 | Device protection gate | 1. Device mode | Choose `standard` or `anti-hacker` while initializing this browser. The persisted choice is reused and is never requested again during vault creation. |
 | First-run create chooser | 2. Vault type | Choose the fast `simple` path or `nexus`; choosing nexus immediately shows the pre-secret readiness gate. |
 | First-run create chooser | 3. Replication type | Choose `personal` or `shared` independently from vault key access. |
-| First-run create chooser | 4. Onboarding type | Read-only summary derived by Rust from the draft replication type: credential transfer for personal, provider grant for shared. |
-| First-run create chooser, then provider picker | 5. Provider capability | The chooser explains that capability is evaluated next. The picker asks Rust/WASM for each provider capability and disables unsupported combinations before setup. |
+| Provider picker | 5. Provider capability | Ask Rust/WASM for each provider capability and disable unsupported combinations before setup. |
 | Unlocked Onboard Device wizard | 4 + 5 | Show the derived onboarding ceremony, label saved providers as personal-only or shared-capable, and select only a provider Rust accepts for the vault replication mode. |
 | Unlocked provider management | 5 | Keep incompatible saved rows visible for explanation/removal, label their capability, and disable sync actions for the current vault mode. |
 | Nexus creation / unlocked vault | 2 + 4 | Secret creation remains blocked until encrypted participant shares satisfy the Rust-owned readiness rule. |

@@ -125,21 +125,19 @@ test.describe('vault architecture modes', () => {
     })
   })
 
-  test('shows vault selectors without repeating device setup', async ({
+  test('shows only actionable vault selectors', async ({
     page,
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     await expect(page.getByTestId('mode-group-vault')).toBeVisible()
     await expect(page.getByTestId('mode-group-replication')).toBeVisible()
-    await expect(page.getByTestId('mode-group-onboarding')).toBeVisible()
-    await expect(
-      page.getByTestId('mode-group-provider-capability'),
-    ).toBeVisible()
+    await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
+    await expect(page.getByTestId('mode-group-provider-capability')).toHaveCount(
+      0,
+    )
     await assertGroupsDoNotOverlap(page, [
       'mode-group-vault',
       'mode-group-replication',
-      'mode-group-onboarding',
-      'mode-group-provider-capability',
     ])
     await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
 
@@ -450,15 +448,13 @@ test.describe('vault architecture modes', () => {
       page,
     }) => {
       await expect(page.getByTestId('mode-group-vault')).toBeVisible()
-      await expect(page.getByTestId('mode-group-onboarding')).toBeVisible()
+      await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
       await expect(
         page.getByTestId('mode-group-provider-capability'),
-      ).toBeVisible()
+      ).toHaveCount(0)
       await assertGroupsDoNotOverlap(page, [
         'mode-group-vault',
         'mode-group-replication',
-        'mode-group-onboarding',
-        'mode-group-provider-capability',
       ])
       await page.getByTestId('vault-mode-select').click()
       await page.getByTestId('mode-option-nexus').click()

@@ -3,7 +3,6 @@
   import { Button } from '$lib/components/ui/button'
   import VaultArchitectureSelect from '$lib/components/VaultArchitectureSelect.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
-  import { onboardingType } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -21,9 +20,6 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  const draftOnboardingType = $derived(
-    onboardingType(vault.draftVaultArchitecture),
-  )
 </script>
 
 <div class="space-y-4" data-testid="login-create-vault-chooser">
@@ -44,39 +40,6 @@
       id="replication-type"
       disabled={isBusy}
     />
-  </div>
-
-  <div class="grid gap-3 sm:grid-cols-2">
-    <div
-      class="rounded-md border border-border/60 bg-muted/15 p-3"
-      data-testid="mode-group-onboarding"
-    >
-      <p class="text-sm font-semibold text-foreground">
-        {vault.t('architecture_modes.onboarding_type_title')}
-      </p>
-      <p class="mt-1 text-xs font-medium text-foreground">
-        {vault.t(
-          `architecture_modes.onboarding_type_${draftOnboardingType}_title`,
-        )}
-      </p>
-      <p class="mt-1 text-xs text-pretty text-muted-foreground">
-        {vault.t(
-          `architecture_modes.onboarding_type_${draftOnboardingType}_description`,
-        )}
-      </p>
-    </div>
-
-    <div
-      class="rounded-md border border-border/60 bg-muted/15 p-3"
-      data-testid="mode-group-provider-capability"
-    >
-      <p class="text-sm font-semibold text-foreground">
-        {vault.t('architecture_modes.provider_capability_title')}
-      </p>
-      <p class="mt-1 text-xs text-pretty text-muted-foreground">
-        {vault.t('architecture_modes.provider_capability_description')}
-      </p>
-    </div>
   </div>
 
   {#if vault.draftVaultType === 'nexus'}
