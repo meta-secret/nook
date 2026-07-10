@@ -55,21 +55,12 @@ test.describe('provider-free Nexus unlock ceremony', () => {
     expect(requestPayload.length).toBeGreaterThan(20)
 
     await deviceB.getByTestId('get-started-path-join').click()
-    await deviceB
-      .getByTestId('nexus-genesis-join-request-input')
-      .fill(requestPayload)
-    await deviceB.getByTestId('nexus-genesis-create-response').click()
     const responseOutput = deviceB.getByTestId(
       'nexus-genesis-generated-response',
     )
     await expect(responseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const participantResponse = await responseOutput.inputValue()
-    const fingerprintText =
-      (await deviceB
-        .getByTestId('nexus-genesis-generated-fingerprint')
-        .textContent()) ?? ''
-    const fingerprint = fingerprintText.split(':').at(-1)?.trim() ?? ''
-    expect(fingerprint.length).toBeGreaterThan(5)
+    expect(participantResponse).toContain('publicKeyAnnouncement')
 
     await deviceA
       .getByTestId('nexus-genesis-response-input')
@@ -83,13 +74,16 @@ test.describe('provider-free Nexus unlock ceremony', () => {
 
     const participantDelivery = deviceA
       .getByTestId('nexus-genesis-delivery')
-      .filter({ hasText: fingerprint })
+      .nth(1)
     await expect(participantDelivery).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const deliveryPayload = await participantDelivery
       .getByTestId('nexus-genesis-delivery-output')
       .inputValue()
     expect(deliveryPayload.length).toBeGreaterThan(20)
 
+    await deviceB
+      .getByTestId('nexus-genesis-share-request-input')
+      .fill(requestPayload)
     await deviceB
       .getByTestId('nexus-genesis-receive-share-input')
       .fill(deliveryPayload)

@@ -323,6 +323,10 @@
             onFinalizeNexusGenesis={() => vault.finalizeNexusGenesis()}
             onCreateNexusGenesisParticipantResponse={(payload) =>
               vault.createNexusGenesisParticipantResponse(payload)}
+            onCreateNexusGenesisPublicKeyAnnouncement={() =>
+              vault.createNexusGenesisPublicKeyAnnouncement()}
+            onRememberNexusGenesisRequest={(payload) =>
+              vault.rememberNexusGenesisRequest(payload)}
             onReceiveNexusGenesisShare={(payload) =>
               vault.acceptNexusGenesisShareDelivery(payload)}
             onCompleteNexusGenesisDelivery={() =>

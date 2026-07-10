@@ -1233,6 +1233,49 @@ export class VaultState {
     }
   }
 
+  async createNexusGenesisPublicKeyAnnouncement(): Promise<string> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return ''
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      await this.initDeviceIdentity()
+      return await this.enqueueStorage(() =>
+        this.manager!.createNexusGenesisPublicKeyAnnouncement(
+          this.t('device_protection.passkey_label_placeholder'),
+        ),
+      )
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to create Nexus public key announcement.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async rememberNexusGenesisRequest(requestPayload: string): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      await this.enqueueStorage(() =>
+        this.manager!.rememberNexusGenesisRequest(requestPayload.trim()),
+      )
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to remember the Nexus initiator request.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
   async createNexusGenesisParticipantResponse(
     requestPayload: string,
   ): Promise<string> {

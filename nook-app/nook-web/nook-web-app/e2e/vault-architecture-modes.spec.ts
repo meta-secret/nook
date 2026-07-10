@@ -250,7 +250,7 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
   })
 
-  test('opens join nexus as a first-class path with response QR focus', async ({
+  test('opens join nexus as a first-class path with public keys ready', async ({
     page,
   }) => {
     await page.getByTestId('get-started-path-join').click()
@@ -258,10 +258,10 @@ test.describe('vault architecture modes', () => {
       page.getByTestId('nexus-genesis-participant-step'),
     ).toBeVisible()
     await expect(
-      page.getByTestId('nexus-genesis-join-request-input'),
-    ).toBeVisible()
+      page.getByTestId('nexus-genesis-generated-response'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await expect(
-      page.getByTestId('nexus-genesis-create-response'),
+      page.getByTestId('nexus-genesis-join-request-toggle'),
     ).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
