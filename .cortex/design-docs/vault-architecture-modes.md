@@ -14,6 +14,29 @@ exports those decisions to the web layer.
 | `onboarding_type` | derived | `nook-core` | Derived from `replication_type` and provider capability. |
 | `sync_provider_type` | provider-specific | `nook-core` | Capability declaration for personal/shared replication. |
 
+## UX Screen And State Map
+
+The five groups stay visually distinct even though Rust derives some of them.
+The web layer renders the current Rust/WASM decision; it does not maintain a
+second compatibility matrix.
+
+| Stage / surface | Group shown | State and transition |
+| --- | --- | --- |
+| First-run create chooser | 1. Device mode | Choose `standard` or `anti-hacker`; the warning stays next to the local-device decision. |
+| First-run create chooser | 2. Vault type | Choose the fast `simple` path or `nexus`; choosing nexus immediately shows the pre-secret readiness gate. |
+| First-run create chooser | 3. Replication type | Choose `personal` or `shared` independently from vault key access. |
+| First-run create chooser | 4. Onboarding type | Read-only summary derived by Rust from the draft replication type: credential transfer for personal, provider grant for shared. |
+| First-run create chooser, then provider picker | 5. Provider capability | The chooser explains that capability is evaluated next. The picker asks Rust/WASM for each provider capability and disables unsupported combinations before setup. |
+| Unlocked Onboard Device wizard | 4 + 5 | Show the derived onboarding ceremony, label saved providers as personal-only or shared-capable, and select only a provider Rust accepts for the vault replication mode. |
+| Unlocked provider management | 5 | Keep incompatible saved rows visible for explanation/removal, label their capability, and disable sync actions for the current vault mode. |
+| Nexus creation / unlocked vault | 2 + 4 | Secret creation remains blocked until encrypted participant shares satisfy the Rust-owned readiness rule. |
+| Nexus login | 2 + 4 | Replace password unlock with the dedicated opened-share ceremony. |
+
+Simple personal remains the default and keeps the local create action on the
+same screen. Shared and nexus choices reveal their constraints before provider
+setup or secret creation, so the low-friction path is not buried by the
+high-security ceremony.
+
 ## Defaults And Persistence
 
 Existing vault YAML with no `architecture:` field migrates in memory to:
@@ -28,6 +51,9 @@ architecture:
 The default is omitted on write to keep legacy simple vault YAML compact.
 Non-default architecture metadata is persisted as a top-level `architecture:`
 field in projection YAML and is mirrored through the WASM session state.
+Architecture selection is immutable once a vault has a `store_id`; changing a
+simple vault into nexus (or the reverse) would reinterpret existing key-access
+records and is rejected instead of treated as an in-place migration.
 
 Device-local `anti-hacker` material never belongs in vault YAML, provider
 snapshots, event logs, app logs, or onboarding payloads. The local record is the
@@ -57,6 +83,13 @@ configured `required_participants` count is reached.
 Password unlock is forbidden as the sole unlock path for nexus vaults
 (`NexusPasswordUnlockForbidden`). Session hydrate from projection YAML also
 fails closed (`NexusCeremonyRequired`) and must never resolve auth envelopes.
+Projection serialization and nexus load validate the records against the
+architecture: nexus rejects every full `auth:` key envelope, while simple
+rejects nexus shares. An issued nexus share set must be complete, have unique
+device ids and share indexes, and match the persisted threshold/participant
+policy. Share issuance is one atomic `NexusSharesIssued` operation after the
+required roster is ready; there is no persistable partial-share onboarding
+state. Partial, malformed-prefix, or mixed share generations fail closed.
 
 Browser unlock is an opened-share ceremony: each device opens its local share
 into an `OpenedNexusShare` contribution (`open_nexus_share_for_identity` /
@@ -74,6 +107,11 @@ share records exist (`can_create_secret_with_records`); UI
 Share math is currently interim GF(256) Shamir inside `nook-auth2`. Product
 SLIP-0039 mnemonic primitives remain owned by #261 and should replace this
 encoding later without changing the architecture-mode contract.
+
+Generic device revocation/key rotation is not valid for nexus because it would
+either write a full current-device key envelope or strand the new epoch behind
+old shares. Nexus revocation therefore fails closed until an atomic participant
+replacement plus share-rotation event is implemented.
 
 ## Shared Replication Grant
 

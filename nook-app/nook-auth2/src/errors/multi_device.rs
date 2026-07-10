@@ -94,6 +94,11 @@ pub enum MultiDeviceError {
     )]
     NexusPasswordUnlockForbidden,
 
+    #[error(
+        "Nexus participant revocation requires an atomic replacement and share-rotation ceremony."
+    )]
+    NexusRevocationUnsupported,
+
     #[error("Failed to build member roster record.")]
     MemberRosterBuildFailed,
 

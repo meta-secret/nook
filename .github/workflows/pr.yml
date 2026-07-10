@@ -70,6 +70,7 @@ jobs:
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         with:
+          retries: 3
           script: |
             const marker = '### Preview deployed'
             const body = `${marker}\n\n${process.env.PREVIEW_URL}`
@@ -102,6 +103,7 @@ jobs:
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.preview_url }}
         with:
+          retries: 3
           script: |
             const previewUrl = process.env.PREVIEW_URL
             if (!previewUrl) {
@@ -258,6 +260,7 @@ jobs:
           FLOOR: ${{ steps.coverage.outputs.floor }}
           STATUS: ${{ steps.coverage.outputs.status }}
         with:
+          retries: 3
           script: |
             const marker = '<!-- nook-core-coverage -->'
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`

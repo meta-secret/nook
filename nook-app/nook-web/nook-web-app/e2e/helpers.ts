@@ -2600,6 +2600,7 @@ export async function seedExtraOauthFileProviders(
     fileName: string
     accessToken: string
     accountEmail?: string
+    folderId?: string
   }>,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
@@ -2630,6 +2631,7 @@ export async function seedExtraOauthFileProviders(
                       accessToken: string
                       fileName: string
                       accountEmail?: string
+                      folderId?: string
                     }
                     storeId?: string
                     createdAt: string
@@ -2650,6 +2652,7 @@ export async function seedExtraOauthFileProviders(
                   accessToken: provider.accessToken,
                   fileName: provider.fileName,
                   accountEmail: provider.accountEmail,
+                  folderId: provider.folderId,
                 },
                 storeId,
                 createdAt: new Date().toISOString(),
@@ -3439,6 +3442,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_OAUTH_ONBOARD_PROVIDER],
   sharedStub?: E2eOauthFileStub,
+  expectedSyncProviderCount = providers.length,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   await seedExtraOauthFileProviders(page, providers)
@@ -3463,7 +3467,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
       await vault.loadProviders()
     }
   })
-  await waitForLoadedSyncProviders(page, providers.length)
+  await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
 

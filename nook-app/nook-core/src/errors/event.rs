@@ -66,6 +66,9 @@ pub enum EventError {
     #[error("non-genesis events must declare parents")]
     MissingEventParents,
 
+    #[error("event graph contains multiple independent genesis roots")]
+    MultipleGenesisRoots,
+
     #[error("remote event id mismatch at {event_id}")]
     RemoteEventIdMismatch { event_id: String },
 

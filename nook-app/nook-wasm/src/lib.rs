@@ -523,6 +523,8 @@ pub async fn prepare_shared_storage_grant(
         nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
             instructions_key,
             joiner_identity,
+            storage_target_id,
+            storage_target_name,
         } => {
             let token = request
                 .access_token
@@ -567,6 +569,8 @@ pub async fn prepare_shared_storage_grant(
                                     nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
                                         instructions_key,
                                         joiner_identity,
+                                        storage_target_id: Some(folder_id),
+                                        storage_target_name: Some(created_name),
                                     }
                                 }
                             }
@@ -574,12 +578,16 @@ pub async fn prepare_shared_storage_grant(
                         Err(_) => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
                             instructions_key,
                             joiner_identity,
+                            storage_target_id,
+                            storage_target_name,
                         },
                     }
                 }
                 _ => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
                     instructions_key,
                     joiner_identity,
+                    storage_target_id,
+                    storage_target_name,
                 },
             }
         }

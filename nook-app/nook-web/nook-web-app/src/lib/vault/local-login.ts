@@ -98,14 +98,14 @@ export async function createLocalVaultWithDeviceKeys(
 
   try {
     await state.initDeviceIdentity()
-    state.applyDraftVaultArchitecture()
     const creatingAdditionalVault = state.localVaults.length > 0
     if (creatingAdditionalVault) {
       await prepareNewLocalVaultSlot()
+      await state.enqueueStorage(() => state.manager!.resetVaultSession())
     }
+    state.applyDraftVaultArchitecture()
     const rawRecords = (await state.enqueueStorage(() => {
       if (creatingAdditionalVault) {
-        state.manager!.resetVaultSession()
         return state.manager!.connect_fresh('local', '', '')
       }
       return state.manager!.connect('local', '', '')

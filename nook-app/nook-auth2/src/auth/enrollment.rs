@@ -332,8 +332,9 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
             {
                 return Err(EnrollmentError::MalformedSharedProviderGrant);
             }
-            if let Some(target) = storage_target_id
-                && target.trim().is_empty()
+            if storage_target_id
+                .as_deref()
+                .is_none_or(|target| target.trim().is_empty())
             {
                 return Err(EnrollmentError::MalformedSharedProviderGrant);
             }
@@ -524,7 +525,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_provider_grant_roundtrips_without_storage_target_id() {
+    fn shared_provider_grant_rejects_missing_storage_target_id() {
         let input = EnrollmentIssueInput {
             provider: EnrollmentProvider::SharedProviderGrant {
                 sync_provider_type: "oauth-file".to_owned(),
@@ -536,9 +537,10 @@ mod tests {
             entry_id: "entry-shared-legacy".to_owned(),
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
-        let code = encrypt_enrollment_payload(&input, "hunter2", "").unwrap();
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
-        assert_eq!(decrypted.provider, input.provider);
+        assert!(matches!(
+            encrypt_enrollment_payload(&input, "hunter2", ""),
+            Err(EnrollmentError::MalformedSharedProviderGrant)
+        ));
     }
 
     #[test]
