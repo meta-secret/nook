@@ -2,6 +2,10 @@ version: '3'
 
 vars:
   CI_AGENT_DIR: agentic-ai/ci-agent
+  CI_AGENT_IMAGE: '{{default "nook-ci-agent:local" .CI_AGENT_IMAGE}}'
+  # Host Docker socket (sibling containers via sock — not DinD). Override on unusual setups.
+  DOCKER_SOCK: '{{default "/var/run/docker.sock" .DOCKER_SOCK}}'
+  DOCKER: '{{default "docker" .DOCKER}}'
 
 tasks:
   ci-agent:install:
@@ -18,40 +22,115 @@ tasks:
     sources:
       - src/**/*
       - tsconfig.json
+      - package.json
+      - package-lock.json
     generates:
       - dist/main/main.js
     cmds:
       - npm run build
 
   ci-agent:prepare:
-    desc: Install and build ci-agent (Node 22.13+ required).
+    desc: Install and build ci-agent on the host (Node 22.13+). Prefer Docker tasks for CI.
     cmds:
       - >-
         node -e "const [maj,min]=process.versions.node.split('.').map(Number);
         if(maj<22||(maj===22&&min<13)){console.error('ci-agent requires Node.js 22.13+ (have '+process.versions.node+')');process.exit(1)}"
       - task: ci-agent:build
 
-  ci-agent:run:
-    desc: Run Cursor SDK agent only (fix and push branch).
-    deps:
-      - ci-agent:prepare
-    env:
-      REPO_ROOT:
-        sh: git rev-parse --show-toplevel
-      VITE_BASE: '{{default "/" .VITE_BASE}}'
-      VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
+  ci-agent:docker:build:
+    desc: Build the nook-ci-agent image (Node + Docker CLI + task; no daemon).
+    sources:
+      - agentic-ai/ci-agent/Dockerfile
+      - agentic-ai/ci-agent/.dockerignore
+      - agentic-ai/ci-agent/package.json
+      - agentic-ai/ci-agent/package-lock.json
+      - agentic-ai/ci-agent/tsconfig.json
+      - agentic-ai/ci-agent/src/**/*
     cmds:
-      - node {{.CI_AGENT_DIR}}/dist/main/main.js agent
+      - >-
+        {{.DOCKER}} build
+        --platform linux/amd64
+        -t {{.CI_AGENT_IMAGE}}
+        -f {{.CI_AGENT_DIR}}/Dockerfile
+        {{.CI_AGENT_DIR}}
+
+  ci-agent:docker:run:
+    desc: Run a ci-agent command in Docker with repo bind-mount and docker.sock.
+    deps:
+      - ci-agent:docker:build
+    vars:
+      REPO_ROOT:
+        sh: 'echo "${REPO_ROOT:-$(git rev-parse --show-toplevel)}"'
+      CI_AGENT_CMD: '{{.CI_AGENT_CMD}}'
+    cmds:
+      - >-
+        {{.DOCKER}} run --rm
+        --platform linux/amd64
+        -v {{.REPO_ROOT}}:{{.REPO_ROOT}}
+        -w {{.REPO_ROOT}}
+        -v {{.DOCKER_SOCK}}:/var/run/docker.sock
+        -e REPO_ROOT={{.REPO_ROOT}}
+        -e CURSOR_API_KEY
+        -e CURSOR_AGENT_MODEL
+        -e NOOK_GITHUB_PAT
+        -e GITHUB_TOKEN
+        -e GH_TOKEN
+        -e GITHUB_REPOSITORY
+        -e GITHUB_RUN_ID
+        -e FIX_BRANCH
+        -e AGENT_BRANCH
+        -e CI_AGENT_PROMPT_FILE
+        -e CI_FIX_LABEL
+        -e CI_FIX_POLL_MS
+        -e CI_AGENT_TIMEOUT_MS
+        -e CI_AGENT_HEARTBEAT_MS
+        -e CI_AGENT_LOG_LEVEL
+        -e AGENT_PROMPT
+        -e AGENT_ISSUE_NUMBER
+        -e AGENT_ISSUE_TITLE
+        -e AGENT_ISSUE_BODY
+        -e AGENT_ISSUE_URL
+        -e AGENT_PR_TITLE
+        -e AGENT_PR_BODY
+        -e AGENT_COMMIT_MESSAGE
+        -e VITE_BASE
+        -e VITE_VAULT_SYNC_INTERVAL_MS
+        -e WASM_BUILD_MODE
+        -e NOOK_GITHUB_E2E_REPO
+        -e NOOK_GITHUB_POLL_MS
+        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
+        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
+        -e DOCKER={{.DOCKER}}
+        -e DOCKER_IMAGE
+        -e TOOLCHAIN_REGISTRY
+        -e NOOK_ENV
+        -e CI=1
+        {{.CI_AGENT_IMAGE}}
+        {{.CI_AGENT_CMD}}
+
+  ci-agent:run:
+    desc: Run Cursor SDK agent only (in Docker; host docker.sock).
+    deps:
+      - setup
+    cmds:
+      - task: ci-agent:docker:run
+        vars:
+          CI_AGENT_CMD: agent
 
   ci-agent:fix:
-    desc: Full CI fix loop — agent, GitHub REST API (PR, checks, squash merge).
+    desc: Full CI fix loop in Docker — agent, GitHub REST API (PR, checks, squash merge).
     deps:
-      - ci-agent:prepare
       - setup
-    env:
-      REPO_ROOT:
-        sh: git rev-parse --show-toplevel
-      VITE_BASE: '{{default "/" .VITE_BASE}}'
-      VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
-      - node {{.CI_AGENT_DIR}}/dist/main/main.js fix
+      - task: ci-agent:docker:run
+        vars:
+          CI_AGENT_CMD: fix
+
+  ci-agent:implement:
+    desc: Implement issue/prompt via Cursor agent in Docker, open PR, squash-merge.
+    deps:
+      - setup
+    cmds:
+      - task: ci-agent:docker:run
+        vars:
+          CI_AGENT_CMD: implement

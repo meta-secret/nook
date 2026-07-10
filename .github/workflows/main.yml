@@ -216,17 +216,12 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
       - name: Resolve toolchain image
         run: task setup WASM_BUILD_MODE=prod
         env:
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
-      - name: Run ci-fix
+      - name: Run ci-fix (Docker + docker.sock)
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}

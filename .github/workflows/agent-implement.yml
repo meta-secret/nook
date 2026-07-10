@@ -1,0 +1,143 @@
+# Cursor SDK agent: implement a labeled issue or a manual prompt, then open a PR
+# and squash-merge after checks pass (same loop as main.yml ci-fix).
+#
+# The agent runs inside the nook-ci-agent Docker image (task ci-agent:implement)
+# with the repo bind-mounted and /var/run/docker.sock mounted so validation uses
+# the host Docker daemon (sibling containers — not Docker-in-Docker).
+#
+# Triggers:
+#   - issues labeled — only when the label being assigned is exactly `ai-agent`
+#   - workflow_dispatch with a required free-text `prompt`
+#
+# Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a
+# user so pr.yml runs and branch protection does not require manual bot-approval).
+# Maintainers must create the repo label named `ai-agent` (workflow does not auto-create it).
+
+name: Agent implement
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Free-text implementation prompt for the Cursor agent
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-implement-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  agent-implement:
+    name: Implement, PR, and merge
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' &&
+       github.event.action == 'labeled' &&
+       github.event.label.name == 'ai-agent' &&
+       github.event.issue.user.type != 'Bot')
+    runs-on: nook
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: read
+      packages: write
+    env:
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      CI_AGENT_PROMPT_FILE: .github/prompts/agent-implement.md
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve toolchain image
+        run: task setup WASM_BUILD_MODE=prod
+        env:
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
+      - name: Configure agent env
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          DISPATCH_PROMPT: ${{ inputs.prompt }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          delim="AGENT_EOF_${RUN_ID}"
+          if [ "$EVENT_NAME" = "issues" ]; then
+            echo "AGENT_BRANCH=agent/issue-${ISSUE_NUMBER}-${RUN_ID}" >> "$GITHUB_ENV"
+            echo "FIX_BRANCH=agent/issue-${ISSUE_NUMBER}-${RUN_ID}" >> "$GITHUB_ENV"
+            echo "AGENT_ISSUE_NUMBER=${ISSUE_NUMBER}" >> "$GITHUB_ENV"
+            {
+              echo "AGENT_ISSUE_TITLE<<${delim}"
+              printf '%s\n' "$ISSUE_TITLE"
+              echo "${delim}"
+              echo "AGENT_ISSUE_BODY<<${delim}"
+              printf '%s\n' "$ISSUE_BODY"
+              echo "${delim}"
+              echo "AGENT_ISSUE_URL<<${delim}"
+              printf '%s\n' "$ISSUE_URL"
+              echo "${delim}"
+              echo "AGENT_PR_TITLE<<${delim}"
+              printf '%s\n' "Implement #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+              echo "${delim}"
+              echo "AGENT_COMMIT_MESSAGE<<${delim}"
+              printf '%s\n' "Implement #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+              echo "${delim}"
+              echo "AGENT_PR_BODY<<${delim}"
+              printf '%s\n' "## Summary"
+              printf '%s\n' "Agent implementation for #${ISSUE_NUMBER}."
+              printf '%s\n' ""
+              printf '%s\n' "Closes #${ISSUE_NUMBER}"
+              printf '%s\n' ""
+              printf '%s\n' "## Test plan"
+              printf '%s\n' "- [ ] CI green on this PR"
+              echo "${delim}"
+            } >> "$GITHUB_ENV"
+          else
+            echo "AGENT_BRANCH=agent/prompt-${RUN_ID}" >> "$GITHUB_ENV"
+            echo "FIX_BRANCH=agent/prompt-${RUN_ID}" >> "$GITHUB_ENV"
+            {
+              echo "AGENT_PROMPT<<${delim}"
+              printf '%s\n' "$DISPATCH_PROMPT"
+              echo "${delim}"
+              echo "AGENT_PR_TITLE<<${delim}"
+              printf '%s\n' "Agent implement (run ${RUN_ID})"
+              echo "${delim}"
+              echo "AGENT_COMMIT_MESSAGE<<${delim}"
+              printf '%s\n' "Agent implement (run ${RUN_ID})."
+              echo "${delim}"
+              echo "AGENT_PR_BODY<<${delim}"
+              printf '%s\n' "## Summary"
+              printf '%s\n' "Agent implementation from workflow_dispatch prompt."
+              printf '%s\n' ""
+              printf '%s\n' "## Test plan"
+              printf '%s\n' "- [ ] CI green on this PR"
+              echo "${delim}"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Run ci-agent implement (Docker + docker.sock)
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          REPO_ROOT: ${{ github.workspace }}
+          WASM_BUILD_MODE: prod
+        run: task ci-agent:implement
