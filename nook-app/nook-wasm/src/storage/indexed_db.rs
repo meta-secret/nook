@@ -276,6 +276,14 @@ pub(crate) async fn device_identity_protection_status() -> Result<&'static str, 
     Ok(wrapped.protection_mode())
 }
 
+pub(crate) async fn device_identity_device_mode() -> Result<Option<&'static str>, NookError> {
+    let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
+        return Ok(None);
+    };
+    let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
+    Ok(wrapped.device_mode())
+}
+
 pub(crate) async fn load_wrapped_device_identity()
 -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
     let Some(raw) = idb_get_string(WRAPPED_DEVICE_IDENTITY_KEY).await? else {
@@ -385,6 +393,11 @@ mod device_identity_storage_tests {
             .expect("load")
             .expect("record");
         assert_eq!(reloaded.protection_mode(), "passkey");
+        assert_eq!(reloaded.device_mode(), Some("standard"));
+        assert_eq!(
+            device_identity_device_mode().await.expect("device mode"),
+            Some("standard")
+        );
         assert_eq!(
             reloaded.user_handle_bytes().expect("user handle"),
             setup.user_handle()

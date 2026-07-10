@@ -27,7 +27,7 @@ additional selectors.
 
 | Stage / surface | Group shown | State and transition |
 | --- | --- | --- |
-| First-run create chooser | 1. Device mode | Choose `standard` or `anti-hacker`; the warning stays next to the local-device decision. |
+| Device protection gate | 1. Device mode | Choose `standard` or `anti-hacker` while initializing this browser. The persisted choice is reused and is never requested again during vault creation. |
 | First-run create chooser | 2. Vault type | Choose the fast `simple` path or `nexus`; choosing nexus immediately shows the pre-secret readiness gate. |
 | First-run create chooser | 3. Replication type | Choose `personal` or `shared` independently from vault key access. |
 | First-run create chooser | 4. Onboarding type | Read-only summary derived by Rust from the draft replication type: credential transfer for personal, provider grant for shared. |

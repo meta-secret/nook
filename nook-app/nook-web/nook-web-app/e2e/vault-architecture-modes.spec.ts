@@ -125,10 +125,10 @@ test.describe('vault architecture modes', () => {
     })
   })
 
-  test('shows mode selectors and gates nexus secret creation setup', async ({
+  test('shows vault selectors without repeating device setup', async ({
     page,
   }) => {
-    await expect(page.getByTestId('mode-group-device')).toBeVisible()
+    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     await expect(page.getByTestId('mode-group-vault')).toBeVisible()
     await expect(page.getByTestId('mode-group-replication')).toBeVisible()
     await expect(page.getByTestId('mode-group-onboarding')).toBeVisible()
@@ -136,19 +136,12 @@ test.describe('vault architecture modes', () => {
       page.getByTestId('mode-group-provider-capability'),
     ).toBeVisible()
     await assertGroupsDoNotOverlap(page, [
-      'mode-group-device',
       'mode-group-vault',
       'mode-group-replication',
       'mode-group-onboarding',
       'mode-group-provider-capability',
     ])
     await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
-
-    await page.getByTestId('device-mode-select').click()
-    await page.getByRole('option', { name: 'High security' }).click()
-    await expect(page.getByTestId('device-mode-select')).toContainText(
-      'High security',
-    )
 
     await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-nexus').click()
@@ -462,7 +455,6 @@ test.describe('vault architecture modes', () => {
         page.getByTestId('mode-group-provider-capability'),
       ).toBeVisible()
       await assertGroupsDoNotOverlap(page, [
-        'mode-group-device',
         'mode-group-vault',
         'mode-group-replication',
         'mode-group-onboarding',

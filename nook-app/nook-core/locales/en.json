@@ -376,11 +376,6 @@
     "recovery_complete": "Device identity reset. Create a new passkey to continue."
   },
   "architecture_modes": {
-    "device_mode_title": "Device protection",
-    "device_mode_standard_title": "Standard",
-    "device_mode_standard_description": "Derive this browser's device key from the passkey. Convenient, and recoverable if browser storage is cleared.",
-    "device_mode_anti-hacker_title": "High security",
-    "device_mode_anti-hacker_description": "Keep a wrapped device key in this browser only. Clearing site data can permanently lose local vault access.",
     "vault_type_title": "Vault type",
     "vault_type_simple_title": "Simple",
     "vault_type_simple_description": "Each enrolled device can open the vault with its own encrypted key envelope.",

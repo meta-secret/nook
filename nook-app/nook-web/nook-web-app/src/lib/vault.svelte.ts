@@ -670,6 +670,14 @@ export class VaultState {
           | 'passkey'
           | 'pin'
           | 'unlocked'
+      const persistedDeviceMode =
+        await this.manager.deviceProtectionDeviceMode()
+      if (
+        persistedDeviceMode === 'standard' ||
+        persistedDeviceMode === 'anti-hacker'
+      ) {
+        this.draftDeviceMode = persistedDeviceMode
+      }
       if (this.deviceProtectionStatus === 'pin') {
         this.deviceProtectionLockedMode = 'pin'
       } else if (this.deviceProtectionStatus === 'passkey') {

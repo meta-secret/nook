@@ -622,11 +622,6 @@
     "recovery_complete": "Идентификатор устройства сброшен. Создайте новый passkey, чтобы продолжить."
   },
   "architecture_modes": {
-    "device_mode_title": "Защита устройства",
-    "device_mode_standard_title": "Standard",
-    "device_mode_standard_description": "Ключ устройства выводится из passkey. Удобно и восстанавливаемо, если очистить хранилище браузера.",
-    "device_mode_anti-hacker_title": "Высокая защита",
-    "device_mode_anti-hacker_description": "Обёрнутый ключ устройства хранится только в этом браузере. Очистка данных сайта может навсегда лишить локального доступа к сейфу.",
     "vault_type_title": "Тип сейфа",
     "vault_type_simple_title": "Simple",
     "vault_type_simple_description": "Каждое зарегистрированное устройство может открыть сейф своим зашифрованным конвертом ключей.",

@@ -154,7 +154,6 @@
             {vault}
             id="device-protection-mode"
             disabled={vault.isVerifying}
-            translationNamespace="device_protection"
           />
 
           <div class="space-y-2">

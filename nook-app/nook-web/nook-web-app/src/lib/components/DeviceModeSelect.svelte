@@ -6,30 +6,19 @@
     vault,
     id,
     disabled = false,
-    translationNamespace = 'architecture_modes',
   }: {
     vault: VaultState
     id: string
     disabled?: boolean
-    translationNamespace?: 'architecture_modes' | 'device_protection'
   } = $props()
 
   const deviceModes = ['standard', 'anti-hacker'] as const
-  const labelKey = $derived(
-    translationNamespace === 'device_protection'
-      ? 'device_protection.mode_group_label'
-      : 'architecture_modes.device_mode_title',
-  )
 
   function modeTranslationKey(
     mode: (typeof deviceModes)[number],
     suffix: 'title' | 'description',
   ) {
-    const translatedMode =
-      translationNamespace === 'device_protection'
-        ? mode.replace('-', '_')
-        : mode
-    return `${translationNamespace}.${translationNamespace === 'architecture_modes' ? 'device_mode_' : 'mode_'}${translatedMode}_${suffix}`
+    return `device_protection.mode_${mode.replace('-', '_')}_${suffix}`
   }
 
   function selectMode(value: string | undefined) {
@@ -41,7 +30,7 @@
 
 <div class="space-y-2" data-testid="mode-group-device">
   <label class="block text-sm font-medium text-foreground" for={id}>
-    {vault.t(labelKey)}
+    {vault.t('device_protection.mode_group_label')}
   </label>
   <Select.Root
     type="single"

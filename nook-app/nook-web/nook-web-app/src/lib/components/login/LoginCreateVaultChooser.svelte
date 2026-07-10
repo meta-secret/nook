@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Cloud } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
-  import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
   import VaultArchitectureSelect from '$lib/components/VaultArchitectureSelect.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import { onboardingType } from '$lib/vault-architecture'
@@ -31,8 +30,6 @@
   <p class="text-sm text-pretty text-muted-foreground">
     {vault.t('login.create_vault_intro')}
   </p>
-
-  <DeviceModeSelect {vault} id="vault-device-mode" disabled={isBusy} />
 
   <div class="grid gap-3 sm:grid-cols-2">
     <VaultArchitectureSelect

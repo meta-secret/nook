@@ -88,6 +88,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('device-protection-title')).toHaveText(
       'Prepare this browser',
     )
+    await expect(page.getByTestId('mode-group-device')).toBeVisible()
     await expect(
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
@@ -124,6 +125,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     const deviceId = await readDeviceId(page)
     const shortDeviceId = `${deviceId.slice(0, 6)}...${deviceId.slice(-4)}`
     await expect
@@ -156,6 +158,38 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
     await page.getByTestId('device-protection-unlock-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
+  })
+
+  test('reuses high-security device mode without showing it during vault creation', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.goto('/')
+
+    await page.getByTestId('device-mode-select').click()
+    await page.getByRole('option', { name: 'High security' }).click()
+    await clickDeviceProtectionSetup(page)
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
+
+    await page.reload()
+    await page.getByTestId('device-protection-unlock-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { draftDeviceMode?: string }
+              }
+            ).__nookVault?.draftDeviceMode,
+        ),
+      )
+      .toBe('anti-hacker')
   })
 
   test('recovers the same device identity from an existing passkey after local metadata is cleared', async ({

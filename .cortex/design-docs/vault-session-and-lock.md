@@ -69,6 +69,8 @@ authorization or PIN fallback restores the identity in WASM memory, then the app
 The gate presents itself as **Device setup — Step 1 of 2**, not as vault login.
 Its copy explains that it prepares or unlocks the browser's protected device
 identity and that vault selection, creation, or import follows in the next step.
+Device protection mode is chosen only here; vault creation reuses the persisted
+device choice and must not render another device-protection selector.
 
 `DeviceProtectionGate` keeps passkey setup and recovery as mutually exclusive
 workflows. When no local passkey-protected device record exists, creating a new
