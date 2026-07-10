@@ -336,3 +336,4 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 5. PR CI and main both run full local-provider **e2e**; nightly runs **sync-live**.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
+<!-- agent-implement docker smoke -->
