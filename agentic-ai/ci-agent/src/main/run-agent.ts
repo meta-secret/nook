@@ -13,7 +13,9 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
     `Running Cursor SDK agent (run ${config.githubRunId}, branch ${config.fixBranch}, timeout ${formatDuration(waitOptions.timeoutMs)})`,
   );
 
-  await using agent = await Agent.create({
+  // Prefer explicit asyncDispose over fire-and-forget close() so local executor
+  // resources are released before git push / PR polling / process.exit.
+  const agent = await Agent.create({
     apiKey: config.cursorApiKey,
     model: { id: config.modelId },
     local: {
@@ -23,32 +25,39 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
     },
   });
 
-  let run;
   try {
-    run = await agent.send(prompt, {
-      onDelta: ({ update }) => {
-        logInteractionUpdate(update);
-      },
-    });
-    log.info(`Agent run started (id ${run.id})`);
-  } catch (err) {
-    if (err instanceof CursorAgentError) {
-      throw new Error(`Cursor agent startup failed: ${err.message}`);
+    let run;
+    try {
+      run = await agent.send(prompt, {
+        onDelta: ({ update }) => {
+          logInteractionUpdate(update);
+        },
+      });
+      log.info(`Agent run started (id ${run.id})`);
+    } catch (err) {
+      if (err instanceof CursorAgentError) {
+        throw new Error(`Cursor agent startup failed: ${err.message}`);
+      }
+      throw err;
     }
-    throw err;
-  }
 
-  const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
-  if (result.status === "error") {
-    throw new Error(`Cursor agent run failed (run id ${result.id})`);
-  }
-  if (result.status === "cancelled") {
-    throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
-  }
+    const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
+    if (result.status === "error") {
+      throw new Error(`Cursor agent run failed (run id ${result.id})`);
+    }
+    if (result.status === "cancelled") {
+      throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
+    }
 
-  log.info(`Agent finished (${result.status})`);
-  finishInteractionLog();
-
-  // Release local executor resources before git push / PR polling.
-  agent.close();
+    log.info(`Agent finished (${result.status})`);
+    finishInteractionLog();
+  } finally {
+    try {
+      await agent[Symbol.asyncDispose]();
+      log.info("Agent disposed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.info(`Agent dispose warning: ${message}`);
+    }
+  }
 }
