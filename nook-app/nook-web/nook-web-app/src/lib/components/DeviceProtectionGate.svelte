@@ -188,7 +188,7 @@
             <div class="h-px flex-1 bg-border"></div>
           </div>
           <Button
-            class="mx-auto flex text-muted-foreground hover:text-foreground"
+            class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
             variant="ghost"
             size="sm"
             disabled={vault.isVerifying}
