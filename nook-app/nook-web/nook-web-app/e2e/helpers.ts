@@ -128,15 +128,10 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   }
 
   const simplePath = page.getByTestId('get-started-path-simple')
-  if (await simplePath.isVisible()) {
-    await simplePath.click()
-  } else {
-    const continueButton = page.getByTestId('create-vault-wizard-continue')
-    await expect(continueButton).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await continueButton.click()
-  }
+  await expect(simplePath).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await simplePath.click()
 
   await expect(finalStep).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
