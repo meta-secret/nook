@@ -151,6 +151,7 @@
     "nexus_genesis_join_request_label": "Initiator request",
     "nexus_genesis_join_request_placeholder": "Paste the Nexus participant request",
     "nexus_genesis_create_response": "Create participant response",
+    "nexus_genesis_response_failed": "Could not create the Nexus participant response.",
     "nexus_genesis_generated_response": "Response for the initiator",
     "nexus_genesis_receive_share_label": "Encrypted share from initiator",
     "nexus_genesis_receive_share_placeholder": "Paste the delivery payload for this device",

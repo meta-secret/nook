@@ -151,6 +151,7 @@
     "nexus_genesis_join_request_label": "Запрос инициатора",
     "nexus_genesis_join_request_placeholder": "Вставьте запрос участнику Nexus",
     "nexus_genesis_create_response": "Создать ответ участника",
+    "nexus_genesis_response_failed": "Не удалось создать ответ участника Nexus.",
     "nexus_genesis_generated_response": "Ответ для инициатора",
     "nexus_genesis_receive_share_label": "Зашифрованная доля от инициатора",
     "nexus_genesis_receive_share_placeholder": "Вставьте пакет доставки для этого устройства",

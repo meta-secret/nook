@@ -781,6 +781,7 @@ impl NookVaultManager {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
+        let signing_public_key = signing.public_key();
         let key_epoch = self.ensure_key_epoch().await?;
         let identity = self.device_identity()?;
         let mut operations = vec![VaultOperation::VaultImported {
@@ -791,9 +792,6 @@ impl NookVaultManager {
         if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
             let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-            let signing_public_key = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-                signing.signing_key().verifying_key().as_bytes(),
-            ));
             match self.vault.architecture.vault_type {
                 nook_core::VaultType::Simple => {
                     let auth_record =
@@ -802,7 +800,7 @@ impl NookVaultManager {
                     operations.push(VaultOperation::JoinApproved {
                         device_id: identity.device_id().clone(),
                         encryption_public_key: identity.public_key(),
-                        signing_public_key,
+                        signing_public_key: signing_public_key.clone(),
                         label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
                         secrets_key_ciphertext: envelopes.secrets_key,
                         members_key_ciphertext: envelopes.members_key,
@@ -812,7 +810,7 @@ impl NookVaultManager {
                     operations.push(VaultOperation::NexusParticipantEnrolled {
                         device_id: identity.device_id().clone(),
                         encryption_public_key: identity.public_key(),
-                        signing_public_key,
+                        signing_public_key: signing_public_key.clone(),
                         label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
                     });
                 }
@@ -822,9 +820,7 @@ impl NookVaultManager {
             schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
             store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
             actor_id,
-            actor_signing_public_key: Some(nook_core::DeviceSigningPublicKey::from_trusted(
-                hex::encode(signing.signing_key().verifying_key().as_bytes()),
-            )),
+            actor_signing_public_key: Some(signing_public_key),
             parents: Vec::new(),
             created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
             key_epoch: EventId::parse(&key_epoch)?,

@@ -282,6 +282,7 @@ export class VaultState {
   localFolderMultipleVaultsIssue = $state<
     LocalFolderMultipleVaultsIssue | undefined
   >(undefined)
+  private architectureSecretCreationAllowed = $state(true)
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== undefined
@@ -296,10 +297,7 @@ export class VaultState {
   }
 
   get architectureCanCreateSecret(): boolean {
-    return (
-      this.manager?.canCreateSecretForVaultArchitecture() ??
-      architectureCanCreateSecret(this.vaultArchitecture)
-    )
+    return this.architectureSecretCreationAllowed
   }
 
   get editBlockReason(): string | undefined {
@@ -880,6 +878,9 @@ export class VaultState {
 
   applyDraftVaultArchitecture() {
     this.vaultArchitecture = this.draftVaultArchitecture
+    this.architectureSecretCreationAllowed = architectureCanCreateSecret(
+      this.vaultArchitecture,
+    )
     if (this.manager) {
       this.manager.setVaultArchitectureJson(
         JSON.stringify(this.vaultArchitecture),
@@ -901,9 +902,28 @@ export class VaultState {
       return
     }
     this.vaultArchitecture = architecture
+    this.architectureSecretCreationAllowed = architectureCanCreateSecret(
+      this.vaultArchitecture,
+    )
     this.draftDeviceMode = this.vaultArchitecture.device_mode
     this.draftVaultType = this.vaultArchitecture.vault_type
     this.draftReplicationType = this.vaultArchitecture.replication_type
+    void this.refreshArchitectureSecretCreationAllowed()
+  }
+
+  async refreshArchitectureSecretCreationAllowed(): Promise<void> {
+    const fallback = architectureCanCreateSecret(this.vaultArchitecture)
+    if (!this.manager) {
+      this.architectureSecretCreationAllowed = fallback
+      return
+    }
+    try {
+      this.architectureSecretCreationAllowed = await this.enqueueStorage(() =>
+        this.manager!.canCreateSecretForVaultArchitecture(),
+      )
+    } catch {
+      this.architectureSecretCreationAllowed = fallback
+    }
   }
 
   async setupDeviceProtection(
@@ -1162,6 +1182,8 @@ export class VaultState {
     threshold: number
   }): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
     this.errorMsg = ''
     this.dismissSuccess()
     this.nexusGenesisDeliveries = []
@@ -1185,11 +1207,15 @@ export class VaultState {
       this.errorMsg =
         error instanceof Error ? error.message : 'Failed to start Nexus setup.'
       throw error
+    } finally {
+      this.isVerifying = false
     }
   }
 
   async addNexusGenesisParticipantResponse(payload: string): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
     this.errorMsg = ''
     try {
       const status = await this.enqueueStorage(() =>
@@ -1202,6 +1228,8 @@ export class VaultState {
           ? error.message
           : 'Failed to add Nexus participant.'
       throw error
+    } finally {
+      this.isVerifying = false
     }
   }
 
@@ -1209,6 +1237,8 @@ export class VaultState {
     requestPayload: string,
   ): Promise<string> {
     if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return ''
+    this.isVerifying = true
     this.errorMsg = ''
     try {
       await this.initDeviceIdentity()
@@ -1224,11 +1254,15 @@ export class VaultState {
           ? error.message
           : 'Failed to create Nexus participant response.'
       throw error
+    } finally {
+      this.isVerifying = false
     }
   }
 
   async finalizeNexusGenesis(): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
     this.errorMsg = ''
     this.nexusGenesisStatus = 'finalizing'
     try {
@@ -1243,11 +1277,15 @@ export class VaultState {
           ? error.message
           : 'Failed to finalize Nexus setup.'
       throw error
+    } finally {
+      this.isVerifying = false
     }
   }
 
   async acceptNexusGenesisShareDelivery(payload: string): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
     this.errorMsg = ''
     try {
       await this.enqueueStorage(() =>
@@ -1260,17 +1298,24 @@ export class VaultState {
           ? error.message
           : 'Failed to receive Nexus share.'
       throw error
+    } finally {
+      this.isVerifying = false
     }
   }
 
   async completeNexusGenesisDelivery(): Promise<void> {
-    if (!this.nexusGenesisStoreId) return
-    this.nexusGenesisStatus = 'complete'
-    await setActiveVault(this.nexusGenesisStoreId)
-    await this.refreshLocalVaultCatalog()
-    this.selectedLoginVaultStoreId = this.nexusGenesisStoreId
-    this.localLoginPrepared = false
-    this.nexusCeremonyPrompt = true
+    if (!this.nexusGenesisStoreId || this.isVerifying) return
+    this.isVerifying = true
+    try {
+      this.nexusGenesisStatus = 'complete'
+      await setActiveVault(this.nexusGenesisStoreId)
+      await this.refreshLocalVaultCatalog()
+      this.selectedLoginVaultStoreId = this.nexusGenesisStoreId
+      this.localLoginPrepared = false
+      this.nexusCeremonyPrompt = true
+    } finally {
+      this.isVerifying = false
+    }
   }
 
   async renameLocalVault(storeId: string, label: string): Promise<void> {
@@ -2216,7 +2261,9 @@ export class VaultState {
   }
 
   async refreshNexusUnlockStatus(): Promise<NexusUnlockStatus> {
-    return nexusUnlockActions.refreshNexusUnlockStatus(this)
+    const status = await nexusUnlockActions.refreshNexusUnlockStatus(this)
+    await this.refreshArchitectureSecretCreationAllowed()
+    return status
   }
 
   async startNexusUnlock(): Promise<void> {

@@ -104,6 +104,14 @@
   const isNexus = $derived(vault.draftVaultType === 'nexus')
   const currentStepNumber = $derived(wizardStep === 'vault' ? 1 : 2)
   const nexusNameReady = $derived(nexusName.trim().length > 0)
+  const nexusPolicyValid = $derived(
+    Number.isInteger(nexusParticipantCount) &&
+      Number.isInteger(nexusThreshold) &&
+      nexusParticipantCount >= 2 &&
+      nexusParticipantCount <= 16 &&
+      nexusThreshold >= 2 &&
+      nexusThreshold <= nexusParticipantCount,
+  )
   const nexusReadyToFinalize = $derived(nexusGenesisStatus === 'ready')
 
   function continueFromVaultType() {
@@ -111,7 +119,13 @@
   }
 
   async function startNexusGenesis() {
-    if (!nexusNameReady || isBusy || nexusActionBusy || !onStartNexusGenesis) {
+    if (
+      !nexusNameReady ||
+      !nexusPolicyValid ||
+      isBusy ||
+      nexusActionBusy ||
+      !onStartNexusGenesis
+    ) {
       return
     }
     nexusActionBusy = true
@@ -183,6 +197,13 @@
         participant?: { fingerprint?: string }
       }
       generatedParticipantFingerprint = response.participant?.fingerprint ?? ''
+    } catch (error) {
+      generatedParticipantResponse = ''
+      generatedParticipantFingerprint = ''
+      vault.errorMsg =
+        error instanceof Error
+          ? error.message
+          : vault.t('login.nexus_genesis_response_failed')
     } finally {
       nexusActionBusy = false
     }
@@ -410,6 +431,7 @@
           disabled={isBusy ||
             nexusActionBusy ||
             !nexusNameReady ||
+            !nexusPolicyValid ||
             !onStartNexusGenesis}
           onclick={() => void startNexusGenesis()}
         >

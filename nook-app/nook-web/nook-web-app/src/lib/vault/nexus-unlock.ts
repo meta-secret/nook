@@ -142,8 +142,8 @@ export async function ensureNexusCeremonyHydrated(
   state: VaultState,
 ): Promise<void> {
   if (!state.manager || state.isAuthenticated || state.isVerifying) return
+  await state.initDeviceIdentity()
   try {
-    await state.initDeviceIdentity()
     await state.syncFromStorage({ force: true })
   } catch {
     // A locked Nexus sync may fail closed until its local share is selected.
