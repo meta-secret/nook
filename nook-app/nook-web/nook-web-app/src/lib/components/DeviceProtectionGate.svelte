@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { KeyRound, Plus, ShieldCheck, TriangleAlert } from '@lucide/svelte'
+  import { KeyRound, ShieldCheck, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
@@ -112,35 +112,9 @@
           : vault.t('device_protection.pin_setup_action')}
       </Button>
     {:else if needsSetup}
-      <fieldset class="space-y-3" disabled={vault.isVerifying}>
-        <legend class="mb-2 text-sm font-medium">
-          {vault.t('device_protection.setup_choice_label')}
-        </legend>
-        <div class="grid grid-cols-2 gap-2">
-          <Button
-            variant={setupWorkflow === 'existing' ? 'secondary' : 'outline'}
-            aria-pressed={setupWorkflow === 'existing'}
-            data-testid="device-protection-use-existing-choice"
-            onclick={() => (setupWorkflow = 'existing')}
-          >
-            <KeyRound class="size-4" />
-            {vault.t('device_protection.existing_passkey_alternative_action')}
-          </Button>
-          <Button
-            variant={setupWorkflow === 'create' ? 'secondary' : 'outline'}
-            aria-pressed={setupWorkflow === 'create'}
-            data-testid="device-protection-create-new-choice"
-            onclick={() => (setupWorkflow = 'create')}
-          >
-            <Plus class="size-4" />
-            {vault.t('device_protection.new_passkey_alternative_action')}
-          </Button>
-        </div>
-      </fieldset>
-
       {#if setupWorkflow === 'existing'}
         <div
-          class="space-y-3 border-t pt-4"
+          class="space-y-3"
           data-testid="device-protection-existing-workflow"
         >
           <p class="text-center text-xs text-muted-foreground">
@@ -156,10 +130,19 @@
               ? vault.t('device_protection.authorizing')
               : vault.t('device_protection.existing_passkey_action')}
           </Button>
+          <Button
+            class="mx-auto flex h-auto px-2 text-xs"
+            variant="link"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-create-new-choice"
+            onclick={() => (setupWorkflow = 'create')}
+          >
+            {vault.t('device_protection.new_passkey_alternative_action')}
+          </Button>
         </div>
       {:else if setupWorkflow === 'create'}
         <div
-          class="space-y-4 border-t pt-4"
+          class="space-y-4"
           data-testid="device-protection-create-workflow"
         >
           <DeviceModeSelect
@@ -196,6 +179,22 @@
             {vault.isVerifying
               ? vault.t('device_protection.authorizing')
               : vault.t('device_protection.setup_action')}
+          </Button>
+          <div class="flex items-center gap-3 pt-1">
+            <div class="h-px flex-1 bg-border"></div>
+            <span class="text-xs text-muted-foreground">
+              {vault.t('device_protection.existing_passkey_alternative')}
+            </span>
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
+          <Button
+            class="mx-auto flex h-auto px-2 text-xs"
+            variant="link"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-use-existing-choice"
+            onclick={() => (setupWorkflow = 'existing')}
+          >
+            {vault.t('device_protection.existing_passkey_alternative_action')}
           </Button>
         </div>
       {/if}

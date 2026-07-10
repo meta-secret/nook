@@ -66,6 +66,15 @@ After lock, the app first shows **`DeviceProtectionGate`**. Successful passkey
 authorization or PIN fallback restores the identity in WASM memory, then the app shows
 **`LoginGate`**:
 
+`DeviceProtectionGate` keeps passkey setup and recovery as mutually exclusive
+workflows. When no local passkey-protected device record exists, creating a new
+passkey is the primary form and using an existing discoverable passkey is a small
+alternative action. When `device_identity_wrapped` already identifies passkey
+protection, the gate shows authorization only and never renders passkey creation.
+Browsers do not expose a general API for enumerating whether an RP already has a
+discoverable passkey, so the missing-record state must retain the explicit existing-
+passkey recovery action.
+
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
 - **Single local vault** → unlock with device keys and/or backup password.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault.
