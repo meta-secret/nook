@@ -122,6 +122,8 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
+    await page.getByTestId('login-vault-workflow-create').click()
+    await expect(page.getByTestId('login-unlock-section')).toBeHidden()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({

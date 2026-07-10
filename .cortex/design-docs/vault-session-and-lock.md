@@ -79,6 +79,11 @@ passkey recovery action.
 - **Single local vault** → unlock with device keys and/or backup password.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault.
 
+The login vault surface presents **Open existing**, **Create new**, and **Import**
+as mutually exclusive workflows rather than consecutive sections. With local
+vaults, Open existing is the default: choose a vault first, then authorize its
+unlock. Create and Import replace the open/unlock controls while selected.
+
 Lock is the safe “step away from this browser” action — analogous to logging out of a password manager while keeping the encrypted database file.
 
 ---
