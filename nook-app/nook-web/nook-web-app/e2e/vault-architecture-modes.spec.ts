@@ -511,6 +511,10 @@ test.describe('vault architecture modes', () => {
       await page.getByTestId('mode-option-nexus').click()
       await expect(page.getByTestId('nexus-genesis-introduction')).toBeVisible()
 
+      // Nexus genesis is provider-free and has its own creation ceremony.
+      // Switch back to Simple before exercising the legacy provider gates.
+      await page.getByTestId('vault-mode-select').click()
+      await page.getByTestId('mode-option-simple').click()
       await setLegacyReplicationForProviderTest(page, 'shared')
       await openLoginProviderSetup(page)
       await expect(page.getByTestId('provider-picker-list')).toBeVisible()
