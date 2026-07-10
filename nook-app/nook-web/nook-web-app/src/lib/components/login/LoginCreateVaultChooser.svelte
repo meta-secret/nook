@@ -1,9 +1,16 @@
 <script lang="ts">
-  import { Cloud, Copy, RefreshCw, ShieldCheck, Users } from '@lucide/svelte'
+  import {
+    Cloud,
+    Copy,
+    KeyRound,
+    RefreshCw,
+    ShieldCheck,
+    UserPlus,
+    Users,
+  } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import NexusUnlockParticipantHelper from '$lib/components/login/NexusUnlockParticipantHelper.svelte'
-  import VaultArchitectureSelect from '$lib/components/VaultArchitectureSelect.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import type { VaultState } from '$lib/vault.svelte'
 
@@ -32,6 +39,13 @@
     label: string
     fingerprint: string
   }
+
+  type WizardStep =
+    | 'choose'
+    | 'simple-create'
+    | 'nexus-policy'
+    | 'nexus-ceremony'
+    | 'join'
 
   let {
     vault,
@@ -74,19 +88,14 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  type WizardStep =
-    | 'vault'
-    | 'simple-create'
-    | 'nexus-policy'
-    | 'nexus-ceremony'
-  let wizardStep = $state<WizardStep>('vault')
+  let wizardStep = $state<WizardStep>('choose')
   let nexusName = $state('')
   let nexusParticipantCount = $state(3)
   let nexusThreshold = $state(2)
   let participantResponse = $state('')
   let copyingRequest = $state(false)
+  let copyingJoinResponse = $state(false)
   let nexusActionBusy = $state(false)
-  let joiningNexus = $state(false)
   let participantRequest = $state('')
   let generatedParticipantResponse = $state('')
   let generatedParticipantFingerprint = $state('')
@@ -101,8 +110,6 @@
     }
   })
 
-  const isNexus = $derived(vault.draftVaultType === 'nexus')
-  const currentStepNumber = $derived(wizardStep === 'vault' ? 1 : 2)
   const nexusNameReady = $derived(nexusName.trim().length > 0)
   const nexusPolicyValid = $derived(
     Number.isInteger(nexusParticipantCount) &&
@@ -113,9 +120,30 @@
       nexusThreshold <= nexusParticipantCount,
   )
   const nexusReadyToFinalize = $derived(nexusGenesisStatus === 'ready')
+  const showPathChooser = $derived(wizardStep === 'choose')
+  const showImportFooter = $derived(
+    wizardStep === 'choose' ||
+      wizardStep === 'simple-create' ||
+      wizardStep === 'nexus-policy',
+  )
 
-  function continueFromVaultType() {
-    wizardStep = isNexus ? 'nexus-policy' : 'simple-create'
+  function chooseSimplePath() {
+    vault.draftVaultType = 'simple'
+    wizardStep = 'simple-create'
+  }
+
+  function chooseNexusCreatePath() {
+    vault.draftVaultType = 'nexus'
+    wizardStep = 'nexus-policy'
+  }
+
+  function chooseJoinPath() {
+    wizardStep = 'join'
+  }
+
+  function backToChooser() {
+    if (wizardStep === 'nexus-ceremony') return
+    wizardStep = 'choose'
   }
 
   async function startNexusGenesis() {
@@ -180,6 +208,19 @@
     }
   }
 
+  async function copyJoinResponse() {
+    if (!generatedParticipantResponse) return
+    try {
+      await navigator.clipboard.writeText(generatedParticipantResponse)
+      copyingJoinResponse = true
+      setTimeout(() => {
+        copyingJoinResponse = false
+      }, 1500)
+    } catch {
+      vault.errorMsg = vault.t('login.nexus_genesis_copy_failed')
+    }
+  }
+
   async function createParticipantResponse() {
     const requestPayload = participantRequest.trim()
     if (
@@ -227,84 +268,77 @@
     {vault.t('login.create_vault_intro')}
   </p>
 
-  <ol class="grid grid-cols-2 gap-2" data-testid="create-vault-wizard-progress">
-    <li>
-      <button
-        type="button"
-        class:border-foreground={wizardStep === 'vault'}
-        class:text-foreground={wizardStep === 'vault'}
-        class="w-full border-b-2 pb-2 text-left text-muted-foreground transition-colors"
-        data-testid="create-vault-wizard-nav-vault"
-        aria-current={wizardStep === 'vault' ? 'step' : undefined}
-        disabled={isBusy || wizardStep === 'nexus-ceremony'}
-        onclick={() => (wizardStep = 'vault')}
-      >
-        <span class="block text-xs font-medium">01</span>
-        <span class="block text-sm font-semibold">
-          {vault.t('login.create_wizard_vault_label')}
-        </span>
-      </button>
-    </li>
-    <li>
-      <div
-        class:border-foreground={currentStepNumber === 2}
-        class:text-foreground={currentStepNumber === 2}
-        class="w-full border-b-2 pb-2 text-left text-muted-foreground"
-        data-testid="create-vault-wizard-nav-next"
-        aria-current={currentStepNumber === 2 ? 'step' : undefined}
-      >
-        <span class="block text-xs font-medium">02</span>
-        <span class="block text-sm font-semibold">
-          {isNexus
-            ? vault.t('login.create_wizard_nexus_label')
-            : vault.t('login.create_wizard_create_label')}
-        </span>
-      </div>
-    </li>
-  </ol>
-
-  {#if wizardStep === 'vault'}
-    <section class="space-y-4" data-testid="create-vault-wizard-vault">
+  {#if showPathChooser}
+    <section class="space-y-4" data-testid="get-started-path-chooser">
       <div class="space-y-1">
         <h3 class="text-lg font-semibold text-foreground">
-          {vault.t('login.create_wizard_vault_title')}
+          {vault.t('login.get_started_paths_title')}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.create_wizard_vault_description')}
+          {vault.t('login.get_started_paths_description')}
         </p>
       </div>
 
-      <VaultArchitectureSelect
-        {vault}
-        kind="vault"
-        id="vault-type"
-        disabled={isBusy}
-      />
-
-      {#if isNexus}
-        <div
-          class="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-foreground"
-          data-testid="nexus-genesis-introduction"
-        >
-          <p class="font-medium">
-            {vault.t('login.nexus_genesis_intro_title')}
-          </p>
-          <p class="mt-1 text-xs text-pretty text-muted-foreground">
-            {vault.t('login.nexus_genesis_intro_description')}
-          </p>
-        </div>
-      {/if}
-
-      <div class="flex justify-end pt-1">
-        <Button
+      <div class="grid gap-3" data-testid="get-started-path-list">
+        <button
           type="button"
-          class="min-w-[140px]"
-          data-testid="create-vault-wizard-continue"
+          class="rounded-lg border border-border/60 bg-muted/10 p-4 text-left transition-colors hover:border-foreground/40 hover:bg-muted/20 disabled:opacity-60"
+          data-testid="get-started-path-simple"
           disabled={isBusy}
-          onclick={continueFromVaultType}
+          onclick={chooseSimplePath}
         >
-          {vault.t('login.create_wizard_continue')}
-        </Button>
+          <div class="flex items-start gap-3">
+            <KeyRound class="mt-0.5 size-5 shrink-0 text-foreground" />
+            <div class="min-w-0 space-y-1">
+              <p class="text-sm font-semibold text-foreground">
+                {vault.t('login.get_started_path_simple_title')}
+              </p>
+              <p class="text-sm text-pretty text-muted-foreground">
+                {vault.t('login.get_started_path_simple_description')}
+              </p>
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="rounded-lg border border-border/60 bg-muted/10 p-4 text-left transition-colors hover:border-foreground/40 hover:bg-muted/20 disabled:opacity-60"
+          data-testid="get-started-path-nexus"
+          disabled={isBusy}
+          onclick={chooseNexusCreatePath}
+        >
+          <div class="flex items-start gap-3">
+            <Users class="mt-0.5 size-5 shrink-0 text-foreground" />
+            <div class="min-w-0 space-y-1">
+              <p class="text-sm font-semibold text-foreground">
+                {vault.t('login.get_started_path_nexus_title')}
+              </p>
+              <p class="text-sm text-pretty text-muted-foreground">
+                {vault.t('login.get_started_path_nexus_description')}
+              </p>
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="rounded-lg border border-border/60 bg-muted/10 p-4 text-left transition-colors hover:border-foreground/40 hover:bg-muted/20 disabled:opacity-60"
+          data-testid="get-started-path-join"
+          disabled={isBusy}
+          onclick={chooseJoinPath}
+        >
+          <div class="flex items-start gap-3">
+            <UserPlus class="mt-0.5 size-5 shrink-0 text-foreground" />
+            <div class="min-w-0 space-y-1">
+              <p class="text-sm font-semibold text-foreground">
+                {vault.t('login.get_started_path_join_title')}
+              </p>
+              <p class="text-sm text-pretty text-muted-foreground">
+                {vault.t('login.get_started_path_join_description')}
+              </p>
+            </div>
+          </div>
+        </button>
       </div>
     </section>
   {:else if wizardStep === 'simple-create'}
@@ -331,7 +365,7 @@
         variant="ghost"
         data-testid="create-vault-wizard-back"
         disabled={isBusy}
-        onclick={() => (wizardStep = 'vault')}
+        onclick={backToChooser}
       >
         {vault.t('common.back')}
       </Button>
@@ -420,7 +454,7 @@
           variant="ghost"
           data-testid="create-vault-wizard-back"
           disabled={isBusy || nexusActionBusy}
-          onclick={() => (wizardStep = 'vault')}
+          onclick={backToChooser}
         >
           {vault.t('common.back')}
         </Button>
@@ -444,7 +478,7 @@
         </Button>
       </div>
     </section>
-  {:else}
+  {:else if wizardStep === 'nexus-ceremony'}
     <section class="space-y-5" data-testid="nexus-genesis-ceremony-step">
       <div class="space-y-1">
         <h3 class="text-lg font-semibold text-foreground">
@@ -665,95 +699,70 @@
         </div>
       {/if}
     </section>
-  {/if}
-
-  {#if wizardStep !== 'nexus-ceremony'}
-    <div class="pt-2" data-testid="login-path-cloud">
-      <div
-        class="flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
-      >
-        <span class="text-xs text-center">
-          {vault.t('login.import_existing_alternative')}
-        </span>
+  {:else}
+    <section class="space-y-4" data-testid="nexus-genesis-participant-step">
+      <div class="space-y-1">
+        <h3 class="text-lg font-semibold text-foreground">
+          {vault.t('login.nexus_genesis_join_title')}
+        </h3>
+        <p class="text-sm text-pretty text-muted-foreground">
+          {vault.t('login.nexus_genesis_join_description')}
+        </p>
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        class="mx-auto mt-2 flex text-foreground"
-        data-testid="login-connect-storage-btn"
-        disabled={isBusy}
-        onclick={onConnectStorage}
-      >
-        <Cloud class="size-4" />
-        {vault.t('login.path_cloud_btn')}
-      </Button>
 
-      <Button
-        type="button"
-        variant="ghost"
-        class="mx-auto flex text-muted-foreground"
-        data-testid="nexus-genesis-join-toggle"
-        disabled={isBusy}
-        onclick={() => (joiningNexus = !joiningNexus)}
-      >
-        <Users class="size-4" />
-        {vault.t('login.nexus_genesis_join_alternative')}
-      </Button>
+      <div class="space-y-2">
+        <label
+          class="text-xs font-medium text-foreground"
+          for="nexus-participant-request"
+        >
+          {vault.t('login.nexus_genesis_join_request_label')}
+        </label>
+        <textarea
+          id="nexus-participant-request"
+          class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+          data-testid="nexus-genesis-join-request-input"
+          placeholder={vault.t('login.nexus_genesis_join_request_placeholder')}
+          bind:value={participantRequest}
+          disabled={isBusy || nexusActionBusy}></textarea>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="nexus-genesis-create-response"
+          disabled={isBusy ||
+            nexusActionBusy ||
+            !participantRequest.trim() ||
+            !onCreateNexusGenesisParticipantResponse}
+          onclick={() => void createParticipantResponse()}
+        >
+          {#if nexusActionBusy}
+            <RefreshCw class="size-4 animate-spin" />
+          {:else}
+            <ShieldCheck class="size-4" />
+          {/if}
+          {vault.t('login.nexus_genesis_create_response')}
+        </Button>
+      </div>
 
-      {#if joiningNexus}
-        <section
-          class="mt-3 space-y-4 rounded-lg border border-border/60 bg-muted/10 p-4"
-          data-testid="nexus-genesis-participant-step"
+      {#if generatedParticipantResponse}
+        <div
+          class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
+          data-testid="nexus-genesis-join-response"
         >
           <div class="space-y-1">
-            <h3 class="text-sm font-semibold text-foreground">
-              {vault.t('login.nexus_genesis_join_title')}
-            </h3>
+            <p class="text-sm font-semibold text-foreground">
+              {vault.t('login.nexus_genesis_generated_response')}
+            </p>
             <p class="text-xs text-pretty text-muted-foreground">
-              {vault.t('login.nexus_genesis_join_description')}
+              {vault.t('login.nexus_genesis_join_qr_hint')}
             </p>
           </div>
-
-          <div class="space-y-2">
-            <label
-              class="text-xs font-medium text-foreground"
-              for="nexus-participant-request"
-            >
-              {vault.t('login.nexus_genesis_join_request_label')}
-            </label>
-            <textarea
-              id="nexus-participant-request"
-              class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              data-testid="nexus-genesis-join-request-input"
-              placeholder={vault.t(
-                'login.nexus_genesis_join_request_placeholder',
-              )}
-              bind:value={participantRequest}
-              disabled={isBusy || nexusActionBusy}></textarea>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="nexus-genesis-create-response"
-              disabled={isBusy ||
-                nexusActionBusy ||
-                !participantRequest.trim() ||
-                !onCreateNexusGenesisParticipantResponse}
-              onclick={() => void createParticipantResponse()}
-            >
-              <ShieldCheck class="size-4" />
-              {vault.t('login.nexus_genesis_create_response')}
-            </Button>
-          </div>
-
-          {#if generatedParticipantResponse}
+          <div class="grid gap-3 sm:grid-cols-[160px_1fr]">
+            <EnrollmentQrCode
+              enrollmentLink={generatedParticipantResponse}
+              loadingLabel={vault.t('login.nexus_genesis_qr_loading')}
+            />
             <div class="space-y-2">
-              <label
-                class="text-xs font-medium text-foreground"
-                for="nexus-generated-response"
-              >
-                {vault.t('login.nexus_genesis_generated_response')}
-              </label>
               <textarea
                 id="nexus-generated-response"
                 class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
@@ -775,50 +784,87 @@
                 type="button"
                 variant="outline"
                 size="sm"
-                onclick={() =>
-                  void navigator.clipboard.writeText(
-                    generatedParticipantResponse,
-                  )}
+                data-testid="nexus-genesis-copy-join-response"
+                onclick={() => void copyJoinResponse()}
               >
                 <Copy class="size-4" />
-                {vault.t('common.copy')}
+                {copyingJoinResponse
+                  ? vault.t('common.copied')
+                  : vault.t('common.copy')}
               </Button>
             </div>
-          {/if}
-
-          <div class="space-y-2 border-t border-border pt-4">
-            <label
-              class="text-xs font-medium text-foreground"
-              for="nexus-received-share"
-            >
-              {vault.t('login.nexus_genesis_receive_share_label')}
-            </label>
-            <textarea
-              id="nexus-received-share"
-              class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              data-testid="nexus-genesis-receive-share-input"
-              placeholder={vault.t(
-                'login.nexus_genesis_receive_share_placeholder',
-              )}
-              bind:value={participantShare}
-              disabled={isBusy || nexusActionBusy}></textarea>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="nexus-genesis-receive-share"
-              disabled={isBusy ||
-                nexusActionBusy ||
-                !participantShare.trim() ||
-                !onReceiveNexusGenesisShare}
-              onclick={() => void receiveParticipantShare()}
-            >
-              <ShieldCheck class="size-4" />
-              {vault.t('login.nexus_genesis_receive_share')}
-            </Button>
           </div>
-        </section>
+        </div>
       {/if}
+
+      <div class="space-y-2 border-t border-border pt-4">
+        <p class="text-xs font-medium text-foreground">
+          {vault.t('login.nexus_genesis_join_share_title')}
+        </p>
+        <p class="text-xs text-pretty text-muted-foreground">
+          {vault.t('login.nexus_genesis_join_share_description')}
+        </p>
+        <label
+          class="text-xs font-medium text-foreground"
+          for="nexus-received-share"
+        >
+          {vault.t('login.nexus_genesis_receive_share_label')}
+        </label>
+        <textarea
+          id="nexus-received-share"
+          class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+          data-testid="nexus-genesis-receive-share-input"
+          placeholder={vault.t('login.nexus_genesis_receive_share_placeholder')}
+          bind:value={participantShare}
+          disabled={isBusy || nexusActionBusy}></textarea>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="nexus-genesis-receive-share"
+          disabled={isBusy ||
+            nexusActionBusy ||
+            !participantShare.trim() ||
+            !onReceiveNexusGenesisShare}
+          onclick={() => void receiveParticipantShare()}
+        >
+          <ShieldCheck class="size-4" />
+          {vault.t('login.nexus_genesis_receive_share')}
+        </Button>
+      </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        data-testid="create-vault-wizard-back"
+        disabled={isBusy || nexusActionBusy}
+        onclick={backToChooser}
+      >
+        {vault.t('common.back')}
+      </Button>
+    </section>
+  {/if}
+
+  {#if showImportFooter}
+    <div class="pt-2" data-testid="login-path-cloud">
+      <div
+        class="flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
+      >
+        <span class="text-xs text-center">
+          {vault.t('login.import_existing_alternative')}
+        </span>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        class="mx-auto mt-2 flex text-foreground"
+        data-testid="login-connect-storage-btn"
+        disabled={isBusy}
+        onclick={onConnectStorage}
+      >
+        <Cloud class="size-4" />
+        {vault.t('login.path_cloud_btn')}
+      </Button>
     </div>
   {/if}
 

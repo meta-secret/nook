@@ -23,21 +23,23 @@ access model.
 
 ## Creation and Import UX
 
-Creation and import are separate top-level workflows. Creation asks for vault
-type first and then branches because Simple and Nexus have fundamentally
-different lifecycles.
+Creation and import are separate top-level workflows. Get started presents
+**three mutually exclusive paths** because Simple create, Nexus create, and
+Nexus join have different lifecycles. Sync-provider import remains a secondary
+“already have a vault” action, not a fourth create/join intent.
 
 | Stage / surface | Choice or state | Transition |
 | --- | --- | --- |
 | Device protection gate | Device mode | Initialize or authorize this browser's protected device identity once. Never ask again during vault creation. |
-| Create, step 1 | Vault type | Choose `simple` or `nexus`. There is no replication selector. |
-| Simple branch | Vault name/action | Create an empty local vault in memory and open it with this device's normal key access. Offer sync later in Settings. |
-| Nexus branch | Nexus policy | Choose participant count `N` and unlock threshold `T`; start reverse onboarding instead of creating/opening a vault. |
-| Nexus reverse onboarding | Participant public keys | Gather the configured roster through signed QR/link/paste responses. No provider is required. |
+| Get started chooser | Path | Choose exactly one: Create Simple, Create Nexus, or Join Nexus. |
+| Create Simple | Vault name/action | Create an empty local vault in memory and open it with this device's normal key access. Offer sync later in Settings. |
+| Create Nexus | Nexus policy | Choose participant count `N` and unlock threshold `T`; start reverse onboarding instead of creating/opening a vault. |
+| Create Nexus waiting | Participant public keys | Gather the configured roster through signed QR/link/paste responses. No provider is required. |
 | Nexus atomic genesis | Encrypted shares | Generate the Nexus root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically. |
+| Join Nexus | Participant response QR | Paste the initiator request and generate this device's signed response QR. Share delivery is a secondary post-genesis step on the same path. |
 | Nexus open | Quorum contributions | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM. |
 | Import | Detected vault type | Fetch from a provider, then route Simple to its unlock/enrollment path or Nexus to quorum access. Provider login never opens Nexus. |
-| Unlocked provider management | Sync provider | Add/remove post-genesis backup replicas for the active vault. |
+| Unlocked provider management / Onboard | Sync provider | Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists. |
 
 See [nexus-genesis.md](nexus-genesis.md) for the complete two-round ceremony and
 security invariants.

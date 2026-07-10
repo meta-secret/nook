@@ -43,9 +43,7 @@ test.describe('provider-free Nexus unlock ceremony', () => {
   })
 
   test('creates and delivers a 2-of-2 Nexus without a sync provider', async () => {
-    await deviceA.getByTestId('vault-mode-select').click()
-    await deviceA.getByTestId('mode-option-nexus').click()
-    await deviceA.getByTestId('create-vault-wizard-continue').click()
+    await deviceA.getByTestId('get-started-path-nexus').click()
     await deviceA.getByTestId('nexus-genesis-name-input').fill('Nexus quorum')
     await deviceA.getByTestId('nexus-genesis-participant-count').fill('2')
     await deviceA.getByTestId('nexus-genesis-threshold').fill('2')
@@ -56,7 +54,7 @@ test.describe('provider-free Nexus unlock ceremony', () => {
     const requestPayload = await genesisRequest.inputValue()
     expect(requestPayload.length).toBeGreaterThan(20)
 
-    await deviceB.getByTestId('nexus-genesis-join-toggle').click()
+    await deviceB.getByTestId('get-started-path-join').click()
     await deviceB
       .getByTestId('nexus-genesis-join-request-input')
       .fill(requestPayload)
