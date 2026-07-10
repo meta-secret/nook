@@ -266,9 +266,9 @@ Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../.
 
 Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT with `repo` scope, or fine-grained with contents + pull requests write on this repo).
 
-The `ci-fix` job runs **`task setup`** (bake the sealed nook-web image, reusing the GHCR toolchain base as cache) **before** `task ci-agent:fix`. Without this, Docker tasks would have no `nook-web:local` image to run. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` builds and loads `nook-web:local`.
+The `ci-fix` / `ci-agent:implement` jobs run **`task setup`** (bake sealed `nook-web:local`) then **`task ci-agent:fix`** / **`task ci-agent:implement`**, which build and run the **`nook-ci-agent:local`** image. That container bind-mounts the checkout and mounts **`/var/run/docker.sock`** so the agent can spawn sibling containers on the host Docker daemon (not Docker-in-Docker). Self-hosted runners share one machine without isolation — the agent must not run on the host. Host Node is not required for these jobs.
 
-Optional env: `CI_AGENT_PROMPT_FILE` (agent instructions), `CI_FIX_LABEL` (PR title/body label).
+Optional env: `CI_AGENT_PROMPT_FILE` (agent instructions), `CI_FIX_LABEL` (PR title/body label), `DOCKER_SOCK` (default `/var/run/docker.sock`).
 
 ### Logging
 
@@ -308,7 +308,7 @@ The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Witho
 
 Opt-in only: create milestones/epics/sub-issues first, then assign `ai-agent` to the focused issue you want executed. Opening an issue (even with labels pre-selected) does not start the job unless GitHub emits a `labeled` event for `ai-agent`. The workflow does **not** auto-create the label — maintainers create it once (`gh label create ai-agent` or the GitHub UI).
 
-Loop: `task setup` → Cursor agent (prompt [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md)) → push branch → open PR → comment on the issue with the PR URL (issue runs) → wait for checks → **squash merge** → optional merged comment. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`.
+Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + docker.sock) → push branch → open PR → comment on the issue with the PR URL (issue runs) → wait for checks → **squash merge** → optional merged comment. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt: [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 
 ## Agent checklist when touching CI or e2e
 

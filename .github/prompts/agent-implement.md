@@ -14,7 +14,10 @@ Read `.cortex/AGENTS.md` and `.cortex/workflows/coding-bro.md` before making cha
 
 ## CI toolchain (Docker)
 
-The job runs `task setup` before you start. It builds the sealed **nook-web image** (toolchain base from GHCR cache + workspace source) and loads it as `nook-web:local`. All `task` Docker commands run that image automatically.
+The job runs `task setup` before you start (sealed **nook-web:local**). You run inside the
+**nook-ci-agent** container with the repo bind-mounted and the host Docker socket mounted
+(`/var/run/docker.sock` — sibling containers, not Docker-in-Docker). Prefer `task check` /
+`task ci:pr` so validation uses the host daemon and the sealed nook-web image.
 
 ## Steps
 

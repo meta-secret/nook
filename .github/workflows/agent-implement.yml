@@ -1,6 +1,10 @@
 # Cursor SDK agent: implement a labeled issue or a manual prompt, then open a PR
 # and squash-merge after checks pass (same loop as main.yml ci-fix).
 #
+# The agent runs inside the nook-ci-agent Docker image (task ci-agent:implement)
+# with the repo bind-mounted and /var/run/docker.sock mounted so validation uses
+# the host Docker daemon (sibling containers — not Docker-in-Docker).
+#
 # Triggers:
 #   - issues labeled — only when the label being assigned is exactly `ai-agent`
 #   - workflow_dispatch with a required free-text `prompt`
@@ -60,11 +64,6 @@ jobs:
         uses: ./.github/actions/nook-docker-setup
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
 
       - name: Resolve toolchain image
         run: task setup WASM_BUILD_MODE=prod
@@ -135,7 +134,7 @@ jobs:
             } >> "$GITHUB_ENV"
           fi
 
-      - name: Run ci-agent implement
+      - name: Run ci-agent implement (Docker + docker.sock)
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
