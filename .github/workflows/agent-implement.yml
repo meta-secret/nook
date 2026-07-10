@@ -2,7 +2,7 @@
 # and squash-merge after checks pass (same loop as main.yml ci-fix).
 #
 # Triggers:
-#   - issues opened/labeled when the issue has the `agent` label
+#   - issues labeled — only when the label being assigned is exactly `agent`
 #   - workflow_dispatch with a required free-text `prompt`
 #
 # Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a
@@ -13,7 +13,7 @@ name: Agent implement
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [labeled]
   workflow_dispatch:
     inputs:
       prompt:
@@ -34,8 +34,9 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' &&
-       github.event.issue.user.type != 'Bot' &&
-       contains(join(github.event.issue.labels.*.name, ','), 'agent'))
+       github.event.action == 'labeled' &&
+       github.event.label.name == 'agent' &&
+       github.event.issue.user.type != 'Bot')
     runs-on: nook
     timeout-minutes: 120
     permissions:

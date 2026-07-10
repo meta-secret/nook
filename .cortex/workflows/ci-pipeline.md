@@ -10,7 +10,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release-v1.yml`](../../.github/workflows/release-v1.yml)   | Push to `release/v1` + manual | Verify, wasm-bindgen tests, build, **full local-provider e2e**, GitHub Pages deploy to stable `nokey.sh` | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue opened/labeled with `agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
 
@@ -303,10 +303,10 @@ The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Witho
 
 | Trigger | When it runs |
 | ------- | ------------ |
-| `issues: [opened, labeled]` | Only if the issue currently has the repo label **`agent`** (and is not bot-authored) |
+| `issues: [labeled]` | Only when the label being assigned is exactly **`agent`** (not on issue open, not when other labels are added) |
 | `workflow_dispatch` | Always, using the required `prompt` input |
 
-Label later on purpose: create milestones/epics/sub-issues first, then add `agent` only to the focused issue you want executed. The workflow does **not** auto-create the label — maintainers create it once (`gh label create agent` or the GitHub UI).
+Opt-in only: create milestones/epics/sub-issues first, then assign `agent` to the focused issue you want executed. Opening an issue (even with labels pre-selected) does not start the job unless GitHub emits a `labeled` event for `agent`. The workflow does **not** auto-create the label — maintainers create it once (`gh label create agent` or the GitHub UI).
 
 Loop: `task setup` → Cursor agent (prompt [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md)) → push branch → open PR → comment on the issue with the PR URL (issue runs) → wait for checks → **squash merge** → optional merged comment. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`.
 
