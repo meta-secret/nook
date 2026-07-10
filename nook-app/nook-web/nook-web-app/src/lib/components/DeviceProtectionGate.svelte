@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { KeyRound, ShieldCheck, TriangleAlert } from '@lucide/svelte'
+  import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
@@ -227,9 +227,9 @@
           : vault.t('device_protection.pin_unlock_action')}
       </Button>
 
-      <div class="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+      <div class="rounded-md border border-border/60 bg-muted/20 p-3">
         <div class="flex gap-2 text-xs text-muted-foreground">
-          <TriangleAlert class="mt-0.5 size-4 shrink-0 text-destructive" />
+          <CircleHelp class="mt-0.5 size-4 shrink-0" />
           <p>{vault.t('device_protection.pin_recovery_warning')}</p>
         </div>
         <Button
@@ -254,9 +254,9 @@
           : vault.t('device_protection.unlock_action')}
       </Button>
 
-      <div class="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+      <div class="rounded-md border border-border/60 bg-muted/20 p-3">
         <div class="flex gap-2 text-xs text-muted-foreground">
-          <TriangleAlert class="mt-0.5 size-4 shrink-0 text-destructive" />
+          <CircleHelp class="mt-0.5 size-4 shrink-0" />
           <p>{vault.t('device_protection.recovery_warning')}</p>
         </div>
         <Button
