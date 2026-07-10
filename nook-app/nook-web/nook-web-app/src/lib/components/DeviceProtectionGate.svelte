@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { KeyRound, ShieldCheck, TriangleAlert } from '@lucide/svelte'
+  import { KeyRound, Plus, ShieldCheck, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
@@ -15,6 +15,7 @@
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
+  let setupWorkflow = $state<'existing' | 'create'>('create')
 
   const needsSetup = $derived(
     vault.deviceProtectionStatus === 'missing' ||
@@ -111,56 +112,93 @@
           : vault.t('device_protection.pin_setup_action')}
       </Button>
     {:else if needsSetup}
-      <Button
-        class="w-full"
-        disabled={vault.isVerifying}
-        data-testid="device-protection-existing-passkey-btn"
-        onclick={() => vault.recoverDeviceProtectionWithPasskey()}
-      >
-        {vault.isVerifying
-          ? vault.t('device_protection.authorizing')
-          : vault.t('device_protection.existing_passkey_action')}
-      </Button>
-      <p class="text-center text-xs text-muted-foreground">
-        {vault.t('device_protection.existing_passkey_hint')}
-      </p>
+      <fieldset class="space-y-3" disabled={vault.isVerifying}>
+        <legend class="mb-2 text-sm font-medium">
+          {vault.t('device_protection.setup_choice_label')}
+        </legend>
+        <div class="grid grid-cols-2 gap-2">
+          <Button
+            variant={setupWorkflow === 'existing' ? 'secondary' : 'outline'}
+            aria-pressed={setupWorkflow === 'existing'}
+            data-testid="device-protection-use-existing-choice"
+            onclick={() => (setupWorkflow = 'existing')}
+          >
+            <KeyRound class="size-4" />
+            {vault.t('device_protection.existing_passkey_alternative_action')}
+          </Button>
+          <Button
+            variant={setupWorkflow === 'create' ? 'secondary' : 'outline'}
+            aria-pressed={setupWorkflow === 'create'}
+            data-testid="device-protection-create-new-choice"
+            onclick={() => (setupWorkflow = 'create')}
+          >
+            <Plus class="size-4" />
+            {vault.t('device_protection.new_passkey_alternative_action')}
+          </Button>
+        </div>
+      </fieldset>
 
-      <div class="pt-2">
-        <DeviceModeSelect
-          {vault}
-          id="device-protection-mode"
-          disabled={vault.isVerifying}
-          translationNamespace="device_protection"
-        />
-      </div>
+      {#if setupWorkflow === 'existing'}
+        <div
+          class="space-y-3 border-t pt-4"
+          data-testid="device-protection-existing-workflow"
+        >
+          <p class="text-center text-xs text-muted-foreground">
+            {vault.t('device_protection.existing_passkey_hint')}
+          </p>
+          <Button
+            class="w-full"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-existing-passkey-btn"
+            onclick={() => vault.recoverDeviceProtectionWithPasskey()}
+          >
+            {vault.isVerifying
+              ? vault.t('device_protection.authorizing')
+              : vault.t('device_protection.existing_passkey_action')}
+          </Button>
+        </div>
+      {:else if setupWorkflow === 'create'}
+        <div
+          class="space-y-4 border-t pt-4"
+          data-testid="device-protection-create-workflow"
+        >
+          <DeviceModeSelect
+            {vault}
+            id="device-protection-mode"
+            disabled={vault.isVerifying}
+            translationNamespace="device_protection"
+          />
 
-      <div class="space-y-2 pt-2">
-        <label class="block text-sm font-medium" for="device-protection-label">
-          {vault.t('device_protection.passkey_label')}
-        </label>
-        <input
-          id="device-protection-label"
-          class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-          type="text"
-          autocomplete="off"
-          placeholder={vault.t('device_protection.passkey_label_placeholder')}
-          bind:value={passkeyLabel}
-          disabled={vault.isVerifying}
-          data-testid="device-protection-label-input"
-        />
-      </div>
-      <Button
-        class="w-full"
-        variant="outline"
-        disabled={vault.isVerifying}
-        data-testid="device-protection-setup-btn"
-        onclick={() =>
-          vault.setupDeviceProtection(passkeyLabel, vault.draftDeviceMode)}
-      >
-        {vault.isVerifying
-          ? vault.t('device_protection.authorizing')
-          : vault.t('device_protection.setup_action')}
-      </Button>
+          <div class="space-y-2">
+            <label class="block text-sm font-medium" for="device-protection-label">
+              {vault.t('device_protection.passkey_label')}
+            </label>
+            <input
+              id="device-protection-label"
+              class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+              type="text"
+              autocomplete="off"
+              placeholder={vault.t(
+                'device_protection.passkey_label_placeholder',
+              )}
+              bind:value={passkeyLabel}
+              disabled={vault.isVerifying}
+              data-testid="device-protection-label-input"
+            />
+          </div>
+          <Button
+            class="w-full"
+            disabled={vault.isVerifying}
+            data-testid="device-protection-setup-btn"
+            onclick={() =>
+              vault.setupDeviceProtection(passkeyLabel, vault.draftDeviceMode)}
+          >
+            {vault.isVerifying
+              ? vault.t('device_protection.authorizing')
+              : vault.t('device_protection.setup_action')}
+          </Button>
+        </div>
+      {/if}
     {:else if vault.deviceProtectionStatus === 'pin'}
       <div class="space-y-2">
         <label class="block text-sm font-medium" for="device-protection-pin">

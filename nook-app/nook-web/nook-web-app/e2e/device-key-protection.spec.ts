@@ -74,6 +74,38 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
 }
 
 test.describe('passkey device-key protection', () => {
+  test('makes passkey creation primary and keeps setup workflows mutually exclusive', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.goto('/')
+
+    await expect(
+      page.getByTestId('device-protection-create-workflow'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('device-protection-existing-workflow'),
+    ).toBeHidden()
+
+    await page.getByTestId('device-protection-use-existing-choice').click()
+    await expect(
+      page.getByTestId('device-protection-existing-workflow'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('device-protection-create-workflow'),
+    ).toBeHidden()
+
+    await page.getByTestId('device-protection-create-new-choice').click()
+    await expect(
+      page.getByTestId('device-protection-create-workflow'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('device-protection-existing-workflow'),
+    ).toBeHidden()
+  })
+
   test('derives the device identity and requires passkey authorization after reload', async ({
     page,
   }) => {
@@ -104,6 +136,10 @@ test.describe('passkey device-key protection', () => {
     await createLocalVaultOnLogin(page, 'Passkey test vault')
     await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
+    await expect(
+      page.getByTestId('device-protection-create-new-choice'),
+    ).toBeHidden()
+    await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
     await page.getByTestId('device-protection-unlock-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
 
@@ -129,6 +165,7 @@ test.describe('passkey device-key protection', () => {
     await clearDeviceMetadata(page)
 
     await page.reload()
+    await page.getByTestId('device-protection-use-existing-choice').click()
     await expect(
       page.getByTestId('device-protection-existing-passkey-btn'),
     ).toBeVisible()
