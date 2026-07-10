@@ -187,7 +187,7 @@
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
-              <span class="truncate font-mono text-foreground"
+              <span class="truncate text-foreground"
                 >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
               >
               {#if item.websiteUrl}
@@ -213,7 +213,7 @@
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
-              <span class="truncate font-mono text-foreground"
+              <span class="truncate text-foreground"
                 >{item.username || vault.t('vault.fields.no_username')}</span
               >
               {#if item.username}
@@ -279,7 +279,7 @@
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
-              <span class="truncate font-mono text-foreground"
+              <span class="truncate text-foreground"
                 >{item.websiteUrl || vault.t('vault.fields.no_website')}</span
               >
               {#if item.websiteUrl}
@@ -364,7 +364,7 @@
             <div
               class="flex items-center justify-between gap-2 min-w-0 bg-muted/20 hover:bg-muted/40 rounded-md px-2 py-1 transition-colors border border-border/20"
             >
-              <span class="truncate font-mono text-foreground"
+              <span class="truncate text-foreground"
                 >{item.name || vault.t('vault.fields.no_account_name')}</span
               >
               {#if item.name}

@@ -2,6 +2,7 @@
   import { KeyRound, ShieldCheck, TriangleAlert } from '@lucide/svelte'
   import type { VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
+  import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
   import {
     Card,
     CardContent,
@@ -14,7 +15,6 @@
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
-  const deviceModes = ['standard', 'anti-hacker'] as const
 
   const needsSetup = $derived(
     vault.deviceProtectionStatus === 'missing' ||
@@ -125,39 +125,13 @@
         {vault.t('device_protection.existing_passkey_hint')}
       </p>
 
-      <div
-        class="grid gap-2 pt-2"
-        role="radiogroup"
-        aria-label={vault.t('device_protection.mode_group_label')}
-        data-testid="mode-group-device"
-      >
-        {#each deviceModes as mode (mode)}
-          <button
-            type="button"
-            class={[
-              'rounded-md border p-3 text-left text-sm transition-colors',
-              vault.draftDeviceMode === mode
-                ? 'border-primary bg-primary/10 text-foreground'
-                : 'border-border/60 bg-background hover:bg-muted/40',
-            ]}
-            aria-pressed={vault.draftDeviceMode === mode}
-            data-testid={`mode-option-${mode}`}
-            onclick={() => {
-              vault.draftDeviceMode = mode
-            }}
-          >
-            <span class="block font-medium">
-              {vault.t(
-                `device_protection.mode_${mode.replace('-', '_')}_title`,
-              )}
-            </span>
-            <span class="mt-1 block text-xs text-muted-foreground">
-              {vault.t(
-                `device_protection.mode_${mode.replace('-', '_')}_description`,
-              )}
-            </span>
-          </button>
-        {/each}
+      <div class="pt-2">
+        <DeviceModeSelect
+          {vault}
+          id="device-protection-mode"
+          disabled={vault.isVerifying}
+          translationNamespace="device_protection"
+        />
       </div>
 
       <div class="space-y-2 pt-2">

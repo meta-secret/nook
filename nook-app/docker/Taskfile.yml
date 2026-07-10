@@ -176,7 +176,7 @@ tasks:
         -v /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
         -w /meta-secret/nook
         {{.DOCKER_IMAGE}}
-        sh -c "cd nook-app/nook-web/nook-web-app && bun install && task _web:dev"
+        sh -c "(cd nook-app/nook-web/nook-web-app && bun install) && task _web:dev"
 
   docker:web:dev:fast:
     internal: true
@@ -194,4 +194,4 @@ tasks:
         -v /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
         -w /meta-secret/nook
         {{.DOCKER_IMAGE}}
-        sh -c "cd nook-app/nook-web/nook-web-app && bun install && task _web:dev:fast"
+        sh -c "(cd nook-app/nook-web/nook-web-app && bun install) && task _web:dev:fast"

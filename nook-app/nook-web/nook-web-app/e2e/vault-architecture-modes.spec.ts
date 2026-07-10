@@ -144,10 +144,10 @@ test.describe('vault architecture modes', () => {
     ])
     await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
 
-    await page.getByTestId('mode-option-anti-hacker').click()
-    await expect(page.getByTestId('mode-option-anti-hacker')).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    await page.getByTestId('device-mode-select').click()
+    await page.getByRole('option', { name: 'High security' }).click()
+    await expect(page.getByTestId('device-mode-select')).toContainText(
+      'High security',
     )
 
     await page.getByTestId('mode-option-nexus').click()

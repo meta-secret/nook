@@ -687,7 +687,7 @@
                     >
                   </div>
                   <div
-                    class="truncate font-mono text-[11px] {selected
+                    class="truncate text-xs {selected
                       ? 'text-muted-foreground'
                       : 'text-muted-foreground/80'}"
                     data-testid="onboard-provider-detail-{provider.id}"

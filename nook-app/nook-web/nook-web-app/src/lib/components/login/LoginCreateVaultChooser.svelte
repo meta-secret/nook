@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Cloud } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
+  import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import { onboardingType } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
@@ -20,7 +21,6 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  const deviceModes = ['standard', 'anti-hacker'] as const
   const vaultTypes = ['simple', 'nexus'] as const
   const replicationTypes = ['personal', 'shared'] as const
   const draftOnboardingType = $derived(
@@ -33,37 +33,7 @@
     {vault.t('login.create_vault_intro')}
   </p>
 
-  <div class="space-y-2" data-testid="mode-group-device">
-    <p class="text-sm font-semibold text-foreground">
-      {vault.t('architecture_modes.device_mode_title')}
-    </p>
-    <div class="grid gap-3 sm:grid-cols-2">
-      {#each deviceModes as mode (mode)}
-        <button
-          type="button"
-          class={[
-            'w-full rounded-md border p-3 text-left text-sm transition-colors',
-            vault.draftDeviceMode === mode
-              ? 'border-primary bg-primary/10 text-foreground'
-              : 'border-border/60 bg-background hover:bg-muted/40',
-          ]}
-          aria-pressed={vault.draftDeviceMode === mode}
-          data-testid={`mode-option-${mode}`}
-          disabled={isBusy}
-          onclick={() => {
-            vault.draftDeviceMode = mode
-          }}
-        >
-          <span class="block font-medium">
-            {vault.t(`architecture_modes.device_mode_${mode}_title`)}
-          </span>
-          <span class="mt-1 block text-xs text-muted-foreground">
-            {vault.t(`architecture_modes.device_mode_${mode}_description`)}
-          </span>
-        </button>
-      {/each}
-    </div>
-  </div>
+  <DeviceModeSelect {vault} id="vault-device-mode" disabled={isBusy} />
 
   <div class="grid gap-3 sm:grid-cols-2">
     <div class="space-y-2" data-testid="mode-group-vault">
