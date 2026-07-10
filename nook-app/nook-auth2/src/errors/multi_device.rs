@@ -69,6 +69,42 @@ pub enum MultiDeviceError {
     #[error("Invalid nexus threshold policy.")]
     InvalidNexusThreshold,
 
+    #[error("Invalid nexus genesis session binding.")]
+    InvalidNexusGenesisSession,
+
+    #[error("Invalid nexus genesis participant response signature.")]
+    InvalidNexusGenesisSignature,
+
+    #[error("Nexus genesis participant already exists: {device_id}.")]
+    DuplicateNexusGenesisParticipant { device_id: String },
+
+    #[error("Nexus genesis roster is full.")]
+    NexusGenesisRosterFull,
+
+    #[error("Nexus genesis needs {required} participants, but has {available}.")]
+    NexusGenesisIncomplete { required: u8, available: usize },
+
+    #[error("Nexus genesis share delivery is not addressed to this device.")]
+    NexusGenesisDeliveryRecipientMismatch,
+
+    #[error("Invalid nexus genesis payload.")]
+    InvalidNexusGenesisPayload,
+
+    #[error("Invalid nexus unlock session binding.")]
+    InvalidNexusUnlockSession,
+
+    #[error("Invalid nexus unlock signature.")]
+    InvalidNexusUnlockSignature,
+
+    #[error("Invalid nexus unlock payload.")]
+    InvalidNexusUnlockPayload,
+
+    #[error("Nexus unlock response already exists for device {device_id} or share index.")]
+    DuplicateNexusUnlockParticipant { device_id: String },
+
+    #[error("Nexus unlock session is not addressed to this requester identity.")]
+    NexusUnlockRecipientMismatch,
+
     #[error("Not enough nexus shares: need {threshold}, got {available}.")]
     NotEnoughNexusShares { threshold: u8, available: usize },
 

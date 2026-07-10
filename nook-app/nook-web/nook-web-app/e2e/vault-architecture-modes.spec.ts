@@ -115,11 +115,23 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
   }
 }
 
-async function continueToReplicationStep(page: Page) {
+async function continueToCreateStep(page: Page) {
   await page.getByTestId('create-vault-wizard-continue').click()
-  await expect(
-    page.getByTestId('create-vault-wizard-replication'),
-  ).toBeVisible()
+  await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+}
+
+async function setLegacyReplicationForProviderTest(
+  page: Page,
+  mode: 'personal' | 'shared',
+) {
+  await page.evaluate((replicationMode) => {
+    const testWindow = window as Window & {
+      __nookVault?: { draftReplicationType: 'personal' | 'shared' }
+    }
+    if (testWindow.__nookVault) {
+      testWindow.__nookVault.draftReplicationType = replicationMode
+    }
+  }, mode)
 }
 
 test.describe('vault architecture modes', () => {
@@ -132,7 +144,7 @@ test.describe('vault architecture modes', () => {
     })
   })
 
-  test('guides vault creation through one architecture decision at a time', async ({
+  test('routes simple and nexus vaults into different creation workflows', async ({
     page,
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
@@ -145,39 +157,44 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('mode-group-provider-capability'),
     ).toHaveCount(0)
-    await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
+    await expect(page.getByTestId('nexus-genesis-introduction')).toHaveCount(0)
+    await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
+    await expect(
+      page.getByTestId('create-vault-wizard-nav-replication'),
+    ).toHaveCount(0)
+
+    await continueToCreateStep(page)
+    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
+    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
+    await page.getByTestId('create-vault-wizard-back').click()
 
     await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-nexus').click()
-    await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
-
-    await continueToReplicationStep(page)
-    await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
-    await expect(page.getByTestId('mode-group-replication')).toBeVisible()
-    await page.getByTestId('create-vault-wizard-back').click()
-    await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
-
-    await continueToReplicationStep(page)
+    await expect(page.getByTestId('nexus-genesis-introduction')).toBeVisible()
     await page.getByTestId('create-vault-wizard-continue').click()
-    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
-    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
+    await expect(page.getByTestId('nexus-genesis-policy-step')).toBeVisible()
+    await expect(page.getByTestId('nexus-genesis-name-input')).toBeVisible()
+    await expect(
+      page.getByTestId('nexus-genesis-participant-count'),
+    ).toHaveValue('3')
+    await expect(
+      page.getByTestId('nexus-genesis-participant-count'),
+    ).toHaveAttribute('max', '16')
+    await expect(page.getByTestId('nexus-genesis-threshold')).toHaveValue('2')
+    await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
+    await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
   })
 
   test('renders wizard copy from the bundled locale catalogs', async ({
     page,
   }) => {
     const chooser = page.getByTestId('login-create-vault-chooser')
-    await expect(chooser).toContainText(
-      'Set up your first vault in three short steps.',
-    )
+    await expect(chooser).toContainText('Choose a vault type.')
     await expect(
       page.getByTestId('create-vault-wizard-nav-vault'),
     ).toContainText('Vault')
     await expect(
-      page.getByTestId('create-vault-wizard-nav-replication'),
-    ).toContainText('Replication')
-    await expect(
-      page.getByTestId('create-vault-wizard-nav-create'),
+      page.getByTestId('create-vault-wizard-nav-next'),
     ).toContainText('Create')
     await expect(page.getByTestId('create-vault-wizard-vault')).toContainText(
       'Choose a vault type',
@@ -189,17 +206,12 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(chooser).toContainText(
-      'Настройте первый сейф за три коротких шага.',
-    )
+    await expect(chooser).toContainText('Выберите тип сейфа.')
     await expect(
       page.getByTestId('create-vault-wizard-nav-vault'),
     ).toContainText('Сейф')
     await expect(
-      page.getByTestId('create-vault-wizard-nav-replication'),
-    ).toContainText('Репликация')
-    await expect(
-      page.getByTestId('create-vault-wizard-nav-create'),
+      page.getByTestId('create-vault-wizard-nav-next'),
     ).toContainText('Создание')
     await expect(page.getByTestId('create-vault-wizard-vault')).toContainText(
       'Выберите тип сейфа',
@@ -214,9 +226,7 @@ test.describe('vault architecture modes', () => {
   }) => {
     await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-simple').click()
-    await continueToReplicationStep(page)
-    await page.getByTestId('replication-mode-select').click()
-    await page.getByTestId('mode-option-personal').click()
+    await continueToCreateStep(page)
     await createLocalVaultOnLogin(page, 'Simple personal architecture')
     await assertVaultReady(page)
 
@@ -231,40 +241,26 @@ test.describe('vault architecture modes', () => {
     await assertAppLogsDoNotLeak(page, [SIMPLE_SECRET_VALUE, prfOutput])
   })
 
-  test('keeps a new nexus vault locked for secret creation until shares exist', async ({
+  test('does not create a nexus vault before its participant ceremony', async ({
     page,
   }) => {
     await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-nexus').click()
-    await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
-    await createLocalVaultOnLogin(page, 'Nexus architecture')
-    await assertVaultReady(page)
-
-    await expect(page.getByTestId('add-secret-btn')).toBeDisabled()
-    await expect(page.getByTestId('secret-edit-blocked-banner')).toContainText(
-      'Nexus secret creation is locked',
-    )
-
-    await openOnboardDevicePanel(page)
-    await expect(page.getByTestId('nexus-onboard-guidance')).toBeVisible()
-    await expect(page.getByTestId('nexus-participant-readiness')).toContainText(
-      '0 of 2 participants ready',
-    )
-    await expect(page.getByTestId('onboard-password-prerequisite')).toHaveCount(
-      0,
-    )
-    await expect(page.getByTestId('onboard-device-submit')).toHaveCount(0)
-
-    await page.getByTestId('nexus-review-joins').click()
-    await expect(page.getByTestId('vault-devices-section')).toBeVisible()
+    await expect(page.getByTestId('nexus-genesis-introduction')).toBeVisible()
+    await page.getByTestId('create-vault-wizard-continue').click()
+    await expect(page.getByTestId('nexus-genesis-policy-step')).toBeVisible()
+    await page
+      .getByTestId('nexus-genesis-name-input')
+      .fill('Nexus architecture')
+    await expect(page.getByTestId('nexus-genesis-start')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
+    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
   })
 
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
-    await continueToReplicationStep(page)
-    await page.getByTestId('replication-mode-select').click()
-    await page.getByTestId('mode-option-shared').click()
+    await setLegacyReplicationForProviderTest(page, 'shared')
     await openLoginProviderSetup(page)
 
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
@@ -293,9 +289,7 @@ test.describe('vault architecture modes', () => {
       fileName: SHARED_PROVIDER.fileName,
     })
 
-    await continueToReplicationStep(page)
-    await page.getByTestId('replication-mode-select').click()
-    await page.getByTestId('mode-option-shared').click()
+    await setLegacyReplicationForProviderTest(page, 'shared')
     await createLocalVaultOnLogin(page, 'Shared replication architecture')
     const sharedSecretKey = uniqueSecretKey('architecture-shared')
     await addSecret(page, sharedSecretKey, SHARED_SECRET_VALUE)
@@ -460,9 +454,7 @@ test.describe('vault architecture modes', () => {
       sharedPermissionStatus: 403,
     })
 
-    await continueToReplicationStep(page)
-    await page.getByTestId('replication-mode-select').click()
-    await page.getByTestId('mode-option-shared').click()
+    await setLegacyReplicationForProviderTest(page, 'shared')
     await createLocalVaultOnLogin(page, 'Manual shared grant architecture')
     await seedOauthFileSyncProvidersWhileUnlocked(
       page,
@@ -517,11 +509,9 @@ test.describe('vault architecture modes', () => {
       ).toHaveCount(0)
       await page.getByTestId('vault-mode-select').click()
       await page.getByTestId('mode-option-nexus').click()
-      await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
+      await expect(page.getByTestId('nexus-genesis-introduction')).toBeVisible()
 
-      await continueToReplicationStep(page)
-      await page.getByTestId('replication-mode-select').click()
-      await page.getByTestId('mode-option-shared').click()
+      await setLegacyReplicationForProviderTest(page, 'shared')
       await openLoginProviderSetup(page)
       await expect(page.getByTestId('provider-picker-list')).toBeVisible()
       await expect(page.getByTestId('provider-option-github')).toBeDisabled()

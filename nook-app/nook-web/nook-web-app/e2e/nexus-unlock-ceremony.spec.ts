@@ -1,69 +1,23 @@
 import { test, expect, type BrowserContext, type Page } from './fixtures'
 import {
-  approveJoinLocalE2eFromBanner,
-  assertVaultReady,
-  authorizeDeviceProtection,
-  connectLocalE2eJoinerDevice,
+  clearBrowserVault,
   createIsolatedContext,
-  createLocalVaultOnLogin,
-  disableLoginAutoUnlock,
-  disableVaultIdleLock,
-  E2E_OAUTH_ONBOARD_PROVIDER,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   flushNookLogPersistQueue,
   readPersistedAppLogs,
-  forceVaultQuiescentForE2e,
-  seedOauthFileSyncProvidersWhileUnlocked,
-  sendJoinRequestLocalE2e,
-  triggerVaultSyncRefresh,
   UI_TIMEOUT_MS,
-  waitForLoadedSyncProviders,
-  waitForSyncRemoteVaultState,
-  waitForVaultOperationsIdle,
-  waitForVaultSyncIdle,
 } from './helpers'
-import { createLocalE2eFileSyncVaultStub } from './file-sync-stub'
 
-const NEXUS_PROVIDER = {
-  ...E2E_OAUTH_ONBOARD_PROVIDER,
-  id: 'nexus-ceremony-provider',
-  label: 'Nexus ceremony sync',
-  fileName: 'nexus-ceremony-events.yaml',
-}
-
-async function openLocalShareContribution(page: Page): Promise<string> {
-  await expect(page.getByTestId('nexus-ceremony-panel')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await page.getByTestId('nexus-open-local-share-btn').click()
-  const output = page.getByTestId('nexus-local-share-output')
-  await expect(output).toBeVisible({ timeout: UI_TIMEOUT_MS })
-  await expect
-    .poll(async () => (await output.inputValue()).trim().length, {
-      timeout: UI_TIMEOUT_MS,
-    })
-    .toBeGreaterThan(10)
-  const value = (await output.inputValue()).trim()
-  expect(value).toContain('"share"')
-  return value
-}
-
-async function lockVault(page: Page) {
-  await page.getByTestId('header-lock-vault-btn').click()
-  await authorizeDeviceProtection(page)
-  await expect(page.getByTestId('login-gate')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+async function openFreshDevice(page: Page) {
+  await page.goto('/')
+  await clearBrowserVault(page)
+  await page.reload()
+  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
   })
 }
 
-async function waitForCeremonyPanel(page: Page) {
-  await expect(page.getByTestId('nexus-ceremony-panel')).toBeVisible({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await expect(page.getByTestId('login-unlock-method-password')).toHaveCount(0)
-}
-
-test.describe('nexus unlock ceremony', () => {
+test.describe('provider-free Nexus unlock ceremony', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(180_000)
 
@@ -71,66 +25,14 @@ test.describe('nexus unlock ceremony', () => {
   let deviceB: Page
   let contextA: BrowserContext
   let contextB: BrowserContext
-  let stub: ReturnType<typeof createLocalE2eFileSyncVaultStub>
-  let shareA = ''
-  let shareB = ''
 
   test.beforeAll(async ({ browser }) => {
     contextA = await createIsolatedContext(browser)
     contextB = await createIsolatedContext(browser)
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
-    await disableVaultIdleLock(deviceB)
-
-    await deviceA.goto('/')
-    await expect(deviceA.getByTestId('login-create-vault-chooser')).toBeVisible(
-      {
-        timeout: UI_TIMEOUT_MS,
-      },
-    )
-    await deviceA.getByTestId('vault-mode-select').click()
-    await deviceA.getByTestId('mode-option-nexus').click()
-    await expect(deviceA.getByTestId('nexus-readiness-gate')).toBeVisible()
-    await createLocalVaultOnLogin(deviceA, 'Nexus ceremony vault')
-    await assertVaultReady(deviceA)
-    await expect(deviceA.getByTestId('add-secret-btn')).toBeDisabled()
-
-    stub = createLocalE2eFileSyncVaultStub('', NEXUS_PROVIDER.fileName)
-    await stub.install(deviceA, {
-      fileName: NEXUS_PROVIDER.fileName,
-      vaultYaml: '',
-    })
-    await stub.install(deviceB, {
-      fileName: NEXUS_PROVIDER.fileName,
-      vaultYaml: '',
-    })
-
-    // Keep genesis unlocked: nexus cannot reconnect via device-key envelopes.
-    await seedOauthFileSyncProvidersWhileUnlocked(
-      deviceA,
-      [NEXUS_PROVIDER],
-      stub,
-    )
-    await waitForLoadedSyncProviders(deviceA)
-    await forceVaultQuiescentForE2e(deviceA)
-    await deviceA.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            runFanOutSyncAfterLocalSave?: () => Promise<void>
-          }
-        }
-      ).__nookVault
-      await vault?.runFanOutSyncAfterLocalSave?.()
-    })
-    await waitForVaultOperationsIdle(deviceA)
-    await waitForVaultSyncIdle(deviceA)
-    // Nexus genesis has no auth envelopes; wait for any event-log fan-out.
-    await expect
-      .poll(() => stub.getEventFileCount(), {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-      .toBeGreaterThan(0)
+    await openFreshDevice(deviceA)
+    await openFreshDevice(deviceB)
   })
 
   test.afterAll(async () => {
@@ -140,113 +42,120 @@ test.describe('nexus unlock ceremony', () => {
     await contextB?.close()
   })
 
-  test('enrolls a second device and issues nexus shares', async () => {
-    await connectLocalE2eJoinerDevice(deviceB, NEXUS_PROVIDER.fileName)
-    const join = await sendJoinRequestLocalE2e(deviceB, stub)
+  test('creates and delivers a 2-of-2 Nexus without a sync provider', async () => {
+    await deviceA.getByTestId('vault-mode-select').click()
+    await deviceA.getByTestId('mode-option-nexus').click()
+    await deviceA.getByTestId('create-vault-wizard-continue').click()
+    await deviceA.getByTestId('nexus-genesis-name-input').fill('Nexus quorum')
+    await deviceA.getByTestId('nexus-genesis-participant-count').fill('2')
+    await deviceA.getByTestId('nexus-genesis-threshold').fill('2')
+    await deviceA.getByTestId('nexus-genesis-start').click()
 
-    await triggerVaultSyncRefresh(deviceA)
-    await approveJoinLocalE2eFromBanner(deviceA, join.deviceId, stub, 2)
+    const genesisRequest = deviceA.getByTestId('nexus-genesis-request-output')
+    await expect(genesisRequest).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const requestPayload = await genesisRequest.inputValue()
+    expect(requestPayload.length).toBeGreaterThan(20)
 
-    await waitForSyncRemoteVaultState(
-      stub,
-      (snapshot) =>
-        snapshot.memberPkIds.length >= 2 && snapshot.nexusShareCount >= 2,
+    await deviceB.getByTestId('nexus-genesis-join-toggle').click()
+    await deviceB
+      .getByTestId('nexus-genesis-join-request-input')
+      .fill(requestPayload)
+    await deviceB.getByTestId('nexus-genesis-create-response').click()
+    const responseOutput = deviceB.getByTestId(
+      'nexus-genesis-generated-response',
     )
+    await expect(responseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const participantResponse = await responseOutput.inputValue()
+    const fingerprintText =
+      (await deviceB
+        .getByTestId('nexus-genesis-generated-fingerprint')
+        .textContent()) ?? ''
+    const fingerprint = fingerprintText.split(':').at(-1)?.trim() ?? ''
+    expect(fingerprint.length).toBeGreaterThan(5)
+
+    await deviceA
+      .getByTestId('nexus-genesis-response-input')
+      .fill(participantResponse)
+    await deviceA.getByTestId('nexus-genesis-add-participant').click()
+    await expect(deviceA.getByTestId('nexus-genesis-progress')).toContainText(
+      '2 / 2',
+    )
+    await expect(deviceA.getByTestId('nexus-genesis-finalize')).toBeEnabled()
+    await deviceA.getByTestId('nexus-genesis-finalize').click()
+
+    const participantDelivery = deviceA
+      .getByTestId('nexus-genesis-delivery')
+      .filter({ hasText: fingerprint })
+    await expect(participantDelivery).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const deliveryPayload = await participantDelivery
+      .getByTestId('nexus-genesis-delivery-output')
+      .inputValue()
+    expect(deliveryPayload.length).toBeGreaterThan(20)
+
+    await deviceB
+      .getByTestId('nexus-genesis-receive-share-input')
+      .fill(deliveryPayload)
+    await deviceB.getByTestId('nexus-genesis-receive-share').click()
+    await expect(
+      deviceB.getByText(/protected locally|сохранена локально/i),
+    ).toBeVisible()
+
+    await deviceA.getByTestId('nexus-genesis-delivery-complete').click()
+    await expect(deviceA.getByTestId('nexus-ceremony-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 
-  test('both devices open local shares and device A unlocks via ceremony', async () => {
-    await disableLoginAutoUnlock(deviceA)
-    await lockVault(deviceA)
-    await waitForCeremonyPanel(deviceA)
-
-    shareA = await openLocalShareContribution(deviceA)
-
-    // Device B may not have a local unlock step yet — open share via evaluate.
-    shareB = await deviceB.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            syncFromStorage?: (opts?: { force?: boolean }) => Promise<void>
-            loadDb?: () => Promise<void>
-            openLocalNexusShare?: () => Promise<string>
-            ensureNexusCeremonyHydrated?: () => Promise<void>
-            manager?: { openLocalNexusShare?: () => string }
-            enqueueStorage?: <T>(op: () => T | Promise<T>) => Promise<T>
-          }
-        }
-      ).__nookVault
-      await vault?.syncFromStorage?.({ force: true })
-      try {
-        await vault?.loadDb?.()
-      } catch {
-        // Ceremony-required is expected for nexus without shares combined.
-      }
-      if (vault?.openLocalNexusShare) {
-        return vault.openLocalNexusShare()
-      }
-      if (!vault?.enqueueStorage || !vault.manager?.openLocalNexusShare) {
-        throw new Error('openLocalNexusShare unavailable on device B')
-      }
-      return vault.enqueueStorage(() => vault.manager!.openLocalNexusShare!())
-    })
-    expect(shareB).toContain('"share"')
-
-    await deviceA.evaluate((peerShare) => {
-      const vault = (
-        window as Window & {
-          __nookVault?: { nexusPeerShareContributions?: string }
-        }
-      ).__nookVault
-      if (vault) vault.nexusPeerShareContributions = peerShare
-    }, shareB)
-
-    await expect(deviceA.getByTestId('nexus-peer-shares-input')).toHaveValue(
-      shareB,
+  test('exchanges only opaque session-bound responses and reaches quorum', async () => {
+    await deviceA.getByTestId('nexus-unlock-start-btn').click()
+    const unlockRequestOutput = deviceA.getByTestId(
+      'nexus-unlock-request-output',
     )
-    await deviceA.getByTestId('nexus-ceremony-unlock-btn').click()
-    await assertVaultReady(deviceA)
+    await expect(unlockRequestOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const unlockRequest = await unlockRequestOutput.inputValue()
+    expect(unlockRequest).not.toContain('mnemonic')
+    expect(unlockRequest).not.toContain('share_mnemonic')
+    await expect(deviceA.getByTestId('nexus-unlock-progress')).toContainText(
+      '1/2',
+    )
+    await expect(
+      deviceA.getByTestId('nexus-unlock-finalize-btn'),
+    ).toBeDisabled()
+
+    await deviceB.reload()
+    const helper = deviceB.getByTestId('nexus-unlock-participant-helper')
+    await expect(helper).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      deviceB.getByTestId('nexus-unlock-delivery-select'),
+    ).toBeVisible()
+    await deviceB
+      .getByTestId('nexus-unlock-participant-request-input')
+      .fill(unlockRequest)
+    await deviceB.getByTestId('nexus-unlock-create-response-btn').click()
+    const opaqueResponseOutput = deviceB.getByTestId(
+      'nexus-unlock-generated-response-output',
+    )
+    await expect(opaqueResponseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const opaqueResponse = await opaqueResponseOutput.inputValue()
+    expect(opaqueResponse.length).toBeGreaterThan(20)
+    expect(opaqueResponse).not.toContain('mnemonic')
+    expect(opaqueResponse).not.toContain('share_mnemonic')
+
+    await deviceA
+      .getByTestId('nexus-unlock-response-input')
+      .fill(opaqueResponse)
+    await deviceA.getByTestId('nexus-unlock-add-response-btn').click()
+    await expect(deviceA.getByTestId('nexus-unlock-progress')).toContainText(
+      '2/2',
+    )
+    await expect(deviceA.getByTestId('nexus-unlock-finalize-btn')).toBeEnabled()
+    await deviceA.getByTestId('nexus-unlock-finalize-btn').click()
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
     await flushNookLogPersistQueue(deviceA)
-    const logs = await readPersistedAppLogs(deviceA, 1000)
-    const serialized = JSON.stringify(logs ?? [])
-    expect(serialized).not.toContain(shareA)
-    expect(serialized).not.toContain(shareB)
-  })
-
-  test('password unlock stays forbidden for nexus', async () => {
-    await disableLoginAutoUnlock(deviceA)
-    await lockVault(deviceA)
-    await waitForCeremonyPanel(deviceA)
-
-    const passwordResult = await deviceA.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            unlockWithPassword?: (
-              entryId: string,
-              password: string,
-            ) => Promise<void>
-            errorMsg?: string
-            isAuthenticated?: boolean
-          }
-        }
-      ).__nookVault
-      if (!vault?.unlockWithPassword) {
-        return { ok: false, error: 'missing unlockWithPassword' }
-      }
-      await vault.unlockWithPassword('missing-entry', 'not-a-real-password')
-      return {
-        ok: true,
-        authenticated: Boolean(vault.isAuthenticated),
-        error: vault.errorMsg ?? '',
-      }
-    })
-
-    expect(passwordResult.ok).toBe(true)
-    expect(passwordResult.authenticated).toBe(false)
-    expect(passwordResult.error).toMatch(/password unlock is forbidden|nexus/i)
+    const logs = JSON.stringify(await readPersistedAppLogs(deviceA, 1000))
+    expect(logs).not.toContain(opaqueResponse)
   })
 })

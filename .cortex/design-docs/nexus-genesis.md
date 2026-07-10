@@ -1,6 +1,7 @@
 # Nexus Genesis and Reverse Onboarding
 
-**Status:** Accepted target design; current implementation requires migration.
+**Status:** Implemented across `nook-auth2`, `nook-core`, `nook-wasm`, and the
+vault-creation UI.
 
 This document defines how a new Nexus vault comes into existence. Nexus genesis
 is not ordinary vault creation followed by device onboarding. It is a
@@ -65,18 +66,19 @@ or vault key to another device.
 
 The pending roster is pre-genesis ceremony state. It is not a vault member
 roster, has no `store_id`, creates no vault event, and cannot be opened as a
-vault. Whether an unfinished ceremony survives refresh is a separate product
-decision; any persisted draft must contain public data only and must never be
-mistaken for a vault.
+vault. The Rust session contains public ceremony data only. Verified participant
+responses remain session state and are never interpreted as persisted vault
+membership before finalization.
 
 ### Atomic key generation
 
 After all participant keys are verified:
 
-1. Rust generates the Nexus root/DEK and derives the vault's explicit
-   `secrets_key` and `members_key` material.
-2. Rust splits the Nexus root with SLIP-0039 using the selected `T-of-N`
-   policy.
+1. Rust generates one random 32-byte Nexus root and derives the vault's explicit
+   `secrets_key` and `members_key` through domain-separated HKDF-SHA256.
+2. Rust splits the Nexus root with current-format, extendable (`ext=1`),
+   single-group SLIP-0039 using the selected `T-of-N` policy. The implementation
+   is Nook-owned and covered by the official 256-bit extendable vectors.
 3. Each member share is encrypted to exactly one participant's public
    encryption key.
 4. Rust constructs the complete participant roster, share commitments, and
@@ -88,13 +90,26 @@ There is no persistable partial-share vault. Failure before the atomic step
 leaves no openable Nexus vault. Device A is not a privileged permanent owner and
 must not receive a full-key envelope that bypasses the threshold.
 
+Finalization consumes the in-memory genesis session and produces one complete
+result: `store_id`, immutable Nexus policy, encrypted member rows, encrypted
+share rows, public participant roster, event-log genesis operations, and the
+participant delivery catalog. Persistence treats that result as one unit.
+Delivery entries are addressed by `store_id` and participant `device_id`, so a
+retry reads or re-delivers the same encrypted artifact instead of issuing a new
+share generation. Finalization itself is one-shot; callers must never rerun key
+generation to repair a partially persisted result.
+
 ### Round 2: return encrypted shares
 
 Without a sync provider, Device A returns each participant's encrypted member
-share through a response QR/link/paste payload. Each participant can decrypt
-and protect only its own share. This second direction is cryptographically
-required: collecting public keys alone does not deliver the newly generated
-shares back to their owners.
+share through a typed response QR/link/paste payload. The provider-free delivery
+catalog binds the genesis session, store, policy, participant device and public
+key, encrypted share, and initiator signing key. Each entry is signed by the
+initiator. A participant accepts it only against the exact Round 1 request and
+only when it is addressed to that participant's device identity. Each
+participant can decrypt and protect only its own share. This second direction
+is cryptographically required: collecting public keys alone does not deliver
+the newly generated shares back to their owners.
 
 A provider configured later may transport the public roster and encrypted share
 records as part of normal encrypted vault replication, but provider access is
@@ -122,8 +137,33 @@ device authorization
   -> create unlocked vault session
 ```
 
+The implemented unlock exchange is also typed and session-bound. The requester
+creates a signed request containing its ephemeral session, store, Nexus policy,
+device encryption key, and signing key. A participant authorizes its protected
+device identity, opens only its local encrypted SLIP-0039 share inside Rust,
+encrypts an opaque contribution to the requester, and signs the response.
+Responses are rejected for the wrong session, store, policy, requester,
+participant, or share index and for duplicate participants/indexes. Only after
+`T` valid responses does Rust decrypt the transient contributions, reconstruct
+the root, derive the two vault keys, and return an unlocked session result.
+
+SLIP-0039 mnemonic text never crosses the Rust/WASM boundary, is never stored in
+the browser ceremony session, and is never exposed in a QR payload or Svelte
+state. The serializable request/response boundary carries signed metadata and
+age-encrypted ciphertext only.
+
 No password, sync-provider login, local cache, initiator role, or possession of
 the encrypted vault can replace the quorum.
+
+## Event Log and Roster Materialization
+
+Atomic Nexus genesis emits one participant-enrollment operation for every
+verified participant plus one complete share-issuance operation. Event-only
+replay retains the public participant roster, including encryption key, signing
+key, label, and enrollment time, before quorum access is available. Rename and
+revocation operations update that public projection. After quorum reconstructs
+`members_key`, Rust rebuilds the canonical encrypted `members:` rows from the
+retained roster; event replay therefore never silently discards Nexus members.
 
 ## Sync and Import
 
@@ -153,18 +193,10 @@ Do not reuse recovery QR payloads, recovery identifiers, or fixed 2-of-3 policy
 as Nexus-genesis payloads. Both protocols need separate typed records and domain
 tests.
 
-## Required Migration From Current Implementation
+## Compatibility
 
-The current milestone implementation creates Nexus key material too early,
-persists a replication mode on vault architecture, and gates secret creation
-rather than vault existence/opening. The target migration must:
-
-1. remove replication selection from vault creation;
-2. model Nexus setup as pre-genesis typed state;
-3. collect and verify the complete participant public-key roster first;
-4. atomically generate and distribute SLIP-0039 encrypted shares;
-5. forbid creation of a full-key device envelope for Nexus;
-6. forbid every Nexus open path until quorum succeeds;
-7. configure sync providers only after genesis;
-8. update persistence, event authorization, WASM APIs, UI, and tests together.
-
+Legacy version-1 Nexus share records remain readable. New genesis writes the
+version-2 root-based format described here. Legacy `replication_type` metadata
+also remains readable, but default personal replication is omitted from new
+architecture serialization and never participates in Nexus policy, genesis,
+delivery, or unlock decisions.

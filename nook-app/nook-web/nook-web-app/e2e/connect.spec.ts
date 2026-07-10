@@ -67,23 +67,19 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('connect-provider-btn')).not.toBeVisible()
   })
 
-  test('shows setup paths after the architecture wizard', async ({ page }) => {
+  test('keeps creation and import as separate first-vault workflows', async ({
+    page,
+  }) => {
     await page.goto('/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await expect(page.getByTestId('create-vault-wizard-vault')).toBeVisible()
-    await expect(page.getByTestId('login-path-local')).toHaveCount(0)
-    await expect(page.getByTestId('login-path-cloud')).toHaveCount(0)
-
-    await page.getByTestId('create-vault-wizard-continue').click()
-    await expect(
-      page.getByTestId('create-vault-wizard-replication'),
-    ).toBeVisible()
-    await expect(page.getByTestId('login-path-local')).toHaveCount(0)
+    await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
+    await expect(page.getByTestId('login-path-cloud')).toBeVisible()
+    await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 
     await page.getByTestId('create-vault-wizard-continue').click()
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
-    await expect(page.getByTestId('login-path-local')).toBeVisible()
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
     await expect(

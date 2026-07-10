@@ -1,6 +1,6 @@
 # Vault Architecture Modes
 
-**Status:** Target design corrected; implementation migration pending.
+**Status:** Implemented.
 
 Nook's security choices belong to their owning lifecycle. Rust owns policy in
 `nook-core` / `nook-auth2`; WASM exposes typed decisions to the web layer.
@@ -58,9 +58,9 @@ Non-default vault architecture metadata is persisted as a top-level
 state. Vault type is immutable once a vault has a `store_id`; changing Simple
 to Nexus or Nexus to Simple would reinterpret key-access records and must fail.
 
-Legacy `replication_type` values must remain readable during migration but do
-not define new-vault behavior. New vault creation must stop asking for or
-writing a replication mode once the schema migration is implemented.
+Legacy `replication_type` values remain readable but do not define new-vault
+behavior. Default personal replication is omitted from new architecture
+serialization, and vault creation does not ask for a replication mode.
 
 Device-local High security material never belongs in vault YAML, provider
 snapshots, event logs, app logs, or onboarding payloads. The local record is the
@@ -95,15 +95,18 @@ or mixed share sets fail closed. No Nexus vault session exists until actual
 share records exist and at least `T` participant contributions reconstruct the
 root. Gating only secret creation is insufficient.
 
-After genesis, browser unlock is an opened-share ceremony: each participating
-device opens its own protected local share into a session-bound contribution;
-the reconstructing device combines at least `T` distinct contributions inside
-Rust/WASM. Peer `DeviceIdentity` secrets and plaintext shares never cross
-browsers.
+After genesis, browser unlock is a signed, encrypted, session-bound ceremony:
+each participating device opens its own protected local share inside Rust and
+returns an opaque contribution encrypted to the requester. The requester
+combines at least `T` distinct verified contributions inside Rust/WASM. Peer
+`DeviceIdentity` secrets and plaintext shares never cross browsers, and raw
+SLIP-0039 mnemonics never cross the WASM boundary.
 
-Share math is currently interim GF(256) Shamir inside `nook-auth2`. The target
-Nexus protocol uses audited SLIP-0039 primitives with the user-selected
-`T-of-N` policy. This is distinct from the fixed-policy recovery flow in
+Nexus uses a Nook-owned current-format extendable (`ext=1`), single-group
+SLIP-0039 implementation with the user-selected `T-of-N` policy. One random
+32-byte Nexus root derives `secrets_key` and `members_key` through
+domain-separated HKDF-SHA256. Official extendable 256-bit vectors cover the
+codec. This is distinct from the fixed-policy recovery flow in
 [slip39-recovery.md](../product-specs/slip39-recovery.md).
 
 Generic revocation/key rotation cannot leave the new epoch behind old shares or
@@ -134,10 +137,18 @@ choices, but it must call Rust/WASM for policy validation, participant
 verification, share issuance, quorum access, and provider capability. Do not
 recreate the state machine or threshold rules in TypeScript.
 
-## Current Implementation Gap
+## Implemented Boundaries
 
-The milestone implementation currently persists `replication_type`, creates
-Nexus key material before the complete roster exists, and gates secret creation
-instead of vault existence/opening. Those behaviors describe current code, not
-the accepted target. Migration must update core persistence, event
-authorization, WASM APIs, Svelte flows, and tests together.
+- Nexus policy and ceremony transitions are Rust-owned and limited to
+  `2 <= T <= N <= 16`.
+- Finalization is one-shot and atomic: it emits the complete encrypted member
+  roster, encrypted share set, participant delivery catalog, and event-log
+  operations together; it never emits a full-key device envelope.
+- Provider-free Round 2 delivery entries are signed and bound to the exact
+  Round 1 session, store, policy, recipient identity, and share.
+- Event-only projection retains the complete public Nexus roster and rebuilds
+  canonical encrypted member rows after quorum unlock.
+- Nexus unlock requests and responses are signed, encrypted, and session-bound;
+  duplicate participants/share indexes and mismatched bindings fail closed.
+- WASM exposes typed JSON/status boundaries while Svelte renders progress; raw
+  roots, vault keys, opened shares, and mnemonic text remain in Rust.

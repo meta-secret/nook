@@ -22,8 +22,8 @@ pub(crate) use sync::{
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
     vault_event, vault_event_builder, vault_event_graph, vault_event_session, vault_event_store,
-    vault_format, vault_ids, vault_import, vault_projection, vault_session, vault_session_cache,
-    vault_wire,
+    vault_format, vault_ids, vault_import, vault_nexus_genesis, vault_nexus_unlock,
+    vault_projection, vault_session, vault_session_cache, vault_wire,
 };
 
 pub use bip39::{
@@ -66,21 +66,35 @@ pub use nook_auth2::{
     MockPasskeyError, MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyResult,
     MockPasskeyUserAuthorization, StoredMockPasskey,
 };
+pub use nook_auth2::{
+    NexusUnlockPolicy, NexusUnlockRequest, NexusUnlockResponse, NexusUnlockSession,
+    NexusUnlockStatus, add_nexus_unlock_response, finalize_nexus_unlock, nexus_unlock_request,
+    nexus_unlock_status,
+};
 pub use secret_types::{
     ApiKeySecret, LoginSecret, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
     SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::build_secret_yaml;
 
+pub use nook_auth2::{
+    NexusGenesisIssued, NexusGenesisParticipant, NexusGenesisParticipantResponse,
+    NexusGenesisPolicy, NexusGenesisRequest, NexusGenesisSession, NexusGenesisShareDelivery,
+    accept_nexus_genesis_share_delivery, add_nexus_genesis_response, finalize_nexus_genesis_shares,
+    nexus_genesis_request,
+};
+
+pub use multi_device::nexus_member_records_from_public_roster;
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, OpenedNexusShare, VaultKeys,
-    VaultMember, VaultMetaRecord, VaultMetaState, apply_vault_meta_operation, approve_join_request,
-    assess_connect_access, auth_record, build_members_records, count_nexus_share_records,
-    create_join_request_record, create_join_request_record_with_signing_key,
-    create_nexus_share_records, create_nexus_share_records_for_recipients, dec_auth_id,
-    dec_auth_id_from_public_key, deny_join_request, device_is_enrolled, encrypt_for_recipient,
-    encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, NexusShareEnvelope,
+    OpenedNexusShare, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+    apply_vault_meta_operation, approve_join_request, assess_connect_access, auth_record,
+    build_members_records, count_nexus_share_records, create_join_request_record,
+    create_join_request_record_with_signing_key, create_nexus_share_records,
+    create_nexus_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
+    deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
+    enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
     explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
     generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
     is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
@@ -197,6 +211,11 @@ pub use vault_import::{
     KeyEpochId, VaultHashContext, secrets_from_import_event, stored_vault_to_import_event,
     verify_stored_vault_import,
 };
+pub use vault_nexus_genesis::{
+    NexusGenesisOutput, finalize_nexus_genesis, nexus_genesis_operations,
+    respond_to_nexus_genesis_request, start_nexus_genesis,
+};
+pub use vault_nexus_unlock::{respond_to_nexus_unlock_request, start_nexus_unlock};
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, project_vault,

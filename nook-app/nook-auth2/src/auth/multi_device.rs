@@ -7,10 +7,12 @@ use crate::{
 use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use zeroize::Zeroize;
 
 /// Symmetric vault key (32-byte random hex).
 pub fn generate_symmetric_key() -> MultiDeviceResult<SymmetricKey> {
@@ -108,10 +110,11 @@ struct NexusSharePlaintext {
     share: String,
 }
 
-/// Browser-safe contribution from one device that has opened its local nexus share.
+/// Internal opened Nexus share used only inside the Rust-owned unlock protocol.
 ///
-/// Contains only the opened share bytes (base64url) and ceremony metadata — never a
-/// peer [`DeviceIdentity`] secret.
+/// This type contains plaintext share material. Browser/WASM APIs must wrap it
+/// in a signed, session-bound encrypted [`crate::NexusUnlockResponse`] and must
+/// never serialize it directly to JavaScript.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OpenedNexusShare {
     pub version: u32,
@@ -127,6 +130,29 @@ pub struct OpenedNexusShare {
 struct NexusVaultKeysPlaintext {
     secrets_key: String,
     members_key: String,
+}
+
+const NEXUS_ROOT_SHARE_VERSION: u32 = 2;
+const NEXUS_SECRETS_KEY_INFO: &[u8] = b"nook/nexus-genesis/v1/secrets-key";
+const NEXUS_MEMBERS_KEY_INFO: &[u8] = b"nook/nexus-genesis/v1/members-key";
+
+fn derive_nexus_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
+    let hkdf = Hkdf::<Sha256>::new(None, root);
+    let mut secrets = [0_u8; 32];
+    let mut members = [0_u8; 32];
+    hkdf.expand(NEXUS_SECRETS_KEY_INFO, &mut secrets)
+        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+    hkdf.expand(NEXUS_MEMBERS_KEY_INFO, &mut members)
+        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+    let result = Ok(VaultKeys {
+        secrets_key: SymmetricKey::parse(&hex::encode(secrets))
+            .map_err(MultiDeviceError::Validation)?,
+        members_key: SymmetricKey::parse(&hex::encode(members))
+            .map_err(MultiDeviceError::Validation)?,
+    });
+    secrets.zeroize();
+    members.zeroize();
+    result
 }
 
 pub fn parse_nexus_share_envelope(value: &str) -> MultiDeviceResult<NexusShareEnvelope> {
@@ -177,6 +203,19 @@ pub struct VaultMember {
     pub public_key: DevicePublicKey,
     pub enrolled_at: String,
     pub label: Option<String>,
+}
+
+/// Public Nexus roster entry retained while materializing event-only vaults.
+/// Encrypted `members:` rows remain the canonical persisted projection after
+/// quorum unlock; this public entry lets event replay preserve the complete
+/// genesis roster before those rows can be decrypted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NexusParticipantEntry {
+    pub device_id: DeviceId,
+    pub encryption_public_key: DevicePublicKey,
+    pub signing_public_key: DeviceSigningPublicKey,
+    pub label: String,
+    pub enrolled_at: String,
 }
 
 #[must_use]
@@ -320,6 +359,7 @@ pub struct VaultMetaState {
     pub joins: HashMap<DeviceId, JoinRequest>,
     pub members: HashMap<AuthKeyId, StoredRecordPayload>,
     pub nexus_shares: HashMap<DeviceId, NexusShareEnvelope>,
+    pub nexus_participants: HashMap<DeviceId, NexusParticipantEntry>,
 }
 
 impl VaultMetaState {
@@ -330,6 +370,7 @@ impl VaultMetaState {
             && self.joins.is_empty()
             && self.members.is_empty()
             && self.nexus_shares.is_empty()
+            && self.nexus_participants.is_empty()
     }
 
     #[must_use]
@@ -1119,6 +1160,52 @@ pub fn create_nexus_share_records_for_recipients(
         .collect()
 }
 
+/// Generate one Nexus root, derive the explicit vault keys with
+/// domain-separated HKDF, and issue encrypted current-format SLIP-0039 shares
+/// atomically. Version 2 is deliberately distinct from legacy version-1 JSON
+/// key bundles, which remain readable.
+pub fn create_nexus_root_share_records_for_recipients(
+    recipients: &[(DeviceId, DevicePublicKey)],
+    threshold: u8,
+) -> MultiDeviceResult<(VaultKeys, Vec<StoredSecretRecord>)> {
+    let required_participants =
+        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
+    validate_nexus_threshold(threshold, required_participants)?;
+    let mut root = [0_u8; 32];
+    getrandom::getrandom(&mut root)
+        .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
+    let keys = derive_nexus_vault_keys(&root)?;
+    let shares = super::slip39::split_nexus_secret(&root, threshold, required_participants)?;
+    root.zeroize();
+    let records = recipients
+        .iter()
+        .zip(shares)
+        .enumerate()
+        .map(|(offset, ((device_id, public_key), share))| {
+            let share_index =
+                u8::try_from(offset + 1).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
+            let plaintext = NexusSharePlaintext {
+                version: NEXUS_ROOT_SHARE_VERSION,
+                threshold,
+                required_participants,
+                share_index,
+                share,
+            };
+            let json =
+                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::NexusSharePayload)?;
+            let envelope = NexusShareEnvelope {
+                version: NEXUS_ROOT_SHARE_VERSION,
+                threshold,
+                required_participants,
+                share_index,
+                ciphertext: encrypt_for_recipient(&json, public_key)?,
+            };
+            VaultMetaRecord::NexusShare(device_id.clone(), envelope).to_stored()
+        })
+        .collect::<MultiDeviceResult<Vec<_>>>()?;
+    Ok((keys, records))
+}
+
 #[must_use]
 pub fn count_nexus_share_records(records: &[StoredSecretRecord]) -> usize {
     records
@@ -1127,7 +1214,7 @@ pub fn count_nexus_share_records(records: &[StoredSecretRecord]) -> usize {
         .count()
 }
 
-/// Open this device's encrypted nexus share into a browser-safe contribution.
+/// Open this device's encrypted Nexus share for an in-Rust unlock response.
 pub fn open_nexus_share_for_identity(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
@@ -1139,6 +1226,9 @@ pub fn open_nexus_share_for_identity(
             device_id: identity.device_id().to_string(),
         })?;
     let envelope = parse_nexus_share_envelope(record.value.as_str())?;
+    if !matches!(envelope.version, 1 | NEXUS_ROOT_SHARE_VERSION) {
+        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+    }
     let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
     let plaintext: NexusSharePlaintext =
         serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::NexusSharePayload)?;
@@ -1149,10 +1239,17 @@ pub fn open_nexus_share_for_identity(
     {
         return Err(MultiDeviceError::InvalidNexusShareEncoding);
     }
-    // Reject malformed share encoding early so ceremony contributions are well-formed.
-    URL_SAFE_NO_PAD
-        .decode(plaintext.share.as_bytes())
-        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+    // Reject malformed legacy share encoding early. Current SLIP-0039 shares
+    // are fully checksum/digest-validated when quorum reconstruction runs.
+    if plaintext.version == NEXUS_ROOT_SHARE_VERSION {
+        if plaintext.share.split_whitespace().count() != 33 {
+            return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        }
+    } else {
+        URL_SAFE_NO_PAD
+            .decode(plaintext.share.as_bytes())
+            .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+    }
     Ok(OpenedNexusShare {
         version: plaintext.version,
         threshold: plaintext.threshold,
@@ -1174,7 +1271,9 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
     let mut shares = Vec::new();
     let mut expected_threshold = None;
     let mut expected_required = None;
+    let mut expected_version = None;
     let mut seen_indexes = std::collections::BTreeSet::new();
+    let mut slip39_mnemonics = Vec::new();
     for contribution in opened {
         let device_id =
             DeviceId::parse(&contribution.device_id).map_err(MultiDeviceError::Validation)?;
@@ -1206,26 +1305,47 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
         } else {
             expected_required = Some(contribution.required_participants);
         }
+        if let Some(version) = expected_version {
+            if version != contribution.version {
+                return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            }
+        } else {
+            expected_version = Some(contribution.version);
+        }
         if !seen_indexes.insert(contribution.share_index) {
             return Err(MultiDeviceError::InvalidNexusShareEncoding);
         }
-        let bytes = URL_SAFE_NO_PAD
-            .decode(contribution.share.as_bytes())
-            .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
-        shares.push(IndexedShare {
-            index: contribution.share_index,
-            bytes,
-        });
+        if contribution.version == NEXUS_ROOT_SHARE_VERSION {
+            if contribution.share.split_whitespace().count() != 33 {
+                return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            }
+            slip39_mnemonics.push(contribution.share.clone());
+        } else {
+            let bytes = URL_SAFE_NO_PAD
+                .decode(contribution.share.as_bytes())
+                .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+            shares.push(IndexedShare {
+                index: contribution.share_index,
+                bytes,
+            });
+        }
     }
     let threshold = expected_threshold.ok_or(MultiDeviceError::NotEnoughNexusShares {
         threshold: 1,
         available: 0,
     })?;
-    if shares.len() < usize::from(threshold) {
+    if opened.len() < usize::from(threshold) {
         return Err(MultiDeviceError::NotEnoughNexusShares {
             threshold,
-            available: shares.len(),
+            available: opened.len(),
         });
+    }
+    if expected_version == Some(NEXUS_ROOT_SHARE_VERSION) {
+        let mut root =
+            super::slip39::recover_nexus_secret(&slip39_mnemonics[..usize::from(threshold)])?;
+        let keys = derive_nexus_vault_keys(&root);
+        root.zeroize();
+        return keys;
     }
     let reconstructed = reconstruct_secret_bytes(&shares[..usize::from(threshold)], threshold)?;
     let payload: NexusVaultKeysPlaintext =
@@ -1240,9 +1360,8 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
 
 /// Native/test helper: open each identity's share locally, then reconstruct.
 ///
-/// Browser unlock must use [`open_nexus_share_for_identity`] on each device and
-/// [`reconstruct_nexus_vault_keys_from_opened`] on the reconstructing device —
-/// never ship peer [`DeviceIdentity`] secrets across browsers.
+/// Browser unlock must use the typed Nexus unlock request/response protocol;
+/// this helper is for native tests and compatibility code only.
 pub fn reconstruct_nexus_vault_keys(
     records: &[StoredSecretRecord],
     identities: &[DeviceIdentity],

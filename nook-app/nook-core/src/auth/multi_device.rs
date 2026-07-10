@@ -6,9 +6,10 @@
 
 pub use nook_auth2::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusShareEnvelope, OpenedNexusShare, VaultKeys,
-    VaultMember, VaultMetaRecord, VaultMetaState, approve_join_request, assess_connect_access,
-    auth_record, build_members_records, count_nexus_share_records, create_join_request_record,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, NexusShareEnvelope,
+    OpenedNexusShare, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+    approve_join_request, assess_connect_access, auth_record, build_members_records,
+    count_nexus_share_records, create_join_request_record,
     create_join_request_record_with_signing_key, create_nexus_share_records,
     create_nexus_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
     deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
@@ -71,8 +72,25 @@ pub fn apply_vault_meta_operation(
                 },
             );
         }
-        VaultOperation::NexusParticipantEnrolled { device_id, .. }
-        | VaultOperation::JoinDenied { device_id } => {
+        VaultOperation::NexusParticipantEnrolled {
+            device_id,
+            encryption_public_key,
+            signing_public_key,
+            label,
+        } => {
+            state.joins.remove(device_id);
+            state.nexus_participants.insert(
+                device_id.clone(),
+                NexusParticipantEntry {
+                    device_id: device_id.clone(),
+                    encryption_public_key: encryption_public_key.clone(),
+                    signing_public_key: signing_public_key.clone(),
+                    label: label.as_str().to_owned(),
+                    enrolled_at: requested_at.to_owned(),
+                },
+            );
+        }
+        VaultOperation::JoinDenied { device_id } => {
             state.joins.remove(device_id);
         }
         VaultOperation::NexusSharesIssued { shares } => {
@@ -89,13 +107,20 @@ pub fn apply_vault_meta_operation(
                 );
             }
         }
+        VaultOperation::MemberRenamed { device_id, label } => {
+            if let Some(participant) = state.nexus_participants.get_mut(device_id) {
+                label.as_str().clone_into(&mut participant.label);
+            }
+        }
+        VaultOperation::DeviceRevoked { device_id } => {
+            state.nexus_participants.remove(device_id);
+            state.nexus_shares.remove(device_id);
+        }
         VaultOperation::VaultImported { .. }
         | VaultOperation::SecretCreated { .. }
         | VaultOperation::SecretDeleted { .. }
         | VaultOperation::SecretReplaced { .. }
         | VaultOperation::SecretConflictResolved { .. }
-        | VaultOperation::MemberRenamed { .. }
-        | VaultOperation::DeviceRevoked { .. }
         | VaultOperation::PasswordAdded { .. }
         | VaultOperation::PasswordRotated { .. }
         | VaultOperation::PasswordRemoved { .. }
@@ -124,4 +149,77 @@ pub fn materialize_vault_meta_from_graph(
         }
     }
     Ok(())
+}
+
+/// Rebuild encrypted `members:` rows after quorum unlock of an event-only
+/// Nexus vault. Public event roster entries are retained before unlock; the
+/// reconstructed members key turns them back into the canonical encrypted
+/// member projection without inventing full-key auth envelopes.
+pub fn nexus_member_records_from_public_roster(
+    state: &VaultMetaState,
+    members_key: &crate::SymmetricKey,
+) -> nook_auth2::MultiDeviceResult<Vec<crate::StoredSecretRecord>> {
+    let mut roster = state
+        .nexus_participants
+        .values()
+        .map(|participant| {
+            Ok(VaultMember {
+                auth_id: dec_auth_id_from_public_key(&participant.encryption_public_key)?,
+                device_id: participant.device_id.clone(),
+                public_key: participant.encryption_public_key.clone(),
+                enrolled_at: participant.enrolled_at.clone(),
+                label: (!participant.label.is_empty()).then(|| participant.label.clone()),
+            })
+        })
+        .collect::<nook_auth2::MultiDeviceResult<Vec<_>>>()?;
+    roster.sort_by(|left, right| left.auth_id.cmp(&right.auth_id));
+    build_members_records(&roster, members_key)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{MemberLabel, SigningIdentity};
+
+    #[test]
+    fn nexus_event_materialization_retains_complete_public_roster() {
+        let identity = DeviceIdentity::generate().unwrap();
+        let (signing, _) = SigningIdentity::generate().unwrap();
+        let operation = VaultOperation::NexusParticipantEnrolled {
+            device_id: identity.device_id().clone(),
+            encryption_public_key: identity.public_key(),
+            signing_public_key: signing.public_key(),
+            label: MemberLabel::from_trusted("Owner".to_owned()),
+        };
+        let mut state = VaultMetaState::default();
+        apply_vault_meta_operation(&mut state, &operation, "2026-07-09T00:00:00Z").unwrap();
+        let participant = state.nexus_participants.get(identity.device_id()).unwrap();
+        assert_eq!(participant.encryption_public_key, identity.public_key());
+        assert_eq!(participant.signing_public_key, signing.public_key());
+        assert_eq!(participant.label, "Owner");
+
+        let members_key = crate::generate_symmetric_key().unwrap();
+        let records = nexus_member_records_from_public_roster(&state, &members_key).unwrap();
+        let roster = crate::resolve_member_roster(&records, &members_key).unwrap();
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].device_id, *identity.device_id());
+
+        apply_vault_meta_operation(
+            &mut state,
+            &VaultOperation::MemberRenamed {
+                device_id: identity.device_id().clone(),
+                label: MemberLabel::from_trusted("Renamed".to_owned()),
+            },
+            "2026-07-09T00:01:00Z",
+        )
+        .unwrap();
+        assert_eq!(
+            state
+                .nexus_participants
+                .get(identity.device_id())
+                .unwrap()
+                .label,
+            "Renamed"
+        );
+    }
 }
