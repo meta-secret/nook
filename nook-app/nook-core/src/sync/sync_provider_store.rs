@@ -302,17 +302,20 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
                 .filter(|identity| !identity.is_empty())
                 .ok_or(ValidationError::SharedJoinerIdentityRequired)?
                 .to_owned(),
-            storage_target_id: shared_storage_target_id
-                .map(str::trim)
-                .filter(|id| !id.is_empty())
-                .map(str::to_owned)
-                .or_else(|| {
-                    provider
-                        .oauth_file
-                        .as_ref()
-                        .and_then(|oauth| oauth.folder_id.clone())
-                        .filter(|id| !id.trim().is_empty())
-                }),
+            storage_target_id: Some(
+                shared_storage_target_id
+                    .map(str::trim)
+                    .filter(|id| !id.is_empty())
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        provider
+                            .oauth_file
+                            .as_ref()
+                            .and_then(|oauth| oauth.folder_id.clone())
+                            .filter(|id| !id.trim().is_empty())
+                    })
+                    .ok_or(ValidationError::SharedStorageTargetRequired)?,
+            ),
         }),
     }
 }
@@ -1350,18 +1353,9 @@ mod tests {
             Some("file-123"),
             "nook.yaml",
         );
-        let grant =
-            enrollment_provider_for_architecture(&gdrive, &shared, Some("joiner@example.com"))
-                .unwrap();
         assert_eq!(
-            grant,
-            EnrollmentProvider::SharedProviderGrant {
-                sync_provider_type: "oauth-file".to_owned(),
-                oauth_preset: Some("google-drive".to_owned()),
-                joiner_identity_kind: "email".to_owned(),
-                joiner_identity: "joiner@example.com".to_owned(),
-                storage_target_id: None,
-            }
+            enrollment_provider_for_architecture(&gdrive, &shared, Some("joiner@example.com")),
+            Err(ValidationError::SharedStorageTargetRequired)
         );
 
         let granted = enrollment_provider_for_architecture_with_storage_target(

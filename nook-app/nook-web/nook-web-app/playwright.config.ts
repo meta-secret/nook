@@ -75,6 +75,10 @@ const webServerCommand = usePreviewServer
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
+  // CI runners can expose enough CPUs for Playwright to overwhelm the single
+  // preview server while every fresh context fetches and compiles the large
+  // WASM bundle. Keep limited parallelism so responses are not aborted.
+  workers: isCi ? 2 : undefined,
   maxFailures: isCi ? 1 : undefined,
   retries: isCi ? 2 : 0,
   globalTimeout: isCi ? 45 * 60_000 : undefined,

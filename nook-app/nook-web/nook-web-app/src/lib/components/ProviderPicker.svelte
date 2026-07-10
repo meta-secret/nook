@@ -80,9 +80,12 @@
   }
 </script>
 
-<fieldset class="space-y-2">
+<fieldset class="min-w-0 w-full max-w-full space-y-2">
   <legend class="sr-only">{vault.t('provider_picker.choose_provider')}</legend>
-  <ul class="space-y-1.5" data-testid="provider-picker-list">
+  <ul
+    class="min-w-0 w-full max-w-full space-y-1.5 overflow-hidden"
+    data-testid="provider-picker-list"
+  >
     {#if !excludeLocal}
       <li>
         <button
@@ -104,10 +107,10 @@
         </button>
       </li>
     {/if}
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
         data-testid="provider-option-local-folder"
         disabled={localFolderUnavailable || blocked('local-folder')}
         onclick={() => {
@@ -131,10 +134,10 @@
         </span>
       </button>
     </li>
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-oauth-file"
         disabled={blocked('oauth-file', 'google-drive')}
         onclick={() => {
@@ -178,10 +181,10 @@
         </span>
       </button>
     </li>
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-icloud"
         disabled={blocked('oauth-file', 'icloud')}
         onclick={() => {
@@ -208,10 +211,10 @@
         </span>
       </button>
     </li>
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-github"
         disabled={blocked('github')}
         onclick={() => {

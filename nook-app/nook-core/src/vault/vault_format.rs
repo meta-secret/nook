@@ -339,7 +339,7 @@ pub fn serialize_stored_yaml_with_unlock_name_architecture(
     vault_version: Option<u64>,
     architecture: &VaultArchitecture,
 ) -> VaultFormatResult<VaultYamlBlob> {
-    architecture.validate()?;
+    architecture.validate_records(records)?;
     let mut vault = partition_yaml_records(records);
     vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
     vault.vault_version = vault_version.unwrap_or(0);
@@ -904,11 +904,11 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             nexus: Some(crate::NexusPolicy {
                 threshold: 2,
                 required_participants: 3,
-                ready_participants: 3,
+                ready_participants: 0,
             }),
         };
         let yaml = serialize_stored_yaml_with_unlock_name_architecture(
-            &sample_records(),
+            &[],
             &VaultUnlock::Keys,
             &[],
             Some("store_SMypl8K0w9Y"),

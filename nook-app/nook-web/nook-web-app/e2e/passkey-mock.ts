@@ -23,18 +23,26 @@ export function installMockPasskeyRuntime() {
       : Uint8Array.from(
           new Uint8Array(source.buffer, source.byteOffset, source.byteLength),
         )
-  const result = (first: ArrayBuffer | ArrayBufferView, enabled: boolean) => ({
-    id: 'nook-e2e-passkey',
-    rawId: credentialId.buffer.slice(0),
-    type: 'public-key',
-    response: { userHandle: userHandle.buffer.slice(0) },
-    getClientExtensionResults: () => ({
-      prf: {
-        enabled,
-        results: { first: derive(first) },
-      },
-    }),
-  })
+  const result = (first: ArrayBuffer | ArrayBufferView, enabled: boolean) => {
+    const prfOutput = derive(first)
+    Object.assign(window, {
+      __nookE2eLastPrfOutput: btoa(
+        String.fromCharCode(...new Uint8Array(prfOutput)),
+      ),
+    })
+    return {
+      id: 'nook-e2e-passkey',
+      rawId: credentialId.buffer.slice(0),
+      type: 'public-key',
+      response: { userHandle: userHandle.buffer.slice(0) },
+      getClientExtensionResults: () => ({
+        prf: {
+          enabled,
+          results: { first: prfOutput },
+        },
+      }),
+    }
+  }
   Object.defineProperty(window, 'PublicKeyCredential', {
     configurable: true,
     value: {

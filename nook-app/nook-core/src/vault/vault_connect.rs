@@ -123,6 +123,7 @@ pub fn load_nexus_vault(content: &str, identities: &[DeviceIdentity]) -> VaultRe
         return Err(crate::MultiDeviceError::InvalidNexusThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
+    architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_nexus_vault_keys(&stored_records, identities)?;
     hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
 }
@@ -138,6 +139,7 @@ pub fn load_nexus_vault_from_opened(
         return Err(crate::MultiDeviceError::InvalidNexusThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
+    architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_nexus_vault_keys_from_opened(&stored_records, opened)?;
     hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
 }
@@ -242,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn nexus_yaml_rejects_single_device_unlock_even_with_auth_envelopes() -> VaultResult<()> {
+    fn nexus_yaml_rejects_full_device_key_envelopes_before_write() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
         let records = vec![genesis_auth_record(
@@ -261,7 +263,7 @@ mod tests {
             }),
         };
         let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+        let error = serialize_stored_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,
             &[],
@@ -269,11 +271,22 @@ mod tests {
             None,
             None,
             &architecture,
-        )?;
+        )
+        .unwrap_err();
 
+        assert!(matches!(
+            error,
+            crate::VaultFormatError::Validation(
+                crate::ValidationError::NexusVaultHasFullKeyEnvelopes
+            )
+        ));
         assert!(
-            load_stored_vault(yaml.as_str(), &identity).is_err(),
-            "nexus vault must reject single-device unlock"
+            load_stored_vault(
+                "schema_version: 1\nstore_id: store_testtoken11\narchitecture:\n  device_mode: standard\n  vault_type: nexus\n  replication_type: personal\n  nexus:\n    threshold: 2\n    required_participants: 2\n    ready_participants: 0\nsecrets: []\n",
+                &identity,
+            )
+            .is_err(),
+            "nexus vault must reject ordinary single-device unlock even before shares exist"
         );
         Ok(())
     }

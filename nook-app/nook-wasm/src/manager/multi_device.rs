@@ -421,6 +421,9 @@ impl NookVaultManager {
         &mut self,
         auth_id: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusRevocationUnsupported.into());
+        }
         let identity = self.device_identity()?;
         let parsed_auth_id = nook_core::AuthKeyId::parse(&auth_id)?;
         let is_self = parsed_auth_id == identity.auth_id();

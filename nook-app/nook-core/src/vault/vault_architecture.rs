@@ -10,6 +10,7 @@ use crate::{
     OauthFilePreset, StorageProviderType, StoredSecretRecord, is_nexus_share_stored_record,
 };
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
+use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -295,6 +296,79 @@ impl VaultArchitecture {
         Ok(())
     }
 
+    /// Validate architecture invariants that depend on persisted vault records.
+    ///
+    /// A nexus vault must never carry a full per-device vault-key envelope. Once
+    /// shares have been issued they form one complete, internally consistent set
+    /// matching the persisted policy; partial or mixed generations fail closed.
+    pub fn validate_records(&self, records: &[StoredSecretRecord]) -> ValidationResult<()> {
+        self.validate()?;
+        let mut share_devices = BTreeSet::new();
+        let mut share_indexes = BTreeSet::new();
+        let mut shares = Vec::new();
+        let mut has_auth = false;
+
+        for record in records {
+            let classified = crate::VaultMetaRecord::classify(record);
+            if record
+                .key
+                .as_str()
+                .starts_with(crate::NEXUS_SHARE_RECORD_PREFIX)
+                && !matches!(&classified, crate::VaultMetaRecord::NexusShare(..))
+            {
+                return Err(ValidationError::InvalidNexusShareSet);
+            }
+            match classified {
+                crate::VaultMetaRecord::Auth(..) => has_auth = true,
+                crate::VaultMetaRecord::NexusShare(device_id, share) => {
+                    if !share_devices.insert(device_id) || !share_indexes.insert(share.share_index)
+                    {
+                        return Err(ValidationError::InvalidNexusShareSet);
+                    }
+                    shares.push(share);
+                }
+                _ => {}
+            }
+        }
+
+        match self.vault_type {
+            VaultType::Simple => {
+                if shares.is_empty() {
+                    Ok(())
+                } else {
+                    Err(ValidationError::SimpleVaultHasNexusShares)
+                }
+            }
+            VaultType::Nexus => {
+                if has_auth {
+                    return Err(ValidationError::NexusVaultHasFullKeyEnvelopes);
+                }
+                if shares.is_empty() {
+                    return if self.nexus.unwrap_or_default().ready_participants == 0 {
+                        Ok(())
+                    } else {
+                        Err(ValidationError::InvalidNexusShareSet)
+                    };
+                }
+
+                let policy = self.nexus.unwrap_or_default();
+                if shares.len() != usize::from(policy.required_participants)
+                    || policy.ready_participants != policy.required_participants
+                    || shares.iter().any(|share| {
+                        share.version != 1
+                            || share.threshold != policy.threshold
+                            || share.required_participants != policy.required_participants
+                            || share.share_index == 0
+                            || share.share_index > policy.required_participants
+                    })
+                {
+                    return Err(ValidationError::InvalidNexusShareSet);
+                }
+                Ok(())
+            }
+        }
+    }
+
     #[must_use]
     pub fn onboarding_type(&self) -> OnboardingType {
         match self.replication_type {
@@ -316,13 +390,8 @@ impl VaultArchitecture {
         match self.vault_type {
             VaultType::Simple => true,
             VaultType::Nexus => {
-                let policy = self.nexus.unwrap_or_default();
-                policy.validate().is_ok()
-                    && records
-                        .iter()
-                        .filter(|record| is_nexus_share_stored_record(record))
-                        .count()
-                        >= usize::from(policy.required_participants)
+                records.iter().any(is_nexus_share_stored_record)
+                    && self.validate_records(records).is_ok()
             }
         }
     }
@@ -452,6 +521,18 @@ pub enum SharedStorageGrantOutcome {
         instructions_key: String,
         #[serde(rename = "joinerIdentity")]
         joiner_identity: String,
+        #[serde(
+            rename = "storageTargetId",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        storage_target_id: Option<String>,
+        #[serde(
+            rename = "storageTargetName",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        storage_target_name: Option<String>,
     },
     #[serde(rename = "unsupported")]
     Unsupported {
@@ -502,6 +583,8 @@ pub fn prepare_shared_storage_grant(
     Ok(SharedStorageGrantOutcome::ManualGrantRequired {
         instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
         joiner_identity: identity.to_owned(),
+        storage_target_id: None,
+        storage_target_name: None,
     })
 }
 
@@ -694,6 +777,103 @@ mod tests {
     }
 
     #[test]
+    fn nexus_record_validation_rejects_full_key_envelopes_and_mixed_share_sets() {
+        let keys = crate::generate_vault_keys().unwrap();
+        let first = crate::DeviceIdentity::generate().unwrap();
+        let second = crate::DeviceIdentity::generate().unwrap();
+        let architecture = VaultArchitecture::nexus_personal(
+            DeviceMode::Standard,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+        let shares =
+            crate::create_nexus_share_records(&keys, &[first.clone(), second.clone()], 2).unwrap();
+        architecture.validate_records(&shares).unwrap();
+
+        let auth =
+            crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key).unwrap();
+        let mut shares_with_auth = shares.clone();
+        shares_with_auth.push(auth);
+        assert_eq!(
+            architecture.validate_records(&shares_with_auth),
+            Err(ValidationError::NexusVaultHasFullKeyEnvelopes)
+        );
+
+        assert_eq!(
+            architecture.validate_records(&shares[..1]),
+            Err(ValidationError::InvalidNexusShareSet)
+        );
+
+        let stale_readiness = VaultArchitecture::nexus_personal(
+            DeviceMode::Standard,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 1,
+            },
+        );
+        assert_eq!(
+            stale_readiness.validate_records(&shares),
+            Err(ValidationError::InvalidNexusShareSet)
+        );
+
+        let mut duplicate_index = shares;
+        let first_envelope =
+            crate::parse_nexus_share_envelope(duplicate_index[0].value.as_str()).unwrap();
+        let mut second_envelope =
+            crate::parse_nexus_share_envelope(duplicate_index[1].value.as_str()).unwrap();
+        second_envelope.share_index = first_envelope.share_index;
+        duplicate_index[1].value = crate::StoredRecordPayload::from_trusted(
+            serde_json::to_string(&second_envelope).unwrap(),
+        );
+        assert_eq!(
+            architecture.validate_records(&duplicate_index),
+            Err(ValidationError::InvalidNexusShareSet)
+        );
+    }
+
+    #[test]
+    fn simple_record_validation_rejects_nexus_shares() {
+        let keys = crate::generate_vault_keys().unwrap();
+        let first = crate::DeviceIdentity::generate().unwrap();
+        let second = crate::DeviceIdentity::generate().unwrap();
+        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
+        assert_eq!(
+            VaultArchitecture::default_legacy().validate_records(&shares),
+            Err(ValidationError::SimpleVaultHasNexusShares)
+        );
+    }
+
+    #[test]
+    fn malformed_nexus_share_prefix_fails_closed_for_every_vault_type() {
+        let malformed = StoredSecretRecord {
+            key: crate::SecretId::from_vault_record("nexus_share:0123456789abcdef"),
+            secret_type: None,
+            value: crate::StoredRecordPayload::from_trusted("not-a-share-envelope".to_owned()),
+        };
+        let nexus = VaultArchitecture::nexus_personal(
+            DeviceMode::Standard,
+            NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 0,
+            },
+        );
+
+        assert_eq!(
+            nexus.validate_records(std::slice::from_ref(&malformed)),
+            Err(ValidationError::InvalidNexusShareSet)
+        );
+        assert_eq!(
+            VaultArchitecture::default_legacy().validate_records(&[malformed]),
+            Err(ValidationError::InvalidNexusShareSet)
+        );
+    }
+
+    #[test]
     fn shared_storage_grant_requires_valid_email_and_returns_manual_ceremony() {
         // Core validates only; WASM upgrades ManualGrantRequired → Granted after
         // Drive folder create + permissions.create succeed.
@@ -711,6 +891,8 @@ mod tests {
             SharedStorageGrantOutcome::ManualGrantRequired {
                 instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
                 joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: None,
+                storage_target_name: None,
             }
         );
 
@@ -744,5 +926,24 @@ mod tests {
         assert_eq!(json["storageTargetName"], "Nook shared vault");
         let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json).unwrap();
         assert_eq!(roundtrip, granted);
+    }
+
+    #[test]
+    fn shared_storage_manual_grant_preserves_created_target() {
+        let manual = SharedStorageGrantOutcome::ManualGrantRequired {
+            instructions_key: "architecture_modes.shared_grant_manual_instructions".to_owned(),
+            joiner_identity: "joiner@example.com".to_owned(),
+            storage_target_id: Some("folder-created-before-permission-failed".to_owned()),
+            storage_target_name: Some("Nook shared vault".to_owned()),
+        };
+        let json = serde_json::to_value(&manual).unwrap();
+        assert_eq!(json["kind"], "manual-grant-required");
+        assert_eq!(
+            json["storageTargetId"],
+            "folder-created-before-permission-failed"
+        );
+        assert_eq!(json["storageTargetName"], "Nook shared vault");
+        let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json).unwrap();
+        assert_eq!(roundtrip, manual);
     }
 }

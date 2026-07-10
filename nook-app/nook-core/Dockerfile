@@ -74,7 +74,12 @@ RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings
 RUN cargo llvm-cov nextest --profile ci -p nook-auth2 --no-report
 
 COPY nook-app/nook-core nook-core
-RUN cargo clippy -p nook-core --all-targets -- -D warnings
+# Docker COPY preserves source mtimes, while the inherited target directory can
+# contain newer artifacts. Touch the module that embeds locale JSON so changes
+# to those non-Rust inputs always reach both the native and downstream WASM
+# builds instead of reusing a stale include_str! result.
+RUN touch nook-core/src/i18n.rs \
+    && cargo clippy -p nook-core --all-targets -- -D warnings
 # Coverage runs HERE, in the image build (not at task runtime): cargo-llvm-cov first runs nook-auth2
 # above, then runs nook-core with --no-clean so the final report combines both crates while preserving
 # cacheable auth coverage. The same run also bakes the coverage artifacts that PR CI copies out later;
