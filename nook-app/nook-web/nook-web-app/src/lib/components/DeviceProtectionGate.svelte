@@ -32,10 +32,10 @@
 </script>
 
 <Card
-  class="mx-auto w-full max-w-lg animate-in fade-in duration-300"
+  class="mx-auto w-full max-w-lg gap-4 py-5 animate-in fade-in duration-300"
   data-testid="device-protection-gate"
 >
-  <CardHeader class="space-y-3 text-center">
+  <CardHeader class="gap-2 text-center">
     <div
       class="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
     >
@@ -46,7 +46,7 @@
       {/if}
     </div>
     <CardTitle>{vault.t('device_protection.title')}</CardTitle>
-    <CardDescription>
+    <CardDescription class="leading-snug">
       {#if vault.deviceProtectionStatus === 'plaintext'}
         {vault.t('device_protection.migration_description')}
       {:else if vault.deviceProtectionStatus === 'pin-setup'}
@@ -141,10 +141,7 @@
           </Button>
         </div>
       {:else if setupWorkflow === 'create'}
-        <div
-          class="space-y-4"
-          data-testid="device-protection-create-workflow"
-        >
+        <div class="space-y-4" data-testid="device-protection-create-workflow">
           <DeviceModeSelect
             {vault}
             id="device-protection-mode"
@@ -153,7 +150,10 @@
           />
 
           <div class="space-y-2">
-            <label class="block text-sm font-medium" for="device-protection-label">
+            <label
+              class="block text-sm font-medium"
+              for="device-protection-label"
+            >
               {vault.t('device_protection.passkey_label')}
             </label>
             <input
