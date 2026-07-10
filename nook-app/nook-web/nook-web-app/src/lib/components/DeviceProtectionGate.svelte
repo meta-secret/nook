@@ -138,13 +138,22 @@
               ? vault.t('device_protection.authorizing')
               : vault.t('device_protection.existing_passkey_action')}
           </Button>
+          <div class="flex items-center gap-3 pt-1">
+            <div class="h-px flex-1 bg-border"></div>
+            <span class="text-xs text-muted-foreground">
+              {vault.t('device_protection.new_passkey_alternative')}
+            </span>
+            <div class="h-px flex-1 bg-border"></div>
+          </div>
           <Button
-            class="mx-auto flex h-auto px-2 text-xs"
-            variant="link"
+            class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+            variant="ghost"
+            size="sm"
             disabled={vault.isVerifying}
             data-testid="device-protection-create-new-choice"
             onclick={() => (setupWorkflow = 'create')}
           >
+            <KeyRound class="size-4" />
             {vault.t('device_protection.new_passkey_alternative_action')}
           </Button>
         </div>

@@ -594,6 +594,7 @@
     "setup_action": "Создать новый passkey",
     "existing_passkey_alternative": "Уже есть passkey Nook?",
     "existing_passkey_alternative_action": "Использовать существующий passkey",
+    "new_passkey_alternative": "Нужен новый passkey Nook?",
     "new_passkey_alternative_action": "Создать новый passkey",
     "existing_passkey_action": "Выбрать passkey",
     "existing_passkey_hint": "Браузер или операционная система покажет сохранённые passkey Nook, если они доступны.",

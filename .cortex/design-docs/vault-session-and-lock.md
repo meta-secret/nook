@@ -77,6 +77,9 @@ workflows. When no local passkey-protected device record exists, creating a new
 passkey is the primary form and using an existing discoverable passkey is a small
 alternative action. When `device_identity_wrapped` already identifies passkey
 protection, the gate shows authorization only and never renders passkey creation.
+The create and existing branches mirror the same action hierarchy: one full-width
+primary button, then a labeled divider and centered ghost action for switching
+to the other branch.
 Browsers do not expose a general API for enumerating whether an RP already has a
 discoverable passkey, so the missing-record state must retain the explicit existing-
 passkey recovery action.

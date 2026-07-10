@@ -100,6 +100,10 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('device-protection-existing-workflow'),
     ).toBeVisible()
+    await expect(page.getByText('Need a new Nook passkey?')).toBeVisible()
+    await expect(
+      page.getByTestId('device-protection-create-new-choice'),
+    ).toHaveText('Create new passkey')
     await expect(
       page.getByTestId('device-protection-create-workflow'),
     ).toBeHidden()
