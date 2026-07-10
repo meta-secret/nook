@@ -374,7 +374,11 @@ impl NookVaultManager {
         if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
-        if event_log_remote {
+        // Local vaults also use the immutable event log once it has been
+        // initialized. Re-importing their projection here would create a
+        // second independent genesis root; append the recovered device's
+        // membership to the existing history instead.
+        if event_log_remote || self.event_log_has_events().await? {
             return self
                 .persist_event_log_password_membership(records, identity, keys)
                 .await;

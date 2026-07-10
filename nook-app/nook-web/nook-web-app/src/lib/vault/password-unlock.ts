@@ -210,13 +210,15 @@ export async function unlockWithPassword(
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
+    const message =
+      e instanceof Error ? e.message : 'Failed to unlock with password.'
+    log.warn('vault password unlock failed', { error: message })
     if (isNexusPasswordUnlockForbiddenError(e)) {
       state.errorMsg = state.t('architecture_modes.nexus_password_forbidden')
       state.nexusCeremonyPrompt = true
       return
     }
-    state.errorMsg =
-      e instanceof Error ? e.message : 'Failed to unlock with password.'
+    state.errorMsg = message
   } finally {
     state.isVerifying = false
   }
