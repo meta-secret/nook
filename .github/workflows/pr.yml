@@ -24,7 +24,7 @@ jobs:
   verify:
     name: Verify and preview
     if: github.event.action != 'closed'
-    runs-on: nook
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7

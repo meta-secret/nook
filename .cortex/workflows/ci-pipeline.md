@@ -11,7 +11,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`release-v1.yml`](../../.github/workflows/release-v1.yml)   | Push to `release/v1` + manual | Verify, wasm-bindgen tests, build, **full local-provider e2e**, GitHub Pages deploy to stable `nokey.sh` | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
-| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
+| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only) | No                                        |
 
 ```mermaid
 flowchart LR
@@ -76,6 +76,17 @@ Live credentials per provider:
 No-live-provider mode uses Playwright route handlers (`sync-stub.ts`,
 `drive-stub.ts`, `file-sync-stub.ts`) — no API quota. For the default `file`
 provider, those handlers read and write real event files under a temp directory.
+
+## Runner placement
+
+CI jobs run on **GitHub-hosted** `ubuntu-latest` runners so agent/CI load does
+not contend with the self-hosted Nook machine. The Docker setup action already
+enables the containerd image store on GitHub-hosted runners.
+
+| Workflow | `runs-on` | Why |
+| --- | --- | --- |
+| `pr.yml`, `main.yml`, `release-v1.yml`, `e2e-pr.yml`, `e2e-nightly.yml` | `ubuntu-latest` | Default CI and AI ci-fix agents |
+| `runner-cleanup.yml` | `nook` | Self-hosted Docker prune only |
 
 ## Why local-provider e2e vs sync-live
 
