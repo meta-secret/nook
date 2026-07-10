@@ -564,6 +564,11 @@ fn is_plausible_shared_email(value: &str) -> bool {
 }
 
 /// Validate a shared-grant request and return the grant ceremony outcome.
+///
+/// Capability lookup is ceremony-agnostic: providers that cannot share return
+/// [`SharedStorageGrantOutcome::Unsupported`] (typed soft failure for UI copy)
+/// rather than [`ValidationError::UnsupportedProviderReplication`]. Identity
+/// validation still fails closed with hard errors.
 pub fn prepare_shared_storage_grant(
     request: &SharedStorageGrantRequest,
 ) -> ValidationResult<SharedStorageGrantOutcome> {
@@ -572,8 +577,7 @@ pub fn prepare_shared_storage_grant(
         Some(preset) if !preset.trim().is_empty() => Some(OauthFilePreset::parse(preset)?),
         _ => None,
     };
-    let capability =
-        validate_provider_replication(provider_type, oauth_preset, ReplicationType::Shared)?;
+    let capability = provider_replication_capability(provider_type, oauth_preset);
     let identity = request.joiner_identity.trim();
     if identity.is_empty() {
         return Err(ValidationError::SharedJoinerIdentityRequired);
@@ -934,7 +938,12 @@ mod tests {
             oauth_preset: None,
             ..request
         };
-        assert!(prepare_shared_storage_grant(&github).is_err());
+        assert_eq!(
+            prepare_shared_storage_grant(&github).unwrap(),
+            SharedStorageGrantOutcome::Unsupported {
+                reason_key: "architecture_modes.shared_grant_unsupported".to_owned(),
+            }
+        );
     }
 
     #[test]
