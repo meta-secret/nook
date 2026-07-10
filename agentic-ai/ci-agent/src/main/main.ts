@@ -2,6 +2,7 @@ import { chdir } from "node:process";
 
 import { exitCiAgent } from "./exit.js";
 import { runCiFix } from "./fix.js";
+import { runIssueImplement } from "./issue.js";
 import { loadConfig } from "./config.js";
 import { loadPrompt } from "./prompt.js";
 import { runFixAgent } from "./run-agent.js";
@@ -28,8 +29,11 @@ async function main(): Promise<void> {
     case "fix":
       await runCiFix();
       break;
+    case "issue":
+      await runIssueImplement();
+      break;
     default:
-      throw new Error(`Unknown command: ${command} (expected agent or fix)`);
+      throw new Error(`Unknown command: ${command} (expected agent, fix, or issue)`);
   }
 }
 

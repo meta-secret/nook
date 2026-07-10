@@ -10,6 +10,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release-v1.yml`](../../.github/workflows/release-v1.yml)   | Push to `release/v1` + manual | Verify, wasm-bindgen tests, build, **full local-provider e2e**, GitHub Pages deploy to stable `nokey.sh` | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`issue-agent.yml`](../../.github/workflows/issue-agent.yml) | Issue opened + manual   | Cursor SDK agent implements the issue in Docker toolchain, opens PR (no merge) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
 
@@ -30,6 +31,9 @@ flowchart LR
 
   cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
   nightly --> e2e_live[sync-live e2e]
+
+  issue[Issue opened] --> issue_agent[issue-agent.yml]
+  issue_agent --> issue_pr[Open implementation PR]
 
   cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
   cleanup --> docker_prune["docker system prune --volumes"]
@@ -239,7 +243,7 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; PR CI then records that preview as a successful `github-pages` GitHub deployment for ruleset enforcement                                         |
 | `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core + nook-auth2 coverage comment                                                                                                 |
-| `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml)                                                                                                                            |
+| `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml) and issue-agent.yml                                                                                                        |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
@@ -268,6 +272,18 @@ Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT wi
 The `ci-fix` job runs **`task setup`** (bake the sealed nook-web image, reusing the GHCR toolchain base as cache) **before** `task ci-agent:fix`. Without this, Docker tasks would have no `nook-web:local` image to run. `nook-docker-setup` sets `NOOK_ENV=ci` and `TOOLCHAIN_REGISTRY`; `setup` builds and loads `nook-web:local`.
 
 Optional env: `CI_AGENT_PROMPT_FILE` (agent instructions), `CI_FIX_LABEL` (PR title/body label).
+
+## Issue agent (`issue-agent.yml`)
+
+[`issue-agent.yml`](../../.github/workflows/issue-agent.yml) runs when a GitHub issue is **opened** (or via `workflow_dispatch` with an issue number): Cursor SDK agent → implementation branch → PR linked with `Closes #N`. It does **not** wait for checks or squash-merge.
+
+Flow:
+
+1. Checkout with `NOOK_GITHUB_PAT`, Docker setup, `task setup` (same sealed `nook-web:local` image as ci-fix).
+2. `task ci-agent:issue` loads `.github/prompts/issue-agent.md`, runs the Cursor SDK agent against the repo, then the harness commits/pushes and opens the PR.
+3. Comments on the issue when the agent starts and when the PR is opened.
+
+Skip automation by labeling the issue `no-agent` or `skip-agent`. Required secrets: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (needs issues write in addition to contents + pull requests).
 
 ### Logging
 

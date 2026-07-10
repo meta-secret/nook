@@ -78,6 +78,36 @@ export async function pushFixBranch(
   log.info(`Pushed ${fixBranch}`);
 }
 
+export async function pushIssueBranch(
+  repoRoot: string,
+  branch: string,
+  issueNumber: number,
+  issueTitle: string,
+): Promise<void> {
+  log.info(`Pushing issue branch ${branch}`);
+  await execFileAsync("git", ["checkout", "-B", branch], { cwd: repoRoot });
+  await execFileAsync("git", ["add", "-A"], { cwd: repoRoot });
+
+  const staged = await hasStagedChanges(repoRoot);
+  if (!staged) {
+    throw new Error("No staged changes to commit after git add -A");
+  }
+
+  const subject = sanitizeCommitSubject(`Implement #${issueNumber}: ${issueTitle}`);
+  await execFileAsync("git", ["commit", "-m", subject], { cwd: repoRoot });
+  await execFileAsync("git", ["push", "-u", "origin", "HEAD"], { cwd: repoRoot });
+  log.info(`Pushed ${branch}`);
+}
+
+/** Keep commit subjects single-line and within a reasonable length. */
+export function sanitizeCommitSubject(raw: string): string {
+  const oneLine = raw.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= 72) {
+    return oneLine;
+  }
+  return `${oneLine.slice(0, 69).trimEnd()}...`;
+}
+
 async function hasStagedChanges(repoRoot: string): Promise<boolean> {
   try {
     await execFileAsync("git", ["diff", "--cached", "--quiet"], { cwd: repoRoot });

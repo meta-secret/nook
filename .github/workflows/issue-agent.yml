@@ -1,0 +1,74 @@
+# Issue → Cursor agent → PR
+#
+# On a new GitHub issue, run the Cursor SDK agent (same stack as ci-fix) against
+# the sealed Docker toolchain, implement the issue, push a branch, and open a PR.
+# Does not auto-merge. Requires CURSOR_API_KEY and NOOK_GITHUB_PAT.
+#
+# Skip: label the issue `no-agent` or `skip-agent` before/when opening.
+
+name: Issue agent
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to implement
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  implement:
+    name: Implement issue #${{ github.event.issue.number || inputs.issue_number }}
+    runs-on: nook
+    timeout-minutes: 180
+    concurrency:
+      group: issue-agent-${{ github.event.issue.number || inputs.issue_number }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      packages: write
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+      ISSUE_BRANCH: agent/issue-${{ github.event.issue.number || inputs.issue_number }}-${{ github.run_id }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      CI_AGENT_PROMPT_FILE: .github/prompts/issue-agent.md
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.NOOK_GITHUB_PAT }}
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Resolve toolchain image
+        run: task setup WASM_BUILD_MODE=prod
+        env:
+          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
+
+      - name: Run issue agent
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
+          REPO_ROOT: ${{ github.workspace }}
+          VITE_BASE: /
+          WASM_BUILD_MODE: prod
+          VITE_VAULT_SYNC_INTERVAL_MS: "1000"
+        run: task ci-agent:issue

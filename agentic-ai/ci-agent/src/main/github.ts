@@ -97,6 +97,99 @@ export async function createFixPr(
   }
 }
 
+export type IssueInfo = {
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+  htmlUrl: string;
+  labels: string[];
+};
+
+const SKIP_ISSUE_AGENT_LABELS = new Set(["no-agent", "skip-agent"]);
+
+export function shouldSkipIssueAgent(labels: string[]): boolean {
+  return labels.some((label) => SKIP_ISSUE_AGENT_LABELS.has(label.toLowerCase()));
+}
+
+export async function getIssue(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+): Promise<IssueInfo> {
+  const { data } = await octokit.rest.issues.get({
+    owner,
+    repo,
+    issue_number: issueNumber,
+  });
+  if (data.pull_request) {
+    throw new Error(`#${issueNumber} is a pull request, not an issue`);
+  }
+  return {
+    number: data.number,
+    title: data.title,
+    body: data.body ?? null,
+    state: data.state,
+    htmlUrl: data.html_url,
+    labels: data.labels.map((label) =>
+      typeof label === "string" ? label : (label.name ?? ""),
+    ),
+  };
+}
+
+export async function commentOnIssue(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+  body: string,
+): Promise<void> {
+  await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    body,
+  });
+}
+
+export async function createIssuePr(
+  octokit: Octokit,
+  repoRef: RepoRef,
+  headBranch: string,
+  issueNumber: number,
+  issueTitle: string,
+): Promise<number> {
+  const { owner, repo } = repoRef;
+  const title = `${issueTitle} (#${issueNumber})`;
+  const body = [
+    "## Summary",
+    `Implements #${issueNumber}.`,
+    "",
+    `Closes #${issueNumber}`,
+    "",
+    "## Test plan",
+    "- [ ] CI green on this PR",
+    "- [ ] Issue acceptance criteria covered",
+  ].join("\n");
+
+  try {
+    const { data } = await octokit.rest.pulls.create({
+      owner,
+      repo,
+      title,
+      head: headBranch,
+      base: "main",
+      body,
+    });
+    return data.number;
+  } catch (err: unknown) {
+    const existing = await findOpenPr(octokit, repoRef, headBranch);
+    if (existing) {
+      return existing;
+    }
+    throw err;
+  }
+}
+
 export async function waitForPrChecks(
   octokit: Octokit,
   repoRef: RepoRef,
