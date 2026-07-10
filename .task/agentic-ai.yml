@@ -64,13 +64,23 @@ tasks:
       CI_AGENT_CMD: '{{.CI_AGENT_CMD}}'
     cmds:
       - >-
+        bash -c 'set -euo pipefail;
+        repo_root="{{.REPO_ROOT}}";
+        if [ ! -e "$repo_root/.git" ]; then
+          echo "ci-agent:docker:run: missing $repo_root/.git — refuse to start agent without a checkout" >&2;
+          ls -la "$repo_root" >&2 || true;
+          exit 1;
+        fi;
+        mounts=(-v "$repo_root:$repo_root");
+        if [ -n "${RUNNER_WORKSPACE:-}" ]; then mounts+=(-v "$RUNNER_WORKSPACE:$RUNNER_WORKSPACE"); fi;
+        if [ -n "${RUNNER_TEMP:-}" ]; then mounts+=(-v "$RUNNER_TEMP:$RUNNER_TEMP"); fi;
         {{.DOCKER}} run --rm
         --init
         --platform linux/amd64
-        -v {{.REPO_ROOT}}:{{.REPO_ROOT}}
-        -w {{.REPO_ROOT}}
+        "${mounts[@]}"
+        -w "$repo_root"
         -v {{.DOCKER_SOCK}}:/var/run/docker.sock
-        -e REPO_ROOT={{.REPO_ROOT}}
+        -e REPO_ROOT="$repo_root"
         -e CURSOR_API_KEY
         -e CURSOR_AGENT_MODEL
         -e NOOK_GITHUB_PAT
@@ -107,7 +117,7 @@ tasks:
         -e NOOK_ENV
         -e CI=1
         {{.CI_AGENT_IMAGE}}
-        {{.CI_AGENT_CMD}}
+        {{.CI_AGENT_CMD}}'
 
   ci-agent:run:
     desc: Run Cursor SDK agent only (in Docker; host docker.sock).
