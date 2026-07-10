@@ -129,16 +129,18 @@ async function tokenClientForScope(
   if (existing) {
     return existing
   }
-  let slot: TokenClientSlot
   const client = window.google!.accounts.oauth2.initTokenClient({
     client_id: googleClientId(),
     scope: key,
     callback: (response) => {
-      slot.pendingResolve?.(response)
-      slot.pendingResolve = undefined
+      const current = tokenClients.get(key)
+      current?.pendingResolve?.(response)
+      if (current) {
+        current.pendingResolve = undefined
+      }
     },
   })
-  slot = { scopeKey: key, client, pendingResolve: undefined }
+  const slot = { scopeKey: key, client, pendingResolve: undefined }
   tokenClients.set(key, slot)
   return slot
 }
