@@ -91,7 +91,9 @@
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== undefined)
-  const showVaultPicker = $derived(vault.showLoginVaultPicker)
+  const showVaultPicker = $derived(
+    vault.showLoginVaultPicker && !showProviderSetupLink,
+  )
   const showNexusCeremony = $derived(
     !vault.isAuthenticated &&
       (vault.nexusCeremonyPrompt ||
@@ -102,6 +104,7 @@
     vault.localVaultPresent &&
       !showSetup &&
       !addProviderOpen &&
+      !showProviderSetupLink &&
       !showVaultPicker,
   )
   const activeLoginVault = $derived(

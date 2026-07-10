@@ -122,6 +122,12 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
 
+    await page.getByTestId('login-vault-workflow-import').click()
+    await page.getByTestId('login-import-vault-btn').click()
+    await expect(page.getByTestId('provider-picker-list')).toBeVisible()
+    await page.getByTestId('login-back-to-get-started').click()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+
     await page.getByTestId('login-vault-workflow-create').click()
     await expect(page.getByTestId('login-unlock-section')).toBeHidden()
     await page.getByTestId('login-vault-name-input').fill('test-2')
