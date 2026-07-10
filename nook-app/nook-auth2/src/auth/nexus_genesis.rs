@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const GENESIS_VERSION: u32 = 1;
+const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +66,21 @@ pub struct NexusGenesisParticipantResponse {
     pub version: u32,
     pub session_id: CompactToken,
     pub participant: NexusGenesisParticipant,
+    pub signature: String,
+}
+
+/// Provider-free public key bundle a participant can share before any initiator
+/// request exists. The initiator binds it to the active genesis session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NexusGenesisPublicKeyAnnouncement {
+    pub kind: String,
+    pub version: u32,
+    pub device_id: DeviceId,
+    pub encryption_public_key: DevicePublicKey,
+    pub signing_public_key: DeviceSigningPublicKey,
+    pub label: String,
+    pub fingerprint: String,
     pub signature: String,
 }
 
@@ -149,6 +165,38 @@ pub fn nexus_genesis_request(session: &NexusGenesisSession) -> NexusGenesisReque
     session.request.clone()
 }
 
+pub fn create_nexus_genesis_public_key_announcement(
+    identity: &DeviceIdentity,
+    signing_key: &SigningKey,
+    label: String,
+) -> MultiDeviceResult<NexusGenesisPublicKeyAnnouncement> {
+    if label.chars().count() > 80 {
+        return Err(MultiDeviceError::DeviceNameTooLong);
+    }
+    let encryption_public_key = identity.public_key();
+    let signing_public_key = signing_public_key(signing_key);
+    let device_id = identity.device_id().clone();
+    let fingerprint =
+        standalone_participant_fingerprint(&encryption_public_key, &signing_public_key);
+    let bytes = announcement_signing_bytes(
+        GENESIS_VERSION,
+        &device_id,
+        &encryption_public_key,
+        &signing_public_key,
+        &label,
+    )?;
+    Ok(NexusGenesisPublicKeyAnnouncement {
+        kind: PUBLIC_KEY_ANNOUNCEMENT_KIND.to_owned(),
+        version: GENESIS_VERSION,
+        device_id,
+        encryption_public_key,
+        signing_public_key,
+        label,
+        fingerprint,
+        signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
+    })
+}
+
 pub fn respond_to_nexus_genesis_request(
     request: &NexusGenesisRequest,
     identity: &DeviceIdentity,
@@ -181,6 +229,23 @@ pub fn respond_to_nexus_genesis_request(
     })
 }
 
+/// Accept either a session-bound response or a standalone public-key announcement.
+pub fn add_nexus_genesis_participant_payload(
+    session: &mut NexusGenesisSession,
+    payload_json: &str,
+) -> MultiDeviceResult<()> {
+    let value: serde_json::Value = serde_json::from_str(payload_json)
+        .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)?;
+    if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        let announcement: NexusGenesisPublicKeyAnnouncement = serde_json::from_value(value)
+            .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)?;
+        return add_nexus_genesis_public_key_announcement(session, &announcement);
+    }
+    let response: NexusGenesisParticipantResponse = serde_json::from_str(payload_json)
+        .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)?;
+    add_nexus_genesis_response(session, response)
+}
+
 pub fn add_nexus_genesis_response(
     session: &mut NexusGenesisSession,
     response: NexusGenesisParticipantResponse,
@@ -204,6 +269,29 @@ pub fn add_nexus_genesis_response(
         return Err(MultiDeviceError::NexusGenesisRosterFull);
     }
     session.participants.push(response.participant);
+    Ok(())
+}
+
+pub fn add_nexus_genesis_public_key_announcement(
+    session: &mut NexusGenesisSession,
+    announcement: &NexusGenesisPublicKeyAnnouncement,
+) -> MultiDeviceResult<()> {
+    validate_request(&session.request)?;
+    verify_public_key_announcement(announcement)?;
+    let participant = bind_announcement_to_session(announcement, &session.request.session_id);
+    if session.participants.iter().any(|existing| {
+        existing.device_id == participant.device_id
+            || existing.encryption_public_key == participant.encryption_public_key
+            || existing.signing_public_key == participant.signing_public_key
+    }) {
+        return Err(MultiDeviceError::DuplicateNexusGenesisParticipant {
+            device_id: participant.device_id.to_string(),
+        });
+    }
+    if session.participants.len() >= usize::from(session.request.policy.participant_count) {
+        return Err(MultiDeviceError::NexusGenesisRosterFull);
+    }
+    session.participants.push(participant);
     Ok(())
 }
 
@@ -425,6 +513,84 @@ fn participant_fingerprint(
     hex::encode(digest.finalize())
 }
 
+fn standalone_participant_fingerprint(
+    encryption: &DevicePublicKey,
+    signing: &DeviceSigningPublicKey,
+) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"nook-nexus-genesis-public-key-v1\0");
+    digest.update(encryption.as_str().as_bytes());
+    digest.update(b"\0");
+    digest.update(signing.as_str().as_bytes());
+    hex::encode(digest.finalize())
+}
+
+fn bind_announcement_to_session(
+    announcement: &NexusGenesisPublicKeyAnnouncement,
+    session_id: &CompactToken,
+) -> NexusGenesisParticipant {
+    NexusGenesisParticipant {
+        device_id: announcement.device_id.clone(),
+        encryption_public_key: announcement.encryption_public_key.clone(),
+        signing_public_key: announcement.signing_public_key.clone(),
+        label: announcement.label.clone(),
+        fingerprint: participant_fingerprint(
+            &announcement.encryption_public_key,
+            &announcement.signing_public_key,
+            session_id,
+        ),
+    }
+}
+
+fn verify_public_key_announcement(
+    announcement: &NexusGenesisPublicKeyAnnouncement,
+) -> MultiDeviceResult<()> {
+    if announcement.kind != PUBLIC_KEY_ANNOUNCEMENT_KIND
+        || announcement.version != GENESIS_VERSION
+        || announcement.signing_public_key.is_empty()
+    {
+        return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+    }
+    if device_id_from_public_key(&announcement.encryption_public_key)? != announcement.device_id
+        || announcement.fingerprint
+            != standalone_participant_fingerprint(
+                &announcement.encryption_public_key,
+                &announcement.signing_public_key,
+            )
+    {
+        return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+    }
+    verify_signature(
+        &announcement.signing_public_key,
+        &announcement.signature,
+        &announcement_signing_bytes(
+            announcement.version,
+            &announcement.device_id,
+            &announcement.encryption_public_key,
+            &announcement.signing_public_key,
+            &announcement.label,
+        )?,
+    )
+}
+
+fn announcement_signing_bytes(
+    version: u32,
+    device_id: &DeviceId,
+    encryption_public_key: &DevicePublicKey,
+    signing_public_key: &DeviceSigningPublicKey,
+    label: &str,
+) -> MultiDeviceResult<Vec<u8>> {
+    serde_json::to_vec(&(
+        PUBLIC_KEY_ANNOUNCEMENT_KIND,
+        version,
+        device_id,
+        encryption_public_key,
+        signing_public_key,
+        label,
+    ))
+    .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,6 +647,48 @@ mod tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn public_key_announcement_joins_without_initiator_request() {
+        let owner = DeviceIdentity::generate().unwrap();
+        let owner_signing = signing_key();
+        let mut session =
+            start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let peer = DeviceIdentity::generate().unwrap();
+        let peer_signing = signing_key();
+        let announcement =
+            create_nexus_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
+                .unwrap();
+        let payload = serde_json::to_string(&announcement).unwrap();
+        add_nexus_genesis_participant_payload(&mut session, &payload).unwrap();
+        assert!(session.is_complete());
+        let issued = finalize_nexus_genesis_shares(
+            session,
+            &StoreId::parse("store_AAAAAAAAAAA").unwrap(),
+            &owner_signing,
+        )
+        .unwrap();
+        assert_eq!(issued.deliveries.len(), 2);
+    }
+
+    #[test]
+    fn tampered_public_key_announcement_fails() {
+        let owner = DeviceIdentity::generate().unwrap();
+        let owner_signing = signing_key();
+        let mut session =
+            start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let peer = DeviceIdentity::generate().unwrap();
+        let peer_signing = signing_key();
+        let mut announcement =
+            create_nexus_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
+                .unwrap();
+        announcement.label = "Mallory".into();
+        let payload = serde_json::to_string(&announcement).unwrap();
+        assert!(matches!(
+            add_nexus_genesis_participant_payload(&mut session, &payload),
+            Err(MultiDeviceError::InvalidNexusGenesisSignature)
+        ));
     }
 
     #[test]

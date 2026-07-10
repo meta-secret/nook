@@ -69,9 +69,12 @@ pub use auth::multi_device::{
 };
 pub use auth::nexus_genesis::{
     NexusGenesisIssued, NexusGenesisParticipant, NexusGenesisParticipantResponse,
-    NexusGenesisPolicy, NexusGenesisRequest, NexusGenesisSession, NexusGenesisShareDelivery,
-    accept_nexus_genesis_share_delivery, add_nexus_genesis_response, finalize_nexus_genesis_shares,
-    nexus_genesis_request, respond_to_nexus_genesis_request, start_nexus_genesis,
+    NexusGenesisPolicy, NexusGenesisPublicKeyAnnouncement, NexusGenesisRequest,
+    NexusGenesisSession, NexusGenesisShareDelivery, accept_nexus_genesis_share_delivery,
+    add_nexus_genesis_participant_payload, add_nexus_genesis_public_key_announcement,
+    add_nexus_genesis_response, create_nexus_genesis_public_key_announcement,
+    finalize_nexus_genesis_shares, nexus_genesis_request, respond_to_nexus_genesis_request,
+    start_nexus_genesis,
 };
 pub use auth::nexus_unlock::{
     NexusUnlockPolicy, NexusUnlockRequest, NexusUnlockResponse, NexusUnlockSession,

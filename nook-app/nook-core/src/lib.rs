@@ -80,9 +80,10 @@ pub use secret_view::build_secret_yaml;
 
 pub use nook_auth2::{
     NexusGenesisIssued, NexusGenesisParticipant, NexusGenesisParticipantResponse,
-    NexusGenesisPolicy, NexusGenesisRequest, NexusGenesisSession, NexusGenesisShareDelivery,
-    accept_nexus_genesis_share_delivery, add_nexus_genesis_response, finalize_nexus_genesis_shares,
-    nexus_genesis_request,
+    NexusGenesisPolicy, NexusGenesisPublicKeyAnnouncement, NexusGenesisRequest,
+    NexusGenesisSession, NexusGenesisShareDelivery, accept_nexus_genesis_share_delivery,
+    add_nexus_genesis_participant_payload, add_nexus_genesis_public_key_announcement,
+    add_nexus_genesis_response, finalize_nexus_genesis_shares, nexus_genesis_request,
 };
 
 pub use multi_device::nexus_member_records_from_public_roster;
@@ -213,8 +214,8 @@ pub use vault_import::{
     verify_stored_vault_import,
 };
 pub use vault_nexus_genesis::{
-    NexusGenesisOutput, finalize_nexus_genesis, nexus_genesis_operations,
-    respond_to_nexus_genesis_request, start_nexus_genesis,
+    NexusGenesisOutput, create_nexus_genesis_public_key_announcement, finalize_nexus_genesis,
+    nexus_genesis_operations, respond_to_nexus_genesis_request, start_nexus_genesis,
 };
 pub use vault_nexus_unlock::{respond_to_nexus_unlock_request, start_nexus_unlock};
 pub use vault_projection::{

@@ -67,6 +67,14 @@ pub fn start_nexus_genesis(
     )
 }
 
+pub fn create_nexus_genesis_public_key_announcement(
+    identity: &DeviceIdentity,
+    signing: &SigningIdentity,
+    label: String,
+) -> Result<crate::NexusGenesisPublicKeyAnnouncement, crate::MultiDeviceError> {
+    nook_auth2::create_nexus_genesis_public_key_announcement(identity, signing.signing_key(), label)
+}
+
 pub fn respond_to_nexus_genesis_request(
     request: &crate::NexusGenesisRequest,
     identity: &DeviceIdentity,

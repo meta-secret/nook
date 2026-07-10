@@ -57,6 +57,8 @@
     onAddNexusGenesisParticipantResponse,
     onFinalizeNexusGenesis,
     onCreateNexusGenesisParticipantResponse,
+    onCreateNexusGenesisPublicKeyAnnouncement,
+    onRememberNexusGenesisRequest,
     onReceiveNexusGenesisShare,
     onCompleteNexusGenesisDelivery,
     nexusGenesisStatus = 'idle',
@@ -78,6 +80,10 @@
     onCreateNexusGenesisParticipantResponse?: (
       requestPayload: string,
     ) => string | Promise<string>
+    onCreateNexusGenesisPublicKeyAnnouncement?: () => string | Promise<string>
+    onRememberNexusGenesisRequest?: (
+      requestPayload: string,
+    ) => void | Promise<void>
     onReceiveNexusGenesisShare?: (sharePayload: string) => void | Promise<void>
     onCompleteNexusGenesisDelivery?: () => void | Promise<void>
     nexusGenesisStatus?: NexusGenesisStatus
@@ -97,9 +103,50 @@
   let copyingJoinResponse = $state(false)
   let nexusActionBusy = $state(false)
   let participantRequest = $state('')
+  let sessionParticipantRequest = $state('')
   let generatedParticipantResponse = $state('')
   let generatedParticipantFingerprint = $state('')
   let participantShare = $state('')
+  let joinPublicKeysLoading = $state(false)
+
+  $effect(() => {
+    if (
+      wizardStep === 'join' &&
+      !generatedParticipantResponse &&
+      !joinPublicKeysLoading &&
+      onCreateNexusGenesisPublicKeyAnnouncement
+    ) {
+      void loadJoinPublicKeys()
+    }
+  })
+
+  async function loadJoinPublicKeys() {
+    if (
+      joinPublicKeysLoading ||
+      generatedParticipantResponse ||
+      !onCreateNexusGenesisPublicKeyAnnouncement
+    ) {
+      return
+    }
+    joinPublicKeysLoading = true
+    try {
+      generatedParticipantResponse =
+        await onCreateNexusGenesisPublicKeyAnnouncement()
+      const announcement = JSON.parse(generatedParticipantResponse) as {
+        fingerprint?: string
+      }
+      generatedParticipantFingerprint = announcement.fingerprint ?? ''
+    } catch (error) {
+      generatedParticipantResponse = ''
+      generatedParticipantFingerprint = ''
+      vault.errorMsg =
+        error instanceof Error
+          ? error.message
+          : vault.t('login.nexus_genesis_response_failed')
+    } finally {
+      joinPublicKeysLoading = false
+    }
+  }
 
   $effect(() => {
     if (
@@ -222,7 +269,7 @@
   }
 
   async function createParticipantResponse() {
-    const requestPayload = participantRequest.trim()
+    const requestPayload = sessionParticipantRequest.trim()
     if (
       !requestPayload ||
       nexusActionBusy ||
@@ -250,11 +297,21 @@
     }
   }
 
+  function refreshJoinPublicKeys() {
+    generatedParticipantResponse = ''
+    generatedParticipantFingerprint = ''
+    void loadJoinPublicKeys()
+  }
+
   async function receiveParticipantShare() {
     const sharePayload = participantShare.trim()
     if (!sharePayload || nexusActionBusy || !onReceiveNexusGenesisShare) return
     nexusActionBusy = true
     try {
+      const requestPayload = participantRequest.trim()
+      if (requestPayload && onRememberNexusGenesisRequest) {
+        await onRememberNexusGenesisRequest(requestPayload)
+      }
       await onReceiveNexusGenesisShare(sharePayload)
       participantShare = ''
     } finally {
@@ -710,40 +767,6 @@
         </p>
       </div>
 
-      <div class="space-y-2">
-        <label
-          class="text-xs font-medium text-foreground"
-          for="nexus-participant-request"
-        >
-          {vault.t('login.nexus_genesis_join_request_label')}
-        </label>
-        <textarea
-          id="nexus-participant-request"
-          class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-          data-testid="nexus-genesis-join-request-input"
-          placeholder={vault.t('login.nexus_genesis_join_request_placeholder')}
-          bind:value={participantRequest}
-          disabled={isBusy || nexusActionBusy}></textarea>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-testid="nexus-genesis-create-response"
-          disabled={isBusy ||
-            nexusActionBusy ||
-            !participantRequest.trim() ||
-            !onCreateNexusGenesisParticipantResponse}
-          onclick={() => void createParticipantResponse()}
-        >
-          {#if nexusActionBusy}
-            <RefreshCw class="size-4 animate-spin" />
-          {:else}
-            <ShieldCheck class="size-4" />
-          {/if}
-          {vault.t('login.nexus_genesis_create_response')}
-        </Button>
-      </div>
-
       {#if generatedParticipantResponse}
         <div
           class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
@@ -795,7 +818,73 @@
             </div>
           </div>
         </div>
+      {:else if joinPublicKeysLoading}
+        <p
+          class="text-sm text-muted-foreground"
+          data-testid="nexus-genesis-join-loading"
+        >
+          {vault.t('login.nexus_genesis_join_loading')}
+        </p>
+      {:else}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid="nexus-genesis-refresh-public-keys"
+          disabled={isBusy || nexusActionBusy}
+          onclick={() => refreshJoinPublicKeys()}
+        >
+          <RefreshCw class="size-4" />
+          {vault.t('login.nexus_genesis_refresh_public_keys')}
+        </Button>
       {/if}
+
+      <details class="rounded-lg border border-border/60 bg-muted/10 p-4">
+        <summary
+          class="cursor-pointer text-sm font-medium text-foreground"
+          data-testid="nexus-genesis-join-request-toggle"
+        >
+          {vault.t('login.nexus_genesis_join_request_optional')}
+        </summary>
+        <div class="mt-3 space-y-2">
+          <p class="text-xs text-pretty text-muted-foreground">
+            {vault.t('login.nexus_genesis_join_request_optional_description')}
+          </p>
+          <label
+            class="text-xs font-medium text-foreground"
+            for="nexus-participant-request"
+          >
+            {vault.t('login.nexus_genesis_join_request_label')}
+          </label>
+          <textarea
+            id="nexus-participant-request"
+            class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+            data-testid="nexus-genesis-join-request-input"
+            placeholder={vault.t(
+              'login.nexus_genesis_join_request_placeholder',
+            )}
+            bind:value={sessionParticipantRequest}
+            disabled={isBusy || nexusActionBusy}></textarea>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="nexus-genesis-create-response"
+            disabled={isBusy ||
+              nexusActionBusy ||
+              !sessionParticipantRequest.trim() ||
+              !onCreateNexusGenesisParticipantResponse}
+            onclick={() => void createParticipantResponse()}
+          >
+            {#if nexusActionBusy}
+              <RefreshCw class="size-4 animate-spin" />
+            {:else}
+              <ShieldCheck class="size-4" />
+            {/if}
+            {vault.t('login.nexus_genesis_create_session_response')}
+          </Button>
+        </div>
+      </details>
 
       <div class="space-y-2 border-t border-border pt-4">
         <p class="text-xs font-medium text-foreground">
@@ -804,6 +893,21 @@
         <p class="text-xs text-pretty text-muted-foreground">
           {vault.t('login.nexus_genesis_join_share_description')}
         </p>
+        <label
+          class="text-xs font-medium text-foreground"
+          for="nexus-share-request"
+        >
+          {vault.t('login.nexus_genesis_join_share_request_label')}
+        </label>
+        <textarea
+          id="nexus-share-request"
+          class="min-h-16 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+          data-testid="nexus-genesis-share-request-input"
+          placeholder={vault.t(
+            'login.nexus_genesis_join_share_request_placeholder',
+          )}
+          bind:value={participantRequest}
+          disabled={isBusy || nexusActionBusy}></textarea>
         <label
           class="text-xs font-medium text-foreground"
           for="nexus-received-share"

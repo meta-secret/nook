@@ -126,6 +126,24 @@ impl NookVaultManager {
         )
     }
 
+    /// Create this device's signed public-key announcement. No initiator request
+    /// is required; the vault owner binds it to the active genesis session.
+    #[wasm_bindgen(js_name = createNexusGenesisPublicKeyAnnouncement)]
+    pub async fn create_nexus_genesis_public_key_announcement(
+        &mut self,
+        participant_label: String,
+    ) -> Result<String, JsError> {
+        let identity = self.ensure_device_identity()?;
+        let signing = self.ensure_signing_identity().await?;
+        let announcement = nook_core::create_nexus_genesis_public_key_announcement(
+            &identity,
+            &signing,
+            participant_label,
+        )?;
+        Ok(serde_json::to_string(&announcement)
+            .map_err(|error| NookError::Serialization(error.to_string()))?)
+    }
+
     /// Create this device's signed participant response. The exact request is
     /// retained in memory and later required to accept its returned share.
     #[wasm_bindgen(js_name = respondToNexusGenesisRequest)]
@@ -150,20 +168,27 @@ impl NookVaultManager {
         Ok(response_json)
     }
 
-    /// Verify and add a participant's signed response to the active roster.
+    /// Remember the initiator request so a later share delivery can be verified.
+    #[wasm_bindgen(js_name = rememberNexusGenesisRequest)]
+    pub fn remember_nexus_genesis_request(&mut self, request_json: &str) -> Result<(), JsError> {
+        let request: nook_core::NexusGenesisRequest = serde_json::from_str(request_json)
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        self.pending_nexus_genesis_request = Some(request);
+        Ok(())
+    }
+
+    /// Verify and add a participant's signed response or public-key announcement
+    /// to the active roster.
     #[wasm_bindgen(js_name = addNexusGenesisParticipantResponse)]
     pub fn add_nexus_genesis_participant_response(
         &mut self,
         response_json: &str,
     ) -> Result<String, JsError> {
-        let response: nook_core::NexusGenesisParticipantResponse =
-            serde_json::from_str(response_json)
-                .map_err(|error| NookError::Serialization(error.to_string()))?;
         let session = self
             .nexus_genesis
             .as_mut()
             .ok_or_else(|| JsError::new("No Nexus genesis ceremony is active."))?;
-        nook_core::add_nexus_genesis_response(session, response)?;
+        nook_core::add_nexus_genesis_participant_payload(session, response_json)?;
         self.nexus_genesis_status_json()
     }
 
@@ -377,7 +402,11 @@ impl NookVaultManager {
         let request = self
             .pending_nexus_genesis_request
             .as_ref()
-            .ok_or_else(|| JsError::new("No matching Nexus genesis request is pending."))?
+            .ok_or_else(|| {
+                JsError::new(
+                    "Paste the initiator request in the share section before accepting delivery.",
+                )
+            })?
             .clone();
         let identity = self.ensure_device_identity()?;
         let record =
