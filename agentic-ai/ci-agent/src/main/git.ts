@@ -15,6 +15,21 @@ const ACTIONS_BOT = {
   name: "github-actions[bot]",
 } as const;
 
+async function markSafeDirectory(repoRoot: string): Promise<void> {
+  // Must run before any other git command: bind-mounted Actions checkouts are
+  // owned by the runner user while the agent container often runs as root.
+  try {
+    await execFileAsync("git", ["config", "--global", "--add", "safe.directory", repoRoot]);
+  } catch {
+    // may already be present
+  }
+  try {
+    await execFileAsync("git", ["config", "--global", "--add", "safe.directory", "*"]);
+  } catch {
+    // optional wildcard
+  }
+}
+
 async function assertGitRepo(repoRoot: string): Promise<void> {
   try {
     await access(join(repoRoot, ".git"));
@@ -37,6 +52,7 @@ export async function configureGitForCi(
   repoRoot: string,
   octokit?: Octokit,
 ): Promise<void> {
+  await markSafeDirectory(repoRoot);
   await assertGitRepo(repoRoot);
 
   let userEmail: string = ACTIONS_BOT.email;
@@ -53,8 +69,6 @@ export async function configureGitForCi(
     }
   }
 
-  // Global identity works even when --local is awkward across container UIDs;
-  // still require a real checkout for commit/push.
   const globalConfig: Array<[string, string]> = [
     ["user.email", userEmail],
     ["user.name", userName],
@@ -62,25 +76,7 @@ export async function configureGitForCi(
   ];
 
   for (const [key, value] of globalConfig) {
-    await execFileAsync("git", ["config", "--global", key, value], { cwd: repoRoot });
-  }
-
-  try {
-    await execFileAsync(
-      "git",
-      ["config", "--global", "--add", "safe.directory", repoRoot],
-      { cwd: repoRoot },
-    );
-  } catch {
-    // safe.directory may already be set by actions/checkout.
-  }
-
-  try {
-    await execFileAsync("git", ["config", "--global", "--add", "safe.directory", "*"], {
-      cwd: repoRoot,
-    });
-  } catch {
-    // optional wildcard for nested gitdirs
+    await execFileAsync("git", ["config", "--global", key, value]);
   }
 
   log.info(`Configured git identity as ${userName} <${userEmail}> in ${repoRoot}`);
