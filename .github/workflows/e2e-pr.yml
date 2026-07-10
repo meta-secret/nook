@@ -40,7 +40,7 @@ concurrency:
 jobs:
   e2e:
     name: Playwright (${{ inputs.suite }})
-    runs-on: nook
+    runs-on: ubuntu-latest
     steps:
       - name: Resolve PR head SHA
         id: pr

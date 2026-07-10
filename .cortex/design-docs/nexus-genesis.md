@@ -16,13 +16,20 @@ Related:
 
 ## Core Decision
 
-Vault creation asks for the vault type only:
+Get started asks for one mutually exclusive intent:
 
-- **Simple:** create an empty local vault in memory. The device can open it
-  immediately with its normal device-key envelope. Sync providers are optional
-  backups/replicas configured after creation.
-- **Nexus:** start a reverse-onboarding ceremony. Do not create an openable
-  vault, generate a usable vault session, or configure a sync provider yet.
+- **Create Simple:** create an empty local vault in memory. The device can open
+  it immediately with its normal device-key envelope. Sync providers are
+  optional backups/replicas configured after creation.
+- **Create Nexus:** start a reverse-onboarding ceremony. Do not create an
+  openable vault, generate a usable vault session, or configure a sync provider
+  yet. The initiator chooses `N`/`T`, waits for every participant public key,
+  then atomically creates the empty vault.
+- **Join Nexus:** a non-initiator device pastes the initiator request and
+  generates a signed response QR. That QR is the primary join outcome. After
+  genesis, receiving the encrypted share is a secondary step; later browser
+  onboarding into an existing vault uses the standard Onboard QR + sync
+  provider flow.
 
 `replication_type` is not a vault architecture choice and must not appear in
 vault creation. A sync provider transports encrypted vault data after genesis;

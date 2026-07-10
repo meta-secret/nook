@@ -73,12 +73,15 @@ test.describe('vault connect flow', () => {
     await page.goto('/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
-    await expect(page.getByTestId('create-vault-wizard-vault')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-nexus')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-join')).toBeVisible()
     await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 
-    await page.getByTestId('create-vault-wizard-continue').click()
+    await page.getByTestId('get-started-path-simple').click()
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('login-vault-name-input')).toBeVisible()

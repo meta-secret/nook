@@ -25,7 +25,7 @@ env:
 jobs:
   deploy:
     name: Verify and deploy v1
-    runs-on: nook
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

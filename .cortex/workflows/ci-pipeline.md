@@ -12,7 +12,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
-| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
+| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only) | No                                        |
 
 ```mermaid
 flowchart LR
@@ -77,6 +77,17 @@ Live credentials per provider:
 No-live-provider mode uses Playwright route handlers (`sync-stub.ts`,
 `drive-stub.ts`, `file-sync-stub.ts`) — no API quota. For the default `file`
 provider, those handlers read and write real event files under a temp directory.
+
+## Runner placement
+
+CI jobs run on **GitHub-hosted** `ubuntu-latest` runners so agent/CI load does
+not contend with the self-hosted Nook machine. The Docker setup action already
+enables the containerd image store on GitHub-hosted runners.
+
+| Workflow | `runs-on` | Why |
+| --- | --- | --- |
+| `pr.yml`, `main.yml`, `release-v1.yml`, `e2e-pr.yml`, `e2e-nightly.yml` | `ubuntu-latest` | Default CI and AI ci-fix agents |
+| `runner-cleanup.yml` | `nook` | Self-hosted Docker prune only |
 
 ## Why local-provider e2e vs sync-live
 
@@ -297,9 +308,11 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 | Level     | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`                                                                          |
 | Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
 
-Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m).
+Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m). PR check wait timeout: `CI_FIX_CHECKS_TIMEOUT_MS` (default 45m) — `waitForPrChecks` must not poll forever.
 
 The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Without an explicit exit, the Cursor SDK local executor can leave child processes and open handles that keep the Node event loop alive and the `ci-fix` job running long after the agent merges its PR.
+
+Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) runs unit tests plus an `exitCiAgent` open-handle check on `ubuntu-latest` when an issue is labeled `ci-agent-smoke` (or via `workflow_dispatch`).
 
 ## Agent implement (`ai-agent` label / manual prompt)
 

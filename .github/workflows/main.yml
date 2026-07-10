@@ -36,7 +36,7 @@ env:
 jobs:
   ci:
     name: Check, build, e2e, and deploy dev
-    runs-on: nook
+    runs-on: ubuntu-latest
     environment:
       name: development
       url: https://dev.nokey.sh/
@@ -193,7 +193,7 @@ jobs:
     name: AI fix, PR, and merge
     needs: ci
     if: failure() && github.event_name == 'push'
-    runs-on: nook
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
       contents: write
