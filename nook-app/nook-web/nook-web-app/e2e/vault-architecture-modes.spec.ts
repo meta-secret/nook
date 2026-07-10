@@ -115,6 +115,13 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
   }
 }
 
+async function continueToReplicationStep(page: Page) {
+  await page.getByTestId('create-vault-wizard-continue').click()
+  await expect(
+    page.getByTestId('create-vault-wizard-replication'),
+  ).toBeVisible()
+}
+
 test.describe('vault architecture modes', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
@@ -125,29 +132,35 @@ test.describe('vault architecture modes', () => {
     })
   })
 
-  test('shows only actionable vault selectors', async ({
+  test('guides vault creation through one architecture decision at a time', async ({
     page,
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
+    await expect(page.getByTestId('create-vault-wizard-progress')).toBeVisible()
+    await expect(page.getByTestId('create-vault-wizard-vault')).toBeVisible()
     await expect(page.getByTestId('mode-group-vault')).toBeVisible()
-    await expect(page.getByTestId('mode-group-replication')).toBeVisible()
+    await expect(page.getByTestId('mode-group-replication')).toHaveCount(0)
+    await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
     await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
-    await expect(page.getByTestId('mode-group-provider-capability')).toHaveCount(
-      0,
-    )
-    await assertGroupsDoNotOverlap(page, [
-      'mode-group-vault',
-      'mode-group-replication',
-    ])
+    await expect(
+      page.getByTestId('mode-group-provider-capability'),
+    ).toHaveCount(0)
     await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
 
     await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-nexus').click()
     await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
 
-    await page.getByTestId('vault-mode-select').click()
-    await page.getByTestId('mode-option-simple').click()
-    await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
+    await continueToReplicationStep(page)
+    await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
+    await expect(page.getByTestId('mode-group-replication')).toBeVisible()
+    await page.getByTestId('create-vault-wizard-back').click()
+    await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
+
+    await continueToReplicationStep(page)
+    await page.getByTestId('create-vault-wizard-continue').click()
+    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
   })
 
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
@@ -155,6 +168,7 @@ test.describe('vault architecture modes', () => {
   }) => {
     await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-simple').click()
+    await continueToReplicationStep(page)
     await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-personal').click()
     await createLocalVaultOnLogin(page, 'Simple personal architecture')
@@ -202,6 +216,7 @@ test.describe('vault architecture modes', () => {
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
+    await continueToReplicationStep(page)
     await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-shared').click()
     await openLoginProviderSetup(page)
@@ -232,6 +247,7 @@ test.describe('vault architecture modes', () => {
       fileName: SHARED_PROVIDER.fileName,
     })
 
+    await continueToReplicationStep(page)
     await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-shared').click()
     await createLocalVaultOnLogin(page, 'Shared replication architecture')
@@ -398,6 +414,7 @@ test.describe('vault architecture modes', () => {
       sharedPermissionStatus: 403,
     })
 
+    await continueToReplicationStep(page)
     await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-shared').click()
     await createLocalVaultOnLogin(page, 'Manual shared grant architecture')
@@ -452,14 +469,11 @@ test.describe('vault architecture modes', () => {
       await expect(
         page.getByTestId('mode-group-provider-capability'),
       ).toHaveCount(0)
-      await assertGroupsDoNotOverlap(page, [
-        'mode-group-vault',
-        'mode-group-replication',
-      ])
       await page.getByTestId('vault-mode-select').click()
       await page.getByTestId('mode-option-nexus').click()
       await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
 
+      await continueToReplicationStep(page)
       await page.getByTestId('replication-mode-select').click()
       await page.getByTestId('mode-option-shared').click()
       await openLoginProviderSetup(page)

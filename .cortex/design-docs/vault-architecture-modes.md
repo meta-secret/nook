@@ -20,26 +20,29 @@ The five groups stay visually distinct even though Rust derives some of them.
 The web layer renders the current Rust/WASM decision; it does not maintain a
 second compatibility matrix.
 
-Selectable alternatives use compact dropdowns for vault and replication type,
-with only the selected mode's description shown below each control. Derived
-onboarding and provider-capability details are omitted from vault creation and
-shown later only where the user can act on them.
+Vault creation is a linear three-step wizard: choose the vault type, choose the
+replication type, then create or connect the vault. It shows one decision at a
+time, preserves earlier selections when navigating Back, and keeps progress
+visible throughout. Each choice uses a compact dropdown with only the selected
+mode's description below it. Derived onboarding and provider-capability details
+are omitted from vault creation and shown later only where the user can act on
+them.
 
 | Stage / surface | Group shown | State and transition |
 | --- | --- | --- |
 | Device protection gate | 1. Device mode | Choose `standard` or `anti-hacker` while initializing this browser. The persisted choice is reused and is never requested again during vault creation. |
-| First-run create chooser | 2. Vault type | Choose the fast `simple` path or `nexus`; choosing nexus immediately shows the pre-secret readiness gate. |
-| First-run create chooser | 3. Replication type | Choose `personal` or `shared` independently from vault key access. |
+| First-run create wizard, step 1 | 2. Vault type | Choose the fast `simple` path or `nexus`; choosing nexus immediately shows the pre-secret readiness gate. Continue advances to replication. |
+| First-run create wizard, step 2 | 3. Replication type | Choose `personal` or `shared` independently from vault key access. Back preserves the vault-type selection. |
+| First-run create wizard, step 3 | Vault action | Name and create the new local vault, or connect a provider for an existing vault. Back preserves both architecture selections. |
 | Provider picker | 5. Provider capability | Ask Rust/WASM for each provider capability and disable unsupported combinations before setup. |
 | Unlocked Onboard Device wizard | 4 + 5 | Show the derived onboarding ceremony, label saved providers as personal-only or shared-capable, and select only a provider Rust accepts for the vault replication mode. |
 | Unlocked provider management | 5 | Keep incompatible saved rows visible for explanation/removal, label their capability, and disable sync actions for the current vault mode. |
 | Nexus creation / unlocked vault | 2 + 4 | Secret creation remains blocked until encrypted participant shares satisfy the Rust-owned readiness rule. |
 | Nexus login | 2 + 4 | Replace password unlock with the dedicated opened-share ceremony. |
 
-Simple personal remains the default and keeps the local create action on the
-same screen. Shared and nexus choices reveal their constraints before provider
-setup or secret creation, so the low-friction path is not buried by the
-high-security ceremony.
+Simple personal remains the default. Shared and nexus choices reveal their
+constraints in their respective wizard steps before provider setup or secret
+creation, so the low-friction path is not buried by the high-security ceremony.
 
 ## Defaults And Persistence
 
