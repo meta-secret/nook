@@ -61,6 +61,10 @@ export async function branchExistsOnOrigin(
   }
 }
 
+export function pullRequestUrl({ owner, repo }: RepoRef, prNumber: number): string {
+  return `https://github.com/${owner}/${repo}/pull/${prNumber}`;
+}
+
 export async function createFixPr(
   octokit: Octokit,
   repoRef: RepoRef,
@@ -69,14 +73,17 @@ export async function createFixPr(
   fixLabel = "main CI",
 ): Promise<number> {
   const { owner, repo } = repoRef;
-  const title = `Fix ${fixLabel} (run ${runId})`;
-  const body = [
-    "## Summary",
-    `Auto-fix for failed ${fixLabel} run ${runId}.`,
-    "",
-    "## Test plan",
-    "- [ ] CI green on this PR",
-  ].join("\n");
+  const title =
+    process.env.AGENT_PR_TITLE?.trim() || `Fix ${fixLabel} (run ${runId})`;
+  const body =
+    process.env.AGENT_PR_BODY?.trim() ||
+    [
+      "## Summary",
+      `Auto-fix for failed ${fixLabel} run ${runId}.`,
+      "",
+      "## Test plan",
+      "- [ ] CI green on this PR",
+    ].join("\n");
 
   try {
     const { data } = await octokit.rest.pulls.create({
@@ -95,6 +102,21 @@ export async function createFixPr(
     }
     throw err;
   }
+}
+
+export async function commentOnIssue(
+  octokit: Octokit,
+  { owner, repo }: RepoRef,
+  issueNumber: number,
+  body: string,
+): Promise<void> {
+  log.info(`Commenting on issue #${issueNumber}`);
+  await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: issueNumber,
+    body,
+  });
 }
 
 const DEFAULT_CHECKS_TIMEOUT_MS = 45 * 60 * 1000;

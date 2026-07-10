@@ -69,11 +69,11 @@ export async function pushFixBranch(
     throw new Error("No staged changes to commit after git add -A");
   }
 
-  await execFileAsync(
-    "git",
-    ["commit", "-m", `Fix main CI failure (run ${runId}).`],
-    { cwd: repoRoot },
-  );
+  const commitMessage =
+    process.env.AGENT_COMMIT_MESSAGE?.trim() ||
+    `Fix main CI failure (run ${runId}).`;
+
+  await execFileAsync("git", ["commit", "-m", commitMessage], { cwd: repoRoot });
   await execFileAsync("git", ["push", "-u", "origin", "HEAD"], { cwd: repoRoot });
   log.info(`Pushed ${fixBranch}`);
 }
