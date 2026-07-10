@@ -42,11 +42,10 @@ If you self-host or deploy Nook, **you** control the hosting environment. This p
 
 ## 5. Google Drive (optional sync)
 
-If you choose **Sign in with Google**, Nook uses Google Identity Services in the browser to obtain an **OAuth access token** with scope:
+If you choose **Sign in with Google**, Nook uses Google Identity Services in the browser to obtain an **OAuth access token**. Scope depends on vault replication mode:
 
-`https://www.googleapis.com/auth/drive.appdata`
-
-That scope allows Nook to store and read an **encrypted vault file** in a **hidden Google Drive application data folder** associated with your Google account—not in your normal visible Drive files.
+- **Personal** vaults: `https://www.googleapis.com/auth/drive.appdata` — encrypted vault data in a **hidden Google Drive application data folder** associated with your Google account (not in your normal visible Drive files).
+- **Shared** vaults: `https://www.googleapis.com/auth/drive.file` — Nook creates a dedicated **My Drive folder**, shares it with the joiner’s Google account (writer), and syncs encrypted event files under that folder.
 
 - The OAuth token is stored **only in your browser** (like a saved GitHub token).
 - Nook may read your **Google account email address** from Google's API to show "Signed in as …" in the UI.

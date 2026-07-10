@@ -6,7 +6,9 @@
  *
  * Google Cloud Console → Credentials → OAuth client (Web application):
  * - Authorized JavaScript origins: http://localhost:5173, https://nokey.sh, https://dev.nokey.sh
- * - OAuth consent screen scope: https://www.googleapis.com/auth/drive.appdata
+ * - OAuth consent screen scopes:
+ *   - Personal vaults: https://www.googleapis.com/auth/drive.appdata
+ *   - Shared vaults: https://www.googleapis.com/auth/drive.file
  *
  * Redirect URIs are not used by the GIS token client flow.
  */

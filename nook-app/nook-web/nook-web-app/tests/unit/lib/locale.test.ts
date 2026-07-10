@@ -51,6 +51,73 @@ describe('locale', () => {
       expect(
         lookupTranslation(catalog, 'provider_picker.google_drive_desc'),
       ).toBeTypeOf('string')
+      expect(
+        lookupTranslation(
+          catalog,
+          'provider_picker.unsupported_replication_desc',
+        ),
+      ).toBeTypeOf('string')
+    }
+  })
+
+  test('catalogs include architecture mode strings', () => {
+    const modeKeys = [
+      'device_protection.mode_group_label',
+      'device_protection.mode_standard_title',
+      'device_protection.mode_standard_description',
+      'device_protection.mode_anti_hacker_title',
+      'device_protection.mode_anti_hacker_description',
+      'architecture_modes.vault_type_title',
+      'architecture_modes.vault_type_simple_title',
+      'architecture_modes.vault_type_simple_description',
+      'architecture_modes.vault_type_nexus_title',
+      'architecture_modes.vault_type_nexus_description',
+      'architecture_modes.replication_type_title',
+      'architecture_modes.replication_type_personal_title',
+      'architecture_modes.replication_type_personal_description',
+      'architecture_modes.replication_type_shared_title',
+      'architecture_modes.replication_type_shared_description',
+      'architecture_modes.onboarding_type_title',
+      'architecture_modes.onboarding_type_personal-credential-transfer_title',
+      'architecture_modes.onboarding_type_personal-credential-transfer_description',
+      'architecture_modes.onboarding_type_shared-provider-grant_title',
+      'architecture_modes.onboarding_type_shared-provider-grant_description',
+      'architecture_modes.provider_capability_title',
+      'architecture_modes.provider_capability_description',
+      'architecture_modes.shared_grant_manual_instructions',
+      'architecture_modes.shared_grant_success',
+      'architecture_modes.shared_grant_unsupported',
+      'architecture_modes.nexus_gate_title',
+      'architecture_modes.nexus_gate_description',
+      'architecture_modes.nexus_secret_creation_blocked',
+      'architecture_modes.nexus_ceremony_title',
+      'architecture_modes.nexus_ceremony_instructions',
+      'architecture_modes.nexus_ceremony_awaiting_shares',
+      'architecture_modes.nexus_ceremony_open_local',
+      'architecture_modes.nexus_ceremony_copy_share',
+      'architecture_modes.nexus_ceremony_paste_peer',
+      'architecture_modes.nexus_ceremony_unlock',
+      'architecture_modes.nexus_password_forbidden',
+      'errors.validation.shared_joiner_identity_required',
+      'errors.validation.shared_joiner_identity_invalid',
+      'errors.validation.shared_storage_target_required',
+      'onboard_device.shared_identity_label',
+      'onboard_device.shared_identity_placeholder',
+      'onboard_device.shared_identity_hint',
+      'onboard_device.shared_identity_required',
+      'onboard_device.no_compatible_sync_providers',
+      'provider_picker.unsupported_current_vault',
+      'provider_picker.capability_personal_only',
+      'provider_picker.capability_personal_shared',
+    ]
+
+    for (const locale of ['en', 'ru'] as const) {
+      const catalog = getTranslationCatalog(locale)
+      for (const key of modeKeys) {
+        expect(lookupTranslation(catalog, key), `${locale}:${key}`).toBeTypeOf(
+          'string',
+        )
+      }
     }
   })
 

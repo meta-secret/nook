@@ -14,6 +14,13 @@ Related:
 [ARCHITECTURE.md](../ARCHITECTURE.md) section 2,
 [#259](https://github.com/meta-secret/nook/issues/259).
 
+This fixed 2-of-3 recovery protocol is distinct from Nexus genesis. Nexus uses
+a separately typed reverse-onboarding ceremony and a configurable `T-of-N`
+access policy before the vault exists. The two features may share audited
+SLIP-0039 primitives, but they must not share payload types, identifiers,
+policy constants, or lifecycle state. See
+[nexus-genesis.md](../design-docs/nexus-genesis.md).
+
 ---
 
 ## 1. Goals

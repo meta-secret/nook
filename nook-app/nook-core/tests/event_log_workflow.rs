@@ -544,8 +544,11 @@ fn join_merge_single_head() -> VaultResult<()> {
 
 #[test]
 fn stored_vault_import_then_decrypt() -> VaultResult<()> {
-    let mut device = EventLogDevice::genesis("main")?;
-    let yaml = sample_stored_vault_yaml(&device.crypto)?;
+    let source = EventLogDevice::genesis("main")?;
+    let yaml = sample_stored_vault_yaml(&source.crypto)?;
+    // Migration imports a stored projection into an empty event log. Importing
+    // another root into an already initialized log is intentionally rejected.
+    let mut device = EventLogDevice::replica_of(&source)?;
     device.import_stored_vault(&yaml)?;
 
     let graph = device.session.store.load_graph(device.store_id())?;

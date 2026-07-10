@@ -10,5 +10,7 @@ This directory contains design specifications, architecture rationales, and core
 | [auth-providers.md](auth-providers.md) | Login gate, sync provider persistence | Verified (migrating copy) |
 | [secret-store-identity.md](secret-store-identity.md) | `store_id` logical vault identity, replication, `pk_id` rationale | Verified |
 | [vault-event-log.md](vault-event-log.md) | Immutable event log, causal DAG, projection (replaces scalar sync) | Implemented |
+| [vault-architecture-modes.md](vault-architecture-modes.md) | Device and vault access modes; replication is post-genesis storage | Design corrected; migration pending |
+| [nexus-genesis.md](nexus-genesis.md) | Provider-free Nexus reverse onboarding, threshold policy, and atomic genesis | Accepted target design |
 | [vault-schema-versioning.md](vault-schema-versioning.md) | #52 safe migration via event log; projection `schema_version` | Implemented |
 | [typed-newtypes.md](typed-newtypes.md) | Domain newtypes over raw `String`/`u32`; version wrappers for multi-schema vault | In progress |

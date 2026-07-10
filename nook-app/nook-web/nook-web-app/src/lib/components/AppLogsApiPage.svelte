@@ -28,21 +28,29 @@
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-{#if error}
-  <pre data-testid="app-logs-error">{JSON.stringify(
-      { error },
-      undefined,
-      2,
-    )}</pre>
-{:else if payload}
-  <pre data-testid="app-logs-json">{JSON.stringify(payload, undefined, 2)}</pre>
-{:else}
-  <pre data-testid="app-logs-loading">{JSON.stringify({ loading: true })}</pre>
-{/if}
+<main class="app-logs-api-page">
+  {#if error}
+    <pre data-testid="app-logs-error">{JSON.stringify(
+        { error },
+        undefined,
+        2,
+      )}</pre>
+  {:else if payload}
+    <pre data-testid="app-logs-json">{JSON.stringify(
+        payload,
+        undefined,
+        2,
+      )}</pre>
+  {:else}
+    <pre data-testid="app-logs-loading">{JSON.stringify({
+        loading: true,
+      })}</pre>
+  {/if}
+</main>
 
 <style>
-  :global(body) {
-    margin: 0;
+  .app-logs-api-page {
+    min-height: 100svh;
     background: #0a0a0a;
     color: #e5e5e5;
     font-family:

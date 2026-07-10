@@ -63,6 +63,78 @@ pub enum MultiDeviceError {
     #[error("No auth envelope found for device {device_id} (pk_id {pk_id})")]
     AuthEnvelopeNotFound { device_id: String, pk_id: String },
 
+    #[error("No nexus share found for device {device_id}.")]
+    NexusShareNotFound { device_id: String },
+
+    #[error("Invalid nexus threshold policy.")]
+    InvalidNexusThreshold,
+
+    #[error("Invalid nexus genesis session binding.")]
+    InvalidNexusGenesisSession,
+
+    #[error("Invalid nexus genesis participant response signature.")]
+    InvalidNexusGenesisSignature,
+
+    #[error("Nexus genesis participant already exists: {device_id}.")]
+    DuplicateNexusGenesisParticipant { device_id: String },
+
+    #[error("Nexus genesis roster is full.")]
+    NexusGenesisRosterFull,
+
+    #[error("Nexus genesis needs {required} participants, but has {available}.")]
+    NexusGenesisIncomplete { required: u8, available: usize },
+
+    #[error("Nexus genesis share delivery is not addressed to this device.")]
+    NexusGenesisDeliveryRecipientMismatch,
+
+    #[error("Invalid nexus genesis payload.")]
+    InvalidNexusGenesisPayload,
+
+    #[error("Invalid nexus unlock session binding.")]
+    InvalidNexusUnlockSession,
+
+    #[error("Invalid nexus unlock signature.")]
+    InvalidNexusUnlockSignature,
+
+    #[error("Invalid nexus unlock payload.")]
+    InvalidNexusUnlockPayload,
+
+    #[error("Nexus unlock response already exists for device {device_id} or share index.")]
+    DuplicateNexusUnlockParticipant { device_id: String },
+
+    #[error("Nexus unlock session is not addressed to this requester identity.")]
+    NexusUnlockRecipientMismatch,
+
+    #[error("Not enough nexus shares: need {threshold}, got {available}.")]
+    NotEnoughNexusShares { threshold: u8, available: usize },
+
+    #[error("Invalid nexus share record JSON")]
+    NexusShareJson(#[source] serde_json::Error),
+
+    #[error("Failed to serialize nexus share record")]
+    NexusShareSerialize(#[source] serde_json::Error),
+
+    #[error("Invalid nexus share payload")]
+    NexusSharePayload(#[source] serde_json::Error),
+
+    #[error("Invalid nexus share encoding.")]
+    InvalidNexusShareEncoding,
+
+    #[error(
+        "Nexus vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
+    )]
+    NexusCeremonyRequired,
+
+    #[error(
+        "Password unlock is forbidden for nexus vaults; use the opened-share ceremony instead."
+    )]
+    NexusPasswordUnlockForbidden,
+
+    #[error(
+        "Nexus participant revocation requires an atomic replacement and share-rotation ceremony."
+    )]
+    NexusRevocationUnsupported,
+
     #[error("Failed to build member roster record.")]
     MemberRosterBuildFailed,
 

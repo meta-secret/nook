@@ -71,6 +71,15 @@ import {
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
 } from '$lib/passkey-device-protection'
+import {
+  canCreateSecret as architectureCanCreateSecret,
+  defaultVaultArchitecture,
+  validateVaultArchitecture,
+  type DeviceMode,
+  type ReplicationType,
+  type VaultArchitecture,
+  type VaultType,
+} from '$lib/vault-architecture'
 
 import * as localeActions from '$lib/vault/locale'
 import * as oauthActions from '$lib/vault/oauth'
@@ -80,8 +89,14 @@ import * as syncActions from '$lib/vault/sync'
 import * as multiDeviceActions from '$lib/vault/multi-device'
 import * as secretsActions from '$lib/vault/secrets'
 import * as passwordUnlockActions from '$lib/vault/password-unlock'
+import * as nexusUnlockActions from '$lib/vault/nexus-unlock'
 import * as idleSessionActions from '$lib/vault/idle-session'
 import * as lifecycleActions from '$lib/vault/lifecycle'
+import type {
+  NexusStoredDeliverySummary,
+  NexusUnlockSessionStatus,
+  NexusUnlockStatus,
+} from '$lib/vault/nexus-unlock'
 
 const vaultLog = createLogger('vault')
 
@@ -100,6 +115,46 @@ type PendingSyncConflictDraft = {
 }
 
 type TranslationCatalog = string
+
+export type NexusGenesisStatus =
+  | 'idle'
+  | 'collecting'
+  | 'ready'
+  | 'finalizing'
+  | 'delivering'
+  | 'complete'
+
+export type NexusGenesisDelivery = {
+  participantId: string
+  fingerprint?: string
+  payload: string
+}
+
+export type NexusGenesisParticipantSummary = {
+  participantId: string
+  label: string
+  fingerprint: string
+}
+
+type NexusGenesisManagerStatus = {
+  active: boolean
+  participants?: Array<{
+    deviceId: string
+    label?: string
+    fingerprint?: string
+  }>
+  isComplete?: boolean
+}
+
+type NexusGenesisFinalizeResult = {
+  storeId: string
+  architecture: VaultArchitecture
+  participantDeliveries: Array<{
+    deviceId: string
+    fingerprint?: string
+    [key: string]: unknown
+  }>
+}
 
 function storageArgsTuple(
   args: NookStorageConnectArgs,
@@ -153,6 +208,16 @@ export class VaultState {
   localFolderBackupSupported = $state(
     typeof window !== 'undefined' && isLocalFolderBackupSupported(),
   )
+  vaultArchitecture = $state<VaultArchitecture>(defaultVaultArchitecture())
+  draftDeviceMode = $state<DeviceMode>('standard')
+  draftVaultType = $state<VaultType>('simple')
+  draftReplicationType = $state<ReplicationType>('personal')
+  nexusGenesisStatus = $state<NexusGenesisStatus>('idle')
+  nexusGenesisRequest = $state('')
+  nexusGenesisParticipantCount = $state(0)
+  nexusGenesisParticipants = $state<NexusGenesisParticipantSummary[]>([])
+  nexusGenesisDeliveries = $state<NexusGenesisDelivery[]>([])
+  nexusGenesisStoreId = $state<string | undefined>(undefined)
   oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined)
   googleOAuthBusy = $state(false)
   icloudOAuthPreparing = $state(false)
@@ -188,6 +253,8 @@ export class VaultState {
   vaultMembers = $state<VaultMember[]>([])
   enrollSecretsKey = $state('')
   enrollMembersKey = $state('')
+  sharedJoinerIdentity = $state('')
+  sharedGrantInstructions = $state('')
   joinEnrollmentPrompt = $state<'none' | 'needs_request' | 'pending'>('none')
   /**
    * True from the moment this device sends a join request until it unlocks.
@@ -215,6 +282,7 @@ export class VaultState {
   localFolderMultipleVaultsIssue = $state<
     LocalFolderMultipleVaultsIssue | undefined
   >(undefined)
+  private architectureSecretCreationAllowed = $state(true)
 
   get syncBlocked(): boolean {
     return this.pendingSyncConflict !== undefined
@@ -225,7 +293,24 @@ export class VaultState {
   }
 
   get editsBlocked(): boolean {
-    return this.syncBlocked || this.securityConflicts.length > 0
+    return this.editBlockReason !== undefined
+  }
+
+  get architectureCanCreateSecret(): boolean {
+    return this.architectureSecretCreationAllowed
+  }
+
+  get editBlockReason(): string | undefined {
+    if (this.securityConflicts.length > 0) {
+      return this.t('auth_storage.security_conflict_edits')
+    }
+    if (this.syncBlocked) {
+      return this.t('auth_storage.sync_blocked_edits')
+    }
+    if (!this.architectureCanCreateSecret) {
+      return this.t('architecture_modes.nexus_secret_creation_blocked')
+    }
+    return undefined
   }
 
   get deviceProtectionReady(): boolean {
@@ -258,6 +343,20 @@ export class VaultState {
   loginUnlockMode = $state<'unknown' | 'keys' | 'password'>('unknown')
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false)
+  /** Nexus vault needs a signed, session-bound quorum ceremony. */
+  nexusCeremonyPrompt = $state(false)
+  nexusUnlockStatus = $state<NexusUnlockStatus>('not_nexus')
+  /** Public, signed Nexus unlock request. It contains no share material. */
+  nexusUnlockRequest = $state('')
+  /** Rust-owned unlock-session progress rendered by the web layer. */
+  nexusUnlockSession = $state<NexusUnlockSessionStatus>({
+    active: false,
+    collected: 0,
+    threshold: 0,
+    ready: false,
+  })
+  /** Provider-free encrypted deliveries available to this protected device. */
+  nexusStoredDeliveries = $state<NexusStoredDeliverySummary[]>([])
   /** Remote vault file missing on storage — prompt before unlock. */
   remoteVaultRecoveryPrompt = $state<'none' | 'with_cache' | 'missing_only'>(
     'none',
@@ -341,7 +440,9 @@ export class VaultState {
         this.githubRepo,
         this.oauthFile?.preset ?? undefined,
         this.oauthFile?.accessToken ?? undefined,
-        this.oauthFile?.fileId ?? undefined,
+        this.oauthFile?.folderId?.trim()
+          ? `shared:${this.oauthFile.folderId.trim()}`
+          : (this.oauthFile?.fileId ?? undefined),
         this.oauthFile?.fileName ?? undefined,
       ),
     )
@@ -624,6 +725,14 @@ export class VaultState {
           | 'passkey'
           | 'pin'
           | 'unlocked'
+      const persistedDeviceMode =
+        await this.manager.deviceProtectionDeviceMode()
+      if (
+        persistedDeviceMode === 'standard' ||
+        persistedDeviceMode === 'anti-hacker'
+      ) {
+        this.draftDeviceMode = persistedDeviceMode
+      }
       if (this.deviceProtectionStatus === 'pin') {
         this.deviceProtectionLockedMode = 'pin'
       } else if (this.deviceProtectionStatus === 'passkey') {
@@ -676,6 +785,16 @@ export class VaultState {
   private async continueInitializationAfterDeviceUnlock() {
     if (!this.manager) return
     await this.initDeviceIdentity({ allowPendingAuthorization: true })
+    if (
+      await this.enqueueStorage(() =>
+        this.manager!.hasPendingNexusGenesisFinalization(),
+      )
+    ) {
+      const rawResult = await this.enqueueStorage(() =>
+        this.manager!.resumePendingNexusGenesisFinalization(),
+      )
+      this.applyNexusGenesisFinalizeResult(rawResult)
+    }
     await this.loadProviders({ ensureLocalRow: true })
     await localLoginActions.refreshLocalVaultCatalog(this)
     if (!this.activeVaultStoreId) {
@@ -741,14 +860,83 @@ export class VaultState {
     this.devicePublicKey = identity.devicePublicKey
   }
 
-  async setupDeviceProtection(passkeyLabel = '') {
+  get draftVaultArchitecture(): VaultArchitecture {
+    return validateVaultArchitecture({
+      device_mode: this.draftDeviceMode,
+      vault_type: this.draftVaultType,
+      replication_type: this.draftReplicationType,
+      nexus:
+        this.draftVaultType === 'nexus'
+          ? {
+              threshold: 2,
+              required_participants: 2,
+              ready_participants: 0,
+            }
+          : undefined,
+    })
+  }
+
+  applyDraftVaultArchitecture() {
+    this.vaultArchitecture = this.draftVaultArchitecture
+    this.architectureSecretCreationAllowed = architectureCanCreateSecret(
+      this.vaultArchitecture,
+    )
+    if (this.manager) {
+      this.manager.setVaultArchitectureJson(
+        JSON.stringify(this.vaultArchitecture),
+      )
+    }
+  }
+
+  refreshVaultArchitectureFromManager() {
+    if (!this.manager) return
+    let architecture: VaultArchitecture
+    try {
+      architecture = validateVaultArchitecture(
+        JSON.parse(this.manager.vaultArchitectureJson) as VaultArchitecture,
+      )
+    } catch (error) {
+      vaultLog.warn('vault architecture metadata could not be parsed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+    this.vaultArchitecture = architecture
+    this.architectureSecretCreationAllowed = architectureCanCreateSecret(
+      this.vaultArchitecture,
+    )
+    this.draftDeviceMode = this.vaultArchitecture.device_mode
+    this.draftVaultType = this.vaultArchitecture.vault_type
+    this.draftReplicationType = this.vaultArchitecture.replication_type
+    void this.refreshArchitectureSecretCreationAllowed()
+  }
+
+  async refreshArchitectureSecretCreationAllowed(): Promise<void> {
+    const fallback = architectureCanCreateSecret(this.vaultArchitecture)
+    if (!this.manager) {
+      this.architectureSecretCreationAllowed = fallback
+      return
+    }
+    try {
+      this.architectureSecretCreationAllowed = await this.enqueueStorage(() =>
+        this.manager!.canCreateSecretForVaultArchitecture(),
+      )
+    } catch {
+      this.architectureSecretCreationAllowed = fallback
+    }
+  }
+
+  async setupDeviceProtection(
+    passkeyLabel = '',
+    deviceMode = this.draftDeviceMode,
+  ) {
     if (!this.manager || this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     let deviceIdentityUnlocked = false
     try {
       await this.enqueueStorage(() =>
-        createPasskeyProtection(this.manager!, passkeyLabel),
+        createPasskeyProtection(this.manager!, passkeyLabel, deviceMode),
       )
       deviceIdentityUnlocked = true
       this.deviceAuthorizationInProgress = true
@@ -956,6 +1144,180 @@ export class VaultState {
     return localLoginActions.createLocalVaultWithDeviceKeys(this, label)
   }
 
+  private applyNexusGenesisStatus(rawStatus: string): void {
+    const status = JSON.parse(rawStatus) as NexusGenesisManagerStatus
+    this.nexusGenesisParticipantCount = status.participants?.length ?? 0
+    this.nexusGenesisParticipants = (status.participants ?? []).map(
+      (participant) => ({
+        participantId: participant.deviceId,
+        label: participant.label ?? '',
+        fingerprint: participant.fingerprint ?? '',
+      }),
+    )
+    this.nexusGenesisStatus = status.isComplete ? 'ready' : 'collecting'
+  }
+
+  private applyNexusGenesisFinalizeResult(rawResult: string): void {
+    const result = JSON.parse(rawResult) as NexusGenesisFinalizeResult
+    this.nexusGenesisStoreId = result.storeId
+    this.activeVaultStoreId = result.storeId
+    this.vaultArchitecture = validateVaultArchitecture(result.architecture)
+    this.nexusGenesisDeliveries = result.participantDeliveries.map(
+      (delivery) => ({
+        participantId: delivery.deviceId,
+        fingerprint:
+          delivery.fingerprint ??
+          this.nexusGenesisParticipants.find(
+            (participant) => participant.participantId === delivery.deviceId,
+          )?.fingerprint,
+        payload: JSON.stringify(delivery),
+      }),
+    )
+    this.nexusGenesisStatus = 'delivering'
+  }
+
+  async startNexusGenesis(args: {
+    label: string
+    participantCount: number
+    threshold: number
+  }): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    this.dismissSuccess()
+    this.nexusGenesisDeliveries = []
+    this.nexusGenesisParticipants = []
+    this.nexusGenesisParticipantCount = 0
+    this.nexusGenesisStoreId = undefined
+    try {
+      await this.initDeviceIdentity()
+      this.manager.setVaultName(args.label.trim())
+      const status = await this.enqueueStorage(() =>
+        this.manager!.startNexusGenesis(
+          args.participantCount,
+          args.threshold,
+          args.label.trim(),
+        ),
+      )
+      this.nexusGenesisRequest = this.manager.nexusGenesisRequestJson()
+      this.applyNexusGenesisStatus(status)
+    } catch (error) {
+      this.nexusGenesisStatus = 'idle'
+      this.errorMsg =
+        error instanceof Error ? error.message : 'Failed to start Nexus setup.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async addNexusGenesisParticipantResponse(payload: string): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      const status = await this.enqueueStorage(() =>
+        this.manager!.addNexusGenesisParticipantResponse(payload.trim()),
+      )
+      this.applyNexusGenesisStatus(status)
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to add Nexus participant.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async createNexusGenesisParticipantResponse(
+    requestPayload: string,
+  ): Promise<string> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return ''
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      await this.initDeviceIdentity()
+      return await this.enqueueStorage(() =>
+        this.manager!.respondToNexusGenesisRequest(
+          requestPayload.trim(),
+          this.t('device_protection.passkey_label_placeholder'),
+        ),
+      )
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to create Nexus participant response.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async finalizeNexusGenesis(): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    this.nexusGenesisStatus = 'finalizing'
+    try {
+      const rawResult = await this.enqueueStorage(() =>
+        this.manager!.finalizeNexusGenesis(),
+      )
+      this.applyNexusGenesisFinalizeResult(rawResult)
+    } catch (error) {
+      this.nexusGenesisStatus = 'ready'
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to finalize Nexus setup.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async acceptNexusGenesisShareDelivery(payload: string): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    if (this.isVerifying) return
+    this.isVerifying = true
+    this.errorMsg = ''
+    try {
+      await this.enqueueStorage(() =>
+        this.manager!.acceptNexusGenesisShareDelivery(payload.trim()),
+      )
+      this.showSuccess(this.t('login.nexus_genesis_receive_share_success'))
+    } catch (error) {
+      this.errorMsg =
+        error instanceof Error
+          ? error.message
+          : 'Failed to receive Nexus share.'
+      throw error
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
+  async completeNexusGenesisDelivery(): Promise<void> {
+    if (!this.nexusGenesisStoreId || this.isVerifying) return
+    this.isVerifying = true
+    try {
+      this.nexusGenesisStatus = 'complete'
+      await setActiveVault(this.nexusGenesisStoreId)
+      await this.refreshLocalVaultCatalog()
+      this.selectedLoginVaultStoreId = this.nexusGenesisStoreId
+      this.localLoginPrepared = false
+      this.nexusCeremonyPrompt = true
+    } finally {
+      this.isVerifying = false
+    }
+  }
+
   async renameLocalVault(storeId: string, label: string): Promise<void> {
     return localLoginActions.renameLocalVaultLabel(this, storeId, label)
   }
@@ -1155,6 +1517,18 @@ export class VaultState {
     this.selectedPasswordEntryId = undefined
     this.loginUnlockMode = 'unknown'
     this.loginPasswordPrompt = false
+    this.nexusCeremonyPrompt = false
+    this.nexusUnlockStatus = 'not_nexus'
+    this.nexusUnlockRequest = ''
+    this.nexusUnlockSession = {
+      active: false,
+      collected: 0,
+      threshold: 0,
+      ready: false,
+    }
+    this.nexusStoredDeliveries = []
+    this.sharedJoinerIdentity = ''
+    this.sharedGrantInstructions = ''
   }
 
   ensureIdleSessionTracker() {
@@ -1195,6 +1569,7 @@ export class VaultState {
     this.isAuthenticated = true
     this.awaitingJoinApproval = false
     this.sessionExpiredByIdle = false
+    this.refreshVaultArchitectureFromManager()
     vaultLog.info('vault session unlocked', { secrets: this.secrets.length })
   }
 
@@ -1208,10 +1583,17 @@ export class VaultState {
     this.joinEnrollmentPrompt = 'none'
     this.enrollSecretsKey = ''
     this.enrollMembersKey = ''
+    this.sharedJoinerIdentity = ''
+    this.sharedGrantInstructions = ''
     this.settingsOpen = false
     this.enrollmentCode = ''
     this.errorMsg = ''
+    const wasNexus = this.vaultArchitecture.vault_type === 'nexus'
     this.resetVaultSessionState()
+    if (wasNexus) {
+      this.nexusCeremonyPrompt = true
+      this.nexusUnlockStatus = 'ceremony_required'
+    }
   }
 
   /** Drop a saved sync provider from this browser. Local vault row cannot be removed. */
@@ -1868,6 +2250,51 @@ export class VaultState {
    */
   async unlockWithPassword(entryId: string, password: string): Promise<void> {
     return passwordUnlockActions.unlockWithPassword(this, entryId, password)
+  }
+
+  isNexusVault(): boolean {
+    return nexusUnlockActions.isNexusVault(this)
+  }
+
+  async getNexusUnlockStatus(): Promise<NexusUnlockStatus> {
+    return nexusUnlockActions.getNexusUnlockStatus(this)
+  }
+
+  async refreshNexusUnlockStatus(): Promise<NexusUnlockStatus> {
+    const status = await nexusUnlockActions.refreshNexusUnlockStatus(this)
+    await this.refreshArchitectureSecretCreationAllowed()
+    return status
+  }
+
+  async startNexusUnlock(): Promise<void> {
+    return nexusUnlockActions.startNexusUnlock(this)
+  }
+
+  async addNexusUnlockResponse(response: string): Promise<void> {
+    return nexusUnlockActions.addNexusUnlockResponse(this, response)
+  }
+
+  async refreshNexusUnlockSession(): Promise<void> {
+    return nexusUnlockActions.refreshNexusUnlockSession(this)
+  }
+
+  async listNexusStoredDeliveries(): Promise<NexusStoredDeliverySummary[]> {
+    return nexusUnlockActions.listNexusStoredDeliveries(this)
+  }
+
+  async createNexusUnlockResponse(
+    storeId: string,
+    request: string,
+  ): Promise<string> {
+    return nexusUnlockActions.createNexusUnlockResponse(this, storeId, request)
+  }
+
+  async finalizeNexusUnlock(): Promise<void> {
+    return nexusUnlockActions.finalizeNexusUnlock(this)
+  }
+
+  isNexusCeremonyRequiredError(err: unknown): boolean {
+    return nexusUnlockActions.isNexusCeremonyRequiredError(err)
   }
 
   /**

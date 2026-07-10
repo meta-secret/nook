@@ -178,6 +178,7 @@ mod tests {
                     refresh_token: refresh.map(str::to_owned),
                     expires_at: None,
                     file_id: None,
+                    folder_id: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: Some("me@example.com".to_owned()),
                 }),

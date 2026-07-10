@@ -3,13 +3,23 @@ import { isoTimestamp, type NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import {
   NookEnrollmentIssueInput,
-  NookEnrollmentProvider,
   StorageProviderType,
   decryptEnrollmentPayload,
+  enrollmentProviderForArchitecture,
   encryptEnrollmentPayload,
   hasActiveLocalVault,
 } from '$lib/nook-wasm/nook_wasm'
-import type { StorageProvider } from '$lib/auth-providers'
+import type { OAuthFilePreset, StorageProvider } from '$lib/auth-providers'
+import {
+  isGoogleOAuthConfigured,
+  oauthTokensToConfig,
+  requestGoogleDriveSharedAccess,
+} from '$lib/google-oauth'
+import { prepareSharedStorageGrant } from '$lib/vault-architecture'
+import {
+  isNexusPasswordUnlockForbiddenError,
+  isNexusVault,
+} from '$lib/vault/nexus-unlock'
 
 const log = createLogger('vault-password')
 
@@ -153,6 +163,11 @@ export async function unlockWithPassword(
     return
   }
   if (state.isVerifying) return
+  if (isNexusVault(state)) {
+    state.errorMsg = state.t('architecture_modes.nexus_password_forbidden')
+    state.nexusCeremonyPrompt = true
+    return
+  }
   if (!state.hasRemoteCredentials()) {
     state.errorMsg =
       state.storageMode === 'oauth-file'
@@ -178,16 +193,16 @@ export async function unlockWithPassword(
       ),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
+    await state.ensureProviderSaved()
+    await state.loadProviders()
+    await state.refreshPasswordEntriesList()
+    void state.hydrateMultiDeviceState()
     state.markVaultUnlocked()
     log.info('vault unlocked with password', {
       mode: state.storageMode,
       secrets: rawRecords.length,
       entryId,
     })
-    await state.ensureProviderSaved()
-    await state.loadProviders()
-    await state.refreshPasswordEntriesList()
-    void state.hydrateMultiDeviceState()
     state.joinEnrollmentPrompt = 'none'
     state.loginPasswordPrompt = false
     state.showSuccess(state.t('toasts.vault_unlocked'))
@@ -195,8 +210,15 @@ export async function unlockWithPassword(
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
-    state.errorMsg =
+    const message =
       e instanceof Error ? e.message : 'Failed to unlock with password.'
+    log.warn('vault password unlock failed', { error: message })
+    if (isNexusPasswordUnlockForbiddenError(e)) {
+      state.errorMsg = state.t('architecture_modes.nexus_password_forbidden')
+      state.nexusCeremonyPrompt = true
+      return
+    }
+    state.errorMsg = message
   } finally {
     state.isVerifying = false
   }
@@ -237,6 +259,26 @@ function applySavedEnrollmentProvider(
   state.localFolder = provider.localFolder ?? undefined
   state.githubPat = ''
   state.oauthFile = undefined
+}
+
+function findSharedGrantProvider(
+  providers: StorageProvider[],
+  preset: string,
+  folderId?: string,
+): StorageProvider | undefined {
+  const withToken = providers.filter(
+    (provider) =>
+      provider.type === 'oauth-file' &&
+      provider.oauthFile?.preset === preset &&
+      Boolean(provider.oauthFile.accessToken?.trim()),
+  )
+  if (folderId) {
+    const matchingFolder = withToken.find(
+      (provider) => provider.oauthFile?.folderId === folderId,
+    )
+    if (matchingFolder) return matchingFolder
+  }
+  return withToken[0]
 }
 
 async function localVaultHasPasswordEntries(
@@ -286,6 +328,70 @@ export async function connectWithEnrollmentCode(
       state.githubRepo = githubRepo
       state.loginSetupType = 'github'
       enrollmentStorageArgs = ['github', githubPat, githubRepo]
+    } else if (payload.provider.isSharedProviderGrant) {
+      const preset = (payload.provider.oauthPreset ??
+        'google-drive') as OAuthFilePreset
+      const folderId = payload.provider.sharedStorageTargetId?.trim()
+      await state.loadProviders()
+      let provider = findSharedGrantProvider(state.providers, preset, folderId)
+      if (!provider && preset === 'google-drive') {
+        if (!isGoogleOAuthConfigured()) {
+          throw new Error(state.t('provider_setup.google_oauth_unconfigured'))
+        }
+        const tokens = await requestGoogleDriveSharedAccess({
+          prompt: 'consent',
+        })
+        const oauthFile = oauthTokensToConfig(tokens, {
+          preset: 'google-drive',
+          accessToken: tokens.accessToken,
+          folderId: folderId || undefined,
+          fileName: 'nook-events',
+        })
+        provider = {
+          id: 'enrollment-shared-oauth',
+          type: 'oauth-file',
+          label: 'Shared Google Drive',
+          oauthFile,
+          createdAt: isoTimestamp(),
+        }
+      }
+      if (!provider) {
+        throw new Error(
+          'Shared-provider enrollment requires this browser to have matching provider access before connecting.',
+        )
+      }
+      if (folderId && provider.oauthFile && !provider.oauthFile.folderId) {
+        provider = {
+          ...provider,
+          oauthFile: { ...provider.oauthFile, folderId },
+        }
+      }
+      applySavedEnrollmentProvider(state, provider)
+      enrollmentStorageArgs = state.providerWasmArgs(provider)
+    } else if (payload.provider.type === StorageProviderType.OauthFile) {
+      const oauthProvider: StorageProvider = {
+        id: 'enrollment-oauth',
+        type: 'oauth-file',
+        label: 'Enrollment OAuth provider',
+        oauthFile: {
+          preset: (payload.provider.oauthPreset ??
+            'google-drive') as OAuthFilePreset,
+          accessToken: payload.provider.oauthAccessToken ?? '',
+          refreshToken: payload.provider.oauthRefreshToken ?? undefined,
+          expiresAt: payload.provider.oauthExpiresAt ?? undefined,
+          fileId: payload.provider.oauthFileId ?? undefined,
+          fileName: payload.provider.oauthFileName ?? undefined,
+          accountEmail: payload.provider.oauthAccountEmail ?? undefined,
+        },
+        createdAt: isoTimestamp(),
+      }
+      state.storageMode = 'oauth-file'
+      state.loginSetupType = 'oauth-file'
+      state.oauthFile = oauthProvider.oauthFile
+      state.githubPat = ''
+      state.githubRepo = oauthProvider.oauthFile?.fileName ?? state.githubRepo
+      state.localFolder = undefined
+      enrollmentStorageArgs = state.providerWasmArgs(oauthProvider)
     } else {
       await state.loadProviders()
       const hasLocalPasswordEntries = await localVaultHasPasswordEntries(state)
@@ -310,11 +416,11 @@ export async function connectWithEnrollmentCode(
       ),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
-    state.markVaultUnlocked()
     await state.ensureProviderSaved()
     await state.loadProviders()
     await state.refreshPasswordEntriesList()
     void state.hydrateMultiDeviceState()
+    state.markVaultUnlocked()
     state.joinEnrollmentPrompt = 'none'
     state.loginEnrollmentCode = ''
     state.prefillEnrollmentCode = ''
@@ -411,15 +517,90 @@ export async function issueEnrollmentCode(
     }
     const githubPat = selectedProvider.githubPat?.trim() ?? ''
     const githubRepo = selectedProvider.githubRepo?.trim() ?? ''
-    if (selectedProvider.type === 'github' && (!githubPat || !githubRepo)) {
+    const sharedJoinerIdentity = state.sharedJoinerIdentity.trim()
+    const isSharedReplication =
+      state.vaultArchitecture.replication_type === 'shared'
+    if (isSharedReplication && !sharedJoinerIdentity) {
+      throw new Error(
+        state.t('errors.validation.shared_joiner_identity_required'),
+      )
+    }
+    if (
+      selectedProvider.type === 'github' &&
+      !isSharedReplication &&
+      (!githubPat || !githubRepo)
+    ) {
       throw new Error(
         'GitHub sync provider is missing credentials. Reconnect in Settings and try again.',
       )
     }
-    const provider =
-      selectedProvider.type === 'github'
-        ? NookEnrollmentProvider.github(githubRepo, githubPat)
-        : NookEnrollmentProvider.local()
+    state.sharedGrantInstructions = ''
+    let sharedStorageTargetId: string | undefined
+    let enrollmentProviderRow = selectedProvider
+    if (isSharedReplication) {
+      const accessToken = selectedProvider.oauthFile?.accessToken?.trim()
+      const grant = await prepareSharedStorageGrant({
+        providerType: selectedProvider.type,
+        oauthPreset: selectedProvider.oauthFile?.preset,
+        joinerIdentityKind: 'email',
+        joinerIdentity: sharedJoinerIdentity,
+        storageTargetHint:
+          selectedProvider.oauthFile?.fileName ??
+          selectedProvider.githubRepo ??
+          undefined,
+        accessToken,
+      })
+      if (grant.kind === 'unsupported') {
+        throw new Error(state.t(grant.reasonKey))
+      }
+      if (grant.kind === 'granted') {
+        sharedStorageTargetId = grant.storageTargetId
+        state.sharedGrantInstructions = state.t(grant.note, {
+          email: sharedJoinerIdentity,
+          folder: grant.storageTargetName ?? grant.storageTargetId,
+        })
+      } else if (grant.kind === 'manual-grant-required') {
+        sharedStorageTargetId = grant.storageTargetId
+        state.sharedGrantInstructions = state.t(grant.instructionsKey, {
+          email: grant.joinerIdentity,
+          folder:
+            grant.storageTargetName ?? grant.storageTargetId ?? 'shared folder',
+        })
+      }
+      if (sharedStorageTargetId && selectedProvider.oauthFile) {
+        const storageTargetName =
+          grant.kind === 'granted' || grant.kind === 'manual-grant-required'
+            ? grant.storageTargetName
+            : undefined
+        const updatedOauth = {
+          ...selectedProvider.oauthFile,
+          folderId: sharedStorageTargetId,
+          fileName: storageTargetName ?? selectedProvider.oauthFile.fileName,
+        }
+        enrollmentProviderRow = {
+          ...selectedProvider,
+          oauthFile: updatedOauth,
+        }
+        state.oauthFile = updatedOauth
+        state.providers = state.providers.map((row) =>
+          row.id === selectedProvider.id ? enrollmentProviderRow : row,
+        )
+        await state.persistProviders()
+
+        // A shared grant is not usable until the target contains the current
+        // vault event log. Await the Rust/WASM fan-out before emitting the code.
+        const targetArgs = state.providerWasmArgs(enrollmentProviderRow)
+        await state.enqueueStorage(() =>
+          state.manager!.flushEventOutboxForProvider(...targetArgs),
+        )
+      }
+    }
+    const provider = enrollmentProviderForArchitecture(
+      enrollmentProviderRow,
+      state.vaultArchitecture,
+      isSharedReplication ? sharedJoinerIdentity : undefined,
+      sharedStorageTargetId,
+    )
     const payload = new NookEnrollmentIssueInput(
       provider,
       entryId,

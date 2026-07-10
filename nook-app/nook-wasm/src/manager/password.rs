@@ -96,6 +96,9 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         self.ensure_vault_crypto_from_cache().await?;
         if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
             return Err(NookError::Database(
@@ -168,6 +171,9 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         self.ensure_vault_crypto_from_cache().await?;
         if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
             return Err(NookError::Database(
@@ -203,6 +209,9 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         self.vault
             .password_entries
             .retain(|entry| entry.id != entry_id);
@@ -216,6 +225,9 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
         let entry_ids: Vec<String> = self
             .vault
             .password_entries
@@ -258,6 +270,10 @@ impl NookVaultManager {
         let (event_log_remote, mut records) = self
             .load_password_unlock_records(&content, vault_missing)
             .await?;
+
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
 
         if records.is_empty() {
             return Err(
@@ -355,20 +371,17 @@ impl NookVaultManager {
         keys: &nook_core::VaultKeys,
         content: &str,
     ) -> Result<(), NookError> {
-        if event_log_remote {
-            let signing = self.ensure_signing_identity().await?;
-            let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-                signing.verifying_key().as_bytes(),
-            ));
-            self.append_vault_operations(vec![nook_core::VaultOperation::JoinRequested {
-                device_id: identity.device_id().clone(),
-                encryption_public_key: identity.public_key().clone(),
-                signing_public_key: signing_pk,
-                label: nook_core::MemberLabel::from_trusted(String::new()),
-            }])
-            .await?;
-            self.flush_event_outbox().await?;
-            return self.persist_projection_cache().await;
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
+        }
+        // Local vaults also use the immutable event log once it has been
+        // initialized. Re-importing their projection here would create a
+        // second independent genesis root; append the recovered device's
+        // membership to the existing history instead.
+        if event_log_remote || self.event_log_has_events().await? {
+            return self
+                .persist_event_log_password_membership(records, identity, keys)
+                .await;
         }
 
         let auth_id =
@@ -413,5 +426,53 @@ impl NookVaultManager {
         self.import_stored_vault_to_event_log(import_yaml.as_str())
             .await?;
         self.flush_event_outbox().await
+    }
+
+    /// Password QR/self-enrol is one-step: the joiner already holds vault keys
+    /// from the envelope, so write membership directly. Do not leave a pending
+    /// `JoinRequested` that would require owner approval.
+    async fn persist_event_log_password_membership(
+        &mut self,
+        records: &[nook_core::StoredSecretRecord],
+        identity: &nook_core::DeviceIdentity,
+        keys: &nook_core::VaultKeys,
+    ) -> Result<(), NookError> {
+        let signing = self.ensure_signing_identity().await?;
+        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
+            signing.verifying_key().as_bytes(),
+        ));
+        let existing_roster =
+            nook_core::resolve_member_roster(records, &keys.members_key).unwrap_or_default();
+        let updated_roster = nook_core::roster_add_member(
+            existing_roster,
+            nook_core::member_from_identity(identity, &wasm_iso_timestamp()),
+        );
+        let member_records = nook_core::build_members_records(&updated_roster, &keys.members_key)?;
+        for record in &member_records {
+            self.vault.meta.apply_record(record);
+        }
+
+        let operations = match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let auth_record =
+                    nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
+                let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+                self.vault.meta.apply_record(&auth_record);
+                vec![nook_core::VaultOperation::JoinApproved {
+                    device_id: identity.device_id().clone(),
+                    encryption_public_key: identity.public_key().clone(),
+                    signing_public_key: signing_pk,
+                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                    secrets_key_ciphertext: envelopes.secrets_key,
+                    members_key_ciphertext: envelopes.members_key,
+                }]
+            }
+            nook_core::VaultType::Nexus => {
+                unreachable!("nexus password membership forbidden")
+            }
+        };
+        self.append_vault_operations(operations).await?;
+        self.flush_event_outbox().await?;
+        self.persist_projection_cache().await
     }
 }

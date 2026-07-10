@@ -7,6 +7,7 @@ import {
   isGoogleOAuthConfigured,
   oauthTokensToConfig,
   requestGoogleAccessToken,
+  requestGoogleDriveSharedAccess,
   type GoogleOAuthTokens,
 } from '$lib/google-oauth'
 import {
@@ -76,8 +77,13 @@ export async function signInWithGoogle(state: VaultState): Promise<void> {
   state.googleOAuthBusy = true
   state.errorMsg = ''
   try {
-    await initGoogleAuth()
-    const tokens = await requestGoogleAccessToken({ prompt: 'consent' })
+    const shared = state.vaultArchitecture.replication_type === 'shared'
+    const tokens = shared
+      ? await requestGoogleDriveSharedAccess({ prompt: 'consent' })
+      : await (async () => {
+          await initGoogleAuth()
+          return requestGoogleAccessToken({ prompt: 'consent' })
+        })()
     await applyGoogleOAuthTokens(state, tokens)
   } catch (error) {
     state.errorMsg =
@@ -209,6 +215,7 @@ async function applyICloudOAuthTokens(
     preset: 'icloud',
     accessToken: tokens.accessToken,
     fileId: state.oauthFile?.fileId,
+    folderId: state.oauthFile?.folderId,
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
@@ -269,6 +276,7 @@ async function applyGoogleOAuthTokens(
     accessToken: tokens.accessToken,
     expiresAt: tokens.expiresAt,
     fileId: state.oauthFile?.fileId,
+    folderId: state.oauthFile?.folderId,
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||

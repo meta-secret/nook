@@ -86,7 +86,7 @@
         bind:value
         {placeholder}
         oninput={adjustHeight}
-        class="block w-full border-0 bg-transparent px-3 py-2 font-mono text-sm leading-relaxed focus:outline-hidden focus:ring-0 {fill
+        class="block w-full border-0 bg-transparent px-3 py-2 font-sans text-sm leading-normal focus:outline-hidden focus:ring-0 {fill
           ? 'min-h-0 flex-1 resize-none'
           : `${minHeight} resize-none`}"></textarea>
     {:else}

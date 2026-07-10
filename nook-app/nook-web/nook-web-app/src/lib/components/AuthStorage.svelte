@@ -25,6 +25,10 @@
     providerStorageDetail,
   } from '$lib/auth-providers'
   import type { VaultState } from '$lib/vault.svelte'
+  import {
+    providerCapabilityLabelKey,
+    providerSupportsReplication,
+  } from '$lib/vault-architecture'
 
   let {
     vault,
@@ -240,6 +244,10 @@
               data-testid="settings-providers-list"
             >
               {#each syncProviders as provider (provider.id)}
+                {@const supportsVaultReplication = providerSupportsReplication(
+                  provider,
+                  vault.vaultArchitecture.replication_type,
+                )}
                 <li class="flex items-center gap-2 py-2.5 first:pt-0 last:pb-0">
                   <div
                     class="flex min-w-0 flex-1 items-center gap-3 px-1 py-1"
@@ -255,7 +263,7 @@
                         {localizeProviderLabel(provider.label, vault.t)}
                       </span>
                       <span
-                        class="block truncate font-mono text-[11px] text-muted-foreground"
+                        class="block truncate text-xs text-muted-foreground"
                       >
                         {providerStorageDetail(provider, vault.t)}
                       </span>
@@ -264,6 +272,19 @@
                         data-testid="sync-status-{provider.id}"
                       >
                         {formatSyncStatus(provider)}
+                      </span>
+                      <span
+                        class="block text-[11px] {supportsVaultReplication
+                          ? 'text-muted-foreground'
+                          : 'text-amber-700 dark:text-amber-300'}"
+                        data-testid="provider-capability-{provider.id}"
+                      >
+                        {vault.t(providerCapabilityLabelKey(provider))}
+                        {#if !supportsVaultReplication}
+                          · {vault.t(
+                            'provider_picker.unsupported_current_vault',
+                          )}
+                        {/if}
                       </span>
                     </span>
                   </div>
@@ -274,7 +295,11 @@
                       data-testid="sync-provider-{provider.id}"
                       disabled={isVerifying ||
                         isInitializing ||
+                        !supportsVaultReplication ||
                         syncingProviderId !== undefined}
+                      title={!supportsVaultReplication
+                        ? vault.t('provider_picker.unsupported_current_vault')
+                        : undefined}
                       aria-busy={syncingProviderId === provider.id}
                       onclick={() => void onSyncProvider(provider.id)}
                     >

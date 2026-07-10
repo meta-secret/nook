@@ -115,15 +115,19 @@ impl NookVaultManager {
         // Fresh enrolment — adopt the remote unlock mode.
         self.capture_vault_unlock(&content);
 
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusCeremonyRequired.into());
+        }
+
         let format = nook_core::detect_stored_format(&content)?;
         let mut records = nook_core::deserialize_stored(&content, format)?;
+        let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
+        let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
 
         let auth_id =
             nook_core::SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
         records.retain(|record| record.key != auth_id);
         records.retain(|record| !nook_core::is_members_stored_record(record));
-        let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
-        let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
         let (auth, members) = nook_core::enroll_device_with_keys(
             &parsed_secrets,
             &parsed_members,
@@ -188,28 +192,114 @@ impl NookVaultManager {
             .ok_or_else(|| NookError::Database("Join request not found.".to_owned()))?;
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-        let (auth_record, join_key, member_records) = nook_core::approve_join_request(
-            &secrets_key,
-            &members_key,
-            &join,
-            &identity,
-            &records,
-        )?;
-        self.vault.meta.remove_key(&join_key);
-        self.vault.meta.apply_record(&auth_record);
-        apply_member_records(&mut self.vault.meta, &member_records);
-        let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
-            device_id: join.device_id.clone(),
-            encryption_public_key: join.public_key.clone(),
-            signing_public_key: join.signing_public_key.clone(),
-            label: nook_core::MemberLabel::from_trusted(String::new()),
-            secrets_key_ciphertext: envelopes.secrets_key.clone(),
-            members_key_ciphertext: envelopes.members_key.clone(),
-        }])
-        .await?;
+        let mut operations = Vec::new();
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let (auth_record, join_key, member_records) = nook_core::approve_join_request(
+                    &secrets_key,
+                    &members_key,
+                    &join,
+                    &identity,
+                    &records,
+                )?;
+                self.vault.meta.remove_key(&join_key);
+                self.vault.meta.apply_record(&auth_record);
+                apply_member_records(&mut self.vault.meta, &member_records);
+                let envelopes: nook_core::AuthEnvelopes =
+                    serde_json::from_str(auth_record.value.as_str())
+                        .map_err(|e| NookError::Serialization(e.to_string()))?;
+                operations.push(nook_core::VaultOperation::JoinApproved {
+                    device_id: join.device_id.clone(),
+                    encryption_public_key: join.public_key.clone(),
+                    signing_public_key: join.signing_public_key.clone(),
+                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                    secrets_key_ciphertext: envelopes.secrets_key.clone(),
+                    members_key_ciphertext: envelopes.members_key.clone(),
+                });
+            }
+            nook_core::VaultType::Nexus => {
+                if !self.vault.meta.nexus_shares.is_empty() {
+                    return Err(nook_core::MultiDeviceError::NexusGenesisRosterFull.into());
+                }
+                let new_member = nook_core::member_from_join(&join)?;
+                let roster = match nook_core::resolve_member_roster(&records, &members_key) {
+                    Ok(existing) => nook_core::roster_add_member(existing, new_member),
+                    Err(_) => vec![
+                        nook_core::member_from_identity(&identity, &join.requested_at),
+                        new_member,
+                    ],
+                };
+                let member_records = nook_core::build_members_records(&roster, &members_key)?;
+                self.vault
+                    .meta
+                    .remove_key(&nook_core::join_record_key(&join.device_id));
+                apply_member_records(&mut self.vault.meta, &member_records);
+                operations.push(nook_core::VaultOperation::NexusParticipantEnrolled {
+                    device_id: join.device_id.clone(),
+                    encryption_public_key: join.public_key.clone(),
+                    signing_public_key: join.signing_public_key.clone(),
+                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                });
+                if let Some(share_op) = self.maybe_issue_nexus_shares(&roster)? {
+                    operations.push(share_op);
+                }
+            }
+        }
+        self.persist_vault_change(operations).await?;
         Ok(self.get_records()?)
+    }
+
+    fn maybe_issue_nexus_shares(
+        &mut self,
+        roster: &[nook_core::VaultMember],
+    ) -> Result<Option<nook_core::VaultOperation>, NookError> {
+        let policy = self.vault.architecture.nexus.unwrap_or_default();
+        if roster.len() > usize::from(policy.required_participants) {
+            return Err(nook_core::MultiDeviceError::NexusGenesisRosterFull.into());
+        }
+        if roster.len() < usize::from(policy.required_participants) {
+            return Ok(None);
+        }
+        if !self.vault.meta.nexus_shares.is_empty() {
+            return Ok(None);
+        }
+        let keys = nook_core::VaultKeys {
+            secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
+            members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
+        };
+        let recipients: Vec<(nook_core::DeviceId, nook_core::DevicePublicKey)> = roster
+            .iter()
+            .map(|member| (member.device_id.clone(), member.public_key.clone()))
+            .collect();
+        let share_records = nook_core::create_nexus_share_records_for_recipients(
+            &keys,
+            &recipients,
+            policy.threshold,
+        )?;
+        let mut shares = Vec::with_capacity(share_records.len());
+        for record in &share_records {
+            self.vault.meta.apply_record(record);
+            let envelope = nook_core::parse_nexus_share_envelope(record.value.as_str())?;
+            let device_id = record
+                .key
+                .as_str()
+                .strip_prefix(nook_core::NEXUS_SHARE_RECORD_PREFIX)
+                .ok_or_else(|| NookError::Database("Invalid nexus share record key.".to_owned()))?;
+            shares.push(nook_core::NexusShareIssuedPayload {
+                device_id: nook_core::DeviceId::parse(device_id)?,
+                version: envelope.version,
+                threshold: envelope.threshold,
+                required_participants: envelope.required_participants,
+                share_index: envelope.share_index,
+                ciphertext: envelope.ciphertext,
+            });
+        }
+        if let Some(nexus) = self.vault.architecture.nexus.as_mut() {
+            nexus.ready_participants = u8::try_from(shares.len()).unwrap_or(u8::MAX);
+        }
+        Ok(Some(nook_core::VaultOperation::NexusSharesIssued {
+            shares,
+        }))
     }
 
     #[wasm_bindgen(js_name = approveExtensionDevice)]
@@ -230,26 +320,56 @@ impl NookVaultManager {
         };
         let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
         let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-        let (auth_record, _join_key, member_records) = nook_core::approve_join_request(
-            &secrets_key,
-            &members_key,
-            &join,
-            &identity,
-            &records,
-        )?;
-        self.vault.meta.apply_record(&auth_record);
-        apply_member_records(&mut self.vault.meta, &member_records);
-        let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        self.persist_vault_change(vec![nook_core::VaultOperation::JoinApproved {
-            device_id: join.device_id.clone(),
-            encryption_public_key: join.public_key.clone(),
-            signing_public_key: join.signing_public_key.clone(),
-            label: nook_core::MemberLabel::from_trusted(label),
-            secrets_key_ciphertext: envelopes.secrets_key.clone(),
-            members_key_ciphertext: envelopes.members_key.clone(),
-        }])
-        .await?;
+        let mut operations = Vec::new();
+        match self.vault.architecture.vault_type {
+            nook_core::VaultType::Simple => {
+                let (auth_record, _join_key, member_records) = nook_core::approve_join_request(
+                    &secrets_key,
+                    &members_key,
+                    &join,
+                    &identity,
+                    &records,
+                )?;
+                self.vault.meta.apply_record(&auth_record);
+                apply_member_records(&mut self.vault.meta, &member_records);
+                let envelopes: nook_core::AuthEnvelopes =
+                    serde_json::from_str(auth_record.value.as_str())
+                        .map_err(|e| NookError::Serialization(e.to_string()))?;
+                operations.push(nook_core::VaultOperation::JoinApproved {
+                    device_id: join.device_id.clone(),
+                    encryption_public_key: join.public_key.clone(),
+                    signing_public_key: join.signing_public_key.clone(),
+                    label: nook_core::MemberLabel::from_trusted(label),
+                    secrets_key_ciphertext: envelopes.secrets_key.clone(),
+                    members_key_ciphertext: envelopes.members_key.clone(),
+                });
+            }
+            nook_core::VaultType::Nexus => {
+                if !self.vault.meta.nexus_shares.is_empty() {
+                    return Err(nook_core::MultiDeviceError::NexusGenesisRosterFull.into());
+                }
+                let new_member = nook_core::member_from_join(&join)?;
+                let roster = match nook_core::resolve_member_roster(&records, &members_key) {
+                    Ok(existing) => nook_core::roster_add_member(existing, new_member),
+                    Err(_) => vec![
+                        nook_core::member_from_identity(&identity, &join.requested_at),
+                        new_member,
+                    ],
+                };
+                let member_records = nook_core::build_members_records(&roster, &members_key)?;
+                apply_member_records(&mut self.vault.meta, &member_records);
+                operations.push(nook_core::VaultOperation::NexusParticipantEnrolled {
+                    device_id: join.device_id.clone(),
+                    encryption_public_key: join.public_key.clone(),
+                    signing_public_key: join.signing_public_key.clone(),
+                    label: nook_core::MemberLabel::from_trusted(label),
+                });
+                if let Some(share_op) = self.maybe_issue_nexus_shares(&roster)? {
+                    operations.push(share_op);
+                }
+            }
+        }
+        self.persist_vault_change(operations).await?;
         Ok(self.get_records()?)
     }
 
@@ -309,6 +429,9 @@ impl NookVaultManager {
         &mut self,
         auth_id: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusRevocationUnsupported.into());
+        }
         let identity = self.device_identity()?;
         let parsed_auth_id = nook_core::AuthKeyId::parse(&auth_id)?;
         let is_self = parsed_auth_id == identity.auth_id();
@@ -350,6 +473,9 @@ impl NookVaultManager {
         secrets_key: String,
         members_key: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusCeremonyRequired.into());
+        }
         let identity = self.device_identity()?;
         let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
         let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;

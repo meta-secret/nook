@@ -2,8 +2,13 @@
   import { Cloud, FolderOpen, HardDrive } from '@lucide/svelte'
   import type {
     OAuthFilePreset,
+    StorageProvider,
     StorageProviderType,
   } from '$lib/auth-providers'
+  import {
+    providerReplicationCapability,
+    type ProviderReplicationCapability,
+  } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
 
   let {
@@ -17,17 +22,77 @@
   } = $props()
 
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
+
+  function draftProvider(
+    type: StorageProviderType,
+    oauthPreset?: OAuthFilePreset,
+  ): StorageProvider {
+    return {
+      id: `draft-${type}-${oauthPreset ?? 'default'}`,
+      type,
+      label: type,
+      githubPat: type === 'github' ? 'github_pat_draft' : undefined,
+      githubRepo: type === 'github' ? 'nook' : undefined,
+      oauthFile:
+        type === 'oauth-file'
+          ? {
+              preset: oauthPreset ?? 'google-drive',
+              accessToken: 'draft-token',
+              fileName: 'nook-events',
+            }
+          : undefined,
+      localFolder: undefined,
+      storeId: undefined,
+      lastSyncedVersion: undefined,
+      lastSyncedAt: undefined,
+      lastSyncRevision: undefined,
+      lastCommonContentHash: undefined,
+      createdAt: new Date(0).toISOString(),
+    } as StorageProvider
+  }
+
+  function capability(
+    type: StorageProviderType,
+    oauthPreset?: OAuthFilePreset,
+  ): ProviderReplicationCapability {
+    return providerReplicationCapability(draftProvider(type, oauthPreset))
+  }
+
+  function blocked(
+    type: StorageProviderType,
+    oauthPreset?: OAuthFilePreset,
+  ): boolean {
+    const result = capability(type, oauthPreset)
+    return vault.draftReplicationType === 'shared'
+      ? !result.supportsShared
+      : !result.supportsPersonal
+  }
+
+  function description(
+    key: string,
+    type: StorageProviderType,
+    oauthPreset?: OAuthFilePreset,
+  ): string {
+    if (blocked(type, oauthPreset)) {
+      return vault.t('provider_picker.unsupported_replication_desc')
+    }
+    return vault.t(key)
+  }
 </script>
 
-<fieldset class="space-y-2">
+<fieldset class="min-w-0 w-full max-w-full space-y-2">
   <legend class="sr-only">{vault.t('provider_picker.choose_provider')}</legend>
-  <ul class="space-y-1.5" data-testid="provider-picker-list">
+  <ul
+    class="min-w-0 w-full max-w-full space-y-1.5 overflow-hidden"
+    data-testid="provider-picker-list"
+  >
     {#if !excludeLocal}
       <li>
         <button
           type="button"
           class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
           data-testid="provider-option-local"
+          disabled={blocked('local')}
           onclick={() => onSelect('local')}
         >
           <HardDrive class="size-4 shrink-0 text-foreground" />
@@ -36,20 +101,21 @@
               >{vault.t('provider_picker.this_device')}</span
             >
             <span class="block truncate text-xs text-muted-foreground">
-              {vault.t('provider_picker.this_device_desc')}
+              {description('provider_picker.this_device_desc', 'local')}
             </span>
           </span>
         </button>
       </li>
     {/if}
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
         data-testid="provider-option-local-folder"
-        disabled={localFolderUnavailable}
+        disabled={localFolderUnavailable || blocked('local-folder')}
         onclick={() => {
-          if (!localFolderUnavailable) onSelect('local-folder')
+          if (!localFolderUnavailable && !blocked('local-folder'))
+            onSelect('local-folder')
         }}
       >
         <FolderOpen class="size-4 shrink-0 text-foreground" />
@@ -60,17 +126,24 @@
           <span class="block truncate text-xs text-muted-foreground">
             {localFolderUnavailable
               ? vault.t('provider_picker.local_folder_unavailable_desc')
-              : vault.t('provider_picker.local_folder_desc')}
+              : description(
+                  'provider_picker.local_folder_desc',
+                  'local-folder',
+                )}
           </span>
         </span>
       </button>
     </li>
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-oauth-file"
-        onclick={() => onSelect('oauth-file', 'google-drive')}
+        disabled={blocked('oauth-file', 'google-drive')}
+        onclick={() => {
+          if (!blocked('oauth-file', 'google-drive'))
+            onSelect('oauth-file', 'google-drive')
+        }}
       >
         <svg
           class="size-4 shrink-0 text-foreground"
@@ -99,17 +172,24 @@
             >{vault.t('provider_picker.google_drive')}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {vault.t('provider_picker.google_drive_desc')}
+            {description(
+              'provider_picker.google_drive_desc',
+              'oauth-file',
+              'google-drive',
+            )}
           </span>
         </span>
       </button>
     </li>
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-icloud"
-        onclick={() => onSelect('oauth-file', 'icloud')}
+        disabled={blocked('oauth-file', 'icloud')}
+        onclick={() => {
+          if (!blocked('oauth-file', 'icloud')) onSelect('oauth-file', 'icloud')
+        }}
       >
         <svg
           class="size-4 shrink-0 text-foreground"
@@ -126,17 +206,20 @@
             >{vault.t('provider_picker.icloud')}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {vault.t('provider_picker.icloud_desc')}
+            {description('provider_picker.icloud_desc', 'oauth-file', 'icloud')}
           </span>
         </span>
       </button>
     </li>
-    <li>
+    <li class="min-w-0 max-w-full">
       <button
         type="button"
-        class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
+        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent"
         data-testid="provider-option-github"
-        onclick={() => onSelect('github')}
+        disabled={blocked('github')}
+        onclick={() => {
+          if (!blocked('github')) onSelect('github')
+        }}
       >
         <Cloud class="size-4 shrink-0 text-foreground" />
         <span class="min-w-0 flex-1">
@@ -144,7 +227,7 @@
             >{vault.t('provider_picker.github')}</span
           >
           <span class="block truncate text-xs text-muted-foreground">
-            {vault.t('provider_picker.github_desc')}
+            {description('provider_picker.github_desc', 'github')}
           </span>
         </span>
       </button>

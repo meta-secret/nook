@@ -25,6 +25,7 @@ const PR_SPECS = [
   'device-key-protection.spec.ts',
   'local-vault.spec.ts',
   'login-unlock-flow.spec.ts',
+  'vault-architecture-modes.spec.ts',
   'idle-session-lock.spec.ts',
   'local-folder-backup.spec.ts',
   'onboard-providers.spec.ts',
@@ -47,6 +48,7 @@ const SYNC_PROVIDER_SPECS = [
   'onboarding-file-provider.spec.ts',
   'sync-fanout.spec.ts',
   'multi-device-local.spec.ts',
+  'nexus-unlock-ceremony.spec.ts',
   'sync-vault.spec.ts',
   'multi-device-sync.spec.ts',
   'password-envelope-sync.spec.ts',
@@ -73,6 +75,10 @@ const webServerCommand = usePreviewServer
 export default defineConfig({
   testDir: 'e2e',
   forbidOnly: isCi,
+  // CI runners can expose enough CPUs for Playwright to overwhelm the single
+  // preview server while every fresh context fetches and compiles the large
+  // WASM bundle. Keep limited parallelism so responses are not aborted.
+  workers: isCi ? 2 : undefined,
   maxFailures: isCi ? 1 : undefined,
   retries: isCi ? 2 : 0,
   globalTimeout: isCi ? 45 * 60_000 : undefined,

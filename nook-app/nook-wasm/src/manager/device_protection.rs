@@ -26,6 +26,14 @@ impl NookVaultManager {
             .to_owned())
     }
 
+    /// Return the product device-protection mode persisted during device setup.
+    #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
+    pub async fn device_protection_device_mode(&self) -> Result<Option<String>, JsError> {
+        Ok(indexed_db::device_identity_device_mode()
+            .await?
+            .map(str::to_owned))
+    }
+
     #[wasm_bindgen(js_name = beginDeviceProtection)]
     pub async fn begin_device_protection(&mut self) -> Result<NookPasskeySetup, JsError> {
         if self.device.identity_private_key.is_empty()
@@ -51,6 +59,19 @@ impl NookVaultManager {
         rp_name: &str,
         passkey_label: &str,
     ) -> Result<(), JsError> {
+        self.setup_device_protection_with_passkey_mode(rp_id, rp_name, passkey_label, "standard")
+            .await
+    }
+
+    #[wasm_bindgen(js_name = setupDeviceProtectionWithPasskeyMode)]
+    pub async fn setup_device_protection_with_passkey_mode(
+        &mut self,
+        rp_id: &str,
+        rp_name: &str,
+        passkey_label: &str,
+        device_mode: &str,
+    ) -> Result<(), JsError> {
+        let mode = passkey_mode_from_device_mode(device_mode)?;
         let setup = self.begin_device_protection().await?;
         let user_handle = setup.user_handle();
         let prf_input = setup.prf_input();
@@ -64,14 +85,15 @@ impl NookVaultManager {
         let credential = passkey_browser::create_credential(&creation_options).await?;
         let credential_id = passkey_browser::credential_id(&credential)?;
         let create_prf_output = passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
-        let registration = nook_core::resolve_passkey_registration(
+        let resolution = nook_core::resolve_passkey_registration_for_mode(
             &credential_id,
             &user_handle,
             &prf_input,
-            create_prf_output.as_ref().map(|output| output.as_slice()),
+            create_prf_output.as_deref().map(Vec::as_slice),
+            mode,
         )?;
-        let material = match registration {
-            nook_core::PasskeyRegistrationResolution::Complete(material) => material,
+        let material = match resolution {
+            nook_core::PasskeyRegistrationResolution::Complete(material) => *material,
             nook_core::PasskeyRegistrationResolution::NeedsAssertion(request) => {
                 let request_options = passkey_browser::request_options(
                     rp_id,
@@ -80,11 +102,12 @@ impl NookVaultManager {
                 )?;
                 let credential = passkey_browser::get_credential(&request_options).await?;
                 let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
-                nook_core::finish_passkey_device_identity(
+                nook_core::finish_passkey_device_identity_for_mode(
                     request.credential_id(),
                     &user_handle,
                     request.prf_input(),
                     prf_output.as_slice(),
+                    mode,
                 )?
             }
         };
@@ -102,14 +125,35 @@ impl NookVaultManager {
         credential_id: Vec<u8>,
         user_handle: Vec<u8>,
         prf_input: Vec<u8>,
-        mut prf_output: Vec<u8>,
+        prf_output: Vec<u8>,
     ) -> Result<(), JsError> {
+        self.finish_device_protection_with_mode(
+            credential_id,
+            user_handle,
+            prf_input,
+            prf_output,
+            "standard".to_owned(),
+        )
+        .await
+    }
+
+    #[wasm_bindgen(js_name = finishDeviceProtectionWithMode)]
+    pub async fn finish_device_protection_with_mode(
+        &mut self,
+        credential_id: Vec<u8>,
+        user_handle: Vec<u8>,
+        prf_input: Vec<u8>,
+        mut prf_output: Vec<u8>,
+        device_mode: String,
+    ) -> Result<(), JsError> {
+        let mode = passkey_mode_from_device_mode(&device_mode)?;
         let result = async {
-            let material = nook_core::finish_passkey_device_identity(
+            let material = nook_core::finish_passkey_device_identity_for_mode(
                 &credential_id,
                 &user_handle,
                 &prf_input,
                 &prf_output,
+                mode,
             )?;
             self.save_passkey_material(&material).await
         }
@@ -253,10 +297,22 @@ impl NookVaultManager {
         self.storage.access_token.zeroize();
         self.storage.remote_ref.clear();
         self.storage.remote_path.clear();
+        self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
         self.storage.mode = nook_core::StorageMode::Local;
         indexed_db::delete_device_identity_for_recovery().await?;
         auth_providers::delete_auth_providers_db().await?;
         Ok(())
+    }
+}
+
+fn passkey_mode_from_device_mode(
+    device_mode: &str,
+) -> Result<nook_core::PasskeyDeviceProtectionMode, JsError> {
+    match nook_core::DeviceMode::parse(device_mode)
+        .map_err(|error| JsError::new(&error.to_string()))?
+    {
+        nook_core::DeviceMode::Standard => Ok(nook_core::PasskeyDeviceProtectionMode::Standard),
+        nook_core::DeviceMode::AntiHacker => Ok(nook_core::PasskeyDeviceProtectionMode::AntiHacker),
     }
 }
 

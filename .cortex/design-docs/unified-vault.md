@@ -159,7 +159,7 @@ stateDiagram-v2
   GetStarted --> ConnectProvider: cloud provider
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists
-  ConnectProvider --> Vault: genesis / pull
+  ConnectProvider --> Vault: import / pull existing
   Unlock --> Vault: device keys or backup password
   Vault --> Passkey: Lock (clear session + device identity)
   Passkey --> LoginGate
@@ -169,7 +169,9 @@ stateDiagram-v2
 
 1. **Authorize the passkey** on init, then load the local cache. The vault may
    auto-unlock if device keys suffice and no sync friction remains.
-2. **First visit:** login chooser — create local vault (device keys) **or** connect sync provider.
+2. **First visit:** login chooser — create a Simple vault locally, start a
+   provider-free Nexus genesis ceremony, **or** connect a sync provider to
+   import an existing vault. See [nexus-genesis.md](nexus-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
    identity; user returns through the passkey gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).

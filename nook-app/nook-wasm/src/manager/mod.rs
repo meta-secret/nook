@@ -23,6 +23,7 @@ mod device_protection;
 mod diagnostics;
 mod event_log;
 mod multi_device;
+mod nexus;
 mod password;
 mod secrets;
 mod sync;
@@ -36,7 +37,7 @@ use crate::storage::{
 };
 use crate::types::records_to_vec;
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
 struct StorageSession {
@@ -44,6 +45,8 @@ struct StorageSession {
     access_token: String,
     remote_ref: String,
     remote_path: String,
+    /// Google Drive event parent: appDataFolder (personal) or shared folder id.
+    drive_event_parent: nook_core::DriveEventParent,
     file_sha: Option<String>,
     /// Cached empty-repo listing from GitHub (`GET .../contents/` -> 404).
     github_root_empty: bool,
@@ -60,6 +63,7 @@ impl Default for StorageSession {
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),
+            drive_event_parent: nook_core::DriveEventParent::AppDataFolder,
             file_sha: None,
             github_root_empty: false,
             use_local_cache_for_connect: false,
@@ -84,6 +88,8 @@ struct VaultSessionState {
     vault_name: Option<String>,
     /// Monotonic vault revision - incremented on every save.
     vault_version: u64,
+    /// Grouped architecture modes persisted in vault YAML.
+    architecture: nook_core::VaultArchitecture,
 }
 
 impl Default for VaultSessionState {
@@ -100,12 +106,16 @@ impl Default for VaultSessionState {
             store_id: String::new(),
             vault_name: None,
             vault_version: 0,
+            architecture: nook_core::VaultArchitecture::default_legacy(),
         }
     }
 }
 
 impl VaultSessionState {
     fn reset(&mut self) {
+        // Preserve architecture so nexus ceremony UI can detect vault type after
+        // lock without re-reading projection YAML first.
+        let architecture = self.architecture.clone();
         self.secrets_key.zeroize();
         self.members_key.zeroize();
         self.crypto = None;
@@ -117,6 +127,7 @@ impl VaultSessionState {
         self.store_id.clear();
         self.vault_name = None;
         self.vault_version = 0;
+        self.architecture = architecture;
     }
 }
 
@@ -190,6 +201,16 @@ pub struct NookVaultManager {
     pub(in crate::manager) device: DeviceSessionState,
     pub(in crate::manager) status: StatusChannel,
     pub(in crate::manager) event_log: EventLogSessionState,
+    /// Public-only, pre-vault Nexus reverse-onboarding state. Draft ceremonies
+    /// deliberately live only in memory: they have no store id and must never
+    /// be mistaken for a persisted vault.
+    pub(in crate::manager) nexus_genesis: Option<nook_core::NexusGenesisSession>,
+    /// Exact request this device answered as a Nexus participant. A returned
+    /// share delivery must bind to this request before it may be persisted.
+    pub(in crate::manager) pending_nexus_genesis_request: Option<nook_core::NexusGenesisRequest>,
+    /// Opaque, session-bound quorum unlock state. It contains encrypted records
+    /// and signed ciphertext responses, never plaintext SLIP-0039 mnemonics.
+    pub(in crate::manager) nexus_unlock: Option<nook_core::NexusUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
 }
@@ -200,6 +221,9 @@ impl Drop for NookVaultManager {
         self.vault.reset();
         self.device.identity_private_key.zeroize();
         self.event_log.reset();
+        self.nexus_genesis = None;
+        self.pending_nexus_genesis_request = None;
+        self.nexus_unlock = None;
         self.sync_outbox.reset();
     }
 }
@@ -214,6 +238,9 @@ impl NookVaultManager {
             device: DeviceSessionState::default(),
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
+            nexus_genesis: None,
+            pending_nexus_genesis_request: None,
+            nexus_unlock: None,
             sync_outbox: SyncOutboxState::default(),
         }
     }
@@ -231,6 +258,38 @@ impl NookVaultManager {
     #[wasm_bindgen(getter, js_name = vaultVersion)]
     pub fn vault_version(&self) -> u64 {
         self.vault.vault_version
+    }
+
+    #[wasm_bindgen(getter, js_name = vaultArchitectureJson)]
+    pub fn vault_architecture_json(&self) -> Result<String, JsError> {
+        serde_json::to_string(&self.vault.architecture)
+            .map_err(|error| JsError::new(&error.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = setVaultArchitectureJson)]
+    pub fn set_vault_architecture_json(&mut self, architecture_json: &str) -> Result<(), JsError> {
+        let architecture: nook_core::VaultArchitecture = serde_json::from_str(architecture_json)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        architecture
+            .validate()
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        if !self.vault.store_id.is_empty() && architecture != self.vault.architecture {
+            return Err(JsError::new(
+                "Vault architecture is immutable after vault creation.",
+            ));
+        }
+        architecture
+            .validate_records(&self.stored_records_snapshot())
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        self.vault.architecture = architecture;
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = canCreateSecretForVaultArchitecture)]
+    pub fn can_create_secret_for_vault_architecture(&self) -> bool {
+        self.vault
+            .architecture
+            .can_create_secret_with_records(&self.stored_records_snapshot())
     }
 
     #[wasm_bindgen(getter, js_name = vaultName)]
@@ -285,6 +344,9 @@ impl NookVaultManager {
         self.storage.github_root_empty = false;
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
+        self.nexus_genesis = None;
+        self.pending_nexus_genesis_request = None;
+        self.nexus_unlock = None;
         self.sync_outbox.reset();
     }
 }
@@ -318,15 +380,18 @@ impl NookVaultManager {
             ));
         }
         let records = self.vault.meta.to_stored_records();
-        Ok(nook_core::serialize_stored_yaml_with_unlock_and_name(
-            &records,
-            &self.vault.unlock,
-            &self.vault.password_entries,
-            Some(self.vault.store_id.as_str()),
-            self.vault.vault_name.as_deref(),
-            None,
-        )?
-        .into_inner())
+        Ok(
+            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+                &records,
+                &self.vault.unlock,
+                &self.vault.password_entries,
+                Some(self.vault.store_id.as_str()),
+                self.vault.vault_name.as_deref(),
+                None,
+                &self.vault.architecture,
+            )?
+            .into_inner(),
+        )
     }
 
     pub(in crate::manager) fn local_cache_ref(&self) -> String {
@@ -360,6 +425,7 @@ impl NookVaultManager {
             self.vault.store_id = metadata.store_id;
             self.vault.vault_name = Some(metadata.vault_name);
             self.vault.vault_version = metadata.version;
+            self.vault.architecture = metadata.architecture;
         }
     }
 
@@ -382,6 +448,9 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         if self.vault.crypto.is_some() {
             return Ok(());
+        }
+        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+            return Err(nook_core::MultiDeviceError::NexusCeremonyRequired.into());
         }
         let identity = self.ensure_device_identity()?;
         if !self.vault.last_synced_content.trim().is_empty() {
@@ -470,6 +539,7 @@ impl NookVaultManager {
         match mode {
             nook_core::StorageMode::Local => {
                 self.storage.access_token = String::new();
+                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
             }
             nook_core::StorageMode::Github => {
                 self.storage.access_token = nook_core::validate_github_pat(github_pat)?.to_string();
@@ -482,6 +552,7 @@ impl NookVaultManager {
                 }
                 self.storage.remote_ref = new_repo;
                 self.storage.remote_path.clear();
+                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
                 let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
                 ensure_github_repo_exists(&self.storage.access_token, &self.storage.remote_ref)
                     .await?;
@@ -491,10 +562,16 @@ impl NookVaultManager {
                     nook_core::validate_oauth_access_token(github_pat)?.to_string();
                 let (known_file_id, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
+                self.storage.drive_event_parent =
+                    nook_core::DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
                 let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
                 verify_drive_access(&self.storage.access_token).await?;
-                self.storage.remote_ref = known_file_id;
+                // Personal: optional vault yaml file id. Shared: folder id for events.
+                self.storage.remote_ref = match &self.storage.drive_event_parent {
+                    nook_core::DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
+                    nook_core::DriveEventParent::AppDataFolder => known_file_id,
+                };
             }
             nook_core::StorageMode::ICloud => {
                 self.storage.access_token =
@@ -503,6 +580,7 @@ impl NookVaultManager {
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
                 self.storage.remote_path = file_name.to_string();
                 self.storage.remote_ref = file_name.to_string();
+                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
             }
         }
 

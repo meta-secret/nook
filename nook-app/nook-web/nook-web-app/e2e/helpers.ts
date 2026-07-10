@@ -116,10 +116,32 @@ export const ENROLLMENT_UNLOCK_TIMEOUT_MS = 30_000
 /** Default password used by e2e create-vault and local-unlock helpers. */
 export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
+export async function advanceCreateVaultWizardToFinalStep(page: Page) {
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  await expect(chooser).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+
+  const finalStep = page.getByTestId('create-vault-wizard-create')
+  for (let step = 0; step < 2 && !(await finalStep.isVisible()); step += 1) {
+    const continueButton = page.getByTestId('create-vault-wizard-continue')
+    await expect(continueButton).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await continueButton.click()
+  }
+
+  await expect(finalStep).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 export async function openLoginProviderSetup(page: Page) {
   if (await page.getByTestId('provider-picker-list').isVisible()) {
     return
   }
+
+  await advanceCreateVaultWizardToFinalStep(page)
 
   const connectBtn = page.getByTestId('login-connect-storage-btn')
   const legacyLink = page.getByTestId('login-use-storage-provider-link')
@@ -165,6 +187,7 @@ export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
 ) {
+  await advanceCreateVaultWizardToFinalStep(page)
   const nameInput = page.getByTestId('login-vault-name-input')
   await expect(nameInput).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -2600,6 +2623,7 @@ export async function seedExtraOauthFileProviders(
     fileName: string
     accessToken: string
     accountEmail?: string
+    folderId?: string
   }>,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page).catch(() => '')
@@ -2630,6 +2654,7 @@ export async function seedExtraOauthFileProviders(
                       accessToken: string
                       fileName: string
                       accountEmail?: string
+                      folderId?: string
                     }
                     storeId?: string
                     createdAt: string
@@ -2650,6 +2675,7 @@ export async function seedExtraOauthFileProviders(
                   accessToken: provider.accessToken,
                   fileName: provider.fileName,
                   accountEmail: provider.accountEmail,
+                  folderId: provider.folderId,
                 },
                 storeId,
                 createdAt: new Date().toISOString(),
@@ -3439,6 +3465,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
   page: Page,
   providers = [E2E_OAUTH_ONBOARD_PROVIDER],
   sharedStub?: E2eOauthFileStub,
+  expectedSyncProviderCount = providers.length,
 ) {
   const vaultYaml = await readLocalVaultYamlFromIdb(page)
   await seedExtraOauthFileProviders(page, providers)
@@ -3463,7 +3490,7 @@ export async function seedOauthFileSyncProvidersWhileUnlocked(
       await vault.loadProviders()
     }
   })
-  await waitForLoadedSyncProviders(page, providers.length)
+  await waitForLoadedSyncProviders(page, expectedSyncProviderCount)
   await forceVaultQuiescentForE2e(page)
 }
 

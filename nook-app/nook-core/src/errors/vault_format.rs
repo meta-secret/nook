@@ -31,6 +31,9 @@ pub enum VaultFormatError {
     #[error("Failed to parse stored YAML for unlock mode")]
     YamlParseUnlock(#[source] serde_yaml::Error),
 
+    #[error("Failed to parse stored YAML for architecture modes")]
+    YamlParseArchitecture(#[source] serde_yaml::Error),
+
     #[error(
         "Vault schema version {found} is newer than this app supports (max {max_supported}). Update Nook or use a pinned older app if you need rollback."
     )]

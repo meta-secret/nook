@@ -22,11 +22,14 @@ mod wire;
 
 pub use auth::device_key_protection::{
     DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyRecoveryRequest, PasskeyRegistrationResolution, WrappedDeviceIdentity,
-    derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
-    finish_passkey_device_identity, parse_wrapped_device_identity, passkey_assertion_request,
+    PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationResolution,
+    WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
+    deterministic_passkey_prf_input, finish_passkey_device_identity,
+    finish_passkey_device_identity_for_mode, finish_passkey_wrapped_device_identity,
+    parse_wrapped_device_identity, passkey_assertion_request,
     passkey_derived_device_identity_record, passkey_recovery_request,
-    recover_passkey_device_identity, resolve_passkey_registration,
+    passkey_wrapped_device_identity_record, recover_passkey_device_identity,
+    resolve_passkey_registration, resolve_passkey_registration_for_mode,
     serialize_wrapped_device_identity, unlock_passkey_device_identity,
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
@@ -44,20 +47,36 @@ pub use auth::mock_passkey::{
 };
 pub use auth::multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState, approve_join_request,
-    assess_connect_access, auth_record, build_members_records, create_join_request_record,
-    create_join_request_record_with_signing_key, dec_auth_id, dec_auth_id_from_public_key,
-    deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
-    enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, NexusShareEnvelope,
+    OpenedNexusShare, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+    approve_join_request, assess_connect_access, auth_record, build_members_records,
+    count_nexus_share_records, create_join_request_record,
+    create_join_request_record_with_signing_key, create_nexus_root_share_records_for_recipients,
+    create_nexus_share_records, create_nexus_share_records_for_recipients, dec_auth_id,
+    dec_auth_id_from_public_key, deny_join_request, device_is_enrolled, encrypt_for_recipient,
+    encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
     explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
     generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
     is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
-    is_members_stored_record, is_reserved_device_label, is_vault_meta_record, join_record_key,
-    list_join_requests, member_from_identity, member_from_join, member_stored_key,
-    merge_remote_join_records, parse_auth_envelopes, parse_join_request, pending_join_for_device,
-    rename_vault_member, replace_member_records, resolve_dec, resolve_dek, resolve_member_roster,
-    resolve_members_key, resolve_secrets_key, revoke_vault_member, roster_add_member,
-    user_stored_records, vault_has_multi_device_records,
+    is_members_stored_record, is_nexus_share_stored_record, is_reserved_device_label,
+    is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
+    member_from_join, member_stored_key, merge_remote_join_records, nexus_share_record_key,
+    open_nexus_share_for_identity, parse_auth_envelopes, parse_join_request,
+    parse_nexus_share_envelope, pending_join_for_device, reconstruct_nexus_vault_keys,
+    reconstruct_nexus_vault_keys_from_opened, rename_vault_member, replace_member_records,
+    resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
+    revoke_vault_member, roster_add_member, user_stored_records, vault_has_multi_device_records,
+};
+pub use auth::nexus_genesis::{
+    NexusGenesisIssued, NexusGenesisParticipant, NexusGenesisParticipantResponse,
+    NexusGenesisPolicy, NexusGenesisRequest, NexusGenesisSession, NexusGenesisShareDelivery,
+    accept_nexus_genesis_share_delivery, add_nexus_genesis_response, finalize_nexus_genesis_shares,
+    nexus_genesis_request, respond_to_nexus_genesis_request, start_nexus_genesis,
+};
+pub use auth::nexus_unlock::{
+    NexusUnlockPolicy, NexusUnlockRequest, NexusUnlockResponse, NexusUnlockSession,
+    NexusUnlockStatus, add_nexus_unlock_response, finalize_nexus_unlock, nexus_unlock_request,
+    nexus_unlock_status, respond_to_nexus_unlock_request, start_nexus_unlock,
 };
 pub use auth::password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,

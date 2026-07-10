@@ -155,6 +155,10 @@
   })
 
   $effect(() => {
+    document.documentElement.classList.toggle('dark', colorMode === 'dark')
+  })
+
+  $effect(() => {
     if (legalPage) {
       document.title = `${legalPageForId(legalPage).title} · Nook`
       return
@@ -410,10 +414,10 @@
             </div>
           {/if}
           {#if !vault.deviceProtectionReady}
-            <DeviceProtectionGate {vault} />
             <div class="mx-auto w-full max-w-lg">
               <ProductIntro {vault} onOpenHelp={() => vault.openHelp()} />
             </div>
+            <DeviceProtectionGate {vault} />
           {:else if vault.providersLoaded}
             <LoginGate
               {vault}
@@ -593,6 +597,7 @@
                     {vault}
                     isSaving={vault.isSaving}
                     editsBlocked={vault.editsBlocked}
+                    editBlockReason={vault.editBlockReason}
                     secrets={vault.secrets}
                     onAddModeChange={(open, type = undefined) => {
                       secretsAddOpen = open

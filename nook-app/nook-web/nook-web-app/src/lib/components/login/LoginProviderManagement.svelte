@@ -163,7 +163,7 @@
                   {localizeProviderLabel(provider.label, vault.t)}
                 </div>
                 <div
-                  class="truncate font-mono text-[11px] text-muted-foreground"
+                  class="truncate text-xs text-muted-foreground"
                   data-testid="provider-detail-{provider.id}"
                 >
                   {providerStorageDetail(provider, vault.t)}

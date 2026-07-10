@@ -435,6 +435,181 @@ pub fn provider_wasm_args(
     Ok(nook_core::storage_args_for_provider(&provider)?.into())
 }
 
+#[wasm_bindgen(js_name = defaultVaultArchitecture)]
+pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
+    Ok(to_js_value(&nook_core::VaultArchitecture::default_legacy())?)
+}
+
+#[wasm_bindgen(js_name = validateVaultArchitecture)]
+pub fn validate_vault_architecture(
+    architecture: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture.validate()?;
+    Ok(to_js_value(&architecture)?)
+}
+
+#[wasm_bindgen(js_name = vaultArchitectureOnboardingType)]
+pub fn vault_architecture_onboarding_type(
+    architecture: JsValue,
+) -> Result<String, wasm_bindgen::JsError> {
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture.validate()?;
+    Ok(architecture.onboarding_type().as_str().to_owned())
+}
+
+#[wasm_bindgen(js_name = vaultArchitectureCanCreateSecret)]
+pub fn vault_architecture_can_create_secret(
+    architecture: JsValue,
+) -> Result<bool, wasm_bindgen::JsError> {
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    architecture.validate()?;
+    Ok(architecture.can_create_secret())
+}
+
+#[wasm_bindgen(js_name = providerReplicationCapability)]
+pub fn provider_replication_capability(
+    provider: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    Ok(to_js_value(
+        &nook_core::provider_replication_capability_for_row(&provider)?,
+    )?)
+}
+
+#[wasm_bindgen(js_name = validateProviderReplication)]
+pub fn validate_provider_replication(
+    provider: JsValue,
+    replication_type: &str,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let replication_type = nook_core::ReplicationType::parse(replication_type)?;
+    Ok(to_js_value(&nook_core::validate_provider_row_replication(
+        &provider,
+        replication_type,
+    )?)?)
+}
+
+#[wasm_bindgen(js_name = enrollmentProviderForArchitecture)]
+#[allow(clippy::needless_pass_by_value)]
+pub fn enrollment_provider_for_architecture(
+    provider: JsValue,
+    architecture: JsValue,
+    shared_joiner_identity: Option<String>,
+    shared_storage_target_id: Option<String>,
+) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
+    let provider: nook_core::StorageProviderData = serde_wasm_bindgen::from_value(provider)?;
+    let architecture: nook_core::VaultArchitecture = serde_wasm_bindgen::from_value(architecture)?;
+    Ok(NookEnrollmentProvider::from_core(
+        nook_core::enrollment_provider_for_architecture_with_storage_target(
+            &provider,
+            &architecture,
+            shared_joiner_identity.as_deref(),
+            shared_storage_target_id.as_deref(),
+        )?,
+    ))
+}
+
+/// Validate a shared-grant request, then (for Google Drive) create a My Drive
+/// folder and share it with the joiner. Falls back to `ManualGrantRequired` when
+/// the Drive API fails or no owner access token is supplied.
+#[wasm_bindgen(js_name = prepareSharedStorageGrant)]
+pub async fn prepare_shared_storage_grant(
+    request: JsValue,
+) -> Result<JsValue, wasm_bindgen::JsError> {
+    let request: nook_core::SharedStorageGrantRequest = serde_wasm_bindgen::from_value(request)?;
+    let validated = nook_core::prepare_shared_storage_grant(&request)?;
+    let outcome = match validated {
+        nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+            instructions_key,
+            joiner_identity,
+            storage_target_id,
+            storage_target_name,
+        } => {
+            let token = request
+                .access_token
+                .as_deref()
+                .map(str::trim)
+                .filter(|token| !token.is_empty());
+            let is_gdrive = request.provider_type.trim() == "oauth-file"
+                && request
+                    .oauth_preset
+                    .as_deref()
+                    .unwrap_or("google-drive")
+                    .trim()
+                    == "google-drive";
+            match (token, is_gdrive) {
+                (Some(access_token), true) => {
+                    let folder_name = request
+                        .storage_target_hint
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or("Nook shared vault");
+                    match storage::drive_shared::create_shared_vault_folder(
+                        access_token,
+                        folder_name,
+                    )
+                    .await
+                    {
+                        Ok((folder_id, created_name)) => {
+                            match storage::drive_shared::share_folder_with_email(
+                                access_token,
+                                &folder_id,
+                                &joiner_identity,
+                            )
+                            .await
+                            {
+                                Ok(()) => nook_core::SharedStorageGrantOutcome::Granted {
+                                    note: "architecture_modes.shared_grant_success".to_owned(),
+                                    storage_target_id: folder_id,
+                                    storage_target_name: Some(created_name),
+                                },
+                                Err(error) => {
+                                    tracing::warn!(
+                                        scope = "shared-storage-grant",
+                                        stage = "share-folder",
+                                        error = %error,
+                                        "automatic shared storage grant failed; manual grant required"
+                                    );
+                                    nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                                        instructions_key,
+                                        joiner_identity,
+                                        storage_target_id: Some(folder_id),
+                                        storage_target_name: Some(created_name),
+                                    }
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                scope = "shared-storage-grant",
+                                stage = "create-folder",
+                                error = %error,
+                                "automatic shared storage grant failed; manual grant required"
+                            );
+                            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                                instructions_key,
+                                joiner_identity,
+                                storage_target_id,
+                                storage_target_name,
+                            }
+                        }
+                    }
+                }
+                _ => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                    instructions_key,
+                    joiner_identity,
+                    storage_target_id,
+                    storage_target_name,
+                },
+            }
+        }
+        other => other,
+    };
+    Ok(to_js_value(&outcome)?)
+}
+
 #[wasm_bindgen(js_name = wasmStorageArgs)]
 #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
 pub fn wasm_storage_args(

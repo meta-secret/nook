@@ -303,21 +303,38 @@ impl NookVaultManager {
         self.vault.database =
             apply_user_records_to_armored_session(user_records, crypto, &mut self.vault.meta)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_nexus_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
             let _ = self.maybe_sync_self_into_roster(&identity);
         }
         Ok(())
     }
 
+    /// Materialize join/share meta from the local event graph without vault keys.
+    /// Used by locked nexus joiners before the opened-share ceremony.
+    pub(in crate::manager) async fn materialize_vault_meta_from_events(
+        &mut self,
+    ) -> Result<(), NookError> {
+        if self.vault.store_id.is_empty() {
+            return Ok(());
+        }
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_nexus_architecture_from_shares()?;
+        Ok(())
+    }
+
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.vault.meta.to_stored_records();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
             &records,
             &self.vault.unlock,
             &self.vault.password_entries,
             Some(self.vault.store_id.as_str()),
             self.vault.vault_name.as_deref(),
             None,
+            &self.vault.architecture,
         )?;
         save_to_indexed_db(yaml.as_str()).await?;
         self.vault.last_synced_content = yaml.into_inner();
@@ -528,10 +545,13 @@ impl NookVaultManager {
         save_heads(&self.vault.store_id, &heads).await?;
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_nexus_architecture_from_shares()?;
         if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
+            self.persist_projection_cache().await?;
         }
-        self.persist_projection_cache().await?;
+        // Locked nexus sessions keep share/join meta in memory for ceremony
+        // without rewriting a keyless projection cache.
         Ok(())
     }
 
@@ -635,6 +655,7 @@ impl NookVaultManager {
             save_heads(&self.vault.store_id, &heads).await?;
             let graph = local.load_graph(&self.vault.store_id)?;
             nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+            self.ensure_nexus_architecture_from_shares()?;
             if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
                 self.apply_event_projection_to_session().await?;
             }
@@ -685,7 +706,8 @@ impl NookVaultManager {
                 list_github_event_ids(&self.storage.access_token, &self.storage.remote_ref).await?
             }
             nook_core::StorageMode::GoogleDrive => {
-                list_drive_event_ids(&self.storage.access_token).await?
+                list_drive_event_ids(&self.storage.access_token, &self.storage.drive_event_parent)
+                    .await?
             }
             nook_core::StorageMode::ICloud => {
                 list_icloud_event_ids(&self.storage.access_token).await?
@@ -709,7 +731,12 @@ impl NookVaultManager {
                 .await
             }
             nook_core::StorageMode::GoogleDrive => {
-                fetch_drive_event(&self.storage.access_token, event_id).await
+                fetch_drive_event(
+                    &self.storage.access_token,
+                    &self.storage.drive_event_parent,
+                    event_id,
+                )
+                .await
             }
             nook_core::StorageMode::ICloud => {
                 fetch_icloud_event(&self.storage.access_token, event_id).await
@@ -733,11 +760,14 @@ impl NookVaultManager {
                 )
                 .await
             }
-            nook_core::StorageMode::GoogleDrive => {
-                put_drive_event_if_absent(&self.storage.access_token, event_id, bytes)
-                    .await
-                    .map(|_| ())
-            }
+            nook_core::StorageMode::GoogleDrive => put_drive_event_if_absent(
+                &self.storage.access_token,
+                &self.storage.drive_event_parent,
+                event_id,
+                bytes,
+            )
+            .await
+            .map(|_| ()),
             nook_core::StorageMode::ICloud => {
                 put_icloud_event_if_absent(&self.storage.access_token, event_id, bytes).await
             }
@@ -751,6 +781,7 @@ impl NookVaultManager {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
+        let signing_public_key = signing.public_key();
         let key_epoch = self.ensure_key_epoch().await?;
         let identity = self.device_identity()?;
         let mut operations = vec![VaultOperation::VaultImported {
@@ -761,27 +792,35 @@ impl NookVaultManager {
         if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
             let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
-            let auth_record =
-                nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-            let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
-            operations.push(VaultOperation::JoinApproved {
-                device_id: identity.device_id().clone(),
-                encryption_public_key: identity.public_key(),
-                signing_public_key: nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-                    signing.signing_key().verifying_key().as_bytes(),
-                )),
-                label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
-                secrets_key_ciphertext: envelopes.secrets_key,
-                members_key_ciphertext: envelopes.members_key,
-            });
+            match self.vault.architecture.vault_type {
+                nook_core::VaultType::Simple => {
+                    let auth_record =
+                        nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
+                    let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+                    operations.push(VaultOperation::JoinApproved {
+                        device_id: identity.device_id().clone(),
+                        encryption_public_key: identity.public_key(),
+                        signing_public_key: signing_public_key.clone(),
+                        label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
+                        secrets_key_ciphertext: envelopes.secrets_key,
+                        members_key_ciphertext: envelopes.members_key,
+                    });
+                }
+                nook_core::VaultType::Nexus => {
+                    operations.push(VaultOperation::NexusParticipantEnrolled {
+                        device_id: identity.device_id().clone(),
+                        encryption_public_key: identity.public_key(),
+                        signing_public_key: signing_public_key.clone(),
+                        label: nook_core::MemberLabel::from_trusted("genesis".to_owned()),
+                    });
+                }
+            }
         }
         let body = nook_core::VaultEventBody {
             schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
             store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
             actor_id,
-            actor_signing_public_key: Some(nook_core::DeviceSigningPublicKey::from_trusted(
-                hex::encode(signing.signing_key().verifying_key().as_bytes()),
-            )),
+            actor_signing_public_key: Some(signing_public_key),
             parents: Vec::new(),
             created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
             key_epoch: EventId::parse(&key_epoch)?,
@@ -797,6 +836,90 @@ impl NookVaultManager {
         self.queue_event_outbox_for_current_provider(&event_id, &bytes)
             .await?;
         Ok(())
+    }
+
+    /// Write Nexus genesis as one immutable root event. The complete roster and
+    /// complete encrypted share set are deliberately inseparable here: no
+    /// partially enrolled/openable Nexus event history is ever published.
+    pub(in crate::manager) async fn bootstrap_nexus_genesis_event(
+        &mut self,
+        participants: &[nook_core::NexusGenesisParticipant],
+        deliveries: &[nook_core::NexusGenesisShareDelivery],
+    ) -> Result<(), NookError> {
+        self.activate_event_log_mode().await?;
+        let signing = self.ensure_signing_identity().await?;
+        let actor_id = signing.actor_id()?;
+        let key_epoch = self.ensure_key_epoch().await?;
+        let mut operations = vec![VaultOperation::VaultImported {
+            source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+            secrets: vec![],
+            password_entries: vec![],
+        }];
+        operations.extend(participants.iter().map(|participant| {
+            VaultOperation::NexusParticipantEnrolled {
+                device_id: participant.device_id.clone(),
+                encryption_public_key: participant.encryption_public_key.clone(),
+                signing_public_key: participant.signing_public_key.clone(),
+                label: nook_core::MemberLabel::from_trusted(participant.label.clone()),
+            }
+        }));
+        operations.push(VaultOperation::NexusSharesIssued {
+            shares: deliveries
+                .iter()
+                .map(|delivery| nook_core::NexusShareIssuedPayload {
+                    device_id: delivery.device_id.clone(),
+                    version: delivery.share.version,
+                    threshold: delivery.share.threshold,
+                    required_participants: delivery.share.required_participants,
+                    share_index: delivery.share.share_index,
+                    ciphertext: delivery.share.ciphertext.clone(),
+                })
+                .collect(),
+        });
+        let body = nook_core::VaultEventBody {
+            schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
+            store_id: nook_core::StoreId::parse(&self.vault.store_id)?,
+            actor_id,
+            actor_signing_public_key: Some(signing.public_key()),
+            parents: Vec::new(),
+            created_at: nook_core::IsoTimestamp::parse(&iso_timestamp())?,
+            key_epoch: EventId::parse(&key_epoch)?,
+            operations,
+        };
+        let genesis = nook_core::VaultEvent::sign(body, signing.signing_key())?;
+        let event_id = genesis.id()?;
+        let bytes = nook_core::serialize_event_storage_yaml(&genesis)
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
+        self.event_log.heads = vec![event_id.as_str().to_owned()];
+        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
+        self.queue_event_outbox_for_current_provider(&event_id, &bytes)
+            .await?;
+        Ok(())
+    }
+
+    /// Idempotently finish the event-log portion of Nexus genesis. If a crash
+    /// happened after event bytes were indexed but before heads were written,
+    /// rebuild heads from the existing graph rather than creating a second root.
+    pub(in crate::manager) async fn ensure_nexus_genesis_event(
+        &mut self,
+        participants: &[nook_core::NexusGenesisParticipant],
+        deliveries: &[nook_core::NexusGenesisShareDelivery],
+    ) -> Result<(), NookError> {
+        let store = load_local_event_store(&self.vault.store_id).await?;
+        if store.event_ids().is_empty() {
+            return self
+                .bootstrap_nexus_genesis_event(participants, deliveries)
+                .await;
+        }
+        self.activate_event_log_mode().await?;
+        let graph = store.load_graph(&self.vault.store_id)?;
+        self.event_log.heads = graph
+            .heads()
+            .into_iter()
+            .map(|head| head.as_str().to_owned())
+            .collect();
+        save_heads(&self.vault.store_id, &self.event_log.heads).await
     }
 
     pub(in crate::manager) async fn persist_vault_change(

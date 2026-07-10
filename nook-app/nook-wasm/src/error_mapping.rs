@@ -52,7 +52,19 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::DriveFileNameChars => NookError::Drive(err.to_string()),
 
             ValidationError::OauthAccessTokenEmpty
+            | ValidationError::SharedJoinerIdentityRequired
+            | ValidationError::SharedJoinerIdentityInvalid
+            | ValidationError::SharedStorageTargetRequired
             | ValidationError::UnknownStorageMode { .. }
+            | ValidationError::UnknownDeviceMode { .. }
+            | ValidationError::UnknownVaultType { .. }
+            | ValidationError::UnknownReplicationType { .. }
+            | ValidationError::UnsupportedProviderReplication { .. }
+            | ValidationError::SimpleVaultHasNexusPolicy
+            | ValidationError::InvalidNexusPolicy
+            | ValidationError::NexusVaultHasFullKeyEnvelopes
+            | ValidationError::SimpleVaultHasNexusShares
+            | ValidationError::InvalidNexusShareSet
             | ValidationError::SecretDataRequired
             | ValidationError::SecretIdRequired
             | ValidationError::SecretIdInvalid

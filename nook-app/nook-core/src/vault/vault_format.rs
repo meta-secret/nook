@@ -2,8 +2,9 @@ use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
-    PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultUnlock,
-    is_auth_stored_record, is_join_stored_record, is_members_stored_record,
+    PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultArchitecture,
+    VaultUnlock, is_auth_stored_record, is_join_stored_record, is_members_stored_record,
+    is_nexus_share_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,9 +43,11 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
         || first_line.starts_with("store_id:")
         || first_line.starts_with("schema_version:")
         || first_line.starts_with("vault_version:")
+        || first_line.starts_with("architecture:")
         || first_line.starts_with("auth:")
         || first_line.starts_with("joins:")
         || first_line.starts_with("members:")
+        || first_line.starts_with("nexus_shares:")
         || first_line.starts_with("unlock:")
         || first_line.starts_with("password_envelope:")
     {
@@ -106,6 +109,10 @@ struct StoredVaultYaml {
     /// legacy reads infer mode from `password_envelope` / `unlock.type: password`.
     #[serde(default, skip_serializing_if = "vault_unlock_is_keys")]
     unlock: VaultUnlock,
+    /// Grouped vault architecture modes. Missing on legacy files maps to the
+    /// current simple/personal/standard behavior.
+    #[serde(default, skip_serializing_if = "vault_architecture_is_default")]
+    architecture: VaultArchitecture,
     #[serde(default)]
     secrets: Vec<StoredSecretRecord>,
     /// Populated only when `unlock = Keys`. Strict mutex: writing this
@@ -117,6 +124,8 @@ struct StoredVaultYaml {
     joins: Vec<StoredSecretRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     members: Vec<MembersYamlRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    nexus_shares: Vec<StoredSecretRecord>,
     /// Optional backup passwords — coexist with `auth:` device-key unlock.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     password_entries: Vec<PasswordUnlockEntry>,
@@ -171,6 +180,12 @@ fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
 fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
     let mut vault = StoredVaultYaml::default();
     for record in records {
+        // Device-protection wrappers are browser-local state. Keep this final
+        // serialization boundary defensive even if a caller accidentally
+        // mixes an IndexedDB wrapper into the vault record collection.
+        if crate::parse_wrapped_device_identity(record.value.as_str()).is_ok() {
+            continue;
+        }
         if is_join_stored_record(record) {
             vault.joins.push(record.clone());
         } else if is_members_stored_record(record) {
@@ -195,6 +210,8 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
             });
         } else if is_auth_stored_record(record) {
             vault.auth.push(stored_record_to_auth(record));
+        } else if is_nexus_share_stored_record(record) {
+            vault.nexus_shares.push(record.clone());
         } else {
             vault.secrets.push(record.clone());
         }
@@ -210,6 +227,10 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn vault_version_is_zero(version: &u64) -> bool {
     *version == 0
+}
+
+fn vault_architecture_is_default(architecture: &VaultArchitecture) -> bool {
+    architecture == &VaultArchitecture::default_legacy()
 }
 
 /// Maximum projection YAML schema this build reads and writes.
@@ -303,12 +324,35 @@ pub fn serialize_stored_yaml_with_unlock_and_name(
     vault_name: Option<&str>,
     vault_version: Option<u64>,
 ) -> VaultFormatResult<VaultYamlBlob> {
+    serialize_stored_yaml_with_unlock_name_architecture(
+        records,
+        unlock,
+        password_entries,
+        store_id,
+        vault_name,
+        vault_version,
+        &VaultArchitecture::default_legacy(),
+    )
+}
+
+/// Serialize records together with unlock, name, and grouped architecture metadata.
+pub fn serialize_stored_yaml_with_unlock_name_architecture(
+    records: &[StoredSecretRecord],
+    unlock: &VaultUnlock,
+    password_entries: &[PasswordUnlockEntry],
+    store_id: Option<&str>,
+    vault_name: Option<&str>,
+    vault_version: Option<u64>,
+    architecture: &VaultArchitecture,
+) -> VaultFormatResult<VaultYamlBlob> {
+    architecture.validate_records(records)?;
     let mut vault = partition_yaml_records(records);
     vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
     vault.vault_version = vault_version.unwrap_or(0);
     vault.store_id = resolve_store_id_for_write(store_id)?;
     vault.name = resolve_vault_name_for_write(vault_name);
     vault.unlock = normalize_unlock_for_write(unlock);
+    vault.architecture = architecture.clone();
     vault.password_entries = password_entries.to_vec();
     vault.password_envelope = None;
     serde_yaml::to_string(&vault)
@@ -412,6 +456,23 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
     }
 }
 
+/// Read grouped architecture metadata from on-disk YAML.
+///
+/// Legacy vaults that do not carry `architecture:` are explicitly treated as
+/// `standard` device mode, `simple` vault type, and `personal` replication.
+pub fn read_vault_architecture(stored: &str) -> VaultFormatResult<VaultArchitecture> {
+    let trimmed = stored.trim();
+    if trimmed.is_empty() {
+        return Ok(VaultArchitecture::default_legacy());
+    }
+    detect_stored_format(trimmed)?;
+    let vault: StoredVaultYaml =
+        serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseArchitecture)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
+    vault.architecture.validate()?;
+    Ok(vault.architecture)
+}
+
 pub fn deserialize_stored_yaml(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
     Ok(deserialize_stored_yaml_with_unlock(stored)?.0)
 }
@@ -444,6 +505,7 @@ pub fn deserialize_stored_yaml_with_unlock(
     records.extend(vault.auth.into_iter().map(auth_to_stored_record));
     records.extend(vault.joins);
     records.extend(vault.members.into_iter().map(members_to_stored_record));
+    records.extend(vault.nexus_shares);
     Ok((records, unlock))
 }
 
@@ -831,6 +893,163 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             read_vault_store_id(backfilled.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
+    }
+
+    #[test]
+    fn architecture_defaults_for_legacy_yaml_and_roundtrips_when_explicit() {
+        let legacy = "schema_version: 1\nstore_id: store_SMypl8K0w9Y\nsecrets: []\n";
+        assert_eq!(
+            read_vault_architecture(legacy).unwrap(),
+            VaultArchitecture::default_legacy()
+        );
+
+        let architecture = VaultArchitecture {
+            device_mode: crate::DeviceMode::AntiHacker,
+            vault_type: crate::VaultType::Nexus,
+            replication_type: crate::ReplicationType::Shared,
+            nexus: Some(crate::NexusPolicy {
+                threshold: 2,
+                required_participants: 3,
+                ready_participants: 0,
+            }),
+        };
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &[],
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("Team vault"),
+            Some(7),
+            &architecture,
+        )
+        .unwrap();
+        assert!(yaml.as_str().contains("architecture:"));
+        assert!(yaml.as_str().contains("device_mode: anti-hacker"));
+        assert_eq!(
+            read_vault_architecture(yaml.as_str()).unwrap(),
+            architecture
+        );
+    }
+
+    #[test]
+    fn invalid_architecture_metadata_is_rejected() {
+        let invalid = "\
+schema_version: 1
+store_id: store_SMypl8K0w9Y
+architecture:
+  vault_type: simple
+  nexus:
+    threshold: 2
+    required_participants: 3
+secrets: []
+";
+        assert!(read_vault_architecture(invalid).is_err());
+    }
+
+    #[test]
+    fn unknown_architecture_mode_reports_stable_validation_key() {
+        use std::error::Error;
+
+        let invalid = "\
+schema_version: 1
+store_id: store_SMypl8K0w9Y
+architecture:
+  device_mode: future-device-mode
+  vault_type: simple
+  replication_type: personal
+secrets: []
+";
+        let error = read_vault_architecture(invalid).unwrap_err();
+        let source = error.source().unwrap().to_string();
+        assert!(
+            source.contains("errors.validation.unknown_device_mode:future-device-mode"),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn anti_hacker_local_wrapper_material_is_not_serialized_to_vault_yaml() {
+        let credential_id = vec![7u8; 48];
+        let user_handle = vec![8u8; 32];
+        let prf_input = crate::deterministic_passkey_prf_input();
+        let prf_output = [10u8; 32];
+        let material = crate::finish_passkey_wrapped_device_identity(
+            &credential_id,
+            &user_handle,
+            &prf_input,
+            &prf_output,
+        )
+        .unwrap();
+        let local_record = crate::serialize_wrapped_device_identity(material.record()).unwrap();
+        assert!(local_record.contains("ciphertext"));
+        assert!(local_record.contains("nonce"));
+        assert!(local_record.contains("hkdfSalt"));
+
+        let architecture = VaultArchitecture {
+            device_mode: crate::DeviceMode::AntiHacker,
+            ..VaultArchitecture::default_legacy()
+        };
+        let mut records = sample_records();
+        records.push(StoredSecretRecord {
+            key: sid("device_identity_wrapped"),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted(local_record),
+        });
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("Anti-hacker vault"),
+            Some(1),
+            &architecture,
+        )
+        .unwrap();
+        let stored = yaml.as_str();
+
+        assert!(stored.contains("device_mode: anti-hacker"));
+        assert!(!stored.contains("passkey-wrapped-local"));
+        assert!(!stored.contains("credentialId"));
+        assert!(!stored.contains("userHandle"));
+        assert!(!stored.contains("prfInput"));
+        assert!(!stored.contains("hkdfSalt"));
+        assert!(!stored.contains("nonce"));
+        assert!(!stored.contains("ciphertext"));
+        assert!(!stored.contains("AGE-SECRET-KEY-"));
+    }
+
+    #[test]
+    fn nexus_share_records_roundtrip_in_dedicated_yaml_section() {
+        let keys = crate::generate_vault_keys().unwrap();
+        let first = crate::DeviceIdentity::generate().unwrap();
+        let second = crate::DeviceIdentity::generate().unwrap();
+        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
+        let architecture = VaultArchitecture::nexus_personal(
+            crate::DeviceMode::Standard,
+            crate::NexusPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+
+        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+            &shares,
+            &VaultUnlock::Keys,
+            &[],
+            Some("store_SMypl8K0w9Y"),
+            Some("Nexus vault"),
+            Some(1),
+            &architecture,
+        )
+        .unwrap();
+        assert!(yaml.as_str().contains("nexus_shares:"));
+        assert!(!yaml.as_str().contains("auth:"));
+        assert!(yaml.as_str().contains("secrets: []"));
+
+        let parsed = deserialize_stored_yaml(yaml.as_str()).unwrap();
+        assert_eq!(parsed, shares);
+        assert!(parsed.iter().all(crate::is_nexus_share_stored_record));
     }
 
     #[test]

@@ -50,7 +50,38 @@ const ENCODE_URI_COMPONENT: &AsciiSet = &CONTROLS
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum EnrollmentProvider {
     Local,
-    Github { pat: String, repo: String },
+    Github {
+        pat: String,
+        repo: String,
+    },
+    #[serde(rename = "oauth-file")]
+    OauthFile {
+        preset: String,
+        access_token: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        refresh_token: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expires_at: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        account_email: Option<String>,
+    },
+    #[serde(rename = "shared-provider-grant")]
+    SharedProviderGrant {
+        sync_provider_type: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        oauth_preset: Option<String>,
+        joiner_identity_kind: String,
+        joiner_identity: String,
+        /// Shared Drive folder id (or other provider storage target) the joiner
+        /// syncs under with their own OAuth token. Absent for legacy codes that
+        /// relied on a manual grant ceremony only.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        storage_target_id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -275,7 +306,53 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
             }
             Ok(())
         }
+        EnrollmentProvider::OauthFile {
+            preset,
+            access_token,
+            ..
+        } => {
+            if !matches!(preset.as_str(), "google-drive" | "icloud")
+                || access_token.trim().is_empty()
+            {
+                return Err(EnrollmentError::MalformedOauthFileProvider);
+            }
+            Ok(())
+        }
+        EnrollmentProvider::SharedProviderGrant {
+            sync_provider_type,
+            oauth_preset,
+            joiner_identity_kind,
+            joiner_identity,
+            storage_target_id,
+        } => {
+            if sync_provider_type.trim() != "oauth-file"
+                || oauth_preset.as_deref().unwrap_or("google-drive") != "google-drive"
+                || joiner_identity_kind.trim() != "email"
+                || !is_plausible_email(joiner_identity)
+            {
+                return Err(EnrollmentError::MalformedSharedProviderGrant);
+            }
+            if storage_target_id
+                .as_deref()
+                .is_none_or(|target| target.trim().is_empty())
+            {
+                return Err(EnrollmentError::MalformedSharedProviderGrant);
+            }
+            Ok(())
+        }
     }
+}
+
+fn is_plausible_email(value: &str) -> bool {
+    let trimmed = value.trim();
+    let Some((local, domain)) = trimmed.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !trimmed.chars().any(char::is_whitespace)
 }
 
 fn derive_enrollment_key(password: &str, salt: &[u8], iterations: u32) -> [u8; KEY_LEN] {
@@ -413,5 +490,116 @@ mod tests {
         let code = encrypt_enrollment_payload(&input, "hunter2", "").unwrap();
         let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
         assert_eq!(decrypted.provider, EnrollmentProvider::Local);
+    }
+
+    #[test]
+    fn shared_provider_grant_roundtrips_without_provider_credentials() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: Some("shared-folder-abc".to_owned()),
+            },
+            entry_id: "entry-shared".to_owned(),
+            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+        };
+        let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant").unwrap();
+        let decrypted = decrypt_enrollment_payload(&code, "hunter2").unwrap();
+        assert_eq!(decrypted.provider, input.provider);
+        match &decrypted.provider {
+            EnrollmentProvider::SharedProviderGrant {
+                storage_target_id, ..
+            } => {
+                assert_eq!(storage_target_id.as_deref(), Some("shared-folder-abc"));
+            }
+            other => panic!("expected shared grant, got {other:?}"),
+        }
+
+        let envelope = parse_enrollment_envelope(&code).unwrap();
+        let serialized = serde_json::to_string(&envelope).unwrap();
+        assert!(!serialized.contains("ya29."));
+        assert!(!serialized.contains("github_pat_"));
+        assert!(!serialized.contains("hunter2"));
+    }
+
+    #[test]
+    fn shared_provider_grant_rejects_missing_storage_target_id() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "oauth-file".to_owned(),
+                oauth_preset: Some("google-drive".to_owned()),
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: None,
+            },
+            entry_id: "entry-shared-legacy".to_owned(),
+            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+        };
+        assert!(matches!(
+            encrypt_enrollment_payload(&input, "hunter2", ""),
+            Err(EnrollmentError::MalformedSharedProviderGrant)
+        ));
+    }
+
+    #[test]
+    fn personal_oauth_file_provider_roundtrips_inside_encrypted_payload() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::OauthFile {
+                preset: "google-drive".to_owned(),
+                access_token: "ya29.secret".to_owned(),
+                refresh_token: Some("refresh.secret".to_owned()),
+                expires_at: Some("2026-07-09T00:00:00Z".to_owned()),
+                file_id: Some("drive-file-id".to_owned()),
+                file_name: Some("nook-backup.yaml".to_owned()),
+                account_email: Some("owner@example.com".to_owned()),
+            },
+            entry_id: "entry-oauth".to_owned(),
+            issued_at: "2026-07-09T00:00:00Z".to_owned(),
+        };
+        let code = encrypt_enrollment_payload(&input, "correct horse", "OAuth entry").unwrap();
+        assert!(!code.contains("ya29.secret"));
+        assert!(!code.contains("refresh.secret"));
+
+        let decrypted = decrypt_enrollment_payload(&code, "correct horse").unwrap();
+        assert_eq!(decrypted.provider, input.provider);
+    }
+
+    #[test]
+    fn malformed_oauth_file_provider_has_provider_specific_error() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::OauthFile {
+                preset: "unsupported".to_owned(),
+                access_token: String::new(),
+                refresh_token: None,
+                expires_at: None,
+                file_id: None,
+                file_name: None,
+                account_email: None,
+            },
+            entry_id: "entry-oauth".to_owned(),
+            issued_at: "2026-07-09T00:00:00Z".to_owned(),
+        };
+        assert!(matches!(
+            encrypt_enrollment_payload(&input, "correct horse", "OAuth entry"),
+            Err(EnrollmentError::MalformedOauthFileProvider)
+        ));
+    }
+
+    #[test]
+    fn shared_provider_grant_rejects_unsupported_identity() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::SharedProviderGrant {
+                sync_provider_type: "github".to_owned(),
+                oauth_preset: None,
+                joiner_identity_kind: "email".to_owned(),
+                joiner_identity: "joiner@example.com".to_owned(),
+                storage_target_id: None,
+            },
+            entry_id: "entry-shared".to_owned(),
+            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+        };
+        assert!(encrypt_enrollment_payload(&input, "hunter2", "").is_err());
     }
 }

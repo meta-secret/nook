@@ -6,6 +6,11 @@ import {
 } from '$lib/nook'
 import { createLogger } from '$lib/log'
 import { syncLocalFolderProvider } from '$lib/vault/sync'
+import {
+  isNexusCeremonyRequiredError,
+  refreshNexusUnlockStatus,
+  surfaceNexusCeremonyIfNeeded,
+} from '$lib/vault/nexus-unlock'
 
 const log = createLogger('connect')
 
@@ -147,18 +152,21 @@ export async function loadDb(state: VaultState) {
       ])) as NookSecretRecord[]
     })
     state.secrets = rawRecords
-    state.markVaultUnlocked()
-    log.info('vault connected', {
-      mode: state.storageMode,
-      secrets: rawRecords.length,
-      accessStatus,
-    })
+    // Load sync providers before unlocking the UI. Otherwise a fast local
+    // edit (especially delete, which used to fire-and-forget fan-out) can run
+    // while `syncProviders` is still empty and never push the event remotely.
     state.syncOAuthRemoteRefFromManager()
     await state.ensureProviderSaved()
     await state.loadProviders()
     await state.promoteSessionVaultToLocalIfNeeded()
     await state.refreshPasswordEntriesList()
     await state.hydrateMultiDeviceState()
+    state.markVaultUnlocked()
+    log.info('vault connected', {
+      mode: state.storageMode,
+      secrets: rawRecords.length,
+      accessStatus,
+    })
     if (state.storageMode === 'local') {
       state.showSuccess(state.t('toasts.local_loaded'))
     } else if (state.storageMode === 'local-folder') {
@@ -172,6 +180,16 @@ export async function loadDb(state: VaultState) {
     state.isAuthenticated = false
     const message = e instanceof Error ? e.message : String(e)
     log.warn('loadDb failed', message)
+    if (await surfaceNexusCeremonyIfNeeded(state, e)) {
+      state.refreshVaultArchitectureFromManager()
+      await refreshNexusUnlockStatus(state)
+      return
+    }
+    if (isNexusCeremonyRequiredError(e)) {
+      state.nexusCeremonyPrompt = true
+      state.errorMsg = ''
+      return
+    }
     state.errorMsg = state.resolveErrorMessage(message)
   } finally {
     if (state.isAuthenticated) {
@@ -188,6 +206,7 @@ export async function loadDb(state: VaultState) {
 }
 
 function editBlockedMessage(state: VaultState): string {
+  if (state.editBlockReason) return state.editBlockReason
   return state.securityConflicts.length > 0
     ? state.t('auth_storage.security_conflict_edits')
     : state.t('auth_storage.sync_blocked_edits')
@@ -258,7 +277,11 @@ export async function handleDeleteSecret(state: VaultState, id: string) {
     await state.refreshSecretsFromSession()
     log.info('secret deleted', { id })
     state.showSuccess(state.t('toasts.secret_deleted'))
-    state.scheduleFanOutSyncAfterLocalSave()
+    // Match add/replace: await fan-out so the delete event is pushed before
+    // callers observe remote state (and so an empty provider list is not a
+    // silent no-op race right after unlock).
+    await state.runFanOutSyncAfterLocalSave()
+    await state.refreshSecretsFromSession()
   } catch (e: unknown) {
     state.secrets = previousSecrets
     state.errorMsg = `Failed to delete secret: ${e instanceof Error ? e.message : String(e)}`
