@@ -55,11 +55,10 @@ declare global {
 type TokenClientSlot = {
   scopeKey: string
   client: TokenClient
+  pendingResolve: ((response: GoogleTokenResponse) => void) | undefined
 }
 
 const tokenClients = new Map<string, TokenClientSlot>()
-let pendingResolve: ((response: GoogleTokenResponse) => void) | undefined =
-  undefined
 let gisReadyPromise: Promise<void> | undefined = undefined
 
 export function isGoogleOAuthConfigured(): boolean {
@@ -123,23 +122,25 @@ async function ensureGisReady(): Promise<void> {
 
 async function tokenClientForScope(
   scope: GoogleDriveOAuthScope,
-): Promise<TokenClient> {
+): Promise<TokenClientSlot> {
   await ensureGisReady()
   const key = scopeString(scope)
   const existing = tokenClients.get(key)
   if (existing) {
-    return existing.client
+    return existing
   }
+  let slot: TokenClientSlot
   const client = window.google!.accounts.oauth2.initTokenClient({
     client_id: googleClientId(),
     scope: key,
     callback: (response) => {
-      pendingResolve?.(response)
-      pendingResolve = undefined
+      slot.pendingResolve?.(response)
+      slot.pendingResolve = undefined
     },
   })
-  tokenClients.set(key, { scopeKey: key, client })
-  return client
+  slot = { scopeKey: key, client, pendingResolve: undefined }
+  tokenClients.set(key, slot)
+  return slot
 }
 
 /** Personal vaults: initialize the default `drive.appdata` token client. */
@@ -173,17 +174,17 @@ export async function requestGoogleAccessToken(options?: {
   scope?: GoogleDriveOAuthScope
 }): Promise<GoogleOAuthTokens> {
   const scope = options?.scope ?? 'appdata'
-  const client = await tokenClientForScope(scope)
+  const slot = await tokenClientForScope(scope)
 
   return new Promise((resolve, reject) => {
-    pendingResolve = (response) => {
+    slot.pendingResolve = (response) => {
       try {
         resolve(tokensFromResponse(response))
       } catch (error) {
         reject(error)
       }
     }
-    client.requestAccessToken(
+    slot.client.requestAccessToken(
       options?.prompt !== undefined ? { prompt: options.prompt } : undefined,
     )
   })

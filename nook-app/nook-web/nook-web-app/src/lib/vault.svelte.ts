@@ -889,9 +889,18 @@ export class VaultState {
 
   refreshVaultArchitectureFromManager() {
     if (!this.manager) return
-    this.vaultArchitecture = validateVaultArchitecture(
-      JSON.parse(this.manager.vaultArchitectureJson) as VaultArchitecture,
-    )
+    let architecture: VaultArchitecture
+    try {
+      architecture = validateVaultArchitecture(
+        JSON.parse(this.manager.vaultArchitectureJson) as VaultArchitecture,
+      )
+    } catch (error) {
+      vaultLog.warn('vault architecture metadata could not be parsed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return
+    }
+    this.vaultArchitecture = architecture
     this.draftDeviceMode = this.vaultArchitecture.device_mode
     this.draftVaultType = this.vaultArchitecture.vault_type
     this.draftReplicationType = this.vaultArchitecture.replication_type
@@ -1473,6 +1482,8 @@ export class VaultState {
       ready: false,
     }
     this.nexusStoredDeliveries = []
+    this.sharedJoinerIdentity = ''
+    this.sharedGrantInstructions = ''
   }
 
   ensureIdleSessionTracker() {
@@ -1527,6 +1538,8 @@ export class VaultState {
     this.joinEnrollmentPrompt = 'none'
     this.enrollSecretsKey = ''
     this.enrollMembersKey = ''
+    this.sharedJoinerIdentity = ''
+    this.sharedGrantInstructions = ''
     this.settingsOpen = false
     this.enrollmentCode = ''
     this.errorMsg = ''

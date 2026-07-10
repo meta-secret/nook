@@ -303,6 +303,7 @@ impl NookVaultManager {
         self.vault.database =
             apply_user_records_to_armored_session(user_records, crypto, &mut self.vault.meta)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_nexus_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
             let _ = self.maybe_sync_self_into_roster(&identity);
         }
@@ -320,6 +321,7 @@ impl NookVaultManager {
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_nexus_architecture_from_shares()?;
         Ok(())
     }
 
@@ -543,6 +545,7 @@ impl NookVaultManager {
         save_heads(&self.vault.store_id, &heads).await?;
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        self.ensure_nexus_architecture_from_shares()?;
         if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
             self.persist_projection_cache().await?;
@@ -652,6 +655,7 @@ impl NookVaultManager {
             save_heads(&self.vault.store_id, &heads).await?;
             let graph = local.load_graph(&self.vault.store_id)?;
             nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+            self.ensure_nexus_architecture_from_shares()?;
             if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
                 self.apply_event_projection_to_session().await?;
             }

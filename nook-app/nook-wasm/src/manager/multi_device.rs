@@ -139,7 +139,6 @@ impl NookVaultManager {
 
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
         self.persist_vault_change(Vec::new()).await?;
-        self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
 
         let updated = nook_core::serialize_stored(&records, format)?;
         let loaded = load_stored_vault(updated.as_str(), &identity)?;
@@ -219,6 +218,9 @@ impl NookVaultManager {
                 });
             }
             nook_core::VaultType::Nexus => {
+                if !self.vault.meta.nexus_shares.is_empty() {
+                    return Err(nook_core::MultiDeviceError::NexusGenesisRosterFull.into());
+                }
                 let new_member = nook_core::member_from_join(&join)?;
                 let roster = match nook_core::resolve_member_roster(&records, &members_key) {
                     Ok(existing) => nook_core::roster_add_member(existing, new_member),
@@ -252,6 +254,9 @@ impl NookVaultManager {
         roster: &[nook_core::VaultMember],
     ) -> Result<Option<nook_core::VaultOperation>, NookError> {
         let policy = self.vault.architecture.nexus.unwrap_or_default();
+        if roster.len() > usize::from(policy.required_participants) {
+            return Err(nook_core::MultiDeviceError::NexusGenesisRosterFull.into());
+        }
         if roster.len() < usize::from(policy.required_participants) {
             return Ok(None);
         }
@@ -340,6 +345,9 @@ impl NookVaultManager {
                 });
             }
             nook_core::VaultType::Nexus => {
+                if !self.vault.meta.nexus_shares.is_empty() {
+                    return Err(nook_core::MultiDeviceError::NexusGenesisRosterFull.into());
+                }
                 let new_member = nook_core::member_from_join(&join)?;
                 let roster = match nook_core::resolve_member_roster(&records, &members_key) {
                     Ok(existing) => nook_core::roster_add_member(existing, new_member),
@@ -471,13 +479,13 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
         let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
-        self.apply_vault_keys(&secrets_key, &members_key)?;
         let (auth, members) = nook_core::enroll_device_with_keys(
             &parsed_secrets,
             &parsed_members,
             &identity,
             &wasm_iso_timestamp(),
         )?;
+        self.apply_vault_keys(&secrets_key, &members_key)?;
         self.vault.meta.apply_record(&auth);
         for member in &members {
             self.vault.meta.apply_record(member);

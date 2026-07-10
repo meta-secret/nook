@@ -85,30 +85,31 @@ impl NookVaultManager {
         let credential = passkey_browser::create_credential(&creation_options).await?;
         let credential_id = passkey_browser::credential_id(&credential)?;
         let create_prf_output = passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
-        let material = if let Some(prf_output) = create_prf_output {
-            nook_core::finish_passkey_device_identity_for_mode(
-                &credential_id,
-                &user_handle,
-                &prf_input,
-                prf_output.as_slice(),
-                mode,
-            )?
-        } else {
-            let request = nook_core::PasskeyAssertionRequest::new(&credential_id, &prf_input)?;
-            let request_options = passkey_browser::request_options(
-                rp_id,
-                request.credential_id(),
-                request.prf_input(),
-            )?;
-            let credential = passkey_browser::get_credential(&request_options).await?;
-            let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
-            nook_core::finish_passkey_device_identity_for_mode(
-                request.credential_id(),
-                &user_handle,
-                request.prf_input(),
-                prf_output.as_slice(),
-                mode,
-            )?
+        let resolution = nook_core::resolve_passkey_registration_for_mode(
+            &credential_id,
+            &user_handle,
+            &prf_input,
+            create_prf_output.as_deref().map(Vec::as_slice),
+            mode,
+        )?;
+        let material = match resolution {
+            nook_core::PasskeyRegistrationResolution::Complete(material) => *material,
+            nook_core::PasskeyRegistrationResolution::NeedsAssertion(request) => {
+                let request_options = passkey_browser::request_options(
+                    rp_id,
+                    request.credential_id(),
+                    request.prf_input(),
+                )?;
+                let credential = passkey_browser::get_credential(&request_options).await?;
+                let prf_output = Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
+                nook_core::finish_passkey_device_identity_for_mode(
+                    request.credential_id(),
+                    &user_handle,
+                    request.prf_input(),
+                    prf_output.as_slice(),
+                    mode,
+                )?
+            }
         };
         let result = self.save_passkey_material(&material).await;
         let device_id = result?;

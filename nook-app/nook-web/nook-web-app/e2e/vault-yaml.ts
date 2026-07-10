@@ -295,6 +295,7 @@ export function parseVaultEventLogSnapshot(
             joins.delete(operation.device_id)
             auth.delete(operation.device_id)
             members.delete(operation.device_id)
+            nexusShares.delete(operation.device_id)
           }
           break
         case 'password-added':

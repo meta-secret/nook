@@ -180,6 +180,12 @@ fn members_to_stored_record(record: MembersYamlRecord) -> StoredSecretRecord {
 fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
     let mut vault = StoredVaultYaml::default();
     for record in records {
+        // Device-protection wrappers are browser-local state. Keep this final
+        // serialization boundary defensive even if a caller accidentally
+        // mixes an IndexedDB wrapper into the vault record collection.
+        if crate::parse_wrapped_device_identity(record.value.as_str()).is_ok() {
+            continue;
+        }
         if is_join_stored_record(record) {
             vault.joins.push(record.clone());
         } else if is_members_stored_record(record) {
@@ -983,8 +989,14 @@ secrets: []
             device_mode: crate::DeviceMode::AntiHacker,
             ..VaultArchitecture::default_legacy()
         };
+        let mut records = sample_records();
+        records.push(StoredSecretRecord {
+            key: sid("device_identity_wrapped"),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted(local_record),
+        });
         let yaml = serialize_stored_yaml_with_unlock_name_architecture(
-            &sample_records(),
+            &records,
             &VaultUnlock::Keys,
             &[],
             Some("store_SMypl8K0w9Y"),

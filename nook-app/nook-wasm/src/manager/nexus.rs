@@ -301,13 +301,14 @@ impl NookVaultManager {
             .ok_or_else(|| JsError::new("No Nexus unlock ceremony is active."))?
             .clone();
         let keys = nook_core::finalize_nexus_unlock(session, &identity)?;
-        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         let records = self.stored_records_snapshot();
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
-        self.vault.database = nook_core::Database::from_stored_records_with_crypto(
+        let database = nook_core::Database::from_stored_records_with_crypto(
             &nook_core::user_stored_records(&records),
             &crypto,
         )?;
+        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        self.vault.database = database;
         if self.event_log_has_events().await? {
             self.apply_event_projection_to_session().await?;
         }
@@ -555,10 +556,9 @@ impl NookVaultManager {
     }
 
     /// Joiners may sync share events before architecture JSON is adopted.
-    fn ensure_nexus_architecture_from_shares(&mut self) -> Result<(), NookError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
-            return Ok(());
-        }
+    pub(in crate::manager) fn ensure_nexus_architecture_from_shares(
+        &mut self,
+    ) -> Result<(), NookError> {
         if self.vault.meta.nexus_shares.is_empty() {
             return Ok(());
         }

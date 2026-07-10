@@ -126,6 +126,14 @@ mod tests {
     #[test]
     fn operation_starts_epoch_maps_security_ops() {
         assert_eq!(
+            operation_starts_epoch(&VaultOperation::VaultImported {
+                source_content_hash: crate::Sha256Hex::from_trusted("0".repeat(64)),
+                secrets: Vec::new(),
+                password_entries: Vec::new(),
+            }),
+            Some(EpochRotationReason::Genesis)
+        );
+        assert_eq!(
             operation_starts_epoch(&VaultOperation::PasswordRotated {
                 entry_id: crate::PasswordEntryId::from_trusted("pwdentry001".to_owned()),
                 envelope: crate::PasswordEnvelope {
@@ -145,6 +153,21 @@ mod tests {
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),
                 },
             }),
+            None
+        );
+        assert_eq!(
+            operation_starts_epoch(&VaultOperation::NexusParticipantEnrolled {
+                device_id: crate::DeviceId::parse("0123456789abcdef").unwrap(),
+                encryption_public_key: crate::DevicePublicKey::from_trusted(
+                    "age-public-key".to_owned(),
+                ),
+                signing_public_key: crate::DeviceSigningPublicKey::from_trusted("a".repeat(64)),
+                label: crate::MemberLabel::from_trusted("Phone".to_owned()),
+            }),
+            None
+        );
+        assert_eq!(
+            operation_starts_epoch(&VaultOperation::NexusSharesIssued { shares: Vec::new() }),
             None
         );
     }

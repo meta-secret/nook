@@ -582,7 +582,7 @@
     "enter_pw_err": "Enter the selected vault password.",
     "shared_identity_label": "Joiner provider email",
     "shared_identity_placeholder": "joiner@example.com",
-    "shared_identity_hint": "The joiner uses this provider identity for shared storage access; your provider credential is not placed in the code.",
+    "shared_identity_hint": "The joiner uses this provider identity for shared storage access; your provider credential is not included in the onboarding link or QR code.",
     "shared_identity_required": "Enter the joiner provider identity.",
     "failed_qr_err": "Failed to generate onboarding QR.",
     "ready_title": "Ready to Onboard",

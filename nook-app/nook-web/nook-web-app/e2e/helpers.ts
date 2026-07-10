@@ -118,9 +118,9 @@ export const DEFAULT_LOCAL_VAULT_PASSWORD = 'test-local-vault-password'
 
 export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   const chooser = page.getByTestId('login-create-vault-chooser')
-  if (!(await chooser.isVisible())) {
-    return
-  }
+  await expect(chooser).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
 
   const finalStep = page.getByTestId('create-vault-wizard-create')
   for (let step = 0; step < 2 && !(await finalStep.isVisible()); step += 1) {

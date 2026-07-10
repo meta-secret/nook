@@ -565,7 +565,13 @@ pub async fn prepare_shared_storage_grant(
                                     storage_target_id: folder_id,
                                     storage_target_name: Some(created_name),
                                 },
-                                Err(_) => {
+                                Err(error) => {
+                                    tracing::warn!(
+                                        scope = "shared-storage-grant",
+                                        stage = "share-folder",
+                                        error = %error,
+                                        "automatic shared storage grant failed; manual grant required"
+                                    );
                                     nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
                                         instructions_key,
                                         joiner_identity,
@@ -575,12 +581,20 @@ pub async fn prepare_shared_storage_grant(
                                 }
                             }
                         }
-                        Err(_) => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
-                            instructions_key,
-                            joiner_identity,
-                            storage_target_id,
-                            storage_target_name,
-                        },
+                        Err(error) => {
+                            tracing::warn!(
+                                scope = "shared-storage-grant",
+                                stage = "create-folder",
+                                error = %error,
+                                "automatic shared storage grant failed; manual grant required"
+                            );
+                            nook_core::SharedStorageGrantOutcome::ManualGrantRequired {
+                                instructions_key,
+                                joiner_identity,
+                                storage_target_id,
+                                storage_target_name,
+                            }
+                        }
                     }
                 }
                 _ => nook_core::SharedStorageGrantOutcome::ManualGrantRequired {

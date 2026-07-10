@@ -1,8 +1,8 @@
 //! Nexus vault key-share lifecycle integration tests.
 
 use nook_core::{
-    DeviceIdentity, DeviceMode, MultiDeviceError, NexusPolicy, VaultArchitecture, VaultFormat,
-    VaultType, VaultUnlock, create_nexus_share_records, generate_store_id, generate_vault_keys,
+    DeviceIdentity, DeviceMode, MultiDeviceError, NexusPolicy, VaultArchitecture, VaultType,
+    VaultUnlock, create_nexus_share_records, generate_store_id, generate_vault_keys,
     load_nexus_vault, load_nexus_vault_from_opened, load_stored_vault,
     open_nexus_share_for_identity, reconstruct_nexus_vault_keys_from_opened,
     serialize_stored_yaml_with_unlock_name_architecture,
@@ -55,8 +55,6 @@ fn nexus_threshold_shares_block_single_device_and_unlock_with_quorum() {
     assert_eq!(loaded.members_key, keys.members_key);
     assert_eq!(loaded.meta.nexus_shares.len(), 3);
     assert_eq!(architecture.vault_type, VaultType::Nexus);
-    let _ = VaultFormat::Yaml;
-
     // Browser path: open shares locally, reconstruct without peer identities.
     let opened = [
         open_nexus_share_for_identity(&shares, &first).unwrap(),

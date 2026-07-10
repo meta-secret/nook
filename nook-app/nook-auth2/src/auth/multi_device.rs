@@ -798,15 +798,19 @@ pub fn revoke_vault_member(
     if roster.len() <= 1 {
         return Err(MultiDeviceError::CannotRemoveLastAccess);
     }
-    if !roster.iter().any(|member| member.auth_id == *auth_id) {
-        return Err(MultiDeviceError::DeviceNotFound);
-    }
+    let revoked_device_id = roster
+        .iter()
+        .find(|member| member.auth_id == *auth_id)
+        .map(|member| member.device_id.clone())
+        .ok_or(MultiDeviceError::DeviceNotFound)?;
+    let revoked_share_key = nexus_share_record_key(&revoked_device_id);
 
     let mut updated: Vec<StoredSecretRecord> = records
         .iter()
         .filter(|record| {
             record.key.as_str() != auth_id.as_str()
                 && record.key.as_str() != member_stored_key(auth_id)
+                && record.key.as_str() != revoked_share_key
         })
         .cloned()
         .collect();
@@ -1951,6 +1955,9 @@ mod tests {
         records.push(create_join_request_record(&joiner, ENROLLED_AT).unwrap());
         records.push(user_secret.clone());
         approve_pending_join(&keys, &genesis, &mut records, &joiner);
+        records.extend(
+            create_nexus_share_records(&keys, &[genesis.clone(), joiner.clone()], 2).unwrap(),
+        );
 
         let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id()).unwrap();
 
@@ -1960,6 +1967,16 @@ mod tests {
             keys.secrets_key
         );
         assert!(revoked.iter().any(|record| record == &user_secret));
+        assert!(
+            !revoked.iter().any(|record| {
+                record.key.as_str() == nexus_share_record_key(joiner.device_id())
+            })
+        );
+        assert!(
+            revoked.iter().any(|record| {
+                record.key.as_str() == nexus_share_record_key(genesis.device_id())
+            })
+        );
         let roster = resolve_member_roster(&revoked, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].auth_id, genesis.auth_id());

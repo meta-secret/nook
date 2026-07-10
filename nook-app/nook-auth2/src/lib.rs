@@ -29,8 +29,9 @@ pub use auth::device_key_protection::{
     parse_wrapped_device_identity, passkey_assertion_request,
     passkey_derived_device_identity_record, passkey_recovery_request,
     passkey_wrapped_device_identity_record, recover_passkey_device_identity,
-    resolve_passkey_registration, serialize_wrapped_device_identity,
-    unlock_passkey_device_identity, unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
+    resolve_passkey_registration, resolve_passkey_registration_for_mode,
+    serialize_wrapped_device_identity, unlock_passkey_device_identity,
+    unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
 pub use auth::enrollment::{
     DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentIssueInput, EnrollmentProvider,

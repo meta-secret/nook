@@ -166,15 +166,6 @@
     if (showLocalUnlock) {
       void vault.prepareLocalLogin()
     }
-  })
-
-  $effect(() => {
-    if (showLocalUnlock && vault.localVaultPresent) {
-      void vault.refreshNexusUnlockStatus()
-    }
-  })
-
-  $effect(() => {
     if (
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)

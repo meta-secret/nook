@@ -215,6 +215,7 @@ async function applyICloudOAuthTokens(
     preset: 'icloud',
     accessToken: tokens.accessToken,
     fileId: state.oauthFile?.fileId,
+    folderId: state.oauthFile?.folderId,
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||
@@ -275,6 +276,7 @@ async function applyGoogleOAuthTokens(
     accessToken: tokens.accessToken,
     expiresAt: tokens.expiresAt,
     fileId: state.oauthFile?.fileId,
+    folderId: state.oauthFile?.folderId,
     fileName:
       state.oauthFile?.fileName?.trim() ||
       state.githubRepo.trim() ||

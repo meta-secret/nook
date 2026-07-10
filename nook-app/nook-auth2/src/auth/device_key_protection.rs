@@ -207,12 +207,32 @@ pub fn resolve_passkey_registration(
     prf_input: &[u8],
     prf_output: Option<&[u8]>,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
+    resolve_passkey_registration_for_mode(
+        credential_id,
+        user_handle,
+        prf_input,
+        prf_output,
+        PasskeyDeviceProtectionMode::Standard,
+    )
+}
+
+pub fn resolve_passkey_registration_for_mode(
+    credential_id: &[u8],
+    user_handle: &[u8],
+    prf_input: &[u8],
+    prf_output: Option<&[u8]>,
+    mode: PasskeyDeviceProtectionMode,
+) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     match prf_output {
-        Some(output) => {
-            finish_passkey_device_identity(credential_id, user_handle, prf_input, output)
-                .map(Box::new)
-                .map(PasskeyRegistrationResolution::Complete)
-        }
+        Some(output) => finish_passkey_device_identity_for_mode(
+            credential_id,
+            user_handle,
+            prf_input,
+            output,
+            mode,
+        )
+        .map(Box::new)
+        .map(PasskeyRegistrationResolution::Complete),
         None => PasskeyAssertionRequest::new(credential_id, prf_input)
             .map(PasskeyRegistrationResolution::NeedsAssertion),
     }
@@ -983,6 +1003,28 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn mode_aware_registration_creates_wrapped_local_identity() {
+        let mut authenticator = MemoryPasskeyAuthenticator::new();
+        let setup = DeviceKeyProtectionSetup::generate().unwrap();
+        let registration = approved_mock_registration(&mut authenticator, &setup);
+        let resolution = resolve_passkey_registration_for_mode(
+            registration.credential_id(),
+            setup.user_handle(),
+            setup.prf_input(),
+            Some(registration.prf_output()),
+            PasskeyDeviceProtectionMode::AntiHacker,
+        )
+        .unwrap();
+        let PasskeyRegistrationResolution::Complete(material) = resolution else {
+            panic!("registration should complete from create() PRF output");
+        };
+        assert!(matches!(
+            material.record(),
+            WrappedDeviceIdentity::PasskeyWrappedLocal(_)
+        ));
     }
 
     #[test]

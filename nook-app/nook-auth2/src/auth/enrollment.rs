@@ -314,7 +314,7 @@ fn validate_provider(provider: &EnrollmentProvider) -> EnrollmentResult<()> {
             if !matches!(preset.as_str(), "google-drive" | "icloud")
                 || access_token.trim().is_empty()
             {
-                return Err(EnrollmentError::MalformedGithubProvider);
+                return Err(EnrollmentError::MalformedOauthFileProvider);
             }
             Ok(())
         }
@@ -564,6 +564,27 @@ mod tests {
 
         let decrypted = decrypt_enrollment_payload(&code, "correct horse").unwrap();
         assert_eq!(decrypted.provider, input.provider);
+    }
+
+    #[test]
+    fn malformed_oauth_file_provider_has_provider_specific_error() {
+        let input = EnrollmentIssueInput {
+            provider: EnrollmentProvider::OauthFile {
+                preset: "unsupported".to_owned(),
+                access_token: String::new(),
+                refresh_token: None,
+                expires_at: None,
+                file_id: None,
+                file_name: None,
+                account_email: None,
+            },
+            entry_id: "entry-oauth".to_owned(),
+            issued_at: "2026-07-09T00:00:00Z".to_owned(),
+        };
+        assert!(matches!(
+            encrypt_enrollment_payload(&input, "correct horse", "OAuth entry"),
+            Err(EnrollmentError::MalformedOauthFileProvider)
+        ));
     }
 
     #[test]
