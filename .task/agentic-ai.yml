@@ -55,3 +55,16 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
     cmds:
       - node {{.CI_AGENT_DIR}}/dist/main/main.js fix
+
+  ci-agent:implement:
+    desc: Implement issue/prompt via Cursor agent, open PR, squash-merge.
+    deps:
+      - ci-agent:prepare
+      - setup
+    env:
+      REPO_ROOT:
+        sh: git rev-parse --show-toplevel
+      VITE_BASE: '{{default "/" .VITE_BASE}}'
+      VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
+    cmds:
+      - node {{.CI_AGENT_DIR}}/dist/main/main.js implement

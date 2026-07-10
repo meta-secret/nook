@@ -17,7 +17,9 @@ export function loadConfig(): CiAgentConfig | null {
 
   const githubRunId = process.env.GITHUB_RUN_ID?.trim() ?? "";
   const fixBranch =
-    process.env.FIX_BRANCH?.trim() || (githubRunId ? `fix/ci-${githubRunId}` : "");
+    process.env.AGENT_BRANCH?.trim() ||
+    process.env.FIX_BRANCH?.trim() ||
+    (githubRunId ? `fix/ci-${githubRunId}` : "");
 
   return {
     repoRoot: process.env.REPO_ROOT?.trim() || process.cwd(),

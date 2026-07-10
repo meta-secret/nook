@@ -10,6 +10,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release-v1.yml`](../../.github/workflows/release-v1.yml)   | Push to `release/v1` + manual | Verify, wasm-bindgen tests, build, **full local-provider e2e**, GitHub Pages deploy to stable `nokey.sh` | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue opened/labeled with `agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners | No                                        |
 
@@ -235,11 +236,11 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 | Secret / env                                        | Used by                                                                                                                                                             |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NOOK_GITHUB_PAT`                                   | sync-live e2e **and** ci-fix PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
+| `NOOK_GITHUB_PAT`                                   | sync-live e2e, ci-fix PR/push, and agent-implement PR/push (repo scope; PRs must be opened as a user, not `GITHUB_TOKEN`, so `pr.yml` runs and auto-merge is not blocked on bot approval) |
 | `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)                                                                                                            |
 | `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; PR CI then records that preview as a successful `github-pages` GitHub deployment for ruleset enforcement                                         |
 | `GITHUB_TOKEN`                                      | Toolchain GHCR, PR comments, nook-core + nook-auth2 coverage comment                                                                                                 |
-| `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml)                                                                                                                            |
+| `CURSOR_API_KEY`                                    | ci-fix agent (main.yml, e2e-nightly.yml) and agent-implement.yml                                                                                                   |
 
 Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
 
@@ -257,9 +258,9 @@ client configuration to contain exact origins; do not commit client secrets, and
 do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 [auth-providers.md §7](../design-docs/auth-providers.md#7-oauth-origins-and-pr-previews).
 
-## CI agent (`ci-fix` job)
+## CI agent (`ci-fix` / `ci-agent:implement`)
 
-Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait for checks → squash merge. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt.
+Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait for checks → squash merge. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for labeled issues / manual prompts (see below).
 
 **Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). Those PRs also sit behind branch protection as bot-authored and need a manual approval you cannot self-grant. The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner, `pr.yml` runs, and squash merge can proceed without a manual approve step (assuming the PAT owner can merge per branch rules).
 
@@ -295,6 +296,19 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m).
 
 The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Without an explicit exit, the Cursor SDK local executor can leave child processes and open handles that keep the Node event loop alive and the `ci-fix` job running long after the agent merges its PR.
+
+## Agent implement (`agent` label / manual prompt)
+
+[`agent-implement.yml`](../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
+
+| Trigger | When it runs |
+| ------- | ------------ |
+| `issues: [opened, labeled]` | Only if the issue currently has the repo label **`agent`** (and is not bot-authored) |
+| `workflow_dispatch` | Always, using the required `prompt` input |
+
+Label later on purpose: create milestones/epics/sub-issues first, then add `agent` only to the focused issue you want executed. The workflow does **not** auto-create the label — maintainers create it once (`gh label create agent` or the GitHub UI).
+
+Loop: `task setup` → Cursor agent (prompt [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md)) → push branch → open PR → comment on the issue with the PR URL (issue runs) → wait for checks → **squash merge** → optional merged comment. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`.
 
 ## Agent checklist when touching CI or e2e
 
