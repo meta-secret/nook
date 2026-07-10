@@ -65,6 +65,7 @@ tasks:
     cmds:
       - >-
         {{.DOCKER}} run --rm
+        --init
         --platform linux/amd64
         -v {{.REPO_ROOT}}:{{.REPO_ROOT}}
         -w {{.REPO_ROOT}}
