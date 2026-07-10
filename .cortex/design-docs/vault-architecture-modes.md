@@ -20,6 +20,11 @@ The five groups stay visually distinct even though Rust derives some of them.
 The web layer renders the current Rust/WASM decision; it does not maintain a
 second compatibility matrix.
 
+Selectable alternatives use compact dropdowns for vault and replication type,
+with only the selected mode's description shown below each control. Onboarding
+type and provider capability remain read-only derived summaries rather than
+additional selectors.
+
 | Stage / surface | Group shown | State and transition |
 | --- | --- | --- |
 | First-run create chooser | 1. Device mode | Choose `standard` or `anti-hacker`; the warning stays next to the local-device decision. |

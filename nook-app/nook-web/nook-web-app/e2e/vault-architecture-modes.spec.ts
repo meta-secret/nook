@@ -150,9 +150,11 @@ test.describe('vault architecture modes', () => {
       'High security',
     )
 
+    await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-nexus').click()
     await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
 
+    await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-simple').click()
     await expect(page.getByTestId('nexus-readiness-gate')).toHaveCount(0)
   })
@@ -160,7 +162,9 @@ test.describe('vault architecture modes', () => {
   test('creates a simple personal vault and keeps secret values out of app logs', async ({
     page,
   }) => {
+    await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-simple').click()
+    await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-personal').click()
     await createLocalVaultOnLogin(page, 'Simple personal architecture')
     await assertVaultReady(page)
@@ -179,6 +183,7 @@ test.describe('vault architecture modes', () => {
   test('keeps a new nexus vault locked for secret creation until shares exist', async ({
     page,
   }) => {
+    await page.getByTestId('vault-mode-select').click()
     await page.getByTestId('mode-option-nexus').click()
     await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
     await createLocalVaultOnLogin(page, 'Nexus architecture')
@@ -206,6 +211,7 @@ test.describe('vault architecture modes', () => {
   test('disables providers that cannot satisfy shared replication', async ({
     page,
   }) => {
+    await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-shared').click()
     await openLoginProviderSetup(page)
 
@@ -235,6 +241,7 @@ test.describe('vault architecture modes', () => {
       fileName: SHARED_PROVIDER.fileName,
     })
 
+    await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-shared').click()
     await createLocalVaultOnLogin(page, 'Shared replication architecture')
     const sharedSecretKey = uniqueSecretKey('architecture-shared')
@@ -400,6 +407,7 @@ test.describe('vault architecture modes', () => {
       sharedPermissionStatus: 403,
     })
 
+    await page.getByTestId('replication-mode-select').click()
     await page.getByTestId('mode-option-shared').click()
     await createLocalVaultOnLogin(page, 'Manual shared grant architecture')
     await seedOauthFileSyncProvidersWhileUnlocked(
@@ -460,9 +468,11 @@ test.describe('vault architecture modes', () => {
         'mode-group-onboarding',
         'mode-group-provider-capability',
       ])
+      await page.getByTestId('vault-mode-select').click()
       await page.getByTestId('mode-option-nexus').click()
       await expect(page.getByTestId('nexus-readiness-gate')).toBeVisible()
 
+      await page.getByTestId('replication-mode-select').click()
       await page.getByTestId('mode-option-shared').click()
       await openLoginProviderSetup(page)
       await expect(page.getByTestId('provider-picker-list')).toBeVisible()

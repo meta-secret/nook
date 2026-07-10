@@ -88,6 +88,7 @@ test.describe('nexus unlock ceremony', () => {
         timeout: UI_TIMEOUT_MS,
       },
     )
+    await deviceA.getByTestId('vault-mode-select').click()
     await deviceA.getByTestId('mode-option-nexus').click()
     await expect(deviceA.getByTestId('nexus-readiness-gate')).toBeVisible()
     await createLocalVaultOnLogin(deviceA, 'Nexus ceremony vault')

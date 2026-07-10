@@ -2,6 +2,7 @@
   import { Cloud } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import DeviceModeSelect from '$lib/components/DeviceModeSelect.svelte'
+  import VaultArchitectureSelect from '$lib/components/VaultArchitectureSelect.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import { onboardingType } from '$lib/vault-architecture'
   import type { VaultState } from '$lib/vault.svelte'
@@ -21,8 +22,6 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  const vaultTypes = ['simple', 'nexus'] as const
-  const replicationTypes = ['personal', 'shared'] as const
   const draftOnboardingType = $derived(
     onboardingType(vault.draftVaultArchitecture),
   )
@@ -36,65 +35,18 @@
   <DeviceModeSelect {vault} id="vault-device-mode" disabled={isBusy} />
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <div class="space-y-2" data-testid="mode-group-vault">
-      <p class="text-sm font-semibold text-foreground">
-        {vault.t('architecture_modes.vault_type_title')}
-      </p>
-      {#each vaultTypes as mode (mode)}
-        <button
-          type="button"
-          class={[
-            'w-full rounded-md border p-3 text-left text-sm transition-colors',
-            vault.draftVaultType === mode
-              ? 'border-primary bg-primary/10 text-foreground'
-              : 'border-border/60 bg-background hover:bg-muted/40',
-          ]}
-          aria-pressed={vault.draftVaultType === mode}
-          data-testid={`mode-option-${mode}`}
-          disabled={isBusy}
-          onclick={() => {
-            vault.draftVaultType = mode
-          }}
-        >
-          <span class="block font-medium">
-            {vault.t(`architecture_modes.vault_type_${mode}_title`)}
-          </span>
-          <span class="mt-1 block text-xs text-muted-foreground">
-            {vault.t(`architecture_modes.vault_type_${mode}_description`)}
-          </span>
-        </button>
-      {/each}
-    </div>
-
-    <div class="space-y-2" data-testid="mode-group-replication">
-      <p class="text-sm font-semibold text-foreground">
-        {vault.t('architecture_modes.replication_type_title')}
-      </p>
-      {#each replicationTypes as mode (mode)}
-        <button
-          type="button"
-          class={[
-            'w-full rounded-md border p-3 text-left text-sm transition-colors',
-            vault.draftReplicationType === mode
-              ? 'border-primary bg-primary/10 text-foreground'
-              : 'border-border/60 bg-background hover:bg-muted/40',
-          ]}
-          aria-pressed={vault.draftReplicationType === mode}
-          data-testid={`mode-option-${mode}`}
-          disabled={isBusy}
-          onclick={() => {
-            vault.draftReplicationType = mode
-          }}
-        >
-          <span class="block font-medium">
-            {vault.t(`architecture_modes.replication_type_${mode}_title`)}
-          </span>
-          <span class="mt-1 block text-xs text-muted-foreground">
-            {vault.t(`architecture_modes.replication_type_${mode}_description`)}
-          </span>
-        </button>
-      {/each}
-    </div>
+    <VaultArchitectureSelect
+      {vault}
+      kind="vault"
+      id="vault-type"
+      disabled={isBusy}
+    />
+    <VaultArchitectureSelect
+      {vault}
+      kind="replication"
+      id="replication-type"
+      disabled={isBusy}
+    />
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
