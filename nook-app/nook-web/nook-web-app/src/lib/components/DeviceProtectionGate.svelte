@@ -36,6 +36,12 @@
   data-testid="device-protection-gate"
 >
   <CardHeader class="gap-2 text-center">
+    <p
+      class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
+      data-testid="device-protection-step"
+    >
+      {vault.t('device_protection.step_label')}
+    </p>
     <div
       class="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
     >
@@ -45,7 +51,9 @@
         <KeyRound class="size-6" />
       {/if}
     </div>
-    <CardTitle>{vault.t('device_protection.title')}</CardTitle>
+    <CardTitle data-testid="device-protection-title">
+      {vault.t('device_protection.title')}
+    </CardTitle>
     <CardDescription class="leading-snug">
       {#if vault.deviceProtectionStatus === 'plaintext'}
         {vault.t('device_protection.migration_description')}

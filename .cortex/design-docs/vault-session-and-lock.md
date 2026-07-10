@@ -66,6 +66,10 @@ After lock, the app first shows **`DeviceProtectionGate`**. Successful passkey
 authorization or PIN fallback restores the identity in WASM memory, then the app shows
 **`LoginGate`**:
 
+The gate presents itself as **Device setup — Step 1 of 2**, not as vault login.
+Its copy explains that it prepares or unlocks the browser's protected device
+identity and that vault selection, creation, or import follows in the next step.
+
 `DeviceProtectionGate` keeps passkey setup and recovery as mutually exclusive
 workflows. When no local passkey-protected device record exists, creating a new
 passkey is the primary form and using an existing discoverable passkey is a small

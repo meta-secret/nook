@@ -82,6 +82,12 @@ test.describe('passkey device-key protection', () => {
     })
     await page.goto('/')
 
+    await expect(page.getByTestId('device-protection-step')).toHaveText(
+      'Device setup · Step 1 of 2',
+    )
+    await expect(page.getByTestId('device-protection-title')).toHaveText(
+      'Prepare this browser',
+    )
     await expect(
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
@@ -136,6 +142,9 @@ test.describe('passkey device-key protection', () => {
     await createLocalVaultOnLogin(page, 'Passkey test vault')
     await page.getByTestId('header-lock-vault-btn').click()
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
+    await expect(page.getByTestId('device-protection-unlock-btn')).toHaveText(
+      'Continue with passkey',
+    )
     await expect(
       page.getByTestId('device-protection-create-new-choice'),
     ).toBeHidden()
