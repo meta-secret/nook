@@ -224,6 +224,9 @@ impl NexusPolicy {
         if self.threshold <= 1 || self.threshold > self.required_participants {
             return Err(ValidationError::InvalidNexusPolicy);
         }
+        if self.required_participants > 16 {
+            return Err(ValidationError::InvalidNexusPolicy);
+        }
         if self.ready_participants > self.required_participants {
             return Err(ValidationError::InvalidNexusPolicy);
         }
@@ -238,10 +241,17 @@ pub struct VaultArchitecture {
     pub device_mode: DeviceMode,
     #[serde(default)]
     pub vault_type: VaultType,
-    #[serde(default)]
+    /// Legacy read compatibility. New vault genesis does not select or derive
+    /// behavior from replication; providers are configured after creation.
+    #[serde(default, skip_serializing_if = "replication_is_legacy_default")]
     pub replication_type: ReplicationType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nexus: Option<NexusPolicy>,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T.
+fn replication_is_legacy_default(value: &ReplicationType) -> bool {
+    *value == ReplicationType::Personal
 }
 
 impl Default for VaultArchitecture {
@@ -355,7 +365,7 @@ impl VaultArchitecture {
                 if shares.len() != usize::from(policy.required_participants)
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
-                        share.version != 1
+                        !matches!(share.version, 1 | 2)
                             || share.threshold != policy.threshold
                             || share.required_participants != policy.required_participants
                             || share.share_index == 0
@@ -591,6 +601,20 @@ pub fn prepare_shared_storage_grant(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_architecture_omits_legacy_personal_replication_but_reads_it() {
+        let architecture = VaultArchitecture::simple_personal(DeviceMode::Standard);
+        let encoded = serde_json::to_value(&architecture).unwrap();
+        assert!(encoded.get("replication_type").is_none());
+        let decoded: VaultArchitecture = serde_json::from_value(serde_json::json!({
+            "device_mode": "standard",
+            "vault_type": "simple",
+            "replication_type": "personal"
+        }))
+        .unwrap();
+        assert_eq!(decoded, architecture);
+    }
 
     #[test]
     fn legacy_defaults_match_current_vault_behavior() {

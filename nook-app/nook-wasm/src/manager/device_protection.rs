@@ -26,6 +26,14 @@ impl NookVaultManager {
             .to_owned())
     }
 
+    /// Return the product device-protection mode persisted during device setup.
+    #[wasm_bindgen(js_name = deviceProtectionDeviceMode)]
+    pub async fn device_protection_device_mode(&self) -> Result<Option<String>, JsError> {
+        Ok(indexed_db::device_identity_device_mode()
+            .await?
+            .map(str::to_owned))
+    }
+
     #[wasm_bindgen(js_name = beginDeviceProtection)]
     pub async fn begin_device_protection(&mut self) -> Result<NookPasskeySetup, JsError> {
         if self.device.identity_private_key.is_empty()

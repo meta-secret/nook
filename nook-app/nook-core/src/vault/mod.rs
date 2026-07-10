@@ -13,6 +13,8 @@ pub(crate) mod vault_event_store;
 pub(crate) mod vault_format;
 pub(crate) mod vault_ids;
 pub(crate) mod vault_import;
+pub(crate) mod vault_nexus_genesis;
+pub(crate) mod vault_nexus_unlock;
 pub(crate) mod vault_projection;
 pub(crate) mod vault_session;
 pub(crate) mod vault_session_cache;

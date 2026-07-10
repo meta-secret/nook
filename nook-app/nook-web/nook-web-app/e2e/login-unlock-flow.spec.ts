@@ -6,6 +6,7 @@ import {
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectVaultPasswordStatus,
+  openLoginProviderSetup,
   openStorageSettings,
   selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
@@ -158,7 +159,7 @@ test.describe('login storage provider setup', () => {
     await clearBrowserVault(page)
     await page.reload()
 
-    await page.getByTestId('login-connect-storage-btn').click()
+    await openLoginProviderSetup(page)
     await expect(page.getByTestId('provider-picker-list')).toBeVisible()
     await expect(page.getByTestId('provider-option-local')).toHaveCount(0)
     await expect(page.getByTestId('provider-option-github')).toBeVisible()

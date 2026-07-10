@@ -91,7 +91,9 @@
 
   const hasProviders = $derived(providers.length > 0)
   const showSetup = $derived(setupType !== undefined)
-  const showVaultPicker = $derived(vault.showLoginVaultPicker)
+  const showVaultPicker = $derived(
+    vault.showLoginVaultPicker && !showProviderSetupLink,
+  )
   const showNexusCeremony = $derived(
     !vault.isAuthenticated &&
       (vault.nexusCeremonyPrompt ||
@@ -100,8 +102,10 @@
   )
   const showLocalUnlock = $derived(
     vault.localVaultPresent &&
+      vault.nexusGenesisStatus !== 'delivering' &&
       !showSetup &&
       !addProviderOpen &&
+      !showProviderSetupLink &&
       !showVaultPicker,
   )
   const activeLoginVault = $derived(
@@ -114,7 +118,7 @@
       undefined,
   )
   const showCreateVault = $derived(
-    !vault.localVaultPresent &&
+    (!vault.localVaultPresent || vault.nexusGenesisStatus === 'delivering') &&
       vault.localVaults.length === 0 &&
       !hasProviders &&
       !showSetup &&
@@ -322,6 +326,21 @@
             {isVerifying}
             {isInitializing}
             {onCreateDeviceVault}
+            onStartNexusGenesis={(args) => vault.startNexusGenesis(args)}
+            onAddNexusGenesisParticipantResponse={(payload) =>
+              vault.addNexusGenesisParticipantResponse(payload)}
+            onFinalizeNexusGenesis={() => vault.finalizeNexusGenesis()}
+            onCreateNexusGenesisParticipantResponse={(payload) =>
+              vault.createNexusGenesisParticipantResponse(payload)}
+            onReceiveNexusGenesisShare={(payload) =>
+              vault.acceptNexusGenesisShareDelivery(payload)}
+            onCompleteNexusGenesisDelivery={() =>
+              vault.completeNexusGenesisDelivery()}
+            nexusGenesisStatus={vault.nexusGenesisStatus}
+            nexusGenesisRequest={vault.nexusGenesisRequest}
+            nexusGenesisParticipantCount={vault.nexusGenesisParticipantCount}
+            nexusGenesisParticipants={vault.nexusGenesisParticipants}
+            nexusGenesisDeliveries={vault.nexusGenesisDeliveries}
             onConnectStorage={() => {
               showProviderSetupLink = true
             }}

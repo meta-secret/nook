@@ -35,13 +35,28 @@ export type ProviderReplicationCapability = {
 }
 
 export function defaultVaultArchitecture(): VaultArchitecture {
-  return wasmDefaultVaultArchitecture() as VaultArchitecture
+  return normalizeVaultArchitecture(
+    wasmDefaultVaultArchitecture() as Partial<VaultArchitecture>,
+  )
 }
 
 export function validateVaultArchitecture(
   architecture: VaultArchitecture,
 ): VaultArchitecture {
-  return wasmValidateVaultArchitecture(architecture) as VaultArchitecture
+  return normalizeVaultArchitecture(
+    wasmValidateVaultArchitecture(architecture) as Partial<VaultArchitecture>,
+  )
+}
+
+function normalizeVaultArchitecture(
+  architecture: Partial<VaultArchitecture>,
+): VaultArchitecture {
+  return {
+    device_mode: architecture.device_mode ?? 'standard',
+    vault_type: architecture.vault_type ?? 'simple',
+    replication_type: architecture.replication_type ?? 'personal',
+    nexus: architecture.nexus,
+  }
 }
 
 export function onboardingType(architecture: VaultArchitecture): string {

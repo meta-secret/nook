@@ -263,7 +263,7 @@
                         {localizeProviderLabel(provider.label, vault.t)}
                       </span>
                       <span
-                        class="block truncate font-mono text-[11px] text-muted-foreground"
+                        class="block truncate text-xs text-muted-foreground"
                       >
                         {providerStorageDetail(provider, vault.t)}
                       </span>

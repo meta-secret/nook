@@ -10,6 +10,29 @@ export type NexusUnlockStatus =
   | 'awaiting_shares'
   | 'ceremony_required'
 
+export type NexusUnlockSessionStatus = {
+  active: boolean
+  collected: number
+  threshold: number
+  ready: boolean
+}
+
+export type NexusStoredDeliverySummary = {
+  storeId: string
+  sessionId: string
+  policy: {
+    participantCount: number
+    threshold: number
+  }
+}
+
+const INACTIVE_SESSION: NexusUnlockSessionStatus = {
+  active: false,
+  collected: 0,
+  threshold: 0,
+  ready: false,
+}
+
 const CEREMONY_REQUIRED_MARKERS = [
   'opened-share ceremony',
   'NexusCeremonyRequired',
@@ -24,6 +47,17 @@ const PASSWORD_FORBIDDEN_MARKERS = [
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   return String(err ?? '')
+}
+
+function parseSessionStatus(raw: string): NexusUnlockSessionStatus {
+  const status = JSON.parse(raw) as Partial<NexusUnlockSessionStatus>
+  if (!status.active) return { ...INACTIVE_SESSION }
+  return {
+    active: true,
+    collected: Number(status.collected ?? 0),
+    threshold: Number(status.threshold ?? 0),
+    ready: Boolean(status.ready),
+  }
 }
 
 export function isNexusCeremonyRequiredError(err: unknown): boolean {
@@ -94,7 +128,6 @@ export async function refreshNexusUnlockStatus(
     status === 'not_nexus' &&
     state.vaultArchitecture.vault_type === 'nexus'
   ) {
-    // Manager session was reset after lock; keep ceremony UI until hydrate.
     state.nexusCeremonyPrompt = true
     state.nexusUnlockStatus = 'ceremony_required'
     return 'ceremony_required'
@@ -104,20 +137,16 @@ export async function refreshNexusUnlockStatus(
   return state.nexusUnlockStatus
 }
 
-/**
- * Run a connect attempt so WASM can load encrypted share meta without keys.
- * Ceremony-required is the expected outcome after lock/reload.
- */
+/** Hydrate encrypted Nexus metadata without attempting to bypass quorum. */
 export async function ensureNexusCeremonyHydrated(
   state: VaultState,
 ): Promise<void> {
   if (!state.manager || state.isAuthenticated || state.isVerifying) return
   try {
     await state.initDeviceIdentity()
-    // Pull remote events + materialize share meta without vault keys.
     await state.syncFromStorage({ force: true })
   } catch {
-    // Sync may fail closed for nexus without keys; openLocalNexusShare retries.
+    // A locked Nexus sync may fail closed until its local share is selected.
   }
   const status = await getNexusUnlockStatus(state)
   if (status === 'ceremony_required' || status === 'awaiting_shares') {
@@ -136,69 +165,101 @@ export async function ensureNexusCeremonyHydrated(
       state.refreshVaultArchitectureFromManager()
       state.nexusCeremonyPrompt = true
       state.loginPasswordPrompt = false
-      return
     }
-    // Ignore other connect failures here; openLocalNexusShare will surface them.
   }
 }
 
-export async function openLocalNexusShare(state: VaultState): Promise<string> {
-  if (!state.manager) {
-    throw new Error('Vault engine is not available.')
-  }
+export async function startNexusUnlock(state: VaultState): Promise<void> {
+  if (!state.manager || state.isVerifying) return
+  state.errorMsg = ''
   await ensureNexusCeremonyHydrated(state)
-  // Opened shares contain share bytes — treat like a recovery code: do not log.
-  const opened = await state.enqueueStorage(() =>
-    state.manager!.openLocalNexusShare(),
+  const rawStatus = await state.enqueueStorage(() =>
+    state.manager!.startNexusUnlock(),
   )
-  state.nexusLocalShareContribution = opened
-  return opened
+  state.nexusUnlockSession = parseSessionStatus(rawStatus)
+  state.nexusUnlockRequest = await state.enqueueStorage(() =>
+    state.manager!.nexusUnlockRequestJson(),
+  )
 }
 
-export async function unlockWithNexusShares(
+export async function addNexusUnlockResponse(
   state: VaultState,
-  contributions: string[],
+  response: string,
 ): Promise<void> {
-  if (!state.manager) {
-    state.errorMsg = 'Vault engine is not available.'
+  if (!state.manager || !response.trim()) return
+  const rawStatus = await state.enqueueStorage(() =>
+    state.manager!.addNexusUnlockResponse(response.trim()),
+  )
+  state.nexusUnlockSession = parseSessionStatus(rawStatus)
+}
+
+export async function refreshNexusUnlockSession(
+  state: VaultState,
+): Promise<void> {
+  if (!state.manager) return
+  const rawStatus = await state.enqueueStorage(() =>
+    state.manager!.nexusUnlockSessionStatusJson(),
+  )
+  state.nexusUnlockSession = parseSessionStatus(rawStatus)
+  if (state.nexusUnlockSession.active && !state.nexusUnlockRequest) {
+    state.nexusUnlockRequest = await state.enqueueStorage(() =>
+      state.manager!.nexusUnlockRequestJson(),
+    )
+  }
+}
+
+export async function listNexusStoredDeliveries(
+  state: VaultState,
+): Promise<NexusStoredDeliverySummary[]> {
+  if (!state.manager) return []
+  await state.initDeviceIdentity()
+  const raw = await state.enqueueStorage(() =>
+    state.manager!.listNexusGenesisShareDeliveries(),
+  )
+  const summaries = JSON.parse(raw) as NexusStoredDeliverySummary[]
+  state.nexusStoredDeliveries = summaries
+  return summaries
+}
+
+export async function createNexusUnlockResponse(
+  state: VaultState,
+  storeId: string,
+  request: string,
+): Promise<string> {
+  if (!state.manager) throw new Error('Vault engine is not available.')
+  if (!storeId.trim() || !request.trim()) return ''
+  await state.initDeviceIdentity()
+  return state.enqueueStorage(async () => {
+    await state.manager!.loadNexusGenesisShareDelivery(storeId.trim())
+    state.refreshVaultArchitectureFromManager()
+    return state.manager!.respondToNexusUnlockRequest(request.trim())
+  })
+}
+
+export async function finalizeNexusUnlock(state: VaultState): Promise<void> {
+  if (!state.manager || state.isVerifying || !state.nexusUnlockSession.ready) {
     return
   }
-  if (state.isVerifying) return
-
-  const opened = contributions
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
-  if (opened.length < 2) {
-    state.errorMsg = state.t('architecture_modes.nexus_ceremony_need_peers')
-    return
-  }
-
   state.errorMsg = ''
   state.dismissSuccess()
   state.isVerifying = true
   try {
-    await state.initDeviceIdentity()
-    const openedSharesJson = JSON.stringify(
-      opened.map((raw) => JSON.parse(raw)),
-    )
-    const connectArgs = state.connectStorageArgs()
     const rawRecords = (await state.enqueueStorage(() =>
-      state.manager!.connectWithNexusShares(...connectArgs, openedSharesJson),
+      state.manager!.finalizeNexusUnlock(),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
     state.nexusCeremonyPrompt = false
-    state.nexusLocalShareContribution = ''
-    state.nexusPeerShareContributions = ''
+    state.nexusUnlockRequest = ''
+    state.nexusUnlockSession = { ...INACTIVE_SESSION }
     state.nexusUnlockStatus = 'unlocked'
     await state.ensureProviderSaved()
     await state.loadProviders()
     await state.refreshPasswordEntriesList()
     void state.hydrateMultiDeviceState()
     state.markVaultUnlocked()
-    log.info('vault unlocked with nexus shares', {
+    log.info('vault unlocked with nexus quorum', {
       mode: state.storageMode,
       secrets: rawRecords.length,
-      contributions: opened.length,
     })
     state.joinEnrollmentPrompt = 'none'
     state.loginPasswordPrompt = false
@@ -214,7 +275,7 @@ export async function unlockWithNexusShares(
     state.errorMsg =
       e instanceof Error
         ? state.resolveErrorMessage(e.message)
-        : 'Failed to unlock with nexus shares.'
+        : state.t('architecture_modes.nexus_unlock_failed')
   } finally {
     state.isVerifying = false
   }

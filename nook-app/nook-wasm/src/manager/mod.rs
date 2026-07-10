@@ -201,6 +201,16 @@ pub struct NookVaultManager {
     pub(in crate::manager) device: DeviceSessionState,
     pub(in crate::manager) status: StatusChannel,
     pub(in crate::manager) event_log: EventLogSessionState,
+    /// Public-only, pre-vault Nexus reverse-onboarding state. Draft ceremonies
+    /// deliberately live only in memory: they have no store id and must never
+    /// be mistaken for a persisted vault.
+    pub(in crate::manager) nexus_genesis: Option<nook_core::NexusGenesisSession>,
+    /// Exact request this device answered as a Nexus participant. A returned
+    /// share delivery must bind to this request before it may be persisted.
+    pub(in crate::manager) pending_nexus_genesis_request: Option<nook_core::NexusGenesisRequest>,
+    /// Opaque, session-bound quorum unlock state. It contains encrypted records
+    /// and signed ciphertext responses, never plaintext SLIP-0039 mnemonics.
+    pub(in crate::manager) nexus_unlock: Option<nook_core::NexusUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
 }
@@ -211,6 +221,9 @@ impl Drop for NookVaultManager {
         self.vault.reset();
         self.device.identity_private_key.zeroize();
         self.event_log.reset();
+        self.nexus_genesis = None;
+        self.pending_nexus_genesis_request = None;
+        self.nexus_unlock = None;
         self.sync_outbox.reset();
     }
 }
@@ -225,6 +238,9 @@ impl NookVaultManager {
             device: DeviceSessionState::default(),
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
+            nexus_genesis: None,
+            pending_nexus_genesis_request: None,
+            nexus_unlock: None,
             sync_outbox: SyncOutboxState::default(),
         }
     }
@@ -328,6 +344,9 @@ impl NookVaultManager {
         self.storage.github_root_empty = false;
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
+        self.nexus_genesis = None;
+        self.pending_nexus_genesis_request = None;
+        self.nexus_unlock = None;
         self.sync_outbox.reset();
     }
 }

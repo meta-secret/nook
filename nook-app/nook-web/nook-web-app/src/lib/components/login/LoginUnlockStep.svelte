@@ -4,6 +4,7 @@
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
+  import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
   import NexusCeremonyPanel from '$lib/components/login/NexusCeremonyPanel.svelte'
   import type {
     NookLocalVaultEntry,
@@ -45,6 +46,7 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
+  let workflow = $state<'open' | 'create' | 'import'>('open')
   const showNexusCeremony = $derived(
     vault.nexusCeremonyPrompt ||
       vault.nexusUnlockStatus === 'ceremony_required' ||
@@ -55,104 +57,108 @@
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
-  {#if vaultEntry}
-    <section class="space-y-2" data-testid="login-vault-context">
-      <h3
-        class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
-      >
-        {vault.t('login.vault_on_device')}
-      </h3>
-      <LoginVaultCard {vault} entry={vaultEntry} active />
-      {#if hasMultipleVaults && onSwitchVault}
-        <button
-          type="button"
-          class="text-sm font-medium text-primary underline-offset-4 hover:underline"
-          data-testid="login-switch-vault-btn"
-          disabled={isBusy}
-          onclick={() => onSwitchVault()}
-        >
-          {vault.t('login.switch_vault')}
-        </button>
-      {/if}
-    </section>
-  {/if}
+  <LoginVaultWorkflowNav
+    {vault}
+    active={workflow}
+    onSelect={(selected) => (workflow = selected)}
+  />
 
-  {#if showNexusCeremony}
-    <NexusCeremonyPanel {vault} {isVerifying} {isInitializing} />
-  {:else}
-    <section
-      class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-      data-testid="login-unlock-section"
-    >
-      <div class="space-y-1">
-        <h3 class="text-sm font-semibold text-foreground">
-          {vault.t('login.unlock_section_title')}
-        </h3>
-        <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.unlock_section_description')}
-        </p>
-      </div>
-
-      <LoginAuthorizationStep
-        {vault}
-        {passwordEntries}
-        bind:selectedPasswordEntryId
-        {isVerifying}
-        {isInitializing}
-        {isUnlocking}
-        loginPasswordPrompt={vault.loginPasswordPrompt}
-        onConsumeLoginPasswordPrompt={() => {
-          vault.loginPasswordPrompt = false
-        }}
-        {onUnlock}
-        onUnlockWithPassword={hidePasswordUnlock
-          ? undefined
-          : onUnlockWithPassword}
-      />
-    </section>
-  {/if}
-
-  {#if onCreateAnotherVault || onImportFromSync}
-    <section
-      class="space-y-3 border-t border-border/60 pt-5"
-      data-testid="login-vault-other-actions"
-    >
-      <div class="space-y-1">
+  {#if workflow === 'open'}
+    {#if vaultEntry}
+      <section class="space-y-2" data-testid="login-vault-context">
         <h3
           class="text-xs font-medium tracking-wide text-muted-foreground uppercase"
         >
-          {vault.t('login.other_vaults_heading')}
+          {vault.t('login.vault_on_device')}
+        </h3>
+        <LoginVaultCard {vault} entry={vaultEntry} active />
+        {#if hasMultipleVaults && onSwitchVault}
+          <button
+            type="button"
+            class="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            data-testid="login-switch-vault-btn"
+            disabled={isBusy}
+            onclick={() => onSwitchVault()}
+          >
+            {vault.t('login.switch_vault')}
+          </button>
+        {/if}
+      </section>
+    {/if}
+
+    {#if showNexusCeremony}
+      <NexusCeremonyPanel {vault} {isVerifying} {isInitializing} />
+    {:else}
+      <section
+        class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
+        data-testid="login-unlock-section"
+      >
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-foreground">
+            {vault.t('login.unlock_section_title')}
+          </h3>
+          <p class="text-sm text-pretty text-muted-foreground">
+            {vault.t('login.unlock_section_description')}
+          </p>
+        </div>
+
+        <LoginAuthorizationStep
+          {vault}
+          {passwordEntries}
+          bind:selectedPasswordEntryId
+          {isVerifying}
+          {isInitializing}
+          {isUnlocking}
+          loginPasswordPrompt={vault.loginPasswordPrompt}
+          onConsumeLoginPasswordPrompt={() => {
+            vault.loginPasswordPrompt = false
+          }}
+          {onUnlock}
+          onUnlockWithPassword={hidePasswordUnlock
+            ? undefined
+            : onUnlockWithPassword}
+        />
+      </section>
+    {/if}
+  {:else if workflow === 'create' && onCreateAnotherVault}
+    <section class="space-y-3" data-testid="login-vault-create-workflow">
+      <div class="space-y-1">
+        <h3 class="text-sm font-semibold text-foreground">
+          {vault.t('login.vault_picker_create_new')}
         </h3>
         <p class="text-sm text-pretty text-muted-foreground">
-          {vault.t('login.other_vaults_description')}
+          {vault.t('login.vault_workflow_create_description')}
         </p>
       </div>
-
-      <div class="space-y-3">
-        {#if onCreateAnotherVault}
-          <LoginVaultNameForm
-            {vault}
-            {isVerifying}
-            {isInitializing}
-            testId="login-create-additional-vault-btn"
-            submitLabel={vault.t('login.vault_picker_create_new')}
-            onCreate={onCreateAnotherVault}
-          />
-        {/if}
-        {#if onImportFromSync}
-          <Button
-            type="button"
-            variant="outline"
-            class="sm:min-w-[180px]"
-            data-testid="login-import-vault-btn"
-            disabled={isBusy}
-            onclick={onImportFromSync}
-          >
-            <ShieldCheck class="size-4" />
-            {vault.t('login.vault_picker_import')}
-          </Button>
-        {/if}
+      <LoginVaultNameForm
+        {vault}
+        {isVerifying}
+        {isInitializing}
+        testId="login-create-additional-vault-btn"
+        submitLabel={vault.t('login.vault_picker_create_new')}
+        onCreate={onCreateAnotherVault}
+      />
+    </section>
+  {:else if workflow === 'import' && onImportFromSync}
+    <section class="space-y-3" data-testid="login-vault-import-workflow">
+      <div class="space-y-1">
+        <h3 class="text-sm font-semibold text-foreground">
+          {vault.t('login.vault_picker_import')}
+        </h3>
+        <p class="text-sm text-pretty text-muted-foreground">
+          {vault.t('login.vault_workflow_import_description')}
+        </p>
       </div>
+      <Button
+        type="button"
+        class="sm:min-w-[180px]"
+        data-testid="login-import-vault-btn"
+        disabled={isBusy}
+        onclick={onImportFromSync}
+      >
+        <ShieldCheck class="size-4" />
+        {vault.t('login.vault_picker_import')}
+      </Button>
     </section>
   {/if}
 </div>
