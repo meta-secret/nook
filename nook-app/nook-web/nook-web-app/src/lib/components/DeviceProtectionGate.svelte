@@ -188,12 +188,14 @@
             <div class="h-px flex-1 bg-border"></div>
           </div>
           <Button
-            class="mx-auto flex h-auto px-2 text-xs"
-            variant="link"
+            class="mx-auto flex"
+            variant="outline"
+            size="sm"
             disabled={vault.isVerifying}
             data-testid="device-protection-use-existing-choice"
             onclick={() => (setupWorkflow = 'existing')}
           >
+            <KeyRound class="size-4" />
             {vault.t('device_protection.existing_passkey_alternative_action')}
           </Button>
         </div>
