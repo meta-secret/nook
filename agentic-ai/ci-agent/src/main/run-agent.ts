@@ -43,7 +43,10 @@ export async function runFixAgent(config: CiAgentConfig, prompt: string): Promis
 
     const result = await waitWithHeartbeat("Agent", () => run.wait(), waitOptions);
     if (result.status === "error") {
-      throw new Error(`Cursor agent run failed (run id ${result.id})`);
+      const detail = result.error?.message?.trim();
+      throw new Error(
+        `Cursor agent run failed (run id ${result.id})${detail ? `: ${detail}` : ""}`,
+      );
     }
     if (result.status === "cancelled") {
       throw new Error(`Cursor agent run cancelled (run id ${result.id})`);
