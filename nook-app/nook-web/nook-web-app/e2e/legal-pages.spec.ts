@@ -53,11 +53,11 @@ test.describe('legal pages', () => {
       name: 'Nook',
       url: 'https://nokey.sh/',
     })
-    await expect(page.locator('a.button.primary')).toHaveAttribute(
+    await expect(page.getByTestId('hero-cta-primary')).toHaveAttribute(
       'href',
       '/app/',
     )
-    await expect(page.locator('a.button.secondary')).toHaveAttribute(
+    await expect(page.getByTestId('hero-cta-secondary')).toHaveAttribute(
       'href',
       '#architecture',
     )

@@ -53,6 +53,7 @@ jobs:
         env:
           REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           RELEASE_EVENT: ${{ github.event_name }}
+          SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
           set -euo pipefail
 
@@ -100,7 +101,7 @@ jobs:
             echo "- Version: \`$version\`"
             echo "- Tag: \`$tag\`"
             echo "- Commit: \`$sha\`"
-            echo "- Source: \`${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}\`"
+            echo "- Source: \`$SOURCE_REF\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Docker setup
