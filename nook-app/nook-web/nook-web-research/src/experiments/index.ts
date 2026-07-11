@@ -3,6 +3,7 @@ import AccessChoreography from './vault/access-choreography/Experiment.svelte'
 import BlackMonolith from './vault/black-monolith/Experiment.svelte'
 import CipherLedger from './vault/cipher-ledger/Experiment.svelte'
 import CredentialAirlock from './vault/credential-airlock/Experiment.svelte'
+import DistributedVaultPairing from './vault/distributed-vault-pairing/Experiment.svelte'
 import EvidenceRoom from './vault/evidence-room/Experiment.svelte'
 import KintsugiRecovery from './vault/kintsugi-recovery/Experiment.svelte'
 import NexusCardStack from './vault/nexus-card-stack/Experiment.svelte'
@@ -31,7 +32,7 @@ export interface ExperimentCategory {
 
 export interface ExperimentSubcategory {
   categorySlug: string
-  slug: 'v1' | 'v2' | 'v3'
+  slug: 'v1' | 'v2' | 'v3' | 'v4'
   title: string
   description: string
 }
@@ -67,12 +68,20 @@ export const subcategories: ExperimentSubcategory[] = [
     description:
       'Evidence Room, Kintsugi Recovery, Access Choreography, and the new wallet-inspired Nexus Card Stack.',
   },
+  {
+    categorySlug: 'vault',
+    slug: 'v4',
+    title: 'V4 · Reference studies',
+    description:
+      "External interaction and visual references translated into Nook's Nexus genesis model.",
+  },
 ]
 
 const vault = categories[0]
 const v1 = subcategories[0]
 const v2 = subcategories[1]
 const v3 = subcategories[2]
+const v4 = subcategories[3]
 
 export const experiments: Experiment[] = [
   {
@@ -164,5 +173,14 @@ export const experiments: Experiment[] = [
     description:
       'A dark wallet-inspired control surface where participant keys become a selectable cryptographic card stack.',
     component: NexusCardStack,
+  },
+  {
+    slug: 'distributed-vault-pairing',
+    category: vault,
+    subcategory: v4,
+    title: 'Distributed vault pairing',
+    description:
+      'A restrained dark operations console for K-of-N policy and participant public-key onboarding.',
+    component: DistributedVaultPairing,
   },
 ]
