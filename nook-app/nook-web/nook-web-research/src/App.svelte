@@ -149,7 +149,7 @@
                           onclick={() => navigate(`/experiments/${item.slug}`)}
                         >
                           Open experiment
-                          <ArrowRight />
+                          <ArrowRight aria-hidden="true" />
                         </Button>
                       </CardFooter>
                     </Card>
