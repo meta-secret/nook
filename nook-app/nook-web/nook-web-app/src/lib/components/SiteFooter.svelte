@@ -7,7 +7,7 @@
   data-testid="site-footer"
 >
   <a
-    href={appPath('/about.html')}
+    href={appPath('/')}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-about-link"
   >

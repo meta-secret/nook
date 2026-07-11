@@ -36,7 +36,7 @@ test.describe('remote vault recovery (local-first sync)', () => {
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
     await installSyncRemote(vaultPage, target)
-    await vaultPage.goto('/')
+    await vaultPage.goto('/app/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
     await connectLocalVault(vaultPage)

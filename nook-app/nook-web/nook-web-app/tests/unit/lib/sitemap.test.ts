@@ -10,7 +10,7 @@ import {
 describe('sitemap', () => {
   test('lists public about and legal pages', () => {
     const paths = PUBLIC_SITEMAP_ENTRIES.map((entry) => entry.path)
-    expect(paths).toEqual(['/about.html', '/privacy.html', '/terms.html'])
+    expect(paths).toEqual(['/', '/privacy.html', '/terms.html'])
   })
 
   test('buildSitemapXml emits valid loc tags for nokey.sh', () => {
@@ -18,7 +18,7 @@ describe('sitemap', () => {
       'https://nokey.sh',
       new Date('2026-06-28T12:00:00Z'),
     )
-    expect(xml).toContain('<loc>https://nokey.sh/about.html</loc>')
+    expect(xml).toContain('<loc>https://nokey.sh/</loc>')
     expect(xml).toContain('<loc>https://nokey.sh/privacy.html</loc>')
     expect(xml).toContain('<loc>https://nokey.sh/terms.html</loc>')
     expect(xml).toContain('<lastmod>2026-06-28</lastmod>')
@@ -30,13 +30,14 @@ describe('sitemap', () => {
     )
   })
 
-  test('buildRobotsTxt keeps app root out of crawler entry points', () => {
+  test('buildRobotsTxt indexes the landing page but excludes the app', () => {
     const robots = buildRobotsTxt('https://nokey.sh')
+    expect(robots).toContain('Allow: /$')
     expect(robots).toContain('Allow: /about.html')
     expect(robots).toContain('Allow: /privacy.html')
     expect(robots).toContain('Allow: /terms.html')
     expect(robots).toContain('Allow: /assets/')
-    expect(robots).toContain('Disallow: /')
+    expect(robots).toContain('Disallow: /app/')
   })
 
   test('siteUrlFromEnv prefers VITE_SITE_URL', () => {

@@ -127,7 +127,7 @@ test.describe('vault password envelope with sync provider', () => {
     expect(enrollmentYaml.trim().length).toBeGreaterThan(0)
     await installSyncRemote(deviceB, target)
 
-    await deviceB.goto('/')
+    await deviceB.goto('/app/')
     await expect(deviceB.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })

@@ -12,7 +12,7 @@ import {
 
 test.describe('BIP39 seed phrase grid', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await mockBip39Wordlist(page)
     await clearBrowserVault(page)
     await page.reload()

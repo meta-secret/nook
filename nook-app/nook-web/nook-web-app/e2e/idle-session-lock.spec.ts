@@ -16,7 +16,7 @@ const IDLE_LOCK_MS = Number(process.env.VITE_VAULT_IDLE_TIMEOUT_MS ?? '2500')
 
 test.describe('idle session auto-lock', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVaultLegacy(page)

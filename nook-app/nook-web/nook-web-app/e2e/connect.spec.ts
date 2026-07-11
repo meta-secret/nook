@@ -14,7 +14,7 @@ test.describe('vault connect flow', () => {
   test('creates local vault with device keys and opens vault', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await createLocalVaultOnLogin(page)
@@ -58,7 +58,7 @@ test.describe('vault connect flow', () => {
   test('github setup keeps sync step locked until token is entered', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
 
     await openLoginProviderSetup(page)
     await page.getByTestId('provider-option-github').click()
@@ -70,7 +70,7 @@ test.describe('vault connect flow', () => {
   test('keeps creation and import as separate first-vault workflows', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
@@ -105,7 +105,7 @@ test.describe('vault connect flow', () => {
   })
 
   test('shows login gate on first visit', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -117,7 +117,7 @@ test.describe('vault connect flow', () => {
   })
 
   test('opens help page from header', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('help-open-btn')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -154,7 +154,7 @@ test.describe('vault connect flow', () => {
   test('add provider from storage settings while connected', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -182,7 +182,7 @@ test.describe('vault connect flow', () => {
   test('returns to vault login after passkey authorization on reload', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -205,7 +205,7 @@ test.describe('vault connect flow', () => {
   test('stays locked after reload when user locked the vault', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
@@ -232,7 +232,7 @@ test.describe('vault connect flow', () => {
   test('removes a saved sync provider from vault settings', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,

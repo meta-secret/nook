@@ -53,7 +53,7 @@ test.describe('sync conflict resolution', () => {
   test('blocks secret edits while an event-log security conflict is present', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -83,7 +83,7 @@ test.describe('sync conflict resolution', () => {
     const stub = createLocalE2eFileSyncVaultStub('', fileName)
     await stub.install(page, { fileName })
 
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page, 'test')
     await disableVaultIdleLock(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({

@@ -5,17 +5,22 @@ import {
 
 const ENROLLMENT_HASH_PREFIX = '#enroll='
 
-/** App root used in QR links (`origin` + Vite `BASE_URL`, or `VITE_PUBLIC_APP_URL`). */
+function appRootUrl(siteRoot: string): string {
+  const normalized = siteRoot.replace(/\/$/, '')
+  return normalized.endsWith('/app') ? `${normalized}/` : `${normalized}/app/`
+}
+
+/** Vault app root used in QR links (`/app/` below the public site root). */
 export function getEnrollmentLinkBase(): string {
   if (typeof window === 'undefined') {
     return ''
   }
   const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim()
   if (configured) {
-    return configured.replace(/\/$/, '')
+    return appRootUrl(configured)
   }
   const basePath = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
-  return `${window.location.origin}${basePath}`
+  return appRootUrl(`${window.location.origin}${basePath}`)
 }
 
 /** Deep link scanned from a QR code — opens the browser and carries the raw code in the hash. */

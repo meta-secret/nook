@@ -80,7 +80,7 @@ test.describe('passkey device-key protection', () => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('device-protection-step')).toHaveText(
       'Device setup · Step 1 of 2',
@@ -123,7 +123,7 @@ test.describe('passkey device-key protection', () => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('device-protection-gate')).toBeVisible()
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
@@ -170,7 +170,7 @@ test.describe('passkey device-key protection', () => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.goto('/')
+    await page.goto('/app/')
 
     await page.getByTestId('device-mode-select').click()
     await page.getByRole('option', { name: 'High security' }).click()
@@ -202,7 +202,7 @@ test.describe('passkey device-key protection', () => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.goto('/')
+    await page.goto('/app/')
 
     await expect(page.getByTestId('device-protection-gate')).toBeVisible()
     await clickDeviceProtectionSetup(page)
@@ -230,7 +230,7 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
       localStorage.setItem('nook_e2e_passkey_mode', 'unsupported')
     })
-    await page.goto('/')
+    await page.goto('/app/')
     await clickDeviceProtectionSetup(page)
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
@@ -276,7 +276,7 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
       localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
     })
-    await page.goto('/')
+    await page.goto('/app/')
     await clickDeviceProtectionSetup(page)
 
     await expect(page.getByTestId('device-protection-error')).toBeVisible()
@@ -289,7 +289,7 @@ test.describe('passkey device-key protection', () => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.goto('/')
+    await page.goto('/app/')
     await clickDeviceProtectionSetup(page)
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await createLocalVaultOnLogin(page, 'Recovery test vault')

@@ -239,7 +239,7 @@ test.describe('local folder backup provider', () => {
   }) => {
     await installPasskeyMock(page)
     await installUnsupportedLocalFolderPickerMock(page)
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
@@ -260,7 +260,7 @@ test.describe('local folder backup provider', () => {
   }) => {
     await installPasskeyMock(page)
     await installLocalFolderPickerMock(page)
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
@@ -320,7 +320,7 @@ test.describe('local folder backup provider', () => {
   }) => {
     await installPasskeyMock(page)
     await installLocalFolderPickerMock(page)
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
@@ -413,7 +413,7 @@ test.describe('local folder backup provider', () => {
   }) => {
     await installPasskeyMock(page)
     await installLocalFolderPickerMock(page)
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)

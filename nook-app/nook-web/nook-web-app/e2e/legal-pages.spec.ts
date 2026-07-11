@@ -19,12 +19,12 @@ test.describe('legal pages', () => {
     await expect(page.locator('h1')).toHaveText('Privacy Policy')
   })
 
-  test('shows footer links on the home page', async ({ page }) => {
-    await page.goto('/')
+  test('shows public links in the vault app footer', async ({ page }) => {
+    await page.goto('/app/')
     await expect(page.getByTestId('product-intro')).toBeVisible()
     await expect(page.getByTestId('footer-about-link')).toHaveAttribute(
       'href',
-      '/about.html',
+      '/',
     )
     await expect(page.getByTestId('footer-privacy-link')).toHaveAttribute(
       'href',
@@ -34,6 +34,16 @@ test.describe('legal pages', () => {
       'href',
       '/terms.html',
     )
+  })
+
+  test('serves the public landing page at the site root', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
+    await expect(page.locator('a.button.primary')).toHaveAttribute(
+      'href',
+      '/app/',
+    )
+    await expect(page.locator('#app')).toHaveCount(0)
   })
 
   test('serves static public about page without the app bundle', async ({

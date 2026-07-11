@@ -38,7 +38,7 @@ async function wipeDeviceIdentity(page: import('@playwright/test').Page) {
 
 test.describe('login unlock flow (local-first)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVaultLegacy(page)
@@ -155,7 +155,7 @@ test.describe('login storage provider setup', () => {
   test('hides local device from sync provider picker on create-vault screen', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
 

@@ -27,7 +27,7 @@ test.describe('unified vault backup passwords with sync provider', () => {
     page,
   }) => {
     await installSyncRemote(page, target)
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)

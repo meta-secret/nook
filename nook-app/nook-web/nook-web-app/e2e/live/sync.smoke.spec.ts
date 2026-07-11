@@ -46,7 +46,7 @@ describeLive(`live ${providerDef.label} sync smoke`, () => {
 
     vaultPage = await browser.newPage()
     await installPasskeyMock(vaultPage)
-    await vaultPage.goto('/')
+    await vaultPage.goto('/app/')
     await clearBrowserVault(vaultPage)
     await vaultPage.reload()
     await connectSyncVault(vaultPage, target)

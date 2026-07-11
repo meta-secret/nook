@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vitest/config'
 import { copyFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { PreviewServer, ViteDevServer } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import {
@@ -12,13 +13,45 @@ import {
 const viteBase =
   typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
 
-/** GitHub Pages (and similar) need 404.html = index.html for client-side routes. */
+const APP_SPA_PATHS = new Set([
+  '/app-logs',
+  '/extension-connect',
+  '/logs',
+  '/privacy',
+  '/terms',
+])
+
+function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
+  server.middlewares.use((request, _response, next) => {
+    const requestUrl = request.url
+    if (!requestUrl) {
+      next()
+      return
+    }
+
+    const suffixIndex = requestUrl.search(/[?#]/)
+    const pathname =
+      suffixIndex === -1 ? requestUrl : requestUrl.slice(0, suffixIndex)
+    const suffix = suffixIndex === -1 ? '' : requestUrl.slice(suffixIndex)
+    const normalizedPath = pathname.replace(/\/$/, '') || '/'
+
+    if (APP_SPA_PATHS.has(normalizedPath)) {
+      request.url = `/app/index.html${suffix}`
+    }
+    next()
+  })
+}
+
+/** Keep the public landing alias and route SPA fallbacks into the vault app. */
 function spaFallback(): Plugin {
   return {
     name: 'spa-fallback',
+    configureServer: routeSpaRequestsToApp,
+    configurePreviewServer: routeSpaRequestsToApp,
     writeBundle() {
       const outDir = join(process.cwd(), 'dist')
-      copyFileSync(join(outDir, 'index.html'), join(outDir, '404.html'))
+      copyFileSync(join(outDir, 'app/index.html'), join(outDir, '404.html'))
+      copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
     },
   }
 }
@@ -40,6 +73,14 @@ function seoStaticFiles(): Plugin {
 export default defineConfig({
   base: viteBase ?? '/',
   plugins: [tailwindcss(), svelte(), spaFallback(), seoStaticFiles()],
+  build: {
+    rollupOptions: {
+      input: {
+        landing: join(process.cwd(), 'index.html'),
+        app: join(process.cwd(), 'app/index.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       $lib: new URL('./src/lib', import.meta.url).pathname,

@@ -126,7 +126,7 @@ test.describe('multi-vault on one browser profile', () => {
   test('creates two vaults, switches between them, and keeps sync providers scoped', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 

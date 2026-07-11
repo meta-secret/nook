@@ -7,7 +7,7 @@ import {
 
 test.describe('authenticated shell height', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)

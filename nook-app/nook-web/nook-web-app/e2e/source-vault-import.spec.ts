@@ -113,7 +113,7 @@ test.describe('source vault import to event log', () => {
   test('re-import on unlock preserves backup and activates event log', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
 
     const yaml = await readLocalVaultYamlFromIdb(page)

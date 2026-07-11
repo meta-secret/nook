@@ -8,7 +8,7 @@ import {
 
 test.describe('sync provider settings', () => {
   test('shows sync now for a saved local sync provider', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
