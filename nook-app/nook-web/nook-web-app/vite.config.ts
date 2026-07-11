@@ -21,6 +21,7 @@ const APP_SPA_PATHS = new Set([
   '/terms',
 ])
 const NOT_FOUND_PATHS = new Set(['/schema.xml'])
+const APP_SHELL_ALIASES = ['app-logs', 'extension-connect', 'logs']
 
 function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
   server.middlewares.use((request, response, next) => {
@@ -58,7 +59,11 @@ function spaFallback(): Plugin {
     configurePreviewServer: routeSpaRequestsToApp,
     writeBundle() {
       const outDir = join(process.cwd(), 'dist')
-      copyFileSync(join(outDir, 'app/index.html'), join(outDir, '404.html'))
+      const appShell = join(outDir, 'app/index.html')
+      copyFileSync(appShell, join(outDir, '404.html'))
+      for (const alias of APP_SHELL_ALIASES) {
+        copyFileSync(appShell, join(outDir, `${alias}.html`))
+      }
       copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
     },
   }

@@ -1,5 +1,0 @@
-/app               /app/             301
-/app/*             /app/index.html   200
-/app-logs          /app/index.html   200
-/extension-connect /app/index.html   200
-/logs              /app/index.html   200
