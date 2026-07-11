@@ -129,13 +129,17 @@
                   {#each subcategoryExperiments as item, index (item.slug)}
                     <Card class="gap-3 py-4">
                       <CardHeader class="gap-1 px-4">
-                        <p class="text-muted-foreground font-mono text-xs">
-                          {subcategory.slug} / {String(index + 1).padStart(
-                            3,
-                            '0',
-                          )}
-                        </p>
-                        <CardTitle class="mt-2 text-xl">{item.title}</CardTitle>
+                        <CardTitle class="text-xl">
+                          {item.title}
+                          <span
+                            class="text-muted-foreground whitespace-nowrap font-mono text-xs font-normal"
+                          >
+                            [{subcategory.slug} / {String(index + 1).padStart(
+                              3,
+                              '0',
+                            )}]
+                          </span>
+                        </CardTitle>
                         <CardDescription>{item.description}</CardDescription>
                       </CardHeader>
                       <CardFooter class="mt-auto px-4">
