@@ -135,12 +135,7 @@
                             '0',
                           )}
                         </p>
-                        <p
-                          class="text-primary mt-1 font-mono text-[10px] font-bold tracking-[0.12em] uppercase"
-                        >
-                          {category.title} concept
-                        </p>
-                        <CardTitle class="mt-4 text-xl">{item.title}</CardTitle>
+                        <CardTitle class="mt-2 text-xl">{item.title}</CardTitle>
                         <CardDescription>{item.description}</CardDescription>
                       </CardHeader>
                       <CardFooter class="mt-auto px-4">
