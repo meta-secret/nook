@@ -163,11 +163,16 @@
           </p>
           <ol class="mt-5 space-y-3 text-sm">
             <li>{name ? '✓' : '○'} Name recorded</li>
-            <li>{threshold <= total ? '✓' : '○'} Policy valid</li>
+            <li>
+              {threshold >= 2 && threshold <= total ? '✓' : '○'} Policy valid
+            </li>
             <li>{keys === total ? '✓' : '○'} All N keys verified</li>
           </ol>
           <button
-            disabled={!name.trim() || threshold > total || keys !== total}
+            disabled={!name.trim() ||
+              threshold > total ||
+              threshold < 2 ||
+              keys !== total}
             class="mt-8 flex w-full items-center justify-center gap-2 bg-black py-4 font-bold text-white disabled:opacity-30"
             onclick={() => (sealed = true)}
             ><Check />

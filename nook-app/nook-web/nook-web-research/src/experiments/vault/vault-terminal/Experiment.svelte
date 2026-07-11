@@ -372,6 +372,7 @@
               <div class="flex flex-wrap items-center justify-between gap-4">
                 <p class="text-[#83e273]">Setup complete.</p>
                 <button
+                  bind:this={choiceElement}
                   class="border border-[#4f7a46] px-5 py-3 text-xs"
                   onclick={restart}>Create another Nexus</button
                 >

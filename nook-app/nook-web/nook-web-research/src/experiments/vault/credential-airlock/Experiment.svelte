@@ -120,6 +120,7 @@
               max="5"
               value={total}
               onchange={changeTotal}
+              disabled={chamber !== 2}
               class="mt-2 block w-full bg-transparent text-4xl font-bold outline-none"
             /></label
           >
@@ -129,6 +130,7 @@
               min="2"
               max={total}
               bind:value={threshold}
+              disabled={chamber !== 2}
               class="mt-2 block w-full bg-transparent text-4xl font-bold outline-none"
             /></label
           >

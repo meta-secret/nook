@@ -107,14 +107,9 @@
               )}
               <section aria-labelledby={`subcategory-${subcategory.slug}`}>
                 <div class="mb-4 border-t pt-4">
-                  <p
-                    class="text-primary font-mono text-xs font-bold tracking-[0.16em] uppercase"
-                  >
-                    {subcategory.slug}
-                  </p>
                   <h3
                     id={`subcategory-${subcategory.slug}`}
-                    class="mt-1 text-lg font-semibold tracking-tight"
+                    class="text-lg font-semibold tracking-tight"
                   >
                     {subcategory.title}
                   </h3>

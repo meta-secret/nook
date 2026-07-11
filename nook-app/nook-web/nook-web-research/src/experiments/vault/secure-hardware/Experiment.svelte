@@ -46,7 +46,9 @@
   }
 
   function changeTotal(event: Event) {
-    total = Number((event.currentTarget as HTMLInputElement).value)
+    const next = Number((event.currentTarget as HTMLInputElement).value)
+    if (!Number.isFinite(next) || next < 2) return
+    total = next
     threshold = Math.min(threshold, total)
     participants = []
     finalized = false

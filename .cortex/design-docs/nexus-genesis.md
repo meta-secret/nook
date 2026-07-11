@@ -117,8 +117,9 @@ share through a typed response QR/link/paste payload. The provider-free delivery
 catalog binds the genesis session, store, policy, participant device and public
 key, encrypted share, and initiator signing key. Each entry is signed by the
 initiator and addressed to the exact participant identity collected in Round 1.
-When Round 1 used an optional initiator request, delivery also verifies that
-request binding. Each participant can decrypt and protect only its own share.
+Delivery acceptance verifies the session, policy, and initiator signing key
+against the expected Round 1 request. Each participant can decrypt and protect
+only its own share.
 This second direction is cryptographically required: collecting public keys
 alone does not deliver the newly generated shares back to their owners.
 
