@@ -92,7 +92,7 @@
       .protocol-tag,
       .status,
       .eyebrow,
-      .capsule-label,
+      .capsule-principles,
       .system-label,
       .card-code {
         font-family:
@@ -153,7 +153,7 @@
       }
 
       .eyebrow,
-      .capsule-label {
+      .capsule-principles {
         color: var(--muted-text);
         font-size: 11px;
         letter-spacing: 0.21em;
@@ -311,9 +311,30 @@
         bottom: 33%;
       }
 
-      .capsule-label {
+      .capsule-principles {
         position: absolute;
-        bottom: 7%;
+        bottom: 6%;
+        display: flex;
+        width: min(76%, 560px);
+        justify-content: space-between;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .capsule-principles li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .capsule-principles li::before {
+        width: 5px;
+        height: 5px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #727a83;
+        content: '';
       }
 
       .manifest {
@@ -468,6 +489,17 @@
           font-size: 7px;
         }
 
+        .capsule-principles {
+          bottom: 2%;
+          width: 94%;
+          font-size: 8px;
+          letter-spacing: 0.15em;
+        }
+
+        .capsule-principles li {
+          gap: 6px;
+        }
+
         .manifest {
           padding: 80px 0;
         }
@@ -571,9 +603,10 @@
                 <img src="/nook-logo-dark.png" alt="Nook" />
               </div>
             </div>
-            <p class="capsule-label">
-              Encrypted storage. Distributed authority.
-            </p>
+            <ul class="capsule-principles" aria-label="Nook principles">
+              <li>Encrypted storage</li>
+              <li>Distributed authority</li>
+            </ul>
           </div>
         </section>
 

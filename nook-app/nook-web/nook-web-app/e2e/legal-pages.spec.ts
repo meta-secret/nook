@@ -46,9 +46,12 @@ test.describe('legal pages', () => {
     )
     await expect(page.locator('body')).toContainText('X25519_DEVICE_IDENTITY')
     await expect(page.locator('body')).toContainText('ENCRYPTED_MESH')
-    await expect(page.locator('body')).toContainText(
-      'Encrypted storage. Distributed authority.',
-    )
+    await expect(
+      page.getByText('Encrypted storage', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByText('Distributed authority', { exact: true }),
+    ).toBeVisible()
     await expect(page.locator('#app')).toHaveCount(0)
   })
 
