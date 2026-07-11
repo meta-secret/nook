@@ -220,9 +220,13 @@ After targeted fixes pass and the iteration is ready for final validation, push/
 
 [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) runs daily on
 the self-hosted `nook` runner label and can also be triggered manually. It runs
-`docker system prune --force --volumes` to reclaim unused containers, networks,
-build cache, dangling images, and anonymous volumes without touching the Docker
-daemon itself.
+`docker system prune --all --force --volumes` to reclaim unused containers,
+networks, build cache, tagged and dangling images, and anonymous volumes without
+touching the Docker daemon itself. `--all` is required because the default prune
+only removes dangling images while `docker system df` includes tagged images
+that no container uses in its reclaimable estimate. That estimate can exceed
+the image-store total because shared image layers are counted for each image; it
+is not a physical-byte reclamation guarantee.
 
 ### CI verification — always check app logs
 
