@@ -1,0 +1,25 @@
+# Nook web research
+
+Small, disposable UI experiments for Nook, built with Svelte 5, Vite,
+Tailwind CSS, and shadcn-svelte components.
+
+This app is intentionally isolated from the production Nook app. It has no
+WASM, Docker, backend, or production-code imports.
+
+## Run it
+
+```bash
+cd nook-app/nook-web/nook-web-research
+bun install
+bun run dev
+```
+
+## Add an experiment
+
+1. Create `src/experiments/<experiment-name>/Experiment.svelte`.
+2. Keep experiment-specific components and assets in that directory.
+3. Add its metadata and component to `src/experiments/index.ts`.
+
+The catalog at `/` discovers experiments through that registry. Each experiment
+gets its own `/experiments/<experiment-name>` page and can freely explore a
+different layout or visual direction.
