@@ -40,12 +40,15 @@ test.describe('legal pages', () => {
     page,
   }) => {
     await page.goto('/about.html')
-    await expect(page.locator('h1')).toHaveText('Sealed by you.Held by no one.')
+    await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
     await expect(page.locator('body')).toContainText(
       'client-side password and secrets manager',
     )
     await expect(page.locator('body')).toContainText('X25519_DEVICE_IDENTITY')
     await expect(page.locator('body')).toContainText('ENCRYPTED_MESH')
+    await expect(page.locator('body')).toContainText(
+      'Encrypted storage. Distributed authority.',
+    )
     await expect(page.locator('#app')).toHaveCount(0)
   })
 
