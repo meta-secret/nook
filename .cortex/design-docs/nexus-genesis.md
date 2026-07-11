@@ -25,10 +25,11 @@ Get started asks for one mutually exclusive intent:
   openable vault, generate a usable vault session, or configure a sync provider
   yet. The initiator chooses `N`/`T`, waits for every participant public key,
   then atomically creates the empty vault.
-- **Join Nexus:** a non-initiator device pastes the initiator request and
-  generates a signed response QR. That QR is the primary join outcome. After
-  genesis, receiving the encrypted share is a secondary step; later browser
-  onboarding into an existing vault uses the standard Onboard QR + sync
+- **Join Nexus:** a non-initiator device generates a standalone signed
+  public-key announcement and gives it to the vault owner. An initiator request
+  is optional and reserved for flows that need an explicit session binding.
+  After genesis, receiving the encrypted share is a secondary step; later
+  browser onboarding into an existing vault uses the standard Onboard QR + sync
   provider flow.
 
 `replication_type` is not a vault architecture choice and must not appear in
@@ -58,16 +59,19 @@ or vault key to another device.
 
 ### Round 1: collect participant public keys
 
-1. Device A starts Nexus setup and chooses `N` and `T`.
-2. WASM creates a typed genesis session identifier and a public request
-   QR/link/paste payload. This is a pairing request, not a vault onboarding
-   link.
-3. Device B scans the request after completing its own device initialization.
-4. Device B displays a signed response QR containing its participant identity,
-   public encryption key, public signing key, session binding, and a human
-   verification fingerprint.
-5. Device A scans the response, verifies it in Rust/WASM, rejects duplicates,
-   and adds the participant to the pending roster.
+1. Device A names an in-memory Nexus genesis draft, then chooses `N` and `T`.
+2. Each participant device independently creates a standalone signed public-key
+   announcement after completing its own device initialization. The announcement
+   contains its participant identity, public encryption key, public signing key,
+   label, signature, and a human-verification fingerprint.
+3. The participant gives that announcement to Device A through QR, link, or
+   paste. No initiator request is required for this primary path.
+4. Device A imports the announcement into the active genesis session, verifies
+   it in Rust/WASM, rejects duplicates, and adds the participant to the pending
+   roster.
+5. An optional initiator request and session-bound response may be used when a
+   transport needs explicit request/response correlation; it is not a
+   prerequisite for collecting a participant public key.
 6. Repeat until all configured `N` participant public keys are present,
    including Device A's own public keys.
 
@@ -112,11 +116,11 @@ Without a sync provider, Device A returns each participant's encrypted member
 share through a typed response QR/link/paste payload. The provider-free delivery
 catalog binds the genesis session, store, policy, participant device and public
 key, encrypted share, and initiator signing key. Each entry is signed by the
-initiator. A participant accepts it only against the exact Round 1 request and
-only when it is addressed to that participant's device identity. Each
-participant can decrypt and protect only its own share. This second direction
-is cryptographically required: collecting public keys alone does not deliver
-the newly generated shares back to their owners.
+initiator and addressed to the exact participant identity collected in Round 1.
+When Round 1 used an optional initiator request, delivery also verifies that
+request binding. Each participant can decrypt and protect only its own share.
+This second direction is cryptographically required: collecting public keys
+alone does not deliver the newly generated shares back to their owners.
 
 A provider configured later may transport the public roster and encrypted share
 records as part of normal encrypted vault replication, but provider access is

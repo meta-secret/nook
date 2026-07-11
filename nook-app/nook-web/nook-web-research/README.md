@@ -16,7 +16,7 @@ bun run dev
 
 ## Add an experiment
 
-1. Create `src/experiments/<experiment-name>/Experiment.svelte`.
+1. Create `src/experiments/<category>/<experiment-name>/Experiment.svelte`.
 2. Keep experiment-specific components and assets in that directory.
 3. Add its metadata and component to `src/experiments/index.ts`.
 

@@ -33,10 +33,10 @@ Nexus join have different lifecycles. Sync-provider import remains a secondary
 | Device protection gate | Device mode | Initialize or authorize this browser's protected device identity once. Never ask again during vault creation. |
 | Get started chooser | Path | Choose exactly one: Create Simple, Create Nexus, or Join Nexus. |
 | Create Simple | Vault name/action | Create an empty local vault in memory and open it with this device's normal key access. Offer sync later in Settings. |
-| Create Nexus | Nexus policy | Choose participant count `N` and unlock threshold `T`; start reverse onboarding instead of creating/opening a vault. |
-| Create Nexus waiting | Participant public keys | Gather the configured roster through signed QR/link/paste responses. No provider is required. |
+| Create Nexus | Name, then Nexus policy | Name an in-memory genesis draft, then choose participant count `N` and unlock threshold `T`; do not create/open a vault yet. |
+| Create Nexus waiting | Participant public keys | Gather standalone signed public-key announcements through QR/link/paste. An initiator request and provider are not required. |
 | Nexus atomic genesis | Encrypted shares | Generate the Nexus root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically. |
-| Join Nexus | Participant response QR | Paste the initiator request and generate this device's signed response QR. Share delivery is a secondary post-genesis step on the same path. |
+| Join Nexus | Public-key announcement | Generate this device's standalone signed public-key announcement and give it to the vault owner. Share delivery is a secondary post-genesis step. |
 | Nexus open | Quorum contributions | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM. |
 | Import | Detected vault type | Fetch from a provider, then route Simple to its unlock/enrollment path or Nexus to quorum access. Provider login never opens Nexus. |
 | Unlocked provider management / Onboard | Sync provider | Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists. |
