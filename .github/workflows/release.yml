@@ -1,0 +1,170 @@
+# Deploy an immutable semantic-version tag to the stable production site.
+
+name: Release production
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version to release (for example 1.2.0 or v1.2.0-rc.1)"
+        required: true
+        type: string
+      ref:
+        description: "Branch, tag, or commit to release"
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  packages: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+env:
+  CI_RELEASE_URL: https://nokey.sh
+  CI_RELEASE_VITE_BASE: /
+  CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS: "500"
+
+jobs:
+  deploy:
+    name: Verify and deploy production
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve and validate release
+        id: release
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          RELEASE_EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          version="${REQUESTED_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "Expected a semantic version such as 1.2.0 or 1.2.0-rc.1; received: $REQUESTED_VERSION" >&2
+            exit 1
+          fi
+
+          tag="v$version"
+          sha="$(git rev-parse HEAD)"
+          git fetch --force --tags origin
+
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            tagged_sha="$(git rev-parse "refs/tags/$tag^{commit}")"
+            if [[ "$tagged_sha" != "$sha" ]]; then
+              echo "$tag already points to $tagged_sha and cannot be moved to $sha" >&2
+              exit 1
+            fi
+          elif [[ "$RELEASE_EVENT" == "workflow_dispatch" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag --annotate "$tag" "$sha" --message "Nook $tag"
+            git push origin "refs/tags/$tag"
+          else
+            echo "Tag-triggered release could not resolve refs/tags/$tag" >&2
+            exit 1
+          fi
+
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
+
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "sha=$sha"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Production release"
+            echo
+            echo "- Version: \`$version\`"
+            echo "- Tag: \`$tag\`"
+            echo "- Commit: \`$sha\`"
+            echo "- Source: \`${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check, build, and e2e
+        run: task ci:main VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
+        env:
+          CI: true
+          VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
+
+      - name: Build stable Pages artifact
+        run: task setup VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }} VITE_SITE_URL=${{ env.CI_RELEASE_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod
+        env:
+          CI: true
+
+      - name: Extract dist from nook-web image
+        run: task docker:extract:dist
+
+      - name: Add release metadata
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          jq --null-input \
+            --arg version "$RELEASE_VERSION" \
+            --arg tag "$RELEASE_TAG" \
+            --arg commit "$RELEASE_SHA" \
+            --arg released_at "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" \
+            '{version: $version, tag: $tag, commit: $commit, released_at: $released_at}' \
+            > nook-app/nook-web/nook-web-app/dist/release.json
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: nook-app/nook-web/nook-web-app/dist
+
+      - name: Deploy stable to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $RELEASE_TAG already exists; leaving it unchanged."
+            exit 0
+          fi
+
+          release_flags=(--verify-tag --target "$RELEASE_SHA" --title "$RELEASE_TAG" --generate-notes)
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            release_flags+=(--prerelease)
+          else
+            release_flags+=(--latest)
+          fi
+          gh release create "$RELEASE_TAG" "${release_flags[@]}"

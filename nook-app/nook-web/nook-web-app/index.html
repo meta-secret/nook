@@ -10,7 +10,7 @@
     />
     <link rel="canonical" href="https://nokey.sh/" />
     <title>Nook — Keys, not accounts</title>
-    <script type="application/ld+json">
+    <script id="structured-data" type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "WebApplication",
@@ -80,6 +80,7 @@
 
       .brand,
       nav,
+      .header-controls,
       .status,
       footer,
       .footer-links {
@@ -130,6 +131,43 @@
 
       nav a {
         text-underline-offset: 4px;
+      }
+
+      .header-controls {
+        gap: 16px;
+      }
+
+      .locale-switch {
+        display: flex;
+        gap: 2px;
+        border: 1px solid #cdd0d3;
+        border-radius: 999px;
+        padding: 3px;
+      }
+
+      .locale-switch button {
+        min-width: 31px;
+        border: 0;
+        border-radius: 999px;
+        padding: 5px 7px 4px;
+        background: transparent;
+        color: var(--muted-text);
+        cursor: pointer;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', monospace;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+      }
+
+      .locale-switch button[aria-pressed='true'] {
+        background: #1b1d1f;
+        color: white;
+      }
+
+      .locale-switch button:focus-visible {
+        outline: 2px solid #5d6872;
+        outline-offset: 2px;
       }
 
       .status {
@@ -299,45 +337,154 @@
 
       .system-label {
         position: absolute;
+        top: var(--signal-y, 50%);
+        left: var(--signal-x, 50%);
         z-index: 2;
-        padding: 6px 9px;
-        background: rgb(244 245 246 / 0.85);
-        color: var(--muted-text);
+        max-width: min(250px, 42vw);
+        border: 1px solid rgb(164 181 193 / 0.3);
+        border-radius: 999px;
+        padding: 7px 11px 6px 23px;
+        background: rgb(20 23 25 / 0.88);
+        box-shadow:
+          0 10px 28px rgb(16 18 20 / 0.14),
+          inset 0 1px 0 rgb(255 255 255 / 0.08);
+        color: #dbe2e7;
+        cursor: help;
         font-size: 9px;
         letter-spacing: 0.13em;
-        backdrop-filter: blur(5px);
+        text-align: left;
+        white-space: nowrap;
+        backdrop-filter: blur(9px);
+        opacity: 1;
+        transform: translate(var(--signal-shift-x, -50%), -50%);
+        transition:
+          opacity 420ms ease,
+          filter 420ms ease,
+          color 180ms ease,
+          background 180ms ease,
+          border-color 180ms ease;
+        animation: signal-float var(--signal-duration, 9s) ease-in-out
+          var(--signal-delay, 0s) infinite alternate;
+        will-change: transform, opacity;
       }
 
-      .label-top {
-        top: 17%;
-        right: 5%;
+      .system-label:hover,
+      .system-label:focus-visible {
+        z-index: 5;
+        border-color: rgb(125 204 167 / 0.65);
+        background: rgb(28 33 36 / 0.96);
+        color: white;
+        animation-play-state: paused;
       }
 
-      .label-left {
-        bottom: 25%;
-        left: 1%;
+      .system-label:focus-visible {
+        outline: 2px solid rgb(74 155 116 / 0.35);
+        outline-offset: 3px;
       }
 
-      .label-right {
+      .system-label::before {
+        position: absolute;
+        top: 50%;
+        left: 10px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #72c39a;
+        box-shadow: 0 0 0 4px rgb(114 195 154 / 0.1);
+        content: '';
+        transform: translateY(-50%);
+      }
+
+      .system-label.is-changing {
+        filter: blur(4px);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .system-label::after {
+        position: absolute;
+        z-index: 4;
+        width: 260px;
+        max-width: calc(100vw - 40px);
+        border: 1px solid #30353a;
+        border-radius: 12px;
+        padding: 13px 14px;
+        background: #16191c;
+        box-shadow: 0 18px 44px rgb(16 18 20 / 0.2);
+        color: #eef1f3;
+        content: attr(data-detail);
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        font-weight: 450;
+        letter-spacing: 0;
+        line-height: 1.5;
+        opacity: 0;
+        pointer-events: none;
+        overflow-wrap: anywhere;
+        text-align: left;
+        text-transform: none;
+        white-space: normal;
+        transform: translateY(5px);
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      .system-label:hover::after,
+      .system-label:focus-visible::after {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .system-label[data-tooltip-y='below']::after {
+        top: calc(100% + 8px);
+      }
+
+      .system-label[data-tooltip-y='above']::after {
+        bottom: calc(100% + 8px);
+      }
+
+      .system-label[data-tooltip-x='left']::after {
+        left: 0;
+      }
+
+      .system-label[data-tooltip-x='center']::after {
+        left: 50%;
+        margin-left: -130px;
+      }
+
+      .system-label[data-tooltip-x='right']::after {
         right: 0;
-        bottom: 33%;
       }
 
       .capsule-principles {
         position: absolute;
-        bottom: 6%;
-        display: flex;
-        width: min(76%, 560px);
-        justify-content: space-between;
+        inset: 0;
         margin: 0;
         padding: 0;
         list-style: none;
+        pointer-events: none;
       }
 
       .capsule-principles li {
+        position: absolute;
+        top: var(--principle-y);
+        left: var(--principle-x);
         display: flex;
         align-items: center;
         gap: 10px;
+        white-space: nowrap;
+        transform: translate(-50%, -50%);
+      }
+
+      .capsule-principles li:first-child {
+        --principle-x: 34%;
+        --principle-y: 18%;
+      }
+
+      .capsule-principles li:last-child {
+        --principle-x: 68%;
+        --principle-y: 76%;
       }
 
       .capsule-principles li::before {
@@ -368,6 +515,143 @@
         font-weight: 350;
         letter-spacing: -0.06em;
         line-height: 0.98;
+      }
+
+      .crypto-inventory {
+        border-top: 1px solid #dfe1df;
+        padding: 110px 0 120px;
+      }
+
+      .inventory-heading {
+        display: grid;
+        grid-template-columns: 0.55fr 1.45fr;
+        gap: 48px;
+        margin-bottom: 62px;
+      }
+
+      .inventory-heading > div {
+        max-width: 900px;
+      }
+
+      .crypto-inventory h2 {
+        margin: 0;
+        font-size: clamp(40px, 5.4vw, 78px);
+        font-weight: 350;
+        letter-spacing: -0.06em;
+        line-height: 0.98;
+      }
+
+      .crypto-console {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+        gap: 1px;
+        overflow: hidden;
+        border: 1px solid #262b2f;
+        border-radius: 26px;
+        background: #30353a;
+        box-shadow: 0 34px 80px rgb(38 43 47 / 0.13);
+      }
+
+      .term-grid,
+      .protocol-readout {
+        background: #15181a;
+        color: #edf0f2;
+      }
+
+      .term-grid {
+        display: flex;
+        align-content: flex-start;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 34px;
+      }
+
+      .crypto-term {
+        border: 1px solid #383e43;
+        border-radius: 999px;
+        padding: 11px 14px 10px;
+        background: #1b1f22;
+        color: #adb5bc;
+        cursor: pointer;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        line-height: 1.25;
+        text-transform: uppercase;
+        transition:
+          border-color 150ms ease,
+          background 150ms ease,
+          color 150ms ease,
+          transform 150ms ease;
+      }
+
+      .crypto-term:hover,
+      .crypto-term:focus-visible,
+      .crypto-term.is-active {
+        border-color: #71808d;
+        background: #242a2e;
+        color: white;
+        transform: translateY(-1px);
+      }
+
+      .crypto-term.is-active {
+        box-shadow: inset 0 0 0 1px rgb(149 166 179 / 0.18);
+      }
+
+      .protocol-readout {
+        display: flex;
+        min-height: 430px;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 36px;
+      }
+
+      .readout-code,
+      .readout-meta {
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', monospace;
+        text-transform: uppercase;
+      }
+
+      .readout-code {
+        margin: 0;
+        color: #7f8991;
+        font-size: 10px;
+        letter-spacing: 0.17em;
+      }
+
+      .protocol-readout h3 {
+        margin: 74px 0 0;
+        font-size: clamp(25px, 3vw, 40px);
+        font-weight: 450;
+        letter-spacing: -0.045em;
+        line-height: 1.05;
+      }
+
+      .readout-detail {
+        margin: 20px 0 0;
+        color: #aeb6bc;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .readout-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 52px;
+        border-top: 1px solid #30353a;
+        padding-top: 18px;
+        color: #77818a;
+        font-size: 9px;
+        letter-spacing: 0.14em;
+      }
+
+      .readout-meta strong {
+        color: #a9d8c2;
+        font-weight: 600;
       }
 
       .systems {
@@ -430,6 +714,17 @@
         }
       }
 
+      @keyframes signal-float {
+        0% {
+          transform: translate(var(--signal-shift-x, -50%), -50%)
+            translate(0, 0);
+        }
+        100% {
+          transform: translate(var(--signal-shift-x, -50%), -50%)
+            translate(var(--signal-drift-x, 8px), var(--signal-drift-y, -8px));
+        }
+      }
+
       @media (max-width: 1040px) {
         nav {
           display: none;
@@ -441,7 +736,7 @@
         }
 
         .capsule-stage {
-          min-height: 610px;
+          min-height: 720px;
         }
 
         .systems {
@@ -472,7 +767,7 @@
         }
 
         .hero {
-          gap: 16px;
+          gap: 20px;
           min-height: auto;
           padding: 64px 0 34px;
         }
@@ -486,7 +781,7 @@
         }
 
         .capsule-stage {
-          min-height: 420px;
+          min-height: min(108vw, 640px);
         }
 
         .orbit {
@@ -502,8 +797,6 @@
         }
 
         .capsule-principles {
-          bottom: 2%;
-          width: 94%;
           font-size: 8px;
           letter-spacing: 0.15em;
         }
@@ -517,8 +810,17 @@
         }
 
         .manifest-heading,
+        .inventory-heading,
         .systems {
           grid-template-columns: 1fr;
+        }
+
+        .crypto-console {
+          grid-template-columns: 1fr;
+        }
+
+        .protocol-readout {
+          min-height: 340px;
         }
 
         .system-card,
@@ -534,6 +836,23 @@
 
         .system-card h3 {
           margin-top: 46px;
+        }
+
+        .crypto-inventory {
+          padding: 80px 0;
+        }
+
+        .inventory-heading {
+          gap: 24px;
+        }
+
+        .term-grid,
+        .protocol-readout {
+          padding: 24px;
+        }
+
+        .system-label::after {
+          width: min(220px, 72vw);
         }
 
         footer {
@@ -553,11 +872,22 @@
           animation: none;
         }
 
-        .button {
+        .system-label {
+          animation: none;
+        }
+
+        .button,
+        .crypto-term,
+        .system-label,
+        .system-label::after {
           transition: none;
         }
 
         .button:hover {
+          transform: none;
+        }
+
+        .crypto-term:hover {
           transform: none;
         }
       }
@@ -571,68 +901,135 @@
           <span>Nook</span>
           <span class="protocol-tag">LOCAL_FIRST</span>
         </a>
-        <nav aria-label="Public pages">
-          <a href="/app/">Open app</a>
-          <a href="#system">System</a>
-          <a href="/privacy.html">Privacy</a>
-          <a href="/terms.html">Terms</a>
-          <a href="https://github.com/meta-secret/nook">Source</a>
+        <nav aria-label="Public pages" data-i18n-aria-label="nav.label">
+          <a href="/app/" data-i18n="nav.open_app">Open app</a>
+          <a href="#architecture" data-i18n="nav.architecture">Architecture</a>
+          <a href="#cryptography" data-i18n="nav.cryptography">Cryptography</a>
+          <a href="/privacy.html" data-i18n="nav.privacy">Privacy</a>
+          <a href="/terms.html" data-i18n="nav.terms">Terms</a>
+          <a href="https://github.com/meta-secret/nook" data-i18n="nav.source"
+            >Source</a
+          >
         </nav>
-        <div class="status" aria-label="Nook architecture status">
-          <span class="status-dot"></span>
-          <span>Network</span>
-          <strong>ENCRYPTED_MESH</strong>
+        <div class="header-controls">
+          <div
+            class="locale-switch"
+            role="group"
+            aria-label="Page language"
+            data-i18n-aria-label="language.label"
+          >
+            <button
+              type="button"
+              lang="en"
+              data-locale="en"
+              aria-label="English"
+              aria-pressed="true"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              lang="ru"
+              data-locale="ru"
+              aria-label="Русский"
+              aria-pressed="false"
+            >
+              RU
+            </button>
+          </div>
+          <div class="status" aria-label="Nook architecture status">
+            <span class="status-dot"></span>
+            <span>Network</span>
+            <strong>ENCRYPTED_MESH</strong>
+          </div>
         </div>
       </header>
 
       <main>
         <section class="hero">
           <div>
-            <p class="eyebrow">Vault 01 / personal secret system</p>
-            <h1>Keys,<br />not accounts.</h1>
-            <p class="lead">
-              Nook is a client-side password and secrets manager. Your vault is
-              encrypted before it leaves the browser, replicated only through
-              storage you choose, and opened only by identities you authorize.
+            <p class="eyebrow" data-i18n="hero.eyebrow">
+              Vault 01 / personal secret system
+            </p>
+            <h1 data-i18n-html="hero.title">Keys,<br />not accounts.</h1>
+            <p class="lead" data-i18n="hero.lead">
+              Nook is a passwordless, local first, decentralized secrets
+              manager. Your vault is encrypted before it leaves the browser,
+              replicated only through storage you choose, and opened only by
+              identities you authorize.
             </p>
             <div class="actions">
-              <a class="button primary" href="/app/">Open Nook</a>
-              <a class="button secondary" href="#system">Inspect the system</a>
+              <a class="button primary" href="/app/" data-i18n="hero.open_nook"
+                >Open Nook</a
+              >
+              <a
+                class="button secondary"
+                href="#architecture"
+                data-i18n="hero.inspect_architecture"
+                >Inspect the architecture</a
+              >
             </div>
           </div>
 
           <div
             class="capsule-stage"
-            role="img"
+            role="group"
             aria-label="Encrypted Nook vault capsule protected by a device identity and immutable event log"
+            data-i18n-aria-label="capsule.label"
           >
             <div class="orbit" aria-hidden="true"></div>
-            <span class="system-label label-top">X25519_DEVICE_IDENTITY</span>
-            <span class="system-label label-left">AES_256_GCM · SEALED</span>
-            <span class="system-label label-right">EVENT_DAG · VERIFIED</span>
+            <button
+              class="system-label"
+              type="button"
+              data-detail="A device-specific X25519 identity opens only the cryptographic envelopes addressed to it."
+            >
+              X25519_DEVICE_IDENTITY
+            </button>
+            <button
+              class="system-label"
+              type="button"
+              data-detail="AES-256-GCM seals local identity material and authenticates its version-bound metadata."
+            >
+              AES_256_GCM · SEALED
+            </button>
+            <button
+              class="system-label"
+              type="button"
+              data-detail="Canonical, signed events converge through a content-addressed causal graph."
+            >
+              EVENT_DAG · VERIFIED
+            </button>
             <div class="capsule">
               <div class="core">
                 <img src="/nook-logo-dark.png" alt="Nook" />
               </div>
             </div>
-            <ul class="capsule-principles" aria-label="Nook principles">
+            <ul
+              class="capsule-principles"
+              aria-label="Nook principles"
+              data-i18n-aria-label="capsule.principles_label"
+            >
               <li>Encrypted storage</li>
               <li>Distributed authority</li>
             </ul>
           </div>
         </section>
 
-        <section class="manifest" id="system">
+        <section class="manifest" id="architecture">
           <div class="manifest-heading">
-            <p class="eyebrow">System manifest / 04 layers</p>
-            <h2>A vault architecture with no central keeper.</h2>
+            <p class="eyebrow" data-i18n="architecture.eyebrow">
+              Architecture manifest / 04 layers
+            </p>
+            <h2 data-i18n="architecture.title">
+              A vault architecture with no central keeper.
+            </h2>
           </div>
 
           <div class="systems">
             <article class="system-card">
               <span class="card-code">IDENTITY_ROOT / 01</span>
               <h3>Device identity</h3>
-              <p>
+              <p data-i18n="architecture.identity_detail">
                 Each authorized device holds its own protected X25519 identity.
                 Plaintext identity material exists only inside an unlocked
                 session.
@@ -641,7 +1038,7 @@
             <article class="system-card">
               <span class="card-code">KEY_ENVELOPE / 02</span>
               <h3>Sealed root keys</h3>
-              <p>
+              <p data-i18n="architecture.keys_detail">
                 Vault keys are wrapped into per-device cryptographic envelopes,
                 so authorized identities can unlock secrets without central
                 authority service.
@@ -650,7 +1047,7 @@
             <article class="system-card">
               <span class="card-code">ENCRYPTED_MESH / 03</span>
               <h3>Provider-neutral sync</h3>
-              <p>
+              <p data-i18n="architecture.sync_detail">
                 Optional providers transport encrypted vault events. They see
                 ciphertext and storage operations—not the secrets held inside.
               </p>
@@ -658,11 +1055,219 @@
             <article class="system-card">
               <span class="card-code">CAUSAL_DAG / 04</span>
               <h3>Immutable event log</h3>
-              <p>
+              <p data-i18n="architecture.log_detail">
                 Encrypted changes converge through a content-addressed event
                 history, preserving the order and integrity of your vault.
               </p>
             </article>
+          </div>
+        </section>
+
+        <section class="crypto-inventory" id="cryptography">
+          <div class="inventory-heading">
+            <p class="eyebrow">Cryptographic inventory / 17 primitives</p>
+            <div>
+              <h2 data-i18n="inventory.title">
+                For those who read the protocol.
+              </h2>
+            </div>
+          </div>
+
+          <div class="crypto-console">
+            <div
+              class="term-grid"
+              aria-label="Nook cryptographic primitives"
+              data-i18n-aria-label="inventory.grid_label"
+            >
+              <button
+                class="crypto-term is-active"
+                type="button"
+                aria-pressed="true"
+                data-code="SLIP_0039 · MNEMONIC"
+                data-i18n-detail="crypto.slip0039"
+                data-detail="Nook splits a 256-bit Nexus root into current-format, single-group SLIP-0039 mnemonic shares with checksums and recovery metadata."
+              >
+                SLIP-0039 mnemonic shares
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="SHAMIR_SECRET_SHARING"
+                data-i18n-detail="crypto.shamir"
+                data-detail="The threshold foundation: divide secret material into distinct shares so only a valid quorum can reconstruct it."
+              >
+                Shamir Secret Sharing
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="T_OF_N · THRESHOLD"
+                data-i18n-detail="crypto.threshold"
+                data-detail="A configurable T-of-N policy accepts any T distinct compatible shares from the enrolled N participants."
+              >
+                T-of-N threshold policy
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="HKDF_SHA256 · DERIVE"
+                data-i18n-detail="crypto.hkdf"
+                data-detail="Domain-separated HKDF-SHA256 expands existing secret material into independent keys for a specific Nook purpose."
+              >
+                HKDF-SHA256
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="WEBAUTHN_PRF"
+                data-i18n-detail="crypto.webauthn"
+                data-detail="A user-verifying passkey ceremony produces PRF output in the browser; Nook consumes it in Rust and never persists the output."
+              >
+                WebAuthn PRF
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="PASSKEY_DERIVED_ID"
+                data-i18n-detail="crypto.passkey_identity"
+                data-detail="Nook derives a deterministic age X25519 device identity from WebAuthn PRF output and the credential user handle."
+              >
+                Passkey-derived device identity
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="X25519 · DEVICE_ENVELOPE"
+                data-i18n-detail="crypto.x25519"
+                data-detail="Each device public key receives its own encrypted vault-key or recovery-share envelope; only the matching identity can open it."
+              >
+                X25519 device envelopes
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="ED25519 · SIGNED"
+                data-i18n-detail="crypto.ed25519"
+                data-detail="Ed25519 signs canonical vault-event bodies so peers can verify who authorized each immutable event."
+              >
+                Ed25519 event signatures
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="AES_256_GCM · AEAD"
+                data-i18n-detail="crypto.aes"
+                data-detail="AES-256-GCM protects local device-identity records while detecting ciphertext or authenticated-metadata modification."
+              >
+                AES-256-GCM authenticated encryption
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="PBKDF2_SHA256 · PIN_KDF"
+                data-i18n-detail="crypto.pbkdf2"
+                data-detail="The PIN fallback derives its local wrapping key with PBKDF2-SHA256 and stores the versioned parameters beside authenticated ciphertext."
+              >
+                PBKDF2-SHA256 key derivation
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="SCRYPT · PASSWORD_ENVELOPE"
+                data-i18n-detail="crypto.scrypt"
+                data-detail="Password access is represented by age scrypt envelopes that wrap high-entropy vault keys instead of encrypting every record directly."
+              >
+                scrypt password envelopes
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="KEY_EPOCH · ROTATED"
+                data-i18n-detail="crypto.epochs"
+                data-detail="Password rotation, password removal, and device revocation start new cryptographic epochs for future private event payloads."
+              >
+                Cryptographic key epochs
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="ZEROIZE · MEMORY"
+                data-i18n-detail="crypto.zeroize"
+                data-detail="Sensitive roots, shares, PRF output, private identities, vault keys, and tokens are explicitly cleared when their Rust-owned lifetime ends."
+              >
+                Zeroized key material
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="AEAD · METADATA_BOUND"
+                data-i18n-detail="crypto.aead"
+                data-detail="Authenticated associated data binds local envelopes to their format version and derivation parameters, not only to their ciphertext."
+              >
+                AEAD metadata binding
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="SHA256U · ADDRESSED"
+                data-i18n-detail="crypto.sha256"
+                data-detail="An event ID is the base64url SHA-256 digest of its canonical body, making immutable provider paths content-addressed."
+              >
+                SHA-256 content addressing
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="CAUSAL_DAG · VERIFIED"
+                data-i18n-detail="crypto.dag"
+                data-detail="Signed event parents form a causal DAG that lets replicas verify history, detect concurrency, and converge without a central sequencer."
+              >
+                Causal DAG verification
+              </button>
+              <button
+                class="crypto-term"
+                type="button"
+                aria-pressed="false"
+                data-code="AGE · ENCRYPTED"
+                data-i18n-detail="crypto.age"
+                data-detail="Nook uses the age format for X25519 recipient envelopes and scrypt-protected ciphertext while keeping the cryptographic operations in Rust."
+              >
+                age encryption
+              </button>
+            </div>
+
+            <aside class="protocol-readout" aria-live="polite">
+              <div>
+                <p class="readout-code">SLIP_0039 · MNEMONIC</p>
+                <h3 class="readout-title">SLIP-0039 mnemonic shares</h3>
+                <p class="readout-detail">
+                  Nook splits a 256-bit Nexus root into current-format,
+                  single-group SLIP-0039 mnemonic shares with checksums and
+                  recovery metadata.
+                </p>
+              </div>
+              <div class="readout-meta">
+                <span>Primitive status</span>
+                <strong data-i18n="inventory.implemented"
+                  >Implemented in Rust</strong
+                >
+              </div>
+            </aside>
           </div>
         </section>
       </main>
@@ -670,12 +1275,498 @@
       <footer>
         <span>CLIENT_SIDE_ENCRYPTION · NO_CENTRAL_ACCOUNT_SERVICE</span>
         <div class="footer-links">
-          <a href="/app/">Open Nook</a>
-          <a href="/privacy.html">Privacy</a>
-          <a href="/terms.html">Terms</a>
+          <a href="/app/" data-i18n="nav.open_nook">Open Nook</a>
+          <a href="/privacy.html" data-i18n="nav.privacy">Privacy</a>
+          <a href="/terms.html" data-i18n="nav.terms">Terms</a>
           <a href="https://github.com/meta-secret/nook">GitHub</a>
         </div>
       </footer>
     </div>
+    <script>
+      const landingMessages = {
+        en: {
+          'meta.title': 'Nook — Keys, not accounts',
+          'meta.description':
+            'Nook is an open-source, client-side password and secrets manager for encrypted vaults that stay under your control.',
+          'language.label': 'Page language',
+          'nav.label': 'Public pages',
+          'nav.open_app': 'Open app',
+          'nav.open_nook': 'Open Nook',
+          'nav.architecture': 'Architecture',
+          'nav.cryptography': 'Cryptography',
+          'nav.privacy': 'Privacy',
+          'nav.terms': 'Terms',
+          'nav.source': 'Source',
+          'hero.eyebrow': 'Vault 01 / personal secret system',
+          'hero.title': 'Keys,<br />not accounts.',
+          'hero.lead':
+            'Nook is a passwordless, local first, decentralized secrets manager. Your vault is encrypted before it leaves the browser, replicated only through storage you choose, and opened only by identities you authorize.',
+          'hero.open_nook': 'Open Nook',
+          'hero.inspect_architecture': 'Inspect the architecture',
+          'capsule.label':
+            'Encrypted Nook vault capsule protected by a device identity and immutable event log',
+          'capsule.principles_label': 'Nook principles',
+          'architecture.eyebrow': 'Architecture manifest / 04 layers',
+          'architecture.title': 'A vault architecture with no central keeper.',
+          'architecture.identity_detail':
+            'Each authorized device holds its own protected X25519 identity. Plaintext identity material exists only inside an unlocked session.',
+          'architecture.keys_detail':
+            'Vault keys are wrapped into per-device cryptographic envelopes, so authorized identities can unlock secrets without central authority service.',
+          'architecture.sync_detail':
+            'Optional providers transport encrypted vault events. They see ciphertext and storage operations—not the secrets held inside.',
+          'architecture.log_detail':
+            'Encrypted changes converge through a content-addressed event history, preserving the order and integrity of your vault.',
+          'inventory.title': 'For those who read the protocol.',
+          'inventory.grid_label': 'Nook cryptographic primitives',
+          'inventory.implemented': 'Implemented in Rust',
+          'crypto.slip0039':
+            'Nook splits a 256-bit Nexus root into current-format, single-group SLIP-0039 mnemonic shares with checksums and recovery metadata.',
+          'crypto.shamir':
+            'The threshold foundation: divide secret material into distinct shares so only a valid quorum can reconstruct it.',
+          'crypto.threshold':
+            'A configurable T-of-N policy accepts any T distinct compatible shares from the enrolled N participants.',
+          'crypto.hkdf':
+            'Domain-separated HKDF-SHA256 expands existing secret material into independent keys for a specific Nook purpose.',
+          'crypto.webauthn':
+            'A user-verifying passkey ceremony produces PRF output in the browser; Nook consumes it in Rust and never persists the output.',
+          'crypto.passkey_identity':
+            'Nook derives a deterministic age X25519 device identity from WebAuthn PRF output and the credential user handle.',
+          'crypto.x25519':
+            'Each device public key receives its own encrypted vault-key or recovery-share envelope; only the matching identity can open it.',
+          'crypto.ed25519':
+            'Ed25519 signs canonical vault-event bodies so peers can verify who authorized each immutable event.',
+          'crypto.aes':
+            'AES-256-GCM protects local device-identity records while detecting ciphertext or authenticated-metadata modification.',
+          'crypto.pbkdf2':
+            'The PIN fallback derives its local wrapping key with PBKDF2-SHA256 and stores the versioned parameters beside authenticated ciphertext.',
+          'crypto.scrypt':
+            'Password access is represented by age scrypt envelopes that wrap high-entropy vault keys instead of encrypting every record directly.',
+          'crypto.epochs':
+            'Password rotation, password removal, and device revocation start new cryptographic epochs for future private event payloads.',
+          'crypto.zeroize':
+            'Sensitive roots, shares, PRF output, private identities, vault keys, and tokens are explicitly cleared when their Rust-owned lifetime ends.',
+          'crypto.aead':
+            'Authenticated associated data binds local envelopes to their format version and derivation parameters, not only to their ciphertext.',
+          'crypto.sha256':
+            'An event ID is the base64url SHA-256 digest of its canonical body, making immutable provider paths content-addressed.',
+          'crypto.dag':
+            'Signed event parents form a causal DAG that lets replicas verify history, detect concurrency, and converge without a central sequencer.',
+          'crypto.age':
+            'Nook uses the age format for X25519 recipient envelopes and scrypt-protected ciphertext while keeping the cryptographic operations in Rust.',
+        },
+        ru: {
+          'meta.title': 'Nook — Ключи, не аккаунты',
+          'meta.description':
+            'Nook — open-source клиентский менеджер паролей и секретов: зашифрованный vault остаётся под вашим контролем.',
+          'language.label': 'Язык страницы',
+          'nav.label': 'Публичные страницы',
+          'nav.open_app': 'Открыть Nook',
+          'nav.open_nook': 'Открыть Nook',
+          'nav.architecture': 'Архитектура',
+          'nav.cryptography': 'Криптография',
+          'nav.privacy': 'Конфиденциальность',
+          'nav.terms': 'Условия',
+          'nav.source': 'Исходный код',
+          'hero.eyebrow': 'Vault 01 / система личных секретов',
+          'hero.title': 'Ключи,<br />не аккаунты.',
+          'hero.lead':
+            'Nook — passwordless, local-first, децентрализованный менеджер секретов. Ваш vault шифруется ещё в браузере, реплицируется только через выбранное вами хранилище и открывается лишь identities, которым вы дали доступ.',
+          'hero.open_nook': 'Открыть Nook',
+          'hero.inspect_architecture': 'Исследовать архитектуру',
+          'capsule.label':
+            'Зашифрованная капсула Nook, защищённая device identity и immutable event log',
+          'capsule.principles_label': 'Принципы Nook',
+          'architecture.eyebrow': 'Манифест архитектуры / 04 слоя',
+          'architecture.title': 'Архитектура vault без центрального хранителя.',
+          'architecture.identity_detail':
+            'Каждое авторизованное устройство хранит собственную защищённую X25519 identity. Identity material существует в plaintext только внутри разблокированной сессии.',
+          'architecture.keys_detail':
+            'Vault keys обёрнуты в отдельные cryptographic envelopes для каждого устройства, поэтому авторизованные identities открывают секреты без central authority service.',
+          'architecture.sync_detail':
+            'Опциональные providers переносят зашифрованные vault events. Они видят ciphertext и операции хранилища, но не секреты внутри.',
+          'architecture.log_detail':
+            'Зашифрованные изменения сходятся в content-addressed event history, сохраняя порядок и целостность вашего vault.',
+          'inventory.title': 'Для тех, кто читает протокол.',
+          'inventory.grid_label': 'Криптографические primitives Nook',
+          'inventory.implemented': 'Реализовано на Rust',
+          'crypto.slip0039':
+            'Nook разделяет 256-битный Nexus root на SLIP-0039 mnemonic shares актуального формата: одна группа, checksums и recovery metadata.',
+          'crypto.shamir':
+            'Shamir Secret Sharing лежит в основе threshold-схемы: секрет делится на отдельные shares, и восстановить его может только допустимый quorum.',
+          'crypto.threshold':
+            'Настраиваемая T-of-N policy принимает любые T разных совместимых shares от N зарегистрированных участников.',
+          'crypto.hkdf':
+            'Domain-separated HKDF-SHA256 разворачивает существующий secret material в независимые keys для конкретной задачи Nook.',
+          'crypto.webauthn':
+            'Passkey ceremony с user verification выдаёт WebAuthn PRF output в браузере; Nook обрабатывает его в Rust и никогда не сохраняет.',
+          'crypto.passkey_identity':
+            'Nook детерминированно выводит age X25519 device identity из WebAuthn PRF output и credential user handle.',
+          'crypto.x25519':
+            'Каждый device public key получает собственный зашифрованный vault-key или recovery-share envelope; открыть его может только соответствующая identity.',
+          'crypto.ed25519':
+            'Ed25519 подписывает canonical vault-event bodies, чтобы peers могли проверить автора каждого immutable event.',
+          'crypto.aes':
+            'AES-256-GCM защищает локальные device-identity records и обнаруживает изменение ciphertext или authenticated metadata.',
+          'crypto.pbkdf2':
+            'PIN fallback выводит локальный wrapping key через PBKDF2-SHA256 и хранит versioned parameters рядом с authenticated ciphertext.',
+          'crypto.scrypt':
+            'Password access представлен age scrypt envelopes, которые оборачивают high-entropy vault keys вместо прямого шифрования каждой записи.',
+          'crypto.epochs':
+            'Смена или удаление пароля и отзыв устройства начинают новые cryptographic key epochs для будущих private event payloads.',
+          'crypto.zeroize':
+            'Sensitive roots, shares, PRF output, private identities, vault keys и tokens явно обнуляются по завершении их lifetime, контролируемого Rust.',
+          'crypto.aead':
+            'Authenticated associated data привязывает локальные envelopes к version и derivation parameters, а не только к ciphertext.',
+          'crypto.sha256':
+            'Event ID — это base64url SHA-256 digest canonical body, благодаря чему immutable provider paths становятся content-addressed.',
+          'crypto.dag':
+            'Подписанные event parents образуют causal DAG: replicas проверяют историю, обнаруживают concurrency и сходятся без central sequencer.',
+          'crypto.age':
+            'Nook использует формат age для X25519 recipient envelopes и scrypt-protected ciphertext, сохраняя cryptographic operations внутри Rust.',
+        },
+      }
+
+      const cryptoTerms = Array.from(document.querySelectorAll('.crypto-term'))
+      const readoutCode = document.querySelector('.readout-code')
+      const readoutTitle = document.querySelector('.readout-title')
+      const readoutDetail = document.querySelector('.readout-detail')
+
+      function selectCryptoTerm(term) {
+        for (const candidate of cryptoTerms) {
+          const selected = candidate === term
+          candidate.classList.toggle('is-active', selected)
+          candidate.setAttribute('aria-pressed', String(selected))
+        }
+        readoutCode.textContent = term.dataset.code
+        readoutTitle.textContent = term.textContent.trim()
+        readoutDetail.textContent = term.dataset.detail
+      }
+
+      function resolveLandingLocale() {
+        try {
+          const savedLocale = localStorage.getItem('nook_locale')
+          if (savedLocale === 'en' || savedLocale === 'ru') return savedLocale
+        } catch {
+          // Browser storage may be unavailable in privacy-restricted contexts.
+        }
+
+        const browserLanguages = [
+          ...(navigator.languages ?? []),
+          navigator.language,
+        ]
+        for (const language of browserLanguages) {
+          const baseLanguage = language?.toLowerCase().split('-')[0]
+          if (baseLanguage === 'en' || baseLanguage === 'ru') {
+            return baseLanguage
+          }
+        }
+        return 'en'
+      }
+
+      function applyLandingLocale(locale, persist = false) {
+        const messages = landingMessages[locale]
+        document.documentElement.lang = locale
+        document.title = messages['meta.title']
+        document
+          .querySelector('meta[name="description"]')
+          .setAttribute('content', messages['meta.description'])
+
+        for (const element of document.querySelectorAll('[data-i18n]')) {
+          element.textContent = messages[element.dataset.i18n]
+        }
+        for (const element of document.querySelectorAll('[data-i18n-html]')) {
+          element.innerHTML = messages[element.dataset.i18nHtml]
+        }
+        for (const element of document.querySelectorAll(
+          '[data-i18n-aria-label]',
+        )) {
+          element.setAttribute(
+            'aria-label',
+            messages[element.dataset.i18nAriaLabel],
+          )
+        }
+        for (const term of cryptoTerms) {
+          term.dataset.detail = messages[term.dataset.i18nDetail]
+        }
+        for (const button of document.querySelectorAll('[data-locale]')) {
+          button.setAttribute(
+            'aria-pressed',
+            String(button.dataset.locale === locale),
+          )
+        }
+        for (const label of document.querySelectorAll('.system-label')) {
+          if (label.dataset.termIndex === undefined) continue
+          const term = cryptoTerms[Number(label.dataset.termIndex)]
+          label.dataset.detail = term.dataset.detail
+          label.setAttribute(
+            'aria-label',
+            `${term.textContent.trim()}: ${term.dataset.detail}`,
+          )
+        }
+
+        const activeTerm = cryptoTerms.find((term) =>
+          term.classList.contains('is-active'),
+        )
+        if (activeTerm) selectCryptoTerm(activeTerm)
+
+        const structuredDataElement = document.querySelector('#structured-data')
+        const structuredData = JSON.parse(structuredDataElement.textContent)
+        structuredData.description = messages['meta.description']
+        structuredData.inLanguage = locale
+        structuredDataElement.textContent = JSON.stringify(structuredData)
+
+        if (persist) {
+          try {
+            localStorage.setItem('nook_locale', locale)
+          } catch {
+            // The visible locale still changes when persistence is unavailable.
+          }
+        }
+      }
+
+      applyLandingLocale(resolveLandingLocale())
+
+      for (const button of document.querySelectorAll('[data-locale]')) {
+        button.addEventListener('click', () => {
+          applyLandingLocale(button.dataset.locale, true)
+        })
+      }
+
+      for (const term of cryptoTerms) {
+        term.addEventListener('pointerenter', () => selectCryptoTerm(term))
+        term.addEventListener('focus', () => selectCryptoTerm(term))
+        term.addEventListener('click', () => selectCryptoTerm(term))
+      }
+
+      function shuffled(values) {
+        return [...values]
+          .map((value) => ({ value, order: Math.random() }))
+          .sort((left, right) => left.order - right.order)
+          .map(({ value }) => value)
+      }
+
+      const principleLayouts = [
+        [
+          { x: 34, y: 18 },
+          { x: 68, y: 76 },
+        ],
+        [
+          { x: 31, y: 70 },
+          { x: 69, y: 18 },
+        ],
+        [
+          { x: 35, y: 30 },
+          { x: 70, y: 73 },
+        ],
+        [
+          { x: 30, y: 66 },
+          { x: 70, y: 29 },
+        ],
+      ]
+      const principleList = document.querySelector('.capsule-principles')
+      const principleLabels = Array.from(principleList.querySelectorAll('li'))
+      const principleLayoutIndex = Math.floor(
+        Math.random() * principleLayouts.length,
+      )
+      const principlePositions = principleLayouts[principleLayoutIndex]
+      principleList.dataset.layoutIndex = String(principleLayoutIndex)
+      for (const [index, principle] of principleLabels.entries()) {
+        const position = principlePositions[index]
+        principle.style.setProperty('--principle-x', `${position.x}%`)
+        principle.style.setProperty('--principle-y', `${position.y}%`)
+      }
+
+      const signalSlots = [
+        { x: 8, y: 14, align: 'left' },
+        { x: 48, y: 10, align: 'center' },
+        { x: 92, y: 17, align: 'right' },
+        { x: 5, y: 34, align: 'left' },
+        { x: 95, y: 37, align: 'right' },
+        { x: 4, y: 57, align: 'left' },
+        { x: 96, y: 59, align: 'right' },
+        { x: 10, y: 76, align: 'left' },
+        { x: 48, y: 77, align: 'center' },
+        { x: 90, y: 75, align: 'right' },
+      ]
+      const signalSlotSectors = [
+        [0, 3],
+        [1, 2, 4],
+        [5, 6, 7, 8, 9],
+      ]
+
+      const diagramLabels = Array.from(
+        document.querySelectorAll('.system-label'),
+      )
+      const reduceMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches
+
+      function slotsConflict(leftIndex, rightIndex) {
+        const left = signalSlots[leftIndex]
+        const right = signalSlots[rightIndex]
+        return positionsConflict(left, right)
+      }
+
+      function positionsConflict(left, right) {
+        const horizontalDistance = Math.abs(left.x - right.x)
+        const verticalDistance = Math.abs(left.y - right.y)
+
+        return (
+          (verticalDistance < 15 && horizontalDistance < 58) ||
+          (horizontalDistance < 20 && verticalDistance < 20)
+        )
+      }
+
+      function signalConflictsWithPrinciples(slotIndex) {
+        return principlePositions.some((position) =>
+          positionsConflict(signalSlots[slotIndex], position),
+        )
+      }
+
+      function pickDistributedSlots(count) {
+        const sectors = signalSlotSectors.slice(0, count)
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const selected = sectors.map(
+            (sector) => sector[Math.floor(Math.random() * sector.length)],
+          )
+          const conflict = selected.some(
+            (slotIndex, index) =>
+              signalConflictsWithPrinciples(slotIndex) ||
+              selected
+                .slice(index + 1)
+                .some((otherIndex) => slotsConflict(slotIndex, otherIndex)),
+          )
+          if (!conflict) return selected
+        }
+
+        return [0, 4, 8].slice(0, count)
+      }
+
+      function assignSignal(label, term, slotIndex) {
+        const slot = signalSlots[slotIndex]
+        const jitterX = (Math.random() - 0.5) * 4
+        const jitterY = (Math.random() - 0.5) * 3
+        const x = Math.max(2, Math.min(98, slot.x + jitterX))
+        const y = Math.max(8, Math.min(79, slot.y + jitterY))
+
+        label.textContent = term.dataset.code
+        label.dataset.detail = term.dataset.detail
+        label.dataset.termIndex = String(cryptoTerms.indexOf(term))
+        label.dataset.slotIndex = String(slotIndex)
+        label.dataset.tooltipX = slot.align
+        label.dataset.tooltipY = y < 45 ? 'below' : 'above'
+        label.style.setProperty('--signal-x', `${x}%`)
+        label.style.setProperty('--signal-y', `${y}%`)
+        label.style.setProperty(
+          '--signal-shift-x',
+          slot.align === 'left'
+            ? '0%'
+            : slot.align === 'right'
+              ? '-100%'
+              : '-50%',
+        )
+        label.style.setProperty(
+          '--signal-drift-x',
+          `${Math.round((Math.random() - 0.5) * 22)}px`,
+        )
+        label.style.setProperty(
+          '--signal-drift-y',
+          `${Math.round((Math.random() - 0.5) * 18)}px`,
+        )
+        label.style.setProperty(
+          '--signal-duration',
+          `${(7 + Math.random() * 5).toFixed(2)}s`,
+        )
+        label.style.setProperty(
+          '--signal-delay',
+          `${(-Math.random() * 6).toFixed(2)}s`,
+        )
+        label.setAttribute(
+          'aria-label',
+          `${term.textContent.trim()}: ${term.dataset.detail}`,
+        )
+      }
+
+      const initialTerms = shuffled(cryptoTerms).slice(0, diagramLabels.length)
+      const initialSlots = pickDistributedSlots(diagramLabels.length)
+
+      for (const [index, label] of diagramLabels.entries()) {
+        label.dataset.sectorIndex = String(index)
+        assignSignal(label, initialTerms[index], initialSlots[index])
+        label.addEventListener('click', () => {
+          selectCryptoTerm(cryptoTerms[Number(label.dataset.termIndex)])
+        })
+      }
+
+      let signalRotationInProgress = false
+
+      function rotateSignal(label) {
+        if (
+          document.hidden ||
+          label.matches(':hover') ||
+          document.activeElement === label ||
+          signalRotationInProgress
+        ) {
+          scheduleSignalRotation(label, false)
+          return
+        }
+        signalRotationInProgress = true
+
+        const visibleTermIndexes = new Set(
+          diagramLabels.map((candidate) => candidate.dataset.termIndex),
+        )
+        const nextTermIndexes = cryptoTerms
+          .map((_, index) => index)
+          .filter((index) => !visibleTermIndexes.has(String(index)))
+        const occupiedSlotIndexes = new Set(
+          diagramLabels
+            .filter((candidate) => candidate !== label)
+            .map((candidate) => Number(candidate.dataset.slotIndex)),
+        )
+        const sectorSlots =
+          signalSlotSectors[Number(label.dataset.sectorIndex)] ??
+          signalSlots.map((_, index) => index)
+        const nextSlots = sectorSlots.filter(
+          (index) =>
+            !occupiedSlotIndexes.has(index) &&
+            index !== Number(label.dataset.slotIndex) &&
+            !signalConflictsWithPrinciples(index) &&
+            [...occupiedSlotIndexes].every(
+              (occupiedIndex) => !slotsConflict(index, occupiedIndex),
+            ),
+        )
+
+        if (nextTermIndexes.length === 0 || nextSlots.length === 0) {
+          signalRotationInProgress = false
+          scheduleSignalRotation(label, false)
+          return
+        }
+
+        const termIndex =
+          nextTermIndexes[Math.floor(Math.random() * nextTermIndexes.length)]
+        const slotIndex =
+          nextSlots[Math.floor(Math.random() * nextSlots.length)]
+        label.classList.add('is-changing')
+        window.setTimeout(() => {
+          assignSignal(label, cryptoTerms[termIndex], slotIndex)
+          label.classList.remove('is-changing')
+          signalRotationInProgress = false
+          scheduleSignalRotation(label, false)
+        }, 420)
+      }
+
+      function scheduleSignalRotation(label, initial, initialIndex = 0) {
+        const delay = initial
+          ? 1300 + initialIndex * 1050 + Math.random() * 450
+          : 4800 + Math.random() * 3700
+        window.setTimeout(() => rotateSignal(label), delay)
+      }
+
+      if (!reduceMotion) {
+        for (const [index, label] of diagramLabels.entries()) {
+          scheduleSignalRotation(label, true, index)
+        }
+      }
+    </script>
   </body>
 </html>

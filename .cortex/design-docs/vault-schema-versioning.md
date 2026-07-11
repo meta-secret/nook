@@ -30,7 +30,7 @@ This document maps #52 goals to the implemented model and lists deferred work.
 | Lazy migration on connect | **Done** | `import_stored_vault_to_event_log` → `vault-imported` genesis event |
 | IndexedDB parity | **Done** | Same backup + event store keys for local-only users |
 | Migration status events | **Done** | `MIGRATION_START` / `MIGRATION_SUCCESS` on WASM status channel |
-| `nokey.sh` stable app rollback | **Done** | `release/v1` branch deploys the stable GitHub Pages artifact |
+| `nokey.sh` stable app rollback | **Done** | Immutable semantic-version tags deploy stable GitHub Pages artifacts |
 | Migration wizard UX | **Deferred** | Connect-time import is automatic; optional explicit gate later |
 | `nook-vault.v2.yaml` side-by-side files | **Not planned** | Event log replaces scalar blob versioning |
 
@@ -58,16 +58,20 @@ providers, `NookVaultEvent` records on iCloud) only.
 
 Opening a projection with `schema_version > 1` fails with an actionable error (upgrade the app).
 
-## v1 stable release
+## Stable releases
 
-`nokey.sh` is the stable first-release channel. It is built from the
-`release/v1` branch by `.github/workflows/release-v1.yml`, using the same
-production Docker gate as `main` (`task ci:main ... WASM_BUILD_MODE=prod`) and
-then deploying a stable `dist` artifact to GitHub Pages. The deploy build passes
+`nokey.sh` is the stable release channel. `.github/workflows/release.yml` deploys
+immutable semantic-version tags using the same production Docker gate as `main`
+(`task ci:main ... WASM_BUILD_MODE=prod`) and then publishes the verified `dist`
+artifact to GitHub Pages. A manual run accepts a version and source ref, creates
+the corresponding `vX.Y.Z` tag without ever moving an existing tag, and publishes
+a GitHub Release only after deployment succeeds. Pushing a semantic-version tag
+also runs the same release path. The deploy build passes
 `VITE_SITE_URL=https://nokey.sh` and
 `VITE_PUBLIC_APP_URL=https://nokey.sh` so generated release metadata and
 enrollment links use the stable root host while the pre-deploy e2e gate keeps
-local Playwright URLs.
+local Playwright URLs. The deployed artifact exposes its exact version and commit
+at `/release.json`.
 
 `dev.nokey.sh` is the active development channel for `main`. `.github/workflows/main.yml`
 keeps the normal main verification and toolchain publish path, then deploys a
@@ -77,11 +81,11 @@ development artifact to Cloudflare Pages with
 Cloudflare Pages custom domain exists and verifies the preconfigured
 Cloudflare DNS CNAME and HTTPS response for `dev.nokey.sh`.
 
-Maintenance rule: `release/v1` should only receive cherry-picked critical fixes
-from `main`; do not continue normal feature development there. If a future app
-version changes event or projection compatibility, keep `nokey.sh` on the
-compatible stable branch until the migration/rollback policy for existing vaults
-is explicit.
+Maintenance rule: tags are immutable. A rollback is a new deployment of a new
+semantic version built from the chosen compatible commit; never move or overwrite
+an existing release tag. If a future app version changes event or projection
+compatibility, do not deploy it to `nokey.sh` until the migration/rollback policy
+for existing vaults is explicit.
 
 ## Deferred (#52 non-goals retained)
 
