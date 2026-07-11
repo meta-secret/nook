@@ -38,6 +38,8 @@ describe('sitemap', () => {
     expect(robots).toContain('Allow: /terms.html')
     expect(robots).toContain('Allow: /assets/')
     expect(robots).toContain('Disallow: /app/')
+    expect(robots).toContain('Disallow: /privacy')
+    expect(robots).toContain('Disallow: /terms')
   })
 
   test('siteUrlFromEnv prefers VITE_SITE_URL', () => {

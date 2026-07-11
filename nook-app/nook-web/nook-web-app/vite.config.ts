@@ -20,9 +20,10 @@ const APP_SPA_PATHS = new Set([
   '/privacy',
   '/terms',
 ])
+const NOT_FOUND_PATHS = new Set(['/schema.xml'])
 
 function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
-  server.middlewares.use((request, _response, next) => {
+  server.middlewares.use((request, response, next) => {
     const requestUrl = request.url
     if (!requestUrl) {
       next()
@@ -34,6 +35,13 @@ function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
       suffixIndex === -1 ? requestUrl : requestUrl.slice(0, suffixIndex)
     const suffix = suffixIndex === -1 ? '' : requestUrl.slice(suffixIndex)
     const normalizedPath = pathname.replace(/\/$/, '') || '/'
+
+    if (NOT_FOUND_PATHS.has(normalizedPath)) {
+      response.statusCode = 404
+      response.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      response.end('Not Found')
+      return
+    }
 
     if (APP_SPA_PATHS.has(normalizedPath)) {
       request.url = `/app/index.html${suffix}`

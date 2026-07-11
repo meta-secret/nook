@@ -79,6 +79,8 @@ Disallow: /app/
 Disallow: /app-logs
 Disallow: /extension-connect
 Disallow: /logs
+Disallow: /privacy
+Disallow: /terms
 
 Sitemap: ${base}/sitemap.xml
 `

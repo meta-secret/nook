@@ -39,6 +39,20 @@ test.describe('legal pages', () => {
   test('serves the public landing page at the site root', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
+    await expect(page).toHaveTitle('Nook — Keys, not accounts')
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      'https://nokey.sh/',
+    )
+    const structuredData = await page
+      .locator('script[type="application/ld+json"]')
+      .textContent()
+    expect(JSON.parse(structuredData ?? '{}')).toMatchObject({
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'Nook',
+      url: 'https://nokey.sh/',
+    })
     await expect(page.locator('a.button.primary')).toHaveAttribute(
       'href',
       '/app/',
@@ -62,7 +76,31 @@ test.describe('legal pages', () => {
     await expect(
       page.getByText('Distributed authority', { exact: true }),
     ).toBeVisible()
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+      'href',
+      'https://nokey.sh/',
+    )
     await expect(page.locator('#app')).toHaveCount(0)
+  })
+
+  test('publishes the canonical crawl configuration', async ({ request }) => {
+    const robotsResponse = await request.get('/robots.txt')
+    expect(robotsResponse.ok()).toBe(true)
+    const robots = await robotsResponse.text()
+    expect(robots).toContain('Allow: /$')
+    expect(robots).toContain('Disallow: /app/')
+    expect(robots).toContain('Sitemap: https://nokey.sh/sitemap.xml')
+
+    const sitemapResponse = await request.get('/sitemap.xml')
+    expect(sitemapResponse.ok()).toBe(true)
+    const sitemap = await sitemapResponse.text()
+    expect(sitemap).toContain('<loc>https://nokey.sh/</loc>')
+    expect(sitemap).toContain('<loc>https://nokey.sh/privacy.html</loc>')
+    expect(sitemap).toContain('<loc>https://nokey.sh/terms.html</loc>')
+    expect(sitemap).not.toContain('/app/</loc>')
+
+    const obsoleteSchemaResponse = await request.get('/schema.xml')
+    expect(obsoleteSchemaResponse.status()).toBe(404)
   })
 
   test('returns to home from static legal page brand link', async ({
