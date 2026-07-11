@@ -12,23 +12,40 @@
     <title>About Nook</title>
     <style>
       :root {
-        color-scheme: dark light;
+        color-scheme: light;
         font-family:
+          Inter,
           ui-sans-serif,
           system-ui,
           -apple-system,
           BlinkMacSystemFont,
           'Segoe UI',
           sans-serif;
-        background: #07080a;
-        color: #f5f5f7;
+        background: #f4f5f6;
+        color: #101214;
+        --muted-text: #59616a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
       }
 
       body {
         margin: 0;
+        min-width: 320px;
         min-height: 100vh;
-        background: #07080a;
-        color: #f5f5f7;
+        background:
+          radial-gradient(
+            circle at 72% 28%,
+            rgb(255 255 255 / 0.9),
+            transparent 28rem
+          ),
+          #f4f5f6;
+        color: #101214;
       }
 
       a {
@@ -36,150 +53,468 @@
       }
 
       .shell {
-        box-sizing: border-box;
+        width: min(100%, 1480px);
         margin: 0 auto;
-        max-width: 1120px;
-        padding: 32px 24px;
+        padding: 0 38px;
       }
 
-      header,
-      footer {
+      header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 16px;
+        min-height: 96px;
+        border-bottom: 1px solid #dfe1df;
+      }
+
+      .brand,
+      nav,
+      .status,
+      footer,
+      .footer-links {
+        display: flex;
+        align-items: center;
       }
 
       .brand {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        font-weight: 700;
+        gap: 12px;
+        font-size: 18px;
+        font-weight: 720;
+        letter-spacing: -0.03em;
+        text-decoration: none;
       }
 
       .brand img {
-        width: 48px;
-        height: 48px;
+        width: 42px;
+        height: 42px;
         border-radius: 12px;
       }
 
-      nav,
-      footer {
-        color: #a8a8b3;
-        font-size: 14px;
+      .protocol-tag,
+      .status,
+      .eyebrow,
+      .capsule-label,
+      .system-label,
+      .card-code {
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          'Liberation Mono', monospace;
+        text-transform: uppercase;
+      }
+
+      .protocol-tag {
+        margin-left: 4px;
+        border: 1px solid #aeb8c4;
+        border-radius: 999px;
+        padding: 7px 10px 6px;
+        color: var(--muted-text);
+        font-size: 10px;
+        letter-spacing: 0.12em;
       }
 
       nav {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 18px;
+        gap: 24px;
+        font-size: 13px;
+      }
+
+      nav a {
+        text-underline-offset: 4px;
+      }
+
+      .status {
+        gap: 10px;
+        color: var(--muted-text);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+
+      .status strong {
+        color: #24282d;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #2f9b68;
+        box-shadow: 0 0 0 4px rgb(47 155 104 / 0.11);
       }
 
       main {
+        overflow: hidden;
+      }
+
+      .hero {
         display: grid;
-        grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
-        gap: 48px;
-        padding: 80px 0 64px;
+        grid-template-columns: minmax(0, 0.82fr) minmax(520px, 1.18fr);
+        align-items: center;
+        gap: 52px;
+        min-height: calc(100vh - 96px);
+        padding: 72px 0 88px;
+      }
+
+      .eyebrow,
+      .capsule-label {
+        color: var(--muted-text);
+        font-size: 11px;
+        letter-spacing: 0.21em;
       }
 
       h1 {
-        margin: 0;
-        font-size: clamp(44px, 8vw, 76px);
-        line-height: 0.95;
-      }
-
-      .eyebrow {
-        margin: 0 0 14px;
-        color: #a8a8b3;
-        font-size: 16px;
-        font-weight: 600;
+        max-width: 760px;
+        margin: 25px 0 0;
+        font-size: clamp(64px, 7.2vw, 114px);
+        font-weight: 320;
+        letter-spacing: -0.078em;
+        line-height: 0.84;
       }
 
       .lead {
-        margin: 28px 0 0;
-        max-width: 720px;
-        color: #f5f5f7;
-        font-size: clamp(22px, 3vw, 34px);
-        line-height: 1.35;
-      }
-
-      .copy {
-        margin: 22px 0 0;
-        max-width: 680px;
-        color: #a8a8b3;
-        font-size: 18px;
-        line-height: 1.7;
+        max-width: 610px;
+        margin: 40px 0 0;
+        color: var(--muted-text);
+        font-size: clamp(18px, 1.65vw, 24px);
+        line-height: 1.55;
       }
 
       .actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 32px;
+        align-items: center;
+        gap: 14px;
+        margin-top: 38px;
       }
 
       .button {
-        border: 1px solid #35363d;
-        border-radius: 8px;
-        padding: 13px 18px;
+        display: inline-flex;
+        align-items: center;
+        gap: 13px;
+        min-height: 54px;
+        border: 1px solid #cdd0d3;
+        border-radius: 999px;
+        padding: 0 22px;
+        font-size: 14px;
+        font-weight: 650;
         text-decoration: none;
+        transition:
+          transform 180ms ease,
+          background 180ms ease;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
       }
 
       .button.primary {
-        background: #f5f5f7;
-        color: #17181d;
+        border-color: #101214;
+        background: #101214;
+        color: white;
       }
 
-      .points {
+      .button.primary::after {
+        content: '↗';
+        font-size: 17px;
+      }
+
+      .button.secondary:hover {
+        background: white;
+      }
+
+      .capsule-stage {
+        position: relative;
         display: grid;
-        gap: 16px;
+        min-height: 660px;
+        place-items: center;
+        isolation: isolate;
       }
 
-      article {
-        border: 1px solid #2a2b31;
-        border-radius: 8px;
-        background: #17181d;
-        padding: 22px;
+      .orbit {
+        position: absolute;
+        width: min(92%, 690px);
+        aspect-ratio: 1;
+        border: 1px solid #d9d8d1;
+        border-radius: 50%;
       }
 
-      h2 {
+      .orbit::before,
+      .orbit::after {
+        position: absolute;
+        inset: 11%;
+        border: 1px solid #d6d5ce;
+        border-radius: inherit;
+        content: '';
+      }
+
+      .orbit::after {
+        inset: 24%;
+      }
+
+      .capsule {
+        position: relative;
+        display: grid;
+        width: min(50%, 360px);
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid #cfcec7;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 35% 25%,
+          #fff,
+          #d9dde1 54%,
+          #9ca5ae
+        );
+        box-shadow:
+          0 48px 105px rgb(55 64 72 / 0.29),
+          inset 0 1px 1px rgb(255 255 255 / 0.8);
+        animation: breathe 7s ease-in-out infinite;
+      }
+
+      .core {
+        display: grid;
+        width: 39%;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid rgb(255 255 255 / 0.38);
+        border-radius: 50%;
+        background: #1b1d1f;
+        box-shadow: inset 0 0 26px rgb(0 0 0 / 0.28);
+      }
+
+      .core img {
+        width: 58%;
+        height: 58%;
+        border-radius: 50%;
+      }
+
+      .system-label {
+        position: absolute;
+        z-index: 2;
+        padding: 6px 9px;
+        background: rgb(244 245 246 / 0.85);
+        color: var(--muted-text);
+        font-size: 9px;
+        letter-spacing: 0.13em;
+        backdrop-filter: blur(5px);
+      }
+
+      .label-top {
+        top: 17%;
+        right: 5%;
+      }
+
+      .label-left {
+        bottom: 25%;
+        left: 1%;
+      }
+
+      .label-right {
+        right: 0;
+        bottom: 33%;
+      }
+
+      .capsule-label {
+        position: absolute;
+        bottom: 7%;
+      }
+
+      .manifest {
+        border-top: 1px solid #dfe1df;
+        padding: 110px 0 120px;
+      }
+
+      .manifest-heading {
+        display: grid;
+        grid-template-columns: 0.55fr 1.45fr;
+        gap: 48px;
+        margin-bottom: 62px;
+      }
+
+      .manifest h2 {
+        max-width: 900px;
         margin: 0;
-        font-size: 20px;
+        font-size: clamp(40px, 5.4vw, 78px);
+        font-weight: 350;
+        letter-spacing: -0.06em;
+        line-height: 0.98;
       }
 
-      article p {
-        margin: 10px 0 0;
-        color: #a8a8b3;
-        font-size: 16px;
-        line-height: 1.6;
+      .systems {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-top: 1px solid #cfd2d2;
+        border-bottom: 1px solid #cfd2d2;
+      }
+
+      .system-card {
+        min-height: 270px;
+        padding: 27px 25px 30px;
+        border-right: 1px solid #cfd2d2;
+      }
+
+      .system-card:last-child {
+        border-right: 0;
+      }
+
+      .card-code {
+        color: var(--muted-text);
+        font-size: 10px;
+        letter-spacing: 0.16em;
+      }
+
+      .system-card h3 {
+        margin: 70px 0 0;
+        font-size: 19px;
+        letter-spacing: -0.025em;
+      }
+
+      .system-card p {
+        margin: 12px 0 0;
+        color: var(--muted-text);
+        font-size: 14px;
+        line-height: 1.65;
       }
 
       footer {
-        border-top: 1px solid #222329;
-        padding-top: 22px;
+        justify-content: space-between;
+        gap: 28px;
+        min-height: 100px;
+        border-top: 1px solid #dfe1df;
+        color: var(--muted-text);
+        font-size: 12px;
       }
 
-      footer div {
-        display: flex;
+      .footer-links {
         flex-wrap: wrap;
-        gap: 16px;
+        gap: 20px;
       }
 
-      @media (max-width: 820px) {
-        header,
-        footer,
-        main {
-          align-items: flex-start;
+      @keyframes breathe {
+        0%,
+        100% {
+          transform: translateY(0) scale(1);
+        }
+        50% {
+          transform: translateY(-8px) scale(1.015);
+        }
+      }
+
+      @media (max-width: 1040px) {
+        nav {
+          display: none;
+        }
+
+        .hero {
+          grid-template-columns: 1fr;
+          padding-top: 80px;
+        }
+
+        .capsule-stage {
+          min-height: 610px;
+        }
+
+        .systems {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .system-card:nth-child(2) {
+          border-right: 0;
+        }
+
+        .system-card:nth-child(-n + 2) {
+          border-bottom: 1px solid #cfd2d2;
+        }
+      }
+
+      @media (max-width: 660px) {
+        .shell {
+          padding: 0 20px;
+        }
+
+        header {
+          min-height: 80px;
+        }
+
+        .protocol-tag,
+        .status {
+          display: none;
+        }
+
+        .hero {
+          gap: 16px;
+          min-height: auto;
+          padding: 64px 0 34px;
+        }
+
+        h1 {
+          font-size: clamp(56px, 18vw, 82px);
+        }
+
+        .lead {
+          margin-top: 30px;
+        }
+
+        .capsule-stage {
+          min-height: 420px;
+        }
+
+        .orbit {
+          width: 108%;
+        }
+
+        .capsule {
+          width: 52%;
+        }
+
+        .system-label {
+          font-size: 7px;
+        }
+
+        .manifest {
+          padding: 80px 0;
+        }
+
+        .manifest-heading,
+        .systems {
           grid-template-columns: 1fr;
         }
 
-        header,
-        footer {
-          flex-direction: column;
+        .system-card,
+        .system-card:nth-child(2) {
+          min-height: 220px;
+          border-right: 0;
+          border-bottom: 1px solid #cfd2d2;
         }
 
-        main {
-          padding-top: 54px;
+        .system-card:last-child {
+          border-bottom: 0;
+        }
+
+        .system-card h3 {
+          margin-top: 46px;
+        }
+
+        footer {
+          align-items: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          padding: 25px 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        .capsule {
+          animation: none;
+        }
+
+        .button {
+          transition: none;
+        }
+
+        .button:hover {
+          transform: none;
         }
       }
     </style>
@@ -190,66 +525,108 @@
         <a class="brand" href="/">
           <img src="/nook-logo-dark.png" alt="" />
           <span>Nook</span>
+          <span class="protocol-tag">LOCAL_FIRST</span>
         </a>
         <nav aria-label="Public pages">
           <a href="/">Open app</a>
+          <a href="#system">System</a>
           <a href="/privacy.html">Privacy</a>
           <a href="/terms.html">Terms</a>
-          <a href="https://github.com/meta-secret/nook">GitHub</a>
+          <a href="https://github.com/meta-secret/nook">Source</a>
         </nav>
+        <div class="status" aria-label="Nook architecture status">
+          <span class="status-dot"></span>
+          <span>Network</span>
+          <strong>ENCRYPTED_MESH</strong>
+        </div>
       </header>
 
       <main>
-        <section>
-          <p class="eyebrow">Open-source password manager</p>
-          <h1>Nook</h1>
-          <p class="lead">
-            Nook is a client-side password and secrets manager for encrypted
-            vaults that stay under your control.
-          </p>
-          <p class="copy">
-            Create a vault in your browser, protect it with this device's keys,
-            and connect optional sync providers such as Google Drive or GitHub
-            to replicate encrypted vault data. Nook does not run a central
-            account service and cannot read your secrets.
-          </p>
-          <div class="actions">
-            <a class="button primary" href="/">Open Nook</a>
-            <a class="button" href="/privacy.html">Read privacy policy</a>
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Vault 01 / personal secret system</p>
+            <h1>Sealed by you.<br />Held by no one.</h1>
+            <p class="lead">
+              Nook is a client-side password and secrets manager. Your vault is
+              encrypted before it leaves the browser, replicated only through
+              storage you choose, and opened only by identities you authorize.
+            </p>
+            <div class="actions">
+              <a class="button primary" href="/">Open Nook</a>
+              <a class="button secondary" href="#system">Inspect the system</a>
+            </div>
+          </div>
+
+          <div
+            class="capsule-stage"
+            role="img"
+            aria-label="Encrypted Nook vault capsule protected by a device identity and immutable event log"
+          >
+            <div class="orbit" aria-hidden="true"></div>
+            <span class="system-label label-top">X25519_DEVICE_IDENTITY</span>
+            <span class="system-label label-left">AES_256_GCM · SEALED</span>
+            <span class="system-label label-right">EVENT_DAG · VERIFIED</span>
+            <div class="capsule">
+              <div class="core">
+                <img src="/nook-logo-dark.png" alt="Nook" />
+              </div>
+            </div>
+            <p class="capsule-label">Encryption shell intact</p>
           </div>
         </section>
 
-        <section class="points" aria-label="How Nook works">
-          <article>
-            <h2>Client-side encryption</h2>
-            <p>
-              Secrets are encrypted in your browser before they are saved or
-              synced.
-            </p>
-          </article>
-          <article>
-            <h2>Your storage</h2>
-            <p>
-              Keep a local vault first, then optionally sync encrypted vault
-              data through providers you choose.
-            </p>
-          </article>
-          <article>
-            <h2>Optional Google Drive sync</h2>
-            <p>
-              When you connect Google Drive, Nook uses app-data storage for its
-              own encrypted vault files only.
-            </p>
-          </article>
+        <section class="manifest" id="system">
+          <div class="manifest-heading">
+            <p class="eyebrow">System manifest / 04 layers</p>
+            <h2>A vault architecture with no central keeper.</h2>
+          </div>
+
+          <div class="systems">
+            <article class="system-card">
+              <span class="card-code">IDENTITY_ROOT / 01</span>
+              <h3>Device identity</h3>
+              <p>
+                Each authorized device holds its own protected X25519 identity.
+                Plaintext identity material exists only inside an unlocked
+                session.
+              </p>
+            </article>
+            <article class="system-card">
+              <span class="card-code">KEY_ENVELOPE / 02</span>
+              <h3>Sealed root keys</h3>
+              <p>
+                Vault keys are wrapped into per-device cryptographic envelopes,
+                so authorized identities can unlock secrets without a central
+                account service.
+              </p>
+            </article>
+            <article class="system-card">
+              <span class="card-code">ENCRYPTED_MESH / 03</span>
+              <h3>Provider-neutral sync</h3>
+              <p>
+                Optional providers transport encrypted vault events. They see
+                ciphertext and storage operations—not the secrets held inside.
+              </p>
+            </article>
+            <article class="system-card">
+              <span class="card-code">CAUSAL_DAG / 04</span>
+              <h3>Immutable event log</h3>
+              <p>
+                Encrypted changes converge through a content-addressed event
+                history, preserving the order and integrity of your vault.
+              </p>
+            </article>
+          </div>
         </section>
       </main>
 
       <footer>
-        <span>Client-side encrypted vaults. No central account service.</span>
-        <div>
+        <span>CLIENT_SIDE_ENCRYPTION · NO_CENTRAL_ACCOUNT_SERVICE</span>
+        <div class="footer-links">
+          <a href="/">Open Nook</a>
           <a href="/privacy.html">Privacy</a>
           <a href="/terms.html">Terms</a>
-          <a href="https://github.com/meta-secret/nook">Source</a>
+          <a href="https://github.com/meta-secret/nook">GitHub</a>
         </div>
       </footer>
     </div>
