@@ -1,6 +1,7 @@
 # Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
 # Toolchain publish runs on main only (ci:main:publish). PR and main CI run full local-provider e2e;
 # nightly runs sync-live.
+# Research-only changes are handled by web-research.yml and skip this full app pipeline.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
 
 name: PR
@@ -8,6 +9,9 @@ name: PR
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
+    paths-ignore:
+      - .github/workflows/web-research.yml
+      - nook-app/nook-web/nook-web-research/**
 
 permissions:
   contents: read

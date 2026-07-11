@@ -142,7 +142,7 @@ jobs:
           script: |
             const isPreview = context.eventName === 'pull_request'
             const ref = isPreview ? context.payload.pull_request.head.sha : context.sha
-            const environment = isPreview ? 'web-research-preview' : 'web-research'
+            const environment = isPreview ? 'github-pages' : 'web-research'
             const environmentUrl = isPreview
               ? process.env.DEPLOYMENT_URL
               : process.env.RESEARCH_URL
