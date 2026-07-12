@@ -116,14 +116,14 @@ pub enum VaultOperation {
     /// Used when `vault_type=nexus`: the joiner is added to the roster, but
     /// vault keys remain threshold-shared rather than encrypted in full to
     /// each device.
-    NexusParticipantEnrolled {
+    SentinelParticipantEnrolled {
         device_id: DeviceId,
         encryption_public_key: DevicePublicKey,
         signing_public_key: DeviceSigningPublicKey,
         label: MemberLabel,
     },
     /// Threshold shares of the vault key bundle, each encrypted to one device.
-    NexusSharesIssued {
+    SentinelSharesIssued {
         shares: Vec<NexusShareIssuedPayload>,
     },
     JoinDenied {

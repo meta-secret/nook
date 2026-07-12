@@ -78,7 +78,7 @@ pub fn join_record_key(device_id: &DeviceId) -> String {
 pub const NEXUS_SHARE_RECORD_PREFIX: &str = "nexus_share:";
 
 #[must_use]
-pub fn nexus_share_record_key(device_id: &DeviceId) -> String {
+pub fn sentinel_share_record_key(device_id: &DeviceId) -> String {
     format!("{NEXUS_SHARE_RECORD_PREFIX}{device_id}")
 }
 
@@ -93,7 +93,7 @@ pub fn parse_auth_envelopes(value: &str) -> MultiDeviceResult<AuthEnvelopes> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct NexusShareEnvelope {
+pub struct SentinelShareEnvelope {
     pub version: u32,
     pub threshold: u8,
     pub required_participants: u8,
@@ -113,7 +113,7 @@ struct NexusSharePlaintext {
 /// Internal opened Nexus share used only inside the Rust-owned unlock protocol.
 ///
 /// This type contains plaintext share material. Browser/WASM APIs must wrap it
-/// in a signed, session-bound encrypted [`crate::NexusUnlockResponse`] and must
+/// in a signed, session-bound encrypted [`crate::SentinelUnlockResponse`] and must
 /// never serialize it directly to JavaScript.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OpenedNexusShare {
@@ -127,7 +127,7 @@ pub struct OpenedNexusShare {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct NexusVaultKeysPlaintext {
+struct SentinelVaultKeysPlaintext {
     secrets_key: String,
     members_key: String,
 }
@@ -141,9 +141,9 @@ fn derive_nexus_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
     let mut secrets = [0_u8; 32];
     let mut members = [0_u8; 32];
     hkdf.expand(NEXUS_SECRETS_KEY_INFO, &mut secrets)
-        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+        .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
     hkdf.expand(NEXUS_MEMBERS_KEY_INFO, &mut members)
-        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+        .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
     let result = Ok(VaultKeys {
         secrets_key: SymmetricKey::parse(&hex::encode(secrets))
             .map_err(MultiDeviceError::Validation)?,
@@ -155,12 +155,12 @@ fn derive_nexus_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
     result
 }
 
-pub fn parse_nexus_share_envelope(value: &str) -> MultiDeviceResult<NexusShareEnvelope> {
+pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelShareEnvelope> {
     serde_json::from_str(value).map_err(MultiDeviceError::NexusShareJson)
 }
 
 #[must_use]
-pub fn is_nexus_share_stored_record(record: &StoredSecretRecord) -> bool {
+pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> bool {
     matches!(
         VaultMetaRecord::classify(record),
         VaultMetaRecord::NexusShare(..)
@@ -271,7 +271,7 @@ pub enum VaultMetaRecord {
     /// A roster entry, still encrypted with `members_key`.
     Member(AuthKeyId, StoredRecordPayload),
     /// A threshold share of the vault key bundle, encrypted to one device.
-    NexusShare(DeviceId, NexusShareEnvelope),
+    NexusShare(DeviceId, SentinelShareEnvelope),
 }
 
 impl VaultMetaRecord {
@@ -279,7 +279,7 @@ impl VaultMetaRecord {
     pub fn classify(record: &StoredSecretRecord) -> Self {
         if let Some(device_id_str) = record.key.as_str().strip_prefix(NEXUS_SHARE_RECORD_PREFIX)
             && let Ok(device_id) = DeviceId::parse(device_id_str)
-            && let Ok(share) = parse_nexus_share_envelope(record.value.as_str())
+            && let Ok(share) = parse_sentinel_share_envelope(record.value.as_str())
         {
             return Self::NexusShare(device_id, share);
         }
@@ -334,7 +334,7 @@ impl VaultMetaRecord {
                 value: payload.clone(),
             },
             Self::NexusShare(device_id, share) => StoredSecretRecord {
-                key: SecretId::from_vault_record(&nexus_share_record_key(device_id)),
+                key: SecretId::from_vault_record(&sentinel_share_record_key(device_id)),
                 secret_type: None,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(share).map_err(MultiDeviceError::NexusShareSerialize)?,
@@ -358,7 +358,7 @@ pub struct VaultMetaState {
     pub auth: HashMap<AuthKeyId, AuthEnvelopes>,
     pub joins: HashMap<DeviceId, JoinRequest>,
     pub members: HashMap<AuthKeyId, StoredRecordPayload>,
-    pub nexus_shares: HashMap<DeviceId, NexusShareEnvelope>,
+    pub nexus_shares: HashMap<DeviceId, SentinelShareEnvelope>,
     pub nexus_participants: HashMap<DeviceId, NexusParticipantEntry>,
 }
 
@@ -621,7 +621,7 @@ pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
     records.iter().any(|record| {
         is_auth_stored_record(record)
             || is_members_stored_record(record)
-            || is_nexus_share_stored_record(record)
+            || is_sentinel_share_stored_record(record)
             || is_join_stored_record(record)
     })
 }
@@ -803,7 +803,7 @@ pub fn revoke_vault_member(
         .find(|member| member.auth_id == *auth_id)
         .map(|member| member.device_id.clone())
         .ok_or(MultiDeviceError::DeviceNotFound)?;
-    let revoked_share_key = nexus_share_record_key(&revoked_device_id);
+    let revoked_share_key = sentinel_share_record_key(&revoked_device_id);
 
     let mut updated: Vec<StoredSecretRecord> = records
         .iter()
@@ -1026,10 +1026,10 @@ pub fn device_is_enrolled(records: &[StoredSecretRecord], identity: &DeviceIdent
     {
         return true;
     }
-    let share_key = nexus_share_record_key(identity.device_id());
+    let share_key = sentinel_share_record_key(identity.device_id());
     records
         .iter()
-        .any(|record| record.key.as_str() == share_key && is_nexus_share_stored_record(record))
+        .any(|record| record.key.as_str() == share_key && is_sentinel_share_stored_record(record))
 }
 
 #[must_use]
@@ -1108,7 +1108,7 @@ pub fn resolve_members_key(
     identity.decrypt_envelope(&envelopes.members_key)
 }
 
-pub fn create_nexus_share_records(
+pub fn create_sentinel_share_records(
     keys: &VaultKeys,
     participants: &[DeviceIdentity],
     threshold: u8,
@@ -1117,7 +1117,7 @@ pub fn create_nexus_share_records(
         .iter()
         .map(|participant| (participant.device_id().clone(), participant.public_key()))
         .collect();
-    create_nexus_share_records_for_recipients(keys, &recipients, threshold)
+    create_sentinel_share_records_for_recipients(keys, &recipients, threshold)
 }
 
 /// Split vault keys into threshold shares encrypted to each recipient public key.
@@ -1125,15 +1125,15 @@ pub fn create_nexus_share_records(
 /// Interim GF(256) Shamir (byte-wise). Product SLIP-0039 mnemonic shares are
 /// owned by #261 and should replace this once wired; do not invent a second
 /// mnemonic format here.
-pub fn create_nexus_share_records_for_recipients(
+pub fn create_sentinel_share_records_for_recipients(
     keys: &VaultKeys,
     recipients: &[(DeviceId, DevicePublicKey)],
     threshold: u8,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
     let required_participants =
-        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
-    validate_nexus_threshold(threshold, required_participants)?;
-    let payload = serde_json::to_vec(&NexusVaultKeysPlaintext {
+        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
+    validate_sentinel_threshold(threshold, required_participants)?;
+    let payload = serde_json::to_vec(&SentinelVaultKeysPlaintext {
         secrets_key: keys.secrets_key.as_str().to_owned(),
         members_key: keys.members_key.as_str().to_owned(),
     })
@@ -1152,7 +1152,7 @@ pub fn create_nexus_share_records_for_recipients(
             };
             let json =
                 serde_json::to_vec(&plaintext).map_err(MultiDeviceError::NexusSharePayload)?;
-            let envelope = NexusShareEnvelope {
+            let envelope = SentinelShareEnvelope {
                 version: 1,
                 threshold,
                 required_participants,
@@ -1173,13 +1173,13 @@ pub fn create_nexus_root_share_records_for_recipients(
     threshold: u8,
 ) -> MultiDeviceResult<(VaultKeys, Vec<StoredSecretRecord>)> {
     let required_participants =
-        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
-    validate_nexus_threshold(threshold, required_participants)?;
+        u8::try_from(recipients.len()).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
+    validate_sentinel_threshold(threshold, required_participants)?;
     let mut root = [0_u8; 32];
     getrandom::getrandom(&mut root)
         .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
     let keys = derive_nexus_vault_keys(&root)?;
-    let shares = super::slip39::split_nexus_secret(&root, threshold, required_participants)?;
+    let shares = super::slip39::split_sentinel_secret(&root, threshold, required_participants)?;
     root.zeroize();
     let records = recipients
         .iter()
@@ -1187,7 +1187,7 @@ pub fn create_nexus_root_share_records_for_recipients(
         .enumerate()
         .map(|(offset, ((device_id, public_key), share))| {
             let share_index =
-                u8::try_from(offset + 1).map_err(|_| MultiDeviceError::InvalidNexusThreshold)?;
+                u8::try_from(offset + 1).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
             let plaintext = NexusSharePlaintext {
                 version: NEXUS_ROOT_SHARE_VERSION,
                 threshold,
@@ -1197,7 +1197,7 @@ pub fn create_nexus_root_share_records_for_recipients(
             };
             let json =
                 serde_json::to_vec(&plaintext).map_err(MultiDeviceError::NexusSharePayload)?;
-            let envelope = NexusShareEnvelope {
+            let envelope = SentinelShareEnvelope {
                 version: NEXUS_ROOT_SHARE_VERSION,
                 threshold,
                 required_participants,
@@ -1214,24 +1214,24 @@ pub fn create_nexus_root_share_records_for_recipients(
 pub fn count_nexus_share_records(records: &[StoredSecretRecord]) -> usize {
     records
         .iter()
-        .filter(|record| is_nexus_share_stored_record(record))
+        .filter(|record| is_sentinel_share_stored_record(record))
         .count()
 }
 
 /// Open this device's encrypted Nexus share for an in-Rust unlock response.
-pub fn open_nexus_share_for_identity(
+pub fn open_sentinel_share_for_identity(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
 ) -> MultiDeviceResult<OpenedNexusShare> {
     let record = records
         .iter()
-        .find(|entry| entry.key.as_str() == nexus_share_record_key(identity.device_id()))
+        .find(|entry| entry.key.as_str() == sentinel_share_record_key(identity.device_id()))
         .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
             device_id: identity.device_id().to_string(),
         })?;
-    let envelope = parse_nexus_share_envelope(record.value.as_str())?;
+    let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
     if !matches!(envelope.version, 1 | NEXUS_ROOT_SHARE_VERSION) {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
     let plaintext: NexusSharePlaintext =
@@ -1241,18 +1241,18 @@ pub fn open_nexus_share_for_identity(
         || plaintext.required_participants != envelope.required_participants
         || plaintext.share_index != envelope.share_index
     {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     // Reject malformed legacy share encoding early. Current SLIP-0039 shares
     // are fully checksum/digest-validated when quorum reconstruction runs.
     if plaintext.version == NEXUS_ROOT_SHARE_VERSION {
         if plaintext.share.split_whitespace().count() != 33 {
-            return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
     } else {
         URL_SAFE_NO_PAD
             .decode(plaintext.share.as_bytes())
-            .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+            .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
     }
     Ok(OpenedNexusShare {
         version: plaintext.version,
@@ -1283,51 +1283,51 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
             DeviceId::parse(&contribution.device_id).map_err(MultiDeviceError::Validation)?;
         let record = records
             .iter()
-            .find(|entry| entry.key.as_str() == nexus_share_record_key(&device_id))
+            .find(|entry| entry.key.as_str() == sentinel_share_record_key(&device_id))
             .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
                 device_id: contribution.device_id.clone(),
             })?;
-        let envelope = parse_nexus_share_envelope(record.value.as_str())?;
+        let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
         if contribution.version != envelope.version
             || contribution.threshold != envelope.threshold
             || contribution.required_participants != envelope.required_participants
             || contribution.share_index != envelope.share_index
         {
-            return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
         if let Some(threshold) = expected_threshold {
             if threshold != contribution.threshold {
-                return Err(MultiDeviceError::InvalidNexusThreshold);
+                return Err(MultiDeviceError::InvalidSentinelThreshold);
             }
         } else {
             expected_threshold = Some(contribution.threshold);
         }
         if let Some(required) = expected_required {
             if required != contribution.required_participants {
-                return Err(MultiDeviceError::InvalidNexusThreshold);
+                return Err(MultiDeviceError::InvalidSentinelThreshold);
             }
         } else {
             expected_required = Some(contribution.required_participants);
         }
         if let Some(version) = expected_version {
             if version != contribution.version {
-                return Err(MultiDeviceError::InvalidNexusShareEncoding);
+                return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
         } else {
             expected_version = Some(contribution.version);
         }
         if !seen_indexes.insert(contribution.share_index) {
-            return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
         if contribution.version == NEXUS_ROOT_SHARE_VERSION {
             if contribution.share.split_whitespace().count() != 33 {
-                return Err(MultiDeviceError::InvalidNexusShareEncoding);
+                return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
             slip39_mnemonics.push(contribution.share.clone());
         } else {
             let bytes = URL_SAFE_NO_PAD
                 .decode(contribution.share.as_bytes())
-                .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+                .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
             shares.push(IndexedShare {
                 index: contribution.share_index,
                 bytes,
@@ -1346,13 +1346,13 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
     }
     if expected_version == Some(NEXUS_ROOT_SHARE_VERSION) {
         let mut root =
-            super::slip39::recover_nexus_secret(&slip39_mnemonics[..usize::from(threshold)])?;
+            super::slip39::recover_sentinel_secret(&slip39_mnemonics[..usize::from(threshold)])?;
         let keys = derive_nexus_vault_keys(&root);
         root.zeroize();
         return keys;
     }
     let reconstructed = reconstruct_secret_bytes(&shares[..usize::from(threshold)], threshold)?;
-    let payload: NexusVaultKeysPlaintext =
+    let payload: SentinelVaultKeysPlaintext =
         serde_json::from_slice(&reconstructed).map_err(MultiDeviceError::NexusSharePayload)?;
     Ok(VaultKeys {
         secrets_key: SymmetricKey::parse(&payload.secrets_key)
@@ -1372,7 +1372,7 @@ pub fn reconstruct_nexus_vault_keys(
 ) -> MultiDeviceResult<VaultKeys> {
     let opened = identities
         .iter()
-        .map(|identity| open_nexus_share_for_identity(records, identity))
+        .map(|identity| open_sentinel_share_for_identity(records, identity))
         .collect::<MultiDeviceResult<Vec<_>>>()?;
     reconstruct_nexus_vault_keys_from_opened(records, &opened)
 }
@@ -1383,9 +1383,9 @@ struct IndexedShare {
     bytes: Vec<u8>,
 }
 
-fn validate_nexus_threshold(threshold: u8, required_participants: u8) -> MultiDeviceResult<()> {
+fn validate_sentinel_threshold(threshold: u8, required_participants: u8) -> MultiDeviceResult<()> {
     if threshold <= 1 || required_participants == 0 || threshold > required_participants {
-        return Err(MultiDeviceError::InvalidNexusThreshold);
+        return Err(MultiDeviceError::InvalidSentinelThreshold);
     }
     Ok(())
 }
@@ -1395,7 +1395,7 @@ fn split_secret_bytes(
     threshold: u8,
     required_participants: u8,
 ) -> MultiDeviceResult<Vec<IndexedShare>> {
-    validate_nexus_threshold(threshold, required_participants)?;
+    validate_sentinel_threshold(threshold, required_participants)?;
     let mut shares: Vec<IndexedShare> = (1..=required_participants)
         .map(|index| IndexedShare {
             index,
@@ -1430,12 +1430,12 @@ fn reconstruct_secret_bytes(shares: &[IndexedShare], threshold: u8) -> MultiDevi
     let length = shares
         .first()
         .map(|share| share.bytes.len())
-        .ok_or(MultiDeviceError::InvalidNexusShareEncoding)?;
+        .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
     if shares
         .iter()
         .any(|share| share.index == 0 || share.bytes.len() != length)
     {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     let mut secret = vec![0u8; length];
     for (byte_index, secret_byte) in secret.iter_mut().enumerate().take(length) {
@@ -1451,7 +1451,7 @@ fn reconstruct_secret_bytes(shares: &[IndexedShare], threshold: u8) -> MultiDevi
                 denominator = gf_mul(denominator, share_i.index ^ share_j.index);
             }
             if denominator == 0 {
-                return Err(MultiDeviceError::InvalidNexusShareEncoding);
+                return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
             let coefficient = gf_mul(numerator, gf_inv(denominator));
             value ^= gf_mul(share_i.bytes[byte_index], coefficient);
@@ -1631,7 +1631,7 @@ mod tests {
         let joiner = DeviceIdentity::generate().unwrap();
         let nexus_participant = DeviceIdentity::generate().unwrap();
         let nexus_record =
-            create_nexus_share_records(&keys, &[genesis.clone(), nexus_participant.clone()], 2)
+            create_sentinel_share_records(&keys, &[genesis.clone(), nexus_participant.clone()], 2)
                 .unwrap()
                 .pop()
                 .unwrap();
@@ -1693,12 +1693,15 @@ mod tests {
         let first = DeviceIdentity::generate().unwrap();
         let second = DeviceIdentity::generate().unwrap();
         let third = DeviceIdentity::generate().unwrap();
-        let records =
-            create_nexus_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)
-                .unwrap();
+        let records = create_sentinel_share_records(
+            &keys,
+            &[first.clone(), second.clone(), third.clone()],
+            2,
+        )
+        .unwrap();
 
         assert_eq!(records.len(), 3);
-        assert!(records.iter().all(is_nexus_share_stored_record));
+        assert!(records.iter().all(is_sentinel_share_stored_record));
         assert!(records.iter().all(|record| !is_auth_stored_record(record)));
         assert!(resolve_secrets_key(&records, &first).is_err());
         assert!(reconstruct_nexus_vault_keys(&records, std::slice::from_ref(&first)).is_err());
@@ -1717,12 +1720,15 @@ mod tests {
         let first = DeviceIdentity::generate().unwrap();
         let second = DeviceIdentity::generate().unwrap();
         let third = DeviceIdentity::generate().unwrap();
-        let records =
-            create_nexus_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)
-                .unwrap();
+        let records = create_sentinel_share_records(
+            &keys,
+            &[first.clone(), second.clone(), third.clone()],
+            2,
+        )
+        .unwrap();
 
-        let opened_first = open_nexus_share_for_identity(&records, &first).unwrap();
-        let opened_second = open_nexus_share_for_identity(&records, &second).unwrap();
+        let opened_first = open_sentinel_share_for_identity(&records, &first).unwrap();
+        let opened_second = open_sentinel_share_for_identity(&records, &second).unwrap();
         assert_eq!(opened_first.device_id, first.device_id().as_str());
         assert_eq!(opened_second.threshold, 2);
 
@@ -1956,7 +1962,7 @@ mod tests {
         records.push(user_secret.clone());
         approve_pending_join(&keys, &genesis, &mut records, &joiner);
         records.extend(
-            create_nexus_share_records(&keys, &[genesis.clone(), joiner.clone()], 2).unwrap(),
+            create_sentinel_share_records(&keys, &[genesis.clone(), joiner.clone()], 2).unwrap(),
         );
 
         let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id()).unwrap();
@@ -1967,16 +1973,12 @@ mod tests {
             keys.secrets_key
         );
         assert!(revoked.iter().any(|record| record == &user_secret));
-        assert!(
-            !revoked.iter().any(|record| {
-                record.key.as_str() == nexus_share_record_key(joiner.device_id())
-            })
-        );
-        assert!(
-            revoked.iter().any(|record| {
-                record.key.as_str() == nexus_share_record_key(genesis.device_id())
-            })
-        );
+        assert!(!revoked.iter().any(|record| {
+            record.key.as_str() == sentinel_share_record_key(joiner.device_id())
+        }));
+        assert!(revoked.iter().any(|record| {
+            record.key.as_str() == sentinel_share_record_key(genesis.device_id())
+        }));
         let roster = resolve_member_roster(&revoked, &keys.members_key).unwrap();
         assert_eq!(roster.len(), 1);
         assert_eq!(roster[0].auth_id, genesis.auth_id());

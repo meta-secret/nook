@@ -5,7 +5,7 @@
 //! Nexus roots are split with the current extendable SLIP-0039 format.
 
 use super::multi_device::{
-    DeviceIdentity, NexusShareEnvelope, VaultMember, VaultMetaRecord, build_members_records,
+    DeviceIdentity, SentinelShareEnvelope, VaultMember, VaultMetaRecord, build_members_records,
     create_nexus_root_share_records_for_recipients, dec_auth_id_from_public_key,
     device_id_from_public_key, generate_id,
 };
@@ -22,19 +22,19 @@ const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisPolicy {
+pub struct SentinelGenesisPolicy {
     pub participant_count: u8,
     pub threshold: u8,
 }
 
-impl NexusGenesisPolicy {
+impl SentinelGenesisPolicy {
     pub fn validate(self) -> MultiDeviceResult<()> {
         if self.threshold < 2
             || self.participant_count < 2
             || self.participant_count > 16
             || self.threshold > self.participant_count
         {
-            return Err(MultiDeviceError::InvalidNexusThreshold);
+            return Err(MultiDeviceError::InvalidSentinelThreshold);
         }
         Ok(())
     }
@@ -42,17 +42,17 @@ impl NexusGenesisPolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisRequest {
+pub struct SentinelGenesisRequest {
     pub version: u32,
     pub session_id: CompactToken,
-    pub policy: NexusGenesisPolicy,
+    pub policy: SentinelGenesisPolicy,
     pub initiator_device_id: DeviceId,
     pub initiator_signing_public_key: DeviceSigningPublicKey,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisParticipant {
+pub struct SentinelGenesisParticipant {
     pub device_id: DeviceId,
     pub encryption_public_key: DevicePublicKey,
     pub signing_public_key: DeviceSigningPublicKey,
@@ -62,10 +62,10 @@ pub struct NexusGenesisParticipant {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisParticipantResponse {
+pub struct SentinelGenesisParticipantResponse {
     pub version: u32,
     pub session_id: CompactToken,
-    pub participant: NexusGenesisParticipant,
+    pub participant: SentinelGenesisParticipant,
     pub signature: String,
 }
 
@@ -73,7 +73,7 @@ pub struct NexusGenesisParticipantResponse {
 /// request exists. The initiator binds it to the active genesis session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisPublicKeyAnnouncement {
+pub struct SentinelGenesisPublicKeyAnnouncement {
     pub kind: String,
     pub version: u32,
     pub device_id: DeviceId,
@@ -86,19 +86,19 @@ pub struct NexusGenesisPublicKeyAnnouncement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisSession {
-    pub request: NexusGenesisRequest,
+pub struct SentinelGenesisSession {
+    pub request: SentinelGenesisRequest,
     /// Verified responses are intentionally session-only. Serializing a public
     /// draft never turns unverified participant fields into a trusted roster;
     /// deserialization yields an incomplete request-only draft that must be
-    /// restarted through `start_nexus_genesis`.
+    /// restarted through `start_sentinel_genesis`.
     #[serde(skip, default)]
-    participants: Vec<NexusGenesisParticipant>,
+    participants: Vec<SentinelGenesisParticipant>,
 }
 
-impl NexusGenesisSession {
+impl SentinelGenesisSession {
     #[must_use]
-    pub fn participants(&self) -> &[NexusGenesisParticipant] {
+    pub fn participants(&self) -> &[SentinelGenesisParticipant] {
         &self.participants
     }
 
@@ -110,66 +110,66 @@ impl NexusGenesisSession {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusGenesisShareDelivery {
+pub struct SentinelGenesisShareDelivery {
     pub version: u32,
     pub session_id: CompactToken,
     pub store_id: StoreId,
-    pub policy: NexusGenesisPolicy,
+    pub policy: SentinelGenesisPolicy,
     pub device_id: DeviceId,
     pub encryption_public_key: DevicePublicKey,
-    pub share: NexusShareEnvelope,
+    pub share: SentinelShareEnvelope,
     pub initiator_signing_public_key: DeviceSigningPublicKey,
     pub signature: String,
 }
 
 /// Atomic result of the key-generation step. Callers must serialize all
 /// records together; no API exposes a partially issued share set.
-pub struct NexusGenesisIssued {
+pub struct SentinelGenesisIssued {
     pub records: Vec<StoredSecretRecord>,
-    pub participants: Vec<NexusGenesisParticipant>,
-    pub deliveries: Vec<NexusGenesisShareDelivery>,
+    pub participants: Vec<SentinelGenesisParticipant>,
+    pub deliveries: Vec<SentinelGenesisShareDelivery>,
 }
 
-pub fn start_nexus_genesis(
+pub fn start_sentinel_genesis(
     identity: &DeviceIdentity,
     signing_key: &SigningKey,
     participant_count: u8,
     threshold: u8,
     label: String,
-) -> MultiDeviceResult<NexusGenesisSession> {
-    let policy = NexusGenesisPolicy {
+) -> MultiDeviceResult<SentinelGenesisSession> {
+    let policy = SentinelGenesisPolicy {
         participant_count,
         threshold,
     };
     policy.validate()?;
     let session_id = generate_id()?;
     let signing_public_key = signing_public_key(signing_key);
-    let request = NexusGenesisRequest {
+    let request = SentinelGenesisRequest {
         version: GENESIS_VERSION,
         session_id: session_id.clone(),
         policy,
         initiator_device_id: identity.device_id().clone(),
         initiator_signing_public_key: signing_public_key,
     };
-    let response = respond_to_nexus_genesis_request(&request, identity, signing_key, label)?;
-    let mut session = NexusGenesisSession {
+    let response = respond_to_sentinel_genesis_request(&request, identity, signing_key, label)?;
+    let mut session = SentinelGenesisSession {
         request,
         participants: Vec::new(),
     };
-    add_nexus_genesis_response(&mut session, response)?;
+    add_sentinel_genesis_response(&mut session, response)?;
     Ok(session)
 }
 
 #[must_use]
-pub fn nexus_genesis_request(session: &NexusGenesisSession) -> NexusGenesisRequest {
+pub fn sentinel_genesis_request(session: &SentinelGenesisSession) -> SentinelGenesisRequest {
     session.request.clone()
 }
 
-pub fn create_nexus_genesis_public_key_announcement(
+pub fn create_sentinel_genesis_public_key_announcement(
     identity: &DeviceIdentity,
     signing_key: &SigningKey,
     label: String,
-) -> MultiDeviceResult<NexusGenesisPublicKeyAnnouncement> {
+) -> MultiDeviceResult<SentinelGenesisPublicKeyAnnouncement> {
     if label.chars().count() > 80 {
         return Err(MultiDeviceError::DeviceNameTooLong);
     }
@@ -185,7 +185,7 @@ pub fn create_nexus_genesis_public_key_announcement(
         &signing_public_key,
         &label,
     )?;
-    Ok(NexusGenesisPublicKeyAnnouncement {
+    Ok(SentinelGenesisPublicKeyAnnouncement {
         kind: PUBLIC_KEY_ANNOUNCEMENT_KIND.to_owned(),
         version: GENESIS_VERSION,
         device_id,
@@ -197,19 +197,19 @@ pub fn create_nexus_genesis_public_key_announcement(
     })
 }
 
-pub fn respond_to_nexus_genesis_request(
-    request: &NexusGenesisRequest,
+pub fn respond_to_sentinel_genesis_request(
+    request: &SentinelGenesisRequest,
     identity: &DeviceIdentity,
     signing_key: &SigningKey,
     label: String,
-) -> MultiDeviceResult<NexusGenesisParticipantResponse> {
+) -> MultiDeviceResult<SentinelGenesisParticipantResponse> {
     validate_request(request)?;
     if label.chars().count() > 80 {
         return Err(MultiDeviceError::DeviceNameTooLong);
     }
     let encryption_public_key = identity.public_key();
     let signing_public_key = signing_public_key(signing_key);
-    let participant = NexusGenesisParticipant {
+    let participant = SentinelGenesisParticipant {
         device_id: identity.device_id().clone(),
         fingerprint: participant_fingerprint(
             &encryption_public_key,
@@ -221,7 +221,7 @@ pub fn respond_to_nexus_genesis_request(
         label,
     };
     let bytes = response_signing_bytes(GENESIS_VERSION, &request.session_id, &participant)?;
-    Ok(NexusGenesisParticipantResponse {
+    Ok(SentinelGenesisParticipantResponse {
         version: GENESIS_VERSION,
         session_id: request.session_id.clone(),
         participant,
@@ -230,29 +230,29 @@ pub fn respond_to_nexus_genesis_request(
 }
 
 /// Accept either a session-bound response or a standalone public-key announcement.
-pub fn add_nexus_genesis_participant_payload(
-    session: &mut NexusGenesisSession,
+pub fn add_sentinel_genesis_participant_payload(
+    session: &mut SentinelGenesisSession,
     payload_json: &str,
 ) -> MultiDeviceResult<()> {
     let value: serde_json::Value = serde_json::from_str(payload_json)
-        .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)?;
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
-        let announcement: NexusGenesisPublicKeyAnnouncement = serde_json::from_value(value)
-            .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)?;
-        return add_nexus_genesis_public_key_announcement(session, &announcement);
+        let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
+            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        return add_sentinel_genesis_public_key_announcement(session, &announcement);
     }
-    let response: NexusGenesisParticipantResponse = serde_json::from_str(payload_json)
-        .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)?;
-    add_nexus_genesis_response(session, response)
+    let response: SentinelGenesisParticipantResponse = serde_json::from_str(payload_json)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    add_sentinel_genesis_response(session, response)
 }
 
-pub fn add_nexus_genesis_response(
-    session: &mut NexusGenesisSession,
-    response: NexusGenesisParticipantResponse,
+pub fn add_sentinel_genesis_response(
+    session: &mut SentinelGenesisSession,
+    response: SentinelGenesisParticipantResponse,
 ) -> MultiDeviceResult<()> {
     validate_request(&session.request)?;
     if response.version != GENESIS_VERSION || response.session_id != session.request.session_id {
-        return Err(MultiDeviceError::InvalidNexusGenesisSession);
+        return Err(MultiDeviceError::InvalidSentinelGenesisSession);
     }
     validate_participant(&response.participant, &response.session_id)?;
     verify_response(&response)?;
@@ -261,20 +261,20 @@ pub fn add_nexus_genesis_response(
             || existing.encryption_public_key == response.participant.encryption_public_key
             || existing.signing_public_key == response.participant.signing_public_key
     }) {
-        return Err(MultiDeviceError::DuplicateNexusGenesisParticipant {
+        return Err(MultiDeviceError::DuplicateSentinelGenesisParticipant {
             device_id: response.participant.device_id.to_string(),
         });
     }
     if session.participants.len() >= usize::from(session.request.policy.participant_count) {
-        return Err(MultiDeviceError::NexusGenesisRosterFull);
+        return Err(MultiDeviceError::SentinelGenesisRosterFull);
     }
     session.participants.push(response.participant);
     Ok(())
 }
 
-pub fn add_nexus_genesis_public_key_announcement(
-    session: &mut NexusGenesisSession,
-    announcement: &NexusGenesisPublicKeyAnnouncement,
+pub fn add_sentinel_genesis_public_key_announcement(
+    session: &mut SentinelGenesisSession,
+    announcement: &SentinelGenesisPublicKeyAnnouncement,
 ) -> MultiDeviceResult<()> {
     validate_request(&session.request)?;
     verify_public_key_announcement(announcement)?;
@@ -284,12 +284,12 @@ pub fn add_nexus_genesis_public_key_announcement(
             || existing.encryption_public_key == participant.encryption_public_key
             || existing.signing_public_key == participant.signing_public_key
     }) {
-        return Err(MultiDeviceError::DuplicateNexusGenesisParticipant {
+        return Err(MultiDeviceError::DuplicateSentinelGenesisParticipant {
             device_id: participant.device_id.to_string(),
         });
     }
     if session.participants.len() >= usize::from(session.request.policy.participant_count) {
-        return Err(MultiDeviceError::NexusGenesisRosterFull);
+        return Err(MultiDeviceError::SentinelGenesisRosterFull);
     }
     session.participants.push(participant);
     Ok(())
@@ -297,12 +297,12 @@ pub fn add_nexus_genesis_public_key_announcement(
 
 #[allow(clippy::needless_pass_by_value)] // Consuming the session prevents issuing twice.
 pub fn finalize_nexus_genesis_shares(
-    session: NexusGenesisSession,
+    session: SentinelGenesisSession,
     store_id: &StoreId,
     initiator_signing_key: &SigningKey,
-) -> MultiDeviceResult<NexusGenesisIssued> {
+) -> MultiDeviceResult<SentinelGenesisIssued> {
     if !session.is_complete() {
-        return Err(MultiDeviceError::NexusGenesisIncomplete {
+        return Err(MultiDeviceError::SentinelGenesisIncomplete {
             required: session.request.policy.participant_count,
             available: session.participants.len(),
         });
@@ -313,7 +313,7 @@ pub fn finalize_nexus_genesis_shares(
                 && participant.signing_public_key == session.request.initiator_signing_public_key
         })
     {
-        return Err(MultiDeviceError::InvalidNexusGenesisSignature);
+        return Err(MultiDeviceError::InvalidSentinelGenesisSignature);
     }
     let recipients = session
         .participants
@@ -335,12 +335,12 @@ pub fn finalize_nexus_genesis_shares(
     for (participant, record) in session.participants.iter().zip(&share_records) {
         let VaultMetaRecord::NexusShare(device_id, share) = VaultMetaRecord::classify(record)
         else {
-            return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         };
         if device_id != participant.device_id {
-            return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }
-        let mut delivery = NexusGenesisShareDelivery {
+        let mut delivery = SentinelGenesisShareDelivery {
             version: GENESIS_VERSION,
             session_id: session.request.session_id.clone(),
             store_id: store_id.clone(),
@@ -373,16 +373,16 @@ pub fn finalize_nexus_genesis_shares(
         .collect::<MultiDeviceResult<Vec<_>>>()?;
     let mut records = build_members_records(&roster, &keys.members_key)?;
     records.extend(share_records);
-    Ok(NexusGenesisIssued {
+    Ok(SentinelGenesisIssued {
         records,
         participants: session.participants,
         deliveries,
     })
 }
 
-pub fn accept_nexus_genesis_share_delivery(
-    delivery: &NexusGenesisShareDelivery,
-    expected_request: &NexusGenesisRequest,
+pub fn accept_sentinel_genesis_share_delivery(
+    delivery: &SentinelGenesisShareDelivery,
+    expected_request: &SentinelGenesisRequest,
     identity: &DeviceIdentity,
 ) -> MultiDeviceResult<StoredSecretRecord> {
     delivery.policy.validate()?;
@@ -391,19 +391,19 @@ pub fn accept_nexus_genesis_share_delivery(
         || delivery.policy != expected_request.policy
         || delivery.initiator_signing_public_key != expected_request.initiator_signing_public_key
     {
-        return Err(MultiDeviceError::InvalidNexusGenesisSession);
+        return Err(MultiDeviceError::InvalidSentinelGenesisSession);
     }
     if delivery.device_id != *identity.device_id()
         || delivery.encryption_public_key != identity.public_key()
     {
-        return Err(MultiDeviceError::NexusGenesisDeliveryRecipientMismatch);
+        return Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch);
     }
     if delivery.share.threshold != delivery.policy.threshold
         || delivery.share.required_participants != delivery.policy.participant_count
         || delivery.share.share_index == 0
         || delivery.share.share_index > delivery.policy.participant_count
     {
-        return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
     verify_signature(
         &delivery.initiator_signing_public_key,
@@ -413,16 +413,16 @@ pub fn accept_nexus_genesis_share_delivery(
     VaultMetaRecord::NexusShare(delivery.device_id.clone(), delivery.share.clone()).to_stored()
 }
 
-fn validate_request(request: &NexusGenesisRequest) -> MultiDeviceResult<()> {
+fn validate_request(request: &SentinelGenesisRequest) -> MultiDeviceResult<()> {
     request.policy.validate()?;
     if request.version != GENESIS_VERSION || request.initiator_signing_public_key.is_empty() {
-        return Err(MultiDeviceError::InvalidNexusGenesisSession);
+        return Err(MultiDeviceError::InvalidSentinelGenesisSession);
     }
     Ok(())
 }
 
 fn validate_participant(
-    participant: &NexusGenesisParticipant,
+    participant: &SentinelGenesisParticipant,
     session_id: &CompactToken,
 ) -> MultiDeviceResult<()> {
     if device_id_from_public_key(&participant.encryption_public_key)? != participant.device_id
@@ -434,12 +434,12 @@ fn validate_participant(
                 session_id,
             )
     {
-        return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
     Ok(())
 }
 
-fn verify_response(response: &NexusGenesisParticipantResponse) -> MultiDeviceResult<()> {
+fn verify_response(response: &SentinelGenesisParticipantResponse) -> MultiDeviceResult<()> {
     verify_signature(
         &response.participant.signing_public_key,
         &response.signature,
@@ -454,13 +454,13 @@ fn verify_response(response: &NexusGenesisParticipantResponse) -> MultiDeviceRes
 fn response_signing_bytes(
     version: u32,
     session_id: &CompactToken,
-    participant: &NexusGenesisParticipant,
+    participant: &SentinelGenesisParticipant,
 ) -> MultiDeviceResult<Vec<u8>> {
     serde_json::to_vec(&(version, session_id, participant))
-        .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
 }
 
-fn delivery_signing_bytes(delivery: &NexusGenesisShareDelivery) -> MultiDeviceResult<Vec<u8>> {
+fn delivery_signing_bytes(delivery: &SentinelGenesisShareDelivery) -> MultiDeviceResult<Vec<u8>> {
     serde_json::to_vec(&(
         delivery.version,
         &delivery.session_id,
@@ -471,7 +471,7 @@ fn delivery_signing_bytes(delivery: &NexusGenesisShareDelivery) -> MultiDeviceRe
         &delivery.share,
         &delivery.initiator_signing_public_key,
     ))
-    .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)
+    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
 }
 
 fn signing_public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
@@ -486,16 +486,16 @@ fn verify_signature(
     let public: [u8; 32] = hex::decode(public_key.as_str())
         .ok()
         .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidNexusGenesisSignature)?;
+        .ok_or(MultiDeviceError::InvalidSentinelGenesisSignature)?;
     let signature: [u8; 64] = hex::decode(signature)
         .ok()
         .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidNexusGenesisSignature)?;
+        .ok_or(MultiDeviceError::InvalidSentinelGenesisSignature)?;
     let verifying_key = VerifyingKey::from_bytes(&public)
-        .map_err(|_| MultiDeviceError::InvalidNexusGenesisSignature)?;
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisSignature)?;
     verifying_key
         .verify(bytes, &Signature::from_bytes(&signature))
-        .map_err(|_| MultiDeviceError::InvalidNexusGenesisSignature)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisSignature)
 }
 
 fn participant_fingerprint(
@@ -526,10 +526,10 @@ fn standalone_participant_fingerprint(
 }
 
 fn bind_announcement_to_session(
-    announcement: &NexusGenesisPublicKeyAnnouncement,
+    announcement: &SentinelGenesisPublicKeyAnnouncement,
     session_id: &CompactToken,
-) -> NexusGenesisParticipant {
-    NexusGenesisParticipant {
+) -> SentinelGenesisParticipant {
+    SentinelGenesisParticipant {
         device_id: announcement.device_id.clone(),
         encryption_public_key: announcement.encryption_public_key.clone(),
         signing_public_key: announcement.signing_public_key.clone(),
@@ -543,13 +543,13 @@ fn bind_announcement_to_session(
 }
 
 fn verify_public_key_announcement(
-    announcement: &NexusGenesisPublicKeyAnnouncement,
+    announcement: &SentinelGenesisPublicKeyAnnouncement,
 ) -> MultiDeviceResult<()> {
     if announcement.kind != PUBLIC_KEY_ANNOUNCEMENT_KIND
         || announcement.version != GENESIS_VERSION
         || announcement.signing_public_key.is_empty()
     {
-        return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
     if device_id_from_public_key(&announcement.encryption_public_key)? != announcement.device_id
         || announcement.fingerprint
@@ -558,7 +558,7 @@ fn verify_public_key_announcement(
                 &announcement.signing_public_key,
             )
     {
-        return Err(MultiDeviceError::InvalidNexusGenesisPayload);
+        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
     verify_signature(
         &announcement.signing_public_key,
@@ -588,7 +588,7 @@ fn announcement_signing_bytes(
         signing_public_key,
         label,
     ))
-    .map_err(|_| MultiDeviceError::InvalidNexusGenesisPayload)
+    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
 }
 
 #[cfg(test)]
@@ -602,13 +602,17 @@ mod tests {
     }
 
     fn participant(
-        request: &NexusGenesisRequest,
+        request: &SentinelGenesisRequest,
         label: &str,
-    ) -> (DeviceIdentity, SigningKey, NexusGenesisParticipantResponse) {
+    ) -> (
+        DeviceIdentity,
+        SigningKey,
+        SentinelGenesisParticipantResponse,
+    ) {
         let identity = DeviceIdentity::generate().unwrap();
         let signing = signing_key();
         let response =
-            respond_to_nexus_genesis_request(request, &identity, &signing, label.to_owned())
+            respond_to_sentinel_genesis_request(request, &identity, &signing, label.to_owned())
                 .unwrap();
         (identity, signing, response)
     }
@@ -616,7 +620,7 @@ mod tests {
     #[test]
     fn policy_requires_real_threshold() {
         assert!(
-            NexusGenesisPolicy {
+            SentinelGenesisPolicy {
                 participant_count: 3,
                 threshold: 2
             }
@@ -624,7 +628,7 @@ mod tests {
             .is_ok()
         );
         assert!(
-            NexusGenesisPolicy {
+            SentinelGenesisPolicy {
                 participant_count: 3,
                 threshold: 1
             }
@@ -632,7 +636,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            NexusGenesisPolicy {
+            SentinelGenesisPolicy {
                 participant_count: 2,
                 threshold: 3
             }
@@ -640,7 +644,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            NexusGenesisPolicy {
+            SentinelGenesisPolicy {
                 participant_count: 17,
                 threshold: 2
             }
@@ -654,14 +658,14 @@ mod tests {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
         let mut session =
-            start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let peer = DeviceIdentity::generate().unwrap();
         let peer_signing = signing_key();
         let announcement =
-            create_nexus_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
+            create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
                 .unwrap();
         let payload = serde_json::to_string(&announcement).unwrap();
-        add_nexus_genesis_participant_payload(&mut session, &payload).unwrap();
+        add_sentinel_genesis_participant_payload(&mut session, &payload).unwrap();
         assert!(session.is_complete());
         let issued = finalize_nexus_genesis_shares(
             session,
@@ -677,17 +681,17 @@ mod tests {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
         let mut session =
-            start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let peer = DeviceIdentity::generate().unwrap();
         let peer_signing = signing_key();
         let mut announcement =
-            create_nexus_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
+            create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
                 .unwrap();
         announcement.label = "Mallory".into();
         let payload = serde_json::to_string(&announcement).unwrap();
         assert!(matches!(
-            add_nexus_genesis_participant_payload(&mut session, &payload),
-            Err(MultiDeviceError::InvalidNexusGenesisSignature)
+            add_sentinel_genesis_participant_payload(&mut session, &payload),
+            Err(MultiDeviceError::InvalidSentinelGenesisSignature)
         ));
     }
 
@@ -696,14 +700,14 @@ mod tests {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
         let mut session =
-            start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let (_, _, response) = participant(&session.request, "Peer");
         let duplicate = response.clone();
-        add_nexus_genesis_response(&mut session, response).unwrap();
+        add_sentinel_genesis_response(&mut session, response).unwrap();
         assert!(session.is_complete());
         assert!(matches!(
-            add_nexus_genesis_response(&mut session, duplicate),
-            Err(MultiDeviceError::DuplicateNexusGenesisParticipant { .. })
+            add_sentinel_genesis_response(&mut session, duplicate),
+            Err(MultiDeviceError::DuplicateSentinelGenesisParticipant { .. })
         ));
     }
 
@@ -711,27 +715,28 @@ mod tests {
     fn tampered_response_and_cross_session_response_fail() {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
-        let mut first = start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let mut first =
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let second_owner = DeviceIdentity::generate().unwrap();
         let second_signing = signing_key();
         let second =
-            start_nexus_genesis(&second_owner, &second_signing, 2, 2, "Other".into()).unwrap();
+            start_sentinel_genesis(&second_owner, &second_signing, 2, 2, "Other".into()).unwrap();
         let (_, _, mut response) = participant(&first.request, "Peer");
         let cross = response.clone();
         response.participant.label = "Mallory".into();
         assert!(matches!(
-            add_nexus_genesis_response(&mut first, response),
-            Err(MultiDeviceError::InvalidNexusGenesisSignature)
+            add_sentinel_genesis_response(&mut first, response),
+            Err(MultiDeviceError::InvalidSentinelGenesisSignature)
         ));
         assert!(matches!(
-            add_nexus_genesis_response(
+            add_sentinel_genesis_response(
                 &mut first,
-                NexusGenesisParticipantResponse {
+                SentinelGenesisParticipantResponse {
                     session_id: second.request.session_id,
                     ..cross
                 }
             ),
-            Err(MultiDeviceError::InvalidNexusGenesisSession)
+            Err(MultiDeviceError::InvalidSentinelGenesisSession)
         ));
     }
 
@@ -739,17 +744,18 @@ mod tests {
     fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified() {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
-        let incomplete = start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let incomplete =
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let store_id = StoreId::parse("store_AAAAAAAAAAA").unwrap();
         assert!(matches!(
             finalize_nexus_genesis_shares(incomplete, &store_id, &owner_signing),
-            Err(MultiDeviceError::NexusGenesisIncomplete { .. })
+            Err(MultiDeviceError::SentinelGenesisIncomplete { .. })
         ));
 
         let mut session =
-            start_nexus_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let (peer, _, response) = participant(&session.request, "Peer");
-        add_nexus_genesis_response(&mut session, response).unwrap();
+        add_sentinel_genesis_response(&mut session, response).unwrap();
         let issued = finalize_nexus_genesis_shares(session, &store_id, &owner_signing).unwrap();
         assert_eq!(issued.records.len(), 4);
         assert_eq!(issued.deliveries.len(), 2);
@@ -758,7 +764,7 @@ mod tests {
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
             .unwrap();
-        let expected_request = NexusGenesisRequest {
+        let expected_request = SentinelGenesisRequest {
             version: GENESIS_VERSION,
             session_id: peer_delivery.session_id.clone(),
             policy: peer_delivery.policy,
@@ -766,11 +772,12 @@ mod tests {
             initiator_signing_public_key: peer_delivery.initiator_signing_public_key.clone(),
         };
         let accepted =
-            accept_nexus_genesis_share_delivery(peer_delivery, &expected_request, &peer).unwrap();
+            accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &peer)
+                .unwrap();
         assert!(issued.records.contains(&accepted));
         assert!(matches!(
-            accept_nexus_genesis_share_delivery(peer_delivery, &expected_request, &owner),
-            Err(MultiDeviceError::NexusGenesisDeliveryRecipientMismatch)
+            accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &owner),
+            Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch)
         ));
     }
 
@@ -779,11 +786,11 @@ mod tests {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
         let mut session =
-            start_nexus_genesis(&owner, &owner_signing, 3, 2, "Owner".into()).unwrap();
+            start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into()).unwrap();
         let (peer_a, _, a) = participant(&session.request, "A");
         let (peer_b, _, b) = participant(&session.request, "B");
-        add_nexus_genesis_response(&mut session, a).unwrap();
-        add_nexus_genesis_response(&mut session, b).unwrap();
+        add_sentinel_genesis_response(&mut session, a).unwrap();
+        add_sentinel_genesis_response(&mut session, b).unwrap();
         let issued = finalize_nexus_genesis_shares(
             session,
             &StoreId::parse("store_AAAAAAAAAAA").unwrap(),

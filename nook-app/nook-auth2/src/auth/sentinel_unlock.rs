@@ -6,7 +6,7 @@
 
 use super::multi_device::{
     DeviceIdentity, OpenedNexusShare, VaultKeys, device_id_from_public_key, encrypt_for_recipient,
-    generate_id, open_nexus_share_for_identity, reconstruct_nexus_vault_keys_from_opened,
+    generate_id, open_sentinel_share_for_identity, reconstruct_nexus_vault_keys_from_opened,
 };
 use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
@@ -20,19 +20,19 @@ const UNLOCK_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusUnlockPolicy {
+pub struct SentinelUnlockPolicy {
     pub threshold: u8,
     pub required_participants: u8,
 }
 
-impl NexusUnlockPolicy {
+impl SentinelUnlockPolicy {
     pub fn validate(self) -> MultiDeviceResult<()> {
         if self.threshold < 2
             || self.required_participants < 2
             || self.threshold > self.required_participants
             || self.required_participants > 16
         {
-            return Err(MultiDeviceError::InvalidNexusThreshold);
+            return Err(MultiDeviceError::InvalidSentinelThreshold);
         }
         Ok(())
     }
@@ -40,11 +40,11 @@ impl NexusUnlockPolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusUnlockRequest {
+pub struct SentinelUnlockRequest {
     pub version: u32,
     pub session_id: CompactToken,
     pub store_id: StoreId,
-    pub policy: NexusUnlockPolicy,
+    pub policy: SentinelUnlockPolicy,
     pub requester_device_id: DeviceId,
     pub requester_encryption_public_key: DevicePublicKey,
     pub requester_signing_public_key: DeviceSigningPublicKey,
@@ -53,11 +53,11 @@ pub struct NexusUnlockRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusUnlockResponse {
+pub struct SentinelUnlockResponse {
     pub version: u32,
     pub session_id: CompactToken,
     pub store_id: StoreId,
-    pub policy: NexusUnlockPolicy,
+    pub policy: SentinelUnlockPolicy,
     pub participant_device_id: DeviceId,
     pub participant_signing_public_key: DeviceSigningPublicKey,
     pub share_index: u8,
@@ -67,7 +67,7 @@ pub struct NexusUnlockResponse {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NexusUnlockStatus {
+pub struct SentinelUnlockStatus {
     pub collected: u8,
     pub threshold: u8,
     pub ready: bool,
@@ -77,33 +77,33 @@ pub struct NexusUnlockStatus {
 /// responses. It deliberately stores neither a requester private key nor an
 /// opened mnemonic contribution.
 #[derive(Clone)]
-pub struct NexusUnlockSession {
-    request: NexusUnlockRequest,
+pub struct SentinelUnlockSession {
+    request: SentinelUnlockRequest,
     records: Vec<StoredSecretRecord>,
-    responses: Vec<NexusUnlockResponse>,
+    responses: Vec<SentinelUnlockResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NexusUnlockContribution {
+struct SentinelUnlockContribution {
     version: u32,
     session_id: CompactToken,
     store_id: StoreId,
-    policy: NexusUnlockPolicy,
+    policy: SentinelUnlockPolicy,
     participant_device_id: DeviceId,
     participant_signing_public_key: DeviceSigningPublicKey,
     opened_share: OpenedNexusShare,
 }
 
-pub fn start_nexus_unlock(
+pub fn start_sentinel_unlock(
     store_id: StoreId,
-    policy: NexusUnlockPolicy,
+    policy: SentinelUnlockPolicy,
     records: &[StoredSecretRecord],
     requester_identity: &DeviceIdentity,
     requester_signing_key: &SigningKey,
-) -> MultiDeviceResult<NexusUnlockSession> {
+) -> MultiDeviceResult<SentinelUnlockSession> {
     policy.validate()?;
-    let mut request = NexusUnlockRequest {
+    let mut request = SentinelUnlockRequest {
         version: UNLOCK_VERSION,
         session_id: generate_id()?,
         store_id,
@@ -119,7 +119,7 @@ pub fn start_nexus_unlock(
             .to_bytes(),
     );
     validate_request(&request)?;
-    Ok(NexusUnlockSession {
+    Ok(SentinelUnlockSession {
         request,
         records: records.to_vec(),
         responses: Vec::new(),
@@ -127,28 +127,28 @@ pub fn start_nexus_unlock(
 }
 
 #[must_use]
-pub fn nexus_unlock_request(session: &NexusUnlockSession) -> NexusUnlockRequest {
+pub fn sentinel_unlock_request(session: &SentinelUnlockSession) -> SentinelUnlockRequest {
     session.request.clone()
 }
 
-pub fn respond_to_nexus_unlock_request(
-    request: &NexusUnlockRequest,
+pub fn respond_to_sentinel_unlock_request(
+    request: &SentinelUnlockRequest,
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
     signing_key: &SigningKey,
-) -> MultiDeviceResult<NexusUnlockResponse> {
+) -> MultiDeviceResult<SentinelUnlockResponse> {
     validate_request(request)?;
-    let opened_share = open_nexus_share_for_identity(records, identity)?;
+    let opened_share = open_sentinel_share_for_identity(records, identity)?;
     if opened_share.threshold != request.policy.threshold
         || opened_share.required_participants != request.policy.required_participants
         || opened_share.device_id != identity.device_id().as_str()
         || opened_share.share_index == 0
         || opened_share.share_index > request.policy.required_participants
     {
-        return Err(MultiDeviceError::InvalidNexusUnlockPayload);
+        return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
     }
     let participant_signing_public_key = signing_public_key(signing_key);
-    let contribution = NexusUnlockContribution {
+    let contribution = SentinelUnlockContribution {
         version: UNLOCK_VERSION,
         session_id: request.session_id.clone(),
         store_id: request.store_id.clone(),
@@ -158,8 +158,8 @@ pub fn respond_to_nexus_unlock_request(
         opened_share,
     };
     let plaintext = serde_json::to_vec(&contribution)
-        .map_err(|_| MultiDeviceError::InvalidNexusUnlockPayload)?;
-    let mut response = NexusUnlockResponse {
+        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)?;
+    let mut response = SentinelUnlockResponse {
         version: UNLOCK_VERSION,
         session_id: request.session_id.clone(),
         store_id: request.store_id.clone(),
@@ -179,11 +179,11 @@ pub fn respond_to_nexus_unlock_request(
 }
 
 /// Verify and collect an opaque response. Decryption is intentionally delayed
-/// until [`finalize_nexus_unlock`] so plaintext mnemonics are never retained
+/// until [`finalize_sentinel_unlock`] so plaintext mnemonics are never retained
 /// in session state between calls.
-pub fn add_nexus_unlock_response(
-    session: &mut NexusUnlockSession,
-    response: NexusUnlockResponse,
+pub fn add_sentinel_unlock_response(
+    session: &mut SentinelUnlockSession,
+    response: SentinelUnlockResponse,
 ) -> MultiDeviceResult<()> {
     validate_request(&session.request)?;
     validate_response_binding(&session.request, &response)?;
@@ -197,7 +197,7 @@ pub fn add_nexus_unlock_response(
             || existing.participant_signing_public_key == response.participant_signing_public_key
             || existing.share_index == response.share_index
     }) {
-        return Err(MultiDeviceError::DuplicateNexusUnlockParticipant {
+        return Err(MultiDeviceError::DuplicateSentinelUnlockParticipant {
             device_id: response.participant_device_id.to_string(),
         });
     }
@@ -206,9 +206,9 @@ pub fn add_nexus_unlock_response(
 }
 
 #[must_use]
-pub fn nexus_unlock_status(session: &NexusUnlockSession) -> NexusUnlockStatus {
+pub fn sentinel_unlock_status(session: &SentinelUnlockSession) -> SentinelUnlockStatus {
     let collected = u8::try_from(session.responses.len()).unwrap_or(u8::MAX);
-    NexusUnlockStatus {
+    SentinelUnlockStatus {
         collected,
         threshold: session.request.policy.threshold,
         ready: collected >= session.request.policy.threshold,
@@ -216,11 +216,11 @@ pub fn nexus_unlock_status(session: &NexusUnlockSession) -> NexusUnlockStatus {
 }
 
 #[allow(clippy::needless_pass_by_value)] // Consuming the session prevents replay/finalize reuse.
-pub fn finalize_nexus_unlock(
-    session: NexusUnlockSession,
+pub fn finalize_sentinel_unlock(
+    session: SentinelUnlockSession,
     requester_identity: &DeviceIdentity,
 ) -> MultiDeviceResult<VaultKeys> {
-    let NexusUnlockSession {
+    let SentinelUnlockSession {
         request,
         records,
         responses,
@@ -229,7 +229,7 @@ pub fn finalize_nexus_unlock(
     if requester_identity.device_id() != &request.requester_device_id
         || requester_identity.public_key() != request.requester_encryption_public_key
     {
-        return Err(MultiDeviceError::NexusUnlockRecipientMismatch);
+        return Err(MultiDeviceError::SentinelUnlockRecipientMismatch);
     }
     if responses.len() < usize::from(request.policy.threshold) {
         return Err(MultiDeviceError::NotEnoughNexusShares {
@@ -249,8 +249,8 @@ pub fn finalize_nexus_unlock(
             &response_signing_bytes(response)?,
         )?;
         let plaintext = requester_identity.open_utf8(&response.ciphertext)?;
-        let contribution: NexusUnlockContribution = serde_json::from_str(&plaintext)
-            .map_err(|_| MultiDeviceError::InvalidNexusUnlockPayload)?;
+        let contribution: SentinelUnlockContribution = serde_json::from_str(&plaintext)
+            .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)?;
         if contribution.version != response.version
             || contribution.session_id != response.session_id
             || contribution.store_id != response.store_id
@@ -266,21 +266,21 @@ pub fn finalize_nexus_unlock(
             || !device_ids.insert(contribution.participant_device_id.clone())
             || !share_indices.insert(contribution.opened_share.share_index)
         {
-            return Err(MultiDeviceError::InvalidNexusUnlockPayload);
+            return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
         }
         opened.push(contribution.opened_share);
     }
     reconstruct_nexus_vault_keys_from_opened(&records, &opened)
 }
 
-fn validate_request(request: &NexusUnlockRequest) -> MultiDeviceResult<()> {
+fn validate_request(request: &SentinelUnlockRequest) -> MultiDeviceResult<()> {
     request.policy.validate()?;
     if request.version != UNLOCK_VERSION
         || request.requester_signing_public_key.is_empty()
         || device_id_from_public_key(&request.requester_encryption_public_key)?
             != request.requester_device_id
     {
-        return Err(MultiDeviceError::InvalidNexusUnlockSession);
+        return Err(MultiDeviceError::InvalidSentinelUnlockSession);
     }
     verify_signature(
         &request.requester_signing_public_key,
@@ -290,8 +290,8 @@ fn validate_request(request: &NexusUnlockRequest) -> MultiDeviceResult<()> {
 }
 
 fn validate_response_binding(
-    request: &NexusUnlockRequest,
-    response: &NexusUnlockResponse,
+    request: &SentinelUnlockRequest,
+    response: &SentinelUnlockResponse,
 ) -> MultiDeviceResult<()> {
     if response.version != UNLOCK_VERSION
         || response.session_id != request.session_id
@@ -301,12 +301,12 @@ fn validate_response_binding(
         || response.share_index == 0
         || response.share_index > request.policy.required_participants
     {
-        return Err(MultiDeviceError::InvalidNexusUnlockSession);
+        return Err(MultiDeviceError::InvalidSentinelUnlockSession);
     }
     Ok(())
 }
 
-fn request_signing_bytes(request: &NexusUnlockRequest) -> MultiDeviceResult<Vec<u8>> {
+fn request_signing_bytes(request: &SentinelUnlockRequest) -> MultiDeviceResult<Vec<u8>> {
     serde_json::to_vec(&(
         request.version,
         &request.session_id,
@@ -316,10 +316,10 @@ fn request_signing_bytes(request: &NexusUnlockRequest) -> MultiDeviceResult<Vec<
         &request.requester_encryption_public_key,
         &request.requester_signing_public_key,
     ))
-    .map_err(|_| MultiDeviceError::InvalidNexusUnlockPayload)
+    .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)
 }
 
-fn response_signing_bytes(response: &NexusUnlockResponse) -> MultiDeviceResult<Vec<u8>> {
+fn response_signing_bytes(response: &SentinelUnlockResponse) -> MultiDeviceResult<Vec<u8>> {
     serde_json::to_vec(&(
         response.version,
         &response.session_id,
@@ -330,7 +330,7 @@ fn response_signing_bytes(response: &NexusUnlockResponse) -> MultiDeviceResult<V
         response.share_index,
         &response.ciphertext,
     ))
-    .map_err(|_| MultiDeviceError::InvalidNexusUnlockPayload)
+    .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)
 }
 
 fn signing_public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
@@ -345,16 +345,16 @@ fn verify_signature(
     let public: [u8; 32] = hex::decode(public_key.as_str())
         .ok()
         .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidNexusUnlockSignature)?;
+        .ok_or(MultiDeviceError::InvalidSentinelUnlockSignature)?;
     let signature: [u8; 64] = hex::decode(signature)
         .ok()
         .and_then(|bytes| bytes.try_into().ok())
-        .ok_or(MultiDeviceError::InvalidNexusUnlockSignature)?;
+        .ok_or(MultiDeviceError::InvalidSentinelUnlockSignature)?;
     let verifying_key = VerifyingKey::from_bytes(&public)
-        .map_err(|_| MultiDeviceError::InvalidNexusUnlockSignature)?;
+        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockSignature)?;
     verifying_key
         .verify(bytes, &Signature::from_bytes(&signature))
-        .map_err(|_| MultiDeviceError::InvalidNexusUnlockSignature)
+        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockSignature)
 }
 
 #[cfg(test)]
@@ -373,7 +373,7 @@ mod tests {
         requester: DeviceIdentity,
         requester_signing: SigningKey,
         store_id: StoreId,
-        policy: NexusUnlockPolicy,
+        policy: SentinelUnlockPolicy,
     }
 
     fn fixture() -> Fixture {
@@ -393,15 +393,15 @@ mod tests {
             requester: DeviceIdentity::generate().unwrap(),
             requester_signing: signing_key(90),
             store_id: StoreId::parse("store_AAAAAAAAAAA").unwrap(),
-            policy: NexusUnlockPolicy {
+            policy: SentinelUnlockPolicy {
                 threshold: 2,
                 required_participants: 3,
             },
         }
     }
 
-    fn session(fixture: &Fixture) -> NexusUnlockSession {
-        start_nexus_unlock(
+    fn session(fixture: &Fixture) -> SentinelUnlockSession {
+        start_sentinel_unlock(
             fixture.store_id.clone(),
             fixture.policy,
             &fixture.records,
@@ -413,10 +413,10 @@ mod tests {
 
     fn response(
         fixture: &Fixture,
-        request: &NexusUnlockRequest,
+        request: &SentinelUnlockRequest,
         index: usize,
-    ) -> NexusUnlockResponse {
-        respond_to_nexus_unlock_request(
+    ) -> SentinelUnlockResponse {
+        respond_to_sentinel_unlock_request(
             request,
             &fixture.records,
             &fixture.participants[index],
@@ -429,29 +429,29 @@ mod tests {
     fn signed_two_of_three_responses_unlock_without_exposing_mnemonics() {
         let fixture = fixture();
         let mut session = session(&fixture);
-        let request = nexus_unlock_request(&session);
+        let request = sentinel_unlock_request(&session);
         let first = response(&fixture, &request, 0);
         let second = response(&fixture, &request, 1);
         let local_plaintext =
-            open_nexus_share_for_identity(&fixture.records, &fixture.participants[0]).unwrap();
+            open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0]).unwrap();
         assert!(
             !serde_json::to_string(&first)
                 .unwrap()
                 .contains(&local_plaintext.share)
         );
-        add_nexus_unlock_response(&mut session, first).unwrap();
+        add_sentinel_unlock_response(&mut session, first).unwrap();
         assert_eq!(
-            nexus_unlock_status(&session),
-            NexusUnlockStatus {
+            sentinel_unlock_status(&session),
+            SentinelUnlockStatus {
                 collected: 1,
                 threshold: 2,
                 ready: false,
             }
         );
-        add_nexus_unlock_response(&mut session, second).unwrap();
-        assert!(nexus_unlock_status(&session).ready);
+        add_sentinel_unlock_response(&mut session, second).unwrap();
+        assert!(sentinel_unlock_status(&session).ready);
         assert_eq!(
-            finalize_nexus_unlock(session, &fixture.requester).unwrap(),
+            finalize_sentinel_unlock(session, &fixture.requester).unwrap(),
             fixture.keys
         );
     }
@@ -460,16 +460,16 @@ mod tests {
     fn below_quorum_and_wrong_requester_are_rejected() {
         let fixture = fixture();
         let mut session = session(&fixture);
-        let request = nexus_unlock_request(&session);
-        add_nexus_unlock_response(&mut session, response(&fixture, &request, 0)).unwrap();
+        let request = sentinel_unlock_request(&session);
+        add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0)).unwrap();
         assert!(matches!(
-            finalize_nexus_unlock(session.clone(), &fixture.requester),
+            finalize_sentinel_unlock(session.clone(), &fixture.requester),
             Err(MultiDeviceError::NotEnoughNexusShares { .. })
         ));
         let wrong = DeviceIdentity::generate().unwrap();
         assert!(matches!(
-            finalize_nexus_unlock(session, &wrong),
-            Err(MultiDeviceError::NexusUnlockRecipientMismatch)
+            finalize_sentinel_unlock(session, &wrong),
+            Err(MultiDeviceError::SentinelUnlockRecipientMismatch)
         ));
     }
 
@@ -477,13 +477,13 @@ mod tests {
     fn duplicate_device_and_share_index_are_rejected() {
         let fixture = fixture();
         let mut session = session(&fixture);
-        let request = nexus_unlock_request(&session);
+        let request = sentinel_unlock_request(&session);
         let first = response(&fixture, &request, 0);
         let duplicate_index = first.share_index;
-        add_nexus_unlock_response(&mut session, first.clone()).unwrap();
+        add_sentinel_unlock_response(&mut session, first.clone()).unwrap();
         assert!(matches!(
-            add_nexus_unlock_response(&mut session, first),
-            Err(MultiDeviceError::DuplicateNexusUnlockParticipant { .. })
+            add_sentinel_unlock_response(&mut session, first),
+            Err(MultiDeviceError::DuplicateSentinelUnlockParticipant { .. })
         ));
 
         let mut second = response(&fixture, &request, 1);
@@ -494,8 +494,8 @@ mod tests {
                 .to_bytes(),
         );
         assert!(matches!(
-            add_nexus_unlock_response(&mut session, second),
-            Err(MultiDeviceError::DuplicateNexusUnlockParticipant { .. })
+            add_sentinel_unlock_response(&mut session, second),
+            Err(MultiDeviceError::DuplicateSentinelUnlockParticipant { .. })
         ));
     }
 
@@ -503,32 +503,32 @@ mod tests {
     fn tampered_request_response_and_wrong_session_are_rejected() {
         let fixture = fixture();
         let mut first_session = session(&fixture);
-        let first_request = nexus_unlock_request(&first_session);
+        let first_request = sentinel_unlock_request(&first_session);
         let mut tampered_request = first_request.clone();
         tampered_request.policy.threshold = 3;
         assert!(matches!(
-            respond_to_nexus_unlock_request(
+            respond_to_sentinel_unlock_request(
                 &tampered_request,
                 &fixture.records,
                 &fixture.participants[0],
                 &signing_key(1),
             ),
-            Err(MultiDeviceError::InvalidNexusUnlockSignature)
+            Err(MultiDeviceError::InvalidSentinelUnlockSignature)
         ));
 
         let response = response(&fixture, &first_request, 0);
         let second_session = session(&fixture);
         let mut wrong_session = second_session;
         assert!(matches!(
-            add_nexus_unlock_response(&mut wrong_session, response.clone()),
-            Err(MultiDeviceError::InvalidNexusUnlockSession)
+            add_sentinel_unlock_response(&mut wrong_session, response.clone()),
+            Err(MultiDeviceError::InvalidSentinelUnlockSession)
         ));
 
         let mut tampered_response = response;
         tampered_response.share_index = 2;
         assert!(matches!(
-            add_nexus_unlock_response(&mut first_session, tampered_response),
-            Err(MultiDeviceError::InvalidNexusUnlockSignature)
+            add_sentinel_unlock_response(&mut first_session, tampered_response),
+            Err(MultiDeviceError::InvalidSentinelUnlockSignature)
         ));
     }
 }

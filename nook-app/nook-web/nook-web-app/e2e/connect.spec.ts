@@ -73,31 +73,29 @@ test.describe('vault connect flow', () => {
     await page.goto('/app/')
 
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
+    await expect(page.getByTestId('landing-auth-step-name')).toBeVisible()
+    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
+    await page.getByTestId('login-vault-name-input').fill('Workflow vault')
+    await page.getByTestId('landing-auth-name-continue').click()
+
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-nexus')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
     await expect(page.getByTestId('get-started-path-join')).toBeVisible()
-    await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 
     await page.getByTestId('get-started-path-simple').click()
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
-    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
-    ).toBeDisabled()
+    ).toBeEnabled()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
-    await expect(page.getByTestId('login-enrollment-toggle')).toBeVisible()
-    await expect(
-      page.getByTestId('login-unlock-method-fieldset'),
-    ).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
-    await expect(page.getByTestId('product-intro')).toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
       'href',
       'https://github.com/meta-secret/nook',

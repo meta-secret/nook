@@ -6,25 +6,26 @@
 
 pub use nook_auth2::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, NexusShareEnvelope,
-    OpenedNexusShare, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, OpenedNexusShare,
+    SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
     approve_join_request, assess_connect_access, auth_record, build_members_records,
     count_nexus_share_records, create_join_request_record,
-    create_join_request_record_with_signing_key, create_nexus_share_records,
-    create_nexus_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
+    create_join_request_record_with_signing_key, create_sentinel_share_records,
+    create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
     deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
     enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
     explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
     generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
     is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
-    is_members_stored_record, is_nexus_share_stored_record, is_reserved_device_label,
+    is_members_stored_record, is_reserved_device_label, is_sentinel_share_stored_record,
     is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
-    member_from_join, member_stored_key, merge_remote_join_records, nexus_share_record_key,
-    open_nexus_share_for_identity, parse_auth_envelopes, parse_join_request,
-    parse_nexus_share_envelope, pending_join_for_device, reconstruct_nexus_vault_keys,
+    member_from_join, member_stored_key, merge_remote_join_records,
+    open_sentinel_share_for_identity, parse_auth_envelopes, parse_join_request,
+    parse_sentinel_share_envelope, pending_join_for_device, reconstruct_nexus_vault_keys,
     reconstruct_nexus_vault_keys_from_opened, rename_vault_member, replace_member_records,
     resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
-    revoke_vault_member, roster_add_member, user_stored_records, vault_has_multi_device_records,
+    revoke_vault_member, roster_add_member, sentinel_share_record_key, user_stored_records,
+    vault_has_multi_device_records,
 };
 
 use crate::vault_event::VaultOperation;
@@ -72,7 +73,7 @@ pub fn apply_vault_meta_operation(
                 },
             );
         }
-        VaultOperation::NexusParticipantEnrolled {
+        VaultOperation::SentinelParticipantEnrolled {
             device_id,
             encryption_public_key,
             signing_public_key,
@@ -93,11 +94,11 @@ pub fn apply_vault_meta_operation(
         VaultOperation::JoinDenied { device_id } => {
             state.joins.remove(device_id);
         }
-        VaultOperation::NexusSharesIssued { shares } => {
+        VaultOperation::SentinelSharesIssued { shares } => {
             for share in shares {
                 state.nexus_shares.insert(
                     share.device_id.clone(),
-                    NexusShareEnvelope {
+                    SentinelShareEnvelope {
                         version: share.version,
                         threshold: share.threshold,
                         required_participants: share.required_participants,
@@ -185,7 +186,7 @@ mod tests {
     fn nexus_event_materialization_retains_complete_public_roster() {
         let identity = DeviceIdentity::generate().unwrap();
         let (signing, _) = SigningIdentity::generate().unwrap();
-        let operation = VaultOperation::NexusParticipantEnrolled {
+        let operation = VaultOperation::SentinelParticipantEnrolled {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key(),
             signing_public_key: signing.public_key(),

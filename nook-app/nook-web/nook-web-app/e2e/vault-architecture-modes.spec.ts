@@ -115,9 +115,16 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
   }
 }
 
-async function continueToCreateStep(page: Page) {
-  await page.getByTestId('get-started-path-simple').click()
-  await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+async function continueToPathChooser(page: Page) {
+  const nameStep = page.getByTestId('landing-auth-step-name')
+  if (await nameStep.isVisible()) {
+    const nameInput = page.getByTestId('login-vault-name-input')
+    if (!(await nameInput.inputValue()).trim()) {
+      await nameInput.fill('Test vault')
+    }
+    await page.getByTestId('landing-auth-name-continue').click()
+  }
+  await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
 }
 
 async function setLegacyReplicationForProviderTest(
@@ -144,13 +151,17 @@ test.describe('vault architecture modes', () => {
     })
   })
 
-  test('routes simple and nexus vaults into different creation workflows', async ({
+  test('routes simple and sentinel vaults into different creation workflows', async ({
     page,
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
+    await expect(page.getByTestId('landing-auth-step-name')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
+
+    await continueToPathChooser(page)
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-nexus')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
     await expect(page.getByTestId('get-started-path-join')).toBeVisible()
     await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
     await expect(page.getByTestId('mode-group-replication')).toHaveCount(0)
@@ -159,27 +170,34 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('mode-group-provider-capability'),
     ).toHaveCount(0)
-    await expect(page.getByTestId('nexus-genesis-introduction')).toHaveCount(0)
+    await expect(page.getByTestId('sentinel-genesis-introduction')).toHaveCount(
+      0,
+    )
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
     await expect(
       page.getByTestId('create-vault-wizard-nav-replication'),
     ).toHaveCount(0)
 
-    await continueToCreateStep(page)
-    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
+    await page.getByTestId('get-started-path-simple').click()
+    await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    await expect(
+      page.getByTestId('login-create-device-vault-btn'),
+    ).toBeVisible()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
     await page.getByTestId('create-vault-wizard-back').click()
 
-    await page.getByTestId('get-started-path-nexus').click()
-    await expect(page.getByTestId('nexus-genesis-policy-step')).toBeVisible()
-    await expect(page.getByTestId('nexus-genesis-name-input')).toBeVisible()
+    await page.getByTestId('get-started-path-sentinel').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    await expect(page.getByTestId('sentinel-genesis-name-input')).toBeVisible()
     await expect(
-      page.getByTestId('nexus-genesis-participant-count'),
+      page.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveValue('3')
     await expect(
-      page.getByTestId('nexus-genesis-participant-count'),
+      page.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveAttribute('max', '16')
-    await expect(page.getByTestId('nexus-genesis-threshold')).toHaveValue('2')
+    await expect(page.getByTestId('sentinel-genesis-threshold')).toHaveValue(
+      '2',
+    )
     await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
   })
@@ -188,35 +206,30 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     const chooser = page.getByTestId('login-create-vault-chooser')
-    await expect(chooser).toContainText('Choose one path')
+    await expect(chooser).toContainText('Keys, not accounts.')
+    await continueToPathChooser(page)
     await expect(page.getByTestId('get-started-path-chooser')).toContainText(
-      'What do you want to do?',
+      'Choose Simple or Sentinel',
     )
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
-      'Create Simple vault',
+      'Simple vault',
     )
-    await expect(page.getByTestId('get-started-path-nexus')).toContainText(
-      'Create Nexus vault',
+    await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
+      'Build Sentinel vault',
     )
     await expect(page.getByTestId('get-started-path-join')).toContainText(
-      'Join Nexus setup',
+      'Join',
     )
 
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
-    await expect(chooser).toContainText('Выберите один путь')
-    await expect(page.getByTestId('get-started-path-chooser')).toContainText(
-      'Что вы хотите сделать?',
-    )
+    await expect(chooser).toContainText('Ключи, а не аккаунты.')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
-      'Создать простой сейф',
+      'Простой',
     )
-    await expect(page.getByTestId('get-started-path-nexus')).toContainText(
-      'Создать сейф Nexus',
-    )
-    await expect(page.getByTestId('get-started-path-join')).toContainText(
-      'Присоединиться к Nexus',
+    await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
+      'Sentinel',
     )
   })
 
@@ -237,31 +250,33 @@ test.describe('vault architecture modes', () => {
     await assertAppLogsDoNotLeak(page, [SIMPLE_SECRET_VALUE, prfOutput])
   })
 
-  test('does not create a nexus vault before its participant ceremony', async ({
+  test('does not create a sentinel vault before its participant ceremony', async ({
     page,
   }) => {
-    await page.getByTestId('get-started-path-nexus').click()
-    await expect(page.getByTestId('nexus-genesis-policy-step')).toBeVisible()
+    await continueToPathChooser(page)
+    await page.getByTestId('get-started-path-sentinel').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
     await page
-      .getByTestId('nexus-genesis-name-input')
-      .fill('Nexus architecture')
-    await expect(page.getByTestId('nexus-genesis-start')).toBeVisible()
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Sentinel architecture')
+    await expect(page.getByTestId('sentinel-genesis-start')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
   })
 
-  test('opens join nexus as a first-class path with public keys ready', async ({
+  test('opens join sentinel as a first-class path with public keys ready', async ({
     page,
   }) => {
+    await continueToPathChooser(page)
     await page.getByTestId('get-started-path-join').click()
     await expect(
-      page.getByTestId('nexus-genesis-participant-step'),
+      page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible()
     await expect(
-      page.getByTestId('nexus-genesis-generated-response'),
+      page.getByTestId('sentinel-genesis-generated-response'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await expect(
-      page.getByTestId('nexus-genesis-join-request-toggle'),
+      page.getByTestId('sentinel-genesis-join-request-toggle'),
     ).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
@@ -512,17 +527,20 @@ test.describe('vault architecture modes', () => {
     test('keeps mode and provider gates usable on narrow screens', async ({
       page,
     }) => {
+      await continueToPathChooser(page)
       await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
       await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
       await expect(page.getByTestId('mode-group-onboarding')).toHaveCount(0)
       await expect(
         page.getByTestId('mode-group-provider-capability'),
       ).toHaveCount(0)
-      await page.getByTestId('get-started-path-nexus').click()
-      await expect(page.getByTestId('nexus-genesis-policy-step')).toBeVisible()
+      await page.getByTestId('get-started-path-sentinel').click()
+      await expect(
+        page.getByTestId('sentinel-genesis-policy-step'),
+      ).toBeVisible()
       await page.getByTestId('create-vault-wizard-back').click()
 
-      // Nexus genesis is provider-free and has its own creation ceremony.
+      // Sentinel genesis is provider-free and has its own creation ceremony.
       // Return to the chooser before exercising the legacy provider gates.
       await setLegacyReplicationForProviderTest(page, 'shared')
       await openLoginProviderSetup(page)

@@ -4,7 +4,7 @@ use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
     PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultArchitecture,
     VaultUnlock, is_auth_stored_record, is_join_stored_record, is_members_stored_record,
-    is_nexus_share_stored_record,
+    is_sentinel_share_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -210,7 +210,7 @@ fn partition_yaml_records(records: &[StoredSecretRecord]) -> StoredVaultYaml {
             });
         } else if is_auth_stored_record(record) {
             vault.auth.push(stored_record_to_auth(record));
-        } else if is_nexus_share_stored_record(record) {
+        } else if is_sentinel_share_stored_record(record) {
             vault.nexus_shares.push(record.clone());
         } else {
             vault.secrets.push(record.clone());
@@ -905,9 +905,9 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
 
         let architecture = VaultArchitecture {
             device_mode: crate::DeviceMode::AntiHacker,
-            vault_type: crate::VaultType::Nexus,
+            vault_type: crate::VaultType::Sentinel,
             replication_type: crate::ReplicationType::Shared,
-            nexus: Some(crate::NexusPolicy {
+            sentinel: Some(crate::SentinelPolicy {
                 threshold: 2,
                 required_participants: 3,
                 ready_participants: 0,
@@ -938,7 +938,7 @@ schema_version: 1
 store_id: store_SMypl8K0w9Y
 architecture:
   vault_type: simple
-  nexus:
+  sentinel:
     threshold: 2
     required_participants: 3
 secrets: []
@@ -1023,10 +1023,10 @@ secrets: []
         let keys = crate::generate_vault_keys().unwrap();
         let first = crate::DeviceIdentity::generate().unwrap();
         let second = crate::DeviceIdentity::generate().unwrap();
-        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
-        let architecture = VaultArchitecture::nexus_personal(
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2).unwrap();
+        let architecture = VaultArchitecture::sentinel_personal(
             crate::DeviceMode::Standard,
-            crate::NexusPolicy {
+            crate::SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
@@ -1049,7 +1049,7 @@ secrets: []
 
         let parsed = deserialize_stored_yaml(yaml.as_str()).unwrap();
         assert_eq!(parsed, shares);
-        assert!(parsed.iter().all(crate::is_nexus_share_stored_record));
+        assert!(parsed.iter().all(crate::is_sentinel_share_stored_record));
     }
 
     #[test]

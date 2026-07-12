@@ -96,7 +96,7 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
@@ -171,7 +171,7 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
@@ -209,7 +209,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPasswordEntry")]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
         self.vault
@@ -225,7 +225,7 @@ impl NookVaultManager {
 
     #[wasm_bindgen(js_name = "removeVaultPassword")]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
         let entry_ids: Vec<String> = self
@@ -271,7 +271,7 @@ impl NookVaultManager {
             .load_password_unlock_records(&content, vault_missing)
             .await?;
 
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
 
@@ -371,7 +371,7 @@ impl NookVaultManager {
         keys: &nook_core::VaultKeys,
         content: &str,
     ) -> Result<(), NookError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
             return Err(nook_core::MultiDeviceError::NexusPasswordUnlockForbidden.into());
         }
         // Local vaults also use the immutable event log once it has been
@@ -467,7 +467,7 @@ impl NookVaultManager {
                     members_key_ciphertext: envelopes.members_key,
                 }]
             }
-            nook_core::VaultType::Nexus => {
+            nook_core::VaultType::Sentinel => {
                 unreachable!("nexus password membership forbidden")
             }
         };

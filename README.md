@@ -70,7 +70,7 @@ item, add a corrected copy and delete the old one.
 ### Local-first vault
 
 1. Protect this browser with a passkey (WebAuthn PRF) or PIN fallback.
-2. Create a **Simple** vault on this device, or create / join a **Nexus** vault
+2. Create a **Simple** vault on this device, or create / join a **Sentinel** vault
    (quorum / SLIP-0039 recovery — see product specs).
 3. Secrets are encrypted in Rust/WASM before anything is written to storage.
 4. The browser keeps an encrypted local copy. Sync providers are optional

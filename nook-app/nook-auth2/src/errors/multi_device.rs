@@ -67,43 +67,43 @@ pub enum MultiDeviceError {
     NexusShareNotFound { device_id: String },
 
     #[error("Invalid nexus threshold policy.")]
-    InvalidNexusThreshold,
+    InvalidSentinelThreshold,
 
     #[error("Invalid nexus genesis session binding.")]
-    InvalidNexusGenesisSession,
+    InvalidSentinelGenesisSession,
 
     #[error("Invalid nexus genesis participant response signature.")]
-    InvalidNexusGenesisSignature,
+    InvalidSentinelGenesisSignature,
 
     #[error("Nexus genesis participant already exists: {device_id}.")]
-    DuplicateNexusGenesisParticipant { device_id: String },
+    DuplicateSentinelGenesisParticipant { device_id: String },
 
     #[error("Nexus genesis roster is full.")]
-    NexusGenesisRosterFull,
+    SentinelGenesisRosterFull,
 
     #[error("Nexus genesis needs {required} participants, but has {available}.")]
-    NexusGenesisIncomplete { required: u8, available: usize },
+    SentinelGenesisIncomplete { required: u8, available: usize },
 
     #[error("Nexus genesis share delivery is not addressed to this device.")]
-    NexusGenesisDeliveryRecipientMismatch,
+    SentinelGenesisDeliveryRecipientMismatch,
 
     #[error("Invalid nexus genesis payload.")]
-    InvalidNexusGenesisPayload,
+    InvalidSentinelGenesisPayload,
 
     #[error("Invalid nexus unlock session binding.")]
-    InvalidNexusUnlockSession,
+    InvalidSentinelUnlockSession,
 
     #[error("Invalid nexus unlock signature.")]
-    InvalidNexusUnlockSignature,
+    InvalidSentinelUnlockSignature,
 
     #[error("Invalid nexus unlock payload.")]
-    InvalidNexusUnlockPayload,
+    InvalidSentinelUnlockPayload,
 
     #[error("Nexus unlock response already exists for device {device_id} or share index.")]
-    DuplicateNexusUnlockParticipant { device_id: String },
+    DuplicateSentinelUnlockParticipant { device_id: String },
 
     #[error("Nexus unlock session is not addressed to this requester identity.")]
-    NexusUnlockRecipientMismatch,
+    SentinelUnlockRecipientMismatch,
 
     #[error("Not enough nexus shares: need {threshold}, got {available}.")]
     NotEnoughNexusShares { threshold: u8, available: usize },
@@ -118,12 +118,12 @@ pub enum MultiDeviceError {
     NexusSharePayload(#[source] serde_json::Error),
 
     #[error("Invalid nexus share encoding.")]
-    InvalidNexusShareEncoding,
+    InvalidSentinelShareEncoding,
 
     #[error(
         "Nexus vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
     )]
-    NexusCeremonyRequired,
+    SentinelCeremonyRequired,
 
     #[error(
         "Password unlock is forbidden for nexus vaults; use the opened-share ceremony instead."

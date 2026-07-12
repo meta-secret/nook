@@ -48,12 +48,12 @@ struct Share {
 ///
 /// Every returned mnemonic has `ext = 1`, `e = 0`, `GT = G = 1`, and uses an
 /// empty SLIP-0039 passphrase. `2 <= threshold <= share_count <= 16`.
-pub(crate) fn split_nexus_secret(
+pub(crate) fn split_sentinel_secret(
     master_secret: &[u8; SECRET_BYTES],
     threshold: u8,
     share_count: u8,
 ) -> MultiDeviceResult<Vec<String>> {
-    validate_nexus_policy(threshold, share_count)?;
+    validate_sentinel_policy(threshold, share_count)?;
 
     let mut identifier_bytes = [0_u8; 2];
     getrandom::getrandom(&mut identifier_bytes)
@@ -79,11 +79,13 @@ pub(crate) fn split_nexus_secret(
 }
 
 /// Recover a 256-bit Nexus root from any quorum of compatible mnemonics.
-pub(crate) fn recover_nexus_secret(mnemonics: &[String]) -> MultiDeviceResult<[u8; SECRET_BYTES]> {
+pub(crate) fn recover_sentinel_secret(
+    mnemonics: &[String],
+) -> MultiDeviceResult<[u8; SECRET_BYTES]> {
     if let Some(first) = mnemonics.first()
         && decode_share(first)?.member_threshold < 2
     {
-        return Err(MultiDeviceError::InvalidNexusThreshold);
+        return Err(MultiDeviceError::InvalidSentinelThreshold);
     }
     recover_with_passphrase(mnemonics, b"")
 }
@@ -110,7 +112,7 @@ fn recover_with_passphrase(
             || share.member_threshold != first.member_threshold
             || share.value.len() != SECRET_BYTES
     }) {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
 
     let mut indexes = BTreeSet::new();
@@ -118,7 +120,7 @@ fn recover_with_passphrase(
         .iter()
         .any(|share| !indexes.insert(share.member_index))
     {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     let required = usize::from(first.member_threshold);
     if shares.len() < required {
@@ -143,12 +145,12 @@ fn recover_with_passphrase(
     encrypted.zeroize();
     decrypted
         .try_into()
-        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)
+        .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)
 }
 
-fn validate_nexus_policy(threshold: u8, share_count: u8) -> MultiDeviceResult<()> {
+fn validate_sentinel_policy(threshold: u8, share_count: u8) -> MultiDeviceResult<()> {
     if threshold < 2 || threshold > share_count || share_count > 16 {
-        return Err(MultiDeviceError::InvalidNexusThreshold);
+        return Err(MultiDeviceError::InvalidSentinelThreshold);
     }
     Ok(())
 }
@@ -157,7 +159,7 @@ fn validate_passphrase(passphrase: &[u8]) -> MultiDeviceResult<()> {
     if passphrase.iter().all(|byte| (32..=126).contains(byte)) || passphrase.is_empty() {
         Ok(())
     } else {
-        Err(MultiDeviceError::InvalidNexusShareEncoding)
+        Err(MultiDeviceError::InvalidSentinelShareEncoding)
     }
 }
 
@@ -168,7 +170,7 @@ fn split_secret(threshold: u8, share_count: u8, secret: &[u8]) -> MultiDeviceRes
         || secret.len() < 16
         || !secret.len().is_multiple_of(2)
     {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     if threshold == 1 {
         return Ok((0..share_count)
@@ -185,7 +187,8 @@ fn split_secret(threshold: u8, share_count: u8, secret: &[u8]) -> MultiDeviceRes
         let mut value = vec![0_u8; secret.len()];
         fill_random(&mut value)?;
         shares.push(RawShare {
-            index: u8::try_from(index).map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?,
+            index: u8::try_from(index)
+                .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?,
             value,
         });
     }
@@ -208,7 +211,8 @@ fn split_secret(threshold: u8, share_count: u8, secret: &[u8]) -> MultiDeviceRes
     });
 
     for index in random_share_count..usize::from(share_count) {
-        let index = u8::try_from(index).map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+        let index =
+            u8::try_from(index).map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
         shares.push(RawShare {
             index,
             value: interpolate(&base_points, index)?,
@@ -229,7 +233,7 @@ fn recover_secret(threshold: u8, shares: &[RawShare]) -> MultiDeviceResult<Vec<u
         return shares
             .first()
             .map(|share| share.value.clone())
-            .ok_or(MultiDeviceError::InvalidNexusShareEncoding);
+            .ok_or(MultiDeviceError::InvalidSentinelShareEncoding);
     }
 
     let secret = interpolate(shares, SECRET_INDEX)?;
@@ -237,7 +241,7 @@ fn recover_secret(threshold: u8, shares: &[RawShare]) -> MultiDeviceResult<Vec<u
     if digest_share.len() < DIGEST_BYTES
         || digest_share[..DIGEST_BYTES] != share_digest(&digest_share[DIGEST_BYTES..], &secret)
     {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     Ok(secret)
 }
@@ -285,13 +289,13 @@ fn interpolate(shares: &[RawShare], target: u8) -> MultiDeviceResult<Vec<u8>> {
     let length = shares
         .first()
         .map(|share| share.value.len())
-        .ok_or(MultiDeviceError::InvalidNexusShareEncoding)?;
+        .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
     let indexes = shares
         .iter()
         .map(|share| share.index)
         .collect::<BTreeSet<_>>();
     if indexes.len() != shares.len() || shares.iter().any(|share| share.value.len() != length) {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     if let Some(share) = shares.iter().find(|share| share.index == target) {
         return Ok(share.value.clone());
@@ -344,7 +348,7 @@ fn gf_pow(mut value: u8, mut exponent: u8) -> u8 {
 
 fn gf_div(numerator: u8, denominator: u8) -> MultiDeviceResult<u8> {
     if denominator == 0 {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     if numerator == 0 {
         return Ok(0);
@@ -362,7 +366,7 @@ fn decrypt_master_secret(
     exponent: u8,
 ) -> MultiDeviceResult<Vec<u8>> {
     if encrypted.len() != SECRET_BYTES || !encrypted.len().is_multiple_of(2) {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     Ok(feistel(
         encrypted,
@@ -418,7 +422,7 @@ fn encode_share(share: &Share) -> MultiDeviceResult<String> {
         || share.member_index > 15
         || share.iteration_exponent > 15
     {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     let id_ext_exponent =
         (u32::from(share.identifier) << 5) | (1_u32 << 4) | u32::from(share.iteration_exponent);
@@ -436,7 +440,7 @@ fn encode_share(share: &Share) -> MultiDeviceResult<String> {
             words
                 .get(usize::from(index))
                 .copied()
-                .ok_or(MultiDeviceError::InvalidNexusShareEncoding)
+                .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)
         })
         .collect::<MultiDeviceResult<Vec<_>>>()
         .map(|mnemonic| mnemonic.join(" "))
@@ -449,23 +453,23 @@ fn decode_share(mnemonic: &str) -> MultiDeviceResult<Share> {
         .map(|word| {
             words
                 .binary_search(&word)
-                .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)
+                .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)
                 .and_then(|index| {
-                    u16::try_from(index).map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)
+                    u16::try_from(index).map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)
                 })
         })
         .collect::<MultiDeviceResult<Vec<_>>>()?;
     if indices.len() != MNEMONIC_WORDS_256 || !verify_checksum(&indices) {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
 
     let id_ext_exponent = words_to_u32(&indices[..2]);
     let identifier = u16::try_from(id_ext_exponent >> 5)
-        .map_err(|_| MultiDeviceError::InvalidNexusShareEncoding)?;
+        .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
     let extendable = (id_ext_exponent >> 4) & 1;
     let iteration_exponent = (id_ext_exponent & 0x0f) as u8;
     if identifier > 0x7fff || extendable != 1 {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
 
     let parameters = words_to_u32(&indices[2..METADATA_WORDS]);
@@ -475,13 +479,13 @@ fn decode_share(mnemonic: &str) -> MultiDeviceResult<Share> {
     let member_index = ((parameters >> 4) & 0x0f) as u8;
     let member_threshold = (parameters & 0x0f) as u8 + 1;
     if group_index != 0 || group_threshold != 1 || group_count != 1 {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
 
     let value_words = &indices[METADATA_WORDS..indices.len() - CHECKSUM_WORDS];
     let value = words_to_bytes(value_words)?;
     if value.len() != SECRET_BYTES {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     Ok(Share {
         identifier,
@@ -526,16 +530,16 @@ fn words_to_bytes(words: &[u16]) -> MultiDeviceResult<Vec<u8>> {
     let padded_bits = words.len() * 10;
     let padding = padded_bits % 16;
     if padding > 8 || words.iter().any(|word| *word > 1023) {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     for bit in 0..padding {
         if words[bit / 10] & (1 << (9 - bit % 10)) != 0 {
-            return Err(MultiDeviceError::InvalidNexusShareEncoding);
+            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
     }
     let byte_count = (padded_bits - padding) / 8;
     if byte_count < 16 {
-        return Err(MultiDeviceError::InvalidNexusShareEncoding);
+        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     let mut bytes = vec![0_u8; byte_count];
     for bit in 0..byte_count * 8 {
@@ -615,8 +619,8 @@ mod tests {
             "8340611602fe91af634a5f4608377b5235fa2d757c51d720c0c7656249a3035f"
         );
         assert!(matches!(
-            recover_nexus_secret(&mnemonics),
-            Err(MultiDeviceError::InvalidNexusThreshold)
+            recover_sentinel_secret(&mnemonics),
+            Err(MultiDeviceError::InvalidSentinelThreshold)
         ));
     }
 
@@ -636,7 +640,7 @@ mod tests {
     #[test]
     fn nexus_round_trip_is_current_ext_one_and_any_quorum_recovers() {
         let root = core::array::from_fn(|index| u8::try_from(index).unwrap());
-        let shares = split_nexus_secret(&root, 3, 5).unwrap();
+        let shares = split_sentinel_secret(&root, 3, 5).unwrap();
         assert_eq!(shares.len(), 5);
         assert!(
             shares
@@ -648,14 +652,14 @@ mod tests {
             assert_eq!(decoded.iteration_exponent, 0);
             assert_eq!(decoded.member_threshold, 3);
         }
-        assert_eq!(recover_nexus_secret(&shares[1..4]).unwrap(), root);
-        assert!(recover_nexus_secret(&shares[..2]).is_err());
+        assert_eq!(recover_sentinel_secret(&shares[1..4]).unwrap(), root);
+        assert!(recover_sentinel_secret(&shares[..2]).is_err());
     }
 
     #[test]
     fn checksum_and_padding_corruption_are_rejected() {
         let root = [42_u8; SECRET_BYTES];
-        let mut shares = split_nexus_secret(&root, 2, 3).unwrap();
+        let mut shares = split_sentinel_secret(&root, 2, 3).unwrap();
         let last = shares[0].rfind(' ').unwrap() + 1;
         let replacement = if &shares[0][last..] == "academic" {
             "acid"
@@ -663,9 +667,9 @@ mod tests {
             "academic"
         };
         shares[0].replace_range(last.., replacement);
-        assert!(recover_nexus_secret(&shares[..2]).is_err());
+        assert!(recover_sentinel_secret(&shares[..2]).is_err());
 
-        let mut valid = split_nexus_secret(&root, 2, 3).unwrap();
+        let mut valid = split_sentinel_secret(&root, 2, 3).unwrap();
         let mut indices = valid[0]
             .split_whitespace()
             .map(|word| u16::try_from(wordlist().binary_search(&word).unwrap()).unwrap())
@@ -679,17 +683,17 @@ mod tests {
             .map(|index| wordlist()[usize::from(index)])
             .collect::<Vec<_>>()
             .join(" ");
-        assert!(recover_nexus_secret(&valid[..2]).is_err());
+        assert!(recover_sentinel_secret(&valid[..2]).is_err());
     }
 
     #[test]
     fn rejects_mixed_sets_duplicates_and_invalid_policy() {
-        let left = split_nexus_secret(&[1_u8; SECRET_BYTES], 2, 3).unwrap();
-        let right = split_nexus_secret(&[2_u8; SECRET_BYTES], 2, 3).unwrap();
-        assert!(recover_nexus_secret(&[left[0].clone(), right[1].clone()]).is_err());
-        assert!(recover_nexus_secret(&[left[0].clone(), left[0].clone()]).is_err());
-        assert!(split_nexus_secret(&[0_u8; SECRET_BYTES], 1, 3).is_err());
-        assert!(split_nexus_secret(&[0_u8; SECRET_BYTES], 3, 2).is_err());
-        assert!(split_nexus_secret(&[0_u8; SECRET_BYTES], 2, 17).is_err());
+        let left = split_sentinel_secret(&[1_u8; SECRET_BYTES], 2, 3).unwrap();
+        let right = split_sentinel_secret(&[2_u8; SECRET_BYTES], 2, 3).unwrap();
+        assert!(recover_sentinel_secret(&[left[0].clone(), right[1].clone()]).is_err());
+        assert!(recover_sentinel_secret(&[left[0].clone(), left[0].clone()]).is_err());
+        assert!(split_sentinel_secret(&[0_u8; SECRET_BYTES], 1, 3).is_err());
+        assert!(split_sentinel_secret(&[0_u8; SECRET_BYTES], 3, 2).is_err());
+        assert!(split_sentinel_secret(&[0_u8; SECRET_BYTES], 2, 17).is_err());
     }
 }

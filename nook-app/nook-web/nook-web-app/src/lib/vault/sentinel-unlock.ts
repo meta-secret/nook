@@ -2,22 +2,22 @@ import type { VaultState } from '$lib/vault.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import { createLogger } from '$lib/log'
 
-const log = createLogger('vault-nexus')
+const log = createLogger('vault-sentinel')
 
-export type NexusUnlockStatus =
-  | 'not_nexus'
+export type SentinelUnlockStatus =
+  | 'not_sentinel'
   | 'unlocked'
   | 'awaiting_shares'
   | 'ceremony_required'
 
-export type NexusUnlockSessionStatus = {
+export type SentinelUnlockSessionStatus = {
   active: boolean
   collected: number
   threshold: number
   ready: boolean
 }
 
-export type NexusStoredDeliverySummary = {
+export type SentinelStoredDeliverySummary = {
   storeId: string
   sessionId: string
   policy: {
@@ -26,7 +26,7 @@ export type NexusStoredDeliverySummary = {
   }
 }
 
-const INACTIVE_SESSION: NexusUnlockSessionStatus = {
+const INACTIVE_SESSION: SentinelUnlockSessionStatus = {
   active: false,
   collected: 0,
   threshold: 0,
@@ -35,7 +35,7 @@ const INACTIVE_SESSION: NexusUnlockSessionStatus = {
 
 const CEREMONY_REQUIRED_MARKERS = [
   'opened-share ceremony',
-  'NexusCeremonyRequired',
+  'SentinelCeremonyRequired',
   'nexus vault unlock requires an opened-share ceremony',
 ]
 
@@ -49,8 +49,8 @@ function errorMessage(err: unknown): string {
   return String(err ?? '')
 }
 
-function parseSessionStatus(raw: string): NexusUnlockSessionStatus {
-  const status = JSON.parse(raw) as Partial<NexusUnlockSessionStatus>
+function parseSessionStatus(raw: string): SentinelUnlockSessionStatus {
+  const status = JSON.parse(raw) as Partial<SentinelUnlockSessionStatus>
   if (!status.active) return { ...INACTIVE_SESSION }
   return {
     active: true,
@@ -60,7 +60,7 @@ function parseSessionStatus(raw: string): NexusUnlockSessionStatus {
   }
 }
 
-export function isNexusCeremonyRequiredError(err: unknown): boolean {
+export function isSentinelCeremonyRequiredError(err: unknown): boolean {
   const message = errorMessage(err)
   return CEREMONY_REQUIRED_MARKERS.some((marker) =>
     message.toLowerCase().includes(marker.toLowerCase()),
@@ -74,71 +74,71 @@ export function isNexusPasswordUnlockForbiddenError(err: unknown): boolean {
   )
 }
 
-export function isNexusVault(state: VaultState): boolean {
-  if (state.vaultArchitecture.vault_type === 'nexus') return true
+export function isSentinelVault(state: VaultState): boolean {
+  if (state.vaultArchitecture.vault_type === 'sentinel') return true
   if (!state.manager) return false
   try {
-    return state.manager.nexusUnlockStatus() !== 'not_nexus'
+    return state.manager.sentinelUnlockStatus() !== 'not_sentinel'
   } catch {
     return false
   }
 }
 
-export async function getNexusUnlockStatus(
+export async function getSentinelUnlockStatus(
   state: VaultState,
-): Promise<NexusUnlockStatus> {
-  if (!state.manager) return 'not_nexus'
+): Promise<SentinelUnlockStatus> {
+  if (!state.manager) return 'not_sentinel'
   try {
     const status = await state.enqueueStorage(() =>
-      state.manager!.nexusUnlockStatus(),
+      state.manager!.sentinelUnlockStatus(),
     )
     switch (status) {
       case 'unlocked':
       case 'awaiting_shares':
       case 'ceremony_required':
-      case 'not_nexus':
+      case 'not_sentinel':
         return status
       default:
-        return 'not_nexus'
+        return 'not_sentinel'
     }
   } catch {
-    return 'not_nexus'
+    return 'not_sentinel'
   }
 }
 
-export async function refreshNexusUnlockStatus(
+export async function refreshSentinelUnlockStatus(
   state: VaultState,
-): Promise<NexusUnlockStatus> {
-  let status = await getNexusUnlockStatus(state)
+): Promise<SentinelUnlockStatus> {
+  let status = await getSentinelUnlockStatus(state)
   if (
     !state.isAuthenticated &&
-    status === 'not_nexus' &&
-    state.vaultArchitecture.vault_type === 'nexus'
+    status === 'not_sentinel' &&
+    state.vaultArchitecture.vault_type === 'sentinel'
   ) {
-    await ensureNexusCeremonyHydrated(state)
-    status = await getNexusUnlockStatus(state)
+    await ensureSentinelCeremonyHydrated(state)
+    status = await getSentinelUnlockStatus(state)
   }
-  state.nexusUnlockStatus = status
+  state.sentinelUnlockStatus = status
   if (status === 'ceremony_required' || status === 'awaiting_shares') {
-    state.nexusCeremonyPrompt = true
+    state.sentinelCeremonyPrompt = true
     state.loginPasswordPrompt = false
   } else if (status === 'unlocked') {
-    state.nexusCeremonyPrompt = false
+    state.sentinelCeremonyPrompt = false
   } else if (
-    status === 'not_nexus' &&
-    state.vaultArchitecture.vault_type === 'nexus'
+    status === 'not_sentinel' &&
+    state.vaultArchitecture.vault_type === 'sentinel'
   ) {
-    state.nexusCeremonyPrompt = true
-    state.nexusUnlockStatus = 'ceremony_required'
+    state.sentinelCeremonyPrompt = true
+    state.sentinelUnlockStatus = 'ceremony_required'
     return 'ceremony_required'
-  } else if (status === 'not_nexus') {
-    state.nexusCeremonyPrompt = false
+  } else if (status === 'not_sentinel') {
+    state.sentinelCeremonyPrompt = false
   }
-  return state.nexusUnlockStatus
+  return state.sentinelUnlockStatus
 }
 
-/** Hydrate encrypted Nexus metadata without attempting to bypass quorum. */
-export async function ensureNexusCeremonyHydrated(
+/** Hydrate encrypted Sentinel metadata without attempting to bypass quorum. */
+export async function ensureSentinelCeremonyHydrated(
   state: VaultState,
 ): Promise<void> {
   if (!state.manager || state.isAuthenticated || state.isVerifying) return
@@ -146,12 +146,12 @@ export async function ensureNexusCeremonyHydrated(
   try {
     await state.syncFromStorage({ force: true })
   } catch {
-    // A locked Nexus sync may fail closed until its local share is selected.
+    // A locked Sentinel sync may fail closed until its local share is selected.
   }
-  const status = await getNexusUnlockStatus(state)
+  const status = await getSentinelUnlockStatus(state)
   if (status === 'ceremony_required' || status === 'awaiting_shares') {
     state.refreshVaultArchitectureFromManager()
-    state.nexusCeremonyPrompt = true
+    state.sentinelCeremonyPrompt = true
     state.loginPasswordPrompt = false
     return
   }
@@ -161,67 +161,67 @@ export async function ensureNexusCeremonyHydrated(
       await state.manager!.connect(...connectArgs)
     })
   } catch (e: unknown) {
-    if (isNexusCeremonyRequiredError(e)) {
+    if (isSentinelCeremonyRequiredError(e)) {
       state.refreshVaultArchitectureFromManager()
-      state.nexusCeremonyPrompt = true
+      state.sentinelCeremonyPrompt = true
       state.loginPasswordPrompt = false
     }
   }
 }
 
-export async function startNexusUnlock(state: VaultState): Promise<void> {
+export async function startSentinelUnlock(state: VaultState): Promise<void> {
   if (!state.manager || state.isVerifying) return
   state.errorMsg = ''
-  await ensureNexusCeremonyHydrated(state)
+  await ensureSentinelCeremonyHydrated(state)
   const rawStatus = await state.enqueueStorage(() =>
-    state.manager!.startNexusUnlock(),
+    state.manager!.startSentinelUnlock(),
   )
-  state.nexusUnlockSession = parseSessionStatus(rawStatus)
-  state.nexusUnlockRequest = await state.enqueueStorage(() =>
-    state.manager!.nexusUnlockRequestJson(),
+  state.sentinelUnlockSession = parseSessionStatus(rawStatus)
+  state.sentinelUnlockRequest = await state.enqueueStorage(() =>
+    state.manager!.sentinelUnlockRequestJson(),
   )
 }
 
-export async function addNexusUnlockResponse(
+export async function addSentinelUnlockResponse(
   state: VaultState,
   response: string,
 ): Promise<void> {
   if (!state.manager || !response.trim()) return
   const rawStatus = await state.enqueueStorage(() =>
-    state.manager!.addNexusUnlockResponse(response.trim()),
+    state.manager!.addSentinelUnlockResponse(response.trim()),
   )
-  state.nexusUnlockSession = parseSessionStatus(rawStatus)
+  state.sentinelUnlockSession = parseSessionStatus(rawStatus)
 }
 
-export async function refreshNexusUnlockSession(
+export async function refreshSentinelUnlockSession(
   state: VaultState,
 ): Promise<void> {
   if (!state.manager) return
   const rawStatus = await state.enqueueStorage(() =>
-    state.manager!.nexusUnlockSessionStatusJson(),
+    state.manager!.sentinelUnlockSessionStatusJson(),
   )
-  state.nexusUnlockSession = parseSessionStatus(rawStatus)
-  if (state.nexusUnlockSession.active && !state.nexusUnlockRequest) {
-    state.nexusUnlockRequest = await state.enqueueStorage(() =>
-      state.manager!.nexusUnlockRequestJson(),
+  state.sentinelUnlockSession = parseSessionStatus(rawStatus)
+  if (state.sentinelUnlockSession.active && !state.sentinelUnlockRequest) {
+    state.sentinelUnlockRequest = await state.enqueueStorage(() =>
+      state.manager!.sentinelUnlockRequestJson(),
     )
   }
 }
 
-export async function listNexusStoredDeliveries(
+export async function listSentinelStoredDeliveries(
   state: VaultState,
-): Promise<NexusStoredDeliverySummary[]> {
+): Promise<SentinelStoredDeliverySummary[]> {
   if (!state.manager) return []
   await state.initDeviceIdentity()
   const raw = await state.enqueueStorage(() =>
-    state.manager!.listNexusGenesisShareDeliveries(),
+    state.manager!.listSentinelGenesisShareDeliveries(),
   )
-  const summaries = JSON.parse(raw) as NexusStoredDeliverySummary[]
-  state.nexusStoredDeliveries = summaries
+  const summaries = JSON.parse(raw) as SentinelStoredDeliverySummary[]
+  state.sentinelStoredDeliveries = summaries
   return summaries
 }
 
-export async function createNexusUnlockResponse(
+export async function createSentinelUnlockResponse(
   state: VaultState,
   storeId: string,
   request: string,
@@ -230,14 +230,18 @@ export async function createNexusUnlockResponse(
   if (!storeId.trim() || !request.trim()) return ''
   await state.initDeviceIdentity()
   return state.enqueueStorage(async () => {
-    await state.manager!.loadNexusGenesisShareDelivery(storeId.trim())
+    await state.manager!.loadSentinelGenesisShareDelivery(storeId.trim())
     state.refreshVaultArchitectureFromManager()
-    return state.manager!.respondToNexusUnlockRequest(request.trim())
+    return state.manager!.respondToSentinelUnlockRequest(request.trim())
   })
 }
 
-export async function finalizeNexusUnlock(state: VaultState): Promise<void> {
-  if (!state.manager || state.isVerifying || !state.nexusUnlockSession.ready) {
+export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
+  if (
+    !state.manager ||
+    state.isVerifying ||
+    !state.sentinelUnlockSession.ready
+  ) {
     return
   }
   state.errorMsg = ''
@@ -245,13 +249,13 @@ export async function finalizeNexusUnlock(state: VaultState): Promise<void> {
   state.isVerifying = true
   try {
     const rawRecords = (await state.enqueueStorage(() =>
-      state.manager!.finalizeNexusUnlock(),
+      state.manager!.finalizeSentinelUnlock(),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
-    state.nexusCeremonyPrompt = false
-    state.nexusUnlockRequest = ''
-    state.nexusUnlockSession = { ...INACTIVE_SESSION }
-    state.nexusUnlockStatus = 'unlocked'
+    state.sentinelCeremonyPrompt = false
+    state.sentinelUnlockRequest = ''
+    state.sentinelUnlockSession = { ...INACTIVE_SESSION }
+    state.sentinelUnlockStatus = 'unlocked'
     await state.ensureProviderSaved()
     await state.loadProviders()
     await state.refreshPasswordEntriesList()
@@ -268,33 +272,33 @@ export async function finalizeNexusUnlock(state: VaultState): Promise<void> {
     state.startVaultSync()
   } catch (e: unknown) {
     state.isAuthenticated = false
-    if (isNexusCeremonyRequiredError(e)) {
-      state.nexusCeremonyPrompt = true
-      await refreshNexusUnlockStatus(state)
+    if (isSentinelCeremonyRequiredError(e)) {
+      state.sentinelCeremonyPrompt = true
+      await refreshSentinelUnlockStatus(state)
     }
     state.errorMsg =
       e instanceof Error
         ? state.resolveErrorMessage(e.message)
-        : state.t('architecture_modes.nexus_unlock_failed')
+        : state.t('architecture_modes.sentinel_unlock_failed')
   } finally {
     state.isVerifying = false
   }
 }
 
-export async function surfaceNexusCeremonyIfNeeded(
+export async function surfaceSentinelCeremonyIfNeeded(
   state: VaultState,
   err: unknown,
 ): Promise<boolean> {
-  if (!isNexusCeremonyRequiredError(err) && !isNexusVault(state)) {
+  if (!isSentinelCeremonyRequiredError(err) && !isSentinelVault(state)) {
     return false
   }
   state.refreshVaultArchitectureFromManager()
-  const status = await refreshNexusUnlockStatus(state)
+  const status = await refreshSentinelUnlockStatus(state)
   if (status === 'ceremony_required' || status === 'awaiting_shares') {
-    state.nexusCeremonyPrompt = true
+    state.sentinelCeremonyPrompt = true
     state.loginPasswordPrompt = false
     state.errorMsg = ''
     return true
   }
-  return isNexusCeremonyRequiredError(err)
+  return isSentinelCeremonyRequiredError(err)
 }

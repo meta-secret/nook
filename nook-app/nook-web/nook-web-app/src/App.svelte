@@ -13,6 +13,7 @@
   import LoginGate from '$lib/components/LoginGate.svelte'
   import ProductIntro from '$lib/components/ProductIntro.svelte'
   import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
+  import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
@@ -221,6 +222,33 @@
         ? authenticatedShellSpacing
         : 'py-5 sm:py-6',
   )
+  /** Existing vault unlock keeps passkey-first; empty create defers passkey. */
+  const requiresPasskeyFirst = $derived(
+    vault.localVaultPresent || vault.localVaults.length > 0,
+  )
+  const showLoginWithoutPasskey = $derived(
+    !requiresPasskeyFirst && vault.providersLoaded,
+  )
+  let pendingSimpleVaultLabel = $state<string | undefined>(undefined)
+  const showPasskeyOverlay = $derived(
+    pendingSimpleVaultLabel !== undefined && !vault.deviceProtectionReady,
+  )
+
+  async function handleCreateDeviceVault(label: string) {
+    if (!vault.deviceProtectionReady) {
+      pendingSimpleVaultLabel = label
+      return
+    }
+    pendingSimpleVaultLabel = undefined
+    await vault.createLocalVaultWithDeviceKeys(label)
+  }
+
+  $effect(() => {
+    const label = pendingSimpleVaultLabel
+    if (!label || !vault.deviceProtectionReady || vault.isVerifying) return
+    pendingSimpleVaultLabel = undefined
+    void vault.createLocalVaultWithDeviceKeys(label)
+  })
 </script>
 
 {#if appLogsPage}
@@ -413,54 +441,63 @@
               />
             </div>
           {/if}
-          {#if !vault.deviceProtectionReady}
+          {#if requiresPasskeyFirst && !vault.deviceProtectionReady}
             <div class="mx-auto w-full max-w-lg">
               <ProductIntro {vault} onOpenHelp={() => vault.openHelp()} />
             </div>
             <DeviceProtectionGate {vault} />
-          {:else if vault.providersLoaded}
-            <LoginGate
-              {vault}
-              providers={vault.providers}
-              bind:setupType={vault.loginSetupType}
-              bind:githubPat={vault.githubPat}
-              bind:githubRepo={vault.githubRepo}
-              addProviderOpen={vault.addProviderOpen}
-              isVerifying={vault.isVerifying}
-              isInitializing={vault.isInitializing}
-              onUnlock={handleUnlock}
-              onBeginAddProvider={() => vault.beginAddProvider()}
-              onCancelAddProvider={() => vault.cancelAddProvider()}
-              onBeginSetup={(type, preset) =>
-                vault.beginProviderSetup(type, preset)}
-              onCancelSetup={() => vault.cancelProviderSetup()}
-              onOpenHelp={() => vault.openHelp()}
-              onUseEnrollmentCode={(code, password) =>
-                vault.connectWithEnrollmentCode(code, password)}
-              prefillEnrollmentCode={vault.prefillEnrollmentCode}
-              enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
-              onUnlockWithPassword={(entryId, password) =>
-                vault.unlockWithPassword(entryId, password)}
-              onCreateDeviceVault={(label) =>
-                vault.createLocalVaultWithDeviceKeys(label)}
-              onRemoveProvider={(id) => vault.removeProvider(id)}
-            />
-            <VaultStatusBar
-              {vault}
-              storageMode={vault.storageMode}
-              githubRepo={vault.githubRepo}
-              lastSyncedAt={vault.lastSyncedAt}
-              isSyncing={vault.isSyncActivityVisible}
-              successMsg={vault.successMsg}
-              errorMsg={vault.errorMsg}
-              {appVersion}
-              label="Nook"
-              showSyncStatus={false}
-              showStorageIcon={false}
-              variant="quiet"
-              onDismissSuccess={() => vault.dismissSuccess()}
-              onDismissError={() => vault.dismissError()}
-            />
+          {:else if vault.deviceProtectionReady || showLoginWithoutPasskey}
+            {#if vault.providersLoaded}
+              <LoginGate
+                {vault}
+                providers={vault.providers}
+                bind:setupType={vault.loginSetupType}
+                bind:githubPat={vault.githubPat}
+                bind:githubRepo={vault.githubRepo}
+                addProviderOpen={vault.addProviderOpen}
+                isVerifying={vault.isVerifying}
+                isInitializing={vault.isInitializing}
+                onUnlock={handleUnlock}
+                onBeginAddProvider={() => vault.beginAddProvider()}
+                onCancelAddProvider={() => vault.cancelAddProvider()}
+                onBeginSetup={(type, preset) =>
+                  vault.beginProviderSetup(type, preset)}
+                onCancelSetup={() => vault.cancelProviderSetup()}
+                onOpenHelp={() => vault.openHelp()}
+                onUseEnrollmentCode={(code, password) =>
+                  vault.connectWithEnrollmentCode(code, password)}
+                prefillEnrollmentCode={vault.prefillEnrollmentCode}
+                enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
+                onUnlockWithPassword={(entryId, password) =>
+                  vault.unlockWithPassword(entryId, password)}
+                onCreateDeviceVault={handleCreateDeviceVault}
+                onRemoveProvider={(id) => vault.removeProvider(id)}
+              />
+              <VaultStatusBar
+                {vault}
+                storageMode={vault.storageMode}
+                githubRepo={vault.githubRepo}
+                lastSyncedAt={vault.lastSyncedAt}
+                isSyncing={vault.isSyncActivityVisible}
+                successMsg={vault.successMsg}
+                errorMsg={vault.errorMsg}
+                {appVersion}
+                label="Nook"
+                showSyncStatus={false}
+                showStorageIcon={false}
+                variant="quiet"
+                onDismissSuccess={() => vault.dismissSuccess()}
+                onDismissError={() => vault.dismissError()}
+              />
+            {/if}
+            {#if showPasskeyOverlay}
+              <PasskeyAuthOverlay
+                {vault}
+                onDismiss={() => {
+                  pendingSimpleVaultLabel = undefined
+                }}
+              />
+            {/if}
           {/if}
         </div>
       {:else if extensionConnectRequest}

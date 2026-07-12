@@ -12,8 +12,8 @@ post-creation storage concern, not a vault mode.
 | Group | Values | Owner | Notes |
 | --- | --- | --- | --- |
 | `device_mode` | `standard`, `anti-hacker` | `nook-auth2` / `nook-core` | Per-device local identity protection. The UI calls the latter High security. |
-| `vault_type` | `simple`, `nexus` | `nook-core` | Vault key-access lifecycle. This is the only vault-type choice during creation. |
-| Nexus policy | participant count `N`, threshold `T` | `nook-auth2` / `nook-core` | Chosen only for Nexus genesis before vault keys exist. |
+| `vault_type` | `simple`, `sentinel` | `nook-core` | Vault key-access lifecycle. This is the only vault-type choice during creation. Legacy YAML may still read `vault_type: nexus` / policy key `nexus:`. |
+| Sentinel policy | participant count `N`, threshold `T` | `nook-auth2` / `nook-core` | Chosen only for Sentinel genesis before vault keys exist. |
 | Sync provider | provider-specific connection | `nook-core` / `nook-wasm` | Optional post-genesis encrypted backup/replica transport. Not a vault mode or unlock factor. |
 
 `replication_type` and its derived `onboarding_type` are legacy implementation
@@ -23,26 +23,30 @@ access model.
 
 ## Creation and Import UX
 
-Creation and import are separate top-level workflows. Get started presents
-**three mutually exclusive paths** because Simple create, Nexus create, and
-Nexus join have different lifecycles. Sync-provider import remains a secondary
-“already have a vault” action, not a fourth create/join intent.
+Creation and import are separate top-level workflows. Empty-device get started
+uses the **Landing → Sentinel** handoff: **name the vault first**, then choose
+exactly one of Simple create, Sentinel create, or Sentinel join. Sync-provider
+import remains a secondary “already have a vault” action, not a fourth
+create/join intent.
 
 | Stage / surface | Choice or state | Transition |
 | --- | --- | --- |
-| Device protection gate | Device mode | Initialize or authorize this browser's protected device identity once. Never ask again during vault creation. |
-| Get started chooser | Path | Choose exactly one: Create Simple, Create Nexus, or Join Nexus. |
-| Create Simple | Vault name/action | Create an empty local vault in memory and open it with this device's normal key access. Offer sync later in Settings. |
-| Create Nexus | Name, then Nexus policy | Name an in-memory genesis draft, then choose participant count `N` and unlock threshold `T`; do not create/open a vault yet. |
-| Create Nexus waiting | Participant public keys | Gather standalone signed public-key announcements through QR/link/paste. An initiator request and provider are not required. |
-| Nexus atomic genesis | Encrypted shares | Generate the Nexus root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically. |
-| Join Nexus | Public-key announcement | Generate this device's standalone signed public-key announcement and give it to the vault owner. Share delivery is a secondary post-genesis step. |
-| Nexus open | Quorum contributions | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM. |
-| Import | Detected vault type | Fetch from a provider, then route Simple to its unlock/enrollment path or Nexus to quorum access. Provider login never opens Nexus. |
+| Landing handoff (empty device) | Vault name | Collect the vault name before path choice. Passkey is **not** required yet. |
+| Path chooser | Path | Choose exactly one: Create Simple, Create Sentinel, or Join Sentinel. |
+| Create Simple confirm | Create action | Confirm local create; **then** show the passkey/device-protection form (top-right overlay) before sealing the vault. |
+| Existing vault unlock | Device protection | Passkey/PIN gate runs **first** when a local vault already exists on this browser. |
+| Create Sentinel | Name (carried), then Sentinel policy | Choose participant count `N` and unlock threshold `T`; do not create/open a vault yet. |
+| Create Sentinel waiting | Participant public keys | Gather standalone signed public-key announcements through QR/link/paste. An initiator request and provider are not required. |
+| Sentinel atomic genesis | Encrypted shares | Generate the Sentinel root/DEK only after the roster is complete, split it with SLIP-0039, encrypt one share per participant, then create the empty vault atomically. |
+| Join Sentinel | Public-key announcement | Generate this device's standalone signed public-key announcement and give it to the vault owner. Share delivery is a secondary post-genesis step. |
+| Sentinel open | Quorum contributions | Do not open the vault unless at least `T` distinct participant contributions reconstruct the root in Rust/WASM. |
+| Import | Detected vault type | Fetch from a provider, then route Simple to its unlock/enrollment path or Sentinel to quorum access. Provider login never opens Sentinel. |
 | Unlocked provider management / Onboard | Sync provider | Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists. |
 
-See [nexus-genesis.md](nexus-genesis.md) for the complete two-round ceremony and
-security invariants.
+See [sentinel-genesis.md](sentinel-genesis.md) for the complete two-round ceremony and
+security invariants. Product name is **Sentinel**; some persisted wire tokens
+(`nexus_shares`, event op tags, HKDF domain strings) remain frozen as `nexus*`
+for compatibility.
 
 ## Defaults and Persistence
 
@@ -58,7 +62,7 @@ The default may be omitted on write to keep legacy Simple vault YAML compact.
 Non-default vault architecture metadata is persisted as a top-level
 `architecture:` field in projection YAML and mirrored through WASM session
 state. Vault type is immutable once a vault has a `store_id`; changing Simple
-to Nexus or Nexus to Simple would reinterpret key-access records and must fail.
+to Sentinel or Sentinel to Simple would reinterpret key-access records and must fail.
 
 Legacy `replication_type` values remain readable but do not define new-vault
 behavior. Default personal replication is omitted from new architecture
@@ -79,12 +83,12 @@ Importing a Simple vault retrieves encrypted data first, then uses an existing
 device envelope, password recovery, or explicit enrollment path. Provider
 credentials grant storage access only.
 
-## Nexus Lifecycle
+## Sentinel Lifecycle
 
-Nexus setup is pre-genesis state. It gathers all configured participant public
-keys before generating the Nexus root or creating the vault. Genesis then
+Sentinel setup is pre-genesis state. It gathers all configured participant public
+keys before generating the Sentinel root or creating the vault. Genesis then
 issues the complete encrypted SLIP-0039 share set atomically. The initiator has
-no permanent threshold bypass and Nexus never writes a per-device full-key
+no permanent threshold bypass and Sentinel never writes a per-device full-key
 envelope.
 
 Password unlock is forbidden as the sole unlock path. Session hydrate from
@@ -93,7 +97,7 @@ Possession of the local cache or sync-provider credentials is insufficient.
 
 An issued share set must be complete, use unique participant/share indexes, and
 match the persisted `T-of-N` policy. Partial, malformed-prefix, stale-generation,
-or mixed share sets fail closed. No Nexus vault session exists until actual
+or mixed share sets fail closed. No Sentinel vault session exists until actual
 share records exist and at least `T` participant contributions reconstruct the
 root. Gating only secret creation is insufficient.
 
@@ -104,15 +108,15 @@ combines at least `T` distinct verified contributions inside Rust/WASM. Peer
 `DeviceIdentity` secrets and plaintext shares never cross browsers, and raw
 SLIP-0039 mnemonics never cross the WASM boundary.
 
-Nexus uses a Nook-owned current-format extendable (`ext=1`), single-group
+Sentinel uses a Nook-owned current-format extendable (`ext=1`), single-group
 SLIP-0039 implementation with the user-selected `T-of-N` policy. One random
-32-byte Nexus root derives `secrets_key` and `members_key` through
+32-byte Sentinel root derives `secrets_key` and `members_key` through
 domain-separated HKDF-SHA256. Official extendable 256-bit vectors cover the
 codec. This is distinct from the fixed-policy recovery flow in
 [slip39-recovery.md](../product-specs/slip39-recovery.md).
 
 Generic revocation/key rotation cannot leave the new epoch behind old shares or
-write a full current-device envelope. Nexus participant replacement therefore
+write a full current-device envelope. Sentinel participant replacement therefore
 requires atomic roster replacement plus share rotation.
 
 ## Provider Capabilities
@@ -130,27 +134,27 @@ feature:
 2. the connection records the folder target without embedding owner tokens;
 3. the joiner uses its own OAuth account to access the same encrypted replica.
 
-This provider-account flow must not be used as Nexus membership or quorum.
+This provider-account flow must not be used as Sentinel membership or quorum.
 
 ## Web Boundary
 
-Svelte may render vault type, Nexus policy, ceremony progress, and provider
+Svelte may render vault type, Sentinel policy, ceremony progress, and provider
 choices, but it must call Rust/WASM for policy validation, participant
 verification, share issuance, quorum access, and provider capability. Do not
 recreate the state machine or threshold rules in TypeScript.
 
 ## Implemented Boundaries
 
-- Nexus policy and ceremony transitions are Rust-owned and limited to
+- Sentinel policy and ceremony transitions are Rust-owned and limited to
   `2 <= T <= N <= 16`.
 - Finalization is one-shot and atomic: it emits the complete encrypted member
   roster, encrypted share set, participant delivery catalog, and event-log
   operations together; it never emits a full-key device envelope.
 - Provider-free Round 2 delivery entries are signed and bound to the exact
   Round 1 session, store, policy, recipient identity, and share.
-- Event-only projection retains the complete public Nexus roster and rebuilds
+- Event-only projection retains the complete public Sentinel roster and rebuilds
   canonical encrypted member rows after quorum unlock.
-- Nexus unlock requests and responses are signed, encrypted, and session-bound;
+- Sentinel unlock requests and responses are signed, encrypted, and session-bound;
   duplicate participants/share indexes and mismatched bindings fail closed.
 - WASM exposes typed JSON/status boundaries while Svelte renders progress; raw
   roots, vault keys, opened shares, and mnemonic text remain in Rust.

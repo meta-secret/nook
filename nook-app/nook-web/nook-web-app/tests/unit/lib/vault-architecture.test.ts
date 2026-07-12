@@ -61,9 +61,9 @@ describe('vault architecture adapter', () => {
   test('nexus vaults are gated until their policy is ready', () => {
     const draft: VaultArchitecture = {
       device_mode: 'anti-hacker',
-      vault_type: 'nexus',
+      vault_type: 'sentinel',
       replication_type: 'shared',
-      nexus: {
+      sentinel: {
         threshold: 2,
         required_participants: 3,
         ready_participants: 1,

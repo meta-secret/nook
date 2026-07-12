@@ -97,12 +97,12 @@ pub fn access_status_for_vault_content(
 ///
 /// Nexus vaults never unlock through per-device auth envelopes. A single
 /// identity is never enough for the default 2-of-N policy; use
-/// [`load_nexus_vault`] when enough participant identities are available.
+/// [`load_sentinel_vault`] when enough participant identities are available.
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
-    if architecture.vault_type == VaultType::Nexus {
-        return Err(crate::MultiDeviceError::NexusCeremonyRequired.into());
+    if architecture.vault_type == VaultType::Sentinel {
+        return Err(crate::MultiDeviceError::SentinelCeremonyRequired.into());
     }
     let stored_records = deserialize_stored(content, format)?;
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
@@ -114,13 +114,16 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
 /// identities can open their encrypted shares locally.
 ///
 /// Browser unlock must not collect peer identities. Use
-/// [`crate::open_nexus_share_for_identity`] on each device and
-/// [`load_nexus_vault_from_opened`] on the reconstructing device.
-pub fn load_nexus_vault(content: &str, identities: &[DeviceIdentity]) -> VaultResult<LoadedVault> {
+/// [`crate::open_sentinel_share_for_identity`] on each device and
+/// [`load_sentinel_vault_from_opened`] on the reconstructing device.
+pub fn load_sentinel_vault(
+    content: &str,
+    identities: &[DeviceIdentity],
+) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
-    if architecture.vault_type != VaultType::Nexus {
-        return Err(crate::MultiDeviceError::InvalidNexusThreshold.into());
+    if architecture.vault_type != VaultType::Sentinel {
+        return Err(crate::MultiDeviceError::InvalidSentinelThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
     architecture.validate_records(&stored_records)?;
@@ -129,14 +132,14 @@ pub fn load_nexus_vault(content: &str, identities: &[DeviceIdentity]) -> VaultRe
 }
 
 /// Reconstruct a nexus vault session from opened-share ceremony contributions.
-pub fn load_nexus_vault_from_opened(
+pub fn load_sentinel_vault_from_opened(
     content: &str,
     opened: &[crate::OpenedNexusShare],
 ) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
-    if architecture.vault_type != VaultType::Nexus {
-        return Err(crate::MultiDeviceError::InvalidNexusThreshold.into());
+    if architecture.vault_type != VaultType::Sentinel {
+        return Err(crate::MultiDeviceError::InvalidSentinelThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
     architecture.validate_records(&stored_records)?;
@@ -197,8 +200,8 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
 mod tests {
     use super::*;
     use crate::{
-        DeviceMode, NexusPolicy, ReplicationType, VaultResult, generate_store_id,
-        generate_vault_keys, genesis_auth_record, genesis_members_records, load_nexus_vault,
+        DeviceMode, ReplicationType, SentinelPolicy, VaultResult, generate_store_id,
+        generate_vault_keys, genesis_auth_record, genesis_members_records, load_sentinel_vault,
         serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_name_architecture,
     };
 
@@ -254,9 +257,9 @@ mod tests {
         )?];
         let architecture = VaultArchitecture {
             device_mode: DeviceMode::Standard,
-            vault_type: VaultType::Nexus,
+            vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Personal,
-            nexus: Some(NexusPolicy {
+            sentinel: Some(SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
@@ -277,12 +280,12 @@ mod tests {
         assert!(matches!(
             error,
             crate::VaultFormatError::Validation(
-                crate::ValidationError::NexusVaultHasFullKeyEnvelopes
+                crate::ValidationError::SentinelVaultHasFullKeyEnvelopes
             )
         ));
         assert!(
             load_stored_vault(
-                "schema_version: 1\nstore_id: store_testtoken11\narchitecture:\n  device_mode: standard\n  vault_type: nexus\n  replication_type: personal\n  nexus:\n    threshold: 2\n    required_participants: 2\n    ready_participants: 0\nsecrets: []\n",
+                "schema_version: 1\nstore_id: store_testtoken11\narchitecture:\n  device_mode: standard\n  vault_type: nexus\n  replication_type: personal\n  sentinel:\n    threshold: 2\n    required_participants: 2\n    ready_participants: 0\nsecrets: []\n",
                 &identity,
             )
             .is_err(),
@@ -297,11 +300,14 @@ mod tests {
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let third = DeviceIdentity::generate()?;
-        let records =
-            crate::create_nexus_share_records(&keys, &[first.clone(), second.clone(), third], 2)?;
-        let architecture = VaultArchitecture::nexus_personal(
+        let records = crate::create_sentinel_share_records(
+            &keys,
+            &[first.clone(), second.clone(), third],
+            2,
+        )?;
+        let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 3,
                 ready_participants: 3,
@@ -319,7 +325,7 @@ mod tests {
         )?;
 
         assert!(load_stored_vault(yaml.as_str(), &first).is_err());
-        let loaded = load_nexus_vault(yaml.as_str(), &[first, second])?;
+        let loaded = load_sentinel_vault(yaml.as_str(), &[first, second])?;
         assert_eq!(loaded.secrets_key, keys.secrets_key);
         assert_eq!(loaded.members_key, keys.members_key);
         assert_eq!(loaded.meta.nexus_shares.len(), 3);

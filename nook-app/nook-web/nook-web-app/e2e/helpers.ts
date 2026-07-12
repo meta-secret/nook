@@ -127,6 +127,20 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
     return
   }
 
+  const nameStep = page.getByTestId('landing-auth-step-name')
+  if (await nameStep.isVisible()) {
+    const nameInput = page.getByTestId('login-vault-name-input')
+    await expect(nameInput).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    if (!(await nameInput.inputValue()).trim()) {
+      await nameInput.fill('Test vault', {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+    }
+    await page.getByTestId('landing-auth-name-continue').click()
+  }
+
   const simplePath = page.getByTestId('get-started-path-simple')
   await expect(simplePath).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -189,21 +203,54 @@ export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
 ) {
-  await advanceCreateVaultWizardToFinalStep(page)
-  const nameInput = page.getByTestId('login-vault-name-input')
-  await expect(nameInput).toBeVisible({
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  await expect(chooser).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await expect(nameInput).toBeEnabled({
-    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  })
-  await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+
+  const nameStep = page.getByTestId('landing-auth-step-name')
+  if (await nameStep.isVisible()) {
+    const nameInput = page.getByTestId('login-vault-name-input')
+    await expect(nameInput).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(nameInput).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('landing-auth-name-continue').click()
+  }
+
+  const finalStep = page.getByTestId('create-vault-wizard-create')
+  if (!(await finalStep.isVisible())) {
+    const simplePath = page.getByTestId('get-started-path-simple')
+    await expect(simplePath).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await simplePath.click()
+    await expect(finalStep).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  }
 
   const createButton = page.getByTestId('login-create-device-vault-btn')
   await expect(createButton).toBeEnabled({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+
+  // Deferred passkey: empty create may show the top-right overlay first.
+  const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+  if (await passkeyOverlay.isVisible()) {
+    const setupBtn = page.getByTestId('device-protection-setup-btn')
+    const unlockBtn = page.getByTestId('device-protection-unlock-btn')
+    if (await setupBtn.isVisible()) {
+      await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    } else if (await unlockBtn.isVisible()) {
+      await unlockBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    }
+  }
+
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })

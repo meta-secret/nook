@@ -267,7 +267,7 @@ export function parseVaultEventLogSnapshot(
             })
           }
           break
-        case 'nexus-participant-enrolled':
+        case 'sentinel-participant-enrolled':
           if (operation.device_id) {
             joins.delete(operation.device_id)
             members.set(operation.device_id, {
@@ -392,7 +392,7 @@ export function assertJoinPendingYaml(
   if (!join.publicKey.startsWith('age1')) {
     throw new Error('Join request must include age1 public_key while pending')
   }
-  // Simple vaults keep genesis auth while a join is pending. Nexus genesis
+  // Simple vaults keep genesis auth while a join is pending. Sentinel genesis
   // never writes auth envelopes, so an empty auth section is expected there.
 }
 

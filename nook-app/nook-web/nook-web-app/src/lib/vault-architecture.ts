@@ -10,10 +10,10 @@ import {
 import type { StorageProvider } from '$lib/auth-providers'
 
 export type DeviceMode = 'standard' | 'anti-hacker'
-export type VaultType = 'simple' | 'nexus'
+export type VaultType = 'simple' | 'sentinel'
 export type ReplicationType = 'personal' | 'shared'
 
-export type NexusPolicy = {
+export type SentinelPolicy = {
   threshold: number
   required_participants: number
   ready_participants: number
@@ -23,7 +23,7 @@ export type VaultArchitecture = {
   device_mode: DeviceMode
   vault_type: VaultType
   replication_type: ReplicationType
-  nexus?: NexusPolicy
+  sentinel?: SentinelPolicy
 }
 
 export type ProviderReplicationCapability = {
@@ -49,13 +49,13 @@ export function validateVaultArchitecture(
 }
 
 function normalizeVaultArchitecture(
-  architecture: Partial<VaultArchitecture>,
+  architecture: Partial<VaultArchitecture> & { nexus?: SentinelPolicy },
 ): VaultArchitecture {
   return {
     device_mode: architecture.device_mode ?? 'standard',
     vault_type: architecture.vault_type ?? 'simple',
     replication_type: architecture.replication_type ?? 'personal',
-    nexus: architecture.nexus,
+    sentinel: architecture.sentinel ?? architecture.nexus,
   }
 }
 

@@ -167,11 +167,13 @@ stateDiagram-v2
   Vault --> SyncSetup: add sync provider (optional)
 ```
 
-1. **Authorize the passkey** on init, then load the local cache. The vault may
-   auto-unlock if device keys suffice and no sync friction remains.
-2. **First visit:** login chooser — create a Simple vault locally, start a
-   provider-free Nexus genesis ceremony, **or** connect a sync provider to
-   import an existing vault. See [nexus-genesis.md](nexus-genesis.md).
+1. **Empty device:** show Landing → Sentinel create (name → path) **before**
+   passkey. Passkey/device protection runs when the user confirms Simple create,
+   or first when unlocking an existing local vault. Then load the local cache.
+2. **First visit / GetStarted:** create a Simple vault locally (after deferred
+   passkey), start a provider-free Sentinel genesis ceremony, **or** connect a
+   sync provider to import an existing vault. See
+   [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
    identity; user returns through the passkey gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).

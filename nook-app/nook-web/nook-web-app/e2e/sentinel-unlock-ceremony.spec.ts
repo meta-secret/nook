@@ -17,7 +17,13 @@ async function openFreshDevice(page: Page) {
   })
 }
 
-test.describe('provider-free Nexus unlock ceremony', () => {
+async function nameVaultAndContinue(page: Page, name: string) {
+  await page.getByTestId('login-vault-name-input').fill(name)
+  await page.getByTestId('landing-auth-name-continue').click()
+  await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
+}
+
+test.describe('provider-free Sentinel unlock ceremony', () => {
   test.describe.configure({ mode: 'serial' })
   test.setTimeout(180_000)
 
@@ -42,90 +48,96 @@ test.describe('provider-free Nexus unlock ceremony', () => {
     await contextB?.close()
   })
 
-  test('creates and delivers a 2-of-2 Nexus without a sync provider', async () => {
-    await deviceA.getByTestId('get-started-path-nexus').click()
-    await deviceA.getByTestId('nexus-genesis-name-input').fill('Nexus quorum')
-    await deviceA.getByTestId('nexus-genesis-participant-count').fill('2')
-    await deviceA.getByTestId('nexus-genesis-threshold').fill('2')
-    await deviceA.getByTestId('nexus-genesis-start').click()
+  test('creates and delivers a 2-of-2 Sentinel without a sync provider', async () => {
+    await nameVaultAndContinue(deviceA, 'Sentinel quorum')
+    await deviceA.getByTestId('get-started-path-sentinel').click()
+    await deviceA
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Sentinel quorum')
+    await deviceA.getByTestId('sentinel-genesis-participant-count').fill('2')
+    await deviceA.getByTestId('sentinel-genesis-threshold').fill('2')
+    await deviceA.getByTestId('sentinel-genesis-start').click()
 
-    const genesisRequest = deviceA.getByTestId('nexus-genesis-request-output')
+    const genesisRequest = deviceA.getByTestId(
+      'sentinel-genesis-request-output',
+    )
     await expect(genesisRequest).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const requestPayload = await genesisRequest.inputValue()
     expect(requestPayload.length).toBeGreaterThan(20)
 
+    await nameVaultAndContinue(deviceB, 'Join device')
     await deviceB.getByTestId('get-started-path-join').click()
     const responseOutput = deviceB.getByTestId(
-      'nexus-genesis-generated-response',
+      'sentinel-genesis-generated-response',
     )
     await expect(responseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const participantResponse = await responseOutput.inputValue()
     expect(participantResponse).toContain('publicKeyAnnouncement')
 
     await deviceA
-      .getByTestId('nexus-genesis-response-input')
+      .getByTestId('sentinel-genesis-response-input')
       .fill(participantResponse)
-    await deviceA.getByTestId('nexus-genesis-add-participant').click()
-    await expect(deviceA.getByTestId('nexus-genesis-progress')).toContainText(
-      '2 / 2',
-    )
-    await expect(deviceA.getByTestId('nexus-genesis-finalize')).toBeEnabled()
-    await deviceA.getByTestId('nexus-genesis-finalize').click()
+    await deviceA.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      deviceA.getByTestId('sentinel-genesis-progress'),
+    ).toContainText('2 / 2')
+    await expect(deviceA.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
+    await deviceA.getByTestId('sentinel-genesis-finalize').click()
 
     const participantDelivery = deviceA
-      .getByTestId('nexus-genesis-delivery')
+      .getByTestId('sentinel-genesis-delivery')
       .nth(1)
     await expect(participantDelivery).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const deliveryPayload = await participantDelivery
-      .getByTestId('nexus-genesis-delivery-output')
+      .getByTestId('sentinel-genesis-delivery-output')
       .inputValue()
     expect(deliveryPayload.length).toBeGreaterThan(20)
 
     await deviceB
-      .getByTestId('nexus-genesis-share-request-input')
+      .getByTestId('sentinel-genesis-share-request-input')
       .fill(requestPayload)
     await deviceB
-      .getByTestId('nexus-genesis-receive-share-input')
+      .getByTestId('sentinel-genesis-receive-share-input')
       .fill(deliveryPayload)
-    await deviceB.getByTestId('nexus-genesis-receive-share').click()
+    await deviceB.getByTestId('sentinel-genesis-receive-share').click()
     await expect(
       deviceB.getByText(/protected locally|сохранена локально/i),
     ).toBeVisible()
 
-    await deviceA.getByTestId('nexus-genesis-delivery-complete').click()
-    await expect(deviceA.getByTestId('nexus-ceremony-panel')).toBeVisible({
+    await deviceA.getByTestId('sentinel-genesis-delivery-complete').click()
+    await expect(deviceA.getByTestId('sentinel-ceremony-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   })
 
   test('exchanges only opaque session-bound responses and reaches quorum', async () => {
-    await deviceA.getByTestId('nexus-unlock-start-btn').click()
+    await deviceA.getByTestId('sentinel-unlock-start-btn').click()
     const unlockRequestOutput = deviceA.getByTestId(
-      'nexus-unlock-request-output',
+      'sentinel-unlock-request-output',
     )
     await expect(unlockRequestOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const unlockRequest = await unlockRequestOutput.inputValue()
     expect(unlockRequest).not.toContain('mnemonic')
     expect(unlockRequest).not.toContain('share_mnemonic')
-    await expect(deviceA.getByTestId('nexus-unlock-progress')).toContainText(
+    await expect(deviceA.getByTestId('sentinel-unlock-progress')).toContainText(
       '1/2',
     )
     await expect(
-      deviceA.getByTestId('nexus-unlock-finalize-btn'),
+      deviceA.getByTestId('sentinel-unlock-finalize-btn'),
     ).toBeDisabled()
 
     await deviceB.reload()
-    const helper = deviceB.getByTestId('nexus-unlock-participant-helper')
+    const helper = deviceB.getByTestId('sentinel-unlock-participant-helper')
     await expect(helper).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(
-      deviceB.getByTestId('nexus-unlock-delivery-select'),
+      deviceB.getByTestId('sentinel-unlock-delivery-select'),
     ).toBeVisible()
     await deviceB
-      .getByTestId('nexus-unlock-participant-request-input')
+      .getByTestId('sentinel-unlock-participant-request-input')
       .fill(unlockRequest)
-    await deviceB.getByTestId('nexus-unlock-create-response-btn').click()
+    await deviceB.getByTestId('sentinel-unlock-create-response-btn').click()
     const opaqueResponseOutput = deviceB.getByTestId(
-      'nexus-unlock-generated-response-output',
+      'sentinel-unlock-generated-response-output',
     )
     await expect(opaqueResponseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const opaqueResponse = await opaqueResponseOutput.inputValue()
@@ -134,14 +146,16 @@ test.describe('provider-free Nexus unlock ceremony', () => {
     expect(opaqueResponse).not.toContain('share_mnemonic')
 
     await deviceA
-      .getByTestId('nexus-unlock-response-input')
+      .getByTestId('sentinel-unlock-response-input')
       .fill(opaqueResponse)
-    await deviceA.getByTestId('nexus-unlock-add-response-btn').click()
-    await expect(deviceA.getByTestId('nexus-unlock-progress')).toContainText(
+    await deviceA.getByTestId('sentinel-unlock-add-response-btn').click()
+    await expect(deviceA.getByTestId('sentinel-unlock-progress')).toContainText(
       '2/2',
     )
-    await expect(deviceA.getByTestId('nexus-unlock-finalize-btn')).toBeEnabled()
-    await deviceA.getByTestId('nexus-unlock-finalize-btn').click()
+    await expect(
+      deviceA.getByTestId('sentinel-unlock-finalize-btn'),
+    ).toBeEnabled()
+    await deviceA.getByTestId('sentinel-unlock-finalize-btn').click()
     await expect(deviceA.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

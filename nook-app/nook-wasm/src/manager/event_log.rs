@@ -806,8 +806,8 @@ impl NookVaultManager {
                         members_key_ciphertext: envelopes.members_key,
                     });
                 }
-                nook_core::VaultType::Nexus => {
-                    operations.push(VaultOperation::NexusParticipantEnrolled {
+                nook_core::VaultType::Sentinel => {
+                    operations.push(VaultOperation::SentinelParticipantEnrolled {
                         device_id: identity.device_id().clone(),
                         encryption_public_key: identity.public_key(),
                         signing_public_key: signing_public_key.clone(),
@@ -841,10 +841,10 @@ impl NookVaultManager {
     /// Write Nexus genesis as one immutable root event. The complete roster and
     /// complete encrypted share set are deliberately inseparable here: no
     /// partially enrolled/openable Nexus event history is ever published.
-    pub(in crate::manager) async fn bootstrap_nexus_genesis_event(
+    pub(in crate::manager) async fn bootstrap_sentinel_genesis_event(
         &mut self,
-        participants: &[nook_core::NexusGenesisParticipant],
-        deliveries: &[nook_core::NexusGenesisShareDelivery],
+        participants: &[nook_core::SentinelGenesisParticipant],
+        deliveries: &[nook_core::SentinelGenesisShareDelivery],
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
@@ -856,14 +856,14 @@ impl NookVaultManager {
             password_entries: vec![],
         }];
         operations.extend(participants.iter().map(|participant| {
-            VaultOperation::NexusParticipantEnrolled {
+            VaultOperation::SentinelParticipantEnrolled {
                 device_id: participant.device_id.clone(),
                 encryption_public_key: participant.encryption_public_key.clone(),
                 signing_public_key: participant.signing_public_key.clone(),
                 label: nook_core::MemberLabel::from_trusted(participant.label.clone()),
             }
         }));
-        operations.push(VaultOperation::NexusSharesIssued {
+        operations.push(VaultOperation::SentinelSharesIssued {
             shares: deliveries
                 .iter()
                 .map(|delivery| nook_core::NexusShareIssuedPayload {
@@ -901,15 +901,15 @@ impl NookVaultManager {
     /// Idempotently finish the event-log portion of Nexus genesis. If a crash
     /// happened after event bytes were indexed but before heads were written,
     /// rebuild heads from the existing graph rather than creating a second root.
-    pub(in crate::manager) async fn ensure_nexus_genesis_event(
+    pub(in crate::manager) async fn ensure_sentinel_genesis_event(
         &mut self,
-        participants: &[nook_core::NexusGenesisParticipant],
-        deliveries: &[nook_core::NexusGenesisShareDelivery],
+        participants: &[nook_core::SentinelGenesisParticipant],
+        deliveries: &[nook_core::SentinelGenesisShareDelivery],
     ) -> Result<(), NookError> {
         let store = load_local_event_store(&self.vault.store_id).await?;
         if store.event_ids().is_empty() {
             return self
-                .bootstrap_nexus_genesis_event(participants, deliveries)
+                .bootstrap_sentinel_genesis_event(participants, deliveries)
                 .await;
         }
         self.activate_event_log_mode().await?;
