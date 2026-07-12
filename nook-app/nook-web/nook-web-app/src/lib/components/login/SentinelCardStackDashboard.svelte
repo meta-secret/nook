@@ -43,6 +43,9 @@
     participants,
     deliveries,
     isBusy,
+    initiatorFingerprint,
+    initiatorKeyLoading,
+    onPrepareInitiator,
     onBack,
     onStart,
     onAddParticipant,
@@ -58,6 +61,9 @@
     participants: Participant[]
     deliveries: Delivery[]
     isBusy: boolean
+    initiatorFingerprint: string
+    initiatorKeyLoading: boolean
+    onPrepareInitiator: () => void | Promise<void>
     onBack: () => void
     onStart: (
       args: StartSentinelGenesisArgs,
@@ -74,7 +80,12 @@
   let queuedParticipant = $state('')
   let deviceName = $state('')
 
-  const rosterCount = $derived(Math.max(1, participants.length))
+  const initiatorKeyReady = $derived(
+    Boolean(participants[0]?.fingerprint || initiatorFingerprint),
+  )
+  const rosterCount = $derived(
+    initiatorKeyReady ? Math.max(1, participants.length) : 0,
+  )
   const missing = $derived(Math.max(0, participantCount - rosterCount))
   const policyValid = $derived(
     name.trim().length > 0 &&
@@ -107,7 +118,7 @@
   }
 
   async function start() {
-    if (!policyValid || isBusy || actionBusy) return
+    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return
     actionBusy = true
     try {
       await onStart({
@@ -262,7 +273,10 @@
         <div class="mt-5 space-y-3">
           <button
             class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === 0 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
-            onclick={() => (selected = 0)}
+            onclick={() => {
+              selected = 0
+              if (!initiatorKeyReady) void onPrepareInitiator()
+            }}
           >
             <span
               class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] text-[#79dfff]"
@@ -277,13 +291,22 @@
               <span
                 class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
               >
-                {participants[0]?.fingerprint ??
+                {participants[0]?.fingerprint ||
+                  initiatorFingerprint ||
                   vault.t('login.sentinel_card_stack_key_pending')}
                 ·
-                {vault.t('login.sentinel_card_stack_automatically_included')}
+                {initiatorKeyReady
+                  ? vault.t('login.sentinel_card_stack_automatically_included')
+                  : vault.t('login.sentinel_card_stack_initialize_device')}
               </span>
             </span>
-            <Check class="size-4 text-[#63eaa1]" />
+            {#if initiatorKeyLoading}
+              <RefreshCw class="size-4 animate-spin text-[#79dfff]" />
+            {:else if initiatorKeyReady}
+              <Check class="size-4 text-[#63eaa1]" />
+            {:else}
+              <span class="font-mono text-[9px] text-[#79dfff]">PASSKEY</span>
+            {/if}
           </button>
 
           {#each participants.slice(1) as participant, index (participant.participantId)}
@@ -312,7 +335,7 @@
             </button>
           {/each}
 
-          {#if missing > 0}
+          {#if initiatorKeyReady && missing > 0}
             <div class="border border-dashed border-[#aeb8c2] p-5">
               <div class="flex items-center justify-between gap-4">
                 <div>

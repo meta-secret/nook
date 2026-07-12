@@ -119,6 +119,9 @@
   let participantShare = $state('')
   let joinPublicKeysLoading = $state(false)
   let joinPasskeyRequested = $state(false)
+  let initiatorFingerprint = $state('')
+  let initiatorKeyLoading = $state(false)
+  let initiatorPasskeyRequested = $state(false)
 
   $effect(() => {
     const deviceProtectionReady = vault.deviceProtectionReady
@@ -126,6 +129,7 @@
       wizardStep === 'join' &&
       !generatedParticipantResponse &&
       !joinPublicKeysLoading &&
+      !isBusy &&
       (!joinPasskeyRequested || deviceProtectionReady) &&
       onCreateSentinelGenesisPublicKeyAnnouncement
     ) {
@@ -206,6 +210,21 @@
       wizardStep === 'sentinel-policy' ||
       wizardStep === 'join',
   )
+
+  $effect(() => {
+    const deviceProtectionReady = vault.deviceProtectionReady
+    if (
+      sentinelDashboardActive &&
+      sentinelGenesisStatus === 'idle' &&
+      !initiatorFingerprint &&
+      !initiatorKeyLoading &&
+      !isBusy &&
+      (!initiatorPasskeyRequested || deviceProtectionReady) &&
+      onCreateSentinelGenesisPublicKeyAnnouncement
+    ) {
+      void prepareInitiatorDeviceKeys()
+    }
+  })
 
   const stepIndex = $derived.by(() => {
     switch (wizardStep) {
@@ -376,6 +395,8 @@
     if (!sentinelName.trim()) {
       sentinelName = trimmedVaultName
     }
+    initiatorFingerprint = ''
+    initiatorPasskeyRequested = false
     sentinelDashboard = null
     wizardStep = 'sentinel-dashboard'
   }
@@ -389,6 +410,30 @@
     chosenPath = 'join'
     joinPasskeyRequested = false
     wizardStep = 'join'
+  }
+
+  async function prepareInitiatorDeviceKeys() {
+    if (
+      initiatorKeyLoading ||
+      initiatorFingerprint ||
+      !onCreateSentinelGenesisPublicKeyAnnouncement
+    )
+      return
+    initiatorKeyLoading = true
+    try {
+      const payload = await onCreateSentinelGenesisPublicKeyAnnouncement()
+      if (!payload && !vault.deviceProtectionReady) {
+        initiatorPasskeyRequested = true
+        return
+      }
+      const announcement = JSON.parse(payload) as { fingerprint?: string }
+      initiatorFingerprint = announcement.fingerprint ?? ''
+      initiatorPasskeyRequested = false
+    } catch {
+      initiatorFingerprint = ''
+    } finally {
+      initiatorKeyLoading = false
+    }
   }
 
   function restoreDashboardChoiceFocus(dashboard: SentinelDashboard) {
@@ -557,6 +602,9 @@
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
+      {initiatorFingerprint}
+      initiatorKeyLoading={initiatorKeyLoading || isBusy}
+      onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
       onAddParticipant={(payload) =>

@@ -148,6 +148,7 @@
     "sentinel_card_stack_participant": "Participant",
     "sentinel_card_stack_key_pending": "KEY PENDING",
     "sentinel_card_stack_automatically_included": "AUTOMATICALLY INCLUDED",
+    "sentinel_card_stack_initialize_device": "USE PASSKEY TO BUILD DEVICE KEYS",
     "sentinel_card_stack_add_participant": "Add participant device",
     "sentinel_card_stack_slots_remaining": "{count} ROSTER SLOTS REMAINING",
     "sentinel_card_stack_device_name_label": "Device name",

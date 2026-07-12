@@ -148,6 +148,7 @@
     "sentinel_card_stack_participant": "Участник",
     "sentinel_card_stack_key_pending": "КЛЮЧ ОЖИДАЕТСЯ",
     "sentinel_card_stack_automatically_included": "ДОБАВЛЕНО АВТОМАТИЧЕСКИ",
+    "sentinel_card_stack_initialize_device": "ИСПОЛЬЗУЙТЕ PASSKEY ДЛЯ СОЗДАНИЯ КЛЮЧЕЙ УСТРОЙСТВА",
     "sentinel_card_stack_add_participant": "Добавить устройство участника",
     "sentinel_card_stack_slots_remaining": "ОСТАЛОСЬ МЕСТ: {count}",
     "sentinel_card_stack_device_name_label": "Имя устройства",
