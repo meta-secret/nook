@@ -21,7 +21,8 @@ test.describe('legal pages', () => {
 
   test('shows public links in the vault app footer', async ({ page }) => {
     await page.goto('/app/')
-    await expect(page.getByTestId('product-intro')).toBeVisible()
+    // Empty-device create uses the landing handoff (no ProductIntro panel).
+    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
     await expect(page.getByTestId('footer-about-link')).toHaveAttribute(
       'href',
       '/',
