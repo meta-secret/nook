@@ -194,7 +194,7 @@
     const queued = parseParticipantPayload(payload)
     if (!queued) {
       participantInputError = vault.t(
-        'login.sentinel_card_stack_public_key_invalid',
+        'login.sentinel_card_stack_public_key_placeholder',
       )
       return
     }
@@ -394,7 +394,7 @@
                   class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
                 >
                   {participant.fingerprint} ·
-                  {vault.t('login.sentinel_card_stack_key_queued')}
+                  {vault.t('login.sentinel_card_stack_key_pending')}
                 </span>
               </span>
               <RefreshCw class="size-4 text-[#79dfff]" />

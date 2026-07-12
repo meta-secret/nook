@@ -155,8 +155,6 @@
     "sentinel_card_stack_device_name_placeholder": "e.g. Ada's iPhone",
     "sentinel_card_stack_public_key_label": "Public key",
     "sentinel_card_stack_public_key_placeholder": "Paste signed public key",
-    "sentinel_card_stack_public_key_invalid": "Paste a valid signed public-key announcement from the participant device.",
-    "sentinel_card_stack_key_queued": "SIGNED KEY QUEUED",
     "sentinel_card_stack_active_configuration": "Active Sentinel configuration",
     "sentinel_card_stack_control_plane": "GENESIS CONTROL PLANE",
     "sentinel_card_stack_pre_genesis": "PRE-GENESIS / VOLATILE",

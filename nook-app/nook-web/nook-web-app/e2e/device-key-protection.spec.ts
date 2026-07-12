@@ -187,7 +187,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
       page.getByTestId('sentinel-genesis-participant-error'),
-    ).toBeVisible()
+    ).toHaveText('Paste signed public key')
     await page
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)
@@ -198,7 +198,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
       page.getByTestId('sentinel-genesis-queued-participant'),
-    ).toContainText('SIGNED KEY QUEUED')
+    ).toContainText('KEY PENDING')
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
     ).toHaveCount(0)

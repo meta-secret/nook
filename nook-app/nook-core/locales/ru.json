@@ -155,8 +155,6 @@
     "sentinel_card_stack_device_name_placeholder": "например, iPhone Ады",
     "sentinel_card_stack_public_key_label": "Открытый ключ",
     "sentinel_card_stack_public_key_placeholder": "Вставьте подписанный открытый ключ",
-    "sentinel_card_stack_public_key_invalid": "Вставьте корректное подписанное объявление открытого ключа с устройства участника.",
-    "sentinel_card_stack_key_queued": "ПОДПИСАННЫЙ КЛЮЧ В ОЧЕРЕДИ",
     "sentinel_card_stack_active_configuration": "Активная конфигурация Sentinel",
     "sentinel_card_stack_control_plane": "ПАНЕЛЬ УПРАВЛЕНИЯ GENESIS",
     "sentinel_card_stack_pre_genesis": "ДО GENESIS / ВРЕМЕННО",
