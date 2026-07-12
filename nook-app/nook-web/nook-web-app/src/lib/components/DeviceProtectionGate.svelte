@@ -11,7 +11,8 @@
     CardTitle,
   } from '$lib/components/ui/card'
 
-  let { vault }: { vault: VaultState } = $props()
+  let { vault, embedded = false }: { vault: VaultState; embedded?: boolean } =
+    $props()
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
@@ -31,7 +32,9 @@
 </script>
 
 <Card
-  class="mx-auto w-full max-w-lg gap-4 py-5 animate-in fade-in duration-300"
+  class={`mx-auto w-full max-w-lg gap-4 py-5 animate-in fade-in duration-300 ${
+    embedded ? 'rounded-none border-0 bg-transparent shadow-none' : ''
+  }`}
   data-testid="device-protection-gate"
 >
   <CardHeader class="gap-2 text-center">

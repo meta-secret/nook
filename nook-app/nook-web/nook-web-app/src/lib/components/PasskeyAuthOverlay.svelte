@@ -32,7 +32,7 @@
   use:portal
 >
   <div
-    class="relative rounded-xl border border-border/60 bg-background/95 p-1 shadow-xl shadow-black/25 backdrop-blur-md"
+    class="relative overflow-hidden rounded-xl border border-border/60 bg-background/95 shadow-xl shadow-black/25 backdrop-blur-md"
   >
     {#if onDismiss}
       <button
@@ -45,6 +45,6 @@
         <ArrowLeft class="size-4" aria-hidden="true" />
       </button>
     {/if}
-    <DeviceProtectionGate {vault} />
+    <DeviceProtectionGate {vault} embedded />
   </div>
 </div>

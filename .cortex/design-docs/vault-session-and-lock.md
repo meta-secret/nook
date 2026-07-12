@@ -81,6 +81,10 @@ alternative. That alternative launches discoverable-passkey recovery immediately
 it must not open a second confirmation widget. When `device_identity_wrapped`
 already identifies passkey protection, the gate shows authorization only and
 never renders passkey creation.
+
+When the gate is embedded in `PasskeyAuthOverlay`, the overlay owns the single
+visible border, radius, and elevation. The embedded gate stays flat so the setup
+surface does not read as a card nested inside another card.
 Browsers do not expose a general API for enumerating whether an RP already has a
 discoverable passkey, so the missing-record state must retain the explicit existing-
 passkey recovery action.
