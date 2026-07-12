@@ -23,3 +23,9 @@ bun run dev
 The catalog at `/` discovers experiments through that registry. Each experiment
 gets its own `/experiments/<experiment-name>` page and can freely explore a
 different layout or visual direction.
+
+## Categories
+
+- **`nook-auth`** — presence-first Open Nook entry (empty vs unlock, Simple vs
+  Sentinel, deferred passkey). Toggle Empty / Vault exists in each sketch.
+- **`vault`** — Sentinel vault genesis UI directions (formerly Nexus).
