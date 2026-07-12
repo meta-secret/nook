@@ -72,6 +72,7 @@
   let copied = $state(false)
   let selected = $state(0)
   let queuedParticipant = $state('')
+  let deviceName = $state('')
 
   const rosterCount = $derived(Math.max(1, participants.length))
   const missing = $derived(Math.max(0, participantCount - rosterCount))
@@ -92,6 +93,17 @@
 
   function changeThreshold(event: Event) {
     threshold = Number((event.currentTarget as HTMLSelectElement).value)
+  }
+
+  function changeParticipantPayload(event: Event) {
+    response = (event.currentTarget as HTMLInputElement).value
+    if (deviceName.trim()) return
+    try {
+      const announcement = JSON.parse(response) as { label?: string }
+      deviceName = announcement.label?.trim() ?? ''
+    } catch {
+      // Keep the compact sketch input usable while an announcement is pasted.
+    }
   }
 
   async function start() {
@@ -116,6 +128,7 @@
       await onAddParticipant(payload)
       queuedParticipant = ''
       response = ''
+      deviceName = ''
       selected = Math.max(0, participants.length)
     } finally {
       actionBusy = false
@@ -124,7 +137,8 @@
 
   async function addParticipant() {
     const payload = response.trim()
-    if (!payload || !policyValid || isBusy || actionBusy) return
+    if (!deviceName.trim() || !payload || !policyValid || isBusy || actionBusy)
+      return
     if (status === 'idle') {
       queuedParticipant = payload
       actionBusy = true
@@ -315,7 +329,8 @@
                   class="grid size-12 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={!response.trim() ||
+                  disabled={!deviceName.trim() ||
+                    !response.trim() ||
                     !policyValid ||
                     isBusy ||
                     actionBusy}
@@ -326,23 +341,37 @@
                     />{:else}<Plus class="size-5" />{/if}
                 </button>
               </div>
-              <label
-                class="mt-5 block text-[9px] tracking-wider text-[#8d99a4] uppercase"
-              >
-                {vault.t('login.sentinel_card_stack_public_key_label')}
-                <textarea
-                  class="mt-2 min-h-24 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
-                  data-testid="sentinel-genesis-response-input"
-                  placeholder={vault.t(
-                    'login.sentinel_card_stack_public_key_placeholder',
-                  )}
-                  bind:value={response}></textarea>
-              </label>
-              {#if status === 'idle'}
-                <p class="mt-3 text-xs leading-5 text-[#8d99a4]">
-                  {vault.t('login.sentinel_card_stack_start_hint')}
-                </p>
-              {/if}
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <label
+                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
+                >
+                  {vault.t('login.sentinel_card_stack_device_name_label')}
+                  <input
+                    class="mt-2 w-full border-b border-white/20 bg-transparent py-2 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                    data-testid="sentinel-genesis-participant-name-input"
+                    placeholder={vault.t(
+                      'login.sentinel_card_stack_device_name_placeholder',
+                    )}
+                    bind:value={deviceName}
+                  />
+                </label>
+                <label
+                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
+                >
+                  {vault.t('login.sentinel_card_stack_public_key_label')}
+                  <input
+                    class="mt-2 w-full border-b border-white/20 bg-transparent py-2 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                    data-testid="sentinel-genesis-response-input"
+                    placeholder={vault.t(
+                      'login.sentinel_card_stack_public_key_placeholder',
+                    )}
+                    value={response}
+                    oninput={changeParticipantPayload}
+                    onkeydown={(event) =>
+                      event.key === 'Enter' && void addParticipant()}
+                  />
+                </label>
+              </div>
             </div>
           {/if}
         </div>
