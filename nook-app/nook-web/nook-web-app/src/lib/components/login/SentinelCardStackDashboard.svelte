@@ -155,7 +155,7 @@
     </button>
   {/if}
   <div
-    class="pointer-events-none fixed inset-0 opacity-25 [background-image:radial-gradient(#a9b8c5_0.7px,transparent_0.7px)] [background-size:22px_22px]"
+    class="pointer-events-none fixed inset-0 opacity-45 [background-image:radial-gradient(#a9b8c5_1px,transparent_1px)] [background-size:22px_22px]"
   ></div>
 
   <section class="relative mx-auto max-w-7xl px-6 py-24 sm:px-10">
