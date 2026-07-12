@@ -11,7 +11,7 @@ test.describe('sync fan-out on save', () => {
   test('shows local vault label and sync provider count in status bar', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -28,7 +28,7 @@ test.describe('sync fan-out on save', () => {
   test('triggers fan-out sync indicator after saving a secret', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

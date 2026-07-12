@@ -110,7 +110,7 @@ async function connectCleanBrowserToFileProvider(
 ) {
   await installGoogleOAuthMock(page, target.pat)
   await installSyncRemote(page, target)
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
 

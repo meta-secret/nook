@@ -136,7 +136,7 @@ async function setLegacyReplicationForProviderTest(
 
 test.describe('vault architecture modes', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
@@ -410,7 +410,7 @@ test.describe('vault architecture modes', () => {
         accessToken: SHARED_JOINER_TOKEN,
         fileName: SHARED_PROVIDER.fileName,
       })
-      await joiner.goto('/')
+      await joiner.goto('/app/')
       await expect(
         joiner.getByTestId('login-create-vault-chooser'),
       ).toBeVisible({

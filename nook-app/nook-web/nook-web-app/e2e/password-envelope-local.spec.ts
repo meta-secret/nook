@@ -34,7 +34,7 @@ test.describe('vault password envelope (local)', () => {
         console.log(`[browser ${msg.type()}] ${text}`)
       }
     })
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVaultLegacy(page)
@@ -299,7 +299,7 @@ test.describe('enrollment link deep link (local)', () => {
     context,
   }) => {
     const pageA = await context.newPage()
-    await pageA.goto('/')
+    await pageA.goto('/app/')
     await clearBrowserVault(pageA)
     await pageA.reload()
     await connectLocalVaultLegacy(pageA)

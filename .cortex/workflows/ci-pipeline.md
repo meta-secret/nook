@@ -8,7 +8,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
 | [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, wasm-bindgen tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
-| [`release-v1.yml`](../../.github/workflows/release-v1.yml)   | Push to `release/v1` + manual | Verify, wasm-bindgen tests, build, **full local-provider e2e**, GitHub Pages deploy to stable `nokey.sh` | No |
+| [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
@@ -25,7 +25,7 @@ flowchart LR
   main_yml --> toolchain_push[Push toolchain to GHCR]
   main_yml --> cf_dev[Cloudflare Pages dev]
 
-  release[v1 branch update] --> release_yml[release-v1.yml]
+  release[Semver tag or manual version + ref] --> release_yml[release.yml]
   release_yml --> release_verify[Verify + build + e2e]
   release_yml --> pages[GitHub Pages stable]
 
@@ -35,6 +35,34 @@ flowchart LR
   cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
   cleanup --> docker_prune["docker system prune --volumes"]
 ```
+
+## Production release strategy
+
+Production releases use immutable semantic-version tags. The tag records the
+exact source commit; the GitHub Release records that the tagged build passed the
+production gate and was deployed to `nokey.sh`.
+
+Preferred release flow:
+
+1. Open **Actions → Release production → Run workflow** on the default branch.
+2. Enter the new semantic version (`1.2.0`; a leading `v` is optional) and the
+   branch, tag, or commit to release (`main` by default).
+3. The workflow creates `v1.2.0`, or verifies that an existing tag already points
+   to the requested commit. Existing tags are never moved.
+4. The tagged source passes the main-equivalent production gate, is deployed to
+   GitHub Pages, and writes its version and commit to `nokey.sh/release.json`.
+5. Only after deployment succeeds does the workflow publish the GitHub Release.
+
+Pushing a `v*.*.*` tag manually is also supported and enters the same validation
+and deployment path. A rerun is idempotent when the version and source commit are
+unchanged. If a deployment fails, keep the tag and rerun it after fixing the
+workflow or infrastructure; the absence of a GitHub Release shows that the tag
+has not completed production release. Rollbacks use a new patch version targeting
+the last compatible commit, never a moved or reused tag.
+
+The workflow does not rewrite Cargo or package manifest versions. The deployment
+version is the immutable tag, avoiding a CI-generated source mutation that would
+make the deployed artifact differ from its tagged commit.
 
 ## Provider selection (`NOOK_E2E_SYNC_PROVIDER`)
 
@@ -86,7 +114,7 @@ enables the containerd image store on GitHub-hosted runners.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
-| `pr.yml`, `main.yml`, `release-v1.yml`, `e2e-pr.yml`, `e2e-nightly.yml` | `ubuntu-latest` | Default CI and AI ci-fix agents |
+| `pr.yml`, `main.yml`, `release.yml`, `e2e-pr.yml`, `e2e-nightly.yml` | `ubuntu-latest` | Default CI and AI ci-fix agents |
 | `runner-cleanup.yml` | `nook` | Self-hosted Docker prune only |
 
 ## Why local-provider e2e vs sync-live
@@ -182,7 +210,7 @@ exported.
 
 ## Local vs remote CI
 
-**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview, and a successful `github-pages` deployment status for the PR head SHA — no toolchain image push). PR coverage always checks the current `nook-core + nook-auth2` artifact against the floor; the expensive base-worktree coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs changed, otherwise the current coverage artifact is reused as the base comparison. Main pushes the commit-tagged toolchain image after green verify and deploys the active development channel to Cloudflare Pages for `dev.nokey.sh`. `release-v1.yml` runs the main-equivalent gate without pushing the toolchain, then deploys the pinned `release/v1` build to GitHub Pages for stable `nokey.sh`. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
+**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview, and a successful `github-pages` deployment status for the PR head SHA — no toolchain image push). PR coverage always checks the current `nook-core + nook-auth2` artifact against the floor; the expensive base-worktree coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs changed, otherwise the current coverage artifact is reused as the base comparison. Main pushes the commit-tagged toolchain image after green verify and deploys the active development channel to Cloudflare Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages for stable `nokey.sh`, and publishes the GitHub Release only after deployment succeeds. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
 
 Main's toolchain publish must authenticate immediately before the GHCR
 `toolchain-push` bake. Do not assume a prior Docker login from setup is still

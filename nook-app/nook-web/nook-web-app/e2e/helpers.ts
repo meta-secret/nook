@@ -227,7 +227,7 @@ export async function createLocalVaultOnLogin(
 }
 
 export async function connectLocalVault(page: Page) {
-  await page.goto('/')
+  await page.goto('/app/')
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
@@ -250,7 +250,7 @@ export async function connectLocalVault(page: Page) {
 
 /** Device-key genesis on login gate (unlock existing or create on this device). */
 export async function connectLocalVaultLegacy(page: Page) {
-  await page.goto('/')
+  await page.goto('/app/')
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
@@ -1051,7 +1051,7 @@ export async function connectGithubVault(
   if (stub) {
     await stub.install(page, { repoName })
   }
-  await page.goto('/')
+  await page.goto('/app/')
   await setupGithubProvider(page, pat, repoName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
@@ -1095,7 +1095,7 @@ export async function connectGoogleDriveVault(
   if (stub) {
     await stub.install(page, { fileName })
   }
-  await page.goto('/')
+  await page.goto('/app/')
   await setupGoogleDriveProvider(page, fileName)
   const connectButton = await waitForEngine(page)
   await connectButton.click()
@@ -1113,7 +1113,7 @@ export async function connectGoogleDriveGenesisDevice(
   fileName: string,
   stub?: E2eOauthFileStub,
 ) {
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
   await connectGoogleDriveVault(page, accessToken, fileName, stub)
@@ -1132,7 +1132,7 @@ export async function connectGoogleDriveJoinerDevice(
   if (stub) {
     await stub.install(page, { fileName })
   }
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
   await setupGoogleDriveProvider(page, fileName)
@@ -1148,7 +1148,7 @@ export async function connectGithubGenesisDevice(
   repoName: string,
   stub?: ReturnType<typeof createLocalE2eGithubVaultStub>,
 ) {
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
   await connectGithubVault(page, pat, repoName, stub)
@@ -1187,7 +1187,7 @@ export async function connectGithubJoinerDevice(
   if (stub) {
     await stub.install(page, { repoName })
   }
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
   await setupGithubProvider(page, pat, repoName)
@@ -1927,7 +1927,7 @@ export async function unlockGithubVault(page: Page, target?: GithubE2eTarget) {
   if (target?.stub) {
     await target.stub.install(page, { repoName: target.repoName })
   }
-  await page.goto('/')
+  await page.goto('/app/')
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
@@ -2263,7 +2263,7 @@ export async function openOnboardDevicePanel(page: Page) {
 
 /** Reconnect after reload — unlock via login gate when auto-unlock is off. */
 export async function reconnectSyncVault(page: Page) {
-  await page.goto('/')
+  await page.goto('/app/')
   await dismissSyncConflictIfVisible(page)
   await dismissJoinEnrollmentDialog(page)
 
@@ -3365,7 +3365,7 @@ export async function connectLocalE2eJoinerDevice(
   accessToken = E2E_OAUTH_ONBOARD_PROVIDER.accessToken,
 ) {
   await installGoogleOAuthMock(page, accessToken)
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
   await setupGoogleDriveProvider(page, fileName)

@@ -14,7 +14,7 @@ test.describe('vault password on device-key vault', () => {
   test('adds first backup password from settings after login-gate vault creation', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
 

@@ -28,13 +28,13 @@ test.describe('application logging', () => {
 
     await page.getByTestId('logs-back-btn').click()
     await expect(page.getByTestId('logs-page')).not.toBeVisible()
-    await expect(page).toHaveURL('/')
+    await expect(page).toHaveURL('/app/')
   })
 
   test('persists info-level milestones when creating a local vault', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
 
     await waitForPersistedAppLog(page, {
@@ -64,7 +64,7 @@ test.describe('application logging', () => {
   })
 
   test('records secret add and vault lock at info level', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await addSecret(page, 'log-test-key', 'log-test-value')
     await page.getByTestId('header-lock-vault-btn').click()
@@ -101,7 +101,7 @@ test.describe('application logging', () => {
       localStorage.setItem('nook_log_level', 'debug'),
     )
 
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await flushNookLogPersistQueue(page)
     await disableVaultIdleLock(page)
@@ -113,7 +113,7 @@ test.describe('application logging', () => {
   })
 
   test('clear removes stored entries from /logs', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await flushNookLogPersistQueue(page)
 
@@ -164,7 +164,7 @@ test.describe('application logging', () => {
   })
 
   test('exports persisted entries as JSON from /app-logs', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await flushNookLogPersistQueue(page)
 
@@ -191,7 +191,7 @@ test.describe('application logging', () => {
       localStorage.setItem('nook_log_level', 'debug'),
     )
 
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await flushNookLogPersistQueue(page)
 
@@ -219,7 +219,7 @@ test.describe('application logging', () => {
       void route.fulfill({ status: 404, body: 'not found' })
     })
 
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
 
     await page.evaluate(async () => {

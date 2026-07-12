@@ -107,7 +107,7 @@
 
   function navigateHome() {
     vault.closeHelp()
-    history.pushState(undefined, '', appPath('/'))
+    history.pushState(undefined, '', appPath('/app/'))
     legalPage = undefined
     logsPage = false
     appLogsPage = false

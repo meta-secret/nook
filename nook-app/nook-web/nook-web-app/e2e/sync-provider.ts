@@ -289,7 +289,7 @@ export async function connectSyncGenesisDevice(
       disableVaultIdleLock,
       ENROLLMENT_UNLOCK_TIMEOUT_MS,
     } = await import('./helpers')
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await expect(

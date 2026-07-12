@@ -18,7 +18,7 @@ import {
 
 test.describe('local vault', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await mockBip39Wordlist(page)
     await clearBrowserVault(page)
     await page.reload()

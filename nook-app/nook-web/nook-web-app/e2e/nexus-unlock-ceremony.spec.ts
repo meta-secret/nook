@@ -9,7 +9,7 @@ import {
 } from './helpers'
 
 async function openFreshDevice(page: Page) {
-  await page.goto('/')
+  await page.goto('/app/')
   await clearBrowserVault(page)
   await page.reload()
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({

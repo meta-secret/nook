@@ -38,7 +38,7 @@ async function chooseFirstOnboardPassword(
 
 test.describe('onboard provider picker', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVaultLegacy(page)

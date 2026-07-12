@@ -23,7 +23,7 @@ test.describe('event-log sync then add', () => {
   test('sync-then-add secure note after file provider connect', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await createLocalVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,

@@ -14,7 +14,7 @@ import {
 
 test.describe('sync provider credential encryption', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await expect(page.getByTestId('login-gate')).toBeVisible({
@@ -49,7 +49,7 @@ test.describe('sync provider credential encryption', () => {
   test('load upgrades legacy plaintext IndexedDB rows to sealed storage', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
     await connectLocalVault(page)
