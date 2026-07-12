@@ -1,4 +1,4 @@
-//! `SigningIdentity` adapters for the portable Nexus quorum unlock protocol.
+//! `SigningIdentity` adapters for the portable Sentinel quorum unlock protocol.
 
 use crate::{
     DeviceIdentity, SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse,
