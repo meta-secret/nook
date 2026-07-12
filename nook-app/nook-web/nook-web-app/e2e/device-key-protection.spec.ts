@@ -164,7 +164,10 @@ test.describe('passkey device-key protection', () => {
 
     await page.getByTestId('get-started-path-sentinel').click()
     await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    await expect(page.getByTestId('sentinel-onboarding-identity')).toBeVisible()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
+      0,
+    )
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
@@ -178,8 +181,6 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-card-stack-dashboard'),
     ).toContainText('AUTOMATICALLY INCLUDED')
-    await page.getByTestId('sentinel-genesis-participant-count').click()
-    await page.getByTestId('sentinel-participant-option-2').click()
     await page.getByTestId('sentinel-genesis-response-input').fill('bb')
     await expect(
       page.getByTestId('sentinel-genesis-add-participant'),
@@ -202,6 +203,8 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
     ).toHaveCount(0)
+    await page.getByTestId('sentinel-onboarding-continue-policy').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
     await page
       .getByTestId('sentinel-genesis-name-input')
       .fill('Passkey Sentinel')
@@ -213,7 +216,9 @@ test.describe('passkey device-key protection', () => {
       '2 / 2',
       { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
     )
-    await expect(page.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
+    await expect(page.getByTestId('sentinel-genesis-deliveries')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     await participantContext.close()
   })

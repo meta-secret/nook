@@ -47,16 +47,35 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
   })
 
   test('creates and delivers a 2-of-2 Sentinel without a sync provider', async () => {
+    await expectPathChooser(deviceB)
+    await deviceB.getByTestId('get-started-path-join').click()
+    const responseOutput = deviceB.getByTestId(
+      'sentinel-genesis-generated-response',
+    )
+    await expect(responseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const participantAnnouncement = await responseOutput.inputValue()
+    expect(participantAnnouncement).toContain('publicKeyAnnouncement')
+
     await expectPathChooser(deviceA)
     await deviceA.getByTestId('get-started-path-sentinel').click()
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
+    await expect(
+      deviceA.getByTestId('sentinel-genesis-response-input'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await deviceA
+      .getByTestId('sentinel-genesis-response-input')
+      .fill(participantAnnouncement)
+    await deviceA.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      deviceA.getByTestId('sentinel-genesis-queued-participant'),
+    ).toBeVisible()
+    await deviceA.getByTestId('sentinel-onboarding-continue-policy').click()
     await deviceA
       .getByTestId('sentinel-genesis-name-input')
       .fill('Sentinel quorum')
-    await deviceA.getByTestId('sentinel-genesis-participant-count').click()
-    await deviceA.getByTestId('sentinel-participant-option-2').click()
-    await deviceA.getByTestId('sentinel-genesis-threshold').click()
-    await deviceA.getByTestId('sentinel-threshold-option-2').click()
+    await expect(
+      deviceA.getByTestId('sentinel-genesis-participant-count'),
+    ).toHaveAttribute('data-value', '2')
     await deviceA.getByTestId('sentinel-genesis-start').click()
 
     const genesisRequest = deviceA.getByTestId(
@@ -65,25 +84,6 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
     await expect(genesisRequest).toBeVisible({ timeout: UI_TIMEOUT_MS })
     const requestPayload = await genesisRequest.inputValue()
     expect(requestPayload.length).toBeGreaterThan(20)
-
-    await expectPathChooser(deviceB)
-    await deviceB.getByTestId('get-started-path-join').click()
-    const responseOutput = deviceB.getByTestId(
-      'sentinel-genesis-generated-response',
-    )
-    await expect(responseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    const participantResponse = await responseOutput.inputValue()
-    expect(participantResponse).toContain('publicKeyAnnouncement')
-
-    await deviceA
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantResponse)
-    await deviceA.getByTestId('sentinel-genesis-add-participant').click()
-    await expect(
-      deviceA.getByTestId('sentinel-genesis-progress'),
-    ).toContainText('2 / 2')
-    await expect(deviceA.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
-    await deviceA.getByTestId('sentinel-genesis-finalize').click()
 
     const participantDelivery = deviceA
       .getByTestId('sentinel-genesis-delivery')

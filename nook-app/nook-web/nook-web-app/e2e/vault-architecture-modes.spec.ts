@@ -188,18 +188,26 @@ test.describe('vault architecture modes', () => {
       0,
     )
     await page.getByTestId('sentinel-dashboard-card-stack').click()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-onboarding-roster-next'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
+      0,
+    )
     await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
     await expect(
       page.getByTestId('login-create-vault-chooser'),
     ).toHaveAttribute('data-sentinel-dashboard', 'card-stack')
-    await expect(page.getByTestId('sentinel-genesis-name-input')).toBeVisible()
+    await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(0)
     await expect(
-      page.getByTestId('sentinel-genesis-participant-count'),
-    ).toHaveAttribute('data-value', '3')
+      page.getByTestId('sentinel-onboarding-continue-policy'),
+    ).toBeDisabled()
     await expect(
-      page.getByTestId('sentinel-genesis-threshold'),
-    ).toHaveAttribute('data-value', '2')
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-onboarding-progress'),
+    ).toContainText('Add devices')
     await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
   })
@@ -550,8 +558,11 @@ test.describe('vault architecture modes', () => {
       await page.getByTestId('get-started-path-sentinel').click()
       await page.getByTestId('sentinel-dashboard-card-stack').click()
       await expect(
+        page.getByTestId('sentinel-onboarding-roster-next'),
+      ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await expect(
         page.getByTestId('sentinel-genesis-policy-step'),
-      ).toBeVisible()
+      ).toHaveCount(0)
       await page.getByTestId('sentinel-dashboard-back').click()
       await page.getByTestId('create-vault-wizard-back').click()
 
