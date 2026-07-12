@@ -6,6 +6,7 @@ vars:
   # Host Docker socket (sibling containers via sock — not DinD). Override on unusual setups.
   DOCKER_SOCK: '{{default "/var/run/docker.sock" .DOCKER_SOCK}}'
   DOCKER: '{{default "docker" .DOCKER}}'
+  DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
   ci-agent:install:
@@ -77,6 +78,7 @@ tasks:
         {{.DOCKER}} run --rm
         --init
         --platform linux/amd64
+        --ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}
         "${mounts[@]}"
         -w "$repo_root"
         -v {{.DOCKER_SOCK}}:/var/run/docker.sock

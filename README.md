@@ -165,6 +165,31 @@ Open [http://localhost:5173](http://localhost:5173) for the landing page, or
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx reuses the cached toolchain base and
 GHCR `:buildcache`, so only the small source + dist layers rebuild.
+Runtime containers receive an explicit 1,048,576 open-file limit; override it
+with `DOCKER_NOFILE_LIMIT` when needed.
+
+On macOS, inotify belongs to Docker Desktop's Linux VM rather than the macOS
+kernel. Reapply the limits after Docker Desktop restarts:
+
+```sh
+docker run --rm --privileged --pid=host busybox:1.37.0 \
+  sysctl -w \
+  fs.inotify.max_user_instances=2500 \
+  fs.inotify.max_user_watches=10485760
+```
+
+On Linux development hosts, raise and persist the same kernel-wide limits
+directly (inotify sysctls cannot be configured per container):
+
+```sh
+sudo sysctl -w fs.inotify.max_user_instances=2500
+sudo sysctl -w fs.inotify.max_user_watches=10485760
+printf '%s\n' \
+  'fs.inotify.max_user_instances=2500' \
+  'fs.inotify.max_user_watches=10485760' \
+  | sudo tee /etc/sysctl.d/99-nook-docker.conf
+sudo sysctl --system
+```
 
 To use GitHub sync, connect a personal access token in the UI. Nook stores the
 encrypted event log under `nook-log/v1/events/` in a private repository.

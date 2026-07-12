@@ -12,6 +12,23 @@ runs:
     - name: Setup Task
       uses: go-task/setup-task@v2
 
+    - name: Raise Linux filesystem watcher limits
+      shell: bash
+      run: |
+        ensure_minimum() {
+          local key="$1"
+          local minimum="$2"
+          local current
+          current="$(sysctl -n "$key")"
+          if (( current < minimum )); then
+            sudo sysctl -w "$key=$minimum"
+          else
+            echo "$key = $current (already >= $minimum)"
+          fi
+        }
+        ensure_minimum fs.inotify.max_user_instances 2500
+        ensure_minimum fs.inotify.max_user_watches 10485760
+
     # Enable the containerd image store so the `docker` driver builder (the daemon's built-in
     # BuildKit, which `task setup` selects via `docker context show` -> "default") writes build
     # results STRAIGHT into the image store — no full-image tarball export + load. This is what

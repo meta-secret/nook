@@ -1,5 +1,8 @@
 version: '3'
 
+vars:
+  DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
+
 includes:
   app:
     taskfile: nook-app/Taskfile.yml
