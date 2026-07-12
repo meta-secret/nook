@@ -46,7 +46,16 @@
   const vault = new VaultState()
   type ColorMode = 'light' | 'dark'
   const THEME_STORAGE_KEY = 'nook_color_mode'
-  let colorMode = $state<ColorMode>('dark')
+
+  function systemColorMode(): ColorMode {
+    return typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light'
+  }
+
+  let colorMode = $state<ColorMode>(systemColorMode())
+  let followsSystemColorMode = $state(true)
   let legalPage = $state<LegalPageId | undefined>(
     typeof window !== 'undefined'
       ? getLegalPageFromPath(window.location.pathname)
@@ -117,10 +126,20 @@
   }
 
   onMount(() => {
+    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
     const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
     if (savedMode === 'light' || savedMode === 'dark') {
       colorMode = savedMode
+      followsSystemColorMode = false
+    } else {
+      colorMode = colorScheme.matches ? 'dark' : 'light'
     }
+    const handleColorSchemeChange = (event: MediaQueryListEvent) => {
+      if (followsSystemColorMode) {
+        colorMode = event.matches ? 'dark' : 'light'
+      }
+    }
+    colorScheme.addEventListener('change', handleColorSchemeChange)
     void vault.init()
 
     if (vault.runtimeConfig.exposeDebugHooks()) {
@@ -152,6 +171,7 @@
       vault.stopIdleSessionTracking()
       void vault.lockDeviceProtection()
       window.removeEventListener('popstate', syncRoute)
+      colorScheme.removeEventListener('change', handleColorSchemeChange)
     }
   })
 
@@ -192,6 +212,7 @@
   }
 
   function toggleColorMode() {
+    followsSystemColorMode = false
     colorMode = colorMode === 'dark' ? 'light' : 'dark'
     localStorage.setItem(THEME_STORAGE_KEY, colorMode)
   }

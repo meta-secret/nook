@@ -143,6 +143,36 @@ test.describe('vault architecture modes', () => {
     })
   })
 
+  test('follows the system theme until the user chooses one', async ({
+    page,
+  }) => {
+    await page.evaluate(() => localStorage.removeItem('nook_color_mode'))
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.reload()
+
+    const app = page.locator('main')
+    await expect(app).not.toHaveClass(/dark/)
+    await expect(page.getByTestId('theme-toggle-btn')).toHaveAttribute(
+      'aria-label',
+      /dark/i,
+    )
+
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(app).toHaveClass(/dark/)
+    await expect(page.getByTestId('theme-toggle-btn')).toHaveAttribute(
+      'aria-label',
+      /light/i,
+    )
+
+    await page.getByTestId('theme-toggle-btn').click()
+    await expect(app).not.toHaveClass(/dark/)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(app).not.toHaveClass(/dark/)
+    await page.reload()
+    await expect(app).not.toHaveClass(/dark/)
+  })
+
   test('routes simple and sentinel vaults into different creation workflows', async ({
     page,
   }) => {
