@@ -232,6 +232,19 @@
       )
       return
     }
+    if (
+      queuedParticipants.some(
+        (participant) => participant.fingerprint === queued.fingerprint,
+      ) ||
+      participants.some(
+        (participant) => participant.fingerprint === queued.fingerprint,
+      )
+    ) {
+      participantInputError = vault.t(
+        'login.sentinel_onboarding_device_already_added',
+      )
+      return
+    }
     queuedParticipants.push(queued)
     response = ''
     deviceName = ''

@@ -168,6 +168,7 @@
     "sentinel_onboarding_roster_title": "Соберите список устройств",
     "sentinel_onboarding_roster_description": "На каждом дополнительном устройстве выберите «Присоединиться к Sentinel», создайте ключи с passkey и вставьте сюда подписанный открытый ключ.",
     "sentinel_onboarding_add_one_device": "Добавьте ещё хотя бы одно устройство",
+    "sentinel_onboarding_device_already_added": "Ключ этого устройства уже добавлен в список.",
     "sentinel_onboarding_continue_with_devices": "Продолжить с {count} устройствами",
     "sentinel_onboarding_edit_roster": "Вернуться к списку устройств",
     "sentinel_onboarding_final_step": "ШАГ 03 · ИТОГОВАЯ ПОЛИТИКА",

@@ -168,6 +168,7 @@
     "sentinel_onboarding_roster_title": "Build your device roster",
     "sentinel_onboarding_roster_description": "On each additional device, choose Join Sentinel, create its keys with a passkey, then paste its signed public key here.",
     "sentinel_onboarding_add_one_device": "Add at least one more device",
+    "sentinel_onboarding_device_already_added": "This device key is already in the roster.",
     "sentinel_onboarding_continue_with_devices": "Continue with {count} devices",
     "sentinel_onboarding_edit_roster": "Back to device roster",
     "sentinel_onboarding_final_step": "STEP 03 · FINAL POLICY",

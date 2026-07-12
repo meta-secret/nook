@@ -200,6 +200,16 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-queued-participant'),
     ).toContainText('KEY PENDING')
+    await page
+      .getByTestId('sentinel-genesis-response-input')
+      .fill(participantAnnouncement)
+    await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-error'),
+    ).toHaveText('This device key is already in the roster.')
+    await expect(
+      page.getByTestId('sentinel-genesis-queued-participant'),
+    ).toHaveCount(1)
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
     ).toHaveCount(0)
