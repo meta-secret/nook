@@ -50,6 +50,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
@@ -83,6 +84,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE=dev
@@ -104,6 +106,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
         --ipc=host
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
         -e VITE_BASE="{{.VITE_BASE}}"
@@ -167,6 +170,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE="{{.WASM_BUILD_MODE}}"
@@ -185,6 +189,7 @@ tasks:
       - >-
         {{.DOCKER}} run --rm
         --platform linux/amd64
+        {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
         -e WASM_BUILD_MODE=dev

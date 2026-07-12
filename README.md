@@ -165,6 +165,43 @@ Open [http://localhost:5173](http://localhost:5173) for the landing page, or
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx reuses the cached toolchain base and
 GHCR `:buildcache`, so only the small source + dist layers rebuild.
+Runtime containers receive an explicit 1,048,576 open-file limit; override it
+with `DOCKER_NOFILE_LIMIT` when needed.
+
+macOS has no inotify; Docker workloads use the inotify implementation in
+Docker Desktop's Linux VM. The following command changes that VM's kernel-wide
+limits for every container. Reapply it after Docker Desktop restarts:
+
+```sh
+docker run --rm --privileged --pid=host busybox:1.37.0 \
+  sysctl -w \
+  fs.inotify.max_user_instances=2500 \
+  fs.inotify.max_user_watches=10485760
+```
+
+On Linux development hosts, raise and persist the same kernel-wide limits
+directly (inotify sysctls cannot be configured per container):
+
+```sh
+sudo sysctl -w fs.inotify.max_user_instances=2500
+sudo sysctl -w fs.inotify.max_user_watches=10485760
+printf '%s\n' \
+  'fs.inotify.max_user_instances=2500' \
+  'fs.inotify.max_user_watches=10485760' \
+  | sudo tee /etc/sysctl.d/99-nook-docker.conf
+sudo sysctl --system
+```
+
+Secondarily, to raise this host's macOS file-descriptor ceilings by 10×, run:
+
+```sh
+sudo sysctl -w kern.maxfiles=2764800
+sudo sysctl -w kern.maxfilesperproc=1382400
+sudo launchctl limit maxfiles 1382400 2764800
+```
+
+The launchd limit applies to newly launched processes, so reopen affected
+terminals and applications.
 
 To use GitHub sync, connect a personal access token in the UI. Nook stores the
 encrypted event log under `nook-log/v1/events/` in a private repository.

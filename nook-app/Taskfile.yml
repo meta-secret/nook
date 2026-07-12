@@ -9,6 +9,10 @@ vars:
   EXTENSION_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-extension'
   WEB_SHARED_ROOT: '{{.WEB_GROUP_ROOT}}/nook-web-shared'
   DOCKER: '{{default "docker" .DOCKER}}'
+  # Keep runtime containers at Docker Desktop's 1 Mi open-file baseline. Kernel-wide inotify
+  # limits are host prerequisites documented in README.md; they cannot be set per container.
+  DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
+  DOCKER_RUN_LIMITS: '--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}'
   # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that, with the
   # containerd image store, the build result is written STRAIGHT into the image store — no 9 GB
   # tarball export + `docker load`. Warm builds only write the small changed source/dist layers;

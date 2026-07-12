@@ -243,6 +243,19 @@ All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` 
 
 `task setup` always (re)builds the **nook-web** image (source may have changed); buildx reuses the toolchain base + GHCR `:buildcache`, so only the source + dist layers rebuild (seconds).
 
+Nook runtime containers set `nofile=1048576`; `DOCKER_NOFILE_LIMIT` can
+override that value. Inotify sysctls are kernel-wide and Docker rejects them as
+per-container `--sysctl` options, so Linux developers configure the documented
+host prerequisites: at least `fs.inotify.max_user_instances=2500` and
+`fs.inotify.max_user_watches=10485760`. The shared GitHub Actions Docker setup
+raises those values when needed without lowering larger runner defaults. On
+macOS, those sysctls live inside Docker Desktop's Linux VM and must be applied
+with the documented short-lived privileged container after Docker Desktop
+restarts; macOS `sudo sysctl` does not configure the VM. The separate macOS
+host-wide file-descriptor ceilings are `kern.maxfiles` and
+`kern.maxfilesperproc`, with launchd's `maxfiles` controlling newly launched
+processes; the README documents the current-host 10x values.
+
 ### Build export: docker driver + containerd image store
 
 The nook-web image is large (~9 GB — it bakes the warm `target/` so runtime `task` never recompiles). Exporting that on every build is the dominant warm-build cost **if** it is re-materialized wholesale. We avoid that by building with the **`docker` driver** builder (BuildKit embedded in the daemon) on top of the **containerd image store**: the build result is written **directly into the image store**, so a warm rebuild only writes the small changed source/dist layers — the unchanged multi-GB deps/target layers are already there. A source-only change goes from a ~60 s full re-export down to **sub-second** export.
