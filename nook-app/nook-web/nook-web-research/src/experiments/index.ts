@@ -10,16 +10,12 @@ import NexusCardStack from './vault/nexus-card-stack/Experiment.svelte'
 import SealedCapsule from './vault/sealed-capsule/Experiment.svelte'
 import SecureHardware from './vault/secure-hardware/Experiment.svelte'
 import VaultTerminal from './vault/vault-terminal/Experiment.svelte'
-import EmptyStudio from './nook-auth/empty-studio/Experiment.svelte'
 import KeyLater from './nook-auth/key-later/Experiment.svelte'
 import LandingHandoff from './nook-auth/landing-handoff/Experiment.svelte'
-import LocalBoard from './nook-auth/local-board/Experiment.svelte'
 import OneQuestion from './nook-auth/one-question/Experiment.svelte'
-import SealedPresence from './nook-auth/sealed-presence/Experiment.svelte'
-import SentinelConsole from './nook-auth/sentinel-console/Experiment.svelte'
-import SentinelDeck from './nook-auth/sentinel-deck/Experiment.svelte'
-import TwoFoundations from './nook-auth/two-foundations/Experiment.svelte'
 import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
+import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
+import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
 
 export interface ExperimentProps {
   navigate: (path: string) => void
@@ -52,13 +48,19 @@ export const categories: ExperimentCategory[] = [
     slug: 'nook-auth',
     title: 'Nook Auth',
     description:
-      'Fresh Open Nook entry: show what exists, unlock existing vaults, choose Simple vs Sentinel on empty state, and defer passkey until it has a reason.',
+      'Presence-first Open Nook entry concepts. Empty vs unlock, Simple vs Sentinel, deferred passkey.',
+  },
+  {
+    slug: 'vault-auth-workflow',
+    title: 'Vault Auth Workflow',
+    description:
+      'End-to-end auth → Sentinel setup. Key later and Landing both use: name vault → Simple or Sentinel → card stack (default) or vault terminal.',
   },
   {
     slug: 'vault',
     title: 'Sentinel Vault',
     description:
-      'Create an in-memory threshold vault, define its policy, onboard participant public keys, and seal the genesis roster.',
+      'Standalone threshold vault genesis directions — policy, participant keys, and seal.',
   },
 ]
 
@@ -66,16 +68,23 @@ export const subcategories: ExperimentSubcategory[] = [
   {
     categorySlug: 'nook-auth',
     slug: 'v1',
-    title: 'V1 · Presence-first concepts',
+    title: 'V1 · Shortlist',
     description:
-      'Ten directions for the post-landing Open Nook moment. Toggle Empty / Vault exists in each sketch.',
+      'Four kept directions. Toggle Empty / Vault exists in each sketch.',
+  },
+  {
+    categorySlug: 'vault-auth-workflow',
+    slug: 'v1',
+    title: 'V1 · Auth → Sentinel',
+    description:
+      'Click Build Sentinel vault to enter the adopted full UI. Card stack is the default destination; terminal is the alternate.',
   },
   {
     categorySlug: 'vault',
     slug: 'v1',
     title: 'V1 · Selected directions',
     description:
-      'The strongest visual directions, now grounded in the Sentinel name → N/K → public-key roster → atomic genesis flow.',
+      'The strongest visual directions for Sentinel genesis.',
   },
   {
     categorySlug: 'vault',
@@ -101,12 +110,14 @@ export const subcategories: ExperimentSubcategory[] = [
 ]
 
 const auth = categories[0]
-const vault = categories[1]
+const workflow = categories[1]
+const vault = categories[2]
 const authV1 = subcategories[0]
-const v1 = subcategories[1]
-const v2 = subcategories[2]
-const v3 = subcategories[3]
-const v4 = subcategories[4]
+const workflowV1 = subcategories[1]
+const v1 = subcategories[2]
+const v2 = subcategories[3]
+const v3 = subcategories[4]
+const v4 = subcategories[5]
 
 export const experiments: Experiment[] = [
   {
@@ -128,33 +139,6 @@ export const experiments: Experiment[] = [
     component: LandingHandoff,
   },
   {
-    slug: 'two-foundations',
-    category: auth,
-    subcategory: authV1,
-    title: 'Two foundations',
-    description:
-      'Dark foundation picker: Simple vs Sentinel before any device ceremony.',
-    component: TwoFoundations,
-  },
-  {
-    slug: 'sealed-presence',
-    category: auth,
-    subcategory: authV1,
-    title: 'Sealed presence',
-    description:
-      'Existing vault as a sealed capsule; empty state as a dashed chamber.',
-    component: SealedPresence,
-  },
-  {
-    slug: 'empty-studio',
-    category: auth,
-    subcategory: authV1,
-    title: 'Empty studio',
-    description:
-      'Warm studio metaphor: draft Simple or Sentinel on a clean bench.',
-    component: EmptyStudio,
-  },
-  {
     slug: 'key-later',
     category: auth,
     subcategory: authV1,
@@ -162,24 +146,6 @@ export const experiments: Experiment[] = [
     description:
       'Step timeline that keeps passkey as the last understanding, not the lobby.',
     component: KeyLater,
-  },
-  {
-    slug: 'sentinel-console',
-    category: auth,
-    subcategory: authV1,
-    title: 'Sentinel console entry',
-    description:
-      'Presence menu that hands off into the vault-terminal Sentinel UI.',
-    component: SentinelConsole,
-  },
-  {
-    slug: 'sentinel-deck',
-    category: auth,
-    subcategory: authV1,
-    title: 'Sentinel deck entry',
-    description:
-      'Presence menu that hands off into the card-stack Sentinel builder.',
-    component: SentinelDeck,
   },
   {
     slug: 'one-question',
@@ -191,13 +157,22 @@ export const experiments: Experiment[] = [
     component: OneQuestion,
   },
   {
-    slug: 'local-board',
-    category: auth,
-    subcategory: authV1,
-    title: 'Local board',
+    slug: 'key-later-sentinel-card-stack',
+    category: workflow,
+    subcategory: workflowV1,
+    title: 'Key later → Sentinel workflow · preferred',
     description:
-      'Ops-style local status board that recommends create or unlock.',
-    component: LocalBoard,
+      'Key later auth. Name vault → choose Simple or Sentinel → Simple create, or Sentinel interface (card stack / terminal).',
+    component: KeyLaterSentinelCardStack,
+  },
+  {
+    slug: 'landing-sentinel-card-stack',
+    category: workflow,
+    subcategory: workflowV1,
+    title: 'Landing → Sentinel workflow',
+    description:
+      'Landing handoff auth. Same steps as Key later: name vault → Simple or Sentinel → card stack / terminal.',
+    component: LandingSentinelCardStack,
   },
   {
     slug: 'cipher-ledger',

@@ -26,6 +26,9 @@ different layout or visual direction.
 
 ## Categories
 
-- **`nook-auth`** — presence-first Open Nook entry (empty vs unlock, Simple vs
-  Sentinel, deferred passkey). Toggle Empty / Vault exists in each sketch.
-- **`vault`** — Sentinel vault genesis UI directions (formerly Nexus).
+- **`nook-auth`** — presence-first Open Nook entry shortlist (What's there?,
+  Landing handoff, Key later, One question). Toggle Empty / Vault exists.
+- **`vault-auth-workflow`** — end-to-end auth → Sentinel. **Key later** and
+  **Landing** both share: name vault → Simple or Sentinel → card stack
+  (default) or vault terminal.
+- **`vault`** — standalone Sentinel vault genesis UI directions.
