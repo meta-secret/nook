@@ -11,8 +11,6 @@
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
-  import ProductIntro from '$lib/components/ProductIntro.svelte'
-  import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
@@ -246,6 +244,9 @@
   /** Existing vault unlock keeps passkey-first; empty create defers passkey. */
   const requiresPasskeyFirst = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
+  )
+  const existingVaultNeedsDeviceUnlock = $derived(
+    requiresPasskeyFirst && !vault.deviceProtectionReady,
   )
   const showLoginWithoutPasskey = $derived(
     !requiresPasskeyFirst && vault.providersLoaded,
@@ -493,13 +494,8 @@
               />
             </div>
           {/if}
-          {#if requiresPasskeyFirst && !vault.deviceProtectionReady}
-            <div class="mx-auto w-full max-w-lg">
-              <ProductIntro {vault} onOpenHelp={() => vault.openHelp()} />
-            </div>
-            <DeviceProtectionGate {vault} />
-          {:else if vault.deviceProtectionReady || showLoginWithoutPasskey}
-            {#if vault.providersLoaded}
+          {#if vault.deviceProtectionReady || showLoginWithoutPasskey || existingVaultNeedsDeviceUnlock}
+            {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock}
               <LoginGate
                 {vault}
                 providers={vault.providers}
@@ -507,8 +503,10 @@
                 bind:githubPat={vault.githubPat}
                 bind:githubRepo={vault.githubRepo}
                 addProviderOpen={vault.addProviderOpen}
-                isVerifying={vault.isVerifying}
+                isVerifying={vault.isVerifying ||
+                  existingVaultNeedsDeviceUnlock}
                 isInitializing={vault.isInitializing}
+                deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
                 onUnlock={handleUnlock}
                 onBeginAddProvider={() => vault.beginAddProvider()}
                 onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -544,12 +542,14 @@
                 onDismissError={() => vault.dismissError()}
               />
             {/if}
-            {#if showPasskeyOverlay}
+            {#if showPasskeyOverlay || existingVaultNeedsDeviceUnlock}
               <PasskeyAuthOverlay
                 {vault}
-                onDismiss={() => {
-                  pendingVaultCreation = undefined
-                }}
+                onDismiss={showPasskeyOverlay
+                  ? () => {
+                      pendingVaultCreation = undefined
+                    }
+                  : undefined}
               />
             {/if}
           {/if}

@@ -317,7 +317,14 @@ test.describe('passkey device-key protection', () => {
     await clearDeviceMetadata(page)
 
     await page.reload()
-    // Existing vault still requires passkey-first after metadata wipe.
+    // Existing vault stays in the app unlock workflow while device recovery is
+    // presented as its mandatory passkey step.
+    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
+    await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toHaveCount(
+      0,
+    )
     await page.getByTestId('device-protection-use-existing-choice').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
 

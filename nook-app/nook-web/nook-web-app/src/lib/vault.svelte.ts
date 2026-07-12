@@ -766,7 +766,8 @@ export class VaultState {
 
       if (!this.deviceProtectionReady && !deviceIdentityUnlocked) {
         // Empty-device Landing → Sentinel: show create flow before passkey.
-        // Unlock paths still require the full-page device-protection gate.
+        // Existing-vault unlock stays in LoginGate with passkey authorization
+        // presented by PasskeyAuthOverlay.
         if (!this.localVaultPresent && this.localVaults.length === 0) {
           try {
             await this.loadProviders({ ensureLocalRow: true })

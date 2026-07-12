@@ -56,6 +56,7 @@
     onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
+    deviceAuthorizationPending = false,
   }: {
     vault: VaultState
     providers: StorageProvider[]
@@ -92,6 +93,7 @@
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
+    deviceAuthorizationPending?: boolean
   } = $props()
 
   let enrollmentPanelOpen = $state(false)
@@ -172,10 +174,11 @@
   }
 
   $effect(() => {
-    if (showLocalUnlock) {
+    if (showLocalUnlock && !deviceAuthorizationPending) {
       void vault.prepareLocalLogin()
     }
     if (
+      !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)
     ) {
