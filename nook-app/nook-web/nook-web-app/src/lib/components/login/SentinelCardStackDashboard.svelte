@@ -33,6 +33,12 @@
     payload: string
   }
 
+  type QueuedParticipant = {
+    payload: string
+    label: string
+    fingerprint: string
+  }
+
   let {
     vault,
     name = $bindable(''),
@@ -77,14 +83,17 @@
   let actionBusy = $state(false)
   let copied = $state(false)
   let selected = $state(0)
-  let queuedParticipant = $state('')
+  let queuedParticipants = $state<QueuedParticipant[]>([])
   let deviceName = $state('')
+  let participantInputError = $state('')
 
   const initiatorKeyReady = $derived(
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
   )
   const rosterCount = $derived(
-    initiatorKeyReady ? Math.max(1, participants.length) : 0,
+    initiatorKeyReady
+      ? Math.max(1, participants.length) + queuedParticipants.length
+      : 0,
   )
   const missing = $derived(Math.max(0, participantCount - rosterCount))
   const policyValid = $derived(
@@ -110,12 +119,39 @@
 
   function changeParticipantPayload(event: Event) {
     response = (event.currentTarget as HTMLInputElement).value
+    participantInputError = ''
     if (deviceName.trim()) return
     try {
       const announcement = JSON.parse(response) as { label?: string }
       deviceName = announcement.label?.trim() ?? ''
     } catch {
       // Keep the compact sketch input usable while an announcement is pasted.
+    }
+  }
+
+  function parseParticipantPayload(payload: string): QueuedParticipant | null {
+    try {
+      const parsed = JSON.parse(payload) as {
+        fingerprint?: string
+        label?: string
+        signature?: string
+        participant?: {
+          fingerprint?: string
+          label?: string
+        }
+      }
+      const fingerprint =
+        parsed.fingerprint?.trim() ?? parsed.participant?.fingerprint?.trim()
+      const signedLabel =
+        parsed.label?.trim() ?? parsed.participant?.label?.trim() ?? ''
+      if (!fingerprint || !parsed.signature?.trim()) return null
+      return {
+        payload,
+        label: deviceName.trim() || signedLabel,
+        fingerprint,
+      }
+    } catch {
+      return null
     }
   }
 
@@ -133,16 +169,20 @@
     }
   }
 
-  async function addQueuedParticipant() {
-    const payload = queuedParticipant
-    if (!payload || status !== 'collecting' || isBusy || actionBusy) return
+  async function flushQueuedParticipants() {
+    if (
+      queuedParticipants.length === 0 ||
+      status !== 'collecting' ||
+      isBusy ||
+      actionBusy
+    )
+      return
     actionBusy = true
     try {
-      await onAddParticipant(payload)
-      queuedParticipant = ''
-      response = ''
-      deviceName = ''
-      selected = Math.max(0, participants.length)
+      while (queuedParticipants.length > 0) {
+        await onAddParticipant(queuedParticipants[0].payload)
+        queuedParticipants.shift()
+      }
     } finally {
       actionBusy = false
     }
@@ -150,34 +190,30 @@
 
   async function addParticipant() {
     const payload = response.trim()
-    if (!deviceName.trim() || !payload || !policyValid || isBusy || actionBusy)
-      return
-    if (status === 'idle') {
-      queuedParticipant = payload
-      actionBusy = true
-      try {
-        await onStart({
-          label: name.trim(),
-          participantCount,
-          threshold,
-        })
-      } finally {
-        actionBusy = false
-      }
+    if (!payload || isBusy || actionBusy) return
+    const queued = parseParticipantPayload(payload)
+    if (!queued) {
+      participantInputError = vault.t(
+        'login.sentinel_card_stack_public_key_invalid',
+      )
       return
     }
-    queuedParticipant = payload
-    await addQueuedParticipant()
+    queuedParticipants.push(queued)
+    response = ''
+    deviceName = ''
+    participantInputError = ''
+    selected = Math.max(0, participants.length + queuedParticipants.length - 1)
+    if (status === 'collecting') await flushQueuedParticipants()
   }
 
   $effect(() => {
     if (
       status === 'collecting' &&
-      queuedParticipant &&
+      queuedParticipants.length > 0 &&
       !isBusy &&
       !actionBusy
     ) {
-      void addQueuedParticipant()
+      void flushQueuedParticipants()
     }
   })
 
@@ -337,6 +373,34 @@
             </button>
           {/each}
 
+          {#each queuedParticipants as participant, index (participant.fingerprint)}
+            <button
+              class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === participants.length + index ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
+              data-testid="sentinel-genesis-queued-participant"
+              onclick={() => (selected = participants.length + index)}
+            >
+              <span
+                class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[9px] text-[#b9c5ce]"
+              >
+                P-{String(participants.length + index + 1).padStart(2, '0')}
+              </span>
+              <span class="min-w-0">
+                <b class="block truncate text-sm">
+                  {participant.label} ·
+                  {vault.t('login.sentinel_card_stack_participant')}
+                  {String(participants.length + index + 1).padStart(2, '0')}
+                </b>
+                <span
+                  class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
+                >
+                  {participant.fingerprint} ·
+                  {vault.t('login.sentinel_card_stack_key_queued')}
+                </span>
+              </span>
+              <RefreshCw class="size-4 text-[#79dfff]" />
+            </button>
+          {/each}
+
           {#if initiatorKeyReady && missing > 0}
             <div class="border border-dashed border-[#aeb8c2] p-5">
               <div class="flex items-center justify-between gap-4">
@@ -354,11 +418,7 @@
                   class="grid size-12 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={!deviceName.trim() ||
-                    !response.trim() ||
-                    !policyValid ||
-                    isBusy ||
-                    actionBusy}
+                  disabled={!response.trim() || isBusy || actionBusy}
                   onclick={() => void addParticipant()}
                 >
                   {#if actionBusy}<RefreshCw
@@ -397,6 +457,15 @@
                   />
                 </label>
               </div>
+              {#if participantInputError}
+                <p
+                  class="mt-4 text-xs leading-5 text-[#ff9f9f]"
+                  role="alert"
+                  data-testid="sentinel-genesis-participant-error"
+                >
+                  {participantInputError}
+                </p>
+              {/if}
             </div>
           {/if}
         </div>

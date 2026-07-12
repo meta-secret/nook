@@ -180,6 +180,14 @@ test.describe('passkey device-key protection', () => {
     ).toContainText('AUTOMATICALLY INCLUDED')
     await page.getByTestId('sentinel-genesis-participant-count').click()
     await page.getByTestId('sentinel-participant-option-2').click()
+    await page.getByTestId('sentinel-genesis-response-input').fill('bb')
+    await expect(
+      page.getByTestId('sentinel-genesis-add-participant'),
+    ).toBeEnabled()
+    await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-error'),
+    ).toBeVisible()
     await page
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)
@@ -188,6 +196,16 @@ test.describe('passkey device-key protection', () => {
     ).toBeEnabled()
 
     await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-queued-participant'),
+    ).toContainText('SIGNED KEY QUEUED')
+    await expect(
+      page.getByTestId('sentinel-genesis-ceremony-step'),
+    ).toHaveCount(0)
+    await page
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Passkey Sentinel')
+    await page.getByTestId('sentinel-genesis-start').click()
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
