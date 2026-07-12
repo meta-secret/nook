@@ -113,7 +113,7 @@ impl Default for VaultSessionState {
 
 impl VaultSessionState {
     fn reset(&mut self) {
-        // Preserve architecture so nexus ceremony UI can detect vault type after
+        // Preserve architecture so sentinel ceremony UI can detect vault type after
         // lock without re-reading projection YAML first.
         let architecture = self.architecture.clone();
         self.secrets_key.zeroize();
@@ -201,11 +201,11 @@ pub struct NookVaultManager {
     pub(in crate::manager) device: DeviceSessionState,
     pub(in crate::manager) status: StatusChannel,
     pub(in crate::manager) event_log: EventLogSessionState,
-    /// Public-only, pre-vault Nexus reverse-onboarding state. Draft ceremonies
+    /// Public-only, pre-vault Sentinel reverse-onboarding state. Draft ceremonies
     /// deliberately live only in memory: they have no store id and must never
     /// be mistaken for a persisted vault.
     pub(in crate::manager) sentinel_genesis: Option<nook_core::SentinelGenesisSession>,
-    /// Exact request this device answered as a Nexus participant. A returned
+    /// Exact request this device answered as a Sentinel participant. A returned
     /// share delivery must bind to this request before it may be persisted.
     pub(in crate::manager) pending_sentinel_genesis_request:
         Option<nook_core::SentinelGenesisRequest>,

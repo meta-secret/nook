@@ -241,6 +241,14 @@ export async function createLocalVaultOnLogin(
 
   // Deferred passkey: empty create may show the top-right overlay first.
   const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+  const vaultPanel = page.getByTestId('vault-panel')
+  await expect
+    .poll(
+      async () =>
+        (await passkeyOverlay.isVisible()) || (await vaultPanel.isVisible()),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
   if (await passkeyOverlay.isVisible()) {
     const setupBtn = page.getByTestId('device-protection-setup-btn')
     const unlockBtn = page.getByTestId('device-protection-unlock-btn')
@@ -251,7 +259,7 @@ export async function createLocalVaultOnLogin(
     }
   }
 
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+  await expect(vaultPanel).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await disableVaultIdleLock(page)

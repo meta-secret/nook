@@ -76,7 +76,7 @@
           </div>
           <div>
             <p class="font-mono text-xs tracking-[0.18em] text-[#a6a79f]">
-              NOOK NEXUS GENESIS APPLIANCE
+              NOOK SENTINEL GENESIS APPLIANCE
             </p>
             <h1 class="text-2xl font-bold">THRESHOLD CONTROL / MK-IV</h1>
           </div>
@@ -97,7 +97,7 @@
             </p>
             <input
               class="mt-4 w-full border-b border-[#777] bg-transparent py-2 text-3xl font-bold outline-none placeholder:text-[#666]"
-              placeholder="NEXUS NAME"
+              placeholder="SENTINEL NAME"
               bind:value={name}
               oninput={() => (finalized = false)}
             />
@@ -204,7 +204,7 @@
             class="mt-7 w-full border-2 border-[#ffb84a] bg-[#3a2d16] px-5 py-4 font-mono text-sm font-bold tracking-[0.08em] text-[#ffd28b] shadow-[inset_0_0_0_3px_#171815,0_5px_0_#111] transition active:translate-y-1 active:shadow-[inset_0_0_0_3px_#171815,0_1px_0_#111] disabled:cursor-not-allowed disabled:border-[#555] disabled:bg-[#292a27] disabled:text-[#696b65] disabled:shadow-[inset_0_0_0_3px_#171815]"
             onclick={() => (finalized = true)}
           >
-            {finalized ? 'VAULT SEALED' : 'SEAL NEXUS VAULT'}
+            {finalized ? 'VAULT SEALED' : 'SEAL SENTINEL VAULT'}
           </button>
         </div>
       </div>

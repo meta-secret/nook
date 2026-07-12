@@ -152,10 +152,11 @@ WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVault
 ```mermaid
 stateDiagram-v2
   [*] --> CheckLocal: app init
-  CheckLocal --> Passkey: setup / authorization
-  Passkey --> GetStarted: no local vault
-  Passkey --> Unlock: local vault exists
-  GetStarted --> CreateLocal: device-key vault
+  CheckLocal --> GetStarted: no local vault
+  CheckLocal --> Passkey: local vault exists
+  GetStarted --> Passkey: confirm Simple create
+  Passkey --> CreateLocal: device protection ready
+  Passkey --> Unlock: authorize existing vault
   GetStarted --> ConnectProvider: cloud provider
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists

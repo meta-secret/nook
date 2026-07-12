@@ -49,13 +49,13 @@ export function validateVaultArchitecture(
 }
 
 function normalizeVaultArchitecture(
-  architecture: Partial<VaultArchitecture> & { nexus?: SentinelPolicy },
+  architecture: Partial<VaultArchitecture>,
 ): VaultArchitecture {
   return {
     device_mode: architecture.device_mode ?? 'standard',
     vault_type: architecture.vault_type ?? 'simple',
     replication_type: architecture.replication_type ?? 'personal',
-    sentinel: architecture.sentinel ?? architecture.nexus,
+    sentinel: architecture.sentinel,
   }
 }
 

@@ -17,7 +17,7 @@ import {
 } from '$lib/google-oauth'
 import { prepareSharedStorageGrant } from '$lib/vault-architecture'
 import {
-  isNexusPasswordUnlockForbiddenError,
+  isSentinelPasswordUnlockForbiddenError,
   isSentinelVault,
 } from '$lib/vault/sentinel-unlock'
 
@@ -213,7 +213,7 @@ export async function unlockWithPassword(
     const message =
       e instanceof Error ? e.message : 'Failed to unlock with password.'
     log.warn('vault password unlock failed', { error: message })
-    if (isNexusPasswordUnlockForbiddenError(e)) {
+    if (isSentinelPasswordUnlockForbiddenError(e)) {
       state.errorMsg = state.t('architecture_modes.sentinel_password_forbidden')
       state.sentinelCeremonyPrompt = true
       return

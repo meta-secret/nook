@@ -136,6 +136,12 @@ export type SentinelGenesisParticipantSummary = {
   fingerprint: string
 }
 
+export type StartSentinelGenesisArgs = {
+  label: string
+  participantCount: number
+  threshold: number
+}
+
 type SentinelGenesisManagerStatus = {
   active: boolean
   participants?: Array<{
@@ -1191,11 +1197,7 @@ export class VaultState {
     this.sentinelGenesisStatus = 'delivering'
   }
 
-  async startSentinelGenesis(args: {
-    label: string
-    participantCount: number
-    threshold: number
-  }): Promise<void> {
+  async startSentinelGenesis(args: StartSentinelGenesisArgs): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true

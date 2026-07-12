@@ -1,6 +1,6 @@
 <script lang="ts">
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import type { VaultState } from '$lib/vault.svelte'
+  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     OAuthFilePreset,
@@ -51,6 +51,7 @@
     onUseEnrollmentCode,
     onUnlockWithPassword,
     onCreateDeviceVault,
+    onStartSentinelGenesis,
     onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
@@ -81,6 +82,9 @@
       password: string,
     ) => void | Promise<void>
     onCreateDeviceVault?: (label: string) => void | Promise<void>
+    onStartSentinelGenesis?: (
+      args: StartSentinelGenesisArgs,
+    ) => boolean | void | Promise<boolean | void>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
@@ -207,7 +211,8 @@
       {isVerifying}
       {isInitializing}
       {onCreateDeviceVault}
-      onStartSentinelGenesis={(args) => vault.startSentinelGenesis(args)}
+      onStartSentinelGenesis={onStartSentinelGenesis ??
+        ((args) => vault.startSentinelGenesis(args))}
       onAddSentinelGenesisParticipantResponse={(payload) =>
         vault.addSentinelGenesisParticipantResponse(payload)}
       onFinalizeSentinelGenesis={() => vault.finalizeSentinelGenesis()}

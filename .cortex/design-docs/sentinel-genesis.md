@@ -35,8 +35,7 @@ vault first**, then one mutually exclusive intent:
   provider flow.
 
 When a local vault already exists, the passkey/device-protection gate runs
-**before** unlock. Wire compatibility: product name is Sentinel; some persisted
-tokens remain `nexus*` (YAML sections, event op tags, HKDF domains).
+**before** unlock. Product and persisted wire names use Sentinel consistently.
 
 `replication_type` is not a vault architecture choice and must not appear in
 vault creation. A sync provider transports encrypted vault data after genesis;

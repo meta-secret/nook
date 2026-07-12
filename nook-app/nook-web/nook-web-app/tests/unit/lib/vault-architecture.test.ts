@@ -58,7 +58,7 @@ describe('vault architecture adapter', () => {
     )
   })
 
-  test('nexus vaults are gated until their policy is ready', () => {
+  test('sentinel vaults are gated until their policy is ready', () => {
     const draft: VaultArchitecture = {
       device_mode: 'anti-hacker',
       vault_type: 'sentinel',
@@ -73,6 +73,30 @@ describe('vault architecture adapter', () => {
     expect(validateVaultArchitecture(draft)).toEqual(draft)
     expect(canCreateSecret(draft)).toBe(false)
     expect(onboardingType(draft)).toBe('shared-provider-grant')
+  })
+
+  test('round-trips the Sentinel wire shape', () => {
+    const normalized = validateVaultArchitecture({
+      device_mode: 'standard',
+      vault_type: 'sentinel',
+      replication_type: 'personal',
+      sentinel: {
+        threshold: 2,
+        required_participants: 3,
+        ready_participants: 0,
+      },
+    })
+
+    expect(normalized).toEqual({
+      device_mode: 'standard',
+      vault_type: 'sentinel',
+      replication_type: 'personal',
+      sentinel: {
+        threshold: 2,
+        required_participants: 3,
+        ready_participants: 0,
+      },
+    })
   })
 
   test('provider matrix allows shared Google Drive and rejects shared GitHub', () => {

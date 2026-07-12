@@ -13,7 +13,7 @@
   import { Button } from '$lib/components/ui/button'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
-  import type { VaultState } from '$lib/vault.svelte'
+  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
 
   type SentinelGenesisStatus =
     | 'idle'
@@ -22,12 +22,6 @@
     | 'finalizing'
     | 'delivering'
     | 'complete'
-
-  type StartSentinelGenesisArgs = {
-    label: string
-    participantCount: number
-    threshold: number
-  }
 
   type SentinelGenesisDelivery = {
     participantId: string
@@ -78,7 +72,7 @@
     onConnectStorage: () => void
     onStartSentinelGenesis?: (
       args: StartSentinelGenesisArgs,
-    ) => void | Promise<void>
+    ) => boolean | void | Promise<boolean | void>
     onAddSentinelGenesisParticipantResponse?: (
       payload: string,
     ) => void | Promise<void>
@@ -107,13 +101,13 @@
   let wizardStep = $state<WizardStep>('name')
   let chosenPath = $state<ChosenPath>('undecided')
   let vaultName = $state('')
-  let nexusName = $state('')
-  let nexusParticipantCount = $state(3)
-  let nexusThreshold = $state(2)
+  let sentinelName = $state('')
+  let sentinelParticipantCount = $state(3)
+  let sentinelThreshold = $state(2)
   let participantResponse = $state('')
   let copyingRequest = $state(false)
   let copyingJoinResponse = $state(false)
-  let nexusActionBusy = $state(false)
+  let sentinelActionBusy = $state(false)
   let participantRequest = $state('')
   let sessionParticipantRequest = $state('')
   let generatedParticipantResponse = $state('')
@@ -161,10 +155,7 @@
   }
 
   $effect(() => {
-    if (
-      sentinelGenesisStatus === 'delivering' &&
-      sentinelGenesisDeliveries.length > 0
-    ) {
+    if (sentinelGenesisStatus !== 'idle') {
       wizardStep = 'sentinel-ceremony'
       chosenPath = 'sentinel'
     }
@@ -172,16 +163,16 @@
 
   const trimmedVaultName = $derived(vaultName.trim())
   const vaultNameReady = $derived(trimmedVaultName.length > 0)
-  const nexusNameReady = $derived(nexusName.trim().length > 0)
-  const nexusPolicyValid = $derived(
-    Number.isInteger(nexusParticipantCount) &&
-      Number.isInteger(nexusThreshold) &&
-      nexusParticipantCount >= 2 &&
-      nexusParticipantCount <= 16 &&
-      nexusThreshold >= 2 &&
-      nexusThreshold <= nexusParticipantCount,
+  const sentinelNameReady = $derived(sentinelName.trim().length > 0)
+  const sentinelPolicyValid = $derived(
+    Number.isInteger(sentinelParticipantCount) &&
+      Number.isInteger(sentinelThreshold) &&
+      sentinelParticipantCount >= 2 &&
+      sentinelParticipantCount <= 16 &&
+      sentinelThreshold >= 2 &&
+      sentinelThreshold <= sentinelParticipantCount,
   )
-  const nexusReadyToFinalize = $derived(sentinelGenesisStatus === 'ready')
+  const sentinelReadyToFinalize = $derived(sentinelGenesisStatus === 'ready')
   const showImportFooter = $derived(
     wizardStep === 'name' ||
       wizardStep === 'choose' ||
@@ -235,11 +226,11 @@
     wizardStep = 'simple-create'
   }
 
-  function chooseNexusCreatePath() {
+  function chooseSentinelCreatePath() {
     vault.draftVaultType = 'sentinel'
     chosenPath = 'sentinel'
-    if (!nexusName.trim()) {
-      nexusName = trimmedVaultName
+    if (!sentinelName.trim()) {
+      sentinelName = trimmedVaultName
     }
     wizardStep = 'sentinel-policy'
   }
@@ -273,24 +264,26 @@
 
   async function startSentinelGenesis() {
     if (
-      !nexusNameReady ||
-      !nexusPolicyValid ||
+      !sentinelNameReady ||
+      !sentinelPolicyValid ||
       isBusy ||
-      nexusActionBusy ||
+      sentinelActionBusy ||
       !onStartSentinelGenesis
     ) {
       return
     }
-    nexusActionBusy = true
+    sentinelActionBusy = true
     try {
-      await onStartSentinelGenesis({
-        label: nexusName.trim(),
-        participantCount: nexusParticipantCount,
-        threshold: nexusThreshold,
+      const started = await onStartSentinelGenesis({
+        label: sentinelName.trim(),
+        participantCount: sentinelParticipantCount,
+        threshold: sentinelThreshold,
       })
-      wizardStep = 'sentinel-ceremony'
+      if (started !== false) {
+        wizardStep = 'sentinel-ceremony'
+      }
     } finally {
-      nexusActionBusy = false
+      sentinelActionBusy = false
     }
   }
 
@@ -298,33 +291,33 @@
     const payload = participantResponse.trim()
     if (
       !payload ||
-      nexusActionBusy ||
+      sentinelActionBusy ||
       !onAddSentinelGenesisParticipantResponse
     ) {
       return
     }
-    nexusActionBusy = true
+    sentinelActionBusy = true
     try {
       await onAddSentinelGenesisParticipantResponse(payload)
       participantResponse = ''
     } finally {
-      nexusActionBusy = false
+      sentinelActionBusy = false
     }
   }
 
   async function finalizeSentinelGenesis() {
     if (
-      !nexusReadyToFinalize ||
-      nexusActionBusy ||
+      !sentinelReadyToFinalize ||
+      sentinelActionBusy ||
       !onFinalizeSentinelGenesis
     ) {
       return
     }
-    nexusActionBusy = true
+    sentinelActionBusy = true
     try {
       await onFinalizeSentinelGenesis()
     } finally {
-      nexusActionBusy = false
+      sentinelActionBusy = false
     }
   }
 
@@ -358,12 +351,12 @@
     const requestPayload = sessionParticipantRequest.trim()
     if (
       !requestPayload ||
-      nexusActionBusy ||
+      sentinelActionBusy ||
       !onCreateSentinelGenesisParticipantResponse
     ) {
       return
     }
-    nexusActionBusy = true
+    sentinelActionBusy = true
     try {
       generatedParticipantResponse =
         await onCreateSentinelGenesisParticipantResponse(requestPayload)
@@ -379,7 +372,7 @@
           ? error.message
           : vault.t('login.sentinel_genesis_response_failed')
     } finally {
-      nexusActionBusy = false
+      sentinelActionBusy = false
     }
   }
 
@@ -391,9 +384,9 @@
 
   async function receiveParticipantShare() {
     const sharePayload = participantShare.trim()
-    if (!sharePayload || nexusActionBusy || !onReceiveSentinelGenesisShare)
+    if (!sharePayload || sentinelActionBusy || !onReceiveSentinelGenesisShare)
       return
-    nexusActionBusy = true
+    sentinelActionBusy = true
     try {
       const requestPayload = participantRequest.trim()
       if (requestPayload && onRememberSentinelGenesisRequest) {
@@ -402,7 +395,7 @@
       await onReceiveSentinelGenesisShare(sharePayload)
       participantShare = ''
     } finally {
-      nexusActionBusy = false
+      sentinelActionBusy = false
     }
   }
 </script>
@@ -556,7 +549,7 @@
                           class="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
                           data-testid="get-started-path-sentinel"
                           disabled={isBusy}
-                          onclick={chooseNexusCreatePath}
+                          onclick={chooseSentinelCreatePath}
                         >
                           <Users class="size-4 shrink-0" />
                           {vault.t('login.get_started_path_sentinel_title')}
@@ -645,8 +638,8 @@
                 maxlength="64"
                 autocomplete="off"
                 data-testid="sentinel-genesis-name-input"
-                bind:value={nexusName}
-                disabled={isBusy || nexusActionBusy}
+                bind:value={sentinelName}
+                disabled={isBusy || sentinelActionBusy}
               />
             </div>
 
@@ -666,8 +659,8 @@
                   step="1"
                   class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
                   data-testid="sentinel-genesis-participant-count"
-                  bind:value={nexusParticipantCount}
-                  disabled={isBusy || nexusActionBusy}
+                  bind:value={sentinelParticipantCount}
+                  disabled={isBusy || sentinelActionBusy}
                 />
                 <p class="text-xs text-pretty text-muted-foreground">
                   {vault.t('login.sentinel_genesis_participant_count_hint')}
@@ -684,12 +677,12 @@
                   id="sentinel-threshold"
                   type="number"
                   min="2"
-                  max={nexusParticipantCount}
+                  max={sentinelParticipantCount}
                   step="1"
                   class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
                   data-testid="sentinel-genesis-threshold"
-                  bind:value={nexusThreshold}
-                  disabled={isBusy || nexusActionBusy}
+                  bind:value={sentinelThreshold}
+                  disabled={isBusy || sentinelActionBusy}
                 />
                 <p class="text-xs text-pretty text-muted-foreground">
                   {vault.t('login.sentinel_genesis_threshold_hint')}
@@ -703,13 +696,13 @@
                 class="min-w-[180px]"
                 data-testid="sentinel-genesis-start"
                 disabled={isBusy ||
-                  nexusActionBusy ||
-                  !nexusNameReady ||
-                  !nexusPolicyValid ||
+                  sentinelActionBusy ||
+                  !sentinelNameReady ||
+                  !sentinelPolicyValid ||
                   !onStartSentinelGenesis}
                 onclick={() => void startSentinelGenesis()}
               >
-                {#if nexusActionBusy}
+                {#if sentinelActionBusy}
                   <RefreshCw class="size-4 animate-spin" />
                 {:else}
                   <Users class="size-4" />
@@ -749,7 +742,7 @@
                   class="text-xs font-medium text-muted-foreground"
                   data-testid="sentinel-genesis-progress"
                 >
-                  {sentinelGenesisParticipantCount} / {nexusParticipantCount}
+                  {sentinelGenesisParticipantCount} / {sentinelParticipantCount}
                 </span>
               </div>
 
@@ -826,14 +819,15 @@
                   'login.sentinel_genesis_response_placeholder',
                 )}
                 bind:value={participantResponse}
-                disabled={isBusy || nexusActionBusy || nexusReadyToFinalize}
-              ></textarea>
+                disabled={isBusy ||
+                  sentinelActionBusy ||
+                  sentinelReadyToFinalize}></textarea>
               <Button
                 type="button"
                 variant="outline"
                 data-testid="sentinel-genesis-add-participant"
                 disabled={isBusy ||
-                  nexusActionBusy ||
+                  sentinelActionBusy ||
                   !participantResponse.trim() ||
                   !onAddSentinelGenesisParticipantResponse}
                 onclick={() => void addParticipantResponse()}
@@ -854,12 +848,12 @@
               class="w-full sm:w-auto sm:min-w-[220px]"
               data-testid="sentinel-genesis-finalize"
               disabled={isBusy ||
-                nexusActionBusy ||
-                !nexusReadyToFinalize ||
+                sentinelActionBusy ||
+                !sentinelReadyToFinalize ||
                 !onFinalizeSentinelGenesis}
               onclick={() => void finalizeSentinelGenesis()}
             >
-              {#if nexusActionBusy || sentinelGenesisStatus === 'finalizing'}
+              {#if sentinelActionBusy || sentinelGenesisStatus === 'finalizing'}
                 <RefreshCw class="size-4 animate-spin" />
               {:else}
                 <ShieldCheck class="size-4" />
@@ -938,7 +932,7 @@
                         type="button"
                         data-testid="sentinel-genesis-delivery-complete"
                         disabled={isBusy ||
-                          nexusActionBusy ||
+                          sentinelActionBusy ||
                           !onCompleteSentinelGenesisDelivery}
                         onclick={() =>
                           void onCompleteSentinelGenesisDelivery?.()}
@@ -1029,7 +1023,7 @@
                 variant="outline"
                 size="sm"
                 data-testid="sentinel-genesis-refresh-public-keys"
-                disabled={isBusy || nexusActionBusy}
+                disabled={isBusy || sentinelActionBusy}
                 onclick={() => refreshJoinPublicKeys()}
               >
                 <RefreshCw class="size-4" />
@@ -1064,19 +1058,19 @@
                     'login.sentinel_genesis_join_request_placeholder',
                   )}
                   bind:value={sessionParticipantRequest}
-                  disabled={isBusy || nexusActionBusy}></textarea>
+                  disabled={isBusy || sentinelActionBusy}></textarea>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   data-testid="sentinel-genesis-create-response"
                   disabled={isBusy ||
-                    nexusActionBusy ||
+                    sentinelActionBusy ||
                     !sessionParticipantRequest.trim() ||
                     !onCreateSentinelGenesisParticipantResponse}
                   onclick={() => void createParticipantResponse()}
                 >
-                  {#if nexusActionBusy}
+                  {#if sentinelActionBusy}
                     <RefreshCw class="size-4 animate-spin" />
                   {:else}
                     <ShieldCheck class="size-4" />
@@ -1107,7 +1101,7 @@
                   'login.sentinel_genesis_join_share_request_placeholder',
                 )}
                 bind:value={participantRequest}
-                disabled={isBusy || nexusActionBusy}></textarea>
+                disabled={isBusy || sentinelActionBusy}></textarea>
               <label
                 class="text-xs font-medium text-foreground"
                 for="sentinel-received-share"
@@ -1122,14 +1116,14 @@
                   'login.sentinel_genesis_receive_share_placeholder',
                 )}
                 bind:value={participantShare}
-                disabled={isBusy || nexusActionBusy}></textarea>
+                disabled={isBusy || sentinelActionBusy}></textarea>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 data-testid="sentinel-genesis-receive-share"
                 disabled={isBusy ||
-                  nexusActionBusy ||
+                  sentinelActionBusy ||
                   !participantShare.trim() ||
                   !onReceiveSentinelGenesisShare}
                 onclick={() => void receiveParticipantShare()}
@@ -1147,7 +1141,7 @@
               type="button"
               variant="outline"
               data-testid="create-vault-wizard-back"
-              disabled={isBusy || nexusActionBusy}
+              disabled={isBusy || sentinelActionBusy}
               onclick={goBack}
             >
               {vault.t('common.back')}

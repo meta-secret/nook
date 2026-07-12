@@ -1,12 +1,12 @@
-//! Atomic core integration for provider-independent Nexus genesis.
+//! Atomic core integration for provider-independent Sentinel genesis.
 
 use crate::{
     DeviceIdentity, DeviceMode, ReplicationType, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity, StoredSecretRecord,
-    VaultArchitecture, VaultType, finalize_nexus_genesis_shares, generate_store_id,
+    VaultArchitecture, VaultType, finalize_sentinel_genesis_shares, generate_store_id,
 };
 
-/// Complete, persistable Nexus genesis result. It contains no full-key device
+/// Complete, persistable Sentinel genesis result. It contains no full-key device
 /// envelope. `keys` are intentionally not exposed here; callers open the new
 /// vault through the same threshold-share ceremony used after reload/import.
 pub struct SentinelGenesisOutput {
@@ -19,7 +19,7 @@ pub struct SentinelGenesisOutput {
 
 /// Complete public genesis operations for an event-log root. Member enrollment
 /// and encrypted shares are emitted together so event-only materialization
-/// never loses the Nexus roster.
+/// never loses the Sentinel roster.
 #[must_use]
 pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate::VaultOperation> {
     let mut operations = output
@@ -38,7 +38,7 @@ pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate:
         shares: output
             .participant_deliveries
             .iter()
-            .map(|delivery| crate::NexusShareIssuedPayload {
+            .map(|delivery| crate::SentinelShareIssuedPayload {
                 device_id: delivery.device_id.clone(),
                 version: delivery.share.version,
                 threshold: delivery.share.threshold,
@@ -96,7 +96,7 @@ pub fn finalize_sentinel_genesis(
 ) -> Result<SentinelGenesisOutput, crate::MultiDeviceError> {
     let store_id = generate_store_id()?;
     let issued =
-        finalize_nexus_genesis_shares(session, &store_id, initiator_signing.signing_key())?;
+        finalize_sentinel_genesis_shares(session, &store_id, initiator_signing.signing_key())?;
     let policy = issued
         .deliveries
         .first()
@@ -106,7 +106,7 @@ pub fn finalize_sentinel_genesis(
     let architecture = VaultArchitecture {
         device_mode: DeviceMode::Standard,
         vault_type: VaultType::Sentinel,
-        // Compatibility-only persisted field; it does not affect Nexus
+        // Compatibility-only persisted field; it does not affect Sentinel
         // genesis, readiness, quorum, or later provider configuration.
         replication_type: ReplicationType::Personal,
         sentinel: Some(SentinelPolicy {
@@ -158,8 +158,8 @@ mod tests {
                 "2026-07-09T00:00:00Z",
             )?;
         }
-        assert_eq!(materialized.nexus_participants.len(), 2);
-        assert_eq!(materialized.nexus_shares.len(), 2);
+        assert_eq!(materialized.sentinel_participants.len(), 2);
+        assert_eq!(materialized.sentinel_shares.len(), 2);
         assert!(output.stored_records.iter().all(|record| {
             !matches!(VaultMetaRecord::classify(record), VaultMetaRecord::Auth(..))
         }));

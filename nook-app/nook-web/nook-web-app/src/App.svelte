@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
-  import { VaultState } from '$lib/vault.svelte'
+  import { VaultState, type StartSentinelGenesisArgs } from '$lib/vault.svelte'
   import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
@@ -229,25 +229,45 @@
   const showLoginWithoutPasskey = $derived(
     !requiresPasskeyFirst && vault.providersLoaded,
   )
-  let pendingSimpleVaultLabel = $state<string | undefined>(undefined)
+  type PendingVaultCreation =
+    | { kind: 'simple'; label: string }
+    | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
+
+  let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
   const showPasskeyOverlay = $derived(
-    pendingSimpleVaultLabel !== undefined && !vault.deviceProtectionReady,
+    pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
   )
 
   async function handleCreateDeviceVault(label: string) {
     if (!vault.deviceProtectionReady) {
-      pendingSimpleVaultLabel = label
+      pendingVaultCreation = { kind: 'simple', label }
       return
     }
-    pendingSimpleVaultLabel = undefined
+    pendingVaultCreation = undefined
     await vault.createLocalVaultWithDeviceKeys(label)
   }
 
+  async function handleStartSentinelGenesis(
+    args: StartSentinelGenesisArgs,
+  ): Promise<boolean> {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'sentinel', args }
+      return false
+    }
+    pendingVaultCreation = undefined
+    await vault.startSentinelGenesis(args)
+    return true
+  }
+
   $effect(() => {
-    const label = pendingSimpleVaultLabel
-    if (!label || !vault.deviceProtectionReady || vault.isVerifying) return
-    pendingSimpleVaultLabel = undefined
-    void vault.createLocalVaultWithDeviceKeys(label)
+    const pending = pendingVaultCreation
+    if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return
+    pendingVaultCreation = undefined
+    if (pending.kind === 'simple') {
+      void vault.createLocalVaultWithDeviceKeys(pending.label)
+      return
+    }
+    void vault.startSentinelGenesis(pending.args)
   })
 </script>
 
@@ -471,6 +491,7 @@
                 onUnlockWithPassword={(entryId, password) =>
                   vault.unlockWithPassword(entryId, password)}
                 onCreateDeviceVault={handleCreateDeviceVault}
+                onStartSentinelGenesis={handleStartSentinelGenesis}
                 onRemoveProvider={(id) => vault.removeProvider(id)}
               />
               <VaultStatusBar
@@ -494,7 +515,7 @@
               <PasskeyAuthOverlay
                 {vault}
                 onDismiss={() => {
-                  pendingSimpleVaultLabel = undefined
+                  pendingVaultCreation = undefined
                 }}
               />
             {/if}

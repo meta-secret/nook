@@ -12,7 +12,7 @@ post-creation storage concern, not a vault mode.
 | Group | Values | Owner | Notes |
 | --- | --- | --- | --- |
 | `device_mode` | `standard`, `anti-hacker` | `nook-auth2` / `nook-core` | Per-device local identity protection. The UI calls the latter High security. |
-| `vault_type` | `simple`, `sentinel` | `nook-core` | Vault key-access lifecycle. This is the only vault-type choice during creation. Legacy YAML may still read `vault_type: nexus` / policy key `nexus:`. |
+| `vault_type` | `simple`, `sentinel` | `nook-core` | Vault key-access lifecycle. This is the only vault-type choice during creation. |
 | Sentinel policy | participant count `N`, threshold `T` | `nook-auth2` / `nook-core` | Chosen only for Sentinel genesis before vault keys exist. |
 | Sync provider | provider-specific connection | `nook-core` / `nook-wasm` | Optional post-genesis encrypted backup/replica transport. Not a vault mode or unlock factor. |
 
@@ -44,9 +44,7 @@ create/join intent.
 | Unlocked provider management / Onboard | Sync provider | Add/remove post-genesis backup replicas, or onboard another browser with the standard password + sync QR after the vault exists. |
 
 See [sentinel-genesis.md](sentinel-genesis.md) for the complete two-round ceremony and
-security invariants. Product name is **Sentinel**; some persisted wire tokens
-(`nexus_shares`, event op tags, HKDF domain strings) remain frozen as `nexus*`
-for compatibility.
+security invariants. Product and persisted wire names use **Sentinel** consistently.
 
 ## Defaults and Persistence
 

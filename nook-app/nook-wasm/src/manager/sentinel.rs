@@ -1,4 +1,4 @@
-//! Nexus genesis and session-bound quorum unlock for the browser.
+//! Sentinel genesis and session-bound quorum unlock for the browser.
 //!
 //! Plaintext SLIP-0039 shares never cross the WASM boundary. Participants open
 //! their local encrypted share inside Rust and return a signed response that is
@@ -39,7 +39,7 @@ struct PendingSentinelGenesisFinalization {
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// List provider-free Nexus shares accepted by this protected device.
+    /// List provider-free Sentinel shares accepted by this protected device.
     #[wasm_bindgen(js_name = listSentinelGenesisShareDeliveries)]
     pub async fn list_sentinel_genesis_share_deliveries(&self) -> Result<String, JsError> {
         let identity = self.device_identity()?;
@@ -74,7 +74,7 @@ impl NookVaultManager {
             load_sentinel_genesis_share_delivery(store_id.trim(), identity.device_id().as_str())
                 .await?
                 .ok_or_else(|| {
-                    JsError::new("No Nexus share delivery exists for this vault and device.")
+                    JsError::new("No Sentinel share delivery exists for this vault and device.")
                 })?;
         let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
@@ -83,12 +83,12 @@ impl NookVaultManager {
             &stored.request,
             &identity,
         )?;
-        self.install_accepted_nexus_delivery(&stored.delivery, &record);
+        self.install_accepted_sentinel_delivery(&stored.delivery, &record);
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
-    /// Start a provider-independent, public-only Nexus genesis ceremony.
+    /// Start a provider-independent, public-only Sentinel genesis ceremony.
     #[wasm_bindgen(js_name = startSentinelGenesis)]
     pub async fn start_sentinel_genesis(
         &mut self,
@@ -101,7 +101,7 @@ impl NookVaultManager {
             .is_some()
         {
             return Err(JsError::new(
-                "A finalized Nexus setup is awaiting durable completion; retry finalization first.",
+                "A finalized Sentinel setup is awaiting durable completion; retry finalization first.",
             ));
         }
         let identity = self.ensure_device_identity()?;
@@ -123,7 +123,7 @@ impl NookVaultManager {
         let session = self
             .sentinel_genesis
             .as_ref()
-            .ok_or_else(|| JsError::new("No Nexus genesis ceremony is active."))?;
+            .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?;
         Ok(
             serde_json::to_string(&nook_core::sentinel_genesis_request(session))
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
@@ -191,7 +191,7 @@ impl NookVaultManager {
         let session = self
             .sentinel_genesis
             .as_mut()
-            .ok_or_else(|| JsError::new("No Nexus genesis ceremony is active."))?;
+            .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?;
         nook_core::add_sentinel_genesis_participant_payload(session, response_json)?;
         self.sentinel_genesis_status_json()
     }
@@ -223,7 +223,7 @@ impl NookVaultManager {
     ) -> Result<String, JsError> {
         let pending_json = load_sentinel_genesis_finalization_pending()
             .await?
-            .ok_or_else(|| JsError::new("No Nexus finalization is pending."))?;
+            .ok_or_else(|| JsError::new("No Sentinel finalization is pending."))?;
         let pending: PendingSentinelGenesisFinalization = serde_json::from_str(&pending_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         self.complete_sentinel_genesis_finalization(pending).await
@@ -257,7 +257,11 @@ impl NookVaultManager {
         }) {
             let request = nook_core::sentinel_unlock_request(&session);
             let own_response = nook_core::respond_to_sentinel_unlock_request(
-                &request, &records, &identity, &signing,
+                &request,
+                &records,
+                &identity,
+                &signing,
+                &signing.public_key(),
             )?;
             nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
         }
@@ -270,7 +274,7 @@ impl NookVaultManager {
         let session = self
             .sentinel_unlock
             .as_ref()
-            .ok_or_else(|| JsError::new("No Nexus unlock ceremony is active."))?;
+            .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?;
         Ok(
             serde_json::to_string(&nook_core::sentinel_unlock_request(session))
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
@@ -292,8 +296,46 @@ impl NookVaultManager {
         }
         let signing = self.ensure_signing_identity().await?;
         let records = self.stored_records_snapshot();
-        let response =
-            nook_core::respond_to_sentinel_unlock_request(&request, &records, &identity, &signing)?;
+        let authorized_signing_key = if let Some(participant) = self
+            .vault
+            .meta
+            .sentinel_participants
+            .get(&request.requester_device_id)
+            .filter(|participant| {
+                participant.encryption_public_key == request.requester_encryption_public_key
+            }) {
+            participant.signing_public_key.clone()
+        } else {
+            let stored_json = load_sentinel_genesis_share_delivery(
+                request.store_id.as_str(),
+                identity.device_id().as_str(),
+            )
+            .await?
+            .ok_or(nook_core::MultiDeviceError::InvalidSentinelUnlockPayload)?;
+            let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+            nook_core::accept_sentinel_genesis_share_delivery(
+                &stored.delivery,
+                &stored.request,
+                &identity,
+            )
+            .map_err(|_| nook_core::MultiDeviceError::InvalidSentinelUnlockPayload)?;
+            if stored.request.initiator_device_id != request.requester_device_id
+                || stored.delivery.store_id != request.store_id
+                || stored.delivery.policy.threshold != request.policy.threshold
+                || stored.delivery.policy.participant_count != request.policy.required_participants
+            {
+                return Err(nook_core::MultiDeviceError::InvalidSentinelUnlockPayload.into());
+            }
+            stored.request.initiator_signing_public_key
+        };
+        let response = nook_core::respond_to_sentinel_unlock_request(
+            &request,
+            &records,
+            &identity,
+            &signing,
+            &authorized_signing_key,
+        )?;
         Ok(serde_json::to_string(&response)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
@@ -305,7 +347,7 @@ impl NookVaultManager {
         let session = self
             .sentinel_unlock
             .as_mut()
-            .ok_or_else(|| JsError::new("No Nexus unlock ceremony is active."))?;
+            .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?;
         nook_core::add_sentinel_unlock_response(session, response)?;
         self.sentinel_unlock_status_json()
     }
@@ -331,7 +373,7 @@ impl NookVaultManager {
         let session = self
             .sentinel_unlock
             .as_ref()
-            .ok_or_else(|| JsError::new("No Nexus unlock ceremony is active."))?
+            .ok_or_else(|| JsError::new("No Sentinel unlock ceremony is active."))?
             .clone();
         let keys = nook_core::finalize_sentinel_unlock(session, &identity)?;
         let records = self.stored_records_snapshot();
@@ -350,7 +392,7 @@ impl NookVaultManager {
         Ok(self.get_records()?)
     }
 
-    /// Atomically create the complete encrypted Nexus projection. No vault key
+    /// Atomically create the complete encrypted Sentinel projection. No vault key
     /// is installed in the browser session; opening still requires quorum.
     #[wasm_bindgen(js_name = finalizeSentinelGenesis)]
     pub async fn finalize_sentinel_genesis(&mut self) -> Result<String, JsError> {
@@ -365,7 +407,7 @@ impl NookVaultManager {
         let session = self
             .sentinel_genesis
             .as_ref()
-            .ok_or_else(|| JsError::new("No Nexus genesis ceremony is active."))?
+            .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?
             .clone();
         let genesis_request = session.request.clone();
         let participants = session.participants().to_vec();
@@ -433,13 +475,13 @@ impl NookVaultManager {
         )
         .await?;
 
-        self.install_accepted_nexus_delivery(&delivery, &record);
+        self.install_accepted_sentinel_delivery(&delivery, &record);
         self.pending_sentinel_genesis_request = None;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
-    /// Status string for nexus unlock UI: `not_sentinel`, `unlocked`,
+    /// Status string for sentinel unlock UI: `not_sentinel`, `unlocked`,
     /// `awaiting_shares`, or `ceremony_required`.
     #[wasm_bindgen(js_name = sentinelUnlockStatus)]
     pub fn sentinel_unlock_status(&self) -> String {
@@ -449,7 +491,7 @@ impl NookVaultManager {
         if !self.vault.secrets_key.is_empty() && !self.vault.members_key.is_empty() {
             return "unlocked".to_owned();
         }
-        if self.vault.meta.nexus_shares.is_empty() {
+        if self.vault.meta.sentinel_shares.is_empty() {
             "awaiting_shares".to_owned()
         } else {
             // Opening the one share addressed to this device is independent of
@@ -485,7 +527,7 @@ impl NookVaultManager {
             .iter()
             .find(|delivery| delivery.device_id == *identity.device_id())
             .ok_or_else(|| {
-                JsError::new("Nexus genesis did not issue the initiator's encrypted share.")
+                JsError::new("Sentinel genesis did not issue the initiator's encrypted share.")
             })?;
         let _ = nook_core::accept_sentinel_genesis_share_delivery(
             own_delivery,
@@ -514,7 +556,7 @@ impl NookVaultManager {
         .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
-    fn install_accepted_nexus_delivery(
+    fn install_accepted_sentinel_delivery(
         &mut self,
         delivery: &nook_core::SentinelGenesisShareDelivery,
         record: &nook_core::StoredSecretRecord,
@@ -532,9 +574,9 @@ impl NookVaultManager {
         self.vault.meta.apply_record(record);
     }
 
-    /// Load vault content for nexus only when session keys already exist;
+    /// Load vault content for sentinel only when session keys already exist;
     /// otherwise fail closed with ceremony-required.
-    pub(in crate::manager) fn load_stored_vault_or_nexus_ceremony(
+    pub(in crate::manager) fn load_stored_vault_or_sentinel_ceremony(
         &self,
         content: &str,
         identity: &nook_core::DeviceIdentity,
@@ -568,7 +610,7 @@ impl NookVaultManager {
 
     /// Hydrate architecture + encrypted share meta without vault keys so the
     /// browser can open a local contribution and run the ceremony UI.
-    pub(in crate::manager) fn prepare_nexus_ceremony_session(
+    pub(in crate::manager) fn prepare_sentinel_ceremony_session(
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
@@ -576,7 +618,7 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(content)?;
         let stored_records = nook_core::deserialize_stored(content, format)?;
         self.vault.meta = nook_core::VaultMetaState::from_stored_records(&stored_records);
-        self.ensure_nexus_architecture_from_shares()?;
+        self.ensure_sentinel_architecture_from_shares()?;
         if !self.is_sentinel_session() {
             return Err(nook_core::MultiDeviceError::InvalidSentinelThreshold.into());
         }
@@ -590,17 +632,17 @@ impl NookVaultManager {
 
     fn is_sentinel_session(&self) -> bool {
         self.vault.architecture.vault_type == nook_core::VaultType::Sentinel
-            || !self.vault.meta.nexus_shares.is_empty()
+            || !self.vault.meta.sentinel_shares.is_empty()
     }
 
     /// Joiners may sync share events before architecture JSON is adopted.
-    pub(in crate::manager) fn ensure_nexus_architecture_from_shares(
+    pub(in crate::manager) fn ensure_sentinel_architecture_from_shares(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.vault.meta.nexus_shares.is_empty() {
+        if self.vault.meta.sentinel_shares.is_empty() {
             return Ok(());
         }
-        let mut shares = self.vault.meta.nexus_shares.values();
+        let mut shares = self.vault.meta.sentinel_shares.values();
         let first = shares
             .next()
             .ok_or(nook_core::MultiDeviceError::InvalidSentinelShareEncoding)?;
@@ -612,6 +654,7 @@ impl NookVaultManager {
         if !matches!(version, 1 | 2)
             || threshold < 2
             || threshold > required
+            || required > 16
             || first.share_index == 0
             || first.share_index > required
             || shares.any(|share| {
@@ -625,7 +668,7 @@ impl NookVaultManager {
         {
             return Err(nook_core::MultiDeviceError::InvalidSentinelShareEncoding.into());
         }
-        let share_count = u8::try_from(self.vault.meta.nexus_shares.len())
+        let share_count = u8::try_from(self.vault.meta.sentinel_shares.len())
             .map_err(|_| nook_core::MultiDeviceError::InvalidSentinelThreshold)?;
         self.vault.architecture.vault_type = nook_core::VaultType::Sentinel;
         self.vault.architecture.sentinel = Some(nook_core::SentinelPolicy {
@@ -681,7 +724,7 @@ mod tests {
     fn architecture_is_inferred_from_share_envelopes_without_hardcoded_threshold() {
         let mut manager = NookVaultManager::new();
         for (device_id, share_index) in [("0123456789abcdef", 1), ("fedcba9876543210", 2)] {
-            manager.vault.meta.nexus_shares.insert(
+            manager.vault.meta.sentinel_shares.insert(
                 nook_core::DeviceId::parse(device_id).expect("device id"),
                 nook_core::SentinelShareEnvelope {
                     version: 2,
@@ -696,12 +739,38 @@ mod tests {
         }
 
         manager
-            .ensure_nexus_architecture_from_shares()
+            .ensure_sentinel_architecture_from_shares()
             .expect("infer architecture");
-        let policy = manager.vault.architecture.sentinel.expect("nexus policy");
+        let policy = manager
+            .vault
+            .architecture
+            .sentinel
+            .expect("sentinel policy");
         assert_eq!(policy.threshold, 3);
         assert_eq!(policy.required_participants, 5);
         assert_eq!(policy.ready_participants, 2);
+    }
+
+    #[test]
+    fn architecture_rejects_share_policy_above_participant_limit() {
+        let mut manager = NookVaultManager::new();
+        manager.vault.meta.sentinel_shares.insert(
+            nook_core::DeviceId::parse("0123456789abcdef").expect("device id"),
+            nook_core::SentinelShareEnvelope {
+                version: 2,
+                threshold: 2,
+                required_participants: 17,
+                share_index: 1,
+                ciphertext: nook_core::AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            },
+        );
+
+        assert!(manager.ensure_sentinel_architecture_from_shares().is_err());
+        assert_eq!(
+            manager.vault.architecture.vault_type,
+            nook_core::VaultType::Simple
+        );
+        assert!(manager.vault.architecture.sentinel.is_none());
     }
 
     #[test]
@@ -715,7 +784,7 @@ mod tests {
                 ready_participants: 5,
             },
         );
-        manager.vault.meta.nexus_shares.insert(
+        manager.vault.meta.sentinel_shares.insert(
             nook_core::DeviceId::parse("0123456789abcdef").expect("device id"),
             nook_core::SentinelShareEnvelope {
                 version: 2,

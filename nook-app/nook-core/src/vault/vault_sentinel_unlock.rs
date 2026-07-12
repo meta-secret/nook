@@ -1,8 +1,8 @@
 //! `SigningIdentity` adapters for the portable Sentinel quorum unlock protocol.
 
 use crate::{
-    DeviceIdentity, SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse,
-    SentinelUnlockSession, SigningIdentity, StoreId, StoredSecretRecord,
+    DeviceIdentity, DeviceSigningPublicKey, SentinelUnlockPolicy, SentinelUnlockRequest,
+    SentinelUnlockResponse, SentinelUnlockSession, SigningIdentity, StoreId, StoredSecretRecord,
 };
 
 pub fn start_sentinel_unlock(
@@ -26,11 +26,13 @@ pub fn respond_to_sentinel_unlock_request(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
     signing: &SigningIdentity,
+    authorized_requester_signing_key: &DeviceSigningPublicKey,
 ) -> Result<SentinelUnlockResponse, crate::MultiDeviceError> {
     nook_auth2::respond_to_sentinel_unlock_request(
         request,
         records,
         identity,
         signing.signing_key(),
+        authorized_requester_signing_key,
     )
 }

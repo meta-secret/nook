@@ -61,10 +61,10 @@ impl EncryptedSecretPayload {
     }
 }
 
-/// One nexus share encrypted to a participant device, recorded in the event log.
+/// One sentinel share encrypted to a participant device, recorded in the event log.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub struct NexusShareIssuedPayload {
+pub struct SentinelShareIssuedPayload {
     pub device_id: DeviceId,
     pub version: u32,
     pub threshold: u8,
@@ -111,9 +111,9 @@ pub enum VaultOperation {
         secrets_key_ciphertext: AgeArmoredCiphertext,
         members_key_ciphertext: AgeArmoredCiphertext,
     },
-    /// Nexus participant enrolled without a full per-device vault-key envelope.
+    /// Sentinel participant enrolled without a full per-device vault-key envelope.
     ///
-    /// Used when `vault_type=nexus`: the joiner is added to the roster, but
+    /// Used when `vault_type=sentinel`: the joiner is added to the roster, but
     /// vault keys remain threshold-shared rather than encrypted in full to
     /// each device.
     SentinelParticipantEnrolled {
@@ -124,7 +124,7 @@ pub enum VaultOperation {
     },
     /// Threshold shares of the vault key bundle, each encrypted to one device.
     SentinelSharesIssued {
-        shares: Vec<NexusShareIssuedPayload>,
+        shares: Vec<SentinelShareIssuedPayload>,
     },
     JoinDenied {
         device_id: DeviceId,

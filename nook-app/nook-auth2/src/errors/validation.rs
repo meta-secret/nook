@@ -30,16 +30,16 @@ pub enum ValidationError {
     #[error("errors.validation.simple_vault_has_sentinel_policy")]
     SimpleVaultHasSentinelPolicy,
 
-    #[error("errors.validation.invalid_nexus_policy")]
+    #[error("errors.validation.invalid_sentinel_policy")]
     InvalidSentinelPolicy,
 
-    #[error("errors.validation.nexus_vault_has_full_key_envelopes")]
+    #[error("errors.validation.sentinel_vault_has_full_key_envelopes")]
     SentinelVaultHasFullKeyEnvelopes,
 
-    #[error("errors.validation.simple_vault_has_nexus_shares")]
-    SimpleVaultHasNexusShares,
+    #[error("errors.validation.simple_vault_has_sentinel_shares")]
+    SimpleVaultHasSentinelShares,
 
-    #[error("errors.validation.invalid_nexus_share_set")]
+    #[error("errors.validation.invalid_sentinel_share_set")]
     InvalidSentinelShareSet,
 
     #[error("errors.validation.github_pat_empty")]

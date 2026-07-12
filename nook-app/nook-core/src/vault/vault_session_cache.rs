@@ -8,7 +8,7 @@ use crate::{
 
 /// Resolve `secrets_key` and `members_key` from a stored vault YAML projection cache.
 ///
-/// Nexus vaults fail closed: auth envelopes must never unlock a nexus session.
+/// Sentinel vaults fail closed: auth envelopes must never unlock a sentinel session.
 /// Browser unlock uses the opened-share ceremony instead.
 pub fn hydrate_keys_from_projection_yaml(
     yaml: &str,
@@ -74,7 +74,7 @@ mod tests {
     }
 
     #[test]
-    fn hydrate_fails_closed_for_nexus_projection_yaml() -> VaultResult<()> {
+    fn hydrate_fails_closed_for_sentinel_projection_yaml() -> VaultResult<()> {
         use crate::{
             DeviceMode, SentinelPolicy, VaultArchitecture, VaultType,
             create_sentinel_share_records, generate_store_id, generate_vault_keys,

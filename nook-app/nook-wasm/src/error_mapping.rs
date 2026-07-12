@@ -63,7 +63,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::SimpleVaultHasSentinelPolicy
             | ValidationError::InvalidSentinelPolicy
             | ValidationError::SentinelVaultHasFullKeyEnvelopes
-            | ValidationError::SimpleVaultHasNexusShares
+            | ValidationError::SimpleVaultHasSentinelShares
             | ValidationError::InvalidSentinelShareSet
             | ValidationError::SecretDataRequired
             | ValidationError::SecretIdRequired

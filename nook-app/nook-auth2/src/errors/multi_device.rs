@@ -63,77 +63,77 @@ pub enum MultiDeviceError {
     #[error("No auth envelope found for device {device_id} (pk_id {pk_id})")]
     AuthEnvelopeNotFound { device_id: String, pk_id: String },
 
-    #[error("No nexus share found for device {device_id}.")]
-    NexusShareNotFound { device_id: String },
+    #[error("No sentinel share found for device {device_id}.")]
+    SentinelShareNotFound { device_id: String },
 
-    #[error("Invalid nexus threshold policy.")]
+    #[error("Invalid sentinel threshold policy.")]
     InvalidSentinelThreshold,
 
-    #[error("Invalid nexus genesis session binding.")]
+    #[error("Invalid sentinel genesis session binding.")]
     InvalidSentinelGenesisSession,
 
-    #[error("Invalid nexus genesis participant response signature.")]
+    #[error("Invalid sentinel genesis participant response signature.")]
     InvalidSentinelGenesisSignature,
 
-    #[error("Nexus genesis participant already exists: {device_id}.")]
+    #[error("Sentinel genesis participant already exists: {device_id}.")]
     DuplicateSentinelGenesisParticipant { device_id: String },
 
-    #[error("Nexus genesis roster is full.")]
+    #[error("Sentinel genesis roster is full.")]
     SentinelGenesisRosterFull,
 
-    #[error("Nexus genesis needs {required} participants, but has {available}.")]
+    #[error("Sentinel genesis needs {required} participants, but has {available}.")]
     SentinelGenesisIncomplete { required: u8, available: usize },
 
-    #[error("Nexus genesis share delivery is not addressed to this device.")]
+    #[error("Sentinel genesis share delivery is not addressed to this device.")]
     SentinelGenesisDeliveryRecipientMismatch,
 
-    #[error("Invalid nexus genesis payload.")]
+    #[error("Invalid sentinel genesis payload.")]
     InvalidSentinelGenesisPayload,
 
-    #[error("Invalid nexus unlock session binding.")]
+    #[error("Invalid sentinel unlock session binding.")]
     InvalidSentinelUnlockSession,
 
-    #[error("Invalid nexus unlock signature.")]
+    #[error("Invalid sentinel unlock signature.")]
     InvalidSentinelUnlockSignature,
 
-    #[error("Invalid nexus unlock payload.")]
+    #[error("Invalid sentinel unlock payload.")]
     InvalidSentinelUnlockPayload,
 
-    #[error("Nexus unlock response already exists for device {device_id} or share index.")]
+    #[error("Sentinel unlock response already exists for device {device_id} or share index.")]
     DuplicateSentinelUnlockParticipant { device_id: String },
 
-    #[error("Nexus unlock session is not addressed to this requester identity.")]
+    #[error("Sentinel unlock session is not addressed to this requester identity.")]
     SentinelUnlockRecipientMismatch,
 
-    #[error("Not enough nexus shares: need {threshold}, got {available}.")]
-    NotEnoughNexusShares { threshold: u8, available: usize },
+    #[error("Not enough sentinel shares: need {threshold}, got {available}.")]
+    NotEnoughSentinelShares { threshold: u8, available: usize },
 
-    #[error("Invalid nexus share record JSON")]
-    NexusShareJson(#[source] serde_json::Error),
+    #[error("Invalid sentinel share record JSON")]
+    SentinelShareJson(#[source] serde_json::Error),
 
-    #[error("Failed to serialize nexus share record")]
-    NexusShareSerialize(#[source] serde_json::Error),
+    #[error("Failed to serialize sentinel share record")]
+    SentinelShareSerialize(#[source] serde_json::Error),
 
-    #[error("Invalid nexus share payload")]
-    NexusSharePayload(#[source] serde_json::Error),
+    #[error("Invalid sentinel share payload")]
+    SentinelSharePayload(#[source] serde_json::Error),
 
-    #[error("Invalid nexus share encoding.")]
+    #[error("Invalid sentinel share encoding.")]
     InvalidSentinelShareEncoding,
 
     #[error(
-        "Nexus vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
+        "Sentinel vault unlock requires an opened-share ceremony; per-device auth envelopes cannot unlock this vault."
     )]
     SentinelCeremonyRequired,
 
     #[error(
-        "Password unlock is forbidden for nexus vaults; use the opened-share ceremony instead."
+        "Password unlock is forbidden for sentinel vaults; use the opened-share ceremony instead."
     )]
-    NexusPasswordUnlockForbidden,
+    SentinelPasswordUnlockForbidden,
 
     #[error(
-        "Nexus participant revocation requires an atomic replacement and share-rotation ceremony."
+        "Sentinel participant revocation requires an atomic replacement and share-rotation ceremony."
     )]
-    NexusRevocationUnsupported,
+    SentinelRevocationUnsupported,
 
     #[error("Failed to build member roster record.")]
     MemberRosterBuildFailed,

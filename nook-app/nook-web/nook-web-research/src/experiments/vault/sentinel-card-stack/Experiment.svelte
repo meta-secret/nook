@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown, Check, Cpu, Plus, ShieldCheck } from '@lucide/svelte'
+  import { Check, ChevronDown, Cpu, Plus, ShieldCheck } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
 
@@ -94,7 +94,7 @@
           Nook threshold wallet
         </p>
         <div class="mt-4 flex flex-wrap items-end gap-7">
-          <h1 class="text-4xl font-semibold tracking-[0.18em]">NEXUS</h1>
+          <h1 class="text-4xl font-semibold tracking-[0.18em]">SENTINEL</h1>
           <div
             class="flex rounded-full bg-white/[0.06] p-1 text-xs text-[#aeb8c2]"
           >
@@ -221,7 +221,7 @@
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
-          Active Nexus configuration
+          Active Sentinel configuration
         </p>
         <div
           class="relative mt-5 min-h-[28rem] overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-7 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-10"
@@ -246,8 +246,9 @@
               Module 01 · Vault identity
               <input
                 class="mt-3 w-full border-b border-white/25 bg-transparent py-2 text-3xl font-light tracking-tight text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
-                placeholder="Name your Nexus"
+                placeholder="Name your Sentinel"
                 bind:value={name}
+                disabled={finalized}
               />
             </label>
           </div>
@@ -328,11 +329,11 @@
             >All encrypted shares return to their participants</label
           >
           <button
-            disabled={!name.trim() || keys !== total}
+            disabled={finalized || !name.trim() || keys !== total}
             class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
             onclick={() => (finalized = true)}
           >
-            {finalized ? 'Nexus vault sealed' : 'Seal Nexus vault'}
+            {finalized ? 'Sentinel vault sealed' : 'Seal Sentinel vault'}
           </button>
         </div>
       </div>

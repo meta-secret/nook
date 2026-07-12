@@ -75,11 +75,11 @@ pub fn join_record_key(device_id: &DeviceId) -> String {
     device_id.to_string()
 }
 
-pub const NEXUS_SHARE_RECORD_PREFIX: &str = "nexus_share:";
+pub const SENTINEL_SHARE_RECORD_PREFIX: &str = "sentinel_share:";
 
 #[must_use]
 pub fn sentinel_share_record_key(device_id: &DeviceId) -> String {
-    format!("{NEXUS_SHARE_RECORD_PREFIX}{device_id}")
+    format!("{SENTINEL_SHARE_RECORD_PREFIX}{device_id}")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -102,7 +102,7 @@ pub struct SentinelShareEnvelope {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct NexusSharePlaintext {
+struct SentinelSharePlaintext {
     version: u32,
     threshold: u8,
     required_participants: u8,
@@ -110,13 +110,13 @@ struct NexusSharePlaintext {
     share: String,
 }
 
-/// Internal opened Nexus share used only inside the Rust-owned unlock protocol.
+/// Internal opened Sentinel share used only inside the Rust-owned unlock protocol.
 ///
 /// This type contains plaintext share material. Browser/WASM APIs must wrap it
 /// in a signed, session-bound encrypted [`crate::SentinelUnlockResponse`] and must
 /// never serialize it directly to JavaScript.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct OpenedNexusShare {
+pub struct OpenedSentinelShare {
     pub version: u32,
     pub threshold: u8,
     pub required_participants: u8,
@@ -132,17 +132,17 @@ struct SentinelVaultKeysPlaintext {
     members_key: String,
 }
 
-const NEXUS_ROOT_SHARE_VERSION: u32 = 2;
-const NEXUS_SECRETS_KEY_INFO: &[u8] = b"nook/nexus-genesis/v1/secrets-key";
-const NEXUS_MEMBERS_KEY_INFO: &[u8] = b"nook/nexus-genesis/v1/members-key";
+const SENTINEL_ROOT_SHARE_VERSION: u32 = 2;
+const SENTINEL_SECRETS_KEY_INFO: &[u8] = b"nook/sentinel-genesis/v1/secrets-key";
+const SENTINEL_MEMBERS_KEY_INFO: &[u8] = b"nook/sentinel-genesis/v1/members-key";
 
-fn derive_nexus_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
+fn derive_sentinel_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
     let hkdf = Hkdf::<Sha256>::new(None, root);
     let mut secrets = [0_u8; 32];
     let mut members = [0_u8; 32];
-    hkdf.expand(NEXUS_SECRETS_KEY_INFO, &mut secrets)
+    hkdf.expand(SENTINEL_SECRETS_KEY_INFO, &mut secrets)
         .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
-    hkdf.expand(NEXUS_MEMBERS_KEY_INFO, &mut members)
+    hkdf.expand(SENTINEL_MEMBERS_KEY_INFO, &mut members)
         .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
     let result = Ok(VaultKeys {
         secrets_key: SymmetricKey::parse(&hex::encode(secrets))
@@ -156,14 +156,14 @@ fn derive_nexus_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
 }
 
 pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelShareEnvelope> {
-    serde_json::from_str(value).map_err(MultiDeviceError::NexusShareJson)
+    serde_json::from_str(value).map_err(MultiDeviceError::SentinelShareJson)
 }
 
 #[must_use]
 pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> bool {
     matches!(
         VaultMetaRecord::classify(record),
-        VaultMetaRecord::NexusShare(..)
+        VaultMetaRecord::SentinelShare(..)
     )
 }
 
@@ -205,12 +205,12 @@ pub struct VaultMember {
     pub label: Option<String>,
 }
 
-/// Public Nexus roster entry retained while materializing event-only vaults.
+/// Public Sentinel roster entry retained while materializing event-only vaults.
 /// Encrypted `members:` rows remain the canonical persisted projection after
 /// quorum unlock; this public entry lets event replay preserve the complete
 /// genesis roster before those rows can be decrypted.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct NexusParticipantEntry {
+pub struct SentinelParticipantEntry {
     pub device_id: DeviceId,
     pub encryption_public_key: DevicePublicKey,
     pub signing_public_key: DeviceSigningPublicKey,
@@ -271,17 +271,20 @@ pub enum VaultMetaRecord {
     /// A roster entry, still encrypted with `members_key`.
     Member(AuthKeyId, StoredRecordPayload),
     /// A threshold share of the vault key bundle, encrypted to one device.
-    NexusShare(DeviceId, SentinelShareEnvelope),
+    SentinelShare(DeviceId, SentinelShareEnvelope),
 }
 
 impl VaultMetaRecord {
     #[must_use]
     pub fn classify(record: &StoredSecretRecord) -> Self {
-        if let Some(device_id_str) = record.key.as_str().strip_prefix(NEXUS_SHARE_RECORD_PREFIX)
+        if let Some(device_id_str) = record
+            .key
+            .as_str()
+            .strip_prefix(SENTINEL_SHARE_RECORD_PREFIX)
             && let Ok(device_id) = DeviceId::parse(device_id_str)
             && let Ok(share) = parse_sentinel_share_envelope(record.value.as_str())
         {
-            return Self::NexusShare(device_id, share);
+            return Self::SentinelShare(device_id, share);
         }
         if let Ok(join) = parse_join_request(record.value.as_str()) {
             return Self::Join(join.device_id.clone(), join);
@@ -333,11 +336,12 @@ impl VaultMetaRecord {
                 secret_type: None,
                 value: payload.clone(),
             },
-            Self::NexusShare(device_id, share) => StoredSecretRecord {
+            Self::SentinelShare(device_id, share) => StoredSecretRecord {
                 key: SecretId::from_vault_record(&sentinel_share_record_key(device_id)),
                 secret_type: None,
                 value: StoredRecordPayload::from_trusted(
-                    serde_json::to_string(share).map_err(MultiDeviceError::NexusShareSerialize)?,
+                    serde_json::to_string(share)
+                        .map_err(MultiDeviceError::SentinelShareSerialize)?,
                 ),
             },
         })
@@ -358,8 +362,8 @@ pub struct VaultMetaState {
     pub auth: HashMap<AuthKeyId, AuthEnvelopes>,
     pub joins: HashMap<DeviceId, JoinRequest>,
     pub members: HashMap<AuthKeyId, StoredRecordPayload>,
-    pub nexus_shares: HashMap<DeviceId, SentinelShareEnvelope>,
-    pub nexus_participants: HashMap<DeviceId, NexusParticipantEntry>,
+    pub sentinel_shares: HashMap<DeviceId, SentinelShareEnvelope>,
+    pub sentinel_participants: HashMap<DeviceId, SentinelParticipantEntry>,
 }
 
 impl VaultMetaState {
@@ -369,8 +373,8 @@ impl VaultMetaState {
             && self.auth.is_empty()
             && self.joins.is_empty()
             && self.members.is_empty()
-            && self.nexus_shares.is_empty()
-            && self.nexus_participants.is_empty()
+            && self.sentinel_shares.is_empty()
+            && self.sentinel_participants.is_empty()
     }
 
     #[must_use]
@@ -397,8 +401,8 @@ impl VaultMetaState {
             VaultMetaRecord::Member(auth_id, payload) => {
                 self.members.insert(auth_id, payload);
             }
-            VaultMetaRecord::NexusShare(device_id, share) => {
-                self.nexus_shares.insert(device_id, share);
+            VaultMetaRecord::SentinelShare(device_id, share) => {
+                self.sentinel_shares.insert(device_id, share);
             }
         }
     }
@@ -417,10 +421,10 @@ impl VaultMetaState {
         if let Ok(auth_id) = AuthKeyId::parse(key) {
             self.auth.remove(&auth_id);
         }
-        if let Some(device_id_str) = key.strip_prefix(NEXUS_SHARE_RECORD_PREFIX)
+        if let Some(device_id_str) = key.strip_prefix(SENTINEL_SHARE_RECORD_PREFIX)
             && let Ok(device_id) = DeviceId::parse(device_id_str)
         {
-            self.nexus_shares.remove(&device_id);
+            self.sentinel_shares.remove(&device_id);
         }
         self.secrets.remove(&SecretId::from_vault_record(key));
     }
@@ -432,7 +436,7 @@ impl VaultMetaState {
                 + self.auth.len()
                 + self.joins.len()
                 + self.members.len()
-                + self.nexus_shares.len(),
+                + self.sentinel_shares.len(),
         );
         for (id, (secret_type, payload)) in &self.secrets {
             records.push(StoredSecretRecord {
@@ -462,9 +466,9 @@ impl VaultMetaState {
                 value: payload.clone(),
             });
         }
-        for (device_id, share) in &self.nexus_shares {
+        for (device_id, share) in &self.sentinel_shares {
             if let Ok(record) =
-                VaultMetaRecord::NexusShare(device_id.clone(), share.clone()).to_stored()
+                VaultMetaRecord::SentinelShare(device_id.clone(), share.clone()).to_stored()
             {
                 records.push(record);
             }
@@ -1017,7 +1021,7 @@ pub fn device_is_enrolled(records: &[StoredSecretRecord], identity: &DeviceIdent
     {
         return true;
     }
-    // Nexus participants are enrolled via member roster and/or share rows without
+    // Sentinel participants are enrolled via member roster and/or share rows without
     // a per-device auth envelope.
     let member_key = member_stored_key(&pk_id);
     if records
@@ -1137,13 +1141,13 @@ pub fn create_sentinel_share_records_for_recipients(
         secrets_key: keys.secrets_key.as_str().to_owned(),
         members_key: keys.members_key.as_str().to_owned(),
     })
-    .map_err(MultiDeviceError::NexusSharePayload)?;
+    .map_err(MultiDeviceError::SentinelSharePayload)?;
     let shares = split_secret_bytes(&payload, threshold, required_participants)?;
     recipients
         .iter()
         .zip(shares)
         .map(|((device_id, public_key), share)| {
-            let plaintext = NexusSharePlaintext {
+            let plaintext = SentinelSharePlaintext {
                 version: 1,
                 threshold,
                 required_participants,
@@ -1151,7 +1155,7 @@ pub fn create_sentinel_share_records_for_recipients(
                 share: URL_SAFE_NO_PAD.encode(&share.bytes),
             };
             let json =
-                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::NexusSharePayload)?;
+                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::SentinelSharePayload)?;
             let envelope = SentinelShareEnvelope {
                 version: 1,
                 threshold,
@@ -1159,16 +1163,16 @@ pub fn create_sentinel_share_records_for_recipients(
                 share_index: share.index,
                 ciphertext: encrypt_for_recipient(&json, public_key)?,
             };
-            VaultMetaRecord::NexusShare(device_id.clone(), envelope).to_stored()
+            VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
         })
         .collect()
 }
 
-/// Generate one Nexus root, derive the explicit vault keys with
+/// Generate one Sentinel root, derive the explicit vault keys with
 /// domain-separated HKDF, and issue encrypted current-format SLIP-0039 shares
 /// atomically. Version 2 is deliberately distinct from legacy version-1 JSON
 /// key bundles, which remain readable.
-pub fn create_nexus_root_share_records_for_recipients(
+pub fn create_sentinel_root_share_records_for_recipients(
     recipients: &[(DeviceId, DevicePublicKey)],
     threshold: u8,
 ) -> MultiDeviceResult<(VaultKeys, Vec<StoredSecretRecord>)> {
@@ -1178,7 +1182,7 @@ pub fn create_nexus_root_share_records_for_recipients(
     let mut root = [0_u8; 32];
     getrandom::getrandom(&mut root)
         .map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
-    let keys = derive_nexus_vault_keys(&root)?;
+    let keys = derive_sentinel_vault_keys(&root)?;
     let shares = super::slip39::split_sentinel_secret(&root, threshold, required_participants)?;
     root.zeroize();
     let records = recipients
@@ -1188,54 +1192,54 @@ pub fn create_nexus_root_share_records_for_recipients(
         .map(|(offset, ((device_id, public_key), share))| {
             let share_index =
                 u8::try_from(offset + 1).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
-            let plaintext = NexusSharePlaintext {
-                version: NEXUS_ROOT_SHARE_VERSION,
+            let plaintext = SentinelSharePlaintext {
+                version: SENTINEL_ROOT_SHARE_VERSION,
                 threshold,
                 required_participants,
                 share_index,
                 share,
             };
             let json =
-                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::NexusSharePayload)?;
+                serde_json::to_vec(&plaintext).map_err(MultiDeviceError::SentinelSharePayload)?;
             let envelope = SentinelShareEnvelope {
-                version: NEXUS_ROOT_SHARE_VERSION,
+                version: SENTINEL_ROOT_SHARE_VERSION,
                 threshold,
                 required_participants,
                 share_index,
                 ciphertext: encrypt_for_recipient(&json, public_key)?,
             };
-            VaultMetaRecord::NexusShare(device_id.clone(), envelope).to_stored()
+            VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
         })
         .collect::<MultiDeviceResult<Vec<_>>>()?;
     Ok((keys, records))
 }
 
 #[must_use]
-pub fn count_nexus_share_records(records: &[StoredSecretRecord]) -> usize {
+pub fn count_sentinel_share_records(records: &[StoredSecretRecord]) -> usize {
     records
         .iter()
         .filter(|record| is_sentinel_share_stored_record(record))
         .count()
 }
 
-/// Open this device's encrypted Nexus share for an in-Rust unlock response.
+/// Open this device's encrypted Sentinel share for an in-Rust unlock response.
 pub fn open_sentinel_share_for_identity(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-) -> MultiDeviceResult<OpenedNexusShare> {
+) -> MultiDeviceResult<OpenedSentinelShare> {
     let record = records
         .iter()
         .find(|entry| entry.key.as_str() == sentinel_share_record_key(identity.device_id()))
-        .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
+        .ok_or_else(|| MultiDeviceError::SentinelShareNotFound {
             device_id: identity.device_id().to_string(),
         })?;
     let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
-    if !matches!(envelope.version, 1 | NEXUS_ROOT_SHARE_VERSION) {
+    if !matches!(envelope.version, 1 | SENTINEL_ROOT_SHARE_VERSION) {
         return Err(MultiDeviceError::InvalidSentinelShareEncoding);
     }
     let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
-    let plaintext: NexusSharePlaintext =
-        serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::NexusSharePayload)?;
+    let plaintext: SentinelSharePlaintext =
+        serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::SentinelSharePayload)?;
     if plaintext.version != envelope.version
         || plaintext.threshold != envelope.threshold
         || plaintext.required_participants != envelope.required_participants
@@ -1245,7 +1249,7 @@ pub fn open_sentinel_share_for_identity(
     }
     // Reject malformed legacy share encoding early. Current SLIP-0039 shares
     // are fully checksum/digest-validated when quorum reconstruction runs.
-    if plaintext.version == NEXUS_ROOT_SHARE_VERSION {
+    if plaintext.version == SENTINEL_ROOT_SHARE_VERSION {
         if plaintext.share.split_whitespace().count() != 33 {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
@@ -1254,7 +1258,7 @@ pub fn open_sentinel_share_for_identity(
             .decode(plaintext.share.as_bytes())
             .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
     }
-    Ok(OpenedNexusShare {
+    Ok(OpenedSentinelShare {
         version: plaintext.version,
         threshold: plaintext.threshold,
         required_participants: plaintext.required_participants,
@@ -1266,11 +1270,11 @@ pub fn open_sentinel_share_for_identity(
 
 /// Reconstruct vault keys from opened-share ceremony contributions.
 ///
-/// `records` are used to verify each contribution matches a stored nexus share
+/// `records` are used to verify each contribution matches a stored sentinel share
 /// envelope; peer device identities are never required.
-pub fn reconstruct_nexus_vault_keys_from_opened(
+pub fn reconstruct_sentinel_vault_keys_from_opened(
     records: &[StoredSecretRecord],
-    opened: &[OpenedNexusShare],
+    opened: &[OpenedSentinelShare],
 ) -> MultiDeviceResult<VaultKeys> {
     let mut shares = Vec::new();
     let mut expected_threshold = None;
@@ -1284,7 +1288,7 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
         let record = records
             .iter()
             .find(|entry| entry.key.as_str() == sentinel_share_record_key(&device_id))
-            .ok_or_else(|| MultiDeviceError::NexusShareNotFound {
+            .ok_or_else(|| MultiDeviceError::SentinelShareNotFound {
                 device_id: contribution.device_id.clone(),
             })?;
         let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
@@ -1319,7 +1323,7 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
         if !seen_indexes.insert(contribution.share_index) {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
-        if contribution.version == NEXUS_ROOT_SHARE_VERSION {
+        if contribution.version == SENTINEL_ROOT_SHARE_VERSION {
             if contribution.share.split_whitespace().count() != 33 {
                 return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
@@ -1334,26 +1338,26 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
             });
         }
     }
-    let threshold = expected_threshold.ok_or(MultiDeviceError::NotEnoughNexusShares {
+    let threshold = expected_threshold.ok_or(MultiDeviceError::NotEnoughSentinelShares {
         threshold: 1,
         available: 0,
     })?;
     if opened.len() < usize::from(threshold) {
-        return Err(MultiDeviceError::NotEnoughNexusShares {
+        return Err(MultiDeviceError::NotEnoughSentinelShares {
             threshold,
             available: opened.len(),
         });
     }
-    if expected_version == Some(NEXUS_ROOT_SHARE_VERSION) {
+    if expected_version == Some(SENTINEL_ROOT_SHARE_VERSION) {
         let mut root =
             super::slip39::recover_sentinel_secret(&slip39_mnemonics[..usize::from(threshold)])?;
-        let keys = derive_nexus_vault_keys(&root);
+        let keys = derive_sentinel_vault_keys(&root);
         root.zeroize();
         return keys;
     }
     let reconstructed = reconstruct_secret_bytes(&shares[..usize::from(threshold)], threshold)?;
     let payload: SentinelVaultKeysPlaintext =
-        serde_json::from_slice(&reconstructed).map_err(MultiDeviceError::NexusSharePayload)?;
+        serde_json::from_slice(&reconstructed).map_err(MultiDeviceError::SentinelSharePayload)?;
     Ok(VaultKeys {
         secrets_key: SymmetricKey::parse(&payload.secrets_key)
             .map_err(MultiDeviceError::Validation)?,
@@ -1364,9 +1368,9 @@ pub fn reconstruct_nexus_vault_keys_from_opened(
 
 /// Native/test helper: open each identity's share locally, then reconstruct.
 ///
-/// Browser unlock must use the typed Nexus unlock request/response protocol;
+/// Browser unlock must use the typed Sentinel unlock request/response protocol;
 /// this helper is for native tests and compatibility code only.
-pub fn reconstruct_nexus_vault_keys(
+pub fn reconstruct_sentinel_vault_keys(
     records: &[StoredSecretRecord],
     identities: &[DeviceIdentity],
 ) -> MultiDeviceResult<VaultKeys> {
@@ -1374,7 +1378,7 @@ pub fn reconstruct_nexus_vault_keys(
         .iter()
         .map(|identity| open_sentinel_share_for_identity(records, identity))
         .collect::<MultiDeviceResult<Vec<_>>>()?;
-    reconstruct_nexus_vault_keys_from_opened(records, &opened)
+    reconstruct_sentinel_vault_keys_from_opened(records, &opened)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1422,7 +1426,7 @@ fn split_secret_bytes(
 
 fn reconstruct_secret_bytes(shares: &[IndexedShare], threshold: u8) -> MultiDeviceResult<Vec<u8>> {
     if shares.len() < usize::from(threshold) {
-        return Err(MultiDeviceError::NotEnoughNexusShares {
+        return Err(MultiDeviceError::NotEnoughSentinelShares {
             threshold,
             available: shares.len(),
         });
@@ -1629,12 +1633,15 @@ mod tests {
         let keys = generate_vault_keys().unwrap();
         let (genesis, mut records) = genesis_vault(&keys);
         let joiner = DeviceIdentity::generate().unwrap();
-        let nexus_participant = DeviceIdentity::generate().unwrap();
-        let nexus_record =
-            create_sentinel_share_records(&keys, &[genesis.clone(), nexus_participant.clone()], 2)
-                .unwrap()
-                .pop()
-                .unwrap();
+        let sentinel_participant = DeviceIdentity::generate().unwrap();
+        let sentinel_record = create_sentinel_share_records(
+            &keys,
+            &[genesis.clone(), sentinel_participant.clone()],
+            2,
+        )
+        .unwrap()
+        .pop()
+        .unwrap();
         let join_record = create_join_request_record_with_signing_key(
             &joiner,
             ENROLLED_AT,
@@ -1643,7 +1650,7 @@ mod tests {
         .unwrap();
         let user_secret = user_secret_record("secret_login001", "encrypted-user-secret");
         records.push(join_record.clone());
-        records.push(nexus_record.clone());
+        records.push(sentinel_record.clone());
         records.push(user_secret.clone());
 
         let mut state = VaultMetaState::from_stored_records(&records);
@@ -1651,7 +1658,7 @@ mod tests {
         assert_eq!(state.auth.len(), 1);
         assert_eq!(state.joins.len(), 1);
         assert_eq!(state.members.len(), 1);
-        assert_eq!(state.nexus_shares.len(), 1);
+        assert_eq!(state.sentinel_shares.len(), 1);
         assert_eq!(
             state
                 .joins
@@ -1670,7 +1677,7 @@ mod tests {
         state.remove_key(genesis.auth_id().as_str());
         state.remove_key(&member_stored_key(&genesis.auth_id()));
         state.remove_key(joiner.device_id().as_str());
-        state.remove_key(nexus_record.key.as_str());
+        state.remove_key(sentinel_record.key.as_str());
         assert!(state.is_empty());
 
         assert!(matches!(
@@ -1682,13 +1689,13 @@ mod tests {
             VaultMetaRecord::Join(_, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&nexus_record),
-            VaultMetaRecord::NexusShare(_, _)
+            VaultMetaRecord::classify(&sentinel_record),
+            VaultMetaRecord::SentinelShare(_, _)
         ));
     }
 
     #[test]
-    fn nexus_threshold_shares_reconstruct_keys_without_full_device_envelopes() {
+    fn sentinel_threshold_shares_reconstruct_keys_without_full_device_envelopes() {
         let keys = generate_vault_keys().unwrap();
         let first = DeviceIdentity::generate().unwrap();
         let second = DeviceIdentity::generate().unwrap();
@@ -1704,18 +1711,18 @@ mod tests {
         assert!(records.iter().all(is_sentinel_share_stored_record));
         assert!(records.iter().all(|record| !is_auth_stored_record(record)));
         assert!(resolve_secrets_key(&records, &first).is_err());
-        assert!(reconstruct_nexus_vault_keys(&records, std::slice::from_ref(&first)).is_err());
+        assert!(reconstruct_sentinel_vault_keys(&records, std::slice::from_ref(&first)).is_err());
 
         let reconstructed =
-            reconstruct_nexus_vault_keys(&records, &[first.clone(), second.clone()]).unwrap();
+            reconstruct_sentinel_vault_keys(&records, &[first.clone(), second.clone()]).unwrap();
         assert_eq!(reconstructed, keys);
 
-        let alternate = reconstruct_nexus_vault_keys(&records, &[second, third]).unwrap();
+        let alternate = reconstruct_sentinel_vault_keys(&records, &[second, third]).unwrap();
         assert_eq!(alternate, keys);
     }
 
     #[test]
-    fn opened_nexus_shares_reconstruct_without_peer_identities() {
+    fn opened_sentinel_shares_reconstruct_without_peer_identities() {
         let keys = generate_vault_keys().unwrap();
         let first = DeviceIdentity::generate().unwrap();
         let second = DeviceIdentity::generate().unwrap();
@@ -1733,12 +1740,15 @@ mod tests {
         assert_eq!(opened_second.threshold, 2);
 
         assert!(
-            reconstruct_nexus_vault_keys_from_opened(&records, std::slice::from_ref(&opened_first))
-                .is_err()
+            reconstruct_sentinel_vault_keys_from_opened(
+                &records,
+                std::slice::from_ref(&opened_first)
+            )
+            .is_err()
         );
 
         let reconstructed =
-            reconstruct_nexus_vault_keys_from_opened(&records, &[opened_first, opened_second])
+            reconstruct_sentinel_vault_keys_from_opened(&records, &[opened_first, opened_second])
                 .unwrap();
         assert_eq!(reconstructed, keys);
 
@@ -1752,7 +1762,7 @@ mod tests {
     }
 
     #[test]
-    fn nexus_member_row_without_auth_counts_as_enrolled() {
+    fn sentinel_member_row_without_auth_counts_as_enrolled() {
         let keys = generate_vault_keys().unwrap();
         let participant = DeviceIdentity::generate().unwrap();
         let members =

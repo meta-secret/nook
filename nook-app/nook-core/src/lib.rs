@@ -83,16 +83,16 @@ pub use nook_auth2::{
     SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest,
     SentinelGenesisSession, SentinelGenesisShareDelivery, accept_sentinel_genesis_share_delivery,
     add_sentinel_genesis_participant_payload, add_sentinel_genesis_public_key_announcement,
-    add_sentinel_genesis_response, finalize_nexus_genesis_shares, sentinel_genesis_request,
+    add_sentinel_genesis_response, finalize_sentinel_genesis_shares, sentinel_genesis_request,
 };
 
-pub use multi_device::nexus_member_records_from_public_roster;
+pub use multi_device::sentinel_member_records_from_public_roster;
 pub use multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, OpenedNexusShare,
+    MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelParticipantEntry,
     SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
     apply_vault_meta_operation, approve_join_request, assess_connect_access, auth_record,
-    build_members_records, count_nexus_share_records, create_join_request_record,
+    build_members_records, count_sentinel_share_records, create_join_request_record,
     create_join_request_record_with_signing_key, create_sentinel_share_records,
     create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
     deny_join_request, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
@@ -104,8 +104,8 @@ pub use multi_device::{
     is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
     member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
     open_sentinel_share_for_identity, parse_auth_envelopes, parse_join_request,
-    parse_sentinel_share_envelope, pending_join_for_device, reconstruct_nexus_vault_keys,
-    reconstruct_nexus_vault_keys_from_opened, rename_vault_member, replace_member_records,
+    parse_sentinel_share_envelope, pending_join_for_device, reconstruct_sentinel_vault_keys,
+    reconstruct_sentinel_vault_keys_from_opened, rename_vault_member, replace_member_records,
     resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
     revoke_vault_member, roster_add_member, sentinel_share_record_key, user_stored_records,
     vault_has_multi_device_records,
@@ -179,7 +179,7 @@ pub use vault_epoch_crypto::{
     rewrap_vault_meta_for_epoch, rotate_vault_keys_with_secrets,
 };
 pub use vault_event::{
-    EncryptedSecretPayload, GenesisImportPayload, NexusShareIssuedPayload, VaultEvent,
+    EncryptedSecretPayload, GenesisImportPayload, SentinelShareIssuedPayload, VaultEvent,
     VaultEventBody, VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
     parse_event_storage_bytes, parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };

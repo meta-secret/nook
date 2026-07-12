@@ -110,10 +110,10 @@
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === 'sentinel',
   )
-  const nexusReadyParticipants = $derived(
+  const sentinelReadyParticipants = $derived(
     vault.vaultArchitecture.sentinel?.ready_participants ?? 0,
   )
-  const nexusRequiredParticipants = $derived(
+  const sentinelRequiredParticipants = $derived(
     vault.vaultArchitecture.sentinel?.required_participants ?? 0,
   )
 
@@ -349,8 +349,8 @@
         </p>
         <p class="mt-0.5 text-sm font-semibold text-foreground">
           {vault.t('onboard_device.sentinel_readiness_count', {
-            ready: String(nexusReadyParticipants),
-            required: String(nexusRequiredParticipants),
+            ready: String(sentinelReadyParticipants),
+            required: String(sentinelRequiredParticipants),
           })}
         </p>
       </div>

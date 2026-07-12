@@ -133,6 +133,33 @@ test.describe('passkey device-key protection', () => {
     ).toBeHidden()
   })
 
+  test('defers passkey until Sentinel device initialization and resumes setup', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.goto('/app/')
+
+    await page.getByTestId('login-vault-name-input').fill('Sentinel flow vault')
+    await page.getByTestId('landing-auth-name-continue').click()
+    await page.getByTestId('get-started-path-sentinel').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+
+    await page.getByTestId('sentinel-genesis-start').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    await expect(page.getByTestId('device-protection-error')).toHaveCount(0)
+
+    await clickDeviceProtectionSetup(page)
+    await expect(
+      page.getByTestId('sentinel-genesis-ceremony-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('sentinel-genesis-request')).toBeVisible()
+  })
+
   test('derives the device identity and requires passkey authorization after reload', async ({
     page,
   }) => {

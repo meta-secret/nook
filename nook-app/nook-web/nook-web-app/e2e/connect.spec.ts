@@ -95,6 +95,11 @@ test.describe('vault connect flow', () => {
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeEnabled()
     await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
+    await page.getByTestId('login-connect-storage-btn').click()
+    await expect(page.getByTestId('login-provider-setup')).toBeVisible()
+    await expect(
+      page.getByTestId('create-vault-wizard-create'),
+    ).not.toBeVisible()
     await expect(page.getByTestId('vault-panel')).not.toBeVisible()
     await expect(page.getByTestId('github-source-link')).toHaveAttribute(
       'href',

@@ -36,12 +36,12 @@ const INACTIVE_SESSION: SentinelUnlockSessionStatus = {
 const CEREMONY_REQUIRED_MARKERS = [
   'opened-share ceremony',
   'SentinelCeremonyRequired',
-  'nexus vault unlock requires an opened-share ceremony',
+  'sentinel vault unlock requires an opened-share ceremony',
 ]
 
 const PASSWORD_FORBIDDEN_MARKERS = [
-  'Password unlock is forbidden for nexus',
-  'NexusPasswordUnlockForbidden',
+  'Password unlock is forbidden for sentinel',
+  'SentinelPasswordUnlockForbidden',
 ]
 
 function errorMessage(err: unknown): string {
@@ -67,7 +67,7 @@ export function isSentinelCeremonyRequiredError(err: unknown): boolean {
   )
 }
 
-export function isNexusPasswordUnlockForbiddenError(err: unknown): boolean {
+export function isSentinelPasswordUnlockForbiddenError(err: unknown): boolean {
   const message = errorMessage(err)
   return PASSWORD_FORBIDDEN_MARKERS.some((marker) =>
     message.toLowerCase().includes(marker.toLowerCase()),
@@ -261,7 +261,7 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     await state.refreshPasswordEntriesList()
     void state.hydrateMultiDeviceState()
     state.markVaultUnlocked()
-    log.info('vault unlocked with nexus quorum', {
+    log.info('vault unlocked with sentinel quorum', {
       mode: state.storageMode,
       secrets: rawRecords.length,
     })
@@ -275,6 +275,8 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     if (isSentinelCeremonyRequiredError(e)) {
       state.sentinelCeremonyPrompt = true
       await refreshSentinelUnlockStatus(state)
+      state.errorMsg = ''
+      return
     }
     state.errorMsg =
       e instanceof Error

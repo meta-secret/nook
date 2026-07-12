@@ -1,12 +1,13 @@
-//! Session-bound, provider-independent Nexus quorum unlock.
+//! Session-bound, provider-independent Sentinel quorum unlock.
 //!
 //! Opened SLIP-0039 mnemonics exist only inside Rust while a participant
 //! creates a response and while the requester finalizes a quorum. The public
 //! protocol types expose only signed metadata and age-encrypted ciphertext.
 
 use super::multi_device::{
-    DeviceIdentity, OpenedNexusShare, VaultKeys, device_id_from_public_key, encrypt_for_recipient,
-    generate_id, open_sentinel_share_for_identity, reconstruct_nexus_vault_keys_from_opened,
+    DeviceIdentity, OpenedSentinelShare, VaultKeys, device_id_from_public_key,
+    encrypt_for_recipient, generate_id, open_sentinel_share_for_identity,
+    reconstruct_sentinel_vault_keys_from_opened,
 };
 use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
@@ -92,7 +93,7 @@ struct SentinelUnlockContribution {
     policy: SentinelUnlockPolicy,
     participant_device_id: DeviceId,
     participant_signing_public_key: DeviceSigningPublicKey,
-    opened_share: OpenedNexusShare,
+    opened_share: OpenedSentinelShare,
 }
 
 pub fn start_sentinel_unlock(
@@ -136,8 +137,12 @@ pub fn respond_to_sentinel_unlock_request(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
     signing_key: &SigningKey,
+    authorized_requester_signing_key: &DeviceSigningPublicKey,
 ) -> MultiDeviceResult<SentinelUnlockResponse> {
     validate_request(request)?;
+    if &request.requester_signing_public_key != authorized_requester_signing_key {
+        return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
+    }
     let opened_share = open_sentinel_share_for_identity(records, identity)?;
     if opened_share.threshold != request.policy.threshold
         || opened_share.required_participants != request.policy.required_participants
@@ -232,7 +237,7 @@ pub fn finalize_sentinel_unlock(
         return Err(MultiDeviceError::SentinelUnlockRecipientMismatch);
     }
     if responses.len() < usize::from(request.policy.threshold) {
-        return Err(MultiDeviceError::NotEnoughNexusShares {
+        return Err(MultiDeviceError::NotEnoughSentinelShares {
             threshold: request.policy.threshold,
             available: responses.len(),
         });
@@ -270,7 +275,7 @@ pub fn finalize_sentinel_unlock(
         }
         opened.push(contribution.opened_share);
     }
-    reconstruct_nexus_vault_keys_from_opened(&records, &opened)
+    reconstruct_sentinel_vault_keys_from_opened(&records, &opened)
 }
 
 fn validate_request(request: &SentinelUnlockRequest) -> MultiDeviceResult<()> {
@@ -360,7 +365,7 @@ fn verify_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::create_nexus_root_share_records_for_recipients;
+    use crate::create_sentinel_root_share_records_for_recipients;
 
     fn signing_key(fill: u8) -> SigningKey {
         SigningKey::from_bytes(&[fill; 32])
@@ -385,12 +390,13 @@ mod tests {
             .map(|identity| (identity.device_id().clone(), identity.public_key()))
             .collect::<Vec<_>>();
         let (keys, records) =
-            create_nexus_root_share_records_for_recipients(&recipients, 2).unwrap();
+            create_sentinel_root_share_records_for_recipients(&recipients, 2).unwrap();
+        let requester = participants[2].clone();
         Fixture {
             keys,
             records,
             participants,
-            requester: DeviceIdentity::generate().unwrap(),
+            requester,
             requester_signing: signing_key(90),
             store_id: StoreId::parse("store_AAAAAAAAAAA").unwrap(),
             policy: SentinelUnlockPolicy {
@@ -421,6 +427,7 @@ mod tests {
             &fixture.records,
             &fixture.participants[index],
             &signing_key(u8::try_from(index + 1).unwrap()),
+            &signing_public_key(&fixture.requester_signing),
         )
         .unwrap()
     }
@@ -464,7 +471,7 @@ mod tests {
         add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0)).unwrap();
         assert!(matches!(
             finalize_sentinel_unlock(session.clone(), &fixture.requester),
-            Err(MultiDeviceError::NotEnoughNexusShares { .. })
+            Err(MultiDeviceError::NotEnoughSentinelShares { .. })
         ));
         let wrong = DeviceIdentity::generate().unwrap();
         assert!(matches!(
@@ -512,6 +519,7 @@ mod tests {
                 &fixture.records,
                 &fixture.participants[0],
                 &signing_key(1),
+                &signing_public_key(&fixture.requester_signing),
             ),
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)
         ));
@@ -529,6 +537,33 @@ mod tests {
         assert!(matches!(
             add_sentinel_unlock_response(&mut first_session, tampered_response),
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)
+        ));
+    }
+
+    #[test]
+    fn unenrolled_requester_receives_no_unlock_response() {
+        let fixture = fixture();
+        let unknown_identity = DeviceIdentity::generate().unwrap();
+        let unknown_signing = signing_key(91);
+        let session = start_sentinel_unlock(
+            fixture.store_id.clone(),
+            fixture.policy,
+            &fixture.records,
+            &unknown_identity,
+            &unknown_signing,
+        )
+        .unwrap();
+        let request = sentinel_unlock_request(&session);
+
+        assert!(matches!(
+            respond_to_sentinel_unlock_request(
+                &request,
+                &fixture.records,
+                &fixture.participants[0],
+                &signing_key(1),
+                &signing_public_key(&fixture.requester_signing),
+            ),
+            Err(MultiDeviceError::InvalidSentinelUnlockPayload)
         ));
     }
 }

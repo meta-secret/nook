@@ -1,12 +1,12 @@
-//! Provider-independent Nexus pre-genesis ceremony.
+//! Provider-independent Sentinel pre-genesis ceremony.
 //!
 //! Session state contains public data only. Vault keys and shares are generated
 //! together only after the complete `N`-participant roster has been verified.
-//! Nexus roots are split with the current extendable SLIP-0039 format.
+//! Sentinel roots are split with the current extendable SLIP-0039 format.
 
 use super::multi_device::{
     DeviceIdentity, SentinelShareEnvelope, VaultMember, VaultMetaRecord, build_members_records,
-    create_nexus_root_share_records_for_recipients, dec_auth_id_from_public_key,
+    create_sentinel_root_share_records_for_recipients, dec_auth_id_from_public_key,
     device_id_from_public_key, generate_id,
 };
 use crate::{
@@ -296,7 +296,7 @@ pub fn add_sentinel_genesis_public_key_announcement(
 }
 
 #[allow(clippy::needless_pass_by_value)] // Consuming the session prevents issuing twice.
-pub fn finalize_nexus_genesis_shares(
+pub fn finalize_sentinel_genesis_shares(
     session: SentinelGenesisSession,
     store_id: &StoreId,
     initiator_signing_key: &SigningKey,
@@ -325,7 +325,7 @@ pub fn finalize_nexus_genesis_shares(
             )
         })
         .collect::<Vec<_>>();
-    let (keys, share_records) = create_nexus_root_share_records_for_recipients(
+    let (keys, share_records) = create_sentinel_root_share_records_for_recipients(
         &recipients,
         session.request.policy.threshold,
     )?;
@@ -333,7 +333,7 @@ pub fn finalize_nexus_genesis_shares(
     // record has parsed and every delivery has been signed.
     let mut deliveries = Vec::with_capacity(share_records.len());
     for (participant, record) in session.participants.iter().zip(&share_records) {
-        let VaultMetaRecord::NexusShare(device_id, share) = VaultMetaRecord::classify(record)
+        let VaultMetaRecord::SentinelShare(device_id, share) = VaultMetaRecord::classify(record)
         else {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         };
@@ -410,7 +410,7 @@ pub fn accept_sentinel_genesis_share_delivery(
         &delivery.signature,
         &delivery_signing_bytes(delivery)?,
     )?;
-    VaultMetaRecord::NexusShare(delivery.device_id.clone(), delivery.share.clone()).to_stored()
+    VaultMetaRecord::SentinelShare(delivery.device_id.clone(), delivery.share.clone()).to_stored()
 }
 
 fn validate_request(request: &SentinelGenesisRequest) -> MultiDeviceResult<()> {
@@ -504,7 +504,7 @@ fn participant_fingerprint(
     session_id: &CompactToken,
 ) -> String {
     let mut digest = Sha256::new();
-    digest.update(b"nook-nexus-genesis-participant-v1\0");
+    digest.update(b"nook-sentinel-genesis-participant-v1\0");
     digest.update(session_id.as_str().as_bytes());
     digest.update(b"\0");
     digest.update(encryption.as_str().as_bytes());
@@ -518,7 +518,7 @@ fn standalone_participant_fingerprint(
     signing: &DeviceSigningPublicKey,
 ) -> String {
     let mut digest = Sha256::new();
-    digest.update(b"nook-nexus-genesis-public-key-v1\0");
+    digest.update(b"nook-sentinel-genesis-public-key-v1\0");
     digest.update(encryption.as_str().as_bytes());
     digest.update(b"\0");
     digest.update(signing.as_str().as_bytes());
@@ -667,7 +667,7 @@ mod tests {
         let payload = serde_json::to_string(&announcement).unwrap();
         add_sentinel_genesis_participant_payload(&mut session, &payload).unwrap();
         assert!(session.is_complete());
-        let issued = finalize_nexus_genesis_shares(
+        let issued = finalize_sentinel_genesis_shares(
             session,
             &StoreId::parse("store_AAAAAAAAAAA").unwrap(),
             &owner_signing,
@@ -748,7 +748,7 @@ mod tests {
             start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let store_id = StoreId::parse("store_AAAAAAAAAAA").unwrap();
         assert!(matches!(
-            finalize_nexus_genesis_shares(incomplete, &store_id, &owner_signing),
+            finalize_sentinel_genesis_shares(incomplete, &store_id, &owner_signing),
             Err(MultiDeviceError::SentinelGenesisIncomplete { .. })
         ));
 
@@ -756,7 +756,7 @@ mod tests {
             start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let (peer, _, response) = participant(&session.request, "Peer");
         add_sentinel_genesis_response(&mut session, response).unwrap();
-        let issued = finalize_nexus_genesis_shares(session, &store_id, &owner_signing).unwrap();
+        let issued = finalize_sentinel_genesis_shares(session, &store_id, &owner_signing).unwrap();
         assert_eq!(issued.records.len(), 4);
         assert_eq!(issued.deliveries.len(), 2);
         let peer_delivery = issued
@@ -791,7 +791,7 @@ mod tests {
         let (peer_b, _, b) = participant(&session.request, "B");
         add_sentinel_genesis_response(&mut session, a).unwrap();
         add_sentinel_genesis_response(&mut session, b).unwrap();
-        let issued = finalize_nexus_genesis_shares(
+        let issued = finalize_sentinel_genesis_shares(
             session,
             &StoreId::parse("store_AAAAAAAAAAA").unwrap(),
             &owner_signing,
@@ -804,24 +804,24 @@ mod tests {
             ))
         );
         assert_eq!(
-            super::super::multi_device::count_nexus_share_records(&issued.records),
+            super::super::multi_device::count_sentinel_share_records(&issued.records),
             3
         );
         assert!(
-            super::super::multi_device::reconstruct_nexus_vault_keys(
+            super::super::multi_device::reconstruct_sentinel_vault_keys(
                 &issued.records,
                 std::slice::from_ref(&owner)
             )
             .is_err()
         );
-        let first_quorum = super::super::multi_device::reconstruct_nexus_vault_keys(
+        let first_quorum = super::super::multi_device::reconstruct_sentinel_vault_keys(
             &issued.records,
             &[owner, peer_a],
         )
         .unwrap();
         assert_eq!(first_quorum.secrets_key.as_str().len(), 64);
         assert!(
-            super::super::multi_device::reconstruct_nexus_vault_keys(&issued.records, &[peer_b])
+            super::super::multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[peer_b])
                 .is_err()
         );
     }

@@ -1,6 +1,6 @@
 //! Nook-owned SLIP-0039 current-format, single-group implementation.
 //!
-//! This module deliberately exposes only the shape used by Nexus genesis:
+//! This module deliberately exposes only the shape used by Sentinel genesis:
 //! 256-bit secrets, extendable backups (`ext = 1`), an empty passphrase, one
 //! group (`GT = G = 1`), and a configurable member `T-of-N` policy.
 //!
@@ -44,7 +44,7 @@ struct Share {
     value: Vec<u8>,
 }
 
-/// Split a 256-bit Nexus root into current-format SLIP-0039 mnemonics.
+/// Split a 256-bit Sentinel root into current-format SLIP-0039 mnemonics.
 ///
 /// Every returned mnemonic has `ext = 1`, `e = 0`, `GT = G = 1`, and uses an
 /// empty SLIP-0039 passphrase. `2 <= threshold <= share_count <= 16`.
@@ -78,7 +78,7 @@ pub(crate) fn split_sentinel_secret(
         .collect()
 }
 
-/// Recover a 256-bit Nexus root from any quorum of compatible mnemonics.
+/// Recover a 256-bit Sentinel root from any quorum of compatible mnemonics.
 pub(crate) fn recover_sentinel_secret(
     mnemonics: &[String],
 ) -> MultiDeviceResult<[u8; SECRET_BYTES]> {
@@ -101,7 +101,7 @@ fn recover_with_passphrase(
         .collect::<MultiDeviceResult<Vec<_>>>()?;
     let first = shares
         .first()
-        .ok_or(MultiDeviceError::NotEnoughNexusShares {
+        .ok_or(MultiDeviceError::NotEnoughSentinelShares {
             threshold: 2,
             available: 0,
         })?;
@@ -124,7 +124,7 @@ fn recover_with_passphrase(
     }
     let required = usize::from(first.member_threshold);
     if shares.len() < required {
-        return Err(MultiDeviceError::NotEnoughNexusShares {
+        return Err(MultiDeviceError::NotEnoughSentinelShares {
             threshold: first.member_threshold,
             available: shares.len(),
         });
@@ -224,7 +224,7 @@ fn split_secret(threshold: u8, share_count: u8, secret: &[u8]) -> MultiDeviceRes
 
 fn recover_secret(threshold: u8, shares: &[RawShare]) -> MultiDeviceResult<Vec<u8>> {
     if threshold == 0 || shares.len() < usize::from(threshold) {
-        return Err(MultiDeviceError::NotEnoughNexusShares {
+        return Err(MultiDeviceError::NotEnoughSentinelShares {
             threshold,
             available: shares.len(),
         });
@@ -638,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn nexus_round_trip_is_current_ext_one_and_any_quorum_recovers() {
+    fn sentinel_round_trip_is_current_ext_one_and_any_quorum_recovers() {
         let root = core::array::from_fn(|index| u8::try_from(index).unwrap());
         let shares = split_sentinel_secret(&root, 3, 5).unwrap();
         assert_eq!(shares.len(), 5);

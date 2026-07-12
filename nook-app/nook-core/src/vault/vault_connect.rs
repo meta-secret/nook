@@ -95,7 +95,7 @@ pub fn access_status_for_vault_content(
 
 /// Decrypt and hydrate an in-memory session from stored vault YAML.
 ///
-/// Nexus vaults never unlock through per-device auth envelopes. A single
+/// Sentinel vaults never unlock through per-device auth envelopes. A single
 /// identity is never enough for the default 2-of-N policy; use
 /// [`load_sentinel_vault`] when enough participant identities are available.
 pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
@@ -110,7 +110,7 @@ pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResul
     hydrate_loaded_vault(&stored_records, secrets_key, members_key)
 }
 
-/// Native/test helper: reconstruct a nexus vault when enough participant
+/// Native/test helper: reconstruct a sentinel vault when enough participant
 /// identities can open their encrypted shares locally.
 ///
 /// Browser unlock must not collect peer identities. Use
@@ -127,14 +127,14 @@ pub fn load_sentinel_vault(
     }
     let stored_records = deserialize_stored(content, format)?;
     architecture.validate_records(&stored_records)?;
-    let keys = crate::reconstruct_nexus_vault_keys(&stored_records, identities)?;
+    let keys = crate::reconstruct_sentinel_vault_keys(&stored_records, identities)?;
     hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
 }
 
-/// Reconstruct a nexus vault session from opened-share ceremony contributions.
+/// Reconstruct a sentinel vault session from opened-share ceremony contributions.
 pub fn load_sentinel_vault_from_opened(
     content: &str,
-    opened: &[crate::OpenedNexusShare],
+    opened: &[crate::OpenedSentinelShare],
 ) -> VaultResult<LoadedVault> {
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
@@ -143,7 +143,7 @@ pub fn load_sentinel_vault_from_opened(
     }
     let stored_records = deserialize_stored(content, format)?;
     architecture.validate_records(&stored_records)?;
-    let keys = crate::reconstruct_nexus_vault_keys_from_opened(&stored_records, opened)?;
+    let keys = crate::reconstruct_sentinel_vault_keys_from_opened(&stored_records, opened)?;
     hydrate_loaded_vault(&stored_records, keys.secrets_key, keys.members_key)
 }
 
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn nexus_yaml_rejects_full_device_key_envelopes_before_write() -> VaultResult<()> {
+    fn sentinel_yaml_rejects_full_device_key_envelopes_before_write() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
         let records = vec![genesis_auth_record(
@@ -285,17 +285,17 @@ mod tests {
         ));
         assert!(
             load_stored_vault(
-                "schema_version: 1\nstore_id: store_testtoken11\narchitecture:\n  device_mode: standard\n  vault_type: nexus\n  replication_type: personal\n  sentinel:\n    threshold: 2\n    required_participants: 2\n    ready_participants: 0\nsecrets: []\n",
+                "schema_version: 1\nstore_id: store_testtoken11\narchitecture:\n  device_mode: standard\n  vault_type: sentinel\n  replication_type: personal\n  sentinel:\n    threshold: 2\n    required_participants: 2\n    ready_participants: 0\nsecrets: []\n",
                 &identity,
             )
             .is_err(),
-            "nexus vault must reject ordinary single-device unlock even before shares exist"
+            "sentinel vault must reject ordinary single-device unlock even before shares exist"
         );
         Ok(())
     }
 
     #[test]
-    fn nexus_yaml_reconstructs_with_threshold_identities() -> VaultResult<()> {
+    fn sentinel_yaml_reconstructs_with_threshold_identities() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
@@ -328,7 +328,7 @@ mod tests {
         let loaded = load_sentinel_vault(yaml.as_str(), &[first, second])?;
         assert_eq!(loaded.secrets_key, keys.secrets_key);
         assert_eq!(loaded.members_key, keys.members_key);
-        assert_eq!(loaded.meta.nexus_shares.len(), 3);
+        assert_eq!(loaded.meta.sentinel_shares.len(), 3);
         Ok(())
     }
 }

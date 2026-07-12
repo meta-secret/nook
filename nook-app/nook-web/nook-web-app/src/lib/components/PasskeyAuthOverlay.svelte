@@ -15,7 +15,6 @@
   class="fixed top-16 right-4 z-50 w-[min(100vw-2rem,22rem)] animate-in fade-in slide-in-from-top-2 duration-200"
   data-testid="passkey-auth-overlay"
   role="dialog"
-  aria-modal="true"
   aria-label={vault.t('device_protection.title')}
 >
   <div
