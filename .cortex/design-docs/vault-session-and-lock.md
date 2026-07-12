@@ -75,14 +75,12 @@ identity and that vault selection, creation, or import follows in the next step.
 Device protection mode is chosen only here; vault creation reuses the persisted
 device choice and must not render another device-protection selector.
 
-`DeviceProtectionGate` keeps passkey setup and recovery as mutually exclusive
-workflows. When no local passkey-protected device record exists, creating a new
-passkey is the primary form and using an existing discoverable passkey is a small
-alternative action. When `device_identity_wrapped` already identifies passkey
-protection, the gate shows authorization only and never renders passkey creation.
-The create and existing branches mirror the same action hierarchy: one full-width
-primary button, then a labeled divider and centered ghost action for switching
-to the other branch.
+When no local passkey-protected device record exists, `DeviceProtectionGate`
+shows new-passkey setup as the primary form and a small **Use existing passkey**
+alternative. That alternative launches discoverable-passkey recovery immediately;
+it must not open a second confirmation widget. When `device_identity_wrapped`
+already identifies passkey protection, the gate shows authorization only and
+never renders passkey creation.
 Browsers do not expose a general API for enumerating whether an RP already has a
 discoverable passkey, so the missing-record state must retain the explicit existing-
 passkey recovery action.

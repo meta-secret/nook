@@ -84,7 +84,7 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
 }
 
 test.describe('passkey device-key protection', () => {
-  test('defers passkey until simple vault create and keeps setup workflows mutually exclusive', async ({
+  test('defers passkey until simple vault create without a second existing-passkey widget', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -108,28 +108,11 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
     await expect(
-      page.getByTestId('device-protection-existing-workflow'),
-    ).toBeHidden()
-
-    await page.getByTestId('device-protection-use-existing-choice').click()
+      page.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use existing passkey')
     await expect(
       page.getByTestId('device-protection-existing-workflow'),
-    ).toBeVisible()
-    await expect(page.getByText('Need a new Nook passkey?')).toBeVisible()
-    await expect(
-      page.getByTestId('device-protection-create-new-choice'),
-    ).toHaveText('Create new passkey')
-    await expect(
-      page.getByTestId('device-protection-create-workflow'),
-    ).toBeHidden()
-
-    await page.getByTestId('device-protection-create-new-choice').click()
-    await expect(
-      page.getByTestId('device-protection-create-workflow'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('device-protection-existing-workflow'),
-    ).toBeHidden()
+    ).toHaveCount(0)
   })
 
   test('uses participant passkeys and adds a signed key from the pre-genesis card', async ({
@@ -269,7 +252,7 @@ test.describe('passkey device-key protection', () => {
       'Continue with passkey',
     )
     await expect(
-      page.getByTestId('device-protection-create-new-choice'),
+      page.getByTestId('device-protection-use-existing-choice'),
     ).toBeHidden()
     await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
     await page.getByTestId('device-protection-unlock-btn').click()
@@ -336,10 +319,6 @@ test.describe('passkey device-key protection', () => {
     await page.reload()
     // Existing vault still requires passkey-first after metadata wipe.
     await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(
-      page.getByTestId('device-protection-existing-passkey-btn'),
-    ).toBeVisible()
-    await page.getByTestId('device-protection-existing-passkey-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible()
 
     const recoveredDeviceId = await readDeviceId(page)
