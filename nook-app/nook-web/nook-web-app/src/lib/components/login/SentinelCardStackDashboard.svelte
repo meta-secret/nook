@@ -357,7 +357,7 @@
       {/each}
     </ol>
 
-    <header class="grid gap-8 md:grid-cols-[1fr_auto] md:items-end">
+    <header>
       <div>
         <p
           class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
@@ -379,25 +379,6 @@
               {vault.t('login.sentinel_card_stack_tab_keys')}
             </span>
           </div>
-        </div>
-      </div>
-      <div
-        class="min-w-64 rounded-xl bg-[#f4f6f7] p-4 text-[#27313a] shadow-2xl"
-      >
-        <p class="text-[9px] tracking-wider text-[#87919a] uppercase">
-          {vault.t('login.sentinel_card_stack_order_details')}
-        </p>
-        <div class="mt-3 flex justify-between text-xs">
-          <span>{vault.t('login.sentinel_card_stack_policy')}</span>
-          <b>
-            {onboardingStage === 'identity' || onboardingStage === 'roster'
-              ? vault.t('login.sentinel_onboarding_not_set')
-              : `${threshold}-of-${participantCount}`}
-          </b>
-        </div>
-        <div class="mt-2 flex justify-between text-xs">
-          <span>{vault.t('login.sentinel_onboarding_devices_ready')}</span>
-          <b>{rosterCount}</b>
         </div>
       </div>
     </header>
