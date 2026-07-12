@@ -17,9 +17,8 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await page.getByTestId('login-vault-name-input').fill('Passkey flow vault')
-  await page.getByTestId('landing-auth-name-continue').click()
   await page.getByTestId('get-started-path-simple').click()
+  await page.getByTestId('login-vault-name-input').fill('Passkey flow vault')
   await page.getByTestId('login-create-device-vault-btn').click()
   await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -149,10 +148,6 @@ test.describe('passkey device-key protection', () => {
     const participant = await participantContext.newPage()
     await participant.goto('/app/')
 
-    await participant
-      .getByTestId('login-vault-name-input')
-      .fill('Participant device')
-    await participant.getByTestId('landing-auth-name-continue').click()
     await participant.getByTestId('get-started-path-join').click()
     await expect(participant.getByTestId('passkey-auth-overlay')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -167,8 +162,6 @@ test.describe('passkey device-key protection', () => {
     const participantAnnouncement = await announcementOutput.inputValue()
     expect(participantAnnouncement).toContain('publicKeyAnnouncement')
 
-    await page.getByTestId('login-vault-name-input').fill('Sentinel flow vault')
-    await page.getByTestId('landing-auth-name-continue').click()
     await page.getByTestId('get-started-path-sentinel').click()
     await page.getByTestId('sentinel-dashboard-card-stack').click()
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
@@ -185,9 +178,8 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-card-stack-dashboard'),
     ).toContainText('AUTOMATICALLY INCLUDED')
-    await page
-      .getByTestId('sentinel-genesis-participant-count')
-      .selectOption('2')
+    await page.getByTestId('sentinel-genesis-participant-count').click()
+    await page.getByTestId('sentinel-participant-option-2').click()
     await page
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)

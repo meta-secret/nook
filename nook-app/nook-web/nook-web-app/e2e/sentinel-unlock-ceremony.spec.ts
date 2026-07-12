@@ -17,9 +17,7 @@ async function openFreshDevice(page: Page) {
   })
 }
 
-async function nameVaultAndContinue(page: Page, name: string) {
-  await page.getByTestId('login-vault-name-input').fill(name)
-  await page.getByTestId('landing-auth-name-continue').click()
+async function expectPathChooser(page: Page) {
   await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
 }
 
@@ -49,16 +47,16 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
   })
 
   test('creates and delivers a 2-of-2 Sentinel without a sync provider', async () => {
-    await nameVaultAndContinue(deviceA, 'Sentinel quorum')
+    await expectPathChooser(deviceA)
     await deviceA.getByTestId('get-started-path-sentinel').click()
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
     await deviceA
       .getByTestId('sentinel-genesis-name-input')
       .fill('Sentinel quorum')
-    await deviceA
-      .getByTestId('sentinel-genesis-participant-count')
-      .selectOption('2')
-    await deviceA.getByTestId('sentinel-genesis-threshold').selectOption('2')
+    await deviceA.getByTestId('sentinel-genesis-participant-count').click()
+    await deviceA.getByTestId('sentinel-participant-option-2').click()
+    await deviceA.getByTestId('sentinel-genesis-threshold').click()
+    await deviceA.getByTestId('sentinel-threshold-option-2').click()
     await deviceA.getByTestId('sentinel-genesis-start').click()
 
     const genesisRequest = deviceA.getByTestId(
@@ -68,7 +66,7 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
     const requestPayload = await genesisRequest.inputValue()
     expect(requestPayload.length).toBeGreaterThan(20)
 
-    await nameVaultAndContinue(deviceB, 'Join device')
+    await expectPathChooser(deviceB)
     await deviceB.getByTestId('get-started-path-join').click()
     const responseOutput = deviceB.getByTestId(
       'sentinel-genesis-generated-response',

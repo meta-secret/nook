@@ -127,20 +127,6 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
     return
   }
 
-  const nameStep = page.getByTestId('landing-auth-step-name')
-  if (await nameStep.isVisible()) {
-    const nameInput = page.getByTestId('login-vault-name-input')
-    await expect(nameInput).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    if (!(await nameInput.inputValue()).trim()) {
-      await nameInput.fill('Test vault', {
-        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-      })
-    }
-    await page.getByTestId('landing-auth-name-continue').click()
-  }
-
   const simplePath = page.getByTestId('get-started-path-simple')
   await expect(simplePath).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -150,6 +136,12 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   await expect(finalStep).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  const nameInput = page.getByTestId('login-vault-name-input')
+  if (!(await nameInput.inputValue()).trim()) {
+    await nameInput.fill('Test vault', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  }
 }
 
 export async function openLoginProviderSetup(page: Page) {
@@ -208,19 +200,6 @@ export async function createLocalVaultOnLogin(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
 
-  const nameStep = page.getByTestId('landing-auth-step-name')
-  if (await nameStep.isVisible()) {
-    const nameInput = page.getByTestId('login-vault-name-input')
-    await expect(nameInput).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(nameInput).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await page.getByTestId('landing-auth-name-continue').click()
-  }
-
   const finalStep = page.getByTestId('create-vault-wizard-create')
   if (!(await finalStep.isVisible())) {
     const simplePath = page.getByTestId('get-started-path-simple')
@@ -232,6 +211,15 @@ export async function createLocalVaultOnLogin(
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
   }
+
+  const nameInput = page.getByTestId('login-vault-name-input')
+  await expect(nameInput).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(nameInput).toBeEnabled({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await nameInput.fill(vaultName, { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
   const createButton = page.getByTestId('login-create-device-vault-btn')
   await expect(createButton).toBeEnabled({

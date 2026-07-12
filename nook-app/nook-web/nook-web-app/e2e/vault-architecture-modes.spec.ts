@@ -116,14 +116,6 @@ async function assertGroupsDoNotOverlap(page: Page, testIds: string[]) {
 }
 
 async function continueToPathChooser(page: Page) {
-  const nameStep = page.getByTestId('landing-auth-step-name')
-  if (await nameStep.isVisible()) {
-    const nameInput = page.getByTestId('login-vault-name-input')
-    if (!(await nameInput.inputValue()).trim()) {
-      await nameInput.fill('Test vault')
-    }
-    await page.getByTestId('landing-auth-name-continue').click()
-  }
   await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
 }
 
@@ -155,12 +147,11 @@ test.describe('vault architecture modes', () => {
     page,
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
-    await expect(page.getByTestId('landing-auth-step-name')).toBeVisible()
     await expect(page.getByTestId('vault-security-orbit')).toBeVisible()
     await expect(
       page.getByTestId('vault-security-orbit').locator('img'),
     ).toHaveAttribute('src', '/nook-logo-dark.png')
-    await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
 
     await continueToPathChooser(page)
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
@@ -184,6 +175,7 @@ test.describe('vault architecture modes', () => {
 
     await page.getByTestId('get-started-path-simple').click()
     await expect(page.getByTestId('create-vault-wizard-create')).toBeVisible()
+    await expect(page.getByTestId('login-vault-name-input')).toBeVisible()
     await expect(
       page.getByTestId('login-create-device-vault-btn'),
     ).toBeVisible()
@@ -204,10 +196,10 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('sentinel-genesis-name-input')).toBeVisible()
     await expect(
       page.getByTestId('sentinel-genesis-participant-count'),
-    ).toHaveValue('3')
-    await expect(page.getByTestId('sentinel-genesis-threshold')).toHaveValue(
-      '2',
-    )
+    ).toHaveAttribute('data-value', '3')
+    await expect(
+      page.getByTestId('sentinel-genesis-threshold'),
+    ).toHaveAttribute('data-value', '2')
     await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
   })

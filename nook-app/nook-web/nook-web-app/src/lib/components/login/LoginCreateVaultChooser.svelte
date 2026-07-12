@@ -41,7 +41,6 @@
   }
 
   type WizardStep =
-    | 'name'
     | 'choose'
     | 'simple-create'
     | 'sentinel-dashboard'
@@ -103,7 +102,7 @@
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
-  let wizardStep = $state<WizardStep>('name')
+  let wizardStep = $state<WizardStep>('choose')
   let chosenPath = $state<ChosenPath>('undecided')
   let vaultName = $state('')
   let sentinelName = $state('')
@@ -198,14 +197,12 @@
       (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
   )
   const showImportFooter = $derived(
-    wizardStep === 'name' ||
-      wizardStep === 'choose' ||
+    wizardStep === 'choose' ||
       wizardStep === 'simple-create' ||
       wizardStep === 'sentinel-dashboard',
   )
   const canGoBack = $derived(
-    wizardStep === 'choose' ||
-      wizardStep === 'simple-create' ||
+    wizardStep === 'simple-create' ||
       wizardStep === 'sentinel-dashboard' ||
       wizardStep === 'sentinel-policy' ||
       wizardStep === 'join',
@@ -228,32 +225,29 @@
 
   const stepIndex = $derived.by(() => {
     switch (wizardStep) {
-      case 'name':
-        return 0
       case 'choose':
-        return 1
+        return 0
       case 'simple-create':
       case 'sentinel-dashboard':
       case 'sentinel-policy':
       case 'join':
       case 'sentinel-ceremony':
-        return 2
+        return 1
     }
   })
 
   const progressSteps = $derived.by(() => {
-    const name = vault.t('login.landing_step_name')
     const choose = vault.t('login.landing_step_choose')
     if (chosenPath === 'simple') {
-      return [name, choose, vault.t('login.landing_step_simple')]
+      return [choose, vault.t('login.landing_step_simple')]
     }
     if (chosenPath === 'sentinel') {
-      return [name, choose, vault.t('login.landing_step_sentinel')]
+      return [choose, vault.t('login.landing_step_sentinel')]
     }
     if (chosenPath === 'join') {
-      return [name, choose, vault.t('login.landing_step_join')]
+      return [choose, vault.t('login.landing_step_join')]
     }
-    return [name, choose, vault.t('login.landing_step_create_or_configure')]
+    return [choose, vault.t('login.landing_step_create_or_configure')]
   })
 
   function portal(node: HTMLElement, enabled: boolean) {
@@ -378,11 +372,6 @@
     }
   }
 
-  function continueAfterName() {
-    if (!vaultNameReady || isBusy) return
-    wizardStep = 'choose'
-  }
-
   function chooseSimplePath() {
     vault.draftVaultType = 'simple'
     chosenPath = 'simple'
@@ -392,9 +381,6 @@
   function chooseSentinelCreatePath() {
     vault.draftVaultType = 'sentinel'
     chosenPath = 'sentinel'
-    if (!sentinelName.trim()) {
-      sentinelName = trimmedVaultName
-    }
     initiatorFingerprint = ''
     initiatorPasskeyRequested = false
     sentinelDashboard = null
@@ -450,11 +436,6 @@
 
   function goBack() {
     if (wizardStep === 'sentinel-ceremony') return
-    if (wizardStep === 'choose') {
-      chosenPath = 'undecided'
-      wizardStep = 'name'
-      return
-    }
     if (wizardStep === 'simple-create' || wizardStep === 'join') {
       chosenPath = 'undecided'
       wizardStep = 'choose'
@@ -751,38 +732,7 @@
                       {label}
                     </p>
 
-                    {#if index === stepIndex && wizardStep === 'name'}
-                      <section
-                        class="mt-3 space-y-3"
-                        data-testid="landing-auth-step-name"
-                      >
-                        <input
-                          id="login-vault-name"
-                          type="text"
-                          class="w-full border-b border-border bg-transparent py-2 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50"
-                          placeholder={vault.t('login.vault_name_placeholder')}
-                          maxlength="64"
-                          autocomplete="off"
-                          data-testid="login-vault-name-input"
-                          bind:value={vaultName}
-                          disabled={isBusy}
-                          onkeydown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              continueAfterName()
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          data-testid="landing-auth-name-continue"
-                          disabled={isBusy || !vaultNameReady}
-                          onclick={continueAfterName}
-                        >
-                          {vault.t('login.create_wizard_continue')}
-                        </Button>
-                      </section>
-                    {:else if index === stepIndex && wizardStep === 'choose'}
+                    {#if index === stepIndex && wizardStep === 'choose'}
                       <section
                         class="mt-3 space-y-3"
                         data-testid="landing-auth-step-choose"
@@ -840,11 +790,34 @@
                           class="space-y-3"
                           data-testid="create-vault-wizard-create"
                         >
-                          <p class="text-sm text-pretty text-muted-foreground">
-                            {vault.t('login.landing_create_simple_locally', {
-                              name: trimmedVaultName,
-                            })}
-                          </p>
+                          <input
+                            id="login-vault-name"
+                            type="text"
+                            class="w-full border-b border-border bg-transparent py-2 text-base text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-foreground/50"
+                            placeholder={vault.t(
+                              'login.vault_name_placeholder',
+                            )}
+                            maxlength="64"
+                            autocomplete="off"
+                            data-testid="login-vault-name-input"
+                            bind:value={vaultName}
+                            disabled={isBusy}
+                            onkeydown={(event) => {
+                              if (event.key === 'Enter' && vaultNameReady) {
+                                event.preventDefault()
+                                void createSimpleVault()
+                              }
+                            }}
+                          />
+                          {#if vaultNameReady}
+                            <p
+                              class="text-sm text-pretty text-muted-foreground"
+                            >
+                              {vault.t('login.landing_create_simple_locally', {
+                                name: trimmedVaultName,
+                              })}
+                            </p>
+                          {/if}
                           <Button
                             type="button"
                             data-testid="login-create-device-vault-btn"

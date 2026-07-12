@@ -2,7 +2,6 @@
   import {
     ArrowLeft,
     Check,
-    ChevronDown,
     Copy,
     Cpu,
     Plus,
@@ -11,6 +10,7 @@
   } from '@lucide/svelte'
   import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
   import { Button } from '$lib/components/ui/button'
+  import * as Select from '$lib/components/ui/select'
   import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
 
   type SentinelGenesisStatus =
@@ -97,13 +97,15 @@
       threshold <= participantCount,
   )
 
-  function changeTotal(event: Event) {
-    participantCount = Number((event.currentTarget as HTMLSelectElement).value)
+  function changeTotal(value: string | undefined) {
+    if (!value) return
+    participantCount = Number(value)
     threshold = Math.min(threshold, participantCount)
   }
 
-  function changeThreshold(event: Event) {
-    threshold = Number((event.currentTarget as HTMLSelectElement).value)
+  function changeThreshold(value: string | undefined) {
+    if (!value) return
+    threshold = Number(value)
   }
 
   function changeParticipantPayload(event: Event) {
@@ -455,55 +457,81 @@
                 <span
                   class="mt-2 grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-5 border-b border-white/70"
                 >
-                  <label class="relative cursor-pointer">
-                    <select
-                      class="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                  <Select.Root
+                    type="single"
+                    value={String(threshold)}
+                    onValueChange={changeThreshold}
+                  >
+                    <Select.Trigger
+                      class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
                       data-testid="sentinel-genesis-threshold"
-                      value={threshold}
-                      onchange={changeThreshold}
+                      data-value={threshold}
                       aria-label={vault.t('login.sentinel_genesis_threshold')}
                     >
-                      {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
-                        <option value={option}>{option}</option>
-                      {/each}
-                    </select>
-                    <span class="block text-4xl font-light text-white">
-                      {threshold}
-                    </span>
-                    <ChevronDown
-                      class="pointer-events-none absolute top-3 right-1 size-4 text-[#aab5be]"
-                    />
-                    <small
-                      class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                      >{vault.t('login.sentinel_card_stack_needed')}</small
+                      <span>
+                        <span class="block text-4xl font-light text-white">
+                          {threshold}
+                        </span>
+                        <small
+                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                          >{vault.t('login.sentinel_card_stack_needed')}</small
+                        >
+                      </span>
+                    </Select.Trigger>
+                    <Select.Content
+                      portalProps={{ disabled: true }}
+                      class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
-                  </label>
+                      {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
+                        <Select.Item
+                          value={String(option)}
+                          class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                          data-testid={`sentinel-threshold-option-${option}`}
+                        >
+                          {option}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
                   <span class="text-3xl font-light text-white/35">/</span>
-                  <label class="relative cursor-pointer">
-                    <select
-                      class="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                  <Select.Root
+                    type="single"
+                    value={String(participantCount)}
+                    onValueChange={changeTotal}
+                  >
+                    <Select.Trigger
+                      class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
                       data-testid="sentinel-genesis-participant-count"
-                      value={participantCount}
-                      onchange={changeTotal}
+                      data-value={participantCount}
                       aria-label={vault.t(
                         'login.sentinel_genesis_participant_count',
                       )}
                     >
-                      {#each Array.from({ length: 15 }, (_, index) => index + 2) as option (option)}
-                        <option value={option}>{option}</option>
-                      {/each}
-                    </select>
-                    <span class="block text-4xl font-light text-white">
-                      {participantCount}
-                    </span>
-                    <ChevronDown
-                      class="pointer-events-none absolute top-3 right-1 size-4 text-[#aab5be]"
-                    />
-                    <small
-                      class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                      >{vault.t('login.sentinel_card_stack_total')}</small
+                      <span>
+                        <span class="block text-4xl font-light text-white">
+                          {participantCount}
+                        </span>
+                        <small
+                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                          >{vault.t('login.sentinel_card_stack_total')}</small
+                        >
+                      </span>
+                    </Select.Trigger>
+                    <Select.Content
+                      portalProps={{ disabled: true }}
+                      class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
-                  </label>
+                      {#each Array.from({ length: 15 }, (_, index) => index + 2) as option (option)}
+                        <Select.Item
+                          value={String(option)}
+                          class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                          data-testid={`sentinel-participant-option-${option}`}
+                        >
+                          {option}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
                 </span>
               </div>
               <div
