@@ -47,10 +47,11 @@ Preferred release flow:
 1. Open **Actions → Release production → Run workflow** on the default branch.
 2. Enter the new semantic version (`1.2.0`; a leading `v` is optional) and the
    branch, tag, or commit to release (`main` by default).
-3. The workflow creates `v1.2.0`, or verifies that an existing tag already points
-   to the requested commit. Existing tags are never moved.
-4. The tagged source passes the main-equivalent production gate, is deployed to
-   GitHub Pages, and writes its version and commit to `nokey.sh/release.json`.
+3. The requested source passes the main-equivalent production gate. For a new
+   manual release, the workflow creates `v1.2.0` only after that gate succeeds;
+   existing tags are verified against the requested commit and never moved.
+4. The tagged source is deployed to GitHub Pages and writes its version and
+   commit to `nokey.sh/release.json`.
 5. Only after deployment succeeds does the workflow publish the GitHub Release.
 
 Pushing a `v*.*.*` tag manually is also supported and enters the same validation
