@@ -4,20 +4,24 @@
   <img src="nook-app/nook-web/nook-web-app/public/nook-logo-dark-transparent.png" alt="Nook logo" width="240">
 </p>
 
-[GitHub repository](https://github.com/meta-secret/nook) · [Live app](https://nokey.sh) · [MIT License](LICENSE)
+**Keys, not accounts.**
 
-Nook is a passwordless vault for:
+[Site](https://nokey.sh) · [Open app](https://nokey.sh/app/) · [GitHub](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
 
-- Website logins
-- API keys
-- Wallet seed phrases
-- Secure notes (Markdown)
+Nook is an open-source, client-side password and secrets manager. Your vault is
+encrypted before it leaves the browser, replicated only through storage you
+choose, and opened only by identities you authorize.
 
-Your secrets live in an encrypted local vault. Optionally sync the same vault to
-storage you control (GitHub today; more providers planned).
+There is no Nook account. There is no master password. Approved devices unlock
+the vault.
 
-There is no Nook account. There is no master password. Your approved devices
-unlock the vault.
+Store website logins, API keys, BIP39 seed phrases, and Markdown secure notes.
+Keep the vault local-first, then optionally sync encrypted events to GitHub
+(more providers planned).
+
+The public site at [nokey.sh](https://nokey.sh) is the sealed-capsule landing
+page (English / Russian). The interactive vault lives at
+[`/app/`](https://nokey.sh/app/).
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -25,29 +29,26 @@ unlock the vault.
 
 ## Why Nook?
 
-**Your device is the key.** No master password. Your devices unlock the vault.
-
 Most password managers give you one master password. You must remember it. It can be
 phished. If you lose it, you may lose the vault.
 
-Nook uses your devices instead:
+Nook uses device keys instead:
 
-- **Passwordless access.** Approved devices unlock the vault (passkey / WebAuthn PRF).
-- **Your secrets. Your storage. Your keys.** Local-first encrypted vault; sync
-  providers only see ciphertext.
-- **No central account server.** Enrollment and unlock stay on your devices.
-- **You approve new devices.** Use a device that already has access.
-- **Open source.** Inspect how Nook works.
+- **Passwordless access.** Passkey / WebAuthn PRF (or PIN fallback) protects this
+  browser's device identity.
+- **No central keeper.** Vault keys are wrapped into per-device envelopes;
+  enrollment and unlock stay on your devices.
+- **Encrypted storage.** Providers transport ciphertext and event digests — not
+  plaintext secrets.
+- **Distributed authority.** You approve new devices; there is no account reset
+  service that can recover the vault for you.
+- **Open source.** Inspect the architecture on the site or in this repository.
 
 GitHub sync is available today. Google Drive, Proton Drive, Cloudflare R2, and
 other providers are planned.
 
-Provider credentials can only read and write encrypted event records. They cannot
-decrypt your secrets.
-
-One important trade-off: Nook cannot reset access for you. If you lose every
-approved device (and any recovery path you configured), you lose the vault.
-Approve at least two devices.
+One important trade-off: if you lose every approved device (and any recovery
+path you configured), you lose the vault. Approve at least two devices.
 
 ## What you can store
 
@@ -89,9 +90,14 @@ item, add a corrected copy and delete the old one.
 3. The new device receives vault keys sealed to its public key and can unlock
    independently.
 
-### Sync model (technical)
+### Four architecture layers
 
-Nook syncs an **immutable event log**, not a single mutable vault blob:
+| Layer | What it does |
+|---|---|
+| Device identity | Each authorized device holds a protected X25519 identity. Plaintext identity material exists only in an unlocked session. |
+| Key envelopes | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority. |
+| Sync transport | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets. |
+| Event log | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer. |
 
 ```text
 local command
@@ -102,11 +108,8 @@ local command
   → plaintext session (unlocked only)
 ```
 
-- Each browser holds an X25519 device identity. The private key never leaves that
-  browser; at rest it is wrapped with a WebAuthn-PRF-derived (or PIN) key.
-- Cryptography and domain logic run in Rust compiled to WebAssembly.
-- Secret payloads are typed YAML encrypted with [age](https://age-encryption.org/).
-- Sync providers see event digests, schemas, and ciphertext — not plaintext secrets.
+Cryptography and domain logic run in Rust compiled to WebAssembly. Secret
+payloads are typed YAML encrypted with [age](https://age-encryption.org/).
 
 ## Architecture
 
@@ -156,7 +159,8 @@ package installs run inside the project container.
 task web:dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Open [http://localhost:5173](http://localhost:5173) for the landing page, or
+[http://localhost:5173/app/](http://localhost:5173/app/) for the vault UI.
 
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx reuses the cached toolchain base and
