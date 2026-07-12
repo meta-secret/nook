@@ -78,7 +78,9 @@
     class="mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-6 py-24 lg:grid-cols-[1.05fr_0.95fr]"
   >
     <div>
-      <p class="font-mono text-[11px] tracking-[0.2em] text-[#7a7a7a] uppercase">
+      <p
+        class="font-mono text-[11px] tracking-[0.2em] text-[#7a7a7a] uppercase"
+      >
         Vault Auth Workflow · Landing handoff
       </p>
       <h1
@@ -94,7 +96,9 @@
           : 'Name the vault first. Then choose Simple or Sentinel — same workflow as Key later, in the landing voice.'}
       </p>
 
-      <div class="relative mt-12 grid min-h-[16rem] place-items-center lg:hidden">
+      <div
+        class="relative mt-12 grid min-h-[16rem] place-items-center lg:hidden"
+      >
         <div
           class="relative grid size-32 place-items-center rounded-full bg-[radial-gradient(circle_at_30%_25%,#fff,#c9ced4_60%,#8b929a)] shadow-[0_20px_50px_rgb(0_0_0/0.14)]"
         >
@@ -108,7 +112,9 @@
     </div>
 
     <div>
-      <div class="hidden lg:relative lg:mb-8 lg:grid lg:min-h-[12rem] lg:place-items-center">
+      <div
+        class="hidden lg:relative lg:mb-8 lg:grid lg:min-h-[12rem] lg:place-items-center"
+      >
         <div class="absolute size-56 rounded-full border border-black/8"></div>
         <div class="absolute size-40 rounded-full border border-black/12"></div>
         <div
@@ -129,7 +135,8 @@
               <span
                 class={`mt-0.5 grid size-7 place-items-center rounded-full text-xs font-bold ${index < step ? 'bg-[#12805a] text-white' : index === step ? 'bg-black text-white' : 'bg-black/10 text-[#888]'}`}
               >
-                {#if index < step}<Check class="size-3.5" />{:else}{index + 1}{/if}
+                {#if index < step}<Check class="size-3.5" />{:else}{index +
+                    1}{/if}
               </span>
               <div class="flex-1">
                 <p
@@ -176,7 +183,9 @@
                     Create simple vault
                   </button>
                 {:else if presence === 'empty' && path === 'sentinel' && index === step && step === 2}
-                  <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <div
+                    class="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap"
+                  >
                     <button
                       class="rounded-md bg-black px-4 py-2.5 text-sm font-medium text-white"
                       onclick={() => onSentinel('card-stack', vaultName.trim())}

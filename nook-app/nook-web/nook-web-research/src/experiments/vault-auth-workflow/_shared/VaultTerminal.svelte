@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte'
-  import { ArrowLeft, Check, CornerDownLeft, KeyRound, Terminal } from '@lucide/svelte'
+  import {
+    ArrowLeft,
+    Check,
+    CornerDownLeft,
+    KeyRound,
+    Terminal,
+  } from '@lucide/svelte'
 
   type WizardStep =
     | 'name'
@@ -229,7 +235,9 @@
   })
 </script>
 
-<div class="min-h-screen bg-[#090b09] p-4 pt-20 font-mono text-[#b7ff95] sm:p-10 sm:pt-24">
+<div
+  class="min-h-screen bg-[#090b09] p-4 pt-20 font-mono text-[#b7ff95] sm:p-10 sm:pt-24"
+>
   <button
     class="fixed top-5 left-36 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
     onclick={onBack}

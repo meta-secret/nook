@@ -100,7 +100,8 @@
             <span
               class={`mt-0.5 grid size-7 place-items-center rounded-full text-xs font-bold ${index < step ? 'bg-[#12805a] text-white' : index === step ? 'bg-black text-white' : 'bg-[#eee] text-[#888]'}`}
             >
-              {#if index < step}<Check class="size-3.5" />{:else}{index + 1}{/if}
+              {#if index < step}<Check class="size-3.5" />{:else}{index +
+                  1}{/if}
             </span>
             <div class="flex-1">
               <p
@@ -162,8 +163,8 @@
                   </button>
                 </div>
                 <p class="mt-3 text-sm text-[#777]">
-                  Opens the full setup UI for “{vaultName.trim()}”. Passkey comes
-                  later at device init.
+                  Opens the full setup UI for “{vaultName.trim()}”. Passkey
+                  comes later at device init.
                 </p>
               {:else if presence === 'existing' && index === step && step === 0}
                 <button

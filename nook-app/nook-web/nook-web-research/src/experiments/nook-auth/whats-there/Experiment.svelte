@@ -2,9 +2,7 @@
   import { Fingerprint, KeyRound, Shield, Sparkles } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import ScenarioBar, {
-    type Presence,
-  } from '../_shared/ScenarioBar.svelte'
+  import ScenarioBar, { type Presence } from '../_shared/ScenarioBar.svelte'
 
   let { navigate }: ExperimentProps = $props()
   let presence = $state<Presence>('empty')
@@ -22,13 +20,17 @@
   <ExperimentBack {navigate} light />
   <ScenarioBar {presence} onPresence={setPresence} light />
 
-  <section class="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-24">
+  <section
+    class="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-24"
+  >
     <p class="font-mono text-xs tracking-[0.22em] text-[#6f7668] uppercase">
       Auth 01 · What's there?
     </p>
 
     {#if stage === 'home' && presence === 'empty'}
-      <h1 class="mt-5 font-serif text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">
+      <h1
+        class="mt-5 font-serif text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl"
+      >
         Nothing here yet.
       </h1>
       <p class="mt-5 max-w-xl text-lg leading-8 text-[#5d6458]">
@@ -59,7 +61,9 @@
         </button>
       </div>
     {:else if stage === 'home' && presence === 'existing'}
-      <h1 class="mt-5 font-serif text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl">
+      <h1
+        class="mt-5 font-serif text-5xl leading-[0.95] tracking-[-0.04em] sm:text-6xl"
+      >
         Your vault is here.
       </h1>
       <p class="mt-5 max-w-xl text-lg leading-8 text-[#5d6458]">
@@ -80,27 +84,45 @@
         </button>
       </div>
     {:else if stage === 'simple'}
-      <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">Name it. Open it.</h1>
+      <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">
+        Name it. Open it.
+      </h1>
       <p class="mt-4 text-[#5d6458]">Simple vault — no passkey wall first.</p>
       <input
         class="mt-8 w-full border-b border-black/20 bg-transparent py-3 text-2xl outline-none"
         placeholder="Vault name"
       />
-      <button class="mt-8 w-fit rounded-full bg-black px-5 py-3 text-sm text-white"
+      <button
+        class="mt-8 w-fit rounded-full bg-black px-5 py-3 text-sm text-white"
         >Create simple vault</button
       >
-      <button class="mt-4 text-sm text-[#6a7164]" onclick={() => (stage = 'home')}
-        >Back</button
+      <button
+        class="mt-4 text-sm text-[#6a7164]"
+        onclick={() => (stage = 'home')}>Back</button
       >
     {:else if stage === 'sentinel'}
-      <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">Sentinel setup</h1>
+      <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">
+        Sentinel setup
+      </h1>
       <p class="mt-4 max-w-lg text-[#5d6458]">
         Policy first. Device identity (passkey) only when you initialize this
         participant.
       </p>
       <div class="mt-8 flex gap-6 font-mono text-sm">
-        <label>N <input type="number" value="3" class="ml-2 w-16 border-b bg-transparent" /></label>
-        <label>T <input type="number" value="2" class="ml-2 w-16 border-b bg-transparent" /></label>
+        <label
+          >N <input
+            type="number"
+            value="3"
+            class="ml-2 w-16 border-b bg-transparent"
+          /></label
+        >
+        <label
+          >T <input
+            type="number"
+            value="2"
+            class="ml-2 w-16 border-b bg-transparent"
+          /></label
+        >
       </div>
       <button
         class="mt-8 w-fit rounded-full bg-black px-5 py-3 text-sm text-white"
@@ -108,8 +130,9 @@
       >
         Initialize this device
       </button>
-      <button class="mt-4 text-sm text-[#6a7164]" onclick={() => (stage = 'home')}
-        >Back</button
+      <button
+        class="mt-4 text-sm text-[#6a7164]"
+        onclick={() => (stage = 'home')}>Back</button
       >
     {:else if stage === 'passkey' || stage === 'unlock'}
       <h1 class="mt-5 font-serif text-5xl tracking-[-0.04em]">
@@ -125,8 +148,9 @@
       >
         <Fingerprint class="size-4" /> Continue with passkey
       </button>
-      <button class="mt-4 text-sm text-[#6a7164]" onclick={() => (stage = 'home')}
-        >Back</button
+      <button
+        class="mt-4 text-sm text-[#6a7164]"
+        onclick={() => (stage = 'home')}>Back</button
       >
     {/if}
   </section>

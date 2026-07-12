@@ -2,9 +2,7 @@
   import { Check, Fingerprint, Timer } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import ScenarioBar, {
-    type Presence,
-  } from '../_shared/ScenarioBar.svelte'
+  import ScenarioBar, { type Presence } from '../_shared/ScenarioBar.svelte'
 
   let { navigate }: ExperimentProps = $props()
   let presence = $state<Presence>('empty')
@@ -67,7 +65,8 @@
             <span
               class={`mt-0.5 grid size-7 place-items-center rounded-full text-xs font-bold ${index < step ? 'bg-[#12805a] text-white' : index === step ? 'bg-black text-white' : 'bg-[#eee] text-[#888]'}`}
             >
-              {#if index < step}<Check class="size-3.5" />{:else}{index + 1}{/if}
+              {#if index < step}<Check class="size-3.5" />{:else}{index +
+                  1}{/if}
             </span>
             <div class="flex-1">
               <p
@@ -98,7 +97,8 @@
                 </div>
               {:else if presence === 'empty' && index === step && step === 1}
                 <div class="mt-3 flex flex-wrap gap-2">
-                  <button class="rounded-full bg-black px-4 py-2 text-sm text-white"
+                  <button
+                    class="rounded-full bg-black px-4 py-2 text-sm text-white"
                     >Sentinel card stack · default</button
                   >
                   <button

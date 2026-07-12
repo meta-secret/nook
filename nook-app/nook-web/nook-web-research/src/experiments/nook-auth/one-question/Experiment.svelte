@@ -2,9 +2,7 @@
   import { Fingerprint } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import ScenarioBar, {
-    type Presence,
-  } from '../_shared/ScenarioBar.svelte'
+  import ScenarioBar, { type Presence } from '../_shared/ScenarioBar.svelte'
 
   let { navigate }: ExperimentProps = $props()
   let presence = $state<Presence>('empty')
@@ -20,12 +18,16 @@
   <ExperimentBack {navigate} light />
   <ScenarioBar {presence} onPresence={setPresence} light />
 
-  <section class="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-24">
+  <section
+    class="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-24"
+  >
     <p class="font-mono text-[11px] tracking-[0.2em] text-[#888] uppercase">
       Auth 09 · One question
     </p>
     <h1 class="mt-6 text-4xl font-medium tracking-[-0.05em] sm:text-5xl">
-      {presence === 'existing' ? 'Unlock your vault?' : 'What do you want to build?'}
+      {presence === 'existing'
+        ? 'Unlock your vault?'
+        : 'What do you want to build?'}
     </h1>
 
     {#if presence === 'existing'}
@@ -56,7 +58,9 @@
       <div class="mt-8 border-t border-black/10 pt-6 text-sm text-[#555]">
         {#if answer === 'unlock'}
           <p>Passkey is appropriate: something already exists.</p>
-          <button class="mt-4 inline-flex items-center gap-2 font-medium text-black">
+          <button
+            class="mt-4 inline-flex items-center gap-2 font-medium text-black"
+          >
             <Fingerprint class="size-4" /> Continue
           </button>
         {:else if answer === 'simple'}

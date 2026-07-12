@@ -23,10 +23,7 @@
   <LandingAuth onSentinel={openSentinel} />
 {:else if sentinelUi === 'card-stack'}
   <ExperimentBack {navigate} />
-  <SentinelCardStack
-    initialName={vaultName}
-    onBack={() => (stage = 'auth')}
-  />
+  <SentinelCardStack initialName={vaultName} onBack={() => (stage = 'auth')} />
 {:else}
   <ExperimentBack {navigate} />
   <VaultTerminal initialName={vaultName} onBack={() => (stage = 'auth')} />

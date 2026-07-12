@@ -1,9 +1,7 @@
 <script lang="ts">
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import KeyLaterAuth, {
-    type SentinelUi,
-  } from '../_shared/KeyLaterAuth.svelte'
+  import KeyLaterAuth, { type SentinelUi } from '../_shared/KeyLaterAuth.svelte'
   import SentinelCardStack from '../_shared/SentinelCardStack.svelte'
   import VaultTerminal from '../_shared/VaultTerminal.svelte'
 
@@ -24,10 +22,7 @@
   <KeyLaterAuth onSentinel={openSentinel} />
 {:else if sentinelUi === 'card-stack'}
   <ExperimentBack {navigate} />
-  <SentinelCardStack
-    initialName={vaultName}
-    onBack={() => (stage = 'auth')}
-  />
+  <SentinelCardStack initialName={vaultName} onBack={() => (stage = 'auth')} />
 {:else}
   <ExperimentBack {navigate} />
   <VaultTerminal initialName={vaultName} onBack={() => (stage = 'auth')} />

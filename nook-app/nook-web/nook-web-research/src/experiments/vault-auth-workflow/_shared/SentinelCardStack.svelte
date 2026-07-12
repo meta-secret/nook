@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { ArrowLeft, ChevronDown, Check, Cpu, Plus, ShieldCheck } from '@lucide/svelte'
+  import {
+    ArrowLeft,
+    ChevronDown,
+    Check,
+    Cpu,
+    Plus,
+    ShieldCheck,
+  } from '@lucide/svelte'
   import { untrack } from 'svelte'
 
   interface ParticipantDevice {
@@ -304,8 +311,8 @@
                     onchange={changeTotal}
                     aria-label="Total devices"
                   >
-                    {#each [2, 3, 4, 5] as option (option)}<option value={option}
-                        >{option}</option
+                    {#each [2, 3, 4, 5] as option (option)}<option
+                        value={option}>{option}</option
                       >{/each}
                   </select>
                   <span class="block text-4xl font-light text-white"

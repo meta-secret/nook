@@ -83,8 +83,7 @@ export const subcategories: ExperimentSubcategory[] = [
     categorySlug: 'vault',
     slug: 'v1',
     title: 'V1 · Selected directions',
-    description:
-      'The strongest visual directions for Sentinel genesis.',
+    description: 'The strongest visual directions for Sentinel genesis.',
   },
   {
     categorySlug: 'vault',
