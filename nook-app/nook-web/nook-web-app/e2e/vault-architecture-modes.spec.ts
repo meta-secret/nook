@@ -208,9 +208,7 @@ test.describe('vault architecture modes', () => {
     const chooser = page.getByTestId('login-create-vault-chooser')
     await expect(chooser).toContainText('Keys, not accounts.')
     await continueToPathChooser(page)
-    await expect(page.getByTestId('get-started-path-chooser')).toContainText(
-      'Choose Simple or Sentinel',
-    )
+    await expect(chooser).toContainText('Choose Simple or Sentinel')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
       'Simple vault',
     )
@@ -225,6 +223,7 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('header-language-option-ru').click()
 
     await expect(chooser).toContainText('Ключи, а не аккаунты.')
+    await expect(chooser).toContainText('Выберите Simple или Sentinel')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
       'Простой',
     )
