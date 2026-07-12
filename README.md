@@ -168,17 +168,9 @@ GHCR `:buildcache`, so only the small source + dist layers rebuild.
 Runtime containers receive an explicit 1,048,576 open-file limit; override it
 with `DOCKER_NOFILE_LIMIT` when needed.
 
-To raise the host-wide macOS file-descriptor ceilings by 10×, run:
-
-```sh
-sudo sysctl -w kern.maxfiles=2764800
-sudo sysctl -w kern.maxfilesperproc=1382400
-sudo launchctl limit maxfiles 1382400 2764800
-```
-
-The launchd limit applies to newly launched processes, so reopen affected
-terminals and applications. macOS has no inotify; that belongs to Docker
-Desktop's Linux VM. Reapply the VM limits after Docker Desktop restarts:
+macOS has no inotify; Docker workloads use the inotify implementation in
+Docker Desktop's Linux VM. The following command changes that VM's kernel-wide
+limits for every container. Reapply it after Docker Desktop restarts:
 
 ```sh
 docker run --rm --privileged --pid=host busybox:1.37.0 \
@@ -199,6 +191,17 @@ printf '%s\n' \
   | sudo tee /etc/sysctl.d/99-nook-docker.conf
 sudo sysctl --system
 ```
+
+Secondarily, to raise this host's macOS file-descriptor ceilings by 10×, run:
+
+```sh
+sudo sysctl -w kern.maxfiles=2764800
+sudo sysctl -w kern.maxfilesperproc=1382400
+sudo launchctl limit maxfiles 1382400 2764800
+```
+
+The launchd limit applies to newly launched processes, so reopen affected
+terminals and applications.
 
 To use GitHub sync, connect a personal access token in the UI. Nook stores the
 encrypted event log under `nook-log/v1/events/` in a private repository.
