@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import {
     Check,
     Cloud,
@@ -67,7 +68,6 @@
     onCompleteSentinelGenesisDelivery,
     sentinelGenesisStatus = 'idle',
     sentinelGenesisRequest = '',
-    sentinelGenesisParticipantCount = 0,
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
   }: {
@@ -98,7 +98,6 @@
     onCompleteSentinelGenesisDelivery?: () => void | Promise<void>
     sentinelGenesisStatus?: SentinelGenesisStatus
     sentinelGenesisRequest?: string
-    sentinelGenesisParticipantCount?: number
     sentinelGenesisParticipants?: SentinelGenesisParticipantSummary[]
     sentinelGenesisDeliveries?: SentinelGenesisDelivery[]
   } = $props()
@@ -111,8 +110,6 @@
   let sentinelDashboard = $state<SentinelDashboard | null>(null)
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
-  let participantResponse = $state('')
-  let copyingRequest = $state(false)
   let copyingJoinResponse = $state(false)
   let sentinelActionBusy = $state(false)
   let participantRequest = $state('')
@@ -184,7 +181,6 @@
       sentinelThreshold >= 2 &&
       sentinelThreshold <= sentinelParticipantCount,
   )
-  const sentinelReadyToFinalize = $derived(sentinelGenesisStatus === 'ready')
   const sentinelDashboardActive = $derived(
     sentinelDashboard !== null &&
       (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
@@ -235,13 +231,108 @@
 
   function portal(node: HTMLElement, enabled: boolean) {
     const anchor = document.createComment('sentinel-dashboard-home')
+    const focusableSelector = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',')
+    const siblingInertState: Array<[HTMLElement, boolean]> = []
+    let active = false
+    let previousFocus: HTMLElement | null = null
+    let returnFocusTestId = 'sentinel-dashboard-card-stack'
     node.before(anchor)
 
-    function update(active: boolean) {
-      if (active) {
-        document.body.appendChild(node)
+    function focusableElements() {
+      return Array.from(
+        node.querySelectorAll<HTMLElement>(focusableSelector),
+      ).filter((element) => element.offsetParent !== null)
+    }
+
+    function trapFocus(event: KeyboardEvent) {
+      if (event.key !== 'Tab') return
+      const elements = focusableElements()
+      if (elements.length === 0) {
+        event.preventDefault()
+        return
+      }
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      const focused = document.activeElement
+      if (event.shiftKey && (focused === first || !node.contains(focused))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && focused === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    function setBackgroundInert(inert: boolean) {
+      for (const sibling of Array.from(document.body.children)) {
+        if (!(sibling instanceof HTMLElement) || sibling === node) continue
+        if (inert) {
+          siblingInertState.push([sibling, sibling.inert])
+          sibling.inert = true
+        }
+      }
+      if (!inert) {
+        for (const [sibling, wasInert] of siblingInertState) {
+          sibling.inert = wasInert
+        }
+        siblingInertState.length = 0
+      }
+    }
+
+    function activate() {
+      returnFocusTestId =
+        sentinelDashboard === 'terminal'
+          ? 'sentinel-dashboard-terminal'
+          : 'sentinel-dashboard-card-stack'
+      previousFocus =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null
+      document.body.appendChild(node)
+      setBackgroundInert(true)
+      node.addEventListener('keydown', trapFocus)
+      requestAnimationFrame(() => {
+        node
+          .querySelector<HTMLElement>('[data-sentinel-dashboard-focus]')
+          ?.focus()
+      })
+      active = true
+    }
+
+    function deactivate() {
+      node.removeEventListener('keydown', trapFocus)
+      setBackgroundInert(false)
+      anchor.parentNode?.insertBefore(node, anchor.nextSibling)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (previousFocus?.isConnected) {
+            previousFocus.focus()
+          } else {
+            node
+              .querySelector<HTMLElement>(
+                `[data-testid="${returnFocusTestId}"]`,
+              )
+              ?.focus()
+          }
+          previousFocus = null
+        })
+      })
+      active = false
+    }
+
+    function update(nextActive: boolean) {
+      if (nextActive === active) return
+      if (nextActive) {
+        activate()
       } else {
-        anchor.parentNode?.insertBefore(node, anchor.nextSibling)
+        deactivate()
       }
     }
 
@@ -249,6 +340,11 @@
     return {
       update,
       destroy() {
+        if (active) {
+          node.removeEventListener('keydown', trapFocus)
+          setBackgroundInert(false)
+          previousFocus?.focus()
+        }
         node.remove()
         anchor.remove()
       },
@@ -286,6 +382,18 @@
     wizardStep = 'join'
   }
 
+  function restoreDashboardChoiceFocus(dashboard: SentinelDashboard) {
+    void tick().then(() => {
+      requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(
+            `[data-testid="sentinel-dashboard-${dashboard}"]`,
+          )
+          ?.focus()
+      })
+    })
+  }
+
   function goBack() {
     if (wizardStep === 'sentinel-ceremony') return
     if (wizardStep === 'choose') {
@@ -296,6 +404,7 @@
     if (wizardStep === 'simple-create' || wizardStep === 'join') {
       chosenPath = 'undecided'
       wizardStep = 'choose'
+      return
     }
     if (wizardStep === 'sentinel-dashboard') {
       sentinelDashboard = null
@@ -304,8 +413,10 @@
       return
     }
     if (wizardStep === 'sentinel-policy') {
+      const dashboard = sentinelDashboard
       sentinelDashboard = null
       wizardStep = 'sentinel-dashboard'
+      if (dashboard) restoreDashboardChoiceFocus(dashboard)
     }
   }
 
@@ -336,53 +447,6 @@
       }
     } finally {
       sentinelActionBusy = false
-    }
-  }
-
-  async function addParticipantResponse() {
-    const payload = participantResponse.trim()
-    if (
-      !payload ||
-      sentinelActionBusy ||
-      !onAddSentinelGenesisParticipantResponse
-    ) {
-      return
-    }
-    sentinelActionBusy = true
-    try {
-      await onAddSentinelGenesisParticipantResponse(payload)
-      participantResponse = ''
-    } finally {
-      sentinelActionBusy = false
-    }
-  }
-
-  async function finalizeSentinelGenesis() {
-    if (
-      !sentinelReadyToFinalize ||
-      sentinelActionBusy ||
-      !onFinalizeSentinelGenesis
-    ) {
-      return
-    }
-    sentinelActionBusy = true
-    try {
-      await onFinalizeSentinelGenesis()
-    } finally {
-      sentinelActionBusy = false
-    }
-  }
-
-  async function copyGenesisRequest() {
-    if (!sentinelGenesisRequest) return
-    try {
-      await navigator.clipboard.writeText(sentinelGenesisRequest)
-      copyingRequest = true
-      setTimeout(() => {
-        copyingRequest = false
-      }, 1500)
-    } catch {
-      vault.errorMsg = vault.t('login.sentinel_genesis_copy_failed')
     }
   }
 
@@ -819,345 +883,7 @@
             </ol>
           {/if}
 
-          {#if wizardStep === 'sentinel-policy'}
-            <section
-              class="mt-6 space-y-4 border-t border-border pt-6"
-              data-testid="sentinel-genesis-policy-step"
-            >
-              <div class="space-y-1">
-                <h3 class="text-lg font-semibold text-foreground">
-                  {vault.t('login.sentinel_genesis_policy_title')}
-                </h3>
-                <p class="text-sm text-pretty text-muted-foreground">
-                  {vault.t('login.sentinel_genesis_policy_description')}
-                </p>
-              </div>
-
-              <div class="space-y-1.5">
-                <label
-                  class="text-xs font-medium text-foreground"
-                  for="sentinel-vault-name"
-                >
-                  {vault.t('login.vault_name_label')}
-                </label>
-                <input
-                  id="sentinel-vault-name"
-                  type="text"
-                  class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                  placeholder={vault.t('login.vault_name_placeholder')}
-                  maxlength="64"
-                  autocomplete="off"
-                  data-testid="sentinel-genesis-name-input"
-                  bind:value={sentinelName}
-                  disabled={isBusy || sentinelActionBusy}
-                />
-              </div>
-
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div class="space-y-1.5">
-                  <label
-                    class="text-xs font-medium text-foreground"
-                    for="sentinel-participant-count"
-                  >
-                    {vault.t('login.sentinel_genesis_participant_count')}
-                  </label>
-                  <input
-                    id="sentinel-participant-count"
-                    type="number"
-                    min="2"
-                    max="16"
-                    step="1"
-                    class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                    data-testid="sentinel-genesis-participant-count"
-                    bind:value={sentinelParticipantCount}
-                    disabled={isBusy || sentinelActionBusy}
-                  />
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t('login.sentinel_genesis_participant_count_hint')}
-                  </p>
-                </div>
-                <div class="space-y-1.5">
-                  <label
-                    class="text-xs font-medium text-foreground"
-                    for="sentinel-threshold"
-                  >
-                    {vault.t('login.sentinel_genesis_threshold')}
-                  </label>
-                  <input
-                    id="sentinel-threshold"
-                    type="number"
-                    min="2"
-                    max={sentinelParticipantCount}
-                    step="1"
-                    class="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                    data-testid="sentinel-genesis-threshold"
-                    bind:value={sentinelThreshold}
-                    disabled={isBusy || sentinelActionBusy}
-                  />
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t('login.sentinel_genesis_threshold_hint')}
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex justify-end pt-1">
-                <Button
-                  type="button"
-                  class="min-w-[180px]"
-                  data-testid="sentinel-genesis-start"
-                  disabled={isBusy ||
-                    sentinelActionBusy ||
-                    !sentinelNameReady ||
-                    !sentinelPolicyValid ||
-                    !onStartSentinelGenesis}
-                  onclick={() => void startSentinelGenesis()}
-                >
-                  {#if sentinelActionBusy}
-                    <RefreshCw class="size-4 animate-spin" />
-                  {:else}
-                    <Users class="size-4" />
-                  {/if}
-                  {vault.t('login.sentinel_genesis_start')}
-                </Button>
-              </div>
-            </section>
-          {:else if wizardStep === 'sentinel-ceremony'}
-            <section
-              class="mt-6 space-y-5 border-t border-border pt-6"
-              data-testid="sentinel-genesis-ceremony-step"
-            >
-              <div class="space-y-1">
-                <h3 class="text-lg font-semibold text-foreground">
-                  {vault.t('login.sentinel_genesis_collect_title')}
-                </h3>
-                <p class="text-sm text-pretty text-muted-foreground">
-                  {vault.t('login.sentinel_genesis_collect_description')}
-                </p>
-              </div>
-
-              <div
-                class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
-                data-testid="sentinel-genesis-request"
-              >
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-sm font-semibold text-foreground">
-                      {vault.t('login.sentinel_genesis_request_title')}
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      {vault.t('login.sentinel_genesis_request_description')}
-                    </p>
-                  </div>
-                  <span
-                    class="text-xs font-medium text-muted-foreground"
-                    data-testid="sentinel-genesis-progress"
-                  >
-                    {sentinelGenesisParticipantCount} / {sentinelParticipantCount}
-                  </span>
-                </div>
-
-                {#if sentinelGenesisRequest}
-                  <div class="grid gap-3 sm:grid-cols-[160px_1fr]">
-                    <EnrollmentQrCode
-                      enrollmentLink={sentinelGenesisRequest}
-                      loadingLabel={vault.t(
-                        'login.sentinel_genesis_qr_loading',
-                      )}
-                    />
-                    <div class="space-y-2">
-                      <textarea
-                        class="min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                        readonly
-                        data-testid="sentinel-genesis-request-output"
-                        value={sentinelGenesisRequest}></textarea>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        data-testid="sentinel-genesis-copy-request"
-                        onclick={() => void copyGenesisRequest()}
-                      >
-                        <Copy class="size-4" />
-                        {copyingRequest
-                          ? vault.t('common.copied')
-                          : vault.t('common.copy')}
-                      </Button>
-                    </div>
-                  </div>
-                {:else}
-                  <p class="text-sm text-muted-foreground" role="status">
-                    {vault.t('login.sentinel_genesis_request_preparing')}
-                  </p>
-                {/if}
-
-                {#if sentinelGenesisParticipants.length > 0}
-                  <div
-                    class="space-y-2 border-t border-border pt-3"
-                    data-testid="sentinel-genesis-verified-participants"
-                  >
-                    <p class="text-xs font-medium text-foreground">
-                      {vault.t('login.sentinel_genesis_verified_participants')}
-                    </p>
-                    <ul class="space-y-1.5">
-                      {#each sentinelGenesisParticipants as participant (participant.participantId)}
-                        <li
-                          class="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
-                        >
-                          <span class="text-foreground">
-                            {participant.label || participant.participantId}
-                          </span>
-                          <code class="text-muted-foreground"
-                            >{participant.fingerprint}</code
-                          >
-                        </li>
-                      {/each}
-                    </ul>
-                  </div>
-                {/if}
-              </div>
-
-              <div class="space-y-2">
-                <label
-                  class="text-xs font-medium text-foreground"
-                  for="sentinel-participant-response"
-                >
-                  {vault.t('login.sentinel_genesis_response_label')}
-                </label>
-                <textarea
-                  id="sentinel-participant-response"
-                  class="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs focus:ring-2 focus:ring-ring focus:outline-none"
-                  data-testid="sentinel-genesis-response-input"
-                  placeholder={vault.t(
-                    'login.sentinel_genesis_response_placeholder',
-                  )}
-                  bind:value={participantResponse}
-                  disabled={isBusy ||
-                    sentinelActionBusy ||
-                    sentinelReadyToFinalize}></textarea>
-                <Button
-                  type="button"
-                  variant="outline"
-                  data-testid="sentinel-genesis-add-participant"
-                  disabled={isBusy ||
-                    sentinelActionBusy ||
-                    !participantResponse.trim() ||
-                    !onAddSentinelGenesisParticipantResponse}
-                  onclick={() => void addParticipantResponse()}
-                >
-                  <Users class="size-4" />
-                  {vault.t('login.sentinel_genesis_add_participant')}
-                </Button>
-              </div>
-
-              <div
-                class="rounded-md border border-border/60 p-3 text-xs text-pretty text-muted-foreground"
-              >
-                {vault.t('login.sentinel_genesis_atomic_notice')}
-              </div>
-
-              <Button
-                type="button"
-                class="w-full sm:w-auto sm:min-w-[220px]"
-                data-testid="sentinel-genesis-finalize"
-                disabled={isBusy ||
-                  sentinelActionBusy ||
-                  !sentinelReadyToFinalize ||
-                  !onFinalizeSentinelGenesis}
-                onclick={() => void finalizeSentinelGenesis()}
-              >
-                {#if sentinelActionBusy || sentinelGenesisStatus === 'finalizing'}
-                  <RefreshCw class="size-4 animate-spin" />
-                {:else}
-                  <ShieldCheck class="size-4" />
-                {/if}
-                {vault.t('login.sentinel_genesis_finalize')}
-              </Button>
-
-              {#if sentinelGenesisStatus === 'delivering' || sentinelGenesisDeliveries.length > 0}
-                <div
-                  class="space-y-3 border-t border-border pt-5"
-                  data-testid="sentinel-genesis-deliveries"
-                >
-                  <div class="space-y-1">
-                    <h4 class="text-sm font-semibold text-foreground">
-                      {vault.t('login.sentinel_genesis_delivery_title')}
-                    </h4>
-                    <p class="text-xs text-pretty text-muted-foreground">
-                      {vault.t('login.sentinel_genesis_delivery_description')}
-                    </p>
-                  </div>
-
-                  {#if sentinelGenesisDeliveries.length === 0}
-                    <p class="text-sm text-muted-foreground" role="status">
-                      {vault.t('login.sentinel_genesis_delivery_waiting')}
-                    </p>
-                  {:else}
-                    <div class="space-y-3">
-                      {#each sentinelGenesisDeliveries as delivery, index (delivery.participantId)}
-                        <div
-                          class="grid gap-3 rounded-lg border border-border/60 bg-muted/10 p-3 sm:grid-cols-[120px_1fr]"
-                          data-testid="sentinel-genesis-delivery"
-                        >
-                          <EnrollmentQrCode
-                            enrollmentLink={delivery.payload}
-                            loadingLabel={vault.t(
-                              'login.sentinel_genesis_qr_loading',
-                            )}
-                          />
-                          <div class="min-w-0 space-y-2">
-                            <p class="text-sm font-medium text-foreground">
-                              {vault.t(
-                                'login.sentinel_genesis_delivery_participant',
-                              )}
-                              {index + 1}
-                            </p>
-                            {#if delivery.fingerprint}
-                              <p
-                                class="break-all font-mono text-xs text-muted-foreground"
-                              >
-                                {delivery.fingerprint}
-                              </p>
-                            {/if}
-                            <textarea
-                              class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                              readonly
-                              data-testid="sentinel-genesis-delivery-output"
-                              value={delivery.payload}></textarea>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              data-testid="sentinel-genesis-copy-delivery"
-                              onclick={() =>
-                                void navigator.clipboard.writeText(
-                                  delivery.payload,
-                                )}
-                            >
-                              <Copy class="size-4" />
-                              {vault.t('common.copy')}
-                            </Button>
-                          </div>
-                        </div>
-                      {/each}
-                      <div class="flex justify-end pt-2">
-                        <Button
-                          type="button"
-                          data-testid="sentinel-genesis-delivery-complete"
-                          disabled={isBusy ||
-                            sentinelActionBusy ||
-                            !onCompleteSentinelGenesisDelivery}
-                          onclick={() =>
-                            void onCompleteSentinelGenesisDelivery?.()}
-                        >
-                          {vault.t('common.done')}
-                        </Button>
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-            </section>
-          {:else if wizardStep === 'join'}
+          {#if wizardStep === 'join'}
             <section
               class="mt-6 space-y-4 border-t border-border pt-6"
               data-testid="sentinel-genesis-participant-step"

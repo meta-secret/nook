@@ -143,6 +143,8 @@
 <div
   class="min-h-screen overflow-hidden bg-[#10141a] text-white [background-image:radial-gradient(circle_at_50%_-10%,#53606d_0,transparent_42%),radial-gradient(circle_at_15%_90%,#25303a_0,transparent_36%)]"
   data-testid="sentinel-card-stack-dashboard"
+  data-sentinel-dashboard-focus
+  tabindex="-1"
 >
   {#if status === 'idle'}
     <button
@@ -277,7 +279,10 @@
                   class="grid size-12 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={status === 'idle' || !response.trim() || actionBusy}
+                  disabled={status === 'idle' ||
+                    !response.trim() ||
+                    isBusy ||
+                    actionBusy}
                   onclick={() => void addParticipant()}
                 >
                   {#if actionBusy}<RefreshCw

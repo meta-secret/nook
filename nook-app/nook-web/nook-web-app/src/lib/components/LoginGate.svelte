@@ -228,7 +228,6 @@
         vault.completeSentinelGenesisDelivery()}
       sentinelGenesisStatus={vault.sentinelGenesisStatus}
       sentinelGenesisRequest={vault.sentinelGenesisRequest}
-      sentinelGenesisParticipantCount={vault.sentinelGenesisParticipantCount}
       sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
       sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
       onConnectStorage={() => {

@@ -72,6 +72,16 @@
   let copied = $state(false)
   let outputElement = $state<HTMLDivElement>()
 
+  const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
+  const policyValid = $derived(
+    name.trim().length > 0 &&
+      Number.isInteger(participantCount) &&
+      participantCount >= 2 &&
+      participantCount <= 16 &&
+      Number.isInteger(threshold) &&
+      threshold >= 2 &&
+      threshold <= participantCount,
+  )
   const rosterCount = $derived(Math.max(1, participants.length))
   const workflowStage = $derived(
     status === 'delivering' || status === 'complete'
@@ -123,7 +133,7 @@
   }
 
   async function start() {
-    if (!name.trim() || isBusy || actionBusy) return
+    if (!policyValid || isBusy || actionBusy) return
     actionBusy = true
     try {
       await onStart({
@@ -159,15 +169,21 @@
 
   async function copyRequest() {
     if (!request) return
-    await navigator.clipboard.writeText(request)
-    copied = true
-    setTimeout(() => (copied = false), 1500)
+    try {
+      await navigator.clipboard.writeText(request)
+      copied = true
+      setTimeout(() => (copied = false), 1500)
+    } catch {
+      vault.errorMsg = vault.t('login.sentinel_genesis_copy_failed')
+    }
   }
 </script>
 
 <div
   class="min-h-screen bg-[#090b09] p-4 pt-20 font-mono text-[#b7ff95] sm:p-10 sm:pt-24"
   data-testid="sentinel-terminal-dashboard"
+  data-sentinel-dashboard-focus
+  tabindex="-1"
 >
   {#if status === 'idle'}
     <button
@@ -270,7 +286,7 @@
                 <button
                   class="inline-flex items-center gap-2 border border-[#4f7a46] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
-                  disabled={!response.trim() || actionBusy}
+                  disabled={!response.trim() || isBusy || actionBusy}
                   onclick={() => void addParticipant()}
                 >
                   {#if actionBusy}<RefreshCw
@@ -289,9 +305,10 @@
                 {vault.t('login.sentinel_terminal_total_question')}
               </p>
               <div class="mt-3 flex flex-wrap gap-2">
-                {#each [2, 3, 4, 5, 6, 7, 8] as choice (choice)}
+                {#each participantChoices as choice (choice)}
                   <button
                     class={`border px-4 py-2 text-xs ${choice === participantCount ? 'border-[#83e273] bg-[#11200f] text-[#d4ffc7]' : 'border-[#22321f] text-[#5e8955]'}`}
+                    data-participant-count={choice}
                     data-testid={choice === participantCount
                       ? 'sentinel-genesis-participant-count'
                       : undefined}
@@ -325,8 +342,9 @@
                   {vault.t('login.sentinel_terminal_start_question')}
                 </p>
                 <button
-                  class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7]"
+                  class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
                   data-testid="sentinel-genesis-start"
+                  disabled={!policyValid || isBusy || actionBusy}
                   onclick={() => void start()}
                 >
                   <KeyRound class="size-4" />
@@ -337,7 +355,7 @@
               <button
                 class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
                 data-testid="sentinel-genesis-finalize"
-                disabled={status !== 'ready' || actionBusy}
+                disabled={status !== 'ready' || isBusy || actionBusy}
                 onclick={() => void finalize()}
               >
                 <KeyRound class="size-4" />

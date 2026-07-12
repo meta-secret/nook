@@ -265,15 +265,24 @@ test.describe('vault architecture modes', () => {
     await continueToPathChooser(page)
     await page.getByTestId('get-started-path-sentinel').click()
     await page.getByTestId('sentinel-dashboard-terminal').click()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    const terminalDashboard = page.getByTestId('sentinel-terminal-dashboard')
+    await expect(terminalDashboard).toBeVisible()
+    await expect(terminalDashboard).toBeFocused()
     await expect(
       page.getByTestId('login-create-vault-chooser'),
     ).toHaveAttribute('data-sentinel-dashboard', 'terminal')
-    await page.getByTestId('sentinel-genesis-participant-count').click()
+    await page.locator('[data-participant-count="16"]').click()
+    await expect(page.getByTestId('sentinel-genesis-threshold')).toContainText(
+      '2 of 16',
+    )
     await page.getByTestId('sentinel-genesis-threshold').click()
     await expect(page.getByTestId('sentinel-genesis-start')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
     await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
+
+    await page.getByTestId('sentinel-dashboard-back').click()
+    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
+    await expect(page.getByTestId('sentinel-dashboard-terminal')).toBeFocused()
   })
 
   test('opens join sentinel as a first-class path with public keys ready', async ({
