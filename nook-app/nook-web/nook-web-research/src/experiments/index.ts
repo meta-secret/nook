@@ -10,6 +10,12 @@ import NexusCardStack from './vault/nexus-card-stack/Experiment.svelte'
 import SealedCapsule from './vault/sealed-capsule/Experiment.svelte'
 import SecureHardware from './vault/secure-hardware/Experiment.svelte'
 import VaultTerminal from './vault/vault-terminal/Experiment.svelte'
+import KeyLater from './nook-auth/key-later/Experiment.svelte'
+import LandingHandoff from './nook-auth/landing-handoff/Experiment.svelte'
+import OneQuestion from './nook-auth/one-question/Experiment.svelte'
+import WhatsThere from './nook-auth/whats-there/Experiment.svelte'
+import KeyLaterSentinelCardStack from './vault-auth-workflow/key-later-sentinel-card-stack/Experiment.svelte'
+import LandingSentinelCardStack from './vault-auth-workflow/landing-sentinel-card-stack/Experiment.svelte'
 
 export interface ExperimentProps {
   navigate: (path: string) => void
@@ -39,20 +45,45 @@ export interface ExperimentSubcategory {
 
 export const categories: ExperimentCategory[] = [
   {
-    slug: 'vault',
-    title: 'Nexus Vault',
+    slug: 'nook-auth',
+    title: 'Nook Auth',
     description:
-      'Create an in-memory threshold vault, define its policy, onboard participant public keys, and seal the genesis roster.',
+      'Presence-first Open Nook entry concepts. Empty vs unlock, Simple vs Sentinel, deferred passkey.',
+  },
+  {
+    slug: 'vault-auth-workflow',
+    title: 'Vault Auth Workflow',
+    description:
+      'End-to-end auth → Sentinel setup. Key later and Landing both use: name vault → Simple or Sentinel → card stack (default) or vault terminal.',
+  },
+  {
+    slug: 'vault',
+    title: 'Sentinel Vault',
+    description:
+      'Standalone threshold vault genesis directions — policy, participant keys, and seal.',
   },
 ]
 
 export const subcategories: ExperimentSubcategory[] = [
   {
+    categorySlug: 'nook-auth',
+    slug: 'v1',
+    title: 'V1 · Shortlist',
+    description:
+      'Four kept directions. Toggle Empty / Vault exists in each sketch.',
+  },
+  {
+    categorySlug: 'vault-auth-workflow',
+    slug: 'v1',
+    title: 'V1 · Auth → Sentinel',
+    description:
+      'Click Build Sentinel vault to enter the adopted full UI. Card stack is the default destination; terminal is the alternate.',
+  },
+  {
     categorySlug: 'vault',
     slug: 'v1',
     title: 'V1 · Selected directions',
-    description:
-      'The strongest visual directions, now grounded in the Nexus name → N/K → public-key roster → atomic genesis flow.',
+    description: 'The strongest visual directions for Sentinel genesis.',
   },
   {
     categorySlug: 'vault',
@@ -66,24 +97,82 @@ export const subcategories: ExperimentSubcategory[] = [
     slug: 'v3',
     title: 'V3 · Selected directions',
     description:
-      'Evidence Room, Kintsugi Recovery, Access Choreography, and the new wallet-inspired Nexus Card Stack.',
+      'Evidence Room, Kintsugi Recovery, Access Choreography, and the wallet-inspired card stack.',
   },
   {
     categorySlug: 'vault',
     slug: 'v4',
     title: 'V4 · Reference studies',
     description:
-      "External interaction and visual references translated into Nook's Nexus genesis model.",
+      "External interaction and visual references translated into Nook's Sentinel genesis model.",
   },
 ]
 
-const vault = categories[0]
-const v1 = subcategories[0]
-const v2 = subcategories[1]
-const v3 = subcategories[2]
-const v4 = subcategories[3]
+const auth = categories[0]
+const workflow = categories[1]
+const vault = categories[2]
+const authV1 = subcategories[0]
+const workflowV1 = subcategories[1]
+const v1 = subcategories[2]
+const v2 = subcategories[3]
+const v3 = subcategories[4]
+const v4 = subcategories[5]
 
 export const experiments: Experiment[] = [
+  {
+    slug: 'whats-there',
+    category: auth,
+    subcategory: authV1,
+    title: "What's there?",
+    description:
+      'Literal presence inventory: empty chooser vs unlock an existing sealed vault.',
+    component: WhatsThere,
+  },
+  {
+    slug: 'landing-handoff',
+    category: auth,
+    subcategory: authV1,
+    title: 'Landing handoff',
+    description:
+      'Continues the nokey.sh voice into Open Nook without a passkey wall.',
+    component: LandingHandoff,
+  },
+  {
+    slug: 'key-later',
+    category: auth,
+    subcategory: authV1,
+    title: 'Key later',
+    description:
+      'Step timeline that keeps passkey as the last understanding, not the lobby.',
+    component: KeyLater,
+  },
+  {
+    slug: 'one-question',
+    category: auth,
+    subcategory: authV1,
+    title: 'One question',
+    description:
+      'Ultra-minimal single question: unlock, or build Simple / Sentinel.',
+    component: OneQuestion,
+  },
+  {
+    slug: 'key-later-sentinel-card-stack',
+    category: workflow,
+    subcategory: workflowV1,
+    title: 'Key later → Sentinel workflow · preferred',
+    description:
+      'Key later auth. Name vault → choose Simple or Sentinel → Simple create, or Sentinel interface (card stack / terminal).',
+    component: KeyLaterSentinelCardStack,
+  },
+  {
+    slug: 'landing-sentinel-card-stack',
+    category: workflow,
+    subcategory: workflowV1,
+    title: 'Landing → Sentinel workflow',
+    description:
+      'Landing handoff auth. Same steps as Key later: name vault → Simple or Sentinel → card stack / terminal.',
+    component: LandingSentinelCardStack,
+  },
   {
     slug: 'cipher-ledger',
     category: vault,
@@ -99,7 +188,7 @@ export const experiments: Experiment[] = [
     subcategory: v1,
     title: 'Vault terminal',
     description:
-      'A keyboard-driven owner console for Nexus policy, public-key import, and atomic genesis.',
+      'A keyboard-driven owner console for Sentinel policy, public-key import, and atomic genesis.',
     component: VaultTerminal,
   },
   {
@@ -135,7 +224,7 @@ export const experiments: Experiment[] = [
     subcategory: v2,
     title: 'Black monolith',
     description:
-      'An ultra-minimal, one-decision-at-a-time Nexus genesis object.',
+      'An ultra-minimal, one-decision-at-a-time Sentinel genesis object.',
     component: BlackMonolith,
   },
   {
@@ -144,7 +233,7 @@ export const experiments: Experiment[] = [
     subcategory: v3,
     title: 'Evidence room',
     description:
-      'A forensic case file where every Nexus genesis prerequisite becomes a sealed exhibit.',
+      'A forensic case file where every Sentinel genesis prerequisite becomes a sealed exhibit.',
     component: EvidenceRoom,
   },
   {
@@ -162,14 +251,14 @@ export const experiments: Experiment[] = [
     subcategory: v3,
     title: 'Access choreography',
     description:
-      'Nexus genesis staged as four precise movements performed by the vault owner.',
+      'Sentinel genesis staged as four precise movements performed by the vault owner.',
     component: AccessChoreography,
   },
   {
     slug: 'nexus-card-stack',
     category: vault,
     subcategory: v3,
-    title: 'Nexus card stack',
+    title: 'Sentinel card stack',
     description:
       'A dark wallet-inspired control surface where participant keys become a selectable cryptographic card stack.',
     component: NexusCardStack,

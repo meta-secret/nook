@@ -23,3 +23,12 @@ bun run dev
 The catalog at `/` discovers experiments through that registry. Each experiment
 gets its own `/experiments/<experiment-name>` page and can freely explore a
 different layout or visual direction.
+
+## Categories
+
+- **`nook-auth`** — presence-first Open Nook entry shortlist (What's there?,
+  Landing handoff, Key later, One question). Toggle Empty / Vault exists.
+- **`vault-auth-workflow`** — end-to-end auth → Sentinel. **Key later** and
+  **Landing** both share: name vault → Simple or Sentinel → card stack
+  (default) or vault terminal.
+- **`vault`** — standalone Sentinel vault genesis UI directions.
