@@ -232,6 +232,7 @@
   type PendingVaultCreation =
     | { kind: 'simple'; label: string }
     | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
+    | { kind: 'sentinel-participant-key' }
 
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
   const showPasskeyOverlay = $derived(
@@ -259,6 +260,15 @@
     return true
   }
 
+  async function handleCreateSentinelParticipantKey(): Promise<string> {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'sentinel-participant-key' }
+      return ''
+    }
+    pendingVaultCreation = undefined
+    return vault.createSentinelGenesisPublicKeyAnnouncement()
+  }
+
   $effect(() => {
     const pending = pendingVaultCreation
     if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return
@@ -267,6 +277,7 @@
       void vault.createLocalVaultWithDeviceKeys(pending.label)
       return
     }
+    if (pending.kind === 'sentinel-participant-key') return
     void vault.startSentinelGenesis(pending.args)
   })
 </script>
@@ -492,6 +503,7 @@
                   vault.unlockWithPassword(entryId, password)}
                 onCreateDeviceVault={handleCreateDeviceVault}
                 onStartSentinelGenesis={handleStartSentinelGenesis}
+                onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}
                 onRemoveProvider={(id) => vault.removeProvider(id)}
               />
               <VaultStatusBar

@@ -60,7 +60,9 @@
     deliveries: Delivery[]
     isBusy: boolean
     onBack: () => void
-    onStart: (args: StartSentinelGenesisArgs) => void | Promise<void>
+    onStart: (
+      args: StartSentinelGenesisArgs,
+    ) => boolean | void | Promise<boolean | void>
     onAddParticipant: (payload: string) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>

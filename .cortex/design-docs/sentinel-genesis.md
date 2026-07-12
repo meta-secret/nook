@@ -80,6 +80,13 @@ or vault key to another device.
 6. Repeat until all configured `N` participant public keys are present,
    including Device A's own public keys.
 
+The Card Stack add-participant action remains available during this pre-genesis
+stage. If Device A has no protected identity yet, adding the first signed
+announcement opens device passkey setup, creates Device A's keys, starts the
+public-only roster session, and then verifies the queued announcement. The user
+must not have to create a vault or start a request-bound flow before the `+`
+action can collect standalone participant keys.
+
 The pending roster is pre-genesis ceremony state. It is not a vault member
 roster, has no `store_id`, creates no vault event, and cannot be opened as a
 vault. The Rust session contains public ceremony data only. Verified participant

@@ -59,7 +59,9 @@
     deliveries: Delivery[]
     isBusy: boolean
     onBack: () => void
-    onStart: (args: StartSentinelGenesisArgs) => void | Promise<void>
+    onStart: (
+      args: StartSentinelGenesisArgs,
+    ) => boolean | void | Promise<boolean | void>
     onAddParticipant: (payload: string) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
@@ -69,6 +71,7 @@
   let actionBusy = $state(false)
   let copied = $state(false)
   let selected = $state(0)
+  let queuedParticipant = $state('')
 
   const rosterCount = $derived(Math.max(1, participants.length))
   const missing = $derived(Math.max(0, participantCount - rosterCount))
@@ -105,18 +108,51 @@
     }
   }
 
-  async function addParticipant() {
-    const payload = response.trim()
-    if (!payload || isBusy || actionBusy) return
+  async function addQueuedParticipant() {
+    const payload = queuedParticipant
+    if (!payload || status !== 'collecting' || isBusy || actionBusy) return
     actionBusy = true
     try {
       await onAddParticipant(payload)
+      queuedParticipant = ''
       response = ''
       selected = Math.max(0, participants.length)
     } finally {
       actionBusy = false
     }
   }
+
+  async function addParticipant() {
+    const payload = response.trim()
+    if (!payload || !policyValid || isBusy || actionBusy) return
+    if (status === 'idle') {
+      queuedParticipant = payload
+      actionBusy = true
+      try {
+        await onStart({
+          label: name.trim(),
+          participantCount,
+          threshold,
+        })
+      } finally {
+        actionBusy = false
+      }
+      return
+    }
+    queuedParticipant = payload
+    await addQueuedParticipant()
+  }
+
+  $effect(() => {
+    if (
+      status === 'collecting' &&
+      queuedParticipant &&
+      !isBusy &&
+      !actionBusy
+    ) {
+      void addQueuedParticipant()
+    }
+  })
 
   async function finalize() {
     if (status !== 'ready' || isBusy || actionBusy) return
@@ -279,8 +315,8 @@
                   class="grid size-12 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={status === 'idle' ||
-                    !response.trim() ||
+                  disabled={!response.trim() ||
+                    !policyValid ||
                     isBusy ||
                     actionBusy}
                   onclick={() => void addParticipant()}
@@ -290,23 +326,22 @@
                     />{:else}<Plus class="size-5" />{/if}
                 </button>
               </div>
+              <label
+                class="mt-5 block text-[9px] tracking-wider text-[#8d99a4] uppercase"
+              >
+                {vault.t('login.sentinel_card_stack_public_key_label')}
+                <textarea
+                  class="mt-2 min-h-24 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                  data-testid="sentinel-genesis-response-input"
+                  placeholder={vault.t(
+                    'login.sentinel_card_stack_public_key_placeholder',
+                  )}
+                  bind:value={response}></textarea>
+              </label>
               {#if status === 'idle'}
-                <p class="mt-5 text-xs leading-5 text-[#8d99a4]">
+                <p class="mt-3 text-xs leading-5 text-[#8d99a4]">
                   {vault.t('login.sentinel_card_stack_start_hint')}
                 </p>
-              {:else}
-                <label
-                  class="mt-5 block text-[9px] tracking-wider text-[#8d99a4] uppercase"
-                >
-                  {vault.t('login.sentinel_genesis_response_label')}
-                  <textarea
-                    class="mt-2 min-h-24 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
-                    data-testid="sentinel-genesis-response-input"
-                    placeholder={vault.t(
-                      'login.sentinel_genesis_response_placeholder',
-                    )}
-                    bind:value={response}></textarea>
-                </label>
               {/if}
             </div>
           {/if}

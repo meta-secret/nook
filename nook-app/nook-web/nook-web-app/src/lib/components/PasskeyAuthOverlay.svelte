@@ -9,6 +9,18 @@
     vault: VaultState
     onDismiss?: () => void
   } = $props()
+
+  function portal(node: HTMLElement) {
+    const anchor = document.createComment('passkey-auth-overlay-home')
+    node.before(anchor)
+    document.body.appendChild(node)
+    return {
+      destroy() {
+        node.remove()
+        anchor.remove()
+      },
+    }
+  }
 </script>
 
 <div
@@ -16,6 +28,7 @@
   data-testid="passkey-auth-overlay"
   role="dialog"
   aria-label={vault.t('device_protection.title')}
+  use:portal
 >
   <div
     class="rounded-xl border border-border/60 bg-background/95 p-1 shadow-xl shadow-black/25 backdrop-blur-md"

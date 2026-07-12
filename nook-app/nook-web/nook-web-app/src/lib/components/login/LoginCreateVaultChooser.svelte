@@ -118,12 +118,15 @@
   let generatedParticipantFingerprint = $state('')
   let participantShare = $state('')
   let joinPublicKeysLoading = $state(false)
+  let joinPasskeyRequested = $state(false)
 
   $effect(() => {
+    const deviceProtectionReady = vault.deviceProtectionReady
     if (
       wizardStep === 'join' &&
       !generatedParticipantResponse &&
       !joinPublicKeysLoading &&
+      (!joinPasskeyRequested || deviceProtectionReady) &&
       onCreateSentinelGenesisPublicKeyAnnouncement
     ) {
       void loadJoinPublicKeys()
@@ -142,6 +145,11 @@
     try {
       generatedParticipantResponse =
         await onCreateSentinelGenesisPublicKeyAnnouncement()
+      if (!generatedParticipantResponse && !vault.deviceProtectionReady) {
+        joinPasskeyRequested = true
+        return
+      }
+      joinPasskeyRequested = false
       const announcement = JSON.parse(generatedParticipantResponse) as {
         fingerprint?: string
       }
@@ -379,6 +387,7 @@
 
   function chooseJoinPath() {
     chosenPath = 'join'
+    joinPasskeyRequested = false
     wizardStep = 'join'
   }
 
@@ -425,7 +434,7 @@
     await onCreateDeviceVault(trimmedVaultName)
   }
 
-  async function startSentinelGenesis() {
+  async function startSentinelGenesis(): Promise<boolean> {
     if (
       !sentinelNameReady ||
       !sentinelPolicyValid ||
@@ -433,7 +442,7 @@
       sentinelActionBusy ||
       !onStartSentinelGenesis
     ) {
-      return
+      return false
     }
     sentinelActionBusy = true
     try {
@@ -444,7 +453,9 @@
       })
       if (started !== false) {
         wizardStep = 'sentinel-ceremony'
+        return true
       }
+      return false
     } finally {
       sentinelActionBusy = false
     }
