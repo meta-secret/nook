@@ -251,7 +251,10 @@ host prerequisites: at least `fs.inotify.max_user_instances=2500` and
 raises those values when needed without lowering larger runner defaults. On
 macOS, those sysctls live inside Docker Desktop's Linux VM and must be applied
 with the documented short-lived privileged container after Docker Desktop
-restarts; macOS `sudo sysctl` does not configure the VM.
+restarts; macOS `sudo sysctl` does not configure the VM. The separate macOS
+host-wide file-descriptor ceilings are `kern.maxfiles` and
+`kern.maxfilesperproc`, with launchd's `maxfiles` controlling newly launched
+processes; the README documents the current-host 10x values.
 
 ### Build export: docker driver + containerd image store
 
