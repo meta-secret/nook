@@ -63,6 +63,11 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * Follow [design-docs/core-beliefs.md §10](design-docs/core-beliefs.md#10-grow-cortex-dynamically): update the most specific existing doc; keep entries concise and linked to code/tests.
 * For recurring refactor, review, boundary, or code-organization feedback, use [workflows/dynamic-skills.md](workflows/dynamic-skills.md) and update [dynamic-skills/index.md](dynamic-skills/index.md).
 
+### Keep the root README current
+* The root [`README.md`](../README.md) is the **public, human-facing** entry point. Agents must **update it in the same PR** when an architectural or product-surface change would make it wrong or incomplete.
+* **Triggers (non-exhaustive):** package layout or dependency flow changes; new/removed crates or web packages; sync/storage model changes (e.g. event log vs blob); vault unlock or enrollment model changes; public Task commands or local-dev prerequisites; user-visible item types or primary flows; links to `.cortex` docs that move or are superseded.
+* **Do not** dump full design specs into the README — keep it accurate and concise, and point to [ARCHITECTURE.md](ARCHITECTURE.md) / design docs for depth. Stale README after an architecture PR is a process defect, same as leaving durable facts only in chat.
+
 ### Project skills
 * [dynamic-skills/index.md](dynamic-skills/index.md) is the canonical registry of repo-specific skills agents must consult for matching work. The directory name means the skills were captured dynamically from durable project feedback; it does **not** mean they are optional or ad hoc.
 * `.cursor/skills/` entries are executable mirrors for tools that support project skills. They must point back to `.cortex/dynamic-skills/`; do not treat `.cursor/skills/` as the source of truth.
