@@ -6,7 +6,6 @@
     KeyRound,
     Layers3,
     RefreshCw,
-    Shield,
     ShieldCheck,
     Terminal,
     UserPlus,
@@ -17,6 +16,7 @@
   import SentinelCardStackDashboard from '$lib/components/login/SentinelCardStackDashboard.svelte'
   import SentinelTerminalDashboard from '$lib/components/login/SentinelTerminalDashboard.svelte'
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
+  import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
   import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
 
   type SentinelGenesisStatus =
@@ -536,15 +536,7 @@
         <div
           class="relative mt-8 grid min-h-[10rem] place-items-center lg:hidden"
         >
-          <div
-            class="relative grid size-28 place-items-center rounded-full bg-gradient-to-br from-muted via-muted/80 to-border shadow-lg shadow-black/10"
-          >
-            <div
-              class="grid size-12 place-items-center rounded-full bg-foreground text-background"
-            >
-              <Shield class="size-5" />
-            </div>
-          </div>
+          <VaultSecurityOrbit compact />
         </div>
       </div>
 
@@ -554,19 +546,7 @@
             ? 'hidden'
             : 'relative mb-8 hidden min-h-[12rem] place-items-center lg:grid'}
         >
-          <div
-            class="absolute size-56 rounded-full border border-border/60"
-          ></div>
-          <div class="absolute size-40 rounded-full border border-border"></div>
-          <div
-            class="relative grid size-28 place-items-center rounded-full bg-gradient-to-br from-muted via-muted/80 to-border shadow-xl shadow-black/15"
-          >
-            <div
-              class="grid size-12 place-items-center rounded-full bg-foreground text-background"
-            >
-              <Shield class="size-5" />
-            </div>
-          </div>
+          <VaultSecurityOrbit />
         </div>
 
         <div

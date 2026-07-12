@@ -156,6 +156,10 @@ test.describe('vault architecture modes', () => {
   }) => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     await expect(page.getByTestId('landing-auth-step-name')).toBeVisible()
+    await expect(page.getByTestId('vault-security-orbit')).toBeVisible()
+    await expect(
+      page.getByTestId('vault-security-orbit').locator('img'),
+    ).toHaveAttribute('src', '/nook-logo-dark.png')
     await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
 
     await continueToPathChooser(page)
