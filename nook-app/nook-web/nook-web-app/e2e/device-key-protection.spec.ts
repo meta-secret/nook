@@ -144,6 +144,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('login-vault-name-input').fill('Sentinel flow vault')
     await page.getByTestId('landing-auth-name-continue').click()
     await page.getByTestId('get-started-path-sentinel').click()
+    await page.getByTestId('sentinel-dashboard-card-stack').click()
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
 
     await page.getByTestId('sentinel-genesis-start').click()

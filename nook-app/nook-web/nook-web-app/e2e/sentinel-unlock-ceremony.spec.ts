@@ -51,11 +51,14 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
   test('creates and delivers a 2-of-2 Sentinel without a sync provider', async () => {
     await nameVaultAndContinue(deviceA, 'Sentinel quorum')
     await deviceA.getByTestId('get-started-path-sentinel').click()
+    await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
     await deviceA
       .getByTestId('sentinel-genesis-name-input')
       .fill('Sentinel quorum')
-    await deviceA.getByTestId('sentinel-genesis-participant-count').fill('2')
-    await deviceA.getByTestId('sentinel-genesis-threshold').fill('2')
+    await deviceA
+      .getByTestId('sentinel-genesis-participant-count')
+      .selectOption('2')
+    await deviceA.getByTestId('sentinel-genesis-threshold').selectOption('2')
     await deviceA.getByTestId('sentinel-genesis-start').click()
 
     const genesisRequest = deviceA.getByTestId(

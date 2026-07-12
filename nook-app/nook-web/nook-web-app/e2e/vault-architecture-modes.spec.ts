@@ -187,14 +187,20 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('create-vault-wizard-back').click()
 
     await page.getByTestId('get-started-path-sentinel').click()
+    await expect(page.getByTestId('sentinel-dashboard-choice')).toBeVisible()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
+      0,
+    )
+    await page.getByTestId('sentinel-dashboard-card-stack').click()
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
+    await expect(
+      page.getByTestId('login-create-vault-chooser'),
+    ).toHaveAttribute('data-sentinel-dashboard', 'card-stack')
     await expect(page.getByTestId('sentinel-genesis-name-input')).toBeVisible()
     await expect(
       page.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveValue('3')
-    await expect(
-      page.getByTestId('sentinel-genesis-participant-count'),
-    ).toHaveAttribute('max', '16')
     await expect(page.getByTestId('sentinel-genesis-threshold')).toHaveValue(
       '2',
     )
@@ -254,13 +260,16 @@ test.describe('vault architecture modes', () => {
   }) => {
     await continueToPathChooser(page)
     await page.getByTestId('get-started-path-sentinel').click()
+    await page.getByTestId('sentinel-dashboard-terminal').click()
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
-    await page
-      .getByTestId('sentinel-genesis-name-input')
-      .fill('Sentinel architecture')
+    await expect(
+      page.getByTestId('login-create-vault-chooser'),
+    ).toHaveAttribute('data-sentinel-dashboard', 'terminal')
+    await page.getByTestId('sentinel-genesis-participant-count').click()
+    await page.getByTestId('sentinel-genesis-threshold').click()
     await expect(page.getByTestId('sentinel-genesis-start')).toBeVisible()
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
-    await expect(page.getByTestId('login-connect-storage-btn')).toBeVisible()
+    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
   })
 
   test('opens join sentinel as a first-class path with public keys ready', async ({
@@ -534,9 +543,11 @@ test.describe('vault architecture modes', () => {
         page.getByTestId('mode-group-provider-capability'),
       ).toHaveCount(0)
       await page.getByTestId('get-started-path-sentinel').click()
+      await page.getByTestId('sentinel-dashboard-card-stack').click()
       await expect(
         page.getByTestId('sentinel-genesis-policy-step'),
       ).toBeVisible()
+      await page.getByTestId('sentinel-dashboard-back').click()
       await page.getByTestId('create-vault-wizard-back').click()
 
       // Sentinel genesis is provider-free and has its own creation ceremony.
