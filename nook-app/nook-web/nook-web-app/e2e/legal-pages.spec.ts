@@ -64,6 +64,36 @@ test.describe('legal pages', () => {
     )
     await expect(page.locator('#architecture')).toHaveCount(1)
     await expect(page.locator('#app')).toHaveCount(0)
+    await expect(page.getByTestId('landing-theme-toggle')).toBeVisible()
+  })
+
+  test('uses the system theme until the visitor chooses one', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('landing-theme-test-initialized')) return
+      localStorage.removeItem('nook_color_mode')
+      sessionStorage.setItem('landing-theme-test-initialized', 'true')
+    })
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.goto('/')
+
+    const root = page.locator('html')
+    const toggle = page.getByTestId('landing-theme-toggle')
+    await expect(root).toHaveAttribute('data-theme', 'light')
+    await expect(toggle).toHaveAttribute('aria-label', /dark/i)
+
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(root).toHaveAttribute('data-theme', 'dark')
+    await expect(toggle).toHaveAttribute('aria-label', /light/i)
+
+    await toggle.click()
+    await expect(root).toHaveAttribute('data-theme', 'light')
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await expect(root).toHaveAttribute('data-theme', 'light')
+    await page.reload()
+    await expect(root).toHaveAttribute('data-theme', 'light')
   })
 
   test('localizes the landing page without translating protocol names', async ({
