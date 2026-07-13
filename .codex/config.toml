@@ -1,0 +1,37 @@
+# Project-scoped browser tooling for the local AI-debug pilot. Codex loads this
+# file only when the repository is trusted. Keep this profile isolated: Nook is
+# a password manager, so the pilot must never inherit a developer's daily
+# browser profile or persist its session after the MCP process exits.
+[mcp_servers.playwright]
+command = "bash"
+args = [
+  ".codex/run-playwright-mcp.sh",
+  "--caps=devtools",
+  "--isolated",
+  "--block-service-workers",
+  "--allowed-origins=http://127.0.0.1:5173;http://localhost:5173;ws://127.0.0.1:5173;ws://localhost:5173;http://127.0.0.1:5175;http://localhost:5175;ws://127.0.0.1:5175;ws://localhost:5175",
+  "--init-page=.codex/playwright-local-only.ts",
+  "--test-id-attribute=data-testid",
+  "--console-level=warning",
+]
+enabled = true
+required = false
+startup_timeout_sec = 60
+tool_timeout_sec = 900
+default_tools_approval_mode = "writes"
+enabled_tools = [
+  "browser_annotate",
+  "browser_click",
+  "browser_close",
+  "browser_console_messages",
+  "browser_evaluate",
+  "browser_find",
+  "browser_navigate",
+  "browser_press_key",
+  "browser_resize",
+  "browser_snapshot",
+  "browser_tabs",
+  "browser_take_screenshot",
+  "browser_type",
+  "browser_wait_for",
+]

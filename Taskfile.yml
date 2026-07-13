@@ -10,3 +10,6 @@ includes:
   agentic-ai:
     taskfile: .task/agentic-ai.yml
     flatten: true
+  ai-debug:
+    taskfile: .task/ai-debug.yml
+    flatten: true

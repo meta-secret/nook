@@ -40,6 +40,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 * [references/rust-wasm.md](references/rust-wasm.md) — Rust-Wasm binding conventions.
 * [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
 * [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, per-test e2e log attachments).
+* [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
 
 ## 6. Workflows (`workflows/`)
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → push/open PR → monitor CI/review → fix loop → address comments → squash merge when green). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
