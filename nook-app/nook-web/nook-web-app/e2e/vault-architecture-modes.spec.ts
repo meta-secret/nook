@@ -247,21 +247,36 @@ test.describe('vault architecture modes', () => {
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
     await page.getByTestId('sentinel-onboarding-create-keys').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    ).toHaveCount(0)
+    await page
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Ordered Sentinel')
+    await page.getByTestId('sentinel-genesis-participant-count').click()
+    await page.getByTestId('sentinel-participant-count-option-2').click()
+    await page.getByTestId('sentinel-onboarding-continue-devices').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toBeVisible()
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(
-      page.getByTestId('sentinel-onboarding-continue-policy'),
-    ).toBeDisabled()
+    await expect(page.getByTestId('sentinel-genesis-start')).toBeDisabled()
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toBeVisible()
     await expect(
       page.getByTestId('sentinel-onboarding-progress'),
     ).toContainText('Add devices')
+    const progressSteps = page
+      .getByTestId('sentinel-onboarding-progress')
+      .locator('li')
+    await expect(progressSteps.nth(1)).toContainText('Define shares')
+    await expect(progressSteps.nth(2)).toHaveAttribute('data-current', 'step')
     await expect(page.getByTestId('login-vault-name-input')).toHaveCount(0)
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
   })

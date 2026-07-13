@@ -193,12 +193,24 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
     await clickDeviceProtectionSetup(page)
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    ).toHaveCount(0)
     await expect(
       page.getByTestId('sentinel-card-stack-dashboard'),
     ).toContainText('AUTOMATICALLY INCLUDED')
+    await page
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Passkey Sentinel')
+    await page.getByTestId('sentinel-genesis-participant-count').click()
+    await page.getByTestId('sentinel-participant-count-option-2').click()
+    await page.getByTestId('sentinel-onboarding-continue-devices').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toBeVisible()
     await page.getByTestId('sentinel-genesis-response-input').fill('bb')
     await expect(
       page.getByTestId('sentinel-genesis-add-participant'),
@@ -218,24 +230,13 @@ test.describe('passkey device-key protection', () => {
     await expect(
       page.getByTestId('sentinel-genesis-queued-participant'),
     ).toContainText('KEY PENDING')
-    await page
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantAnnouncement)
-    await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
-      page.getByTestId('sentinel-genesis-participant-error'),
-    ).toHaveText('This device key is already in the roster.')
-    await expect(
-      page.getByTestId('sentinel-genesis-queued-participant'),
-    ).toHaveCount(1)
+      page.getByTestId('sentinel-genesis-participant-fields'),
+    ).toHaveCount(0)
+    await expect(page.getByTestId('sentinel-genesis-start')).toBeEnabled()
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
     ).toHaveCount(0)
-    await page.getByTestId('sentinel-onboarding-continue-policy').click()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
-    await page
-      .getByTestId('sentinel-genesis-name-input')
-      .fill('Passkey Sentinel')
     await page.getByTestId('sentinel-genesis-start').click()
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),

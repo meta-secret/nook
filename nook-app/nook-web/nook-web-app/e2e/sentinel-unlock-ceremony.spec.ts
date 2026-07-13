@@ -75,12 +75,12 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
     await deviceA.getByTestId('sentinel-onboarding-create-keys').click()
     const passkeyOverlay = deviceA.getByTestId('passkey-auth-overlay')
+    const policyStep = deviceA.getByTestId('sentinel-genesis-policy-step')
     const responseInput = deviceA.getByTestId('sentinel-genesis-response-input')
     await expect
       .poll(
         async () =>
-          (await passkeyOverlay.isVisible()) ||
-          (await responseInput.isVisible()),
+          (await passkeyOverlay.isVisible()) || (await policyStep.isVisible()),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .toBe(true)
@@ -91,9 +91,16 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       })
       await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     }
-    await expect(responseInput).toBeVisible({
+    await expect(policyStep).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await deviceA
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Sentinel quorum')
+    await deviceA.getByTestId('sentinel-genesis-participant-count').click()
+    await deviceA.getByTestId('sentinel-participant-count-option-2').click()
+    await deviceA.getByTestId('sentinel-onboarding-continue-devices').click()
+    await expect(responseInput).toBeVisible()
     await deviceA
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)
@@ -101,13 +108,9 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await expect(
       deviceA.getByTestId('sentinel-genesis-queued-participant'),
     ).toBeVisible()
-    await deviceA.getByTestId('sentinel-onboarding-continue-policy').click()
-    await deviceA
-      .getByTestId('sentinel-genesis-name-input')
-      .fill('Sentinel quorum')
     await expect(
       deviceA.getByTestId('sentinel-genesis-participant-count'),
-    ).toHaveAttribute('data-value', '2')
+    ).toHaveCount(0)
     await deviceA.getByTestId('sentinel-genesis-start').click()
 
     const genesisRequest = deviceA.getByTestId(

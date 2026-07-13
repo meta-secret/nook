@@ -97,6 +97,8 @@
   let buildRequested = $state(false)
   let preparingOnboardingLinks = $state(false)
 
+  const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
+
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),
   )
@@ -114,22 +116,28 @@
       ? Math.max(1, participants.length) + queuedParticipants.length
       : 0,
   )
-  const availableRosterSlots = $derived(Math.max(0, 16 - rosterCount))
+  const availableRosterSlots = $derived(
+    Math.max(0, participantCount - rosterCount),
+  )
   const policyValid = $derived(
     name.trim().length > 0 &&
       Number.isInteger(participantCount) &&
       participantCount >= 2 &&
       participantCount <= 16 &&
+      participantCount >= rosterCount &&
       Number.isInteger(threshold) &&
       threshold >= 2 &&
       threshold <= participantCount,
   )
+  const rosterComplete = $derived(
+    policyValid && rosterCount === participantCount,
+  )
   const onboardingStep = $derived(
     onboardingStage === 'identity'
       ? 0
-      : onboardingStage === 'roster'
+      : onboardingStage === 'policy'
         ? 1
-        : onboardingStage === 'policy'
+        : onboardingStage === 'roster'
           ? 2
           : 3,
   )
@@ -138,11 +146,19 @@
     if (status !== 'idle') {
       onboardingStage = 'build'
     } else if (initiatorKeyReady && onboardingStage === 'identity') {
-      onboardingStage = 'roster'
+      onboardingStage = 'policy'
     } else if (!initiatorKeyReady) {
       onboardingStage = 'identity'
     }
   })
+
+  function changeParticipantCount(value: string | undefined) {
+    if (!value) return
+    const count = Number(value)
+    if (count < rosterCount) return
+    participantCount = count
+    threshold = Math.min(threshold, participantCount)
+  }
 
   function changeThreshold(value: string | undefined) {
     if (!value) return
@@ -161,7 +177,9 @@
     }
   }
 
-  function parseParticipantPayload(payload: string): QueuedParticipant | null {
+  function parseParticipantPayload(
+    payload: string,
+  ): QueuedParticipant | undefined {
     try {
       const parsed = JSON.parse(payload) as {
         fingerprint?: string
@@ -176,19 +194,19 @@
         parsed.fingerprint?.trim() ?? parsed.participant?.fingerprint?.trim()
       const signedLabel =
         parsed.label?.trim() ?? parsed.participant?.label?.trim() ?? ''
-      if (!fingerprint || !parsed.signature?.trim()) return null
+      if (!fingerprint || !parsed.signature?.trim()) return undefined
       return {
         payload,
         label: deviceName.trim() || signedLabel,
         fingerprint,
       }
     } catch {
-      return null
+      return undefined
     }
   }
 
   async function start() {
-    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return
+    if (!initiatorKeyReady || !rosterComplete || isBusy || actionBusy) return
     buildRequested = true
     onboardingStage = 'build'
     actionBusy = true
@@ -200,22 +218,20 @@
       })
       if (started === false) {
         buildRequested = false
-        onboardingStage = 'policy'
+        onboardingStage = 'roster'
       }
     } catch (error) {
       buildRequested = false
-      onboardingStage = 'policy'
+      onboardingStage = 'roster'
       throw error
     } finally {
       actionBusy = false
     }
   }
 
-  function continueToPolicy() {
-    if (rosterCount < 2 || isBusy || actionBusy) return
-    participantCount = rosterCount
-    threshold = Math.min(Math.max(2, threshold), participantCount)
-    onboardingStage = 'policy'
+  function continueToRoster() {
+    if (!policyValid || isBusy || actionBusy) return
+    onboardingStage = 'roster'
   }
 
   async function flushQueuedParticipants() {
@@ -239,7 +255,7 @@
 
   async function addParticipant() {
     const payload = response.trim()
-    if (!payload || isBusy || actionBusy) return
+    if (!payload || availableRosterSlots === 0 || isBusy || actionBusy) return
     const queued = parseParticipantPayload(payload)
     if (!queued) {
       participantInputError = vault.t(
@@ -362,7 +378,7 @@
       class="mt-8 mb-12 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
       data-testid="sentinel-onboarding-progress"
     >
-      {#each [vault.t('login.sentinel_onboarding_step_keys'), vault.t('login.sentinel_onboarding_step_devices'), vault.t('login.sentinel_onboarding_step_shares'), vault.t('login.sentinel_onboarding_step_build')] as label, index (label)}
+      {#each [vault.t('login.sentinel_onboarding_step_keys'), vault.t('login.sentinel_onboarding_step_shares'), vault.t('login.sentinel_onboarding_step_devices'), vault.t('login.sentinel_onboarding_step_build')] as label, index (label)}
         <li
           class={[
             'flex items-center gap-3 rounded-lg px-3 py-3 transition-colors',
@@ -601,26 +617,25 @@
               </p>
               <button
                 class="mt-5 w-full rounded-md bg-[#79dfff] px-5 py-3 text-xs font-bold tracking-wide text-[#10202a] uppercase transition hover:bg-[#9be7ff] disabled:cursor-not-allowed disabled:opacity-25"
-                data-testid="sentinel-onboarding-continue-policy"
-                disabled={rosterCount < 2 || isBusy || actionBusy}
-                onclick={continueToPolicy}
+                data-testid="sentinel-genesis-start"
+                disabled={!rosterComplete || isBusy || actionBusy}
+                onclick={() => void start()}
               >
-                {rosterCount < 2
-                  ? vault.t('login.sentinel_onboarding_add_one_device')
-                  : vault.t('login.sentinel_onboarding_continue_with_devices', {
-                      count: String(rosterCount),
+                {rosterComplete
+                  ? vault.t('login.sentinel_onboarding_build_action')
+                  : vault.t('login.sentinel_onboarding_devices_remaining', {
+                      count: String(availableRosterSlots),
                     })}
               </button>
+              <button
+                type="button"
+                class="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.035] px-5 py-3 text-xs text-[#aeb8c2] transition hover:border-[#79dfff]/40 hover:text-white"
+                data-testid="sentinel-onboarding-edit-policy"
+                onclick={() => (onboardingStage = 'policy')}
+              >
+                ← {vault.t('login.sentinel_onboarding_edit_policy')}
+              </button>
             </div>
-          {:else if onboardingStage === 'policy'}
-            <button
-              type="button"
-              class="w-full rounded-lg border border-white/10 bg-white/[0.035] px-5 py-4 text-left text-xs text-[#aeb8c2] transition hover:border-[#79dfff]/40 hover:text-white"
-              data-testid="sentinel-onboarding-edit-roster"
-              onclick={() => (onboardingStage = 'roster')}
-            >
-              ← {vault.t('login.sentinel_onboarding_edit_roster')}
-            </button>
           {/if}
         </div>
       </div>
@@ -662,7 +677,7 @@
                 <p
                   class="mb-5 font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
                 >
-                  {vault.t('login.sentinel_onboarding_final_step')}
+                  {vault.t('login.sentinel_onboarding_policy_step')}
                 </p>
                 <label
                   class="block text-[10px] tracking-[0.16em] text-[#b5c0c9] uppercase"
@@ -728,21 +743,44 @@
                       </Select.Content>
                     </Select.Root>
                     <span class="text-3xl font-light text-white/35">/</span>
-                    <span
-                      class="block w-full text-left"
-                      data-testid="sentinel-genesis-participant-count"
-                      data-value={participantCount}
+                    <Select.Root
+                      type="single"
+                      value={String(participantCount)}
+                      onValueChange={changeParticipantCount}
                     >
-                      <span>
-                        <span class="block text-4xl font-light text-white">
-                          {participantCount}
+                      <Select.Trigger
+                        class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
+                        data-testid="sentinel-genesis-participant-count"
+                        data-value={participantCount}
+                        aria-label={vault.t(
+                          'login.sentinel_genesis_participant_count',
+                        )}
+                      >
+                        <span>
+                          <span class="block text-4xl font-light text-white">
+                            {participantCount}
+                          </span>
+                          <small
+                            class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                            >{vault.t('login.sentinel_card_stack_total')}</small
+                          >
                         </span>
-                        <small
-                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                          >{vault.t('login.sentinel_card_stack_total')}</small
-                        >
-                      </span>
-                    </span>
+                      </Select.Trigger>
+                      <Select.Content
+                        portalProps={{ disabled: true }}
+                        class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                      >
+                        {#each participantChoices.filter((option) => option >= rosterCount) as option (option)}
+                          <Select.Item
+                            value={String(option)}
+                            class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                            data-testid={`sentinel-participant-count-option-${option}`}
+                          >
+                            {option}
+                          </Select.Item>
+                        {/each}
+                      </Select.Content>
+                    </Select.Root>
                   </span>
                 </div>
                 <div
@@ -859,7 +897,7 @@
         </div>
 
         <div class="mt-6 flex flex-wrap items-center justify-between gap-5">
-          {#if onboardingStage === 'policy' || status !== 'idle'}
+          {#if onboardingStage !== 'identity' || status !== 'idle'}
             <label class="flex items-center gap-3 text-xs text-[#a4afb9]">
               <span
                 class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
@@ -874,10 +912,12 @@
             <button
               disabled={!policyValid || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-8 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.22)] transition hover:-translate-y-0.5 hover:bg-[#6bed8c] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-25"
-              data-testid="sentinel-genesis-start"
-              onclick={() => void start()}
+              data-testid="sentinel-onboarding-continue-devices"
+              onclick={continueToRoster}
             >
-              {vault.t('login.sentinel_onboarding_build_action')}
+              {vault.t('login.sentinel_onboarding_continue_with_devices', {
+                count: String(participantCount),
+              })}
             </button>
           {:else if status === 'collecting' || status === 'ready' || status === 'finalizing'}
             <button
