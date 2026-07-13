@@ -74,10 +74,8 @@ FROM debian:${DEBIAN_RELEASE}-slim AS web-base
 
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.42.1
-ARG PLAYWRIGHT_VERSION=1.55.0
 
 ENV BUN_INSTALL=/usr/local/bun
-ENV BUN_INSTALL_CACHE_DIR=/opt/nook/bun-install-cache
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
 
@@ -94,11 +92,15 @@ RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 COPY --from=playwright-node /usr/local/bin/node /usr/local/bin/node
 RUN sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -b /usr/local/bin "v${TASK_VERSION}"
 
-# Playwright system libraries and Chromium live only in the web branch. Rust source changes do not
-# invalidate this layer, and normal CI no longer carries it through the Rust target/ lineage.
+WORKDIR /meta-secret/nook
+
+# Browser binaries are deliberately outside web-base. PR checks use web-base for unit tests and
+# preview builds, so putting Chromium here forces every PR solve to pull a ~432 MB browser layer.
+FROM web-base AS web-e2e-base
+
+ARG PLAYWRIGHT_VERSION=1.55.0
+
 RUN bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
     && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
     && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
     && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /meta-secret/nook

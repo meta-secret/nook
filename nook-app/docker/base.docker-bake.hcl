@@ -19,3 +19,12 @@ target "web-base" {
   cache-from = web_cache_from
   cache-to   = web_cache_to
 }
+
+target "web-e2e-base" {
+  context    = "."
+  dockerfile = "nook-app/docker/base.Dockerfile"
+  target     = "web-e2e-base"
+  platforms  = ["linux/amd64"]
+  cache-from = web_e2e_cache_from
+  cache-to   = web_e2e_cache_to
+}

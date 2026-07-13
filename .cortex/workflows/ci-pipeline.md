@@ -116,12 +116,15 @@ GitHub-hosted `ubuntu-latest`, where their six-hour background work cannot
 exhaust or block the Nook machine. Other scheduled, main, release, manual e2e,
 and research jobs also remain GitHub-hosted.
 
-The web dependency stage uses a private (non-locking) BuildKit mount for Bun's
-package cache. Do not change it to `sharing=locked`: superseded PR solves share
-the runner daemon, and a canceled cache-mount owner can otherwise serialize or
-stall unrelated PR builds. Private mounts also avoid concurrent writers to the
-same cache directory. The frozen lockfile and Docker layer remain the
-reproducibility boundary.
+The web dependency stage runs `bun install --frozen-lockfile` directly in its
+Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
+lockfile and immutable Docker layer are the cache and reproducibility boundary.
+
+PR web solves use browser-free `web-base`. The roughly 432 MB Playwright
+Chromium layer lives in `web-e2e-base`, uses a separate remote cache, and is
+pulled only by main, nightly, or explicitly requested browser e2e.
+The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
+a whole-build retry loop.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |

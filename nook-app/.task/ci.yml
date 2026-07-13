@@ -11,11 +11,12 @@ tasks:
 
   ci:pr:e2e:
     desc: Explicit local/manual full stub web Playwright e2e plus extension e2e.
+    deps:
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
-      - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
-      - task: web:e2e:build-dist
-      - task: web:test:e2e:parallel
-      - task: extension:test:e2e
+      - task: docker:e2e:run
+        vars: { TASK: _ci:main }
 
   ci:pr:e2e:local:
     desc: Alias for ci:pr:e2e.
@@ -25,9 +26,10 @@ tasks:
   ci:main:
     desc: Main CI — Rust/WASM image validation, then one slim web container for verify/build/e2e.
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _ci:main }
 
   ci:main:prepare:
@@ -65,9 +67,10 @@ tasks:
   ci:nightly:e2e:
     desc: Nightly live sync provider e2e (real APIs; requires provider credentials).
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _ci:nightly:e2e }
 
   ci:main:build:

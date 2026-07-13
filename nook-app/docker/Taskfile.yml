@@ -151,7 +151,7 @@ tasks:
         -e NOOK_GOOGLE_E2E_ACCESS_TOKEN
         -e E2E_SPEC
         -w /meta-secret/nook
-        {{.DOCKER_IMAGE}}
+        {{.DOCKER_E2E_IMAGE}}
         task {{.TASK}}
 
   docker:extract:dist:
