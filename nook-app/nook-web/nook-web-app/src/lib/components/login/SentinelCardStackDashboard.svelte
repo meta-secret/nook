@@ -21,7 +21,7 @@
     | 'delivering'
     | 'complete'
 
-  type OnboardingStage = 'identity' | 'roster' | 'policy' | 'build'
+  type OnboardingStage = 'identity' | 'policy' | 'roster' | 'build'
 
   type Participant = {
     participantId: string
@@ -34,12 +34,6 @@
     fingerprint?: string
     payload: string
     sharePayload?: string
-  }
-
-  type QueuedParticipant = {
-    payload: string
-    label: string
-    fingerprint: string
   }
 
   let {
@@ -90,11 +84,8 @@
   let actionBusy = $state(false)
   let copied = $state(false)
   let selected = $state(0)
-  let queuedParticipants = $state<QueuedParticipant[]>([])
-  let deviceName = $state('')
   let participantInputError = $state('')
   let onboardingStage = $state<OnboardingStage>('identity')
-  let buildRequested = $state(false)
   let preparingOnboardingLinks = $state(false)
 
   const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
@@ -112,9 +103,7 @@
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
   )
   const rosterCount = $derived(
-    initiatorKeyReady
-      ? Math.max(1, participants.length) + queuedParticipants.length
-      : 0,
+    initiatorKeyReady ? Math.max(1, participants.length) : 0,
   )
   const availableRosterSlots = $derived(
     Math.max(0, participantCount - rosterCount),
@@ -124,13 +113,9 @@
       Number.isInteger(participantCount) &&
       participantCount >= 2 &&
       participantCount <= 16 &&
-      participantCount >= rosterCount &&
       Number.isInteger(threshold) &&
       threshold >= 2 &&
       threshold <= participantCount,
-  )
-  const rosterComplete = $derived(
-    policyValid && rosterCount === participantCount,
   )
   const onboardingStep = $derived(
     onboardingStage === 'identity'
@@ -143,7 +128,9 @@
   )
 
   $effect(() => {
-    if (status !== 'idle') {
+    if (status === 'collecting') {
+      onboardingStage = 'roster'
+    } else if (status !== 'idle') {
       onboardingStage = 'build'
     } else if (initiatorKeyReady && onboardingStage === 'identity') {
       onboardingStage = 'policy'
@@ -155,7 +142,6 @@
   function changeParticipantCount(value: string | undefined) {
     if (!value) return
     const count = Number(value)
-    if (count < rosterCount) return
     participantCount = count
     threshold = Math.min(threshold, participantCount)
   }
@@ -168,47 +154,10 @@
   function changeParticipantPayload(event: Event) {
     response = (event.currentTarget as HTMLInputElement).value
     participantInputError = ''
-    if (deviceName.trim()) return
-    try {
-      const announcement = JSON.parse(response) as { label?: string }
-      deviceName = announcement.label?.trim() ?? ''
-    } catch {
-      // Keep the compact sketch input usable while an announcement is pasted.
-    }
   }
 
-  function parseParticipantPayload(
-    payload: string,
-  ): QueuedParticipant | undefined {
-    try {
-      const parsed = JSON.parse(payload) as {
-        fingerprint?: string
-        label?: string
-        signature?: string
-        participant?: {
-          fingerprint?: string
-          label?: string
-        }
-      }
-      const fingerprint =
-        parsed.fingerprint?.trim() ?? parsed.participant?.fingerprint?.trim()
-      const signedLabel =
-        parsed.label?.trim() ?? parsed.participant?.label?.trim() ?? ''
-      if (!fingerprint || !parsed.signature?.trim()) return undefined
-      return {
-        payload,
-        label: deviceName.trim() || signedLabel,
-        fingerprint,
-      }
-    } catch {
-      return undefined
-    }
-  }
-
-  async function start() {
-    if (!initiatorKeyReady || !rosterComplete || isBusy || actionBusy) return
-    buildRequested = true
-    onboardingStage = 'build'
+  async function continueToRoster() {
+    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return
     actionBusy = true
     try {
       const started = await onStart({
@@ -216,38 +165,9 @@
         participantCount,
         threshold,
       })
-      if (started === false) {
-        buildRequested = false
-        onboardingStage = 'roster'
-      }
-    } catch (error) {
-      buildRequested = false
-      onboardingStage = 'roster'
-      throw error
-    } finally {
-      actionBusy = false
-    }
-  }
-
-  function continueToRoster() {
-    if (!policyValid || isBusy || actionBusy) return
-    onboardingStage = 'roster'
-  }
-
-  async function flushQueuedParticipants() {
-    if (
-      queuedParticipants.length === 0 ||
-      status !== 'collecting' ||
-      isBusy ||
-      actionBusy
-    )
-      return
-    actionBusy = true
-    try {
-      while (queuedParticipants.length > 0) {
-        await onAddParticipant(queuedParticipants[0].payload)
-        queuedParticipants.shift()
-      }
+      if (started !== false) onboardingStage = 'roster'
+    } catch {
+      // The vault action publishes the core error through the shared error UI.
     } finally {
       actionBusy = false
     }
@@ -255,64 +175,35 @@
 
   async function addParticipant() {
     const payload = response.trim()
-    if (!payload || availableRosterSlots === 0 || isBusy || actionBusy) return
-    const queued = parseParticipantPayload(payload)
-    if (!queued) {
-      participantInputError = vault.t(
-        'login.sentinel_card_stack_public_key_placeholder',
-      )
-      return
-    }
     if (
-      queuedParticipants.some(
-        (participant) => participant.fingerprint === queued.fingerprint,
-      ) ||
-      participants.some(
-        (participant) => participant.fingerprint === queued.fingerprint,
-      )
-    ) {
-      participantInputError = vault.t(
-        'login.sentinel_onboarding_device_already_added',
-      )
+      !payload ||
+      status !== 'collecting' ||
+      availableRosterSlots === 0 ||
+      isBusy ||
+      actionBusy
+    )
       return
+    actionBusy = true
+    try {
+      await onAddParticipant(payload)
+      response = ''
+      participantInputError = ''
+      selected = participants.length
+    } catch (error) {
+      participantInputError =
+        error instanceof Error
+          ? error.message
+          : vault.t('login.sentinel_genesis_response_failed')
+    } finally {
+      actionBusy = false
     }
-    queuedParticipants.push(queued)
-    response = ''
-    deviceName = ''
-    participantInputError = ''
-    selected = Math.max(0, participants.length + queuedParticipants.length - 1)
-    if (status === 'collecting') await flushQueuedParticipants()
   }
-
-  $effect(() => {
-    if (
-      status === 'collecting' &&
-      queuedParticipants.length > 0 &&
-      !isBusy &&
-      !actionBusy
-    ) {
-      void flushQueuedParticipants()
-    }
-  })
-
-  $effect(() => {
-    if (
-      buildRequested &&
-      status === 'ready' &&
-      queuedParticipants.length === 0 &&
-      !isBusy &&
-      !actionBusy
-    ) {
-      void finalize()
-    }
-  })
 
   async function finalize() {
     if (status !== 'ready' || isBusy || actionBusy) return
     actionBusy = true
     try {
       await onFinalize()
-      buildRequested = false
     } finally {
       actionBusy = false
     }
@@ -504,35 +395,7 @@
             </button>
           {/each}
 
-          {#each queuedParticipants as participant, index (participant.fingerprint)}
-            <button
-              class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === participants.length + index ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
-              data-testid="sentinel-genesis-queued-participant"
-              onclick={() => (selected = participants.length + index)}
-            >
-              <span
-                class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[9px] text-[#b9c5ce]"
-              >
-                P-{String(participants.length + index + 1).padStart(2, '0')}
-              </span>
-              <span class="min-w-0">
-                <b class="block truncate text-sm">
-                  {participant.label} ·
-                  {vault.t('login.sentinel_card_stack_participant')}
-                  {String(participants.length + index + 1).padStart(2, '0')}
-                </b>
-                <span
-                  class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
-                >
-                  {participant.fingerprint} ·
-                  {vault.t('login.sentinel_card_stack_key_pending')}
-                </span>
-              </span>
-              <RefreshCw class="size-4 text-[#79dfff]" />
-            </button>
-          {/each}
-
-          {#if onboardingStage === 'roster' && availableRosterSlots > 0}
+          {#if status === 'collecting' && availableRosterSlots > 0}
             <div class="border border-dashed border-[#aeb8c2] p-5">
               <div class="flex items-center justify-between gap-4">
                 <div>
@@ -558,22 +421,9 @@
                 </button>
               </div>
               <div
-                class="mt-5 grid gap-5"
+                class="mt-5"
                 data-testid="sentinel-genesis-participant-fields"
               >
-                <label
-                  class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
-                >
-                  {vault.t('login.sentinel_card_stack_device_name_label')}
-                  <input
-                    class="mt-2 w-full border-b border-white/20 bg-transparent py-2 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
-                    data-testid="sentinel-genesis-participant-name-input"
-                    placeholder={vault.t(
-                      'login.sentinel_card_stack_device_name_placeholder',
-                    )}
-                    bind:value={deviceName}
-                  />
-                </label>
                 <label
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
@@ -615,26 +465,14 @@
               <p class="mt-2 text-xs leading-5 text-[#8f9ca7]">
                 {vault.t('login.sentinel_onboarding_roster_description')}
               </p>
-              <button
-                class="mt-5 w-full rounded-md bg-[#79dfff] px-5 py-3 text-xs font-bold tracking-wide text-[#10202a] uppercase transition hover:bg-[#9be7ff] disabled:cursor-not-allowed disabled:opacity-25"
-                data-testid="sentinel-genesis-start"
-                disabled={!rosterComplete || isBusy || actionBusy}
-                onclick={() => void start()}
+              <p
+                class="mt-5 w-full rounded-md border border-white/10 bg-black/10 px-5 py-3 text-center text-xs font-bold tracking-wide text-[#aeb8c2] uppercase"
+                data-testid="sentinel-onboarding-devices-remaining"
               >
-                {rosterComplete
-                  ? vault.t('login.sentinel_onboarding_build_action')
-                  : vault.t('login.sentinel_onboarding_devices_remaining', {
-                      count: String(availableRosterSlots),
-                    })}
-              </button>
-              <button
-                type="button"
-                class="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.035] px-5 py-3 text-xs text-[#aeb8c2] transition hover:border-[#79dfff]/40 hover:text-white"
-                data-testid="sentinel-onboarding-edit-policy"
-                onclick={() => (onboardingStage = 'policy')}
-              >
-                ← {vault.t('login.sentinel_onboarding_edit_policy')}
-              </button>
+                {vault.t('login.sentinel_onboarding_devices_remaining', {
+                  count: String(availableRosterSlots),
+                })}
+              </p>
             </div>
           {/if}
         </div>
@@ -770,7 +608,7 @@
                         portalProps={{ disabled: true }}
                         class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                       >
-                        {#each participantChoices.filter((option) => option >= rosterCount) as option (option)}
+                        {#each participantChoices as option (option)}
                           <Select.Item
                             value={String(option)}
                             class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
@@ -913,7 +751,7 @@
               disabled={!policyValid || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-8 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.22)] transition hover:-translate-y-0.5 hover:bg-[#6bed8c] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-25"
               data-testid="sentinel-onboarding-continue-devices"
-              onclick={continueToRoster}
+              onclick={() => void continueToRoster()}
             >
               {vault.t('login.sentinel_onboarding_continue_with_devices', {
                 count: String(participantCount),

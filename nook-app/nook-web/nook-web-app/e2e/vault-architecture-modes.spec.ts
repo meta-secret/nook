@@ -265,7 +265,10 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    await expect(page.getByTestId('sentinel-genesis-start')).toBeDisabled()
+    await expect(
+      page.getByTestId('sentinel-onboarding-devices-remaining'),
+    ).toContainText('1')
+    await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toBeVisible()

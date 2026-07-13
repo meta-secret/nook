@@ -106,12 +106,10 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       .fill(participantAnnouncement)
     await deviceA.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
-      deviceA.getByTestId('sentinel-genesis-queued-participant'),
-    ).toBeVisible()
-    await expect(
       deviceA.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveCount(0)
-    await deviceA.getByTestId('sentinel-genesis-start').click()
+    await expect(deviceA.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
+    await deviceA.getByTestId('sentinel-genesis-finalize').click()
 
     const genesisRequest = deviceA.getByTestId(
       'sentinel-genesis-request-output',

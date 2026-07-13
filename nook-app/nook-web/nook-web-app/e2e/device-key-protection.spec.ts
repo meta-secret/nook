@@ -218,7 +218,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
       page.getByTestId('sentinel-genesis-participant-error'),
-    ).toHaveText('Paste signed public key')
+    ).toHaveText('Invalid sentinel genesis payload.')
     await page
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)
@@ -228,16 +228,16 @@ test.describe('passkey device-key protection', () => {
 
     await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
-      page.getByTestId('sentinel-genesis-queued-participant'),
-    ).toContainText('KEY PENDING')
-    await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toHaveCount(0)
-    await expect(page.getByTestId('sentinel-genesis-start')).toBeEnabled()
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
-    ).toHaveCount(0)
-    await page.getByTestId('sentinel-genesis-start').click()
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
+    await expect(
+      page.getByTestId('sentinel-onboarding-progress').locator('li').nth(3),
+    ).toHaveAttribute('data-current', 'step')
+    await page.getByTestId('sentinel-genesis-finalize').click()
     await expect(
       page.getByTestId('sentinel-genesis-ceremony-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
