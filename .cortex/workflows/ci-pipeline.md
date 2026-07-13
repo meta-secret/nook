@@ -10,9 +10,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** (GitHub-hosted `ubuntu-latest`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
-| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only) | No                                        |
 
 ```mermaid
 flowchart LR
@@ -32,8 +31,6 @@ flowchart LR
   cron[Nightly 03:00 UTC] --> nightly[e2e-nightly.yml]
   nightly --> e2e_live[sync-live e2e]
 
-  cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
-  cleanup --> docker_prune["docker system prune --volumes"]
 ```
 
 ## Production release strategy
@@ -109,14 +106,13 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-CI jobs run on **GitHub-hosted** `ubuntu-latest` runners so agent/CI load does
-not contend with the self-hosted Nook machine. The Docker setup action already
+All CI and agent jobs run on **GitHub-hosted** `ubuntu-latest` runners. No
+workflow targets the former self-hosted `nook` label. The Docker setup action
 enables the containerd image store on GitHub-hosted runners.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
-| `pr.yml`, `main.yml`, `release.yml`, `e2e-pr.yml`, `e2e-nightly.yml` | `ubuntu-latest` | Default CI and AI ci-fix agents |
-| `runner-cleanup.yml` | `nook` | Self-hosted Docker prune only |
+| `pr.yml`, `main.yml`, `release.yml`, `e2e-pr.yml`, `e2e-nightly.yml`, agent workflows | `ubuntu-latest` | GitHub-hosted CI, deployments, e2e, and AI agents |
 
 ## Why local-provider e2e vs sync-live
 
@@ -218,7 +214,7 @@ exported.
 
 Main's toolchain publish must authenticate immediately before the GHCR
 `toolchain-push` bake. Do not assume a prior Docker login from setup is still
-visible to Buildx on every self-hosted runner; a green verify/e2e run can still
+visible to Buildx on every fresh GitHub-hosted runner; a green verify/e2e run can still
 block the Pages deploy if the final push falls back to anonymous GHCR auth and
 gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into
 `task ci:main:publish`, and `docker:push` re-logins before pushing. After the
@@ -247,18 +243,6 @@ After targeted fixes pass and the iteration is ready for final validation, push/
    then **persisted app logs** (see below), fix locally (prefer single-spec e2e
    while iterating), push the completed fix, then run the required local gate
    while remote CI refreshes.
-
-## Runner cleanup
-
-[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) runs daily on
-the self-hosted `nook` runner label and can also be triggered manually. It runs
-`docker system prune --all --force --volumes` to reclaim unused containers,
-networks, build cache, tagged and dangling images, and anonymous volumes without
-touching the Docker daemon itself. `--all` is required because the default prune
-only removes dangling images while `docker system df` includes tagged images
-that no container uses in its reclaimable estimate. That estimate can exceed
-the image-store total because shared image layers are counted for each image; it
-is not a physical-byte reclamation guarantee.
 
 ### CI verification — always check app logs
 
@@ -315,7 +299,7 @@ Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT wi
 
 The `ci-fix` / `ci-agent:implement` jobs run **`task setup`** (bake sealed `nook-web:local`) then **`task ci-agent:fix`** / **`task ci-agent:implement`**, which build and run the **`nook-ci-agent:local`** image. That container includes both the Docker CLI and the Buildx CLI plugin because repository Task targets use `docker buildx bake`. It uses **`docker run --init`**, bind-mounts the checkout, and mounts **`/var/run/docker.sock`** so the agent can spawn sibling containers on the host Docker daemon (not Docker-in-Docker).
 
-**Runner placement:** `ci-fix` (main/nightly) and `agent-implement.yml` all run on GitHub-hosted **`ubuntu-latest`** so agent work does not share the self-hosted Nook machine with other CI. Host Node is not required for these jobs.
+**Runner placement:** `ci-fix` (main/nightly) and `agent-implement.yml` all run on GitHub-hosted **`ubuntu-latest`**. Host Node is not required for these jobs.
 
 After the agent finishes, ci-agent **awaits** `agent[Symbol.asyncDispose]()` (not fire-and-forget `close()`), then calls `process.exit` (and best-effort SIGKILL of direct child PIDs) so orphaned SDK children cannot keep the container alive.
 
