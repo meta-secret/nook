@@ -206,11 +206,7 @@ tasks:
         for attempt in 1 2 3; do
           rm -rf "$out_dir";
           mkdir -p "$out_dir";
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
-            {{.NOOK_BAKE_FILES}}
-            --allow="fs.write=$out_dir"
-            --set "coverage-export.output=type=local,dest=$out_dir"
-            coverage-export; then
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
