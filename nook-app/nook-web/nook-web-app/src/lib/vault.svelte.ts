@@ -859,6 +859,15 @@ export class VaultState {
       this.enrollmentFromUrlPending = true
     }
 
+    // A password-only session may have queued local event-log writes while
+    // provider credentials were still sealed. Once passkey/PIN authorization
+    // reloads those credentials, flush the pending events before normal polling
+    // resumes so remote replicas do not wait for another user edit.
+    if (this.isAuthenticated) {
+      await this.runFanOutSyncAfterLocalSave()
+      this.startVaultSync()
+    }
+
     vaultLog.info('app init finished', {
       localVaultPresent: this.localVaultPresent,
       authenticated: this.isAuthenticated,

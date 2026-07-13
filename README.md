@@ -82,8 +82,12 @@ item, add a corrected copy and delete the old one.
 
 ### When you come back
 
-- Authorize with the passkey so Nook can unwrap this browser's device identity.
-- Unlock the local vault (or connect a sync provider to import one).
+- Unlock with this browser's passkey/PIN-protected device keys, or use a backup
+  password to open the encrypted local vault directly.
+- A backup-password session leaves the protected device identity and saved sync
+  provider credentials locked. Authorize with the passkey or PIN when you want
+  remote synchronization to resume.
+- You can also connect a sync provider to import an existing vault.
 - Decrypted secrets exist only in the active browser session.
 - **Lock vault** clears the plaintext session; encrypted data and providers stay.
 

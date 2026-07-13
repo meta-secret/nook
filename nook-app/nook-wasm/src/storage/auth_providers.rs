@@ -274,6 +274,7 @@ mod wasm_idb_tests {
                     file_id: None,
                     file_name: Some("nook-events".to_owned()),
                     account_email: None,
+                    folder_id: None,
                 }),
                 local_folder: None,
                 store_id: None,
