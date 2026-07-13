@@ -152,10 +152,11 @@ WASM export: `compareVaultSync(local, remote)` for compare-only; `reconcileVault
 ```mermaid
 stateDiagram-v2
   [*] --> CheckLocal: app init
-  CheckLocal --> Passkey: setup / authorization
-  Passkey --> GetStarted: no local vault
-  Passkey --> Unlock: local vault exists
-  GetStarted --> CreateLocal: device-key vault
+  CheckLocal --> GetStarted: no local vault
+  CheckLocal --> Passkey: local vault exists
+  GetStarted --> Passkey: confirm Simple create
+  Passkey --> CreateLocal: device protection ready
+  Passkey --> Unlock: authorize existing vault
   GetStarted --> ConnectProvider: cloud provider
   CreateLocal --> Vault: session unlocked
   ConnectProvider --> Reconcile: remote exists
@@ -167,11 +168,15 @@ stateDiagram-v2
   Vault --> SyncSetup: add sync provider (optional)
 ```
 
-1. **Authorize the passkey** on init, then load the local cache. The vault may
-   auto-unlock if device keys suffice and no sync friction remains.
-2. **First visit:** login chooser — create a Simple vault locally, start a
-   provider-free Nexus genesis ceremony, **or** connect a sync provider to
-   import an existing vault. See [nexus-genesis.md](nexus-genesis.md).
+1. **Empty device:** show Landing → Sentinel create (path first; naming inside
+   the chosen setup) **before**
+   passkey. Passkey/device protection runs when the user confirms Simple create,
+   or first when unlocking an existing local vault. Then load the local cache.
+2. **First visit / GetStarted:** create a Simple vault locally (after deferred
+   passkey), start Sentinel genesis without configuring storage until the vault
+   is atomically created, **or** connect a
+   sync provider to import an existing vault. See
+   [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
    identity; user returns through the passkey gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).

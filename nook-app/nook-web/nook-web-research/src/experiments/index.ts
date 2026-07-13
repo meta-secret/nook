@@ -6,7 +6,7 @@ import CredentialAirlock from './vault/credential-airlock/Experiment.svelte'
 import DistributedVaultPairing from './vault/distributed-vault-pairing/Experiment.svelte'
 import EvidenceRoom from './vault/evidence-room/Experiment.svelte'
 import KintsugiRecovery from './vault/kintsugi-recovery/Experiment.svelte'
-import NexusCardStack from './vault/nexus-card-stack/Experiment.svelte'
+import SentinelCardStack from './vault/sentinel-card-stack/Experiment.svelte'
 import SealedCapsule from './vault/sealed-capsule/Experiment.svelte'
 import SecureHardware from './vault/secure-hardware/Experiment.svelte'
 import VaultTerminal from './vault/vault-terminal/Experiment.svelte'
@@ -255,13 +255,13 @@ export const experiments: Experiment[] = [
     component: AccessChoreography,
   },
   {
-    slug: 'nexus-card-stack',
+    slug: 'sentinel-card-stack',
     category: vault,
     subcategory: v3,
     title: 'Sentinel card stack',
     description:
       'A dark wallet-inspired control surface where participant keys become a selectable cryptographic card stack.',
-    component: NexusCardStack,
+    component: SentinelCardStack,
   },
   {
     slug: 'distributed-vault-pairing',

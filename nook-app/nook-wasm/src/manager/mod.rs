@@ -23,9 +23,9 @@ mod device_protection;
 mod diagnostics;
 mod event_log;
 mod multi_device;
-mod nexus;
 mod password;
 mod secrets;
+mod sentinel;
 mod sync;
 
 use crate::NookError;
@@ -113,7 +113,7 @@ impl Default for VaultSessionState {
 
 impl VaultSessionState {
     fn reset(&mut self) {
-        // Preserve architecture so nexus ceremony UI can detect vault type after
+        // Preserve architecture so sentinel ceremony UI can detect vault type after
         // lock without re-reading projection YAML first.
         let architecture = self.architecture.clone();
         self.secrets_key.zeroize();
@@ -201,16 +201,17 @@ pub struct NookVaultManager {
     pub(in crate::manager) device: DeviceSessionState,
     pub(in crate::manager) status: StatusChannel,
     pub(in crate::manager) event_log: EventLogSessionState,
-    /// Public-only, pre-vault Nexus reverse-onboarding state. Draft ceremonies
+    /// Public-only, pre-vault Sentinel reverse-onboarding state. Draft ceremonies
     /// deliberately live only in memory: they have no store id and must never
     /// be mistaken for a persisted vault.
-    pub(in crate::manager) nexus_genesis: Option<nook_core::NexusGenesisSession>,
-    /// Exact request this device answered as a Nexus participant. A returned
+    pub(in crate::manager) sentinel_genesis: Option<nook_core::SentinelGenesisSession>,
+    /// Exact request this device answered as a Sentinel participant. A returned
     /// share delivery must bind to this request before it may be persisted.
-    pub(in crate::manager) pending_nexus_genesis_request: Option<nook_core::NexusGenesisRequest>,
+    pub(in crate::manager) pending_sentinel_genesis_request:
+        Option<nook_core::SentinelGenesisRequest>,
     /// Opaque, session-bound quorum unlock state. It contains encrypted records
     /// and signed ciphertext responses, never plaintext SLIP-0039 mnemonics.
-    pub(in crate::manager) nexus_unlock: Option<nook_core::NexusUnlockSession>,
+    pub(in crate::manager) sentinel_unlock: Option<nook_core::SentinelUnlockSession>,
     /// Last non-local sync provider used for event outbox fan-out.
     pub(in crate::manager) sync_outbox: SyncOutboxState,
 }
@@ -221,9 +222,9 @@ impl Drop for NookVaultManager {
         self.vault.reset();
         self.device.identity_private_key.zeroize();
         self.event_log.reset();
-        self.nexus_genesis = None;
-        self.pending_nexus_genesis_request = None;
-        self.nexus_unlock = None;
+        self.sentinel_genesis = None;
+        self.pending_sentinel_genesis_request = None;
+        self.sentinel_unlock = None;
         self.sync_outbox.reset();
     }
 }
@@ -238,9 +239,9 @@ impl NookVaultManager {
             device: DeviceSessionState::default(),
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
-            nexus_genesis: None,
-            pending_nexus_genesis_request: None,
-            nexus_unlock: None,
+            sentinel_genesis: None,
+            pending_sentinel_genesis_request: None,
+            sentinel_unlock: None,
             sync_outbox: SyncOutboxState::default(),
         }
     }
@@ -344,9 +345,9 @@ impl NookVaultManager {
         self.storage.github_root_empty = false;
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
-        self.nexus_genesis = None;
-        self.pending_nexus_genesis_request = None;
-        self.nexus_unlock = None;
+        self.sentinel_genesis = None;
+        self.pending_sentinel_genesis_request = None;
+        self.sentinel_unlock = None;
         self.sync_outbox.reset();
     }
 }
@@ -449,8 +450,8 @@ impl NookVaultManager {
         if self.vault.crypto.is_some() {
             return Ok(());
         }
-        if self.vault.architecture.vault_type == nook_core::VaultType::Nexus {
-            return Err(nook_core::MultiDeviceError::NexusCeremonyRequired.into());
+        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
+            return Err(nook_core::MultiDeviceError::SentinelCeremonyRequired.into());
         }
         let identity = self.ensure_device_identity()?;
         if !self.vault.last_synced_content.trim().is_empty() {

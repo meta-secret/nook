@@ -36,7 +36,6 @@ test.describe('idle session auto-lock', () => {
 
     await page.waitForTimeout(IDLE_LOCK_MS + 1500)
 
-    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-session-expired')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
 
@@ -46,10 +45,7 @@ test.describe('idle session auto-lock', () => {
       messageIncludes: 'vault locked',
     })
 
-    await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await page.getByTestId('unlock-vault-btn').click()
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('authenticated-shell')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

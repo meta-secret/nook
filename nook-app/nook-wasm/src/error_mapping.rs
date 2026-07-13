@@ -60,11 +60,11 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::UnknownVaultType { .. }
             | ValidationError::UnknownReplicationType { .. }
             | ValidationError::UnsupportedProviderReplication { .. }
-            | ValidationError::SimpleVaultHasNexusPolicy
-            | ValidationError::InvalidNexusPolicy
-            | ValidationError::NexusVaultHasFullKeyEnvelopes
-            | ValidationError::SimpleVaultHasNexusShares
-            | ValidationError::InvalidNexusShareSet
+            | ValidationError::SimpleVaultHasSentinelPolicy
+            | ValidationError::InvalidSentinelPolicy
+            | ValidationError::SentinelVaultHasFullKeyEnvelopes
+            | ValidationError::SimpleVaultHasSentinelShares
+            | ValidationError::InvalidSentinelShareSet
             | ValidationError::SecretDataRequired
             | ValidationError::SecretIdRequired
             | ValidationError::SecretIdInvalid

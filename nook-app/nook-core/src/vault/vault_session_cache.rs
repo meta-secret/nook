@@ -8,7 +8,7 @@ use crate::{
 
 /// Resolve `secrets_key` and `members_key` from a stored vault YAML projection cache.
 ///
-/// Nexus vaults fail closed: auth envelopes must never unlock a nexus session.
+/// Sentinel vaults fail closed: auth envelopes must never unlock a sentinel session.
 /// Browser unlock uses the opened-share ceremony instead.
 pub fn hydrate_keys_from_projection_yaml(
     yaml: &str,
@@ -18,8 +18,8 @@ pub fn hydrate_keys_from_projection_yaml(
         return Err(EventError::EmptyProjectionCache.into());
     }
     let architecture = crate::read_vault_architecture(yaml)?;
-    if architecture.vault_type == VaultType::Nexus {
-        return Err(MultiDeviceError::NexusCeremonyRequired.into());
+    if architecture.vault_type == VaultType::Sentinel {
+        return Err(MultiDeviceError::SentinelCeremonyRequired.into());
     }
     let format = detect_stored_format(yaml)?;
     let records = deserialize_stored(yaml, format)?;
@@ -74,26 +74,26 @@ mod tests {
     }
 
     #[test]
-    fn hydrate_fails_closed_for_nexus_projection_yaml() -> VaultResult<()> {
+    fn hydrate_fails_closed_for_sentinel_projection_yaml() -> VaultResult<()> {
         use crate::{
-            DeviceMode, NexusPolicy, VaultArchitecture, VaultType, create_nexus_share_records,
-            generate_store_id, generate_vault_keys,
+            DeviceMode, SentinelPolicy, VaultArchitecture, VaultType,
+            create_sentinel_share_records, generate_store_id, generate_vault_keys,
             serialize_stored_yaml_with_unlock_name_architecture,
         };
 
         let keys = generate_vault_keys()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = create_nexus_share_records(&keys, &[first.clone(), second.clone()], 2)?;
-        let architecture = VaultArchitecture::nexus_personal(
+        let shares = create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)?;
+        let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
             },
         );
-        assert_eq!(architecture.vault_type, VaultType::Nexus);
+        assert_eq!(architecture.vault_type, VaultType::Sentinel);
         let store_id = generate_store_id()?;
         let yaml = serialize_stored_yaml_with_unlock_name_architecture(
             &shares,
@@ -109,9 +109,9 @@ mod tests {
         assert!(
             matches!(
                 err,
-                crate::VaultError::MultiDevice(crate::MultiDeviceError::NexusCeremonyRequired)
+                crate::VaultError::MultiDevice(crate::MultiDeviceError::SentinelCeremonyRequired)
             ),
-            "expected NexusCeremonyRequired, got {err:?}"
+            "expected SentinelCeremonyRequired, got {err:?}"
         );
         Ok(())
     }

@@ -66,7 +66,7 @@ impl NookVaultManager {
             .can_create_secret_with_records(&self.stored_records_snapshot())
         {
             return Err(NookError::Database(
-                "Nexus vault is not ready for secret creation.".to_owned(),
+                "Sentinel vault is not ready for secret creation.".to_owned(),
             )
             .into());
         }
@@ -124,7 +124,7 @@ impl NookVaultManager {
             .can_create_secret_with_records(&self.stored_records_snapshot())
         {
             return Err(NookError::Database(
-                "Nexus vault is not ready for secret creation.".to_owned(),
+                "Sentinel vault is not ready for secret creation.".to_owned(),
             )
             .into());
         }

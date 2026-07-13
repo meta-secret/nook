@@ -127,11 +127,11 @@ mod tests {
         assert_eq!(translate("en", "common.back"), "Back");
         assert_eq!(translate("ru", "common.back"), "Назад");
         assert_eq!(
-            translate("en", "onboard_device.nexus_readiness_count"),
+            translate("en", "onboard_device.sentinel_readiness_count"),
             "{ready} of {required} participants ready"
         );
         assert_eq!(
-            translate("ru", "onboard_device.nexus_readiness_label"),
+            translate("ru", "onboard_device.sentinel_readiness_label"),
             "Готовность участников"
         );
     }

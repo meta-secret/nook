@@ -107,12 +107,14 @@
   const derivedOnboardingType = $derived(
     onboardingType(vault.vaultArchitecture),
   )
-  const isNexusVault = $derived(vault.vaultArchitecture.vault_type === 'nexus')
-  const nexusReadyParticipants = $derived(
-    vault.vaultArchitecture.nexus?.ready_participants ?? 0,
+  const isSentinelVault = $derived(
+    vault.vaultArchitecture.vault_type === 'sentinel',
   )
-  const nexusRequiredParticipants = $derived(
-    vault.vaultArchitecture.nexus?.required_participants ?? 0,
+  const sentinelReadyParticipants = $derived(
+    vault.vaultArchitecture.sentinel?.ready_participants ?? 0,
+  )
+  const sentinelRequiredParticipants = $derived(
+    vault.vaultArchitecture.sentinel?.required_participants ?? 0,
   )
 
   let providerId = $state<string | undefined>(undefined)
@@ -309,15 +311,17 @@
     </h2>
     <p class="text-xs text-muted-foreground text-pretty">
       {vault.t(
-        isNexusVault ? 'onboard_device.nexus_desc' : 'onboard_device.desc',
+        isSentinelVault
+          ? 'onboard_device.sentinel_desc'
+          : 'onboard_device.desc',
       )}
     </p>
   </div>
 
-  {#if isNexusVault}
+  {#if isSentinelVault}
     <div
       class="space-y-4 rounded-lg border border-primary/20 bg-primary/[0.04] p-4"
-      data-testid="nexus-onboard-guidance"
+      data-testid="sentinel-onboard-guidance"
     >
       <div class="flex items-start gap-3">
         <div
@@ -328,25 +332,25 @@
         </div>
         <div class="min-w-0 space-y-1">
           <h3 class="text-sm font-semibold text-foreground">
-            {vault.t('onboard_device.nexus_title')}
+            {vault.t('onboard_device.sentinel_title')}
           </h3>
           <p class="text-sm text-muted-foreground text-pretty">
-            {vault.t('onboard_device.nexus_no_password_desc')}
+            {vault.t('onboard_device.sentinel_no_password_desc')}
           </p>
         </div>
       </div>
 
       <div
         class="rounded-md border border-border bg-background/70 px-3 py-2.5"
-        data-testid="nexus-participant-readiness"
+        data-testid="sentinel-participant-readiness"
       >
         <p class="text-xs font-medium text-muted-foreground">
-          {vault.t('onboard_device.nexus_readiness_label')}
+          {vault.t('onboard_device.sentinel_readiness_label')}
         </p>
         <p class="mt-0.5 text-sm font-semibold text-foreground">
-          {vault.t('onboard_device.nexus_readiness_count', {
-            ready: String(nexusReadyParticipants),
-            required: String(nexusRequiredParticipants),
+          {vault.t('onboard_device.sentinel_readiness_count', {
+            ready: String(sentinelReadyParticipants),
+            required: String(sentinelRequiredParticipants),
           })}
         </p>
       </div>
@@ -357,14 +361,14 @@
             class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
             >1</span
           >
-          <span>{vault.t('onboard_device.nexus_step_connect')}</span>
+          <span>{vault.t('onboard_device.sentinel_step_connect')}</span>
         </li>
         <li class="flex gap-3">
           <span
             class="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground"
             >2</span
           >
-          <span>{vault.t('onboard_device.nexus_step_approve')}</span>
+          <span>{vault.t('onboard_device.sentinel_step_approve')}</span>
         </li>
       </ol>
 
@@ -372,13 +376,13 @@
         class="text-xs {hasCompatibleSyncProviders
           ? 'text-muted-foreground'
           : 'text-amber-700 dark:text-amber-300'}"
-        data-testid="nexus-compatible-provider-status"
+        data-testid="sentinel-compatible-provider-status"
       >
         {hasCompatibleSyncProviders
-          ? vault.t('onboard_device.nexus_provider_ready', {
+          ? vault.t('onboard_device.sentinel_provider_ready', {
               count: String(compatibleSyncProviders.length),
             })
-          : vault.t('onboard_device.nexus_provider_missing')}
+          : vault.t('onboard_device.sentinel_provider_missing')}
       </p>
 
       <div class="flex flex-wrap gap-2">
@@ -386,20 +390,20 @@
           type="button"
           variant="outline"
           size="sm"
-          data-testid="nexus-manage-providers"
+          data-testid="sentinel-manage-providers"
           onclick={() => vault.openAdmin('storage')}
         >
           <Cloud class="size-4" />
-          {vault.t('onboard_device.nexus_manage_providers')}
+          {vault.t('onboard_device.sentinel_manage_providers')}
         </Button>
         <Button
           type="button"
           size="sm"
-          data-testid="nexus-review-joins"
+          data-testid="sentinel-review-joins"
           onclick={() => vault.openSettings('storage', 'devices')}
         >
           <ShieldCheck class="size-4" />
-          {vault.t('onboard_device.nexus_review_joins')}
+          {vault.t('onboard_device.sentinel_review_joins')}
         </Button>
       </div>
     </div>

@@ -15,10 +15,11 @@ use crate::storage::indexed_db::load_vault_local_cache;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-fn is_nexus_ceremony_required(err: &NookError) -> bool {
+fn is_sentinel_ceremony_required(err: &NookError) -> bool {
     match err {
         NookError::Encryption(message) | NookError::Database(message) => {
-            message.contains("opened-share ceremony") || message.contains("NexusCeremonyRequired")
+            message.contains("opened-share ceremony")
+                || message.contains("SentinelCeremonyRequired")
         }
         _ => false,
     }
@@ -220,7 +221,7 @@ impl NookVaultManager {
                 .await?
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| content.to_owned());
-            match self.load_stored_vault_or_nexus_ceremony(&cache, identity) {
+            match self.load_stored_vault_or_sentinel_ceremony(&cache, identity) {
                 Ok(LoadedVault {
                     meta,
                     secrets_key,
@@ -234,8 +235,8 @@ impl NookVaultManager {
                     self.apply_event_projection_to_session().await?;
                     Ok(())
                 }
-                Err(err) if is_nexus_ceremony_required(&err) => {
-                    self.prepare_nexus_ceremony_session(&cache)?;
+                Err(err) if is_sentinel_ceremony_required(&err) => {
+                    self.prepare_sentinel_ceremony_session(&cache)?;
                     Err(err.into())
                 }
                 Err(err) => Err(err.into()),
@@ -247,7 +248,7 @@ impl NookVaultManager {
                 return Err(NookError::Database(message).into());
             }
             let _ = self.status.tx.send("DECRYPT_START".to_owned());
-            match self.load_stored_vault_or_nexus_ceremony(content, identity) {
+            match self.load_stored_vault_or_sentinel_ceremony(content, identity) {
                 Ok(loaded) => {
                     let LoadedVault {
                         database,
@@ -267,8 +268,8 @@ impl NookVaultManager {
                     self.flush_event_outbox().await?;
                     Ok(())
                 }
-                Err(err) if is_nexus_ceremony_required(&err) => {
-                    self.prepare_nexus_ceremony_session(content)?;
+                Err(err) if is_sentinel_ceremony_required(&err) => {
+                    self.prepare_sentinel_ceremony_session(content)?;
                     Err(err.into())
                 }
                 Err(err) => Err(err.into()),
@@ -339,7 +340,7 @@ impl NookVaultManager {
             return Err(NookError::Database(message));
         }
         let projection = self.serialize_current_projection_yaml()?;
-        match self.load_stored_vault_or_nexus_ceremony(&projection, identity) {
+        match self.load_stored_vault_or_sentinel_ceremony(&projection, identity) {
             Ok(loaded) => {
                 let LoadedVault {
                     database,
@@ -356,8 +357,8 @@ impl NookVaultManager {
                 let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
                 Ok(())
             }
-            Err(err) if is_nexus_ceremony_required(&err) => {
-                self.prepare_nexus_ceremony_session(&projection)?;
+            Err(err) if is_sentinel_ceremony_required(&err) => {
+                self.prepare_sentinel_ceremony_session(&projection)?;
                 Err(err)
             }
             Err(err) => Err(err),
@@ -379,8 +380,8 @@ impl NookVaultManager {
                     nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
                 self.vault.meta.apply_record(&genesis);
             }
-            nook_core::VaultType::Nexus => {
-                // Nexus genesis keeps vault keys in session memory only. Shares
+            nook_core::VaultType::Sentinel => {
+                // Sentinel genesis keeps vault keys in session memory only. Shares
                 // are issued after the required participants are enrolled.
             }
         }
@@ -407,8 +408,8 @@ impl NookVaultManager {
                         nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
                     self.vault.meta.apply_record(&genesis);
                 }
-                nook_core::VaultType::Nexus => {
-                    // Nexus never writes per-device auth envelopes.
+                nook_core::VaultType::Sentinel => {
+                    // Sentinel never writes per-device auth envelopes.
                 }
             }
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {

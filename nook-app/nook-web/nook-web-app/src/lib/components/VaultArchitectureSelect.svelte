@@ -16,7 +16,7 @@
 
   const modes = $derived(
     kind === 'vault'
-      ? (['simple', 'nexus'] as const)
+      ? (['simple', 'sentinel'] as const)
       : (['personal', 'shared'] as const),
   )
   const selectedMode = $derived(
@@ -29,7 +29,7 @@
   )
 
   function selectMode(value: string | undefined) {
-    if (kind === 'vault' && (value === 'simple' || value === 'nexus')) {
+    if (kind === 'vault' && (value === 'simple' || value === 'sentinel')) {
       vault.draftVaultType = value
     } else if (
       kind === 'replication' &&
