@@ -1,0 +1,149 @@
+name: Temporary runner diagnostics
+
+on:
+  push:
+    branches:
+      - codex/runner-limit-diagnostics
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-runner-diagnostics
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    name: Inspect nook runner limits
+    runs-on: nook
+    timeout-minutes: 15
+    steps:
+      - name: Inspect host, runner, and Docker limits
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/runner-diagnostics.txt"
+          exec > >(tee "$report") 2>&1
+
+          section() {
+            printf '\n===== %s =====\n' "$1"
+          }
+
+          section "Host capacity"
+          printf 'date_utc=%s\n' "$(date -u +%FT%TZ)"
+          printf 'runner_name=%s\n' "$RUNNER_NAME"
+          printf 'runner_os=%s\n' "$RUNNER_OS"
+          printf 'runner_arch=%s\n' "$RUNNER_ARCH"
+          printf 'user=%s uid=%s\n' "$(id -un)" "$(id -u)"
+          printf 'logical_cpus=%s\n' "$(nproc)"
+          lscpu | grep -E '^(Architecture|CPU\(s\)|Model name|Thread\(s\) per core|Core\(s\) per socket|Socket\(s\)|CPU max MHz|CPU min MHz):' || true
+          free -h
+          df -hT / /var/lib/docker 2>/dev/null || df -hT /
+
+          section "Kernel-wide file and inotify ceilings"
+          sysctl \
+            fs.inotify.max_user_instances \
+            fs.inotify.max_user_watches \
+            fs.inotify.max_queued_events \
+            fs.file-max \
+            fs.file-nr
+
+          section "Workflow shell limits"
+          printf 'soft_nofile=%s\n' "$(ulimit -Sn)"
+          printf 'hard_nofile=%s\n' "$(ulimit -Hn)"
+          grep 'Max open files' /proc/self/limits
+
+          section "GitHub runner processes"
+          runner_uid="$(id -u)"
+          mapfile -t runner_pids < <(pgrep -u "$runner_uid" -f 'Runner.Listener|Runner.Worker' || true)
+          printf 'runner_process_count=%s\n' "${#runner_pids[@]}"
+          for pid in "${runner_pids[@]}"; do
+            printf 'pid=%s command=%s open_fds=' "$pid" "$(cat "/proc/$pid/comm" 2>/dev/null || echo unreadable)"
+            find "/proc/$pid/fd" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l
+            grep 'Max open files' "/proc/$pid/limits" 2>/dev/null || true
+          done
+
+          section "Current inotify use for runner user"
+          instances=0
+          watches=0
+          for proc_dir in /proc/[0-9]*; do
+            owner="$(stat -c '%u' "$proc_dir" 2>/dev/null || true)"
+            [ "$owner" = "$runner_uid" ] || continue
+            for fd in "$proc_dir"/fd/*; do
+              [ "$(readlink "$fd" 2>/dev/null || true)" = "anon_inode:inotify" ] || continue
+              instances=$((instances + 1))
+            done
+            for fdinfo in "$proc_dir"/fdinfo/*; do
+              [ -r "$fdinfo" ] || continue
+              count="$(grep -c '^inotify' "$fdinfo" 2>/dev/null || true)"
+              watches=$((watches + count))
+            done
+          done
+          printf 'inotify_instances=%s\n' "$instances"
+          printf 'inotify_watches=%s\n' "$watches"
+
+          section "Docker daemon limits and capacity"
+          systemctl show docker.service \
+            --property=LimitNOFILE \
+            --property=TasksCurrent \
+            --property=TasksMax \
+            --property=MemoryCurrent \
+            --property=MemoryMax || true
+          dockerd_pid="$(pgrep -xo dockerd || true)"
+          if [ -n "$dockerd_pid" ]; then
+            printf 'dockerd_pid=%s\n' "$dockerd_pid"
+            grep 'Max open files' "/proc/$dockerd_pid/limits" 2>/dev/null || true
+          fi
+          docker version --format 'docker_client={{.Client.Version}} docker_server={{.Server.Version}}'
+          docker info --format 'cpus={{.NCPU}} memory_bytes={{.MemTotal}} storage_driver={{.Driver}} cgroup_driver={{.CgroupDriver}} cgroup_version={{.CgroupVersion}} docker_root={{.DockerRootDir}}'
+          docker info --format 'driver_status={{json .DriverStatus}}'
+          docker buildx ls
+          if [ -r /etc/docker/daemon.json ] && command -v jq >/dev/null; then
+            jq '{features, "default-ulimits": .["default-ulimits"]}' /etc/docker/daemon.json
+          fi
+
+          section "Default runtime-container nofile"
+          docker run --rm busybox:1.37.0 sh -c \
+            'printf "soft_nofile=%s\nhard_nofile=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)"; grep "Max open files" /proc/self/limits'
+
+          section "BuildKit RUN-step nofile"
+          probe="$RUNNER_TEMP/nook-buildkit-nofile-probe"
+          mkdir -p "$probe"
+          cat >"$probe/Dockerfile" <<'EOF'
+          FROM busybox:1.37.0
+          RUN printf "soft_nofile=%s\nhard_nofile=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)" \
+              && grep "Max open files" /proc/self/limits
+          EOF
+          docker buildx build --no-cache --progress=plain --file "$probe/Dockerfile" "$probe"
+
+          section "Known limit errors in runner service logs (last 24 hours)"
+          journalctl --since '24 hours ago' --no-pager 2>/dev/null \
+            | grep -Ei 'ENOSPC|EMFILE|ENFILE|inotify|too many open files|file descriptor' \
+            | tail -100 \
+            || true
+
+      - name: Publish diagnostic summary
+        if: always()
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/runner-diagnostics.txt"
+          {
+            echo '## Temporary nook runner diagnostics'
+            echo
+            echo '```text'
+            if [ -f "$report" ]; then
+              cat "$report"
+            else
+              echo 'The diagnostic report was not created.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: runner-diagnostics
+          path: ${{ runner.temp }}/runner-diagnostics.txt
+          if-no-files-found: warn
+          retention-days: 1
