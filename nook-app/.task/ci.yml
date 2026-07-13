@@ -85,17 +85,13 @@ tasks:
       - task: docker:push:ci
 
   ci:pr:deploy-preview:
-    desc: Deploy nook-app/nook-web/dist to Cloudflare Pages inside the app container (dist is in-image, no mount).
-    deps:
-      - setup
+    desc: Deploy the prepared PR image's dist to Cloudflare Pages (CI only; ci:pr must run first).
     cmds:
       - task: docker:task
         vars: { TASK: _deploy-preview }
 
   ci:cloudflare:deploy:
-    desc: Deploy nook-app/nook-web/dist to Cloudflare Pages for the configured branch.
-    deps:
-      - setup
+    desc: Deploy the prepared main image's dist to Cloudflare Pages (CI only; ci:main must run first).
     cmds:
       - task: docker:task
         vars: { TASK: _deploy-cloudflare }

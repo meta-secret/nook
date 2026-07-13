@@ -57,8 +57,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}
         run: |
-          # Deploy runs inside the app container (dist is in-image, no bind mount). Capture the
-          # preview URL from the container's stdout marker and hand it to the comment step.
+          # Deploy reuses the image prepared by the preceding gate (dist is in-image, no bind
+          # mount or second setup). Capture the preview URL from the container's stdout marker.
           # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
           # print the container output (it holds the real error) before failing the step.
           set +e

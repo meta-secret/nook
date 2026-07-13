@@ -225,7 +225,8 @@ as the base comparison because the measured source is unchanged.
 self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
 **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
-toolchain image push). PR coverage always checks the current
+toolchain image push). The preview deploy reuses that prepared sealed image and
+must not declare another `setup` dependency. PR coverage always checks the current
 `nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
 inputs reuse the exact base commit's main artifact (with a coverage-only build
 fallback), while unchanged source reuses the current artifact as the base
@@ -237,7 +238,8 @@ place to discover fmt/clippy/unit/e2e failures.
 research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
 the toolchain cache from GHCR. Main pushes the commit-tagged toolchain image
 after green verify and deploys the active development channel to Cloudflare
-Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without
+Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
+`release.yml` runs the main-equivalent gate without
 pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages
 for stable `nokey.sh`, and publishes the GitHub Release only after deployment
 succeeds. The extra latency is acceptable for background work and keeps it from
