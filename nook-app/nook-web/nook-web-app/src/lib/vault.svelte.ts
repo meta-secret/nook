@@ -859,6 +859,15 @@ export class VaultState {
       this.enrollmentFromUrlPending = true
     }
 
+    // A password-only session may have queued local event-log writes while
+    // provider credentials were still sealed. Once passkey/PIN authorization
+    // reloads those credentials, flush the pending events before normal polling
+    // resumes so remote replicas do not wait for another user edit.
+    if (this.isAuthenticated) {
+      await this.runFanOutSyncAfterLocalSave()
+      this.startVaultSync()
+    }
+
     vaultLog.info('app init finished', {
       localVaultPresent: this.localVaultPresent,
       authenticated: this.isAuthenticated,
@@ -1533,6 +1542,19 @@ export class VaultState {
     this.deviceAuthorizationInProgress = false
     this.deviceId = ''
     this.devicePublicKey = ''
+    // Sync-provider credentials are sealed to the protected device identity.
+    // Keep only the non-secret local row in memory while that identity is
+    // locked; passkey/PIN authorization reloads the sealed providers.
+    this.providers = this.providers.filter(
+      (provider) => provider.type === 'local',
+    )
+    this.providersLoaded = this.providers.length > 0
+    this.githubPat = ''
+    this.oauthFile = undefined
+    this.localFolder = undefined
+    if (this.localVaultPresent) {
+      this.storageMode = LOCAL_PROVIDER_TYPE
+    }
     if (!this.manager) return Promise.resolve()
     return this.enqueueStorage(() => this.manager!.lockDeviceIdentity()).catch(
       () => {
@@ -1961,6 +1983,7 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
+    if (!this.deviceProtectionReady) return
     if (this.syncProviders.length === 0) {
       await this.flushRemoteEventOutboxNow()
       return

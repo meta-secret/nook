@@ -157,6 +157,10 @@ export async function syncLocalFolderProvider(
 
 export function startVaultSync(state: VaultState) {
   state.stopVaultSync()
+  if (state.isAuthenticated && !state.deviceProtectionReady) {
+    log.debug('vault sync timer skipped (device identity locked)')
+    return
+  }
   const intervalMs = state.runtimeConfig.resolveVaultSyncIntervalMs(
     import.meta.env.VITE_VAULT_SYNC_INTERVAL_MS ?? undefined,
   )

@@ -63,13 +63,21 @@ flowchart TB
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
-**Unlock ordering:** `markVaultUnlocked()` must run only after `loadProviders()` (and related provider hydrate). Fan-out after local save uses `syncProviders`; unlocking the UI earlier lets a fast edit (especially delete) push with an empty provider list and leave the remote event log stale. Delete/replace/add all `await runFanOutSyncAfterLocalSave()` so remote observers see the event before the handler returns.
+**Unlock ordering:** Device-key unlock runs `loadProviders()` (and related
+provider hydrate) before `markVaultUnlocked()`. Fan-out after local save uses
+`syncProviders`; unlocking that path earlier lets a fast edit push with an
+empty provider list and leave the remote event log stale. Backup-password
+unlock is the exception: it may open the local vault while the device identity
+and its sealed provider credentials remain locked, and remote fan-out stays
+disabled until device authorization.
 
 After lock, the app stays in **`LoginGate`** without opening a passkey prompt.
-When the user explicitly chooses **Unlock**, it presents `DeviceProtectionGate`
-in `PasskeyAuthOverlay` as the required device-authorization step. Successful
-passkey authorization or PIN fallback restores the identity in WASM memory and
-continues that same vault-unlock action automatically:
+When the user explicitly chooses **This device's keys**, it presents
+`DeviceProtectionGate` in `PasskeyAuthOverlay` as the required
+device-authorization step. Successful passkey authorization or PIN fallback
+restores the identity in WASM memory and continues that same vault-unlock action
+automatically. **Backup password** is an alternative vault-key credential and
+must open the local vault directly without presenting the passkey/PIN form.
 
 The gate presents itself as **Device setup — Step 1 of 2**, not as vault login.
 Its copy explains that it prepares or unlocks the browser's protected device
@@ -93,6 +101,10 @@ passkey recovery action.
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
 - **Single local vault** → unlock with device keys and/or backup password.
+- Backup-password summaries are read from the encrypted local vault before
+  device authorization, so Lock must not hide the password choice. Selecting a
+  backup password unwraps the vault keys directly; it does not unlock the
+  wrapped device identity or its sealed sync-provider credentials.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Sentinel starts the pre-vault reverse-onboarding ceremony in [sentinel-genesis.md](sentinel-genesis.md).
 
 The login vault surface presents **Open existing**, **Create new**, and **Import**

@@ -263,7 +263,16 @@ impl NookVaultManager {
         let _ = self.status.tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity()?;
+        // A backup password is an alternate vault-key credential. After an
+        // explicit Lock the wrapped device identity stays protected, but the
+        // password must still be able to open the local vault without first
+        // authorizing that identity. When the identity is already available
+        // (for example during QR enrolment), refresh membership as before.
+        let identity = if self.device.identity_private_key.is_empty() {
+            None
+        } else {
+            Some(self.ensure_device_identity()?)
+        };
 
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -301,14 +310,22 @@ impl NookVaultManager {
 
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.unlock = nook_core::VaultUnlock::Keys;
-        self.persist_password_unlock_membership(
-            event_log_remote,
-            &mut records,
-            &identity,
-            &keys,
-            &content,
-        )
-        .await?;
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
+        // Password-only sessions can still mutate the local vault. Make sure a
+        // legacy YAML projection is imported before any later CRUD operation
+        // appends to the immutable log, even when the protected device identity
+        // remains locked and membership cannot be refreshed yet.
+        self.ensure_event_log_ready().await?;
+        if let Some(identity) = identity.as_ref() {
+            self.persist_password_unlock_membership(
+                event_log_remote,
+                &mut records,
+                identity,
+                &keys,
+                &content,
+            )
+            .await?;
+        }
 
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let stored_records = self.stored_records_snapshot();
@@ -474,5 +491,101 @@ impl NookVaultManager {
         self.append_vault_operations(operations).await?;
         self.flush_event_outbox().await?;
         self.persist_projection_cache().await
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod wasm_tests {
+    use super::*;
+    use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn locked_password_unlock_imports_legacy_projection_and_reopens_event_log() {
+        let keys = nook_core::generate_vault_keys().expect("vault keys");
+        let mut database = nook_core::Database::new();
+        let secret_id = nook_core::SecretId::from_vault_record(
+            format!("secret_{}", nook_core::generate_id().expect("secret id")).as_str(),
+        );
+        database.insert(
+            secret_id,
+            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
+                title: "legacy note".to_owned(),
+                note: "preserve me".to_owned(),
+            }),
+        );
+        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key).expect("vault crypto");
+        let records = database
+            .to_stored_records_with_crypto(&crypto)
+            .expect("stored records");
+        let password_entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            nook_core::generate_id().expect("password id").as_str(),
+            "Recovery",
+            "2026-07-13T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N,
+        )
+        .expect("password entry");
+        let store_id = nook_core::generate_store_id()
+            .expect("store id")
+            .to_string();
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+            &records,
+            &nook_core::VaultUnlock::Keys,
+            std::slice::from_ref(&password_entry),
+            Some(&store_id),
+            Some("Legacy password test"),
+            None,
+        )
+        .expect("legacy yaml");
+        import_vault_blob(yaml.as_str(), Some("Legacy password test"))
+            .await
+            .expect("import legacy vault");
+        switch_active_vault(&store_id)
+            .await
+            .expect("select legacy vault");
+
+        let mut legacy_manager = NookVaultManager::new();
+        let unlocked = legacy_manager
+            .connect_with_password(
+                "local".to_owned(),
+                String::new(),
+                String::new(),
+                password_entry.id.clone(),
+                "correct horse battery staple".to_owned(),
+            )
+            .await
+            .expect("locked legacy password unlock");
+        assert_eq!(unlocked.len(), 1);
+        assert!(legacy_manager.device.identity_private_key.is_empty());
+        assert!(
+            legacy_manager
+                .event_log_has_events()
+                .await
+                .expect("legacy import event check")
+        );
+
+        let mut event_log_manager = NookVaultManager::new();
+        let reopened = event_log_manager
+            .connect_with_password(
+                "local".to_owned(),
+                String::new(),
+                String::new(),
+                password_entry.id,
+                "correct horse battery staple".to_owned(),
+            )
+            .await
+            .expect("locked event-log password unlock");
+        assert_eq!(reopened.len(), 1);
+        assert!(event_log_manager.device.identity_private_key.is_empty());
+        assert!(
+            event_log_manager
+                .event_log_has_events()
+                .await
+                .expect("event-log reopen check")
+        );
     }
 }

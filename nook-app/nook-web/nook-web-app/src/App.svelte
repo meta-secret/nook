@@ -226,6 +226,10 @@
     await vault.loadDb()
   }
 
+  async function handlePasswordUnlock(entryId: string, password: string) {
+    await vault.unlockWithPassword(entryId, password)
+  }
+
   async function handleSettingsReconnect() {
     if (vault.loginSetupType) {
       await vault.connectAndSyncStagedProvider()
@@ -281,7 +285,6 @@
     | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
     | { kind: 'sentinel-participant-key' }
     | { kind: 'sentinel-onboarding'; packageJson: string }
-
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
   let pendingExistingVaultUnlock = $state(false)
   const showPasskeyOverlay = $derived(
@@ -576,8 +579,7 @@
                 {sentinelInvitationRequest}
                 {sentinelOnboardingPackage}
                 onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
-                onUnlockWithPassword={(entryId, password) =>
-                  vault.unlockWithPassword(entryId, password)}
+                onUnlockWithPassword={handlePasswordUnlock}
                 onCreateDeviceVault={handleCreateDeviceVault}
                 onStartSentinelGenesis={handleStartSentinelGenesis}
                 onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}
