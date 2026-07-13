@@ -11,7 +11,7 @@ direct invocation; the `.cortex` card remains the source of truth.
 
 | Skill card | Purpose | Cursor skill |
 |---|---|---|
-| [code-review-comments.md](code-review-comments.md) | Make CodeRabbit review handling auditable: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.cursor/skills/code-review-comments/SKILL.md`](../../.cursor/skills/code-review-comments/SKILL.md) |
+| [code-review-comments.md](code-review-comments.md) | Make human, Codex, and automated review handling auditable: verify, fix or explain, validate, push, reply on-thread, then resolve | [`.cursor/skills/code-review-comments/SKILL.md`](../../.cursor/skills/code-review-comments/SKILL.md) |
 | [dynamic-skill-authoring.md](dynamic-skill-authoring.md) | Capture user feedback as durable `.cortex` skill cards and optional Cursor project skills | [`.cursor/skills/dynamic-skill/SKILL.md`](../../.cursor/skills/dynamic-skill/SKILL.md) |
 | [feature-issue-planning.md](feature-issue-planning.md) | Organize every feature issue pack with a mandatory milestone, parent issue, focused sub-issues, and labels so GitHub stays manageable | |
 | [issue-scope-management.md](issue-scope-management.md) | Manage deferred, risky, or too-large work through existing issues, aggregate parent issues, and focused sub-issues without disrupting other agents | [`.cursor/skills/issue-scope-management/SKILL.md`](../../.cursor/skills/issue-scope-management/SKILL.md) |
