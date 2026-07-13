@@ -18,20 +18,34 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 
 ## ⛔ Non-negotiable: never wait for external reviews or checks
 
-The repository-owned PR test check (`PR / Verify and preview`) is the only
-remote check agents wait for. **Codex reviews are not required.** Never request,
+Applicable repository-owned PR test checks are the only remote checks agents
+wait for: normally `PR / Verify and preview`, plus `Web research / Build and
+deploy research catalog` when web-research paths change. **Codex reviews are not required.** Never request,
 poll, monitor, or delay merge/handoff for Codex, Claude, Cursor, CodeRabbit, or
 any other external review, check, deployment, or service. Do not add a grace
-period for external feedback after Nook's PR test check passes.
+period for external feedback after Nook's applicable PR test checks pass.
 
 External feedback is still useful when it already exists: before merge or
 handoff, inspect the comments and review findings currently present and address
 every active actionable item from humans or external services. Reply with the
 fix, validation, or no-change rationale as documented below. Then proceed based
-on Nook's own PR test check; never wait for another external response or review
+on Nook's own applicable PR test checks; never wait for another external response or review
 cycle. Every external-service review comment already present must be inspected;
 the service being optional is never a reason to skip its feedback. Full policy:
 [rules.md §6](rules.md#6-git--pull-request-workflow).
+
+## ⛔ Non-negotiable: push before final checks; run them in parallel
+
+As soon as a change is coherent enough to validate, **commit it, push it to the
+PR, and only then start the required local checks**. Never serialize the final
+gate as `local checks → push → remote checks`; that wastes the entire local-check
+duration. The required order is `commit → push/open or update PR → local checks
+and repository-owned PR checks in parallel`.
+
+Tiny focused commands used to develop or make the commit coherent may run before
+the push. The minimum local gate, full suites, builds, e2e, and any repeated
+post-fix validation must run after the completed change is pushed so remote work
+starts immediately. Full policy: [workflows/coding-bro.md](workflows/coding-bro.md#testing-strategy--parallel-final-validation).
 
 ## 1. Rules & Architectural Layout
 * [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level package layout, dependencies, command surface, and quality gates.
@@ -60,7 +74,7 @@ the service being optional is never a reason to skip its feedback. Full policy:
 * [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
 
 ## 6. Workflows (`workflows/`)
-* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → push/open PR → monitor Nook's PR test check → fix loop → address comments already present → squash merge when green). Prefer cached local Docker over cold GH Actions; never wait for external services.
+* [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → commit/push first → local and applicable PR checks in parallel → fix loop → address comments already present → squash merge when green). Prefer cached local Docker over cold GH Actions; never wait for external services.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
 * [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
@@ -107,8 +121,8 @@ the service being optional is never a reason to skip its feedback. Full policy:
   specific comment/item; a broad PR audit comment is not a substitute. Resolve a conversation only after
   the targeted reply is visible and the finding is fixed or explicitly invalidated, then re-query the PR.
   Inspect what is present before merge or handoff, but never wait for a reviewer or external service to
-  comment, re-review, resolve, or finish a check. Nook's repository-owned PR test check is the only remote
-  check agents wait for.
+  comment, re-review, resolve, or finish a check. Nook's applicable repository-owned PR test checks are the
+  only remote checks agents wait for.
   See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality

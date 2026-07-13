@@ -2,6 +2,7 @@ import { chdir } from "node:process";
 
 import { loadConfig } from "./config.js";
 import {
+  assertNoPendingPrFeedback,
   branchExistsOnOrigin,
   commentOnIssue,
   createFixPr,
@@ -93,12 +94,13 @@ export async function runCiImplement(): Promise<void> {
         octokit,
         repoRef,
         issueNumber,
-        `Opened PR ${url} for this issue. Waiting for checks, then squash-merging.`,
+        `Opened PR ${url} for this issue. Waiting only for Nook's repository-owned PR checks, then inspecting existing feedback before squash-merging.`,
       );
     }
   }
 
   await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
+  await assertNoPendingPrFeedback(octokit, repoRef, prNumber);
   await squashMergePr(octokit, repoRef, prNumber, agentBranch);
   log.info(`Done — merged PR #${prNumber} (implement run ${runId})`);
 

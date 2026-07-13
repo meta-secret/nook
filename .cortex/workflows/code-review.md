@@ -5,8 +5,9 @@ Codex, Claude, Cursor, CodeRabbit, and other services are never required gates.
 
 ## Non-blocking rule
 
-The repository-owned PR test check (`PR / Verify and preview`) is the only
-remote check agents wait for. Agents must never:
+Applicable repository-owned PR test checks are the only remote checks agents
+wait for: normally `PR / Verify and preview`, plus `Web research / Build and
+deploy research catalog` when web-research paths change. Agents must never:
 
 - request `@codex review` or request a review from another external service;
 - poll or monitor an external review or check;
@@ -16,7 +17,7 @@ remote check agents wait for. Agents must never:
 
 Automatic external reviews may remain enabled as a source of useful comments,
 but their absence, pending state, failure, or lack of a second pass has no effect
-on readiness. Nook's own local validation and repository-owned PR test check
+on readiness. Nook's own local validation and applicable repository-owned PR test checks
 remain authoritative.
 
 ## Handling feedback that already exists
@@ -43,7 +44,7 @@ non-actionable status/praise as no action and fully handle every substantive
 finding.
 
 After those existing items are handled, proceed based on Nook's own PR test
-check. Do not wait for an external reply, resolution, re-review, or new comment.
+checks. Do not wait for an external reply, resolution, re-review, or new comment.
 If another actionable comment arrives while the agent is still working, address
 it; comments that have not arrived cannot block the workflow.
 
@@ -58,7 +59,7 @@ Report:
 - every actionable finding that was already present and how it was handled;
 - unresolved active review-thread count at the time of the final inspection;
 - local validation results; and
-- the state of Nook's repository-owned PR test check.
+- the state of Nook's applicable repository-owned PR test checks.
 
 Do not report external review completion as a requirement and do not delay the
 handoff to obtain it.

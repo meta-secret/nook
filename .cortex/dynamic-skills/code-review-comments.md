@@ -33,7 +33,7 @@ posting a broad or duplicative PR comment.
 
 Inspect the currently available feedback once before merge or handoff. After
 all actionable items currently present are handled, proceed as soon as Nook's
-repository-owned PR test check passes. Do not wait for reviewers or services to
+applicable repository-owned PR test checks pass. Do not wait for reviewers or services to
 reply, re-review, resolve, or finish; do not add a grace period for comments
 that might arrive later.
 
@@ -150,7 +150,7 @@ commit or why it no longer applies before resolution.
 
 Use GraphQL or `gh pr view`/`gh api` to confirm there are no unresolved review
 threads, and inspect submitted reviews and PR comments for remaining actionable
-items currently present. Report Nook's repository-owned PR test-check state,
+items currently present. Report Nook's applicable repository-owned PR test-check state,
 the unresolved-thread query result, and whether any unthreaded actionable
 review-body item remains in the handoff. Never wait for an external reviewer or
 check to change state.

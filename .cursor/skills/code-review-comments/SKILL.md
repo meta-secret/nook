@@ -26,8 +26,9 @@ checklist and final handoff rather than creating broad or duplicative PR
 comments. Re-query reviews and unresolved threads before handoff.
 
 Inspect the feedback currently present once, address every actionable item, and
-then proceed as soon as Nook's repository-owned `PR / Verify and preview` check
-passes. Never wait for Codex or another service to comment, reply, re-review,
+then proceed as soon as Nook's applicable repository-owned PR test checks pass.
+These are normally `PR / Verify and preview`, plus `Web research / Build and
+deploy research catalog` when web-research paths change. Never wait for Codex or another service to comment, reply, re-review,
 resolve, or finish a check, and never add a grace period for future feedback.
 
 Use the concrete, paginated review-thread GraphQL query and the current-head
