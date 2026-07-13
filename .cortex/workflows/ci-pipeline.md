@@ -434,6 +434,7 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
 5. PR CI omits browser e2e; main runs full local-provider and extension **e2e**; nightly runs **sync-live**. Main and nightly failures invoke `ci-fix`.
+6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. `_ci:dockerfile-cache-policy` rejects violations.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
 <!-- agent-implement docker smoke -->

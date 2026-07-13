@@ -149,8 +149,21 @@ tasks:
   _ci:pr:
     desc: PR gate — format, wasm (image-seeded), verify ‖ build (one container; no browser e2e).
     cmds:
+      - task: _ci:dockerfile-cache-policy
       - task: _format:check
       - task: _ci:pr:parallel
+
+  _ci:dockerfile-cache-policy:
+    desc: Reject Dockerfile BuildKit cache mounts; immutable image layers are the cache boundary.
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        matches="$(find . -type f \( -name Dockerfile -o -name "*.Dockerfile" \) -not -path "./.git/*" -exec grep -Hn -- "--mount=type=cache" {} + || true)";
+        if [ -n "$matches" ]; then
+          echo "Dockerfile RUN --mount=type=cache is prohibited by .cortex/rules.md:" >&2;
+          echo "$matches" >&2;
+          exit 1;
+        fi'
 
   _ci:pr:parallel:
     desc: Lint/test ‖ production web build after wasm is ready.
@@ -161,6 +174,7 @@ tasks:
   _ci:main:build:
     desc: Main verify/build track without e2e.
     cmds:
+      - task: _ci:dockerfile-cache-policy
       - task: _format:check
       - task: _ci:pr:parallel
 

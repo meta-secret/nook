@@ -125,6 +125,20 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
     1. `task format` - Automatically formats all Rust and JS/TS/Svelte files.
     2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and web builds.
 
+### Dockerfile cache mounts — never use them
+
+> ## ⛔ STRICTLY PROHIBITED: `RUN --mount=type=cache`
+>
+> **Never add a Dockerfile `RUN --mount=type=cache` directive anywhere in this repository.**
+> Cache mounts introduce hidden BuildKit-daemon state, can serialize concurrent
+> builds, and have caused immediate severe performance regressions on the shared
+> runner. Install dependencies directly in ordinary Dockerfile `RUN` layers and
+> let the immutable Docker layer plus the pinned lockfile be the cache boundary.
+>
+> This prohibition applies regardless of `sharing=shared`, `sharing=private`, or
+> `sharing=locked`. Changing the sharing mode is not an acceptable workaround.
+> PR and main CI enforce this rule through `_ci:dockerfile-cache-policy`.
+
 ### Docker daemon — never kill it
 
 > ## ⛔ STRICTLY PROHIBITED: killing the Docker daemon
