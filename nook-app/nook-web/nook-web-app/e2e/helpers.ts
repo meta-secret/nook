@@ -3735,8 +3735,7 @@ export async function addSecret(
           const tx = db.transaction('vault', 'readonly')
           const store = tx.objectStore('vault')
           const activeReq = store.get('active_vault_id')
-          activeReq.onerror = () =>
-            resolve(`idb-read-error:${activeReq.error}`)
+          activeReq.onerror = () => resolve(`idb-read-error:${activeReq.error}`)
           activeReq.onsuccess = () => {
             const activeId = String(activeReq.result ?? '').trim()
             if (!activeId) {
@@ -3744,8 +3743,7 @@ export async function addSecret(
               return
             }
             const getReq = store.get(`vault:${activeId}`)
-            getReq.onerror = () =>
-              resolve(`idb-read-error:${getReq.error}`)
+            getReq.onerror = () => resolve(`idb-read-error:${getReq.error}`)
             getReq.onsuccess = () =>
               resolve(typeof getReq.result === 'string' ? getReq.result : '')
           }

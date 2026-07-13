@@ -1,9 +1,5 @@
 import { expect, test } from './fixtures'
-import {
-  clearBrowserVault,
-  connectLocalVault,
-  UI_TIMEOUT_MS,
-} from './helpers'
+import { clearBrowserVault, connectLocalVault, UI_TIMEOUT_MS } from './helpers'
 
 test.describe('authenticated shell height', () => {
   test.beforeEach(async ({ page }) => {
