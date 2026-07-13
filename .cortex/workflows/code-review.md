@@ -1,91 +1,64 @@
-# Codex GitHub Review Workflow
+# External Review Feedback Workflow
 
-Use Codex as Nook's automatic high-signal reviewer on GitHub pull requests.
-Codex submits a standard GitHub review, follows the closest `AGENTS.md`, and
-limits GitHub findings to P0/P1 issues.
+External AI review is optional, non-blocking feedback for Nook pull requests.
+Codex, Claude, Cursor, CodeRabbit, and other services are never required gates.
 
-Reference: [Codex code review in GitHub](https://learn.chatgpt.com/docs/third-party/github).
+## Non-blocking rule
 
-Codex review does **not** replace Nook's required gates:
+The repository-owned PR test check (`PR / Verify and preview`) is the only
+remote check agents wait for. Agents must never:
 
-- `task format:check`
-- `task check`
-- targeted or full Playwright e2e where relevant
-- GitHub Actions and required deployment status
-- human review and `.cortex` architecture rules
+- request `@codex review` or request a review from another external service;
+- poll or monitor an external review or check;
+- wait for a review to start, finish, or run again after a push;
+- delay merge or handoff for an external status, deployment, or service; or
+- add a grace period in case external feedback might arrive.
 
-## Repository setup
+Automatic external reviews may remain enabled as a source of useful comments,
+but their absence, pending state, failure, or lack of a second pass has no effect
+on readiness. Nook's own local validation and repository-owned PR test check
+remain authoritative.
 
-The repository must have all of the following:
+## Handling feedback that already exists
 
-1. Codex Cloud access to `meta-secret/nook`.
-2. Code review enabled for the repository in Codex settings.
-3. Repository automatic review set to **Review all PRs**, with the **On every
-   push** trigger and exhaustive review enabled. Credit use remains disabled.
-4. Review guidance in the root [`AGENTS.md`](../../AGENTS.md), with more
-   specific nested `AGENTS.md` files where a subtree needs extra rules.
+Before merge or handoff, inspect the PR comments, submitted review bodies, and
+inline threads that are currently present. Follow
+[the code-review-comments skill](../dynamic-skills/code-review-comments.md) for
+every active actionable finding, whether it came from a human, Codex, Claude,
+Cursor, CodeRabbit, or another service:
 
-Codex applies the closest `AGENTS.md` to each changed file. Keep review-only
-priorities under `## Review guidelines`; keep the full architecture and workflow
-rules in [`.cortex/AGENTS.md`](../AGENTS.md) and its linked documents.
-
-## Automatic review
-
-Automatic review runs when a pull request is opened and again after every push.
-Confirm that Codex reacts and submits a review before considering the review gate
-observed. A thumbs-up is a valid clean review; actionable findings appear as
-standard GitHub review comments.
-
-Codex reviews only serious P0/P1 findings on GitHub. Do not weaken the root
-review guidelines merely to produce more comments.
-
-## Manual and focused review
-
-Use the exact PR comment below when automatic review did not run or a one-off
-manual pass is needed:
-
-```text
-@codex review
-```
-
-Add a one-off focus when the change has a specific risk:
-
-```text
-@codex review for authentication and plaintext-storage regressions
-```
-
-Request one coherent review after the branch is ready. Do not post repeated
-review requests for exploratory commits or while another Codex review is still
-running.
-
-## Handling findings
-
-Follow [the code-review-comments skill](../dynamic-skills/code-review-comments.md)
-for every actionable finding:
-
-1. Verify it against the current branch and `.cortex` rules.
+1. Verify the finding against the current branch and `.cortex` rules.
 2. Make the minimal correct fix or document why no change is needed.
 3. Run the smallest relevant local validation.
-4. Push the completed fix.
-5. Reply on the original thread with the fix and validation.
+4. Push the completed fix when files changed.
+5. Reply on the original thread or comment with the fix and validation when a
+   targeted reply is possible.
 6. Resolve only after the targeted reply is visible and the finding is fixed or
    explicitly invalidated.
-7. Re-query reviews and unresolved threads before handoff or merge.
+7. Re-query the feedback currently present once before handoff or merge.
 
-Codex can be asked to fix a finding with a PR comment such as `@codex fix the P1
-issue`, but that starts a separate cloud task that may push to the branch. Use it
-only when the user explicitly wants Codex Cloud to own that fix; the active agent
-normally handles findings directly.
+Inspect every external-service review comment already present. An optional
+review service never makes its delivered feedback optional; classify
+non-actionable status/praise as no action and fully handle every substantive
+finding.
 
-## Validation and handoff
+After those existing items are handled, proceed based on Nook's own PR test
+check. Do not wait for an external reply, resolution, re-review, or new comment.
+If another actionable comment arrives while the agent is still working, address
+it; comments that have not arrived cannot block the workflow.
 
-Before merge or handoff, report:
+An external service may be asked to implement a finding only when the user
+explicitly requests that separate service to own the fix. The active agent
+otherwise handles findings directly and never waits for the service.
 
-- whether automatic or manual Codex review ran on the latest coherent change;
-- every P0/P1 finding and how it was handled;
-- unresolved review-thread count;
-- local validation and GitHub check/deployment state.
+## Handoff
 
-If Codex does not react or submit a review, verify repository access, the Codex
-Cloud environment, repository code-review settings, automatic-review trigger,
-and the exact `@codex review` command before treating it as a product failure.
+Report:
+
+- every actionable finding that was already present and how it was handled;
+- unresolved active review-thread count at the time of the final inspection;
+- local validation results; and
+- the state of Nook's repository-owned PR test check.
+
+Do not report external review completion as a requirement and do not delay the
+handoff to obtain it.
