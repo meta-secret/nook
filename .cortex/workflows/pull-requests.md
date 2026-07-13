@@ -102,12 +102,14 @@ is coherent. See [code-review.md](code-review.md).
 
 ### 5. Local checks
 
-**Remote CI is cold and heavy** — fresh runners pull Docker images and run the
-full prepared test set from scratch (**5+ minutes** plus queue). **Local Docker
-uses cached images** and is strongly preferred for checking tests, fixing issues,
-and iterating. Once the iteration is ready for final validation, push first and
-run the local gate immediately while remote CI runs. Remote CI validates a clean
-environment for the PR; local Docker remains the primary diagnostic loop.
+**Remote PR CI is cache-warm but still a full validation gate.** `pr.yml` uses
+the self-hosted `nook` pool so Docker/BuildKit layers persist between runs and
+developer-critical PR feedback stays fast. **Local Docker also uses cached
+images** and is strongly preferred for checking tests, fixing issues, and
+iterating. Once the iteration is ready for final validation, push first and run
+the local gate immediately while remote CI runs. Remote CI validates the PR in
+the repository runner environment; local Docker remains the primary diagnostic
+loop. Long-running AI agents are isolated on GitHub-hosted runners.
 
 **Minimum local final gate before merge or handoff:**
 
