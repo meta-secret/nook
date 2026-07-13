@@ -19,7 +19,7 @@ ownership until merge or an explicit blocked handoff:
 5. **Fix failed GitHub Actions** — inspect failed logs, consult app logs for
    web/e2e failures, fix locally, push the completed fix, and re-watch CI until
    green.
-6. **Address comments** — reply to actionable human, CodeRabbit, and automated
+6. **Address comments** — reply to actionable human, Codex, and automated
    comments with the fix, validation, or no-change rationale, then push any
    needed changes and re-watch checks.
 7. **Merge when ready and green** — after the branch is current with
@@ -49,17 +49,16 @@ Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for auto
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
   A --> I[2 Implement]
-  I --> CR[3 CodeRabbit when useful]
-  CR --> E[4 Push + open/update PR]
-  E --> B[5 Local validation: check / e2e / ci:pr]
-  E --> F[6 Monitor PR CI + review]
+  I --> E[3 Push + open/update PR]
+  E --> B[4 Local validation: check / e2e / ci:pr]
+  E --> F[5 Monitor PR CI + Codex review]
   B --> G{Local + remote green?}
   F --> G
-  G -->|no| H[7 Read app logs + fix]
-  H --> PUSH[8 Push completed fix]
+  G -->|no| H[6 Read app logs + fix]
+  H --> PUSH[7 Push completed fix]
   PUSH --> B
   PUSH --> F
-  G -->|yes| C[9 Address comments]
+  G -->|yes| C[8 Address comments]
   C --> M[Squash merge PR]
   M --> J[Report task duration]
   J --> K[Done]
@@ -84,23 +83,7 @@ around getting that PR green and merged.
 
 ### 2. Implement
 
-### 3. CodeRabbit review when useful
-
-For nontrivial agent-authored changes, run a CodeRabbit local review before the
-final local gate:
-
-```bash
-coderabbit review --agent --type uncommitted
-```
-
-Fix valid `critical` and `major` findings, consider behaviorally meaningful
-`minor` findings, then re-run once after substantial fixes. CodeRabbit is an
-extra review signal; it does not replace `task check`, e2e/`task ci:pr`, app-log
-inspection, or `.cortex` architecture rules. Skip it for trivial docs/mechanical
-changes or when authentication/rate limits block it, and say so in the PR
-handoff. See [coderabbit.md](coderabbit.md).
-
-### 4. Push at the final-validation boundary
+### 3. Push at the final-validation boundary
 
 When the branch has a coherent implementation commit, commit and push/open or
 update the PR **before** starting the long final local gate. This lets remote CI
@@ -112,6 +95,10 @@ and push only when the PR branch is ready for final validation.
 git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
+
+Codex automatically reviews PRs on open and every push. If automatic review does
+not run or a one-off focused pass is needed, post `@codex review` once the branch
+is coherent. See [code-review.md](code-review.md).
 
 ### 5. Local checks
 
@@ -228,43 +215,34 @@ gh pr checks <number> --watch
 ### 6.1. Address review comments
 
 Actionable PR feedback is part of the PR gate, whether it comes from a human
-reviewer, CodeRabbit, or another automated reviewer. Follow
+reviewer, Codex, or another automated reviewer. Follow
 [code-review-comments.md](../dynamic-skills/code-review-comments.md) for the full
 checklist.
 
 Agents must leave their own GitHub reply explaining the fix, validation, or
 no-change rationale before resolving any PR comment or review conversation. Do
-not resolve comments silently. CodeRabbit's automatic "addressed in commit ..."
-text does not count as the agent's reply.
-For CodeRabbit threads, do not manually resolve after replying. CodeRabbit can
-mark/close the conversation after it accepts the targeted reply; wait for that
-and re-query the thread state instead of forcing resolution.
-
-Inspect both CodeRabbit surfaces:
+not resolve comments silently. Inspect submitted review bodies as well as inline
+review threads and PR comments:
 
 ```bash
 gh pr view <pr-number> --comments
-gh api repos/meta-secret/nook/issues/<pr-number>/comments \
-  --jq '.[] | select(.user.login == "coderabbitai") | {url, body}'
+head_sha="$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)"
+gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
+  --jq ".[] | {user: .user.login, state, body, html_url, commit_id, current_head: (.commit_id == \"$head_sha\")}"
 ```
 
-CodeRabbit can post actionable items in PR timeline/summary comments that are
-not inline review threads, including "outside diff range comments", nitpicks,
-and collapsed "actionable comments posted" sections. Expand and handle those
-items too.
+Treat actionable submitted-review bodies as current only when `current_head` is
+`true`. Keep older review bodies as audit context, and use thread `isOutdated`
+state plus the current code when deciding whether an older inline finding still
+needs a reply.
 
-If CodeRabbit is enabled on the repository and an agent pushed new commits after
-the initial review, use `@coderabbitai review` as a top-level PR comment for
-focused feedback on the new code. Use `@coderabbitai full review` after large
-rewrites, draft-to-ready transitions, or cross-cutting changes that need a fresh
-whole-PR pass. See [coderabbit.md](coderabbit.md).
-
-Use the GitHub review-thread GraphQL query from the agent's CodeRabbit workflow
-to inspect unresolved inline conversations. Reply only on actual review
-threads/comments that support threaded replies. Do not use normal PR timeline
-comments as a substitute for unthreaded CodeRabbit summary items; track those in
-the checklist/final handoff and let pushed code plus CodeRabbit re-review update
-the PR state.
+Use the GitHub review-thread GraphQL query from the
+[code-review-comments skill](../dynamic-skills/code-review-comments.md) to
+inspect unresolved inline conversations. Reply only on actual review
+threads/comments that support targeted replies. Track actionable submitted
+review-body items without a threaded reply target in the checklist/final handoff
+rather than creating comment spam. If automatic review does not run or a one-off
+focused pass is needed, post one `@codex review`. See [code-review.md](code-review.md).
 
 ### 7. Fix loop on failure
 
@@ -326,8 +304,8 @@ Rules:
 See [coding-bro.md](coding-bro.md) for the numbered 0–10 checklist.
 
 1. Fetch `origin/main`; branch from it.
-2. Implement; run CodeRabbit when useful for nontrivial agent-authored changes.
-3. Push/open/update the PR when the iteration is ready for final validation.
+2. Implement and push/open/update the PR when the iteration is ready for final validation.
+3. Confirm automatic Codex review ran on the latest push; request `@codex review` only when automatic review does not run or a one-off focus is needed.
 4. Run `task check` (or scoped subset) while remote CI runs.
 5. Monitor CI and PR review until green.
 6. On failure: fix → push completed fix → run the required local gate while CI refreshes.
