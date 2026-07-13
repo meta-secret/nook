@@ -76,7 +76,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
     await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-join')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
     await expect(page.getByTestId('login-path-cloud')).toBeVisible()
     await expect(page.getByTestId('replication-mode-select')).toHaveCount(0)
 

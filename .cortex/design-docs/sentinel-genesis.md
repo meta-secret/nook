@@ -16,8 +16,7 @@ Related:
 
 ## Core Decision
 
-Get started (empty device) uses the Landing → Sentinel handoff: **name the
-vault first**, then one mutually exclusive intent:
+Get started (empty device) presents exactly two owner creation paths:
 
 - **Create Simple:** create an empty local vault in memory after passkey
   confirmation at the create step. The device can open it immediately with its
@@ -27,12 +26,16 @@ vault first**, then one mutually exclusive intent:
   openable vault, generate a usable vault session, or configure a sync provider
   yet. The initiator chooses `N`/`T`, waits for every participant public key,
   then atomically creates the empty vault.
-- **Join Sentinel:** a non-initiator device generates a standalone signed
-  public-key announcement and gives it to the vault owner. An initiator request
-  is optional and reserved for flows that need an explicit session binding.
-  After genesis, receiving the encrypted share is a secondary step; later
-  browser onboarding into an existing vault uses the standard Onboard QR + sync
-  provider flow.
+
+There is no unrestricted **Join Sentinel** choice on the creation landing page.
+The initiating owner onboards participants from the Sentinel workspace; a
+participant never starts genesis independently. The current wire format accepts
+signed public-key announcements, while cryptographically binding every remote
+response to an owner-issued QR/link request is tracked in
+[#337](https://github.com/meta-secret/nook/issues/337).
+After genesis, receiving the encrypted share is a secondary step; later browser
+onboarding into an existing vault uses the standard Onboard QR + sync provider
+flow.
 
 When a local vault already exists, the passkey/device-protection gate runs
 **before** unlock. Product and persisted wire names use Sentinel consistently.
@@ -65,19 +68,17 @@ or vault key to another device.
 ### Round 1: collect participant public keys
 
 1. Device A names an in-memory Sentinel genesis draft, then chooses `N` and `T`.
-2. Each participant device independently creates a standalone signed public-key
+2. Each participant device independently creates a signed public-key
    announcement after completing its own device initialization. The announcement
    contains its participant identity, public encryption key, public signing key,
    label, signature, and a human-verification fingerprint.
-3. The participant gives that announcement to Device A through QR, link, or
-   paste. No initiator request is required for this primary path.
+3. Device A initiates the onboarding exchange and the participant returns the
+   announcement through QR, link, or paste; participant setup is never entered
+   as a free-standing landing-page choice.
 4. Device A imports the announcement into the active genesis session, verifies
    it in Rust/WASM, rejects duplicates, and adds the participant to the pending
    roster.
-5. An optional initiator request and session-bound response may be used when a
-   transport needs explicit request/response correlation; it is not a
-   prerequisite for collecting a participant public key.
-6. Repeat until all configured `N` participant public keys are present,
+5. Repeat until all configured `N` participant public keys are present,
    including Device A's own public keys.
 
 The Card Stack add-participant action remains available during this pre-genesis

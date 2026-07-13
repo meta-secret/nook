@@ -9,7 +9,6 @@
     RefreshCw,
     ShieldCheck,
     Terminal,
-    UserPlus,
     Users,
   } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
@@ -69,6 +68,7 @@
     sentinelGenesisRequest = '',
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
+    sentinelInvitationRequest = '',
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -99,6 +99,7 @@
     sentinelGenesisRequest?: string
     sentinelGenesisParticipants?: SentinelGenesisParticipantSummary[]
     sentinelGenesisDeliveries?: SentinelGenesisDelivery[]
+    sentinelInvitationRequest?: string
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
@@ -123,9 +124,19 @@
   let initiatorPasskeyRequested = $state(false)
 
   $effect(() => {
+    const invitation = sentinelInvitationRequest.trim()
+    if (!invitation || wizardStep !== 'choose') return
+    participantRequest = invitation
+    chosenPath = 'join'
+    joinPasskeyRequested = false
+    wizardStep = 'join'
+  })
+
+  $effect(() => {
     const deviceProtectionReady = vault.deviceProtectionReady
     if (
       wizardStep === 'join' &&
+      !sentinelInvitationRequest.trim() &&
       !generatedParticipantResponse &&
       !joinPublicKeysLoading &&
       !isBusy &&
@@ -146,8 +157,11 @@
     }
     joinPublicKeysLoading = true
     try {
+      const requestPayload = participantRequest.trim()
       generatedParticipantResponse =
-        await onCreateSentinelGenesisPublicKeyAnnouncement()
+        requestPayload && onCreateSentinelGenesisParticipantResponse
+          ? await onCreateSentinelGenesisParticipantResponse(requestPayload)
+          : await onCreateSentinelGenesisPublicKeyAnnouncement()
       if (!generatedParticipantResponse && !vault.deviceProtectionReady) {
         joinPasskeyRequested = true
         return
@@ -390,12 +404,6 @@
   function chooseSentinelDashboard(dashboard: SentinelDashboard) {
     sentinelDashboard = dashboard
     wizardStep = 'sentinel-policy'
-  }
-
-  function chooseJoinPath() {
-    chosenPath = 'join'
-    joinPasskeyRequested = false
-    wizardStep = 'join'
   }
 
   async function prepareInitiatorDeviceKeys() {
@@ -742,12 +750,12 @@
                           data-testid="get-started-path-chooser"
                         >
                           <div
-                            class="flex flex-wrap gap-2"
+                            class="grid gap-3 sm:grid-cols-2"
                             data-testid="get-started-path-list"
                           >
                             <button
                               type="button"
-                              class="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:opacity-60"
+                              class="inline-flex min-h-14 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:opacity-60"
                               data-testid="get-started-path-simple"
                               disabled={isBusy}
                               onclick={chooseSimplePath}
@@ -757,23 +765,13 @@
                             </button>
                             <button
                               type="button"
-                              class="inline-flex items-center gap-2 rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+                              class="inline-flex min-h-14 items-center justify-center gap-2 rounded-md bg-foreground px-4 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
                               data-testid="get-started-path-sentinel"
                               disabled={isBusy}
                               onclick={chooseSentinelCreatePath}
                             >
                               <Users class="size-4 shrink-0" />
                               {vault.t('login.get_started_path_sentinel_title')}
-                            </button>
-                            <button
-                              type="button"
-                              class="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:opacity-60"
-                              data-testid="get-started-path-join"
-                              disabled={isBusy}
-                              onclick={chooseJoinPath}
-                            >
-                              <UserPlus class="size-4 shrink-0" />
-                              {vault.t('login.get_started_path_join_title')}
                             </button>
                           </div>
                           <p class="text-sm text-pretty text-muted-foreground">
@@ -1003,56 +1001,60 @@
                 </Button>
               {/if}
 
-              <details
-                class="rounded-lg border border-border/60 bg-muted/10 p-4"
-              >
-                <summary
-                  class="cursor-pointer text-sm font-medium text-foreground"
-                  data-testid="sentinel-genesis-join-request-toggle"
+              {#if !sentinelInvitationRequest.trim()}
+                <details
+                  class="rounded-lg border border-border/60 bg-muted/10 p-4"
                 >
-                  {vault.t('login.sentinel_genesis_join_request_optional')}
-                </summary>
-                <div class="mt-3 space-y-2">
-                  <p class="text-xs text-pretty text-muted-foreground">
-                    {vault.t(
-                      'login.sentinel_genesis_join_request_optional_description',
-                    )}
-                  </p>
-                  <label
-                    class="text-xs font-medium text-foreground"
-                    for="sentinel-participant-request"
+                  <summary
+                    class="cursor-pointer text-sm font-medium text-foreground"
+                    data-testid="sentinel-genesis-join-request-toggle"
                   >
-                    {vault.t('login.sentinel_genesis_join_request_label')}
-                  </label>
-                  <textarea
-                    id="sentinel-participant-request"
-                    class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                    data-testid="sentinel-genesis-join-request-input"
-                    placeholder={vault.t(
-                      'login.sentinel_genesis_join_request_placeholder',
-                    )}
-                    bind:value={sessionParticipantRequest}
-                    disabled={isBusy || sentinelActionBusy}></textarea>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    data-testid="sentinel-genesis-create-response"
-                    disabled={isBusy ||
-                      sentinelActionBusy ||
-                      !sessionParticipantRequest.trim() ||
-                      !onCreateSentinelGenesisParticipantResponse}
-                    onclick={() => void createParticipantResponse()}
-                  >
-                    {#if sentinelActionBusy}
-                      <RefreshCw class="size-4 animate-spin" />
-                    {:else}
-                      <ShieldCheck class="size-4" />
-                    {/if}
-                    {vault.t('login.sentinel_genesis_create_session_response')}
-                  </Button>
-                </div>
-              </details>
+                    {vault.t('login.sentinel_genesis_join_request_optional')}
+                  </summary>
+                  <div class="mt-3 space-y-2">
+                    <p class="text-xs text-pretty text-muted-foreground">
+                      {vault.t(
+                        'login.sentinel_genesis_join_request_optional_description',
+                      )}
+                    </p>
+                    <label
+                      class="text-xs font-medium text-foreground"
+                      for="sentinel-participant-request"
+                    >
+                      {vault.t('login.sentinel_genesis_join_request_label')}
+                    </label>
+                    <textarea
+                      id="sentinel-participant-request"
+                      class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                      data-testid="sentinel-genesis-join-request-input"
+                      placeholder={vault.t(
+                        'login.sentinel_genesis_join_request_placeholder',
+                      )}
+                      bind:value={sessionParticipantRequest}
+                      disabled={isBusy || sentinelActionBusy}></textarea>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      data-testid="sentinel-genesis-create-response"
+                      disabled={isBusy ||
+                        sentinelActionBusy ||
+                        !sessionParticipantRequest.trim() ||
+                        !onCreateSentinelGenesisParticipantResponse}
+                      onclick={() => void createParticipantResponse()}
+                    >
+                      {#if sentinelActionBusy}
+                        <RefreshCw class="size-4 animate-spin" />
+                      {:else}
+                        <ShieldCheck class="size-4" />
+                      {/if}
+                      {vault.t(
+                        'login.sentinel_genesis_create_session_response',
+                      )}
+                    </Button>
+                  </div>
+                </details>
+              {/if}
 
               <div class="space-y-2 border-t border-border pt-4">
                 <p class="text-xs font-medium text-foreground">

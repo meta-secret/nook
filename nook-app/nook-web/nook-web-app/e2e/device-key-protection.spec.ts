@@ -130,19 +130,36 @@ test.describe('passkey device-key protection', () => {
     })
     const participant = await participantContext.newPage()
     await participant.goto('/app/')
+    await expect(
+      participant.getByTestId('login-create-vault-chooser'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect
+      .poll(() =>
+        participant.evaluate(() =>
+          Boolean((window as Window & { __nookVault?: unknown }).__nookVault),
+        ),
+      )
+      .toBe(true)
 
-    await participant.getByTestId('get-started-path-join').click()
-    await expect(participant.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    const participantAnnouncement = await participant.evaluate(async () => {
+      const participantVault = (
+        window as Window & {
+          __nookVault?: {
+            setupDeviceProtection: (
+              label: string,
+              mode: 'standard',
+            ) => Promise<void>
+            createSentinelGenesisPublicKeyAnnouncement: () => Promise<string>
+          }
+        }
+      ).__nookVault
+      if (!participantVault) throw new Error('Participant vault is unavailable')
+      await participantVault.setupDeviceProtection(
+        'Sentinel participant',
+        'standard',
+      )
+      return participantVault.createSentinelGenesisPublicKeyAnnouncement()
     })
-    await clickDeviceProtectionSetup(participant)
-    const announcementOutput = participant.getByTestId(
-      'sentinel-genesis-generated-response',
-    )
-    await expect(announcementOutput).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    const participantAnnouncement = await announcementOutput.inputValue()
     expect(participantAnnouncement).toContain('publicKeyAnnouncement')
 
     await page.getByTestId('get-started-path-sentinel').click()

@@ -187,7 +187,7 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('get-started-path-chooser')).toBeVisible()
     await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
     await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
-    await expect(page.getByTestId('get-started-path-join')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
     await expect(page.getByTestId('mode-group-vault')).toHaveCount(0)
     await expect(page.getByTestId('mode-group-replication')).toHaveCount(0)
     await expect(page.getByTestId('create-vault-wizard-create')).toHaveCount(0)
@@ -248,24 +248,22 @@ test.describe('vault architecture modes', () => {
     const chooser = page.getByTestId('login-create-vault-chooser')
     await expect(chooser).toContainText('Keys, not accounts.')
     await continueToPathChooser(page)
-    await expect(chooser).toContainText('Choose Simple or Sentinel')
+    await expect(chooser).toContainText('Choose your vault')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
-      'Simple vault',
+      'Create simple vault',
     )
     await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
-      'Build Sentinel vault',
+      'Create Sentinel vault',
     )
-    await expect(page.getByTestId('get-started-path-join')).toContainText(
-      'Join',
-    )
+    await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
 
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
 
     await expect(chooser).toContainText('Ключи, а не аккаунты.')
-    await expect(chooser).toContainText('Выберите Simple или Sentinel')
+    await expect(chooser).toContainText('Выберите сейф')
     await expect(page.getByTestId('get-started-path-simple')).toContainText(
-      'Простой',
+      'Создать простой сейф',
     )
     await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
       'Sentinel',
@@ -315,22 +313,29 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('sentinel-dashboard-terminal')).toBeFocused()
   })
 
-  test('opens join sentinel as a first-class path with public keys ready', async ({
+  test('does not expose unrestricted Sentinel join as a creation path', async ({
     page,
   }) => {
     await continueToPathChooser(page)
-    await page.getByTestId('get-started-path-join').click()
+    await expect(page.getByTestId('get-started-path-simple')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible()
+    await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
+    await expect(page.getByTestId('login-enrollment-toggle')).toHaveCount(0)
+  })
+
+  test('opens participant response only from an owner invitation URL', async ({
+    page,
+  }) => {
+    await page.goto(
+      `/app/?sentinel-request=${encodeURIComponent('owner-issued-request')}`,
+    )
     await expect(
       page.getByTestId('sentinel-genesis-participant-step'),
-    ).toBeVisible()
-    await expect(
-      page.getByTestId('sentinel-genesis-generated-response'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
     await expect(
-      page.getByTestId('sentinel-genesis-join-request-toggle'),
-    ).toBeVisible()
-    await expect(page.getByTestId('get-started-path-simple')).toHaveCount(0)
-    await expect(page.getByTestId('login-connect-storage-btn')).toHaveCount(0)
+      page.getByTestId('sentinel-genesis-share-request-input'),
+    ).toHaveValue('owner-issued-request')
   })
 
   test('disables providers that cannot satisfy shared replication', async ({

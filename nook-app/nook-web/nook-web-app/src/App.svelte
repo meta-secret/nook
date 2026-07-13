@@ -79,6 +79,12 @@
       ? extensionConnectRequestFromLocation(window.location)
       : undefined,
   )
+  let sentinelInvitationRequest = $state(
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('sentinel-request') ??
+          '')
+      : '',
+  )
 
   function syncRoute() {
     legalPage = getLegalPageFromPath(window.location.pathname)
@@ -88,6 +94,8 @@
     extensionConnectRequest = extensionConnectRequestFromLocation(
       window.location,
     )
+    sentinelInvitationRequest =
+      new URLSearchParams(window.location.search).get('sentinel-request') ?? ''
   }
 
   function conflictCandidates(
@@ -537,6 +545,7 @@
                   vault.connectWithEnrollmentCode(code, password)}
                 prefillEnrollmentCode={vault.prefillEnrollmentCode}
                 enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
+                {sentinelInvitationRequest}
                 onUnlockWithPassword={(entryId, password) =>
                   vault.unlockWithPassword(entryId, password)}
                 onCreateDeviceVault={handleCreateDeviceVault}

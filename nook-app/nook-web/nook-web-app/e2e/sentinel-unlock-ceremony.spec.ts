@@ -48,17 +48,47 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
 
   test('creates and delivers a 2-of-2 Sentinel without a sync provider', async () => {
     await expectPathChooser(deviceB)
-    await deviceB.getByTestId('get-started-path-join').click()
-    const responseOutput = deviceB.getByTestId(
-      'sentinel-genesis-generated-response',
-    )
-    await expect(responseOutput).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    const participantAnnouncement = await responseOutput.inputValue()
+    const participantAnnouncement = await deviceB.evaluate(async () => {
+      const participantVault = (
+        window as Window & {
+          __nookVault?: {
+            setupDeviceProtection: (
+              label: string,
+              mode: 'standard',
+            ) => Promise<void>
+            createSentinelGenesisPublicKeyAnnouncement: () => Promise<string>
+          }
+        }
+      ).__nookVault
+      if (!participantVault) throw new Error('Participant vault is unavailable')
+      await participantVault.setupDeviceProtection(
+        'Sentinel participant',
+        'standard',
+      )
+      return participantVault.createSentinelGenesisPublicKeyAnnouncement()
+    })
     expect(participantAnnouncement).toContain('publicKeyAnnouncement')
 
     await expectPathChooser(deviceA)
     await deviceA.getByTestId('get-started-path-sentinel').click()
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
+    await deviceA.evaluate(async () => {
+      const initiatorVault = (
+        window as Window & {
+          __nookVault?: {
+            setupDeviceProtection: (
+              label: string,
+              mode: 'standard',
+            ) => Promise<void>
+          }
+        }
+      ).__nookVault
+      if (!initiatorVault) throw new Error('Initiator vault is unavailable')
+      await initiatorVault.setupDeviceProtection(
+        'Sentinel initiator',
+        'standard',
+      )
+    })
     await expect(
       deviceA.getByTestId('sentinel-genesis-response-input'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
@@ -94,16 +124,25 @@ test.describe('provider-free Sentinel unlock ceremony', () => {
       .inputValue()
     expect(deliveryPayload.length).toBeGreaterThan(20)
 
-    await deviceB
-      .getByTestId('sentinel-genesis-share-request-input')
-      .fill(requestPayload)
-    await deviceB
-      .getByTestId('sentinel-genesis-receive-share-input')
-      .fill(deliveryPayload)
-    await deviceB.getByTestId('sentinel-genesis-receive-share').click()
-    await expect(
-      deviceB.getByText(/protected locally|сохранена локально/i),
-    ).toBeVisible()
+    await deviceB.evaluate(
+      async ({ request, delivery }) => {
+        const participantVault = (
+          window as Window & {
+            __nookVault?: {
+              rememberSentinelGenesisRequest: (payload: string) => Promise<void>
+              acceptSentinelGenesisShareDelivery: (
+                payload: string,
+              ) => Promise<void>
+            }
+          }
+        ).__nookVault
+        if (!participantVault)
+          throw new Error('Participant vault is unavailable')
+        await participantVault.rememberSentinelGenesisRequest(request)
+        await participantVault.acceptSentinelGenesisShareDelivery(delivery)
+      },
+      { request: requestPayload, delivery: deliveryPayload },
+    )
 
     await deviceA.getByTestId('sentinel-genesis-delivery-complete').click()
     await expect(deviceA.getByTestId('sentinel-ceremony-panel')).toBeVisible({

@@ -57,6 +57,7 @@
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
+    sentinelInvitationRequest = '',
   }: {
     vault: VaultState
     providers: StorageProvider[]
@@ -94,6 +95,7 @@
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
+    sentinelInvitationRequest?: string
   } = $props()
 
   let enrollmentPanelOpen = $state(false)
@@ -156,7 +158,7 @@
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
-      (showProviderSetup || showSetup || showCreateVault),
+      (showProviderSetup || showSetup),
   )
 
   const setupCanConnect = $derived(
@@ -237,6 +239,7 @@
       sentinelGenesisRequest={vault.sentinelGenesisRequest}
       sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
       sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
+      {sentinelInvitationRequest}
       onConnectStorage={() => {
         showProviderSetupLink = true
       }}
