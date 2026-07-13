@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  PLAYWRIGHT_MCP_VERSION: 0.0.78
+  WEB_DEV_PORT: '{{default "5173" .WEB_DEV_PORT}}'
+
+tasks:
+  ai-debug:check:
+    desc: Verify the Codex + Playwright MCP annotation pilot prerequisites.
+    cmds:
+      - >-
+        node -e "const major=Number(process.versions.node.split('.')[0]);
+        if(major<18){console.error('Playwright MCP requires Node.js 18+ (have '+process.versions.node+')');process.exit(1)}"
+      - >-
+        case "{{.WEB_DEV_PORT}}" in
+          5173|5175) ;;
+          *) echo 'AI-debug mode supports WEB_DEV_PORT=5173 or 5175 only.' >&2; exit 1 ;;
+        esac
+      - >-
+        test "$(npx -y @playwright/mcp@{{.PLAYWRIGHT_MCP_VERSION}} --version)"
+        = "Version {{.PLAYWRIGHT_MCP_VERSION}}"
+      - >-
+        codex mcp list --json | node -e '
+          const servers = JSON.parse(require("fs").readFileSync(0, "utf8"));
+          const server = servers.find(({ name }) => name === "playwright");
+          if (!server?.enabled) {
+            console.error("Playwright MCP is not enabled or visible to Codex.");
+            console.error("Trust this repository, then restart Codex so .codex/config.toml is loaded.");
+            process.exit(1);
+          }
+          if (server.transport?.type !== "stdio" ||
+              !server.transport.args?.includes("--caps=devtools")) {
+            console.error("The Playwright MCP server is missing --caps=devtools; browser_annotate will not be available.");
+            process.exit(1);
+          }
+        '
+
+  ai-debug:dev:
+    desc: Verify the annotation pilot and start the local Nook development server.
+    deps:
+      - ai-debug:check
+    cmds:
+      - task: web:dev:fast

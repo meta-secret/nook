@@ -13,6 +13,9 @@ agentic-ai/ci-agent/dist-test/
 # Resolved toolchain image ref (written by task setup).
 .nook/
 
+# Local Playwright MCP screenshots, snapshots, console, and annotation output.
+.playwright-mcp/
+
 # Local env files with secrets (never commit)
 .env
 .env.local

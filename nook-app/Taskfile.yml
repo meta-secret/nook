@@ -47,6 +47,7 @@ vars:
   VITE_SITE_URL: '{{default "" .VITE_SITE_URL}}'
   VITE_PUBLIC_APP_URL: '{{default "" .VITE_PUBLIC_APP_URL}}'
   VITE_VAULT_SYNC_INTERVAL_MS: '{{default "" .VITE_VAULT_SYNC_INTERVAL_MS}}'
+  WEB_DEV_PORT: '{{default "5173" .WEB_DEV_PORT}}'
 
 includes:
   docker:

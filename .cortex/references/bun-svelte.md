@@ -20,9 +20,16 @@ console first — a common error is `nook_wasm.js does not provide an export nam
 still serving a **stale cached transform** from before `wasm-pack` ran.
 
 ```bash
-docker ps --filter publish=5173 -q | xargs docker stop
+WEB_DEV_PORT="${WEB_DEV_PORT:-5173}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+for container in $(docker ps --filter publish="$WEB_DEV_PORT" -q); do
+  mounted_root="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/meta-secret/nook"}}{{.Source}}{{end}}{{end}}' "$container")"
+  if [ "$mounted_root" = "$REPO_ROOT" ]; then
+    docker stop "$container"
+  fi
+done
 rm -rf nook-app/nook-web/node_modules/.vite
-task web:dev
+WEB_DEV_PORT="$WEB_DEV_PORT" task web:dev
 ```
 
 After `task wasm:build`, `task wasm:build:fast`, or any `nook-wasm` /
@@ -34,6 +41,10 @@ not recover on its own.
 - **Debug one spec** (preferred during fix sessions): `E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file` — fast feedback without waiting for the full suite.
 - Full stub Playwright (`e2e` project): `task web:test:e2e` — all stub specs including sync; runs on PR and main CI.
 - Fast subset Playwright (`e2e-pr` project): `task web:test:e2e:pr` — manual/debug-only subset for vault CRUD, login, legal pages (no sync HTTP).
+- Mounted dev servers publish container port `5173` on `WEB_DEV_PORT` (default
+  `5173`). In the multi-worktree repo, use an unused host port such as
+  `WEB_DEV_PORT=5175 task web:dev:fast`; never stop another worktree's container
+  to reclaim `5173`.
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; nightly only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
