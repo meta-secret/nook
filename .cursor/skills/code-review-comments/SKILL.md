@@ -23,3 +23,7 @@ after the reply is visible and resolution is the correct next action. Track
 actionable submitted-review items without threaded reply targets in the local
 checklist and final handoff rather than creating broad or duplicative PR
 comments. Re-query reviews and unresolved threads before handoff.
+
+Use the concrete, paginated review-thread GraphQL query and the current-head
+`commit_id` comparison in the system-of-record skill; do not infer current
+findings from unfiltered flat review lists.

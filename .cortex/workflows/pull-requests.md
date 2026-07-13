@@ -226,9 +226,15 @@ review threads and PR comments:
 
 ```bash
 gh pr view <pr-number> --comments
+head_sha="$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)"
 gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
-  --jq '.[] | {user: .user.login, state, body, html_url}'
+  --jq ".[] | {user: .user.login, state, body, html_url, commit_id, current_head: (.commit_id == \"$head_sha\")}"
 ```
+
+Treat actionable submitted-review bodies as current only when `current_head` is
+`true`. Keep older review bodies as audit context, and use thread `isOutdated`
+state plus the current code when deciding whether an older inline finding still
+needs a reply.
 
 Use the GitHub review-thread GraphQL query from the
 [code-review-comments skill](../dynamic-skills/code-review-comments.md) to

@@ -81,6 +81,60 @@ Does not apply to:
       the local checklist and final handoff rather than creating comment spam.
 - [ ] Re-query submitted reviews and unresolved review threads before handoff.
 
+## GitHub Queries
+
+Record the current head before interpreting submitted review bodies. Include
+each review's `commit_id` so a finding attached to an older push is not mistaken
+for a current-head finding:
+
+```bash
+head_sha="$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)"
+gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
+  --jq ".[] | {user: .user.login, state, body, html_url, commit_id, current_head: (.commit_id == \"$head_sha\")}"
+```
+
+Fetch inline review conversations with their resolution and outdated state. The
+`--paginate` form follows `reviewThreads` beyond the first 100 entries by using
+GitHub CLI's required `$endCursor` variable:
+
+```bash
+gh api graphql --paginate \
+  -F owner=meta-secret \
+  -F repo=nook \
+  -F number=<pr-number> \
+  -f query='query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        headRefOid
+        reviewThreads(first: 100, after: $endCursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            isResolved
+            isOutdated
+            path
+            line
+            comments(first: 100) {
+              nodes {
+                id
+                author { login }
+                body
+                url
+                createdAt
+              }
+            }
+          }
+        }
+      }
+    }
+  }'
+```
+
+Build the actionable checklist from unresolved, non-outdated threads and from
+submitted review bodies whose `commit_id` matches `headRefOid`. An older thread
+that remains unresolved still needs a targeted reply explaining the addressing
+commit or why it no longer applies before resolution.
+
 ## Validation
 
 Use GraphQL or `gh pr view`/`gh api` to confirm there are no unresolved review
