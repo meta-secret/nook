@@ -43,7 +43,7 @@ jobs:
        github.event.label.name == 'ai-agent' &&
        github.event.issue.user.type != 'Bot')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     permissions:
       contents: write
       pull-requests: write
@@ -54,6 +54,8 @@ jobs:
       GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_RUN_ID: ${{ github.run_id }}
       CI_AGENT_PROMPT_FILE: .github/prompts/agent-implement.md
+      # Match the 6-hour GitHub-hosted job ceiling instead of the harness's 90-minute default.
+      CI_AGENT_TIMEOUT_MS: '21600000'
     steps:
       - name: Checkout
         uses: actions/checkout@v7

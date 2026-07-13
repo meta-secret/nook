@@ -312,7 +312,7 @@ Required secrets for ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT` (classic PAT wi
 
 The `ci-fix` / `ci-agent:implement` jobs run **`task setup`** (bake sealed `nook-web:local`) then **`task ci-agent:fix`** / **`task ci-agent:implement`**, which build and run the **`nook-ci-agent:local`** image. That container includes both the Docker CLI and the Buildx CLI plugin because repository Task targets use `docker buildx bake`. It uses **`docker run --init`**, bind-mounts the checkout, and mounts **`/var/run/docker.sock`** so the agent can spawn sibling containers on the host Docker daemon (not Docker-in-Docker).
 
-**Runner split:** `ci-fix` (main/nightly) still runs on self-hosted **`nook`**. **`agent-implement.yml` runs on GitHub-hosted `ubuntu-latest`** so intentional agent work does not share the self-hosted machine with other CI. Host Node is not required for these jobs.
+**Runner placement:** `ci-fix` (main/nightly) and `agent-implement.yml` all run on GitHub-hosted **`ubuntu-latest`** so agent work does not share the self-hosted Nook machine with other CI. Host Node is not required for these jobs.
 
 After the agent finishes, ci-agent **awaits** `agent[Symbol.asyncDispose]()` (not fire-and-forget `close()`), then calls `process.exit` (and best-effort SIGKILL of direct child PIDs) so orphaned SDK children cannot keep the container alive.
 
@@ -341,7 +341,7 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 | Level     | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`                                                                          |
 | Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
 
-Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). Timeout: `CI_AGENT_TIMEOUT_MS` (default 90m). PR check wait timeout: `CI_FIX_CHECKS_TIMEOUT_MS` (default 45m) — `waitForPrChecks` must not poll forever.
+Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). The harness's local/default agent timeout is 90m, but every production Actions agent job explicitly sets `CI_AGENT_TIMEOUT_MS=21600000` and `timeout-minutes: 360`, matching GitHub's six-hour hosted-runner ceiling so the harness does not interrupt the agent earlier. The six-hour job limit covers setup, the agent run, PR creation, and check polling together, so GitHub remains the ultimate cutoff. PR check wait timeout: `CI_FIX_CHECKS_TIMEOUT_MS` (default 45m) — `waitForPrChecks` must not poll forever.
 
 The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Without an explicit exit, the Cursor SDK local executor can leave child processes and open handles that keep the Node event loop alive and the `ci-fix` job running long after the agent merges its PR.
 
