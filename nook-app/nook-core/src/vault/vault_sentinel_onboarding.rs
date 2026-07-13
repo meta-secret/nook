@@ -237,13 +237,14 @@ mod tests {
 
     #[test]
     fn oversized_onboarding_payload_is_rejected_before_deserialization() {
-        let oversized = vec![b'x'; (MAX_DECOMPRESSED_PACKAGE_BYTES + 1) as usize];
-        let mut encoder = DeflateEncoder::new(Vec::new(), Compression::best());
-        encoder.write_all(&oversized).unwrap();
-        let encoded = URL_SAFE_NO_PAD.encode(encoder.finish().unwrap());
+        let oversized_len = usize::try_from(MAX_DECOMPRESSED_PACKAGE_BYTES + 1).unwrap();
+        let oversized = vec![b'x'; oversized_len];
+        let mut deflater = DeflateEncoder::new(Vec::new(), Compression::best());
+        deflater.write_all(&oversized).unwrap();
+        let compressed_payload = URL_SAFE_NO_PAD.encode(deflater.finish().unwrap());
 
         assert!(matches!(
-            decode_sentinel_onboarding_package(&encoded),
+            decode_sentinel_onboarding_package(&compressed_payload),
             Err(MultiDeviceError::InvalidSentinelGenesisPayload)
         ));
     }
