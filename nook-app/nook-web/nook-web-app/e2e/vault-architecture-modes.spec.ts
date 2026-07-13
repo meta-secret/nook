@@ -220,7 +220,7 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('sentinel-dashboard-card-stack').click()
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    ).toHaveCount(0)
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
       0,
     )
@@ -228,12 +228,36 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('login-create-vault-chooser'),
     ).toHaveAttribute('data-sentinel-dashboard', 'card-stack')
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-onboarding-create-keys'),
+    ).toBeVisible()
+    const headingBox = await page
+      .getByTestId('sentinel-dashboard-heading')
+      .boundingBox()
+    const progressBox = await page
+      .getByTestId('sentinel-onboarding-progress')
+      .boundingBox()
+    if (!headingBox || !progressBox) {
+      throw new Error('Sentinel heading and progress must have layout boxes')
+    }
+    expect(headingBox.y).toBeLessThan(progressBox.y)
     await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toHaveCount(0)
+    await page.getByTestId('sentinel-onboarding-create-keys').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      page.getByTestId('sentinel-onboarding-roster-next'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await expect(
       page.getByTestId('sentinel-onboarding-continue-policy'),
     ).toBeDisabled()
     await expect(
-      page.getByTestId('sentinel-genesis-response-input'),
+      page.getByTestId('sentinel-genesis-participant-fields'),
     ).toBeVisible()
     await expect(
       page.getByTestId('sentinel-onboarding-progress'),
@@ -254,6 +278,12 @@ test.describe('vault architecture modes', () => {
     )
     await expect(page.getByTestId('get-started-path-sentinel')).toContainText(
       'Create Sentinel vault',
+    )
+    await expect(page.getByTestId('login-path-cloud')).toContainText(
+      'Import an existing Simple or Sentinel vault',
+    )
+    await expect(page.getByTestId('login-connect-storage-btn')).toContainText(
+      'Import from sync provider',
     )
     await expect(page.getByTestId('get-started-path-join')).toHaveCount(0)
 
@@ -594,6 +624,9 @@ test.describe('vault architecture modes', () => {
       await page.getByTestId('sentinel-dashboard-card-stack').click()
       await expect(
         page.getByTestId('sentinel-onboarding-roster-next'),
+      ).toHaveCount(0)
+      await expect(
+        page.getByTestId('sentinel-onboarding-create-keys'),
       ).toBeVisible({ timeout: UI_TIMEOUT_MS })
       await expect(
         page.getByTestId('sentinel-genesis-policy-step'),
