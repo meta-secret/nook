@@ -8,6 +8,7 @@ import {
   type VaultMember,
 } from '$lib/nook'
 import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
+import { buildSentinelOnboardingLink } from '$lib/sentinel-onboarding-link'
 import { SvelteDate } from 'svelte/reactivity'
 import {
   chooseLocalFolderBackupDirectory,
@@ -128,6 +129,7 @@ export type SentinelGenesisDelivery = {
   participantId: string
   fingerprint?: string
   payload: string
+  sharePayload?: string
 }
 
 export type SentinelGenesisParticipantSummary = {
@@ -1193,6 +1195,7 @@ export class VaultState {
             (participant) => participant.participantId === delivery.deviceId,
           )?.fingerprint,
         payload: JSON.stringify(delivery),
+        sharePayload: JSON.stringify(delivery),
       }),
     )
     this.sentinelGenesisStatus = 'delivering'
@@ -1379,6 +1382,50 @@ export class VaultState {
     } finally {
       this.isVerifying = false
     }
+  }
+
+  async prepareSentinelOnboardingLinks(): Promise<void> {
+    if (!this.manager || !this.sentinelGenesisStoreId) return
+    const provider = this.syncProviders[0]
+    if (!provider || provider.type === 'local-folder') return
+    const providerSnapshot = JSON.parse(
+      JSON.stringify({
+        providers: [provider],
+        activeVaultStoreId: this.sentinelGenesisStoreId,
+      }),
+    )
+    this.sentinelGenesisDeliveries = this.sentinelGenesisDeliveries.map(
+      (delivery) => {
+        const sharePayload = delivery.sharePayload ?? delivery.payload
+        if (delivery.participantId === this.deviceId) {
+          return { ...delivery, sharePayload }
+        }
+        const packageJson = this.manager!.createSentinelOnboardingPackage(
+          this.sentinelGenesisRequest,
+          sharePayload,
+          providerSnapshot,
+        )
+        return {
+          ...delivery,
+          sharePayload,
+          payload: buildSentinelOnboardingLink(packageJson),
+        }
+      },
+    )
+  }
+
+  async acceptSentinelOnboardingPackage(packageJson: string): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    this.errorMsg = ''
+    const storeId = await this.enqueueStorage(() =>
+      this.manager!.acceptSentinelOnboardingPackage(packageJson),
+    )
+    this.activeVaultStoreId = storeId
+    await setActiveVault(storeId)
+    await this.loadProviders()
+    this.applyActiveProviderCredentials()
+    this.sentinelGenesisStatus = 'complete'
+    await this.loadDb()
   }
 
   async renameLocalVault(storeId: string, label: string): Promise<void> {

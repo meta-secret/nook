@@ -58,6 +58,8 @@
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
     sentinelInvitationRequest = '',
+    sentinelOnboardingPackage = '',
+    onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
     providers: StorageProvider[]
@@ -96,6 +98,10 @@
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
     sentinelInvitationRequest?: string
+    sentinelOnboardingPackage?: string
+    onAcceptSentinelOnboardingPackage?: (
+      packageJson: string,
+    ) => void | Promise<void>
   } = $props()
 
   let enrollmentPanelOpen = $state(false)
@@ -130,10 +136,10 @@
       undefined,
   )
   const showCreateVault = $derived(
-    (!vault.localVaultPresent ||
-      vault.sentinelGenesisStatus === 'delivering') &&
-      vault.localVaults.length === 0 &&
-      !hasProviders &&
+    (vault.sentinelGenesisStatus === 'delivering' ||
+      (!vault.localVaultPresent &&
+        vault.localVaults.length === 0 &&
+        !hasProviders)) &&
       !showSetup &&
       !addProviderOpen &&
       !showProviderSetupLink &&
@@ -176,6 +182,14 @@
   }
 
   $effect(() => {
+    if (
+      vault.sentinelGenesisStatus === 'delivering' &&
+      vault.syncProviders.length > 0 &&
+      !showSetup &&
+      !addProviderOpen
+    ) {
+      showProviderSetupLink = false
+    }
     if (showLocalUnlock && !deviceAuthorizationPending) {
       void vault.prepareLocalLogin()
     }
@@ -240,6 +254,8 @@
       sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
       sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
       {sentinelInvitationRequest}
+      {sentinelOnboardingPackage}
+      {onAcceptSentinelOnboardingPackage}
       onConnectStorage={() => {
         showProviderSetupLink = true
       }}

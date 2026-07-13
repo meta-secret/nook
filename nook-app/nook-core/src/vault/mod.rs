@@ -15,6 +15,7 @@ pub(crate) mod vault_ids;
 pub(crate) mod vault_import;
 pub(crate) mod vault_projection;
 pub(crate) mod vault_sentinel_genesis;
+pub(crate) mod vault_sentinel_onboarding;
 pub(crate) mod vault_sentinel_unlock;
 pub(crate) mod vault_session;
 pub(crate) mod vault_session_cache;

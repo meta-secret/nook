@@ -24,8 +24,9 @@ Get started (empty device) presents exactly two owner creation paths:
   configured after creation.
 - **Create Sentinel:** start a reverse-onboarding ceremony. Do not create an
   openable vault, generate a usable vault session, or configure a sync provider
-  yet. The initiator chooses `N`/`T`, waits for every participant public key,
-  then atomically creates the empty vault.
+  before atomic genesis. The initiator chooses `N`/`T`, waits for every
+  participant public key, atomically creates the empty vault, then selects one
+  sync provider and issues one addressed onboarding QR/link per remote member.
 
 There is no unrestricted **Join Sentinel** choice on the creation landing page.
 The initiating owner onboards participants from the Sentinel workspace; a
@@ -33,9 +34,10 @@ participant never starts genesis independently. The current wire format accepts
 signed public-key announcements, while cryptographically binding every remote
 response to an owner-issued QR/link request is tracked in
 [#337](https://github.com/meta-secret/nook/issues/337).
-After genesis, receiving the encrypted share is a secondary step; later browser
-onboarding into an existing vault uses the standard Onboard QR + sync provider
-flow.
+After genesis, the owner must connect a sync provider before member invitations
+are emitted. Each invitation combines that participant's signed encrypted share
+with a provider snapshot whose credentials are age-encrypted to the same
+participant device public key. Simple-vault password enrollment is not reused.
 
 When a local vault already exists, the passkey/device-protection gate runs
 **before** unlock. Product and persisted wire names use Sentinel consistently.
@@ -123,23 +125,25 @@ retry reads or re-delivers the same encrypted artifact instead of issuing a new
 share generation. Finalization itself is one-shot; callers must never rerun key
 generation to repair a partially persisted result.
 
-### Round 2: return encrypted shares
+### Round 2: connect storage and invite members
 
-Without a sync provider, Device A returns each participant's encrypted member
-share through a typed response QR/link/paste payload. The provider-free delivery
-catalog binds the genesis session, store, policy, participant device and public
-key, encrypted share, and initiator signing key. Each entry is signed by the
-initiator and addressed to the exact participant identity collected in Round 1.
-Delivery acceptance verifies the session, policy, and initiator signing key
-against the expected Round 1 request. Each participant can decrypt and protect
-only its own share.
+After atomic genesis, Device A chooses one remote sync provider and uploads the
+encrypted vault. Local-folder storage cannot serve member onboarding because a
+browser folder handle is not transferable. Nook then creates a distinct QR/link
+for every remote participant. The package contains the Round 1 request, that
+participant's signed encrypted share delivery, and one provider snapshot
+encrypted to the participant public key collected in Round 1.
+
+Delivery acceptance verifies the genesis session, policy, initiator signing
+key, participant identity, public key, and share signature. Only the matching
+device can decrypt the provider snapshot and its share. It persists both, pulls
+the encrypted vault from the provider, and enters the normal Sentinel quorum
+unlock ceremony. Provider access is necessary for this onboarding transport but
+is never sufficient to open the vault.
+
 This second direction is cryptographically required: collecting public keys
-alone does not deliver the newly generated shares back to their owners.
-
-A provider configured later may transport the public roster and encrypted share
-records as part of normal encrypted vault replication, but provider access is
-not required to complete the genesis key ceremony and is never sufficient to
-open the vault.
+alone does not deliver the generated shares or encrypted vault replica back to
+their owners.
 
 After delivering the share set, Device A clears the plaintext Sentinel root,
 derived vault keys, and plaintext shares. Opening the newly created vault then

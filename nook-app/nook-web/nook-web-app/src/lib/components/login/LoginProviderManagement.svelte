@@ -97,7 +97,12 @@
     </div>
 
     {#if onBeginSetup}
-      <ProviderPicker {vault} onSelect={onBeginSetup} excludeLocal />
+      <ProviderPicker
+        {vault}
+        onSelect={onBeginSetup}
+        excludeLocal
+        excludeLocalFolder={vault.sentinelGenesisStatus === 'delivering'}
+      />
     {/if}
   </div>
 {:else}

@@ -168,11 +168,13 @@ stateDiagram-v2
   Vault --> SyncSetup: add sync provider (optional)
 ```
 
-1. **Empty device:** show Landing → Sentinel create (name → path) **before**
+1. **Empty device:** show Landing → Sentinel create (path first; naming inside
+   the chosen setup) **before**
    passkey. Passkey/device protection runs when the user confirms Simple create,
    or first when unlocking an existing local vault. Then load the local cache.
 2. **First visit / GetStarted:** create a Simple vault locally (after deferred
-   passkey), start a provider-free Sentinel genesis ceremony, **or** connect a
+   passkey), start Sentinel genesis without configuring storage until the vault
+   is atomically created, **or** connect a
    sync provider to import an existing vault. See
    [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device

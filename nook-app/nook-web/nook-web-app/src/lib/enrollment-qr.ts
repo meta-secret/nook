@@ -5,7 +5,10 @@ export const enrollmentQrSize = 360
 const ink = '#090b10'
 const nookQrBadgeImage = '/nook-qr-badge.png'
 
-export function createEnrollmentQrOptions(enrollmentLink: string) {
+export function createEnrollmentQrOptions(
+  enrollmentLink: string,
+  dense = false,
+) {
   return {
     width: enrollmentQrSize,
     height: enrollmentQrSize,
@@ -16,12 +19,12 @@ export function createEnrollmentQrOptions(enrollmentLink: string) {
     qrOptions: {
       typeNumber: 0,
       mode: 'Byte',
-      errorCorrectionLevel: 'Q',
+      errorCorrectionLevel: dense ? 'L' : 'Q',
     },
-    image: nookQrBadgeImage,
+    image: dense ? undefined : nookQrBadgeImage,
     imageOptions: {
       hideBackgroundDots: true,
-      imageSize: 0.13,
+      imageSize: dense ? 0 : 0.13,
       margin: 4,
       saveAsBlob: false,
     },

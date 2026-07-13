@@ -23,7 +23,8 @@ pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
     vault_event, vault_event_builder, vault_event_graph, vault_event_session, vault_event_store,
     vault_format, vault_ids, vault_import, vault_projection, vault_sentinel_genesis,
-    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
+    vault_sentinel_onboarding, vault_sentinel_unlock, vault_session, vault_session_cache,
+    vault_wire,
 };
 
 pub use bip39::{
@@ -77,6 +78,11 @@ pub use secret_types::{
     SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::build_secret_yaml;
+pub use vault_sentinel_onboarding::{
+    AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
+    create_sentinel_onboarding_package, decode_sentinel_onboarding_package,
+    encode_sentinel_onboarding_package,
+};
 
 pub use nook_auth2::{
     SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,

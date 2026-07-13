@@ -15,10 +15,12 @@
     vault,
     onSelect,
     excludeLocal = false,
+    excludeLocalFolder = false,
   }: {
     vault: VaultState
     onSelect: (type: StorageProviderType, oauthPreset?: OAuthFilePreset) => void
     excludeLocal?: boolean
+    excludeLocalFolder?: boolean
   } = $props()
 
   const localFolderUnavailable = $derived(!vault.localFolderBackupSupported)
@@ -107,33 +109,35 @@
         </button>
       </li>
     {/if}
-    <li class="min-w-0 max-w-full">
-      <button
-        type="button"
-        class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
-        data-testid="provider-option-local-folder"
-        disabled={localFolderUnavailable || blocked('local-folder')}
-        onclick={() => {
-          if (!localFolderUnavailable && !blocked('local-folder'))
-            onSelect('local-folder')
-        }}
-      >
-        <FolderOpen class="size-4 shrink-0 text-foreground" />
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-foreground"
-            >{vault.t('provider_picker.local_folder')}</span
-          >
-          <span class="block truncate text-xs text-muted-foreground">
-            {localFolderUnavailable
-              ? vault.t('provider_picker.local_folder_unavailable_desc')
-              : description(
-                  'provider_picker.local_folder_desc',
-                  'local-folder',
-                )}
+    {#if !excludeLocalFolder}
+      <li class="min-w-0 max-w-full">
+        <button
+          type="button"
+          class="flex min-w-0 w-full max-w-full items-center gap-3 overflow-hidden rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-left transition-colors hover:border-primary/30 hover:bg-accent disabled:cursor-not-allowed disabled:border-border disabled:bg-muted/10 disabled:opacity-60 disabled:hover:bg-muted/10"
+          data-testid="provider-option-local-folder"
+          disabled={localFolderUnavailable || blocked('local-folder')}
+          onclick={() => {
+            if (!localFolderUnavailable && !blocked('local-folder'))
+              onSelect('local-folder')
+          }}
+        >
+          <FolderOpen class="size-4 shrink-0 text-foreground" />
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-foreground"
+              >{vault.t('provider_picker.local_folder')}</span
+            >
+            <span class="block truncate text-xs text-muted-foreground">
+              {localFolderUnavailable
+                ? vault.t('provider_picker.local_folder_unavailable_desc')
+                : description(
+                    'provider_picker.local_folder_desc',
+                    'local-folder',
+                  )}
+            </span>
           </span>
-        </span>
-      </button>
-    </li>
+        </button>
+      </li>
+    {/if}
     <li class="min-w-0 max-w-full">
       <button
         type="button"

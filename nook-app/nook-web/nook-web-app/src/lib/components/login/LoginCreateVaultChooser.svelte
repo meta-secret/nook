@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import {
+    ArrowRight,
     Check,
     Cloud,
     Copy,
@@ -69,6 +70,8 @@
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
     sentinelInvitationRequest = '',
+    sentinelOnboardingPackage = '',
+    onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
     isVerifying: boolean
@@ -100,6 +103,10 @@
     sentinelGenesisParticipants?: SentinelGenesisParticipantSummary[]
     sentinelGenesisDeliveries?: SentinelGenesisDelivery[]
     sentinelInvitationRequest?: string
+    sentinelOnboardingPackage?: string
+    onAcceptSentinelOnboardingPackage?: (
+      packageJson: string,
+    ) => void | Promise<void>
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
@@ -124,6 +131,13 @@
   let initiatorPasskeyRequested = $state(false)
 
   $effect(() => {
+    if (sentinelOnboardingPackage.trim() && wizardStep === 'choose') {
+      chosenPath = 'join'
+      wizardStep = 'join'
+    }
+  })
+
+  $effect(() => {
     const invitation = sentinelInvitationRequest.trim()
     if (!invitation || wizardStep !== 'choose') return
     participantRequest = invitation
@@ -136,6 +150,7 @@
     const deviceProtectionReady = vault.deviceProtectionReady
     if (
       wizardStep === 'join' &&
+      !sentinelOnboardingPackage.trim() &&
       !sentinelInvitationRequest.trim() &&
       !generatedParticipantResponse &&
       !joinPublicKeysLoading &&
@@ -600,6 +615,8 @@
         onAddSentinelGenesisParticipantResponse?.(payload)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
+      onChooseSyncProvider={onConnectStorage}
+      onPrepareOnboardingLinks={() => vault.prepareSentinelOnboardingLinks()}
     />
   {:else if sentinelDashboardActive && sentinelDashboard === 'terminal'}
     <SentinelTerminalDashboard
@@ -618,6 +635,8 @@
         onAddSentinelGenesisParticipantResponse?.(payload)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
+      onChooseSyncProvider={onConnectStorage}
+      onPrepareOnboardingLinks={() => vault.prepareSentinelOnboardingLinks()}
     />
   {:else}
     <section
@@ -746,37 +765,74 @@
                         data-testid="landing-auth-step-choose"
                       >
                         <div
-                          class="space-y-2"
+                          class="space-y-3"
                           data-testid="get-started-path-chooser"
                         >
                           <div
-                            class="grid gap-3 sm:grid-cols-2"
+                            class="grid gap-2"
                             data-testid="get-started-path-list"
                           >
                             <button
                               type="button"
-                              class="inline-flex min-h-14 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:opacity-60"
+                              class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
                               data-testid="get-started-path-simple"
                               disabled={isBusy}
                               onclick={chooseSimplePath}
                             >
-                              <KeyRound class="size-4 shrink-0" />
-                              {vault.t('login.get_started_path_simple_title')}
+                              <span
+                                class="grid size-9 place-items-center rounded-full border border-border bg-muted/30"
+                              >
+                                <KeyRound class="size-4" />
+                              </span>
+                              <span class="min-w-0">
+                                <span class="block text-sm font-semibold">
+                                  {vault.t(
+                                    'login.get_started_path_simple_title',
+                                  )}
+                                </span>
+                                <span
+                                  class="mt-1 block text-xs leading-snug text-muted-foreground"
+                                >
+                                  {vault.t(
+                                    'login.get_started_path_simple_description',
+                                  )}
+                                </span>
+                              </span>
+                              <ArrowRight
+                                class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                              />
                             </button>
                             <button
                               type="button"
-                              class="inline-flex min-h-14 items-center justify-center gap-2 rounded-md bg-foreground px-4 py-3 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+                              class="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 text-left text-foreground transition-[border-color,background-color,box-shadow] hover:border-foreground/25 hover:bg-muted/30 hover:shadow-sm disabled:opacity-60"
                               data-testid="get-started-path-sentinel"
                               disabled={isBusy}
                               onclick={chooseSentinelCreatePath}
                             >
-                              <Users class="size-4 shrink-0" />
-                              {vault.t('login.get_started_path_sentinel_title')}
+                              <span
+                                class="grid size-9 place-items-center rounded-full bg-foreground text-background"
+                              >
+                                <Users class="size-4" />
+                              </span>
+                              <span class="min-w-0">
+                                <span class="block text-sm font-semibold">
+                                  {vault.t(
+                                    'login.get_started_path_sentinel_title',
+                                  )}
+                                </span>
+                                <span
+                                  class="mt-1 block text-xs leading-snug text-muted-foreground"
+                                >
+                                  {vault.t(
+                                    'login.get_started_path_sentinel_description',
+                                  )}
+                                </span>
+                              </span>
+                              <ArrowRight
+                                class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                              />
                             </button>
                           </div>
-                          <p class="text-sm text-pretty text-muted-foreground">
-                            {vault.t('login.get_started_paths_description')}
-                          </p>
                         </div>
                       </section>
                     {:else if index === stepIndex && wizardStep === 'simple-create'}
@@ -920,14 +976,39 @@
             >
               <div class="space-y-1">
                 <h3 class="text-lg font-semibold text-foreground">
-                  {vault.t('login.sentinel_genesis_join_title')}
+                  {sentinelOnboardingPackage.trim()
+                    ? vault.t('login.sentinel_onboarding_member_title')
+                    : vault.t('login.sentinel_genesis_join_title')}
                 </h3>
                 <p class="text-sm text-pretty text-muted-foreground">
-                  {vault.t('login.sentinel_genesis_join_description')}
+                  {sentinelOnboardingPackage.trim()
+                    ? vault.t('login.sentinel_onboarding_member_description')
+                    : vault.t('login.sentinel_genesis_join_description')}
                 </p>
               </div>
 
-              {#if generatedParticipantResponse}
+              {#if sentinelOnboardingPackage.trim()}
+                <div
+                  class="rounded-lg border border-primary/25 bg-primary/5 p-4"
+                >
+                  <p class="text-xs leading-relaxed text-muted-foreground">
+                    {vault.t('login.sentinel_onboarding_member_security')}
+                  </p>
+                  <Button
+                    type="button"
+                    class="mt-4 w-full sm:w-auto"
+                    data-testid="sentinel-accept-onboarding"
+                    disabled={isBusy || sentinelActionBusy}
+                    onclick={() =>
+                      void onAcceptSentinelOnboardingPackage?.(
+                        sentinelOnboardingPackage,
+                      )}
+                  >
+                    <ShieldCheck class="size-4" />
+                    {vault.t('login.sentinel_onboarding_member_action')}
+                  </Button>
+                </div>
+              {:else if generatedParticipantResponse}
                 <div
                   class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
                   data-testid="sentinel-genesis-join-response"
@@ -1001,7 +1082,7 @@
                 </Button>
               {/if}
 
-              {#if !sentinelInvitationRequest.trim()}
+              {#if !sentinelInvitationRequest.trim() && !sentinelOnboardingPackage.trim()}
                 <details
                   class="rounded-lg border border-border/60 bg-muted/10 p-4"
                 >
@@ -1056,58 +1137,60 @@
                 </details>
               {/if}
 
-              <div class="space-y-2 border-t border-border pt-4">
-                <p class="text-xs font-medium text-foreground">
-                  {vault.t('login.sentinel_genesis_join_share_title')}
-                </p>
-                <p class="text-xs text-pretty text-muted-foreground">
-                  {vault.t('login.sentinel_genesis_join_share_description')}
-                </p>
-                <label
-                  class="text-xs font-medium text-foreground"
-                  for="sentinel-share-request"
-                >
-                  {vault.t('login.sentinel_genesis_join_share_request_label')}
-                </label>
-                <textarea
-                  id="sentinel-share-request"
-                  class="min-h-16 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                  data-testid="sentinel-genesis-share-request-input"
-                  placeholder={vault.t(
-                    'login.sentinel_genesis_join_share_request_placeholder',
-                  )}
-                  bind:value={participantRequest}
-                  disabled={isBusy || sentinelActionBusy}></textarea>
-                <label
-                  class="text-xs font-medium text-foreground"
-                  for="sentinel-received-share"
-                >
-                  {vault.t('login.sentinel_genesis_receive_share_label')}
-                </label>
-                <textarea
-                  id="sentinel-received-share"
-                  class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                  data-testid="sentinel-genesis-receive-share-input"
-                  placeholder={vault.t(
-                    'login.sentinel_genesis_receive_share_placeholder',
-                  )}
-                  bind:value={participantShare}
-                  disabled={isBusy || sentinelActionBusy}></textarea>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  data-testid="sentinel-genesis-receive-share"
-                  disabled={isBusy ||
-                    sentinelActionBusy ||
-                    !participantShare.trim() ||
-                    !onReceiveSentinelGenesisShare}
-                  onclick={() => void receiveParticipantShare()}
-                >
-                  <ShieldCheck class="size-4" />
-                  {vault.t('login.sentinel_genesis_receive_share')}
-                </Button>
-              </div>
+              {#if !sentinelOnboardingPackage.trim()}
+                <div class="space-y-2 border-t border-border pt-4">
+                  <p class="text-xs font-medium text-foreground">
+                    {vault.t('login.sentinel_genesis_join_share_title')}
+                  </p>
+                  <p class="text-xs text-pretty text-muted-foreground">
+                    {vault.t('login.sentinel_genesis_join_share_description')}
+                  </p>
+                  <label
+                    class="text-xs font-medium text-foreground"
+                    for="sentinel-share-request"
+                  >
+                    {vault.t('login.sentinel_genesis_join_share_request_label')}
+                  </label>
+                  <textarea
+                    id="sentinel-share-request"
+                    class="min-h-16 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    data-testid="sentinel-genesis-share-request-input"
+                    placeholder={vault.t(
+                      'login.sentinel_genesis_join_share_request_placeholder',
+                    )}
+                    bind:value={participantRequest}
+                    disabled={isBusy || sentinelActionBusy}></textarea>
+                  <label
+                    class="text-xs font-medium text-foreground"
+                    for="sentinel-received-share"
+                  >
+                    {vault.t('login.sentinel_genesis_receive_share_label')}
+                  </label>
+                  <textarea
+                    id="sentinel-received-share"
+                    class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    data-testid="sentinel-genesis-receive-share-input"
+                    placeholder={vault.t(
+                      'login.sentinel_genesis_receive_share_placeholder',
+                    )}
+                    bind:value={participantShare}
+                    disabled={isBusy || sentinelActionBusy}></textarea>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-testid="sentinel-genesis-receive-share"
+                    disabled={isBusy ||
+                      sentinelActionBusy ||
+                      !participantShare.trim() ||
+                      !onReceiveSentinelGenesisShare}
+                    onclick={() => void receiveParticipantShare()}
+                  >
+                    <ShieldCheck class="size-4" />
+                    {vault.t('login.sentinel_genesis_receive_share')}
+                  </Button>
+                </div>
+              {/if}
             </section>
           {/if}
 

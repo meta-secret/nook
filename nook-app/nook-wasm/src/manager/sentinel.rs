@@ -8,6 +8,7 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::NookSecretRecord;
 use crate::conversion::{LoadedVault, load_stored_vault};
+use crate::storage::auth_providers::save_auth_providers;
 use crate::storage::indexed_db::{
     clear_sentinel_genesis_finalization_pending, list_sentinel_genesis_share_deliveries,
     load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
@@ -39,6 +40,53 @@ struct PendingSentinelGenesisFinalization {
 
 #[wasm_bindgen]
 impl NookVaultManager {
+    /// Build one member-addressed post-genesis package. Provider credentials
+    /// are encrypted to the same device key that owns the Sentinel share.
+    #[wasm_bindgen(js_name = createSentinelOnboardingPackage)]
+    pub fn create_sentinel_onboarding_package(
+        &self,
+        request_json: String,
+        delivery_json: String,
+        provider_snapshot: wasm_bindgen::JsValue,
+    ) -> Result<String, JsError> {
+        let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
+        let delivery: nook_core::SentinelGenesisShareDelivery =
+            serde_json::from_str(&delivery_json)
+                .map_err(|error| NookError::Serialization(error.to_string()))?;
+        let snapshot: nook_core::AuthProvidersSnapshotData =
+            serde_wasm_bindgen::from_value(provider_snapshot)?;
+        let package = nook_core::create_sentinel_onboarding_package(request, delivery, &snapshot)?;
+        Ok(nook_core::encode_sentinel_onboarding_package(&package)?)
+    }
+
+    /// Accept a member-addressed package, persist this device's encrypted
+    /// share, and install the included sync provider credentials locally.
+    #[wasm_bindgen(js_name = acceptSentinelOnboardingPackage)]
+    pub async fn accept_sentinel_onboarding_package(
+        &mut self,
+        package_json: String,
+    ) -> Result<String, JsError> {
+        let package = nook_core::decode_sentinel_onboarding_package(&package_json)?;
+        let identity = self.ensure_device_identity()?;
+        let accepted = nook_core::accept_sentinel_onboarding_package(&package, &identity)?;
+        let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
+            request: package.request.clone(),
+            delivery: package.delivery.clone(),
+        })
+        .map_err(|error| NookError::Serialization(error.to_string()))?;
+        save_sentinel_genesis_share_delivery(
+            package.delivery.store_id.as_str(),
+            identity.device_id().as_str(),
+            &stored_json,
+        )
+        .await?;
+        save_auth_providers(&identity, &accepted.provider_snapshot).await?;
+        self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record);
+        self.pending_sentinel_genesis_request = None;
+        Ok(package.delivery.store_id.to_string())
+    }
+
     /// List provider-free Sentinel shares accepted by this protected device.
     #[wasm_bindgen(js_name = listSentinelGenesisShareDeliveries)]
     pub async fn list_sentinel_genesis_share_deliveries(&self) -> Result<String, JsError> {

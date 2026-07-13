@@ -40,6 +40,7 @@
     type ExtensionConnectRequest,
   } from '$lib/extension-connect'
   import type { VaultItemType } from '$lib/nook'
+  import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
 
   const vault = new VaultState()
   type ColorMode = 'light' | 'dark'
@@ -85,6 +86,11 @@
           '')
       : '',
   )
+  let sentinelOnboardingPackage = $state(
+    typeof window !== 'undefined'
+      ? consumeSentinelOnboardingFromLocation()
+      : '',
+  )
 
   function syncRoute() {
     legalPage = getLegalPageFromPath(window.location.pathname)
@@ -96,6 +102,8 @@
     )
     sentinelInvitationRequest =
       new URLSearchParams(window.location.search).get('sentinel-request') ?? ''
+    const onboardingPackage = consumeSentinelOnboardingFromLocation()
+    if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
   }
 
   function conflictCandidates(
@@ -203,7 +211,12 @@
 
   async function handleUnlock() {
     if (vault.loginSetupType) {
-      await vault.connectStagedProvider()
+      if (vault.sentinelGenesisStatus === 'delivering') {
+        await vault.connectAndSyncStagedProvider()
+        await vault.prepareSentinelOnboardingLinks()
+      } else {
+        await vault.connectStagedProvider()
+      }
       return
     }
     if (existingVaultNeedsDeviceUnlock) {
@@ -267,6 +280,7 @@
     | { kind: 'simple'; label: string }
     | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
     | { kind: 'sentinel-participant-key' }
+    | { kind: 'sentinel-onboarding'; packageJson: string }
 
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
   let pendingExistingVaultUnlock = $state(false)
@@ -307,6 +321,16 @@
     return vault.createSentinelGenesisPublicKeyAnnouncement()
   }
 
+  async function handleAcceptSentinelOnboarding(packageJson: string) {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'sentinel-onboarding', packageJson }
+      return
+    }
+    pendingVaultCreation = undefined
+    await vault.acceptSentinelOnboardingPackage(packageJson)
+    sentinelOnboardingPackage = ''
+  }
+
   $effect(() => {
     const pending = pendingVaultCreation
     if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return
@@ -316,6 +340,10 @@
       return
     }
     if (pending.kind === 'sentinel-participant-key') return
+    if (pending.kind === 'sentinel-onboarding') {
+      void handleAcceptSentinelOnboarding(pending.packageJson)
+      return
+    }
     void vault.startSentinelGenesis(pending.args)
   })
 
@@ -546,6 +574,8 @@
                 prefillEnrollmentCode={vault.prefillEnrollmentCode}
                 enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
                 {sentinelInvitationRequest}
+                {sentinelOnboardingPackage}
+                onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
                 onUnlockWithPassword={(entryId, password) =>
                   vault.unlockWithPassword(entryId, password)}
                 onCreateDeviceVault={handleCreateDeviceVault}
