@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import {
   addVaultPassword,
   clearBrowserVault,
-  connectLocalVaultLegacy,
+  connectLocalVault,
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   expectVaultPasswordStatus,
@@ -42,7 +42,7 @@ test.describe('login unlock flow (local-first)', () => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVaultLegacy(page)
+    await connectLocalVault(page)
   })
 
   test('shows local unlock step when vault has backup passwords', async ({

@@ -1,8 +1,7 @@
 //! IndexedDB-backed storage adapter.
 //!
 //! Object stores inside `nook_db`:
-//! - `vault` — encrypted vault YAML, local metadata, device identities, and
-//!   legacy compatibility keys.
+//! - `vault` — encrypted vault YAML, local metadata, and device identities.
 //! - `events` — immutable event bytes keyed by `[store_id, event_id]` strings.
 //! - `projections` — encrypted materialized-view cache metadata.
 //! - `provider_receipts` — reserved provider event receipt cache.
@@ -15,7 +14,6 @@
 //! - `pending_new_local_vault` — when set, local load returns empty so
 //!   `connect_fresh` can bootstrap a second vault without overwriting the
 //!   previous active blob.
-//! - `encrypted_db` — legacy single-vault key (migrated on first read).
 //! - `device_id` / `device_identity_wrapped` — stable browser device identity
 //!   metadata for passkey-derived identities or PIN-encrypted identity records.
 //! - `vault_cache:{ref}` — per-provider local mirror of remote YAML.
@@ -27,7 +25,6 @@
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
-const LEGACY_ENCRYPTED_DB_KEY: &str = "encrypted_db";
 const ACTIVE_VAULT_KEY: &str = "active_vault_id";
 const VAULT_REGISTRY_KEY: &str = "vault_registry";
 const PENDING_NEW_LOCAL_VAULT_KEY: &str = "pending_new_local_vault";
@@ -247,33 +244,11 @@ fn chrono_lite_now() -> nook_core::IsoTimestamp {
     nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
 }
 
-async fn migrate_legacy_encrypted_db_if_needed() -> Result<(), NookError> {
-    let legacy = idb_get_string(LEGACY_ENCRYPTED_DB_KEY).await?;
-    let Some(content) = legacy.filter(|value| !value.trim().is_empty()) else {
-        return Ok(());
-    };
-
-    let store_id = store_id_from_yaml(&content)?;
-    idb_put_string(&vault_blob_key(&store_id), &content).await?;
-
-    let mut registry = load_vault_registry().await?;
-    upsert_registry_entry(&mut registry, &store_id, None, false);
-    save_vault_registry(&registry).await?;
-
-    if get_active_vault_id().await?.is_none() {
-        set_active_vault_id(&store_id).await?;
-    }
-
-    idb_delete_key(LEGACY_ENCRYPTED_DB_KEY).await
-}
-
 pub(crate) async fn list_vault_registry_entries() -> Result<Vec<VaultRegistryEntry>, NookError> {
-    migrate_legacy_encrypted_db_if_needed().await?;
     Ok(load_vault_registry().await?.vaults)
 }
 
 pub(crate) async fn load_vault_blob(store_id: &str) -> Result<Option<String>, NookError> {
-    migrate_legacy_encrypted_db_if_needed().await?;
     idb_get_string(&vault_blob_key(store_id)).await
 }
 
@@ -454,8 +429,6 @@ mod device_identity_storage_tests {
 }
 
 pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> {
-    migrate_legacy_encrypted_db_if_needed().await?;
-
     if is_pending_new_local_vault().await? {
         return Ok(None);
     }
@@ -468,7 +441,6 @@ pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> 
 }
 
 pub(crate) async fn has_local_vault() -> Result<bool, NookError> {
-    migrate_legacy_encrypted_db_if_needed().await?;
     let registry = load_vault_registry().await?;
     Ok(!registry.vaults.is_empty())
 }
@@ -616,7 +588,6 @@ pub(crate) async fn set_local_vault_label(store_id: &str, label: &str) -> Result
             "Vault label cannot be empty.".to_owned(),
         ));
     }
-    migrate_legacy_encrypted_db_if_needed().await?;
     let mut registry = load_vault_registry().await?;
     if !registry
         .vaults
@@ -637,7 +608,6 @@ pub(crate) async fn set_local_vault_label(store_id: &str, label: &str) -> Result
 }
 
 pub(crate) async fn switch_active_vault(store_id: &str) -> Result<(), NookError> {
-    migrate_legacy_encrypted_db_if_needed().await?;
     let registry = load_vault_registry().await?;
     if !registry
         .vaults

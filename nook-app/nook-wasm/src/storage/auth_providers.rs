@@ -98,9 +98,8 @@ fn now_iso() -> String {
     js_sys::Date::new_0().to_iso_string().into()
 }
 
-/// Full load pipeline: read → unseal → legacy seed → field migration, re-saving
-/// (sealed) when anything changed. Returns the decrypted in-memory snapshot plus
-/// the legacy active-provider id for the one-time remote vault copy.
+/// Full load pipeline: read, unseal, normalize provider fields, and re-save
+/// sealed credentials when anything changed.
 pub(crate) async fn load_auth_providers(
     identity: &DeviceIdentity,
 ) -> Result<NormalizedAuthSnapshot, NookError> {
@@ -144,11 +143,7 @@ pub(crate) async fn load_auth_providers(
         save_auth_providers(identity, &snapshot).await?;
     }
 
-    Ok(NormalizedAuthSnapshot {
-        snapshot,
-        legacy_active_provider_id: normalized.legacy_active_provider_id,
-        changed,
-    })
+    Ok(NormalizedAuthSnapshot { snapshot, changed })
 }
 
 /// Seal credential fields and persist the snapshot.

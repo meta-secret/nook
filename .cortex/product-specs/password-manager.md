@@ -82,7 +82,7 @@ session.
 - **Scope:** In-memory only — never written to GitHub or IndexedDB as plaintext.
 
 ### B. Local Projection Layout (YAML)
-Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `encrypted_db`).
+Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `vault:{store_id}`).
 
 ```yaml
 vault_version: 1
@@ -97,7 +97,7 @@ secrets:
 ```
 
 - **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../design-docs/secret-store-identity.md).
-- **`vault_version`:** Legacy/local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
+- **`vault_version`:** Local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).
 Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && cargo run --example generate_vault_fixtures -p nook-core`).
@@ -108,8 +108,8 @@ Example fixtures: `nook-app/nook-core/fixtures/` (generate via `cd nook-app && c
   - `device_identity_wrapped` — versioned AES-256-GCM-wrapped age X25519 identity plus WebAuthn PRF or PIN metadata (never synced).
   - `device_identity_secret` — legacy plaintext record, deleted after successful passkey migration.
   - `device_id` — short fingerprint for UI.
-  - `encrypted_db` — local copy of vault YAML (local storage mode).
-  - `encrypted_db` — UTF-8 text of the on-disk vault file (YAML).
+  - `vault:{store_id}` — local projection cache for one vault.
+  - Values are UTF-8 YAML text.
 
 ### D. GitHub Repository Adapter
 - **Repository:** `{username}/nook` (auto-created if missing).

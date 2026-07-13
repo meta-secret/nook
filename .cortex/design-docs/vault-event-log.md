@@ -164,37 +164,26 @@ different bytes as corruption.
 |-------|---------|
 | `events` | Immutable event bytes and event indexes |
 | `outbox` | Durable per-provider retry queue |
-| `projections` | Projection heads, key-epoch markers, and source projection backup bytes |
+| `projections` | Projection heads and key-epoch markers |
 | `provider_receipts` | Reserved for compact per-provider sync receipts |
-| `vault` | Source projection cache plus local device/signing identity material |
+| `vault` | Local projection cache plus device/signing identity material |
 
 Event-log reads and writes use the separated stores. Event heads, key epochs,
-event bytes, outbox rows, and source projection backups must not be read from
-any other `IndexedDB` object store.
-
-## Migration
-
-1. Byte-for-byte backup of source projection YAML → `source_backup:{store_id}` in IndexedDB (first import only).
-2. `verify_stored_vault_import` — secret id parity before append.
-3. Deterministic `vault-imported` genesis event from `VaultHashContext` (`nook-app/nook-core/src/vault_import.rs`).
-4. Local append before remote upload (`MIGRATION_START` / `MIGRATION_SUCCESS` status events).
-5. Set-union fan-out to all providers; later provider flushes repair any local
-   events the provider does not yet have.
-
-See [vault-schema-versioning.md](vault-schema-versioning.md) for #52 goal mapping.
+event bytes, and outbox rows must not be read from any other `IndexedDB` object
+store. Vault creation appends genesis directly; projection YAML is never an
+event source.
 
 ## Rollout phases
 
 | Phase | Scope |
 |-------|--------|
 | 0 | This ADR |
-| 1 | `nook-core` event model, DAG, projection, import |
+| 1 | `nook-core` event model, DAG, and projection |
 | 2 | Ed25519 device keys, epoch crypto, actor authorization |
 | 3 | IndexedDB event store, outbox, projection cache |
 | 4 | GitHub / Drive event adapters |
 | 5 | WASM manager + UI |
-| 6 | User migration |
-| 7 | Provider projection removal — **done** (event log is the only provider write path; YAML is local/import material only) |
+| 6 | Provider projection removal — **done** (event log is the only provider write path) |
 
 ## Testing requirements
 

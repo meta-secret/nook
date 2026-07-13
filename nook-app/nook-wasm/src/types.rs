@@ -71,7 +71,6 @@ export interface NookAuthProvidersSnapshot {
 
 export interface NookLoadedAuthProviders {
   snapshot: NookAuthProvidersSnapshot;
-  legacyActiveProviderId?: string;
   changed: boolean;
 }
 

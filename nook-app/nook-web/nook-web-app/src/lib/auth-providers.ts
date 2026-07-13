@@ -86,7 +86,7 @@ export async function loadAuthProviders(
   return loaded.snapshot
 }
 
-/** Load providers, then copy a legacy remote vault into local storage once. */
+/** Load providers and ensure the local provider row exists. */
 export async function loadAuthProvidersWithLocalRow(
   manager: NookVaultManager,
 ): Promise<AuthProvidersSnapshot> {

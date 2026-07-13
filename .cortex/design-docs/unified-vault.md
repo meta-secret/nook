@@ -25,7 +25,7 @@ flowchart TB
     V[nook-projection.yaml]
   end
   subgraph local["Browser"]
-    L[nook_db.encrypted_db — local cache]
+    L[nook_db vault:{store_id} — local cache]
     S[Unlocked session — memory only]
   end
   subgraph sync["Sync providers (replicas)"]
@@ -41,7 +41,7 @@ flowchart TB
 | Concept | Old | New |
 |---------|-----|-----|
 | **Vault** | Implicit per provider | Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](vault-session-and-lock.md)) |
-| **Primary copy** | Whichever provider is active | Local IndexedDB (`nook_db.encrypted_db`) for the **active** vault |
+| **Primary copy** | Immutable provider event log | Local IndexedDB (`vault:{store_id}`) projection cache for the active vault |
 | **Unlock** | Provider-first wizard | Login gate: unlock local cache or connect provider to fetch a vault |
 | **Sync providers** | Vault selectors | **Replica targets** for the current vault — many providers, one `store_id` |
 | **Lock** | N/A | Clear decrypted session; encrypted vault + providers remain |
@@ -57,7 +57,7 @@ flowchart TB
 
 | Key | Value | Notes |
 |-----|-------|-------|
-| `encrypted_db` | UTF-8 vault YAML | **Authoritative local copy** — always present after first setup |
+| `vault:{store_id}` | UTF-8 vault YAML | Derived local projection cache |
 | `device_identity_wrapped` | Versioned AES-256-GCM ciphertext + WebAuthn PRF or PIN metadata | Never synced; legacy `device_identity_secret` is deleted after migration |
 | `device_id` | Short fingerprint | UI only |
 
@@ -103,7 +103,6 @@ secrets:
 |------|-----------|
 | **Genesis** | `vault_version: 1` on first persist |
 | **Every save** | Increment before write |
-| **Legacy vaults** | Missing field → treat as `0`; next save normalizes to `1+` |
 
 Implementation: `nook-app/nook-core/src/vault_format.rs` (`read_vault_version`), `nook-app/nook-core/src/vault_sync.rs`.
 
@@ -185,20 +184,7 @@ Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside
 
 ---
 
-## 7. Migration from current model
-
-| Current state | Migration |
-|---------------|-----------|
-| User with one local provider | No change — already local-first |
-| User with GitHub-only provider | On upgrade: copy remote vault into `encrypted_db`, switch to local-first reads |
-| User with multiple providers (different vaults) | Prompt: pick one vault to keep as canonical; others become disconnected |
-| Missing `vault_version` | Backfill on next save |
-
-Migration runs once on `VaultState.init()` when detecting legacy provider-as-vault model.
-
----
-
-## 8. Security notes
+## 7. Security notes
 
 - Master password never leaves the browser; used only to unwrap vault keys in WASM.
 - Sync provider tokens (GitHub PAT, OAuth) remain in `nook_auth` — compromise exposes encrypted blob access, not plaintext.
@@ -211,7 +197,7 @@ Migration runs once on `VaultState.init()` when detecting legacy provider-as-vau
 
 After any local vault save (secret CRUD, join approve/deny, device roster change — phased rollout), the web layer pushes to **all connected sync providers**:
 
-1. Read authoritative blob from `nook_db.encrypted_db` (`readLocalVaultYaml`).
+1. Read the local projection cache from `vault:{store_id}` (`readLocalVaultYaml`).
 2. For each non-local provider in `nook_auth`: `reconcileVaultBlobs` → push/adopt/conflict.
 3. Background fan-out is **quiet** (no per-provider toast spam); status bar shows `Syncing to {provider}…`.
 
@@ -244,6 +230,5 @@ Manual **Sync all** in the status bar runs the same reconcile loop with user-vis
 | Onboard / enrollment QR (local-first) | Done (#75, Phase 5) |
 | Help page rewrite | Done (#76, Phase 6) |
 | Join sync propagation | Done (#77, Phase 7) |
-| Legacy multi-vault migration | Done (#78, Phase 8) |
 
 UI rollout details: [exec-plans/unified-vault-ui-rollout.md](../exec-plans/unified-vault-ui-rollout.md).

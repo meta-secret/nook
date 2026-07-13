@@ -106,7 +106,7 @@ impl Default for VaultSessionState {
             store_id: String::new(),
             vault_name: None,
             vault_version: 0,
-            architecture: nook_core::VaultArchitecture::default_legacy(),
+            architecture: nook_core::VaultArchitecture::default(),
         }
     }
 }

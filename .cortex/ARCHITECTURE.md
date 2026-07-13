@@ -169,7 +169,7 @@ root/
          → update typed Database session
          → encrypt_value ONLY for this key → stored_armored
          → serialize_stored(Yaml) from cache (no full re-encrypt)
-         → write encrypted_db / GitHub PUT
+         → write vault:{store_id} / append provider events
 ```
 
 ### Search
@@ -211,7 +211,7 @@ members:  members_key-encrypted catalog entries
 
 - **Per-record age armor** for values; labels plaintext in YAML.
 - **GitHub:** UTF-8 YAML file, base64 in API payloads (not hex blob).
-- **IndexedDB `encrypted_db`:** UTF-8 YAML text (not hex).
+- **IndexedDB `vault:{store_id}`:** UTF-8 YAML projection cache (not hex).
 
 ---
 

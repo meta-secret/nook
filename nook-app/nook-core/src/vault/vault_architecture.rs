@@ -243,7 +243,7 @@ pub struct VaultArchitecture {
     pub vault_type: VaultType,
     /// New vault genesis does not select or derive behavior from replication;
     /// providers are configured after creation.
-    #[serde(default, skip_serializing_if = "replication_is_legacy_default")]
+    #[serde(default, skip_serializing_if = "replication_is_default")]
     pub replication_type: ReplicationType,
     /// Sentinel quorum policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -251,7 +251,7 @@ pub struct VaultArchitecture {
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T.
-fn replication_is_legacy_default(value: &ReplicationType) -> bool {
+fn replication_is_default(value: &ReplicationType) -> bool {
     *value == ReplicationType::Personal
 }
 
@@ -267,11 +267,6 @@ impl Default for VaultArchitecture {
 }
 
 impl VaultArchitecture {
-    #[must_use]
-    pub fn default_legacy() -> Self {
-        Self::default()
-    }
-
     #[must_use]
     pub fn simple_personal(device_mode: DeviceMode) -> Self {
         Self {
@@ -608,7 +603,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn new_architecture_omits_legacy_personal_replication_but_reads_it() {
+    fn architecture_omits_default_personal_replication() {
         let architecture = VaultArchitecture::simple_personal(DeviceMode::Standard);
         let encoded = serde_json::to_value(&architecture).unwrap();
         assert!(encoded.get("replication_type").is_none());
@@ -649,8 +644,8 @@ mod tests {
     }
 
     #[test]
-    fn legacy_defaults_match_current_vault_behavior() {
-        let architecture = VaultArchitecture::default_legacy();
+    fn defaults_match_current_vault_behavior() {
+        let architecture = VaultArchitecture::default();
         assert_eq!(architecture.device_mode, DeviceMode::Standard);
         assert_eq!(architecture.vault_type, VaultType::Simple);
         assert_eq!(architecture.replication_type, ReplicationType::Personal);
@@ -710,7 +705,7 @@ mod tests {
 
         let simple_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
-            ..VaultArchitecture::default_legacy()
+            ..VaultArchitecture::default()
         };
         assert!(
             validate_architecture_for_provider(&simple_shared, StorageProviderType::Github, None)
@@ -768,7 +763,7 @@ mod tests {
 
         let shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
-            ..VaultArchitecture::default_legacy()
+            ..VaultArchitecture::default()
         };
         assert_eq!(
             shared.onboarding_type(),
@@ -899,7 +894,7 @@ mod tests {
         let second = crate::DeviceIdentity::generate().unwrap();
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2).unwrap();
         assert_eq!(
-            VaultArchitecture::default_legacy().validate_records(&shares),
+            VaultArchitecture::default().validate_records(&shares),
             Err(ValidationError::SimpleVaultHasSentinelShares)
         );
     }
@@ -925,7 +920,7 @@ mod tests {
             Err(ValidationError::InvalidSentinelShareSet)
         );
         assert_eq!(
-            VaultArchitecture::default_legacy().validate_records(&[malformed]),
+            VaultArchitecture::default().validate_records(&[malformed]),
             Err(ValidationError::InvalidSentinelShareSet)
         );
     }

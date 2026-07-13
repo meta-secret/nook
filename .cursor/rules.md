@@ -19,7 +19,7 @@ These files are the source of truth for how this project works.
 - **No user master passphrase.** DEC is auto-generated on first connect and stored in the vault `auth:` section (encrypted to the device key). Device identity lives in IndexedDB (`device_identity_secret`). Never expose a passphrase input in the UI.
 - **Secret key stays in the browser.** The encryption key is never written to GitHub — only the encrypted vault file (`nook-vault.yaml`) is synced remotely.
 - **GitHub mode requires only a PAT** with `repo` scope. Repository and vault file are resolved automatically: `{username}/nook/nook-vault.yaml`.
-- **Local mode requires no credentials.** The encrypted vault lives in IndexedDB under `encrypted_db`.
+- **Local mode requires no credentials.** Each projection cache lives in IndexedDB under `vault:{store_id}`.
 
 ### Get started paths
 - **Three mutually exclusive first-run intents:** Create Simple vault, Create Sentinel vault, Join Sentinel setup. Do not collapse create/join into one vault-type dropdown with footer links.

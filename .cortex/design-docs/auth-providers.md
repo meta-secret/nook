@@ -42,7 +42,6 @@ interface StorageProvider {
 }
 ```
 
-> The deprecated `activeProviderId` field is stripped by `normalize_auth_snapshot` on load (its value drives the one-time legacy vault copy, then it is dropped).
 
 **Persistence + crypto live in Rust/WASM.** `nook_auth` I/O, credential sealing, snapshot shaping, and the legacy `localStorage` migration all run in `nook-wasm`/`nook-core`; [`auth-providers.ts`](../../nook-app/nook-web/src/lib/auth-providers.ts) is a thin shim that owns only the TS **type declarations**, i18n presentation helpers (`localizeProviderLabel`, `maskGithubPat`, `providerStorageDetail` — coupled to the web `t()` catalog), and wasm-wrapper functions. Ownership split:
 
@@ -55,7 +54,7 @@ interface StorageProvider {
 
 **Credentials are sealed at rest with the device key.** Secret fields — `githubPat`, `oauthFile.accessToken`, `oauthFile.refreshToken` — are sealed inside `save_auth_providers` and unsealed inside the `load_auth_providers` pipeline. Non-secret fields (labels, repo, timestamps) stay plaintext. Crypto never lives in TypeScript (see [rules.md §1](../rules.md)).
 
-**Device key = existing device identity.** No new key is minted for provider storage. The wasm layer reuses this browser's **age X25519 device identity** (`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). The identity must first be authorized with the saved passkey's WebAuthn PRF result, or with the local PIN fallback on PRF-missing platforms. Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which the load path uses to distinguish sealed vs legacy-plaintext fields).
+**Device key = existing device identity.** No new key is minted for provider storage. The wasm layer reuses this browser's **age X25519 device identity** (`device_id` / `device_identity_wrapped` in the `nook_db` `vault` store — the same identity that unwraps `auth:` envelopes). The identity must first be authorized with the saved passkey's WebAuthn PRF result, or with the local PIN fallback on PRF-missing platforms. Sealing encrypts the credential to the device's own public key (age self-recipient, `DeviceIdentity::seal_utf8`); unsealing decrypts with the in-memory device secret (`DeviceIdentity::open_utf8`). Sealed values are age-armored ciphertext (they contain `BEGIN AGE ENCRYPTED FILE`, which distinguishes sealed from plaintext credential fields).
 
 **Migration:** On first load, legacy `localStorage` keys (`nook_storage_mode`, `nook_github_pat`) are imported into `nook_auth` and removed from `localStorage`. Existing **plaintext** provider rows (pre-encryption, or those seeded directly in e2e) are read transparently and re-saved in sealed form on the next load (`had_plaintext` upgrade path).
 
@@ -118,13 +117,17 @@ does it load providers, apply `activeProvider` credentials to `storageMode` /
 connect/enroll/join. Backup-password unlock may hydrate the local vault session
 without those provider steps; sealed-provider sync remains paused.
 
-WASM still receives `(storageMode, githubPat)` per call — no change to the Rust sync bridge. Provider **persistence and shaping** now live in `nook-wasm`/`nook-core`; the web layer only maps snapshots onto `VaultState` and drives the one-time legacy remote-vault copy (`migrateLegacyVaultToLocal`, which stays in TS because it fetches over the network).
+WASM still receives `(storageMode, githubPat)` per call. Provider persistence
+and shaping live in `nook-wasm`/`nook-core`; the web layer maps snapshots onto
+`VaultState`.
 
 ---
 
 ## 5. Sync replication (implemented)
 
-Version-based sync is in `nook-app/nook-core/src/vault_sync.rs`. UI uses local-first `encrypted_db` + fan-out to all sync providers in `nook_auth`.
+Event-log sync is in `nook-app/nook-core/src`. UI uses the local
+`vault:{store_id}` projection cache and fans events out to sync providers in
+`nook_auth`.
 
 | Capability | Status |
 |------------|--------|

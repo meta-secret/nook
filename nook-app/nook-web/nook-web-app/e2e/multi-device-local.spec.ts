@@ -3,7 +3,7 @@ import {
   approveJoinLocalE2eFromBanner,
   assertVaultReady,
   connectLocalE2eJoinerDevice,
-  connectLocalVaultLegacy,
+  connectLocalVault,
   createIsolatedContext,
   disableVaultIdleLock,
   E2E_SYNC_ONBOARD_PROVIDER,
@@ -36,7 +36,7 @@ test.describe('multi-device local vault with sync provider', () => {
     deviceB = await contextB.newPage()
     await disableVaultIdleLock(deviceB)
 
-    await connectLocalVaultLegacy(deviceA)
+    await connectLocalVault(deviceA)
     await assertVaultReady(deviceA)
 
     const genesisYaml = await readLocalVaultYamlFromIdb(deviceA)

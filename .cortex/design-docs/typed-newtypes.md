@@ -16,7 +16,7 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 |---------|--------|----------------|
 | `CompactToken` | `vault_ids` | 11-char base64url random suffix |
 | `StoreId` | `vault_ids` | `store_{token}` vault identity |
-| `SecretId` | `vault_ids` | `secret_{token}` or legacy human label |
+| `SecretId` | `vault_ids` | `secret_{token}` |
 | `AuthKeyId` | `vault_ids` | `key_{sha256_hex}` actor / auth row |
 | `DeviceId` | `vault_ids` | 16-hex device fingerprint |
 | `EventId` | `event_canonical` | `sha256u:{base64url_no_pad}` content-addressed event |
@@ -35,7 +35,6 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 | `MemberLabel` | `vault_wire` | human device / member label |
 | `PasswordEntryId` | `vault_wire` | password-unlock slot id |
 | `VaultEventSchemaVersion` | `vault_event` | event body `schema_version` |
-| `VaultHashContext` | `vault_import` | stored vault bytes → `Sha256Hex` + encrypted secrets for genesis import |
 | `ObservedHeads` | `vault_event_builder` | validated causal head set |
 | `DecryptedPlaintext` | `vault_wire` | age-scrypt decrypt output (YAML or JSON) |
 | `SigningSeedHex` | `vault_wire` | 64-hex Ed25519 signing seed |
@@ -93,16 +92,7 @@ enum VersionedVaultEventBody {
 
 `from_trusted` / `from_vault_record` for values already validated or emitted by this process. Do not use for external input.
 
-### Stored vault import (`vault_import.rs`)
-
-```rust
-let ctx = VaultHashContext::from(stored_yaml);
-stored_vault_to_import_event(&ctx, &store_id, &actor_id, &signing_key, &created_at)?;
-```
-
-Use `VaultHashContext` so content hash and encrypted-secret extraction stay aligned for genesis `vault-imported` events.
-
-## Migration checklist (remaining)
+## Remaining type-safety checklist
 
 - [ ] `VaultEventSession` — `store_id: StoreId`, `heads: Vec<EventId>`, `key_epoch: KeyEpoch`
 - [ ] `VaultProjection` maps — `BTreeMap<SecretId, …>` instead of `String` keys

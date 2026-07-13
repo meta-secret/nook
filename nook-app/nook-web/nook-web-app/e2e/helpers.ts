@@ -292,7 +292,7 @@ export async function connectLocalVault(page: Page) {
 }
 
 /** Device-key genesis on login gate (unlock existing or create on this device). */
-export async function connectLocalVaultLegacy(page: Page) {
+export async function connectLocalVault(page: Page) {
   await page.goto('/app/')
   await expect(
     page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
@@ -2211,7 +2211,7 @@ export async function waitForStableLocalVaultState(
   throw new Error(`Timed out waiting for stable local vault YAML: ${lastError}`)
 }
 
-/** Match vault password badge copy (`1 item` or legacy `1 password`). */
+/** Match the vault password badge copy. */
 export async function dismissSyncConflictIfVisible(page: Page) {
   const dialog = page.getByTestId('vault-sync-conflict-dialog')
   if (!(await dialog.isVisible())) return
@@ -2974,7 +2974,7 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
             void readBlob(`vault:${activeId}`).then(resolve).catch(reject)
             return
           }
-          void readBlob('encrypted_db').then(resolve).catch(reject)
+          resolve('')
         }
         tx.oncomplete = () => db.close()
       }
@@ -3734,10 +3734,21 @@ export async function addSecret(
           const db = request.result
           const tx = db.transaction('vault', 'readonly')
           const store = tx.objectStore('vault')
-          const getReq = store.get('encrypted_db')
-          getReq.onerror = () => resolve(`idb-read-error:${getReq.error}`)
-          getReq.onsuccess = () =>
-            resolve(typeof getReq.result === 'string' ? getReq.result : '')
+          const activeReq = store.get('active_vault_id')
+          activeReq.onerror = () =>
+            resolve(`idb-read-error:${activeReq.error}`)
+          activeReq.onsuccess = () => {
+            const activeId = String(activeReq.result ?? '').trim()
+            if (!activeId) {
+              resolve('')
+              return
+            }
+            const getReq = store.get(`vault:${activeId}`)
+            getReq.onerror = () =>
+              resolve(`idb-read-error:${getReq.error}`)
+            getReq.onsuccess = () =>
+              resolve(typeof getReq.result === 'string' ? getReq.result : '')
+          }
           tx.oncomplete = () => db.close()
         }
       })

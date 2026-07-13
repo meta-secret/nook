@@ -135,9 +135,7 @@ No user-visible UI changes yet.
 
 | # | Change |
 |---|--------|
-| 8.1 | Copy active provider vault → local `encrypted_db` (`vault-migration.ts`, init migration) |
 | 8.2 | Remove legacy login wizard (`LoginWizard`, `LoginConnectionStep`) |
-| 8.3 | Remove `activeProviderId` from auth snapshot |
 | 8.4 | Update e2e helpers for local-first login |
 
 **E2E:** Updated `login-unlock-flow`, `connect`, `provider-switch-passwords`, `remote-vault-recovery-github`.

@@ -33,7 +33,6 @@ type PasswordEntryYaml = {
 
 type UnlockYaml = {
   type?: string
-  envelope?: PasswordEnvelopeYaml
   entries?: PasswordEntryYaml[]
 }
 
@@ -45,8 +44,6 @@ type StoredVaultYaml = {
   unlock?: UnlockYaml
   password_entries?: PasswordEntryYaml[]
   sentinel_shares?: StoredSecretRecord[]
-  /** Legacy field — pre-enum vaults wrote the envelope at the top level. */
-  password_envelope?: PasswordEnvelopeYaml
 }
 
 type JoinRequestJson = {
@@ -123,12 +120,6 @@ function collectPasswordEntries(vault: StoredVaultYaml): PasswordEntryYaml[] {
   if (vault.unlock?.entries && vault.unlock.entries.length > 0) {
     return vault.unlock.entries
   }
-  if (vault.unlock?.type === 'password' && vault.unlock.envelope) {
-    return [{ envelope: vault.unlock.envelope }]
-  }
-  if (vault.password_envelope) {
-    return [{ envelope: vault.password_envelope }]
-  }
   return []
 }
 
@@ -145,8 +136,8 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
 
   const passwordEntries = collectPasswordEntries(vault)
   const hasPasswordEnvelope = passwordEntries.length > 0
-  // Device-key auth rows are primary. Password-only vaults (legacy mutex) have
-  // no auth section; hybrid vaults keep auth alongside password_entries.
+  // Device-key auth rows are primary; hybrid vaults keep auth alongside
+  // password_entries.
   const unlockMode: 'keys' | 'password' =
     authPkIds.length > 0 ? 'keys' : hasPasswordEnvelope ? 'password' : 'keys'
   const activeEnvelope = passwordEntries[0]?.envelope
@@ -372,7 +363,7 @@ export function assertGenesisVaultYaml(snapshot: VaultYamlSnapshot) {
     throw new Error('Genesis vault should not contain join requests')
   }
   if (snapshot.raw.includes('dek:') || snapshot.raw.includes('dec:')) {
-    throw new Error('Vault must not use legacy dek/dec fields')
+    throw new Error('Vault must not use unsupported dek/dec fields')
   }
 }
 

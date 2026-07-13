@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
-  connectLocalVaultLegacy as connectLocalVault,
+  connectLocalVault,
   UI_TIMEOUT_MS,
 } from './helpers'
 
