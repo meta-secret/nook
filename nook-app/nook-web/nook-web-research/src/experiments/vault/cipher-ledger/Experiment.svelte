@@ -61,7 +61,7 @@
     >
       <div>
         <p class="font-mono text-xs tracking-[0.2em] uppercase">
-          Nexus genesis ledger · folio 001
+          Sentinel genesis ledger · folio 001
         </p>
         <h1 class="mt-4 font-serif text-6xl tracking-[-0.05em] sm:text-8xl">
           The Cipher Ledger
@@ -83,7 +83,7 @@
         </p>
         <input
           class="mt-5 w-full border-b-2 border-[#211e19] bg-transparent py-3 font-serif text-4xl outline-none placeholder:text-[#766e60]"
-          placeholder="Nexus vault name"
+          placeholder="Sentinel vault name"
           bind:value={name}
         />
         <p class="mt-4 font-serif text-lg italic text-[#6e6658]">
@@ -189,7 +189,7 @@
           onclick={() => (finalized = true)}
           ><Stamp class="size-4" />{finalized
             ? 'Vault sealed in ledger'
-            : 'Seal Nexus vault'}</button
+            : 'Seal Sentinel vault'}</button
         >
       </div>
     </section>

@@ -63,8 +63,8 @@ pub fn operation_starts_epoch(operation: &VaultOperation) -> Option<EpochRotatio
         | VaultOperation::SecretConflictResolved { .. }
         | VaultOperation::JoinRequested { .. }
         | VaultOperation::JoinApproved { .. }
-        | VaultOperation::NexusParticipantEnrolled { .. }
-        | VaultOperation::NexusSharesIssued { .. }
+        | VaultOperation::SentinelParticipantEnrolled { .. }
+        | VaultOperation::SentinelSharesIssued { .. }
         | VaultOperation::JoinDenied { .. }
         | VaultOperation::MemberRenamed { .. }
         | VaultOperation::PasswordAdded { .. }
@@ -156,7 +156,7 @@ mod tests {
             None
         );
         assert_eq!(
-            operation_starts_epoch(&VaultOperation::NexusParticipantEnrolled {
+            operation_starts_epoch(&VaultOperation::SentinelParticipantEnrolled {
                 device_id: crate::DeviceId::parse("0123456789abcdef").unwrap(),
                 encryption_public_key: crate::DevicePublicKey::from_trusted(
                     "age-public-key".to_owned(),
@@ -167,7 +167,7 @@ mod tests {
             None
         );
         assert_eq!(
-            operation_starts_epoch(&VaultOperation::NexusSharesIssued { shares: Vec::new() }),
+            operation_starts_epoch(&VaultOperation::SentinelSharesIssued { shares: Vec::new() }),
             None
         );
     }

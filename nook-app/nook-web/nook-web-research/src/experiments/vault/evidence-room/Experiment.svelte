@@ -104,7 +104,7 @@
           </p>
           <input
             class="mt-5 w-full border-2 border-black bg-transparent p-3 font-bold outline-none"
-            placeholder="Nexus vault name"
+            placeholder="Sentinel vault name"
             bind:value={name}
           />{:else if selected === 2}<p class="mt-6 text-sm">
             Record total shares N and unlock threshold K.
@@ -176,7 +176,7 @@
             class="mt-8 flex w-full items-center justify-center gap-2 bg-black py-4 font-bold text-white disabled:opacity-30"
             onclick={() => (sealed = true)}
             ><Check />
-            {sealed ? 'CASE + VAULT SEALED' : 'SEAL NEXUS VAULT'}</button
+            {sealed ? 'CASE + VAULT SEALED' : 'SEAL SENTINEL VAULT'}</button
           >{/if}
       </aside>
     </div>

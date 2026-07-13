@@ -7,7 +7,7 @@
 
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    OauthFilePreset, StorageProviderType, StoredSecretRecord, is_nexus_share_stored_record,
+    OauthFilePreset, StorageProviderType, StoredSecretRecord, is_sentinel_share_stored_record,
 };
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
 use std::collections::BTreeSet;
@@ -62,7 +62,7 @@ pub enum VaultType {
     #[default]
     Simple,
     /// Threshold-share vault access; one device alone is insufficient.
-    Nexus,
+    Sentinel,
 }
 
 impl VaultType {
@@ -70,14 +70,14 @@ impl VaultType {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Simple => "simple",
-            Self::Nexus => "nexus",
+            Self::Sentinel => "sentinel",
         }
     }
 
     pub fn parse(value: &str) -> ValidationResult<Self> {
         match value {
             "" | "simple" => Ok(Self::Simple),
-            "nexus" => Ok(Self::Nexus),
+            "sentinel" => Ok(Self::Sentinel),
             other => Err(ValidationError::UnknownVaultType {
                 vault_type: other.to_owned(),
             }),
@@ -195,14 +195,14 @@ impl ProviderReplicationCapability {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct NexusPolicy {
+pub struct SentinelPolicy {
     pub threshold: u8,
     pub required_participants: u8,
     #[serde(default)]
     pub ready_participants: u8,
 }
 
-impl Default for NexusPolicy {
+impl Default for SentinelPolicy {
     fn default() -> Self {
         Self {
             threshold: 2,
@@ -212,7 +212,7 @@ impl Default for NexusPolicy {
     }
 }
 
-impl NexusPolicy {
+impl SentinelPolicy {
     #[must_use]
     pub fn is_ready(self) -> bool {
         self.threshold > 1
@@ -222,13 +222,13 @@ impl NexusPolicy {
 
     pub fn validate(self) -> ValidationResult<()> {
         if self.threshold <= 1 || self.threshold > self.required_participants {
-            return Err(ValidationError::InvalidNexusPolicy);
+            return Err(ValidationError::InvalidSentinelPolicy);
         }
         if self.required_participants > 16 {
-            return Err(ValidationError::InvalidNexusPolicy);
+            return Err(ValidationError::InvalidSentinelPolicy);
         }
         if self.ready_participants > self.required_participants {
-            return Err(ValidationError::InvalidNexusPolicy);
+            return Err(ValidationError::InvalidSentinelPolicy);
         }
         Ok(())
     }
@@ -241,12 +241,13 @@ pub struct VaultArchitecture {
     pub device_mode: DeviceMode,
     #[serde(default)]
     pub vault_type: VaultType,
-    /// Legacy read compatibility. New vault genesis does not select or derive
-    /// behavior from replication; providers are configured after creation.
+    /// New vault genesis does not select or derive behavior from replication;
+    /// providers are configured after creation.
     #[serde(default, skip_serializing_if = "replication_is_legacy_default")]
     pub replication_type: ReplicationType,
+    /// Sentinel quorum policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub nexus: Option<NexusPolicy>,
+    pub sentinel: Option<SentinelPolicy>,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T.
@@ -260,7 +261,7 @@ impl Default for VaultArchitecture {
             device_mode: DeviceMode::Standard,
             vault_type: VaultType::Simple,
             replication_type: ReplicationType::Personal,
-            nexus: None,
+            sentinel: None,
         }
     }
 }
@@ -277,29 +278,29 @@ impl VaultArchitecture {
             device_mode,
             vault_type: VaultType::Simple,
             replication_type: ReplicationType::Personal,
-            nexus: None,
+            sentinel: None,
         }
     }
 
     #[must_use]
-    pub fn nexus_personal(device_mode: DeviceMode, policy: NexusPolicy) -> Self {
+    pub fn sentinel_personal(device_mode: DeviceMode, policy: SentinelPolicy) -> Self {
         Self {
             device_mode,
-            vault_type: VaultType::Nexus,
+            vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Personal,
-            nexus: Some(policy),
+            sentinel: Some(policy),
         }
     }
 
     pub fn validate(&self) -> ValidationResult<()> {
         match self.vault_type {
             VaultType::Simple => {
-                if self.nexus.is_some() {
-                    return Err(ValidationError::SimpleVaultHasNexusPolicy);
+                if self.sentinel.is_some() {
+                    return Err(ValidationError::SimpleVaultHasSentinelPolicy);
                 }
             }
-            VaultType::Nexus => {
-                let policy = self.nexus.unwrap_or_default();
+            VaultType::Sentinel => {
+                let policy = self.sentinel.unwrap_or_default();
                 policy.validate()?;
             }
         }
@@ -308,7 +309,7 @@ impl VaultArchitecture {
 
     /// Validate architecture invariants that depend on persisted vault records.
     ///
-    /// A nexus vault must never carry a full per-device vault-key envelope. Once
+    /// A sentinel vault must never carry a full per-device vault-key envelope. Once
     /// shares have been issued they form one complete, internally consistent set
     /// matching the persisted policy; partial or mixed generations fail closed.
     pub fn validate_records(&self, records: &[StoredSecretRecord]) -> ValidationResult<()> {
@@ -323,17 +324,17 @@ impl VaultArchitecture {
             if record
                 .key
                 .as_str()
-                .starts_with(crate::NEXUS_SHARE_RECORD_PREFIX)
-                && !matches!(&classified, crate::VaultMetaRecord::NexusShare(..))
+                .starts_with(crate::SENTINEL_SHARE_RECORD_PREFIX)
+                && !matches!(&classified, crate::VaultMetaRecord::SentinelShare(..))
             {
-                return Err(ValidationError::InvalidNexusShareSet);
+                return Err(ValidationError::InvalidSentinelShareSet);
             }
             match classified {
                 crate::VaultMetaRecord::Auth(..) => has_auth = true,
-                crate::VaultMetaRecord::NexusShare(device_id, share) => {
+                crate::VaultMetaRecord::SentinelShare(device_id, share) => {
                     if !share_devices.insert(device_id) || !share_indexes.insert(share.share_index)
                     {
-                        return Err(ValidationError::InvalidNexusShareSet);
+                        return Err(ValidationError::InvalidSentinelShareSet);
                     }
                     shares.push(share);
                 }
@@ -346,22 +347,22 @@ impl VaultArchitecture {
                 if shares.is_empty() {
                     Ok(())
                 } else {
-                    Err(ValidationError::SimpleVaultHasNexusShares)
+                    Err(ValidationError::SimpleVaultHasSentinelShares)
                 }
             }
-            VaultType::Nexus => {
+            VaultType::Sentinel => {
                 if has_auth {
-                    return Err(ValidationError::NexusVaultHasFullKeyEnvelopes);
+                    return Err(ValidationError::SentinelVaultHasFullKeyEnvelopes);
                 }
                 if shares.is_empty() {
-                    return if self.nexus.unwrap_or_default().ready_participants == 0 {
+                    return if self.sentinel.unwrap_or_default().ready_participants == 0 {
                         Ok(())
                     } else {
-                        Err(ValidationError::InvalidNexusShareSet)
+                        Err(ValidationError::InvalidSentinelShareSet)
                     };
                 }
 
-                let policy = self.nexus.unwrap_or_default();
+                let policy = self.sentinel.unwrap_or_default();
                 if shares.len() != usize::from(policy.required_participants)
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
@@ -372,7 +373,7 @@ impl VaultArchitecture {
                             || share.share_index > policy.required_participants
                     })
                 {
-                    return Err(ValidationError::InvalidNexusShareSet);
+                    return Err(ValidationError::InvalidSentinelShareSet);
                 }
                 Ok(())
             }
@@ -391,7 +392,7 @@ impl VaultArchitecture {
     pub fn can_create_secret(&self) -> bool {
         match self.vault_type {
             VaultType::Simple => true,
-            VaultType::Nexus => self.nexus.unwrap_or_default().is_ready(),
+            VaultType::Sentinel => self.sentinel.unwrap_or_default().is_ready(),
         }
     }
 
@@ -399,16 +400,16 @@ impl VaultArchitecture {
     pub fn can_create_secret_with_records(&self, records: &[StoredSecretRecord]) -> bool {
         match self.vault_type {
             VaultType::Simple => true,
-            VaultType::Nexus => {
-                records.iter().any(is_nexus_share_stored_record)
+            VaultType::Sentinel => {
+                records.iter().any(is_sentinel_share_stored_record)
                     && self.validate_records(records).is_ok()
             }
         }
     }
 
     #[must_use]
-    pub fn is_nexus_ready(&self) -> bool {
-        self.vault_type == VaultType::Nexus && self.nexus.unwrap_or_default().is_ready()
+    pub fn is_sentinel_ready(&self) -> bool {
+        self.vault_type == VaultType::Sentinel && self.sentinel.unwrap_or_default().is_ready()
     }
 }
 
@@ -621,6 +622,33 @@ mod tests {
     }
 
     #[test]
+    fn sentinel_architecture_uses_only_sentinel_wire_names() {
+        let architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            SentinelPolicy {
+                threshold: 2,
+                required_participants: 3,
+                ready_participants: 0,
+            },
+        );
+
+        let encoded = serde_json::to_value(&architecture).unwrap();
+        assert_eq!(encoded["vault_type"], "sentinel");
+        assert!(encoded.get("sentinel").is_some());
+
+        let decoded: VaultArchitecture = serde_json::from_value(serde_json::json!({
+            "vault_type": "sentinel",
+            "sentinel": {
+                "threshold": 2,
+                "required_participants": 3,
+                "ready_participants": 0
+            }
+        }))
+        .unwrap();
+        assert_eq!(decoded, architecture);
+    }
+
+    #[test]
     fn legacy_defaults_match_current_vault_behavior() {
         let architecture = VaultArchitecture::default_legacy();
         assert_eq!(architecture.device_mode, DeviceMode::Standard);
@@ -695,34 +723,34 @@ mod tests {
         )
         .unwrap();
 
-        let nexus_ready = VaultArchitecture::nexus_personal(
+        let sentinel_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
             },
         );
-        validate_architecture_for_provider(&nexus_ready, StorageProviderType::Github, None)
+        validate_architecture_for_provider(&sentinel_ready, StorageProviderType::Github, None)
             .unwrap();
 
-        let nexus_shared = VaultArchitecture {
+        let sentinel_shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
-            ..nexus_ready
+            ..sentinel_ready
         };
         validate_architecture_for_provider(
-            &nexus_shared,
+            &sentinel_shared,
             StorageProviderType::OauthFile,
             Some(OauthFilePreset::GoogleDrive),
         )
         .unwrap();
         assert!(
-            validate_architecture_for_provider(&nexus_shared, StorageProviderType::Github, None)
+            validate_architecture_for_provider(&sentinel_shared, StorageProviderType::Github, None)
                 .is_err()
         );
         assert!(
             validate_architecture_for_provider(
-                &nexus_shared,
+                &sentinel_shared,
                 StorageProviderType::OauthFile,
                 Some(OauthFilePreset::ICloud),
             )
@@ -749,10 +777,10 @@ mod tests {
     }
 
     #[test]
-    fn nexus_requires_valid_threshold_and_all_participants_before_secret_creation() {
-        let not_ready = VaultArchitecture::nexus_personal(
+    fn sentinel_requires_valid_threshold_and_all_participants_before_secret_creation() {
+        let not_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 3,
                 ready_participants: 2,
@@ -761,9 +789,9 @@ mod tests {
         not_ready.validate().unwrap();
         assert!(!not_ready.can_create_secret());
 
-        let ready = VaultArchitecture::nexus_personal(
+        let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 3,
                 ready_participants: 3,
@@ -772,9 +800,9 @@ mod tests {
         ready.validate().unwrap();
         assert!(ready.can_create_secret());
 
-        let invalid = VaultArchitecture::nexus_personal(
+        let invalid = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 1,
                 required_participants: 1,
                 ready_participants: 1,
@@ -784,14 +812,14 @@ mod tests {
     }
 
     #[test]
-    fn nexus_secret_creation_requires_actual_share_records() {
+    fn sentinel_secret_creation_requires_actual_share_records() {
         let keys = crate::generate_vault_keys().unwrap();
         let first = crate::DeviceIdentity::generate().unwrap();
         let second = crate::DeviceIdentity::generate().unwrap();
-        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
-        let ready = VaultArchitecture::nexus_personal(
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2).unwrap();
+        let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
@@ -805,20 +833,21 @@ mod tests {
     }
 
     #[test]
-    fn nexus_record_validation_rejects_full_key_envelopes_and_mixed_share_sets() {
+    fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets() {
         let keys = crate::generate_vault_keys().unwrap();
         let first = crate::DeviceIdentity::generate().unwrap();
         let second = crate::DeviceIdentity::generate().unwrap();
-        let architecture = VaultArchitecture::nexus_personal(
+        let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
             },
         );
         let shares =
-            crate::create_nexus_share_records(&keys, &[first.clone(), second.clone()], 2).unwrap();
+            crate::create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)
+                .unwrap();
         architecture.validate_records(&shares).unwrap();
 
         let auth =
@@ -827,17 +856,17 @@ mod tests {
         shares_with_auth.push(auth);
         assert_eq!(
             architecture.validate_records(&shares_with_auth),
-            Err(ValidationError::NexusVaultHasFullKeyEnvelopes)
+            Err(ValidationError::SentinelVaultHasFullKeyEnvelopes)
         );
 
         assert_eq!(
             architecture.validate_records(&shares[..1]),
-            Err(ValidationError::InvalidNexusShareSet)
+            Err(ValidationError::InvalidSentinelShareSet)
         );
 
-        let stale_readiness = VaultArchitecture::nexus_personal(
+        let stale_readiness = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 1,
@@ -845,46 +874,46 @@ mod tests {
         );
         assert_eq!(
             stale_readiness.validate_records(&shares),
-            Err(ValidationError::InvalidNexusShareSet)
+            Err(ValidationError::InvalidSentinelShareSet)
         );
 
         let mut duplicate_index = shares;
         let first_envelope =
-            crate::parse_nexus_share_envelope(duplicate_index[0].value.as_str()).unwrap();
+            crate::parse_sentinel_share_envelope(duplicate_index[0].value.as_str()).unwrap();
         let mut second_envelope =
-            crate::parse_nexus_share_envelope(duplicate_index[1].value.as_str()).unwrap();
+            crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str()).unwrap();
         second_envelope.share_index = first_envelope.share_index;
         duplicate_index[1].value = crate::StoredRecordPayload::from_trusted(
             serde_json::to_string(&second_envelope).unwrap(),
         );
         assert_eq!(
             architecture.validate_records(&duplicate_index),
-            Err(ValidationError::InvalidNexusShareSet)
+            Err(ValidationError::InvalidSentinelShareSet)
         );
     }
 
     #[test]
-    fn simple_record_validation_rejects_nexus_shares() {
+    fn simple_record_validation_rejects_sentinel_shares() {
         let keys = crate::generate_vault_keys().unwrap();
         let first = crate::DeviceIdentity::generate().unwrap();
         let second = crate::DeviceIdentity::generate().unwrap();
-        let shares = crate::create_nexus_share_records(&keys, &[first, second], 2).unwrap();
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2).unwrap();
         assert_eq!(
             VaultArchitecture::default_legacy().validate_records(&shares),
-            Err(ValidationError::SimpleVaultHasNexusShares)
+            Err(ValidationError::SimpleVaultHasSentinelShares)
         );
     }
 
     #[test]
-    fn malformed_nexus_share_prefix_fails_closed_for_every_vault_type() {
+    fn malformed_sentinel_share_prefix_fails_closed_for_every_vault_type() {
         let malformed = StoredSecretRecord {
-            key: crate::SecretId::from_vault_record("nexus_share:0123456789abcdef"),
+            key: crate::SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
             secret_type: None,
             value: crate::StoredRecordPayload::from_trusted("not-a-share-envelope".to_owned()),
         };
-        let nexus = VaultArchitecture::nexus_personal(
+        let sentinel = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
-            NexusPolicy {
+            SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 0,
@@ -892,12 +921,12 @@ mod tests {
         );
 
         assert_eq!(
-            nexus.validate_records(std::slice::from_ref(&malformed)),
-            Err(ValidationError::InvalidNexusShareSet)
+            sentinel.validate_records(std::slice::from_ref(&malformed)),
+            Err(ValidationError::InvalidSentinelShareSet)
         );
         assert_eq!(
             VaultArchitecture::default_legacy().validate_records(&[malformed]),
-            Err(ValidationError::InvalidNexusShareSet)
+            Err(ValidationError::InvalidSentinelShareSet)
         );
     }
 

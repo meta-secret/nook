@@ -20,4 +20,15 @@ describe('createEnrollmentQrOptions', () => {
     expect(options.imageOptions?.margin).toBe(4)
     expect(options.image).toBe('/nook-qr-badge.png')
   })
+
+  test('uses maximum capacity without a badge for dense member invitations', () => {
+    const options = createEnrollmentQrOptions(
+      'https://nook.example/app/#sentinel-onboard=x',
+      true,
+    )
+
+    expect(options.qrOptions?.errorCorrectionLevel).toBe('L')
+    expect(options.image).toBeUndefined()
+    expect(options.imageOptions?.imageSize).toBe(0)
+  })
 })

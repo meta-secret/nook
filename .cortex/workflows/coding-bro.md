@@ -29,7 +29,7 @@ Default PR-first loop:
    comments instead of stopping after the PR link exists.
 5. **Fix red CI until green** — inspect failed logs, check app logs for web/e2e
    failures, fix locally, push the completed fix, and re-watch refreshed checks.
-6. **Address comments** — reply to actionable human, CodeRabbit, and automated
+6. **Address comments** — reply to actionable human, Codex, and automated
    review comments with the fix, validation, or no-change rationale before
    resolving/considering them complete.
 7. **Merge when ready** — when the branch is current, all required checks and
@@ -59,17 +59,16 @@ Default agent flow:
 1. **Prepare the PR path first** — fetch `origin/main`, branch from it, and plan
    the PR title/scope before editing.
 2. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
-3. **Run CodeRabbit when it adds signal** — for nontrivial agent-authored changes, run `coderabbit review --agent --type uncommitted`, fix valid `critical`/`major` findings, and re-run once after meaningful fixes. See [coderabbit.md](coderabbit.md).
-4. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
-5. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
-6. **Monitor remote CI and PR review in parallel** — watch checks on the PR while local validation runs; use CodeRabbit PR commands from [coderabbit.md](coderabbit.md) when a refreshed GitHub-side review is useful after new commits.
-7. **On any local or remote failure** — read **app logs** (`nook-app-logs.json` attachment,
+3. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
+4. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
+5. **Monitor remote CI and Codex review in parallel** — watch checks and automatic Codex reviews on PR open and every push while local validation runs; use `@codex review` only when automatic review does not run or a one-off focus is needed. See [code-review.md](code-review.md).
+6. **On any local or remote failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
    debugging) → commit and push the completed fix → run local validation in
    parallel with the refreshed remote checks.
-8. **Address actionable PR comments** — reply with the fix, validation, or
+7. **Address actionable PR comments** — reply with the fix, validation, or
    no-change rationale, push any needed changes, and re-watch CI/review.
-9. **Merge** — before merging, verify the PR branch is not stale against
+8. **Merge** — before merging, verify the PR branch is not stale against
    `origin/main`; update it and re-watch CI if needed. Squash merge only when
    **every** remote check is green on the updated branch.
 
@@ -99,47 +98,46 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    If part of the requested functionality is too large, risky, blocked, or out
    of scope, follow [issues.md](issues.md) before handoff: update or create the
    aggregate GitHub issue and focused sub-issues for the missing work.
-4. **CodeRabbit review when useful** — For nontrivial agent-authored code, run `coderabbit review --agent --type uncommitted` before final validation. Fix valid high-severity findings and do not let CodeRabbit override `.cortex`, tests, or repo architecture. See [coderabbit.md](coderabbit.md).
-5. **Push and open/update PR** — Commit and push as soon as the branch has a
+4. **Push and open/update PR** — Commit and push as soon as the branch has a
    coherent implementation commit. If no PR exists, open it before starting the
    long local final gate so remote CI can run in parallel.
-6. **Local validation + remote monitoring** — Immediately run `task check` (or a
+5. **Local validation + remote monitoring** — Immediately run `task check` (or a
    scoped subset) and relevant e2e while watching the PR checks. Prefer local
    Docker (cached images) for diagnosis and iteration; use remote CI as the
    clean-run gate. During debug, run specs one at a time with
    `E2E_SPEC=… task web:test:e2e:file`.
-7. **Monitor CI and PR review** — Watch remote checks until every required job
-   finishes. If an agent pushes new commits and CodeRabbit's GitHub-side review
-   needs a refresh, post `@coderabbitai review` (focused) or `@coderabbitai full
-   review` (large rewrite). Before merging, fetch `origin/main` and verify
+6. **Monitor CI and Codex review** — Watch remote checks and the automatic Codex
+   review until every required job finishes. If automatic review does not run or
+   a one-off focused pass is needed, post one `@codex review`, optionally with a
+   specific risk focus.
+   Before merging, fetch `origin/main` and verify
    GitHub does not mark the PR branch stale/out-of-date; if it is stale, merge
    `origin/main` into the PR branch, push, and re-watch the refreshed
    checks/deployment gate.
-8. **Fix loop on failure** — If local or remote validation fails: read **app
+7. **Fix loop on failure** — If local or remote validation fails: read **app
    logs** (Playwright `nook-app-logs.json`, `fetchAppLogs`, or `/app-logs`) →
    fix → run targeted local checks while debugging → commit and push the
    completed fix → run the required local gate while monitoring refreshed CI.
-9. **Address PR comments** — Inspect human, CodeRabbit, and automated feedback;
+8. **Address PR comments** — Inspect human, Codex, and automated feedback;
    reply with the fix, validation, or no-change rationale, push changes when
    needed, and re-watch checks.
-10. **Repeat** — Return to step 8 until every remote check is green and comments
+9. **Repeat** — Return to step 7 until every remote check is green and comments
     are handled.
-11. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
+10. **Squash merge and report** — `gh pr merge <n> --squash` when green; report task duration.
 
 ```mermaid
 flowchart TD
   P[0 Prompt] --> F[1 Fetch origin/main]
   F --> B[2 Branch + prepare PR]
   B --> I[3 Implement]
-  I --> CR[4 CodeRabbit when useful]
-  CR --> PU[5 Push + open/update PR]
-  PU --> L[6 Local validation: check / e2e / ci:pr]
-  PU --> PR[7 Monitor CI + PR review]
+  I --> PU[4 Push + open/update PR]
+  PU --> L[5 Local validation: check / e2e / ci:pr]
+  PU --> PR[6 Monitor CI + Codex review]
   L --> G{Local + remote green?}
   PR --> G
-  G -->|yes| C[9 Address comments]
-  C --> M[11 Squash merge]
-  G -->|no| FIX[8 Read app logs + fix]
+  G -->|yes| C[8 Address comments]
+  C --> M[10 Squash merge]
+  G -->|no| FIX[7 Read app logs + fix]
   FIX --> PUSH[Push completed fix]
   PUSH --> L
   PUSH --> PR
@@ -162,21 +160,7 @@ git checkout -b <branch-name> origin/main
 
 Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 
-### 4 — CodeRabbit review (when useful)
-
-CodeRabbit is a second-pass AI reviewer, not a required build gate. For
-nontrivial code changes authored by an agent, run it before final validation:
-
-```bash
-coderabbit review --agent --type uncommitted
-```
-
-Fix valid `critical` and `major` findings, consider behaviorally meaningful
-`minor` findings, then re-run once after substantial fixes. Skip it for trivial
-docs/mechanical changes or when auth/rate limits block it; report that decision
-in the handoff. Full rules: [coderabbit.md](coderabbit.md).
-
-### 5–7 — Push, validate locally, and monitor remotely
+### 4–6 — Push, validate locally, and monitor remotely
 
 **Why push before the long final gate:** GitHub Actions runners download Docker
 images and run the full prepared test set from scratch every time. Locally,
@@ -184,6 +168,11 @@ toolchain images are **already cached** — the same gates finish much faster. U
 local Task commands for implementation/debug loops. Once the current iteration is
 functionally complete, commit and push/open/update the PR, then run the local
 final gate immediately while remote CI runs.
+
+Codex automatically reviews PRs on open and every push. If automatic review does
+not run or a one-off focused pass is needed, post `@codex review` once the branch
+is coherent. Follow [code-review.md](code-review.md) for focused requests and
+finding handling.
 
 **Minimum local final gate** (must finish before merge or handoff):
 

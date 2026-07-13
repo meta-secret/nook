@@ -5,7 +5,7 @@ pub mod enrollment;
 #[cfg(any(test, feature = "mock-passkey"))]
 pub mod mock_passkey;
 pub mod multi_device;
-pub mod nexus_genesis;
-pub mod nexus_unlock;
 pub mod password_envelope;
+pub mod sentinel_genesis;
+pub mod sentinel_unlock;
 mod slip39;

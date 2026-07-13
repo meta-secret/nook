@@ -1,26 +1,26 @@
-//! Nexus vault key-share lifecycle integration tests.
+//! Sentinel vault key-share lifecycle integration tests.
 
 use nook_core::{
-    DeviceIdentity, DeviceMode, MultiDeviceError, NexusPolicy, VaultArchitecture, VaultType,
-    VaultUnlock, create_nexus_share_records, generate_store_id, generate_vault_keys,
-    load_nexus_vault, load_nexus_vault_from_opened, load_stored_vault,
-    open_nexus_share_for_identity, reconstruct_nexus_vault_keys_from_opened,
+    DeviceIdentity, DeviceMode, MultiDeviceError, SentinelPolicy, VaultArchitecture, VaultType,
+    VaultUnlock, create_sentinel_share_records, generate_store_id, generate_vault_keys,
+    load_sentinel_vault, load_sentinel_vault_from_opened, load_stored_vault,
+    open_sentinel_share_for_identity, reconstruct_sentinel_vault_keys_from_opened,
     serialize_stored_yaml_with_unlock_name_architecture,
 };
 
 #[test]
-fn nexus_threshold_shares_block_single_device_and_unlock_with_quorum() {
+fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() {
     let keys = generate_vault_keys().unwrap();
     let first = DeviceIdentity::generate().unwrap();
     let second = DeviceIdentity::generate().unwrap();
     let third = DeviceIdentity::generate().unwrap();
     let shares =
-        create_nexus_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)
+        create_sentinel_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)
             .unwrap();
 
-    let architecture = VaultArchitecture::nexus_personal(
+    let architecture = VaultArchitecture::sentinel_personal(
         DeviceMode::Standard,
-        NexusPolicy {
+        SentinelPolicy {
             threshold: 2,
             required_participants: 3,
             ready_participants: 3,
@@ -45,25 +45,25 @@ fn nexus_threshold_shares_block_single_device_and_unlock_with_quorum() {
     assert!(matches!(
         load_stored_vault(yaml.as_str(), &first),
         Err(nook_core::VaultError::MultiDevice(
-            MultiDeviceError::NexusCeremonyRequired
+            MultiDeviceError::SentinelCeremonyRequired
         ))
     ));
-    assert!(load_nexus_vault(yaml.as_str(), std::slice::from_ref(&first)).is_err());
+    assert!(load_sentinel_vault(yaml.as_str(), std::slice::from_ref(&first)).is_err());
 
-    let loaded = load_nexus_vault(yaml.as_str(), &[first.clone(), second.clone()]).unwrap();
+    let loaded = load_sentinel_vault(yaml.as_str(), &[first.clone(), second.clone()]).unwrap();
     assert_eq!(loaded.secrets_key, keys.secrets_key);
     assert_eq!(loaded.members_key, keys.members_key);
-    assert_eq!(loaded.meta.nexus_shares.len(), 3);
-    assert_eq!(architecture.vault_type, VaultType::Nexus);
+    assert_eq!(loaded.meta.sentinel_shares.len(), 3);
+    assert_eq!(architecture.vault_type, VaultType::Sentinel);
     // Browser path: open shares locally, reconstruct without peer identities.
     let opened = [
-        open_nexus_share_for_identity(&shares, &first).unwrap(),
-        open_nexus_share_for_identity(&shares, &second).unwrap(),
+        open_sentinel_share_for_identity(&shares, &first).unwrap(),
+        open_sentinel_share_for_identity(&shares, &second).unwrap(),
     ];
-    let from_opened = reconstruct_nexus_vault_keys_from_opened(&shares, &opened).unwrap();
+    let from_opened = reconstruct_sentinel_vault_keys_from_opened(&shares, &opened).unwrap();
     assert_eq!(from_opened, keys);
 
-    let loaded_opened = load_nexus_vault_from_opened(yaml.as_str(), &opened).unwrap();
+    let loaded_opened = load_sentinel_vault_from_opened(yaml.as_str(), &opened).unwrap();
     assert_eq!(loaded_opened.secrets_key, keys.secrets_key);
     assert_eq!(loaded_opened.members_key, keys.members_key);
 }

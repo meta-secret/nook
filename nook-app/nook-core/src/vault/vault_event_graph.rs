@@ -332,8 +332,8 @@ impl EventGraph {
     /// Policy:
     /// - `JoinRequested` — always allowed when self-signed (pending join).
     /// - `JoinApproved` — allowed only for simple password self-enrol, i.e. when
-    ///   causal ancestry has no nexus membership/share ops.
-    /// - `NexusParticipantEnrolled` — never self-signed; must be authorized.
+    ///   causal ancestry has no sentinel membership/share ops.
+    /// - `SentinelParticipantEnrolled` — never self-signed; must be authorized.
     fn is_self_signed_membership_event(&self, event: &VaultEvent) -> VaultResult<bool> {
         if event.body.operations.is_empty() {
             return Ok(false);
@@ -358,14 +358,14 @@ impl EventGraph {
                     }
                     allows_join_approved = true;
                 }
-                VaultOperation::NexusParticipantEnrolled { .. } => {
-                    // Nexus enrolment must be signed by an already-authorized actor.
+                VaultOperation::SentinelParticipantEnrolled { .. } => {
+                    // Sentinel enrolment must be signed by an already-authorized actor.
                     return Ok(false);
                 }
                 _ => return Ok(false),
             }
         }
-        if allows_join_approved && self.ancestry_has_nexus_membership_ops(event) {
+        if allows_join_approved && self.ancestry_has_sentinel_membership_ops(event) {
             return Ok(false);
         }
         Ok(allows_join_requested || allows_join_approved)
@@ -388,9 +388,9 @@ impl EventGraph {
         Ok(request_actor == event.body.actor_id)
     }
 
-    /// True when causal ancestry contains nexus roster/share operations that
+    /// True when causal ancestry contains sentinel roster/share operations that
     /// disqualify simple password self-enrol via `JoinApproved`.
-    fn ancestry_has_nexus_membership_ops(&self, event: &VaultEvent) -> bool {
+    fn ancestry_has_sentinel_membership_ops(&self, event: &VaultEvent) -> bool {
         let mut visited = BTreeSet::new();
         let mut stack = event.body.parents.clone();
         while let Some(id) = stack.pop() {
@@ -403,8 +403,8 @@ impl EventGraph {
             if parent.body.operations.iter().any(|operation| {
                 matches!(
                     operation,
-                    VaultOperation::NexusParticipantEnrolled { .. }
-                        | VaultOperation::NexusSharesIssued { .. }
+                    VaultOperation::SentinelParticipantEnrolled { .. }
+                        | VaultOperation::SentinelSharesIssued { .. }
                 )
             }) {
                 return true;
@@ -444,7 +444,7 @@ impl EventGraph {
                         signing_public_key,
                         ..
                     }
-                    | VaultOperation::NexusParticipantEnrolled {
+                    | VaultOperation::SentinelParticipantEnrolled {
                         device_id,
                         signing_public_key,
                         ..
@@ -912,7 +912,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_nexus_participant_enrolled_is_quarantined() -> VaultResult<()> {
+    fn self_signed_sentinel_participant_enrolled_is_quarantined() -> VaultResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
@@ -922,7 +922,7 @@ mod tests {
 
         let enrol = signed_operation(
             vec![genesis_id],
-            VaultOperation::NexusParticipantEnrolled {
+            VaultOperation::SentinelParticipantEnrolled {
                 device_id: DeviceId::parse("0123456789abcdef").unwrap(),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&stranger_key),
@@ -940,7 +940,7 @@ mod tests {
     }
 
     #[test]
-    fn owner_signed_nexus_participant_enrolled_is_allowed() -> VaultResult<()> {
+    fn owner_signed_sentinel_participant_enrolled_is_allowed() -> VaultResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let mut graph = EventGraph::new();
@@ -950,7 +950,7 @@ mod tests {
 
         let enrol = signed_operation(
             vec![genesis_id],
-            VaultOperation::NexusParticipantEnrolled {
+            VaultOperation::SentinelParticipantEnrolled {
                 device_id: DeviceId::parse("0123456789abcdef").unwrap(),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
@@ -967,7 +967,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_approved_after_nexus_enrol_is_quarantined() -> VaultResult<()> {
+    fn self_signed_join_approved_after_sentinel_enrol_is_quarantined() -> VaultResult<()> {
         let root_key = signing_key();
         let joiner_key = signing_key();
         let stranger_key = signing_key();
@@ -976,9 +976,9 @@ mod tests {
         let genesis_id = genesis.id()?;
         graph.insert(genesis, STORE_STR)?;
 
-        let nexus_enrol = signed_operation(
+        let sentinel_enrol = signed_operation(
             vec![genesis_id],
-            VaultOperation::NexusParticipantEnrolled {
+            VaultOperation::SentinelParticipantEnrolled {
                 device_id: DeviceId::parse("0123456789abcdef").unwrap(),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&joiner_key),
@@ -986,11 +986,11 @@ mod tests {
             },
             &root_key,
         );
-        let nexus_enrol_id = nexus_enrol.id()?;
-        graph.insert(nexus_enrol, STORE_STR)?;
+        let sentinel_enrol_id = sentinel_enrol.id()?;
+        graph.insert(sentinel_enrol, STORE_STR)?;
 
         let self_approve = signed_operation(
-            vec![nexus_enrol_id],
+            vec![sentinel_enrol_id],
             VaultOperation::JoinApproved {
                 device_id: DeviceId::parse("fedcba9876543210").unwrap(),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub-2".to_owned()),
@@ -1013,7 +1013,7 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_approved_after_nexus_shares_is_quarantined() -> VaultResult<()> {
+    fn self_signed_join_approved_after_sentinel_shares_is_quarantined() -> VaultResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
@@ -1023,8 +1023,8 @@ mod tests {
 
         let shares = signed_operation(
             vec![genesis_id],
-            VaultOperation::NexusSharesIssued {
-                shares: vec![crate::vault_event::NexusShareIssuedPayload {
+            VaultOperation::SentinelSharesIssued {
+                shares: vec![crate::vault_event::SentinelShareIssuedPayload {
                     device_id: DeviceId::parse("0123456789abcdef").unwrap(),
                     version: 1,
                     threshold: 2,
@@ -1062,33 +1062,33 @@ mod tests {
     }
 
     #[test]
-    fn self_signed_join_approved_after_nexus_genesis_root_is_quarantined() -> VaultResult<()> {
+    fn self_signed_join_approved_after_sentinel_genesis_root_is_quarantined() -> VaultResult<()> {
         let root_key = signing_key();
         let stranger_key = signing_key();
         let mut graph = EventGraph::new();
 
-        // Nexus-style root: genesis import that also records the owner's
-        // NexusParticipantEnrolled in the same empty-parent event (allowed via
+        // Sentinel-style root: genesis import that also records the owner's
+        // SentinelParticipantEnrolled in the same empty-parent event (allowed via
         // parents.is_empty() short-circuit on actor auth).
-        let mut nexus_genesis = genesis_event(&root_key);
-        nexus_genesis
+        let mut sentinel_genesis = genesis_event(&root_key);
+        sentinel_genesis
             .body
             .operations
-            .push(VaultOperation::NexusParticipantEnrolled {
+            .push(VaultOperation::SentinelParticipantEnrolled {
                 device_id: DeviceId::parse("0123456789abcdef").unwrap(),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub".to_owned()),
                 signing_public_key: public_key(&root_key),
                 label: MemberLabel::from_trusted("owner".to_owned()),
             });
-        nexus_genesis = VaultEvent::sign(nexus_genesis.body, &root_key).unwrap();
-        let nexus_genesis_id = nexus_genesis.id()?;
+        sentinel_genesis = VaultEvent::sign(sentinel_genesis.body, &root_key).unwrap();
+        let sentinel_genesis_id = sentinel_genesis.id()?;
         assert_eq!(
-            graph.insert(nexus_genesis, STORE_STR)?,
+            graph.insert(sentinel_genesis, STORE_STR)?,
             EventInsertStatus::Applied
         );
 
         let self_approve = signed_operation(
-            vec![nexus_genesis_id],
+            vec![sentinel_genesis_id],
             VaultOperation::JoinApproved {
                 device_id: DeviceId::parse("fedcba9876543210").unwrap(),
                 encryption_public_key: DevicePublicKey::from_trusted("age-pub-2".to_owned()),

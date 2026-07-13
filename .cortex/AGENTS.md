@@ -45,7 +45,7 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
 ## 6. Workflows (`workflows/`)
 * [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → push/open PR → monitor CI/review → fix loop → address comments → squash merge when green). Prefer cached local Docker over cold GH Actions; run e2e one spec at a time while debugging.
 * [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
-* [workflows/coderabbit.md](workflows/coderabbit.md) — CodeRabbit CLI / PR-review workflow for agent pre-commit review loops and GitHub-side review control.
+* [workflows/code-review.md](workflows/code-review.md) — Codex automatic/manual GitHub review workflow and repository review-guidance rules.
 * [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
 * [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
 * [workflows/issues.md](workflows/issues.md) — GitHub issue hierarchy management for scoped-down, risky, or deferred functionality.
@@ -83,14 +83,13 @@ Full policy: [rules.md §5](rules.md#docker-daemon--never-kill-it).
   See [references/logging.md § Debugging…](references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 ### PR review comments
-* When a PR has actionable review feedback from a human, CodeRabbit, or another automated reviewer, treat
+* When a PR has actionable review feedback from a human, Codex, or another automated reviewer, treat
   every active, non-outdated item as required work. An agent must leave its own GitHub reply explaining the
-  fix, validation, or no-change rationale before resolving any PR comment or review conversation. CodeRabbit
-  also posts actionable items outside normal code review threads, including PR timeline/summary comments,
-  outside-diff-range sections, and nitpicks; inspect those surfaces too. CodeRabbit's automatic "addressed"
-  marker does not count as the agent's own reply. Replies must target the specific comment/item; a broad PR
-  audit comment is not a substitute. For CodeRabbit threads, do not manually resolve after replying; wait
-  for CodeRabbit to mark/close the thread, then re-query. See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
+  fix, validation, or no-change rationale before resolving any PR comment or review conversation. Inspect
+  both inline review threads and top-level review bodies for actionable findings. Replies must target the
+  specific comment/item; a broad PR audit comment is not a substitute. Resolve a conversation only after
+  the targeted reply is visible and the finding is fixed or explicitly invalidated, then re-query the PR.
+  See [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md).
 
 ### Deferred or out-of-scope functionality
 * If an agent truly believes part of a requested feature is too large, too risky, blocked, or out of

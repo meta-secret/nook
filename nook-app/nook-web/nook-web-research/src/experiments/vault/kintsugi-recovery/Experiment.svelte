@@ -68,7 +68,7 @@
     <div class="mx-auto mt-9 grid max-w-3xl gap-3 sm:grid-cols-[1fr_auto_auto]">
       <input
         class="border-b border-[#9d8244] bg-transparent px-3 py-3 font-serif text-2xl outline-none placeholder:text-[#746b5e]"
-        placeholder="Name the Nexus"
+        placeholder="Name the Sentinel"
         bind:value={name}
       /><label class="border border-[#9d8244] px-4 py-2 text-[10px]"
         >N PIECES<input
@@ -156,7 +156,7 @@
         onclick={() => (created = true)}
         ><KeyRound />{created
           ? `${name} sealed as a whole`
-          : `Seal ${threshold}-of-${total} Nexus vault`}</button
+          : `Seal ${threshold}-of-${total} Sentinel vault`}</button
       >{/if}
   </section>
 </main>

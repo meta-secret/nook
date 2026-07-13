@@ -7,15 +7,17 @@
   let {
     enrollmentLink,
     loadingLabel,
+    dense = false,
   }: {
     enrollmentLink: string
     loadingLabel: string
+    dense?: boolean
   } = $props()
 
   let container: HTMLDivElement | undefined
   let qrCode: QRCodeStyling | undefined
   let isReady = $state(false)
-  const options = $derived(createEnrollmentQrOptions(enrollmentLink))
+  const options = $derived(createEnrollmentQrOptions(enrollmentLink, dense))
 
   onMount(() => {
     if (!container) return

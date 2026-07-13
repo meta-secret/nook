@@ -54,26 +54,26 @@ actor id must be the SHA-256 digest of that Ed25519 public key, and the event
 signature must verify over the canonical body before a current-schema remote
 event enters the local event set. Non-genesis events are also checked against
 the event's causal past: an actor is accepted only if it is the import root, was
-introduced by a causally prior `join-approved` / `nexus-participant-enrolled`,
+introduced by a causally prior `join-approved` / `sentinel-participant-enrolled`,
 or is publishing its own self-signed membership event under a narrow policy:
 
 - `join-requested` — always allowed when self-signed (pending join);
 - `join-approved` — self-signed only for simple password QR self-enrol, and only
-  when causal ancestry has no nexus membership/share ops
-  (`nexus-participant-enrolled` / `nexus-shares-issued`);
-- `nexus-participant-enrolled` — never self-signed; must be signed by an
+  when causal ancestry has no Sentinel membership/share ops
+  (`sentinel-participant-enrolled` / `sentinel-shares-issued`);
+- `sentinel-participant-enrolled` — never self-signed; must be signed by an
   already-authorized actor (owner approval / genesis).
 
-### Nexus genesis correction
+### Sentinel genesis correction
 
-The target Nexus lifecycle does not build a vault roster incrementally through
+The target Sentinel lifecycle does not build a vault roster incrementally through
 pre-genesis events. Participant public keys are collected in a separate typed
 genesis session before a `store_id`, vault event set, or authorized actor graph
-exists. Atomic Nexus genesis creates the initial authorized roster, policy, and
+exists. Atomic Sentinel genesis creates the initial authorized roster, policy, and
 complete encrypted share commitments together. The current
-`nexus-participant-enrolled` / `nexus-shares-issued` sequence is implementation
+`sentinel-participant-enrolled` / `sentinel-shares-issued` sequence is implementation
 debt and must not be treated as the target protocol. See
-[nexus-genesis.md](nexus-genesis.md).
+[sentinel-genesis.md](sentinel-genesis.md).
 
 ## Canonical encoding
 

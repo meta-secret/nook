@@ -69,9 +69,13 @@ item, add a corrected copy and delete the old one.
 
 ### Local-first vault
 
-1. Protect this browser with a passkey (WebAuthn PRF) or PIN fallback.
-2. Create a **Simple** vault on this device, or create / join a **Nexus** vault
-   (quorum / SLIP-0039 recovery — see product specs).
+1. Choose **Create Simple vault** or **Create Sentinel vault**. Sentinel member
+   devices enter only through an owner-issued invitation.
+2. Creating a **Simple** vault protects this browser with a passkey (WebAuthn
+   PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup; after
+   atomic creation, the owner connects a sync provider and sends each member a
+   distinct device-addressed onboarding QR/link.
+   Member devices connect only through those owner-issued invitations.
 3. Secrets are encrypted in Rust/WASM before anything is written to storage.
 4. The browser keeps an encrypted local copy. Sync providers are optional
    **replicas** of the same vault, not separate databases.
