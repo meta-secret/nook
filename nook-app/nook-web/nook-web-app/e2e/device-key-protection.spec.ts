@@ -427,6 +427,7 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
     })
     await page.goto('/app/')
+    await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
@@ -446,8 +447,8 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
     })
     await page.goto('/app/')
+    await openPasskeyOverlayForSimpleCreate(page)
     await page.getByTestId('device-protection-use-existing-choice').click()
-    await page.getByTestId('device-protection-existing-passkey-btn').click()
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
       'Set a local PIN to protect a new device identity instead',
@@ -475,6 +476,7 @@ test.describe('passkey device-key protection', () => {
         localStorage.setItem('nook_e2e_passkey_mode', mode)
       }, scenario.mode)
       await page.goto('/app/')
+      await openPasskeyOverlayForSimpleCreate(page)
       await clickDeviceProtectionSetup(page)
 
       await expect(page.getByTestId('device-protection-error')).toContainText(
