@@ -276,12 +276,14 @@ export async function connectLocalVault(page: Page) {
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
 
   if (await page.getByTestId('vault-panel').isVisible()) {
+    await disableVaultIdleLock(page)
     return
   }
 
   const chooser = page.getByTestId('login-create-vault-chooser')
   if (await chooser.isVisible()) {
     await createLocalVaultOnLogin(page)
+    await disableVaultIdleLock(page)
     return
   }
 
@@ -289,39 +291,7 @@ export async function connectLocalVault(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-}
-
-/** Device-key genesis on login gate (unlock existing or create on this device). */
-export async function connectLocalVault(page: Page) {
-  await page.goto('/app/')
-  await expect(
-    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-
-  if (await page.getByTestId('vault-panel').isVisible()) {
-    await disableVaultIdleLock(page)
-    return
-  }
-
-  const localUnlock = page.getByTestId('login-local-unlock-step')
-  if (await localUnlock.isVisible()) {
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await disableVaultIdleLock(page)
-    return
-  }
-
-  const chooser = page.getByTestId('login-create-vault-chooser')
-  if (await chooser.isVisible()) {
-    await createLocalVaultOnLogin(page)
-    return
-  }
-
-  throw new Error(
-    'Login gate has no local unlock step or create-vault chooser — use createLocalVaultOnLogin.',
-  )
+  await disableVaultIdleLock(page)
 }
 
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'

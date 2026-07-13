@@ -126,12 +126,11 @@ password_entries:
 
 ### Credential effects
 
-| Operation                   | Effect                                                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Add password entry          | Appends a labelled `password_entries` item; keeps `auth:`, `joins:`, and the current device-key unlock path.          |
-| Rotate password entry       | Starts a new key epoch, rewraps live vault keys for remaining credentials, and updates the selected entry.            |
-| Remove password entry       | Starts a new key epoch and removes that password's future access while preserving enrolled devices.                   |
-| Legacy password-only unlock | Reads the old envelope, writes/refreshes this device's `auth:` row, and imports the current state into the event log. |
+| Operation             | Effect                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Add password entry    | Appends a labelled `password_entries` item; keeps `auth:`, `joins:`, and the current device-key unlock path. |
+| Rotate password entry | Starts a new key epoch, rewraps live vault keys for remaining credentials, and updates the selected entry.   |
+| Remove password entry | Starts a new key epoch and removes that password's future access while preserving enrolled devices.          |
 
 ### Existing sections
 
