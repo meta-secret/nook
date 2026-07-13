@@ -44,6 +44,35 @@ route, limits console forwarding to warnings/errors, and exposes a narrow tool
 allowlist. `browser_network_requests`, storage inspection/export, file upload,
 and unrestricted Playwright execution are not available to the pilot agent.
 
+### Concurrent AI-debug sessions
+
+The Nook dev server runs in Docker, but Playwright MCP intentionally runs on the
+host. The upstream Playwright MCP Docker image supports headless Chromium only;
+annotation mode needs its visible Chrome and Dashboard windows. Host execution
+does not mean sessions share browser state:
+
+- `--isolated` gives every MCP server process its own in-memory browser profile,
+  so cookies, IndexedDB, and other browser state are not reused;
+- [`.codex/run-playwright-mcp.sh`](../../.codex/run-playwright-mcp.sh) creates an
+  atomic, mode-`0700` `.playwright-mcp/session.*` directory for that process's
+  screenshots, annotations, snapshots, and console artifacts, then removes it
+  when the MCP process exits or is interrupted;
+- `task ai-debug:dev` accepts only ports `5173` and `5175`, and Docker fails
+  loudly if the chosen host port is already owned—it does not silently attach a
+  new dev server to another session;
+- in a multi-worktree checkout, use a distinct supported port and verify the URL
+  before annotating. Browser profile isolation still applies if two agents read
+  the same development build.
+
+Each Codex task should use the Chrome and theater-mask Dashboard windows launched
+for its own annotation request. Do not switch to windows from another task.
+
+Running both services in Docker Compose is not suitable for this phase: the
+upstream Playwright MCP Docker image currently supports headless Chromium only,
+while `browser_annotate` depends on visible Chrome and Dashboard windows. A
+custom headed image with Xvfb/noVNC is possible but adds a remote-desktop layer
+and custom infrastructure. Treat that as a #336 gate option, not part of #335.
+
 ## Run an annotation session
 
 Start Nook through the repository command surface:

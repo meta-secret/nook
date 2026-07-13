@@ -3,16 +3,14 @@
 # a password manager, so the pilot must never inherit a developer's daily
 # browser profile or persist its session after the MCP process exits.
 [mcp_servers.playwright]
-command = "npx"
+command = "bash"
 args = [
-  "-y",
-  "@playwright/mcp@0.0.78",
+  ".codex/run-playwright-mcp.sh",
   "--caps=devtools",
   "--isolated",
   "--block-service-workers",
   "--allowed-origins=http://127.0.0.1:5173;http://localhost:5173;ws://127.0.0.1:5173;ws://localhost:5173;http://127.0.0.1:5175;http://localhost:5175;ws://127.0.0.1:5175;ws://localhost:5175",
   "--init-page=.codex/playwright-local-only.ts",
-  "--output-dir=.playwright-mcp",
   "--test-id-attribute=data-testid",
   "--console-level=warning",
 ]

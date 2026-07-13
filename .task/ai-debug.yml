@@ -29,8 +29,10 @@ tasks:
             process.exit(1);
           }
           if (server.transport?.type !== "stdio" ||
+              server.transport.command !== "bash" ||
+              server.transport.args?.[0] !== ".codex/run-playwright-mcp.sh" ||
               !server.transport.args?.includes("--caps=devtools")) {
-            console.error("The Playwright MCP server is missing --caps=devtools; browser_annotate will not be available.");
+            console.error("The Playwright MCP server is missing its session launcher or --caps=devtools.");
             process.exit(1);
           }
         '
