@@ -1533,6 +1533,19 @@ export class VaultState {
     this.deviceAuthorizationInProgress = false
     this.deviceId = ''
     this.devicePublicKey = ''
+    // Sync-provider credentials are sealed to the protected device identity.
+    // Keep only the non-secret local row in memory while that identity is
+    // locked; passkey/PIN authorization reloads the sealed providers.
+    this.providers = this.providers.filter(
+      (provider) => provider.type === 'local',
+    )
+    this.providersLoaded = this.providers.length > 0
+    this.githubPat = ''
+    this.oauthFile = undefined
+    this.localFolder = undefined
+    if (this.localVaultPresent) {
+      this.storageMode = LOCAL_PROVIDER_TYPE
+    }
     if (!this.manager) return Promise.resolve()
     return this.enqueueStorage(() => this.manager!.lockDeviceIdentity()).catch(
       () => {
@@ -1961,6 +1974,7 @@ export class VaultState {
   }
 
   async runFanOutSyncAfterLocalSave(): Promise<void> {
+    if (!this.deviceProtectionReady) return
     if (this.syncProviders.length === 0) {
       await this.flushRemoteEventOutboxNow()
       return

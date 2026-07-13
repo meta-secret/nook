@@ -131,10 +131,7 @@ test.describe('login unlock flow (local-first)', () => {
     await page.getByTestId('login-password-input').fill('recovery-pass-99')
     await page.getByTestId('unlock-vault-btn').click()
 
-    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await page.getByTestId('device-protection-unlock-btn').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

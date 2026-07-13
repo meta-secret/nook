@@ -40,10 +40,10 @@ keys.
 ```
 
 ### A. Login & Storage Provider Flow
-1. **Device protection gate:** Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable.
+1. **Device protection gate:** Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable. A backup password may instead unwrap a local vault directly; that path does not load the protected device identity or its sealed provider credentials.
 2. **Login gate (vault locked):** If no saved providers exist, the user sees a provider list (Local, GitHub). This is the primary entry point — not a settings page.
 3. **First-time setup:** User picks a storage provider. GitHub requires a one-time PAT entry; local needs no credentials. On successful connect, the provider (including a device-sealed GitHub PAT) is saved to IndexedDB (`nook_auth`). The vault is created with **device keys** as the default unlock method.
-4. **Return visits:** After passkey authorization, the vault may auto-unlock when device keys work. Otherwise the login gate shows the storage provider and unlock methods — device keys (default) or a labelled backup password when the vault has `password_entries`. See [auth-providers.md](../design-docs/auth-providers.md) §3.
+4. **Return visits:** The login gate shows device keys (default) and any labelled backup passwords. Device-key unlock requests passkey/PIN authorization; backup-password unlock opens the local vault directly. After device authorization, the vault may auto-unlock when device keys work. See [auth-providers.md](../design-docs/auth-providers.md) §3.
 5. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
 6. **Encryption keys (auto-managed):** Before first connect, the user creates passkey-PRF protection or, when PRF is unavailable, a local PIN wrapper. Rust/WASM derives the AES key and stores the device private key as `device_identity_wrapped`. On connect, vault keys are generated and written to the vault file. GitHub only stores the encrypted vault file.
 7. **Vault connection:** Rust validates storage mode and PAT before I/O, loads/decrypts the vault, or initializes empty storage.

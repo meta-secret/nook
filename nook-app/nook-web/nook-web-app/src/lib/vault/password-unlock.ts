@@ -184,7 +184,6 @@ export async function unlockWithPassword(
   state.dismissSuccess()
   state.isVerifying = true
   try {
-    await state.initDeviceIdentity()
     const rawRecords = (await state.enqueueStorage(() =>
       state.manager!.connectWithPassword(
         ...state.wasmStorageArgs(),
@@ -193,10 +192,14 @@ export async function unlockWithPassword(
       ),
     )) as NookSecretRecord[]
     state.secrets = rawRecords
-    await state.ensureProviderSaved()
-    await state.loadProviders()
+    if (state.deviceProtectionReady) {
+      await state.ensureProviderSaved()
+      await state.loadProviders()
+    }
     await state.refreshPasswordEntriesList()
-    void state.hydrateMultiDeviceState()
+    if (state.deviceProtectionReady) {
+      void state.hydrateMultiDeviceState()
+    }
     state.markVaultUnlocked()
     log.info('vault unlocked with password', {
       mode: state.storageMode,
@@ -207,7 +210,9 @@ export async function unlockWithPassword(
     state.loginPasswordPrompt = false
     state.showSuccess(state.t('toasts.vault_unlocked'))
     state.startIdleSessionTracking()
-    state.startVaultSync()
+    if (state.deviceProtectionReady) {
+      state.startVaultSync()
+    }
   } catch (e: unknown) {
     state.isAuthenticated = false
     const message =

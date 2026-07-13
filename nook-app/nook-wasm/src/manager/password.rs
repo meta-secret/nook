@@ -263,7 +263,16 @@ impl NookVaultManager {
         let _ = self.status.tx.send("CONNECT_START".to_owned());
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
             .await?;
-        let identity = self.ensure_device_identity()?;
+        // A backup password is an alternate vault-key credential. After an
+        // explicit Lock the wrapped device identity stays protected, but the
+        // password must still be able to open the local vault without first
+        // authorizing that identity. When the identity is already available
+        // (for example during QR enrolment), refresh membership as before.
+        let identity = if self.device.identity_private_key.is_empty() {
+            None
+        } else {
+            Some(self.ensure_device_identity()?)
+        };
 
         let mut vault_missing = false;
         let content = self.fetch_vault_content(&mut vault_missing).await?;
@@ -301,14 +310,17 @@ impl NookVaultManager {
 
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.unlock = nook_core::VaultUnlock::Keys;
-        self.persist_password_unlock_membership(
-            event_log_remote,
-            &mut records,
-            &identity,
-            &keys,
-            &content,
-        )
-        .await?;
+        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
+        if let Some(identity) = identity.as_ref() {
+            self.persist_password_unlock_membership(
+                event_log_remote,
+                &mut records,
+                identity,
+                &keys,
+                &content,
+            )
+            .await?;
+        }
 
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let stored_records = self.stored_records_snapshot();

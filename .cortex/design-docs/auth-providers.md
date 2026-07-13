@@ -75,17 +75,18 @@ and surface the lower-level WASM/database error.
 ```mermaid
 stateDiagram-v2
   [*] --> Loading: app init
-  Loading --> DeviceProtectionGate: setup / passkey authorization required
+  Loading --> LoginGate: local vault exists
+  LoginGate --> DeviceProtectionGate: device-key unlock
   DeviceProtectionGate --> LoginGate: device identity authorized
   LoginGate --> Vault: unlock / create / connect success
-  Vault --> DeviceProtectionGate: Lock (header)
+  Vault --> LoginGate: Lock (header)
   Vault --> Settings: bottom nav
   Settings --> Vault: secrets tab
 ```
 
 | Component | When shown | Purpose |
 |-----------|------------|---------|
-| `DeviceProtectionGate` | Device identity locked or needs migration | Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data |
+| `DeviceProtectionGate` | Device-key unlock selected while identity is locked, or identity needs migration | Create/authorize passkey, or PIN fallback when PRF is unavailable, before loading device-sealed data |
 | `LoginGate` | Vault locked | Get started chooser, unlock local cache, connect sync provider, enrollment |
 | `SecretVault` | Authenticated | Primary app — secrets CRUD |
 | `AuthStorage` | Settings → Sync providers | Manage replica targets for **current** vault |
@@ -93,7 +94,7 @@ stateDiagram-v2
 
 ### Lock
 
-See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears the WASM typed session database, the in-memory device identity, and Svelte state. The passkey gate runs before the normal vault login gate.
+See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not** “delete vault” — it clears the WASM typed session database, the in-memory device identity, and sensitive Svelte state. The normal vault login gate remains visible; choosing device keys opens the passkey/PIN gate, while a backup password can unlock the local vault without opening it.
 
 **Test ids:** `header-lock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `unlock-vault-btn`, `add-provider-btn`, `remove-provider-{id}`.
 
@@ -110,10 +111,12 @@ Legacy login wizard docs (connection × authorization accordion) are superseded 
 
 ## 4. VaultState integration
 
-`VaultState` first creates or unlocks device protection on `init()`. Only after
-the identity is present in WASM memory does it load providers, apply
-`activeProvider` credentials to `storageMode` / `githubPat`, and call
-`ensureProviderSaved()` after successful connect/enroll/join.
+`VaultState` discovers local vaults on `init()` without unsealing the device
+identity. Only after device-key authorization puts the identity in WASM memory
+does it load providers, apply `activeProvider` credentials to `storageMode` /
+`githubPat`, and call `ensureProviderSaved()` after successful
+connect/enroll/join. Backup-password unlock may hydrate the local vault session
+without those provider steps; sealed-provider sync remains paused.
 
 WASM still receives `(storageMode, githubPat)` per call — no change to the Rust sync bridge. Provider **persistence and shaping** now live in `nook-wasm`/`nook-core`; the web layer only maps snapshots onto `VaultState` and drives the one-time legacy remote-vault copy (`migrateLegacyVaultToLocal`, which stays in TS because it fetches over the network).
 
