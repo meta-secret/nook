@@ -15,9 +15,10 @@ variable "VITE_PUBLIC_APP_URL" {
   default = ""
 }
 
-// Set by `task setup` to the temporary directory exported by the web-artifacts target. The default
-// keeps `bake --print` usable; a direct nook-web build without the prepare phase fails on the missing
-// /nook-wasm artifact instead of silently using stale generated code.
+// Set by `task setup` to the commit-scoped, invocation-isolated directory exported by the
+// web-artifacts target. The default keeps `bake --print` usable; a direct nook-web build without the
+// prepare phase fails on the missing /nook-wasm artifact instead of silently using stale generated
+// code.
 variable "WEB_ARTIFACTS_CONTEXT" {
   default = "."
 }
