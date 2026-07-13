@@ -45,15 +45,14 @@ impl NookVaultManager {
     #[wasm_bindgen(js_name = createSentinelOnboardingPackage)]
     pub fn create_sentinel_onboarding_package(
         &self,
-        request_json: String,
-        delivery_json: String,
+        request_json: &str,
+        delivery_json: &str,
         provider_snapshot: wasm_bindgen::JsValue,
     ) -> Result<String, JsError> {
-        let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
+        let request: nook_core::SentinelGenesisRequest = serde_json::from_str(request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let delivery: nook_core::SentinelGenesisShareDelivery =
-            serde_json::from_str(&delivery_json)
-                .map_err(|error| NookError::Serialization(error.to_string()))?;
+        let delivery: nook_core::SentinelGenesisShareDelivery = serde_json::from_str(delivery_json)
+            .map_err(|error| NookError::Serialization(error.to_string()))?;
         let snapshot: nook_core::AuthProvidersSnapshotData =
             serde_wasm_bindgen::from_value(provider_snapshot)?;
         let package = nook_core::create_sentinel_onboarding_package(request, delivery, &snapshot)?;
