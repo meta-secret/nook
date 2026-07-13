@@ -280,7 +280,7 @@ export async function connectSyncGenesisDevice(
   if (backend === 'google-drive' || backend === 'file') {
     const {
       clearBrowserVault,
-      connectLocalVaultLegacy,
+      connectLocalVault,
       createLocalVaultOnLogin,
       assertVaultReady,
       readLocalVaultYamlFromIdb,
@@ -301,7 +301,7 @@ export async function connectSyncGenesisDevice(
     if (await chooser.isVisible()) {
       await createLocalVaultOnLogin(page)
     } else {
-      await connectLocalVaultLegacy(page)
+      await connectLocalVault(page)
     }
     await assertVaultReady(page)
     const genesisYaml = await readLocalVaultYamlFromIdb(page)

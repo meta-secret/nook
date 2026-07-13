@@ -276,12 +276,14 @@ export async function connectLocalVault(page: Page) {
   ).toBeVisible({ timeout: UI_TIMEOUT_MS })
 
   if (await page.getByTestId('vault-panel').isVisible()) {
+    await disableVaultIdleLock(page)
     return
   }
 
   const chooser = page.getByTestId('login-create-vault-chooser')
   if (await chooser.isVisible()) {
     await createLocalVaultOnLogin(page)
+    await disableVaultIdleLock(page)
     return
   }
 
@@ -289,39 +291,7 @@ export async function connectLocalVault(page: Page) {
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-}
-
-/** Device-key genesis on login gate (unlock existing or create on this device). */
-export async function connectLocalVaultLegacy(page: Page) {
-  await page.goto('/app/')
-  await expect(
-    page.getByTestId('vault-panel').or(page.getByTestId('login-gate')),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS })
-
-  if (await page.getByTestId('vault-panel').isVisible()) {
-    await disableVaultIdleLock(page)
-    return
-  }
-
-  const localUnlock = page.getByTestId('login-local-unlock-step')
-  if (await localUnlock.isVisible()) {
-    await page.getByTestId('unlock-vault-btn').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await disableVaultIdleLock(page)
-    return
-  }
-
-  const chooser = page.getByTestId('login-create-vault-chooser')
-  if (await chooser.isVisible()) {
-    await createLocalVaultOnLogin(page)
-    return
-  }
-
-  throw new Error(
-    'Login gate has no local unlock step or create-vault chooser — use createLocalVaultOnLogin.',
-  )
+  await disableVaultIdleLock(page)
 }
 
 export const BIP39_WORDLIST_ROUTE = '**/bip-0039/english.txt'
@@ -2211,7 +2181,7 @@ export async function waitForStableLocalVaultState(
   throw new Error(`Timed out waiting for stable local vault YAML: ${lastError}`)
 }
 
-/** Match vault password badge copy (`1 item` or legacy `1 password`). */
+/** Match the vault password badge copy. */
 export async function dismissSyncConflictIfVisible(page: Page) {
   const dialog = page.getByTestId('vault-sync-conflict-dialog')
   if (!(await dialog.isVisible())) return
@@ -2974,7 +2944,7 @@ export async function readLocalVaultYamlFromIdb(page: Page): Promise<string> {
             void readBlob(`vault:${activeId}`).then(resolve).catch(reject)
             return
           }
-          void readBlob('encrypted_db').then(resolve).catch(reject)
+          resolve('')
         }
         tx.oncomplete = () => db.close()
       }
@@ -3734,10 +3704,19 @@ export async function addSecret(
           const db = request.result
           const tx = db.transaction('vault', 'readonly')
           const store = tx.objectStore('vault')
-          const getReq = store.get('encrypted_db')
-          getReq.onerror = () => resolve(`idb-read-error:${getReq.error}`)
-          getReq.onsuccess = () =>
-            resolve(typeof getReq.result === 'string' ? getReq.result : '')
+          const activeReq = store.get('active_vault_id')
+          activeReq.onerror = () => resolve(`idb-read-error:${activeReq.error}`)
+          activeReq.onsuccess = () => {
+            const activeId = String(activeReq.result ?? '').trim()
+            if (!activeId) {
+              resolve('')
+              return
+            }
+            const getReq = store.get(`vault:${activeId}`)
+            getReq.onerror = () => resolve(`idb-read-error:${getReq.error}`)
+            getReq.onsuccess = () =>
+              resolve(typeof getReq.result === 'string' ? getReq.result : '')
+          }
           tx.oncomplete = () => db.close()
         }
       })

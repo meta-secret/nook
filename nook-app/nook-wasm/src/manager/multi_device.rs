@@ -55,14 +55,10 @@ impl NookVaultManager {
                 return Err(NookError::Database("No vault found to join.".to_owned()).into());
             }
         } else {
-            // Fresh join attempt against an old provider blob — adopt the remote unlock mode.
             self.capture_vault_unlock(&content);
             self.sync_events_from_current_provider().await?;
             if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
-                let format = nook_core::detect_stored_format(&content)?;
-                let records = nook_core::deserialize_stored(&content, format)?;
-                self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
-                self.import_stored_vault_to_event_log(&content).await?;
+                return Err(NookError::Database("Vault event log is required.".to_owned()).into());
             }
         }
 

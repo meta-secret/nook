@@ -2,16 +2,15 @@
 //!
 //! Returns a JS object shape (`{changed, access_status?, secrets?,
 //! pending_joins?, vault_members?}`) consumed by the web layer's sync timer.
-//! Event-log vaults union remote events; legacy YAML polling is no longer used
-//! for persistence after cutover.
+//! Event-log vaults union remote events. Projection YAML is never a sync source.
 
 use super::NookVaultManager;
-use crate::NookVaultSyncResult;
 use crate::conversion::{
-    LoadedVault, access_status_for_vault_content, sync_result_access_status, sync_result_session,
+    access_status_for_vault_content, sync_result_access_status, sync_result_session,
     sync_result_unchanged,
 };
 use crate::storage::event_db::is_event_log_mode;
+use crate::{NookError, NookVaultSyncResult};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -90,26 +89,6 @@ impl NookVaultManager {
             return sync_result_access_status(&status);
         }
 
-        let identity = self.device_identity()?;
-        let format = nook_core::detect_stored_format(&content)?;
-        let fresh_records = nook_core::deserialize_stored(&content, format)?;
-
-        nook_core::merge_remote_join_records(&mut self.vault.meta, &fresh_records);
-        let loaded = self.load_stored_vault_or_sentinel_ceremony(&content, &identity)?;
-        let LoadedVault {
-            database,
-            meta,
-            secrets_key,
-            members_key,
-        } = loaded;
-        self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-        self.vault.database = database;
-        self.vault.meta = meta;
-        self.capture_vault_unlock(&content);
-        self.vault.last_synced_content = content.clone();
-        let import_yaml = self.serialize_current_projection_yaml()?;
-        self.import_stored_vault_to_event_log(&import_yaml).await?;
-        self.flush_event_outbox().await?;
-        sync_result_session(self, true)
+        Err(NookError::Database("Vault event log is required.".to_owned()).into())
     }
 }

@@ -8,9 +8,6 @@ Current vaults keep **device-key auth as the baseline unlock path**:
 - `password_entries` — zero or more scrypt-wrapped envelopes of
   `{secrets_key, members_key}`. These provide backup unlock and QR/device
   enrolment without replacing device-key auth.
-- `VaultUnlock::Password { envelope }` — legacy password-only vaults remain
-  readable, but new backup passwords are written through `password_entries`
-  alongside `auth:`.
 
 Future modes (hardware token, SLIP-0039 device quorum recovery, …) plug in
 through the same unlock/credential model without changing encrypted secret
@@ -111,10 +108,6 @@ password_entries:
 - **Hybrid storage.** Device-key vaults may contain both `auth:` and
   `password_entries`; the entries are alternate wraps for the same current
   vault keys.
-- **Legacy migration.** Vaults written before `password_entries` may carry a
-  top-level `password_envelope:` field or `unlock.type == password`. The
-  deserialiser maps those values to password unlock entries where possible;
-  the next write emits the current schema.
 - Uses the **same `age` crate already in `nook-core`** —
   `age::scrypt::Recipient` for encryption and `age::scrypt::Identity` for
   decryption (see `nook-app/nook-core/src/vault_crypto.rs`). No new crypto
@@ -133,12 +126,11 @@ password_entries:
 
 ### Credential effects
 
-| Operation                   | Effect                                                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Add password entry          | Appends a labelled `password_entries` item; keeps `auth:`, `joins:`, and the current device-key unlock path.          |
-| Rotate password entry       | Starts a new key epoch, rewraps live vault keys for remaining credentials, and updates the selected entry.            |
-| Remove password entry       | Starts a new key epoch and removes that password's future access while preserving enrolled devices.                   |
-| Legacy password-only unlock | Reads the old envelope, writes/refreshes this device's `auth:` row, and imports the current state into the event log. |
+| Operation             | Effect                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Add password entry    | Appends a labelled `password_entries` item; keeps `auth:`, `joins:`, and the current device-key unlock path. |
+| Rotate password entry | Starts a new key epoch, rewraps live vault keys for remaining credentials, and updates the selected entry.   |
+| Remove password entry | Starts a new key epoch and removes that password's future access while preserving enrolled devices.          |
 
 ### Existing sections
 
@@ -272,7 +264,7 @@ provider credentials remain outside the auth crate.
 | `resolve_keys_from_entry(entry, password) -> VaultKeys`                              | Unwrap a selected entry for password unlock/enrolment.      |
 | `verify_password_entry(entry, password) -> bool`                                     | Side-effect-free password check.                            |
 | `serialize_stored_yaml_with_unlock_and_name(records, unlock, password_entries, ...)` | Writes hybrid `auth:` + `password_entries` projection YAML. |
-| `read_vault_password_entries(yaml)`                                                  | Reads current entries and legacy password-envelope fields.  |
+| `read_vault_password_entries(yaml)`                                                  | Reads current labelled password entries.                    |
 | `VaultOperation::{PasswordAdded, PasswordRotated, PasswordRemoved}`                  | Event-log operations for password credential changes.       |
 
 All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).

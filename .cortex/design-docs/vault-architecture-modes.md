@@ -48,7 +48,7 @@ security invariants. Product and persisted wire names use **Sentinel** consisten
 
 ## Defaults and Persistence
 
-Existing vault YAML with no `architecture:` field migrates in memory to:
+The default architecture is:
 
 ```yaml
 architecture:
@@ -56,13 +56,13 @@ architecture:
   vault_type: simple
 ```
 
-The default may be omitted on write to keep legacy Simple vault YAML compact.
+The default may be omitted on write to keep Simple vault YAML compact.
 Non-default vault architecture metadata is persisted as a top-level
 `architecture:` field in projection YAML and mirrored through WASM session
 state. Vault type is immutable once a vault has a `store_id`; changing Simple
 to Sentinel or Sentinel to Simple would reinterpret key-access records and must fail.
 
-Legacy `replication_type` values remain readable but do not define new-vault
+`replication_type` values do not define new-vault
 behavior. Default personal replication is omitted from new architecture
 serialization, and vault creation does not ask for a replication mode.
 

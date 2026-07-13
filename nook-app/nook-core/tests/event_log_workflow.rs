@@ -3,10 +3,7 @@
 #[path = "event_log_harness.rs"]
 mod harness;
 
-use harness::{
-    EventLogDevice, ProviderBuckets, push_device_outbox, sample_stored_vault_yaml,
-    union_device_from_providers,
-};
+use harness::{EventLogDevice, ProviderBuckets, push_device_outbox, union_device_from_providers};
 use nook_core::{
     AppendEventInput, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventError,
     EventId, IsoTimestamp, JoinRequest, MemberLabel, OpaqueCiphertext, SecretId, SecretType,
@@ -539,21 +536,6 @@ fn join_merge_single_head() -> VaultResult<()> {
 
     let graph = device.session.store.load_graph(device.store_id())?;
     assert_eq!(graph.heads().len(), 1);
-    Ok(())
-}
-
-#[test]
-fn stored_vault_import_then_decrypt() -> VaultResult<()> {
-    let source = EventLogDevice::genesis("main")?;
-    let yaml = sample_stored_vault_yaml(&source.crypto)?;
-    // Migration imports a stored projection into an empty event log. Importing
-    // another root into an already initialized log is intentionally rejected.
-    let mut device = EventLogDevice::replica_of(&source)?;
-    device.import_stored_vault(&yaml)?;
-
-    let graph = device.session.store.load_graph(device.store_id())?;
-    let live = device.project()?.live_secrets(&graph);
-    assert!(live.contains_key("import-secret"));
     Ok(())
 }
 

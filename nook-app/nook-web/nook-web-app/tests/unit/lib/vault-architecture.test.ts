@@ -47,7 +47,7 @@ function githubProvider(): StorageProvider {
 }
 
 describe('vault architecture adapter', () => {
-  test('defaults preserve the legacy simple personal standard vault', () => {
+  test('defaults select the simple personal standard vault', () => {
     expect(defaultVaultArchitecture()).toEqual({
       device_mode: 'standard',
       vault_type: 'simple',

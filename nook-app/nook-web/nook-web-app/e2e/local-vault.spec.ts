@@ -4,7 +4,7 @@ import {
   assertVaultReady,
   BIP39_SAMPLE_WORDS,
   clearBrowserVault,
-  connectLocalVaultLegacy,
+  connectLocalVault,
   deleteSecret,
   expandSecretRow,
   fillSeedPhraseGrid,
@@ -22,7 +22,7 @@ test.describe('local vault', () => {
     await mockBip39Wordlist(page)
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVaultLegacy(page)
+    await connectLocalVault(page)
   })
 
   test('adds, reveals, searches, copies, and deletes a secret', async ({

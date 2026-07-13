@@ -437,7 +437,7 @@ pub fn provider_wasm_args(
 
 #[wasm_bindgen(js_name = defaultVaultArchitecture)]
 pub fn default_vault_architecture() -> Result<JsValue, wasm_bindgen::JsError> {
-    Ok(to_js_value(&nook_core::VaultArchitecture::default_legacy())?)
+    Ok(to_js_value(&nook_core::VaultArchitecture::default())?)
 }
 
 #[wasm_bindgen(js_name = validateVaultArchitecture)]
@@ -726,9 +726,8 @@ pub fn peek_enrollment_issued_at(code: &str) -> Option<String> {
 /// credential fields with the device key, seed from legacy `localStorage`,
 /// backfill provider fields, and re-persist (sealed) when anything changed.
 ///
-/// Returns `{ snapshot, legacyActiveProviderId, changed }`; `snapshot` carries
-/// decrypted credentials for in-memory sync use, and `legacyActiveProviderId`
-/// drives the one-time remote-vault copy that still lives in the web layer.
+/// Returns `{ snapshot, changed }`; `snapshot` carries decrypted credentials
+/// for in-memory sync use.
 fn to_js_value<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
     serde_wasm_bindgen::to_value(value)
 }
@@ -777,8 +776,7 @@ pub async fn delete_auth_providers_db() -> Result<(), wasm_bindgen::JsError> {
     Ok(())
 }
 
-/// Strip the deprecated `activeProviderId` field from a raw persisted snapshot,
-/// returning `{ snapshot, legacyActiveProviderId, changed }`.
+/// Parse a raw persisted provider snapshot.
 #[wasm_bindgen(js_name = normalizeAuthSnapshot)]
 pub fn normalize_auth_snapshot(raw: JsValue) -> Result<JsValue, wasm_bindgen::JsError> {
     let value: serde_json::Value = if raw.is_undefined() || raw.is_null() {

@@ -5,11 +5,10 @@
 
 use nook_core::{
     AuthKeyId, Database, DeviceIdentity, EventId, LocalEventStore, SecretId, SecretType,
-    SigningIdentity, VaultCrypto, VaultEventSession, VaultHashContext, VaultKeys, VaultOperation,
-    VaultProjection, VaultResult, VaultUnlock, encrypted_secret_from_armored, generate_store_id,
+    SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
+    VaultResult, VaultUnlock, encrypted_secret_from_armored, generate_store_id,
     generate_vault_keys, genesis_auth_record, genesis_members_records,
     hydrate_keys_from_projection_yaml, serialize_stored_yaml_with_unlock,
-    stored_vault_to_import_event,
 };
 use std::collections::HashMap;
 
@@ -43,9 +42,11 @@ impl EventLogDevice {
             projection_cache_yaml,
             crypto,
         };
-        device.import_stored_vault(
-            &genesis_yaml(&keys, &device.identity, device.store_id())?.into_inner(),
-        )?;
+        device.append_signed(vec![VaultOperation::VaultImported {
+            source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+            secrets: Vec::new(),
+            password_entries: Vec::new(),
+        }])?;
         let _ = label;
         Ok(device)
     }
@@ -151,23 +152,6 @@ impl EventLogDevice {
                 .map_err(nook_core::VaultError::Validation)?,
         )?;
         Ok(())
-    }
-
-    pub fn import_stored_vault(&mut self, yaml: &str) -> VaultResult<EventId> {
-        let ctx = VaultHashContext::from(yaml);
-        let event = stored_vault_to_import_event(
-            &ctx,
-            &nook_core::StoreId::parse(self.store_id())?,
-            &self.actor_id()?,
-            self.session.signing.signing_key(),
-            &nook_core::IsoTimestamp::from_trusted(TS.to_owned()),
-        )?;
-        let id = event.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&event)?;
-        self.session.store.put_event(id.clone(), bytes.clone());
-        self.session.store.queue_outbox("github", id.clone(), bytes);
-        self.session.set_heads_from_graph()?;
-        Ok(id)
     }
 }
 

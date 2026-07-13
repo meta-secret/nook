@@ -4,7 +4,7 @@ import {
   addVaultPassword,
   assertVaultReady,
   clearBrowserVault,
-  connectLocalVaultLegacy,
+  connectLocalVault,
   E2E_SYNC_ONBOARD_PROVIDER,
   expandSettingsSection,
   expectVaultPasswordStatus,
@@ -37,7 +37,7 @@ test.describe('vault password envelope (local)', () => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVaultLegacy(page)
+    await connectLocalVault(page)
   })
 
   test('adds backup passwords without replacing device-key unlock', async ({
@@ -302,7 +302,7 @@ test.describe('enrollment link deep link (local)', () => {
     await pageA.goto('/app/')
     await clearBrowserVault(pageA)
     await pageA.reload()
-    await connectLocalVaultLegacy(pageA)
+    await connectLocalVault(pageA)
     const secretKey = uniqueSecretKey('e2e-link')
     await addSecret(pageA, secretKey, 'via-hash-enroll')
 

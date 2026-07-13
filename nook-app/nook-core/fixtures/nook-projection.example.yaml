@@ -1,3 +1,5 @@
+schema_version: 1
+store_id: store_SMypl8K0w9Y
 secrets:
 - id: github.com
   type: api-key

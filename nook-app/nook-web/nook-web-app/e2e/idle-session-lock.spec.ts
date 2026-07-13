@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import {
   authorizeDeviceProtection,
   clearBrowserVault,
-  connectLocalVaultLegacy,
+  connectLocalVault,
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   UI_TIMEOUT_MS,
@@ -19,7 +19,7 @@ test.describe('idle session auto-lock', () => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVaultLegacy(page)
+    await connectLocalVault(page)
     await disableLoginAutoUnlock(page)
     await page.reload()
   })

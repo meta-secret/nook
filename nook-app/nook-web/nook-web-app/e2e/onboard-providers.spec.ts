@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures'
 import {
   clearBrowserVault,
-  connectLocalVaultLegacy,
+  connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   forceVaultQuiescentForE2e,
   openOnboardDevicePanel,
@@ -41,7 +41,7 @@ test.describe('onboard provider picker', () => {
     await page.goto('/app/')
     await clearBrowserVault(page)
     await page.reload()
-    await connectLocalVaultLegacy(page)
+    await connectLocalVault(page)
   })
 
   test('wizard starts on vault password step when no passwords exist', async ({

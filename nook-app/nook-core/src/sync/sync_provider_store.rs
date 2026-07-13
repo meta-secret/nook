@@ -94,13 +94,11 @@ pub struct AuthProvidersSnapshotData {
     pub active_vault_store_id: Option<String>,
 }
 
-/// Result of [`normalize_auth_snapshot`] — the cleaned snapshot plus signals the
-/// caller uses to decide whether to re-persist and to run legacy vault copy.
+/// Result of [`normalize_auth_snapshot`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedAuthSnapshot {
     pub snapshot: AuthProvidersSnapshotData,
-    pub legacy_active_provider_id: Option<String>,
     pub changed: bool,
 }
 
@@ -526,9 +524,7 @@ pub fn find_duplicate_sync_provider(
         .cloned()
 }
 
-/// Drop the deprecated `activeProviderId` field from a raw persisted snapshot,
-/// returning the cleaned snapshot plus the legacy id (for one-time vault copy)
-/// and whether anything changed.
+/// Parse a raw persisted provider snapshot.
 #[must_use]
 pub fn normalize_auth_snapshot(raw: &serde_json::Value) -> NormalizedAuthSnapshot {
     let object = raw.as_object();
@@ -542,11 +538,6 @@ pub fn normalize_auth_snapshot(raw: &serde_json::Value) -> NormalizedAuthSnapsho
                 .collect()
         })
         .unwrap_or_default();
-    let legacy_active_provider_id = object
-        .and_then(|object| object.get("activeProviderId"))
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_owned);
-    let changed = object.is_some_and(|object| object.contains_key("activeProviderId"));
     let active_vault_store_id = object
         .and_then(|object| object.get("activeVaultStoreId"))
         .and_then(serde_json::Value::as_str)
@@ -556,8 +547,7 @@ pub fn normalize_auth_snapshot(raw: &serde_json::Value) -> NormalizedAuthSnapsho
             providers,
             active_vault_store_id,
         },
-        legacy_active_provider_id,
-        changed,
+        changed: false,
     }
 }
 
@@ -822,24 +812,7 @@ mod tests {
     fn normalize_handles_missing_value() {
         let result = normalize_auth_snapshot(&serde_json::Value::Null);
         assert_eq!(result.snapshot, AuthProvidersSnapshotData::default());
-        assert_eq!(result.legacy_active_provider_id, None);
         assert!(!result.changed);
-    }
-
-    #[test]
-    fn normalize_strips_legacy_active_provider_id() {
-        let raw = json!({
-            "providers": [{"id": "a", "type": "github", "label": "GitHub", "createdAt": ""}],
-            "activeProviderId": "a",
-        });
-        let result = normalize_auth_snapshot(&raw);
-        assert_eq!(result.snapshot.providers.len(), 1);
-        assert_eq!(result.snapshot.providers[0].id, "a");
-        assert_eq!(result.legacy_active_provider_id.as_deref(), Some("a"));
-        assert!(result.changed);
-        // Re-serialization drops the deprecated field.
-        let value = serde_json::to_value(&result.snapshot).unwrap();
-        assert!(value.get("activeProviderId").is_none());
     }
 
     #[test]
@@ -1342,7 +1315,7 @@ mod tests {
     fn enrollment_provider_builder_enforces_replication_before_payload_creation() {
         let shared = VaultArchitecture {
             replication_type: ReplicationType::Shared,
-            ..VaultArchitecture::default_legacy()
+            ..VaultArchitecture::default()
         };
         let github = github_provider("gh", "nook", "github_pat_123");
         assert!(enrollment_provider_for_architecture(&github, &shared, Some("a@b.com")).is_err());
@@ -1376,7 +1349,7 @@ mod tests {
             }
         );
 
-        let personal = VaultArchitecture::default_legacy();
+        let personal = VaultArchitecture::default();
         let provider = enrollment_provider_for_architecture(&gdrive, &personal, None).unwrap();
         assert_eq!(
             provider,

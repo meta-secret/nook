@@ -1,10 +1,9 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
 use crate::{
-    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, LEGACY_PASSWORD_ENTRY_LABEL, PasswordEnvelope,
-    PasswordUnlockEntry, SecretId, StoredRecordPayload, StoredSecretRecord, VaultArchitecture,
-    VaultUnlock, is_auth_stored_record, is_join_stored_record, is_members_stored_record,
-    is_sentinel_share_stored_record,
+    AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
+    StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultUnlock, is_auth_stored_record,
+    is_join_stored_record, is_members_stored_record, is_sentinel_share_stored_record,
 };
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +48,6 @@ pub fn detect_stored_format(stored: &str) -> VaultFormatResult<VaultFormat> {
         || first_line.starts_with("members:")
         || first_line.starts_with("sentinel_shares:")
         || first_line.starts_with("unlock:")
-        || first_line.starts_with("password_envelope:")
     {
         return Ok(VaultFormat::Yaml);
     }
@@ -93,8 +91,7 @@ struct MembersYamlRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 struct StoredVaultYaml {
-    /// Explicit projection-cache schema — missing on load is treated as `1`.
-    #[serde(default = "default_vault_schema_version")]
+    /// Explicit projection-cache schema.
     schema_version: u32,
     /// Monotonic revision counter — incremented on every save.
     #[serde(default, skip_serializing_if = "vault_version_is_zero")]
@@ -105,12 +102,10 @@ struct StoredVaultYaml {
     /// Human-readable vault label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     name: Option<String>,
-    /// Active unlock mechanism. Omitted on write when `Keys` (the default);
-    /// legacy reads infer mode from `password_envelope` / `unlock.type: password`.
+    /// Active unlock mechanism. Omitted on write when `Keys` (the default).
     #[serde(default, skip_serializing_if = "vault_unlock_is_keys")]
     unlock: VaultUnlock,
-    /// Grouped vault architecture modes. Missing on legacy files maps to the
-    /// current simple/personal/standard behavior.
+    /// Grouped vault architecture modes.
     #[serde(default, skip_serializing_if = "vault_architecture_is_default")]
     architecture: VaultArchitecture,
     #[serde(default)]
@@ -129,11 +124,6 @@ struct StoredVaultYaml {
     /// Optional backup passwords — coexist with `auth:` device-key unlock.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     password_entries: Vec<PasswordUnlockEntry>,
-    /// **Legacy** field — pre-enum vaults stored the envelope at the top
-    /// level alongside `auth:`. Read-only: we migrate this into `unlock` on
-    /// load and never write it again.
-    #[serde(default, skip_serializing)]
-    password_envelope: Option<PasswordEnvelope>,
 }
 
 fn stored_record_to_auth(record: &StoredSecretRecord) -> AuthYamlRecord {
@@ -230,18 +220,14 @@ fn vault_version_is_zero(version: &u64) -> bool {
 }
 
 fn vault_architecture_is_default(architecture: &VaultArchitecture) -> bool {
-    architecture == &VaultArchitecture::default_legacy()
+    architecture == &VaultArchitecture::default()
 }
 
 /// Maximum projection YAML schema this build reads and writes.
 pub const CURRENT_VAULT_SCHEMA_VERSION: u32 = 1;
 
-fn default_vault_schema_version() -> u32 {
-    1
-}
-
 fn ensure_supported_vault_schema(version: u32) -> VaultFormatResult<()> {
-    if version > CURRENT_VAULT_SCHEMA_VERSION {
+    if version != CURRENT_VAULT_SCHEMA_VERSION {
         return Err(VaultFormatError::UnsupportedSchemaVersion {
             found: version,
             max_supported: CURRENT_VAULT_SCHEMA_VERSION,
@@ -331,7 +317,7 @@ pub fn serialize_stored_yaml_with_unlock_and_name(
         store_id,
         vault_name,
         vault_version,
-        &VaultArchitecture::default_legacy(),
+        &VaultArchitecture::default(),
     )
 }
 
@@ -354,7 +340,6 @@ pub fn serialize_stored_yaml_with_unlock_name_architecture(
     vault.unlock = normalize_unlock_for_write(unlock);
     vault.architecture = architecture.clone();
     vault.password_entries = password_entries.to_vec();
-    vault.password_envelope = None;
     serde_yaml::to_string(&vault)
         .map(VaultYamlBlob::from_trusted)
         .map_err(VaultFormatError::YamlSerialize)
@@ -369,6 +354,7 @@ pub fn read_vault_name(stored: &str) -> VaultFormatResult<Option<String>> {
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
     Ok(vault
         .name
         .and_then(|name| resolve_vault_name_for_write(Some(&name))))
@@ -383,13 +369,14 @@ pub fn set_vault_name(stored: &str, name: &str) -> VaultFormatResult<VaultYamlBl
     detect_stored_format(trimmed)?;
     let mut vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
     vault.name = resolve_vault_name_for_write(Some(name));
     serde_yaml::to_string(&vault)
         .map(VaultYamlBlob::from_trusted)
         .map_err(VaultFormatError::YamlSerialize)
 }
 
-/// Read the monotonic revision counter from on-disk YAML (0 for legacy vaults).
+/// Read the monotonic revision counter from on-disk YAML.
 pub fn read_vault_version(stored: &str) -> VaultFormatResult<u64> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
@@ -398,6 +385,7 @@ pub fn read_vault_version(stored: &str) -> VaultFormatResult<u64> {
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
     Ok(vault.vault_version)
 }
 
@@ -412,21 +400,7 @@ fn normalize_unlock_for_write(unlock: &VaultUnlock) -> VaultUnlock {
 }
 
 fn extract_password_entries(vault: &StoredVaultYaml) -> Vec<PasswordUnlockEntry> {
-    if !vault.password_entries.is_empty() {
-        return vault.password_entries.clone();
-    }
-    if let VaultUnlock::Passwords { entries } = &vault.unlock {
-        return entries.clone();
-    }
-    if let Some(envelope) = &vault.password_envelope {
-        return vec![PasswordUnlockEntry {
-            id: "legacy".to_owned(),
-            label: LEGACY_PASSWORD_ENTRY_LABEL.to_owned(),
-            created_at: String::new(),
-            envelope: envelope.clone(),
-        }];
-    }
-    Vec::new()
+    vault.password_entries.clone()
 }
 
 /// Read labelled backup passwords without unwinding the full record list.
@@ -438,10 +412,11 @@ pub fn read_vault_password_entries(stored: &str) -> VaultFormatResult<Vec<Passwo
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParsePasswordEntries)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
     Ok(extract_password_entries(&vault))
 }
 
-/// Read the logical secret-store id from on-disk YAML (absent on legacy vaults).
+/// Read the logical secret-store id from on-disk YAML.
 pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
@@ -450,6 +425,7 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
+    ensure_supported_vault_schema(vault.schema_version)?;
     match vault.store_id {
         Some(id) => Ok(Some(crate::validate_store_id(&id)?.to_string())),
         None => Ok(None),
@@ -458,12 +434,10 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<Option<String>> {
 
 /// Read grouped architecture metadata from on-disk YAML.
 ///
-/// Legacy vaults that do not carry `architecture:` are explicitly treated as
-/// `standard` device mode, `simple` vault type, and `personal` replication.
 pub fn read_vault_architecture(stored: &str) -> VaultFormatResult<VaultArchitecture> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
-        return Ok(VaultArchitecture::default_legacy());
+        return Ok(VaultArchitecture::default());
     }
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
@@ -478,11 +452,6 @@ pub fn deserialize_stored_yaml(stored: &str) -> VaultFormatResult<Vec<StoredSecr
 }
 
 /// Deserialize records and the active unlock mode side-by-side.
-///
-/// Backward compatibility: vaults written before the enum carry their unlock
-/// data either as `auth:` rows (keys mode) or a top-level `password_envelope:`
-/// field (password mode). Both shapes are mapped onto `VaultUnlock` on read;
-/// subsequent writes use the new schema.
 pub fn deserialize_stored_yaml_with_unlock(
     stored: &str,
 ) -> VaultFormatResult<(Vec<StoredSecretRecord>, VaultUnlock)> {
@@ -496,12 +465,9 @@ pub fn deserialize_stored_yaml_with_unlock(
 
     ensure_supported_vault_schema(vault.schema_version)?;
 
-    let unlock = resolve_unlock_with_legacy(&vault);
+    let unlock = vault.unlock.clone();
 
     let mut records = vault.secrets;
-    // In password mode the on-disk vault should carry no auth rows / joins,
-    // but tolerate legacy files (or buggy writers) by still parsing them out
-    // — the caller decides whether to retain or drop them on next write.
     records.extend(vault.auth.into_iter().map(auth_to_stored_record));
     records.extend(vault.joins);
     records.extend(vault.members.into_iter().map(members_to_stored_record));
@@ -518,29 +484,8 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseUnlock)?;
-    Ok(resolve_unlock_with_legacy(&vault))
-}
-
-/// Bridge from the on-disk YAML view (which may carry both legacy and
-/// modern fields) to the canonical `VaultUnlock` enum.
-fn resolve_unlock_with_legacy(vault: &StoredVaultYaml) -> VaultUnlock {
-    if !vault.auth.is_empty() {
-        return VaultUnlock::Keys;
-    }
-    if let VaultUnlock::Passwords { .. } = &vault.unlock {
-        return vault.unlock.clone();
-    }
-    if let Some(envelope) = &vault.password_envelope {
-        return VaultUnlock::Passwords {
-            entries: vec![PasswordUnlockEntry {
-                id: "legacy".to_owned(),
-                label: LEGACY_PASSWORD_ENTRY_LABEL.to_owned(),
-                created_at: String::new(),
-                envelope: envelope.clone(),
-            }],
-        };
-    }
-    VaultUnlock::Keys
+    ensure_supported_vault_schema(vault.schema_version)?;
+    Ok(vault.unlock)
 }
 
 #[cfg(test)]
@@ -833,33 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn legacy_password_envelope_field_migrates_to_unlock() {
-        let legacy = "\
-password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext: |\n    -----BEGIN AGE ENCRYPTED FILE-----\n    fake-but-structurally-valid\n    -----END AGE ENCRYPTED FILE-----\nsecrets: []\n";
-        let unlock = read_vault_unlock(legacy).unwrap();
-        assert!(unlock.is_password());
-        let envelope = unlock.password_envelope().unwrap();
-        assert_eq!(envelope.version, 1);
-        assert_eq!(envelope.kdf, "scrypt");
-
-        // Re-serialising migrates to the new schema and drops the legacy field.
-        let (records, parsed_unlock) = deserialize_stored_yaml_with_unlock(legacy).unwrap();
-        assert!(records.is_empty());
-        let rewritten = serialize_stored_yaml_with_unlock(
-            &records,
-            &parsed_unlock,
-            &crate::read_vault_password_entries(legacy).unwrap(),
-            None,
-            None,
-        )
-        .unwrap();
-        assert!(!rewritten.as_str().contains("unlock:"));
-        assert!(rewritten.as_str().contains("password_entries:"));
-        assert!(!rewritten.as_str().starts_with("password_envelope:"));
-    }
-
-    #[test]
-    fn store_id_roundtrip_and_legacy_backfill() {
+    fn store_id_roundtrip() {
         let records = sample_records();
         let yaml = serialize_stored_yaml_with_unlock(
             &records,
@@ -878,31 +797,10 @@ password_envelope:\n  version: 1\n  kdf: scrypt\n  work_factor: 18\n  ciphertext
             read_vault_store_id(yaml.as_str()).unwrap(),
             Some("store_SMypl8K0w9Y".to_owned())
         );
-
-        let legacy = "unlock:\n  type: keys\nsecrets: []\n";
-        assert!(read_vault_store_id(legacy).unwrap().is_none());
-        let backfilled = serialize_stored_yaml_with_unlock(
-            &records,
-            &VaultUnlock::Keys,
-            &[],
-            Some("store_SMypl8K0w9Y"),
-            Some(1),
-        )
-        .unwrap();
-        assert_eq!(
-            read_vault_store_id(backfilled.as_str()).unwrap(),
-            Some("store_SMypl8K0w9Y".to_owned())
-        );
     }
 
     #[test]
-    fn architecture_defaults_for_legacy_yaml_and_roundtrips_when_explicit() {
-        let legacy = "schema_version: 1\nstore_id: store_SMypl8K0w9Y\nsecrets: []\n";
-        assert_eq!(
-            read_vault_architecture(legacy).unwrap(),
-            VaultArchitecture::default_legacy()
-        );
-
+    fn architecture_roundtrips_when_explicit() {
         let architecture = VaultArchitecture {
             device_mode: crate::DeviceMode::AntiHacker,
             vault_type: crate::VaultType::Sentinel,
@@ -987,7 +885,7 @@ secrets: []
 
         let architecture = VaultArchitecture {
             device_mode: crate::DeviceMode::AntiHacker,
-            ..VaultArchitecture::default_legacy()
+            ..VaultArchitecture::default()
         };
         let mut records = sample_records();
         records.push(StoredSecretRecord {
@@ -1082,20 +980,6 @@ secrets: []
             Some("store_SMypl8K0w9Y".to_owned())
         );
         assert_eq!(deserialize_stored_yaml(renamed.as_str()).unwrap(), records);
-    }
-
-    #[test]
-    fn vault_name_is_optional_for_legacy_yaml() {
-        let legacy = "schema_version: 1\nstore_id: store_SMypl8K0w9Y\nsecrets: []\n";
-        assert_eq!(read_vault_name(legacy).unwrap(), None);
-        assert!(deserialize_stored_yaml(legacy).unwrap().is_empty());
-    }
-
-    #[test]
-    fn legacy_yaml_without_schema_version_reads_as_one() {
-        let legacy = "unlock:\n  type: keys\nsecrets: []\n";
-        assert_eq!(read_vault_schema_version(legacy).unwrap(), 1);
-        deserialize_stored_yaml(legacy).unwrap();
     }
 
     #[test]

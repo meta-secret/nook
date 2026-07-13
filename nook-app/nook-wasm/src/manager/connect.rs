@@ -242,38 +242,7 @@ impl NookVaultManager {
                 Err(err) => Err(err.into()),
             }
         } else {
-            let format = nook_core::detect_stored_format(content)?;
-            let records = nook_core::deserialize_stored(content, format)?;
-            if let Some(message) = nook_core::explain_connect_blocked(&records, identity) {
-                return Err(NookError::Database(message).into());
-            }
-            let _ = self.status.tx.send("DECRYPT_START".to_owned());
-            match self.load_stored_vault_or_sentinel_ceremony(content, identity) {
-                Ok(loaded) => {
-                    let LoadedVault {
-                        database,
-                        meta,
-                        secrets_key,
-                        members_key,
-                    } = loaded;
-                    self.apply_vault_keys(secrets_key.as_str(), members_key.as_str())?;
-                    self.vault.database = database;
-                    self.vault.meta = meta;
-                    self.maybe_sync_self_into_roster(identity)?;
-                    let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
-                    self.vault.last_synced_content = content.to_owned();
-                    let import_yaml = self.serialize_current_projection_yaml()?;
-                    self.import_stored_vault_to_event_log(&import_yaml).await?;
-                    self.event_log.enabled = true;
-                    self.flush_event_outbox().await?;
-                    Ok(())
-                }
-                Err(err) if is_sentinel_ceremony_required(&err) => {
-                    self.prepare_sentinel_ceremony_session(content)?;
-                    Err(err.into())
-                }
-                Err(err) => Err(err.into()),
-            }
+            Err(NookError::Database("Vault event log is required.".to_owned()).into())
         }
     }
 
@@ -419,7 +388,9 @@ impl NookVaultManager {
         if self.vault.store_id.is_empty() {
             self.vault.store_id = nook_core::generate_store_id()?.to_string();
         }
-        self.ensure_event_log_ready().await?;
+        if !self.event_log_has_events().await? {
+            self.bootstrap_event_log_genesis().await?;
+        }
         self.persist_projection_cache().await?;
         let _ = self.status.tx.send("READY".to_owned());
         Ok(self.get_records()?)

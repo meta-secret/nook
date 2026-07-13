@@ -1,4 +1,4 @@
-//! Event-log persistence, migration, and provider fan-out.
+//! Event-log persistence and provider fan-out.
 
 use super::NookVaultManager;
 use crate::NookError;
@@ -9,8 +9,7 @@ use crate::storage::drive_events::{
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_event_bytes,
-    save_heads, save_key_epoch, save_signing_seed, save_source_backup_if_absent,
-    set_event_log_mode,
+    save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
 };
 use crate::storage::github_events::{
     fetch_github_event, list_github_event_ids, put_github_event_if_absent,
@@ -26,8 +25,7 @@ use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
     VaultOperation, apply_user_records_to_armored_session, build_signed_event,
     classify_remote_event_log, members_checkpoint_hash_from_roster, project_vault,
-    rewrap_vault_meta_for_epoch, stored_vault_to_import_event, union_remote_events_and_heads,
-    verify_stored_vault_import,
+    rewrap_vault_meta_for_epoch, union_remote_events_and_heads,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -112,8 +110,7 @@ impl NookVaultManager {
 
     /// Activate event-log persistence for this vault session.
     ///
-    /// Idempotent when the log already exists. Otherwise imports the current
-    /// session projection or bootstraps a genesis event before any write.
+    /// Idempotent when the current event log exists.
     pub(in crate::manager) async fn ensure_event_log_ready(&mut self) -> Result<(), NookError> {
         if self.ensure_event_log_mode().await? && self.event_log_has_events().await? {
             return Ok(());
@@ -122,21 +119,9 @@ impl NookVaultManager {
             self.activate_event_log_mode().await?;
             return Ok(());
         }
-        if !self.vault.meta.is_empty() {
-            let yaml = self.serialize_current_projection_yaml()?;
-            self.import_stored_vault_to_event_log(&yaml).await?;
-            return Ok(());
-        }
-        if !self.vault.last_synced_content.trim().is_empty() {
-            let yaml = self.vault.last_synced_content.clone();
-            self.import_stored_vault_to_event_log(&yaml).await?;
-            return Ok(());
-        }
-        if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
-        }
-        self.bootstrap_event_log_genesis().await?;
-        Ok(())
+        Err(NookError::Database(
+            "Vault event log is required.".to_owned(),
+        ))
     }
 
     pub(in crate::manager) async fn activate_event_log_mode(&mut self) -> Result<(), NookError> {
@@ -187,44 +172,6 @@ impl NookVaultManager {
             save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await?;
         }
         Ok(self.event_log.key_epoch.clone())
-    }
-
-    pub(in crate::manager) async fn import_stored_vault_to_event_log(
-        &mut self,
-        stored_vault: &str,
-    ) -> Result<(), NookError> {
-        if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
-        }
-        let _ = self.status.tx.send("MIGRATION_START".to_owned());
-        save_source_backup_if_absent(&self.vault.store_id, stored_vault).await?;
-        let signing = self.ensure_signing_identity().await?;
-        let actor_id = signing.actor_id()?;
-        let ctx = nook_core::VaultHashContext::from(stored_vault);
-        let import = stored_vault_to_import_event(
-            &ctx,
-            &nook_core::StoreId::parse(&self.vault.store_id)?,
-            &actor_id,
-            signing.signing_key(),
-            &nook_core::IsoTimestamp::parse(&iso_timestamp())?,
-        )?;
-        verify_stored_vault_import(&ctx, &import)?;
-        let event_id = import.id()?;
-        let bytes = nook_core::serialize_event_storage_yaml(&import)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
-        self.event_log.heads = vec![event_id.as_str().to_owned()];
-        self.event_log.key_epoch = import.body.key_epoch.as_str().to_owned();
-        save_heads(&self.vault.store_id, &self.event_log.heads).await?;
-        save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await?;
-        self.activate_event_log_mode().await?;
-        if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
-            self.apply_event_projection_to_session().await?;
-        }
-        self.queue_event_outbox_for_current_provider(&event_id, &bytes)
-            .await?;
-        let _ = self.status.tx.send("MIGRATION_SUCCESS".to_owned());
-        Ok(())
     }
 
     pub(in crate::manager) async fn event_log_has_events(&self) -> Result<bool, NookError> {

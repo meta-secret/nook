@@ -76,7 +76,7 @@ test.describe('sync conflict resolution', () => {
     })
   })
 
-  test('ignores a stale legacy vault blob when connecting an event-log provider to a second vault', async ({
+  test('ignores an unrelated vault blob when connecting an event-log provider to a second vault', async ({
     page,
   }) => {
     const fileName = 'nook-e2e-shared-vault-file.yaml'

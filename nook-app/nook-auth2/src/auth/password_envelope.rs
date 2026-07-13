@@ -63,9 +63,6 @@ pub struct PasswordUnlockEntry {
     pub envelope: PasswordEnvelope,
 }
 
-/// Default label used when migrating a legacy single-envelope vault.
-pub const LEGACY_PASSWORD_ENTRY_LABEL: &str = "Vault password";
-
 /// On-disk password envelope. Salt + KDF params are embedded in the age
 /// header; the `kdf` / `work_factor` fields are redundant hints for tooling.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -93,9 +90,6 @@ pub struct PasswordEnvelope {
 ///       created_at: ...
 ///       envelope: { version, kdf, work_factor, ciphertext }
 /// ```
-///
-/// Legacy vaults may still carry a single `envelope:` under `type: password`;
-/// those are migrated into a one-entry `entries` list on read.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum VaultUnlock {
     #[default]
@@ -112,8 +106,6 @@ enum VaultUnlockTagged {
     Password {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         entries: Vec<PasswordUnlockEntry>,
-        #[serde(default, skip_serializing)]
-        envelope: Option<PasswordEnvelope>,
     },
 }
 
@@ -123,7 +115,6 @@ impl Serialize for VaultUnlock {
             Self::Keys => VaultUnlockTagged::Keys.serialize(serializer),
             Self::Passwords { entries } => VaultUnlockTagged::Password {
                 entries: entries.clone(),
-                envelope: None,
             }
             .serialize(serializer),
         }
@@ -135,27 +126,8 @@ impl<'de> Deserialize<'de> for VaultUnlock {
         let tagged = VaultUnlockTagged::deserialize(deserializer)?;
         Ok(match tagged {
             VaultUnlockTagged::Keys => Self::Keys,
-            VaultUnlockTagged::Password { entries, envelope } => {
-                if !entries.is_empty() {
-                    Self::Passwords { entries }
-                } else if let Some(envelope) = envelope {
-                    Self::Passwords {
-                        entries: vec![legacy_password_entry(envelope)],
-                    }
-                } else {
-                    Self::Keys
-                }
-            }
+            VaultUnlockTagged::Password { entries } => Self::Passwords { entries },
         })
-    }
-}
-
-fn legacy_password_entry(envelope: PasswordEnvelope) -> PasswordUnlockEntry {
-    PasswordUnlockEntry {
-        id: "legacy".to_owned(),
-        label: LEGACY_PASSWORD_ENTRY_LABEL.to_owned(),
-        created_at: String::new(),
-        envelope,
     }
 }
 
@@ -508,18 +480,5 @@ mod tests {
             parsed.password_envelope().map(|e| e.ciphertext.trim()),
             Some(envelope.ciphertext.trim()),
         );
-    }
-
-    #[test]
-    fn legacy_single_envelope_deserialises_to_one_entry() {
-        let envelope =
-            attach_password_envelope(&sample_keys(), "correct horse battery staple").unwrap();
-        let unlock = VaultUnlock::Passwords {
-            entries: vec![legacy_password_entry(envelope)],
-        };
-        let yaml = serde_yaml::to_string(&unlock).unwrap();
-        let reparsed: VaultUnlock = serde_yaml::from_str(&yaml).unwrap();
-        assert!(reparsed.is_password());
-        assert_eq!(reparsed.password_entries().len(), 1);
     }
 }

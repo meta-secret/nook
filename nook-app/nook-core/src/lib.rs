@@ -22,9 +22,8 @@ pub(crate) use sync::{
 pub(crate) use vault::{
     database, vault_access_diagnostics, vault_architecture, vault_connect, vault_epoch,
     vault_event, vault_event_builder, vault_event_graph, vault_event_session, vault_event_store,
-    vault_format, vault_ids, vault_import, vault_projection, vault_sentinel_genesis,
-    vault_sentinel_onboarding, vault_sentinel_unlock, vault_session, vault_session_cache,
-    vault_wire,
+    vault_format, vault_ids, vault_projection, vault_sentinel_genesis, vault_sentinel_onboarding,
+    vault_sentinel_unlock, vault_session, vault_session_cache, vault_wire,
 };
 
 pub use bip39::{
@@ -124,9 +123,8 @@ pub use event_canonical::{
 };
 pub use password::{MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordOptions, generate_password};
 pub use password_envelope::{
-    LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
-    PasswordUnlockEntry, VaultUnlock, attach_password_envelope,
-    attach_password_envelope_with_work_factor, create_password_entry,
+    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
+    attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,
     create_password_entry_with_work_factor, is_vault_password_long_enough,
     is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
@@ -214,10 +212,6 @@ pub use vault_ids::{
     generate_secret_id, generate_store_id, is_auth_key_id, is_compact_token, is_device_id,
     normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
     validate_store_id,
-};
-pub use vault_import::{
-    KeyEpochId, VaultHashContext, secrets_from_import_event, stored_vault_to_import_event,
-    verify_stored_vault_import,
 };
 pub use vault_projection::{
     ProjectedSecret, SecretReplacementConflict, SecurityConflict, VaultProjection,

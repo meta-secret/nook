@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import {
   BIP39_SAMPLE_WORDS,
   clearBrowserVault,
-  connectLocalVaultLegacy as connectLocalVault,
+  connectLocalVault,
   expandSecretRow,
   fillSeedPhraseGrid,
   mockBip39Wordlist,

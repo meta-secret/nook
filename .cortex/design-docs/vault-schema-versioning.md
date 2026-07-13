@@ -1,93 +1,37 @@
-# Vault Schema Versioning (#52)
+# Vault Schema Versioning
 
-**Status:** Implemented (event-log migration path)  
-**Issue:** [#52](https://github.com/meta-secret/nook/issues/52)  
-**Related:** [vault-event-log.md](vault-event-log.md) (authoritative sync model)
+**Status:** Implemented
+**Related:** [vault-event-log.md](vault-event-log.md)
 
 ## Decision
 
-Issue #52 originally proposed **YAML schema v2** with `nook-vault.v2.yaml` and `nook-vault.meta.yaml` copy-on-upgrade. That path is **superseded** by the immutable event log ([#112](https://github.com/meta-secret/nook/issues/112)): the event set is the source of truth; projection YAML is a derived local cache only.
+The immutable event log is the vault source of truth. Projection YAML is a
+derived, browser-local cache and is never imported as an event source.
 
-This document maps #52 goals to the implemented model and lists deferred work.
+## Version axes
 
-## Two version axes (unchanged from #52)
+| Axis | Current value | Owned by |
+|------|---------------|----------|
+| App semver | Release tag | CI and deployment workflows |
+| Projection `schema_version` | `1` | `nook-core` `vault_format.rs` |
+| Event `schema_version` | `2` | `nook-core` `vault_event.rs` |
+| Password envelope `version` | Envelope crypto version | `password_envelope.rs` |
 
-| Axis | Examples | Owned by |
-|------|----------|----------|
-| **App semver** | `nokey.sh` stable, `dev.nokey.sh` current development | CI / GitHub Pages + Cloudflare Pages |
-| **Projection `schema_version`** | `1` today in `nook-projection.yaml` cache | `nook-core` `vault_format.rs` |
-| **Event `schema_version`** | `2` on signed YAML event bodies | `nook-core` `vault_event.rs` |
-| **Password envelope `version`** | Crypto wrap inside `password_entries` | `password_envelope.rs` |
+Current builds read and write only the current projection and event schemas.
+An unsupported schema version fails with an actionable error. There is no
+copy-on-upgrade, projection import, or compatibility conversion path.
 
-## #52 goal → implementation
+## Storage contract
 
-| #52 goal | Status | How |
-|----------|--------|-----|
-| Explicit `schema_version` in vault YAML | **Done** | Top-level field on projection cache; missing → `1` |
-| Copy-on-upgrade, never destroy only copy | **Done (event path)** | `source_backup:{store_id}` in IndexedDB on first import; remote projection artifacts are no longer overwritten |
-| Active-vault pointer (`nook-vault.meta.yaml`) | **Superseded** | Event-log heads + set union across providers |
-| Verification before cutover | **Done** | `verify_stored_vault_import` compares secret ids before append |
-| Lazy migration on connect | **Done** | `import_stored_vault_to_event_log` → `vault-imported` genesis event |
-| IndexedDB parity | **Done** | Same backup + event store keys for local-only users |
-| Migration status events | **Done** | `MIGRATION_START` / `MIGRATION_SUCCESS` on WASM status channel |
-| `nokey.sh` stable app rollback | **Done** | Immutable semantic-version tags deploy stable GitHub Pages artifacts |
-| Migration wizard UX | **Deferred** | Connect-time import is automatic; optional explicit gate later |
-| `nook-vault.v2.yaml` side-by-side files | **Not planned** | Event log replaces scalar blob versioning |
+- Vault creation writes the genesis event directly.
+- Providers store immutable signed events.
+- IndexedDB stores events, outbox entries, projection metadata, and the local
+  projection cache in their designated object stores.
+- Projection cache bytes are never treated as authoritative sync input.
+- `store_id` mismatches are hard errors.
 
-## Safe migration flow (current)
+## Release rule
 
-```text
-1. User connects / unlocks source projection YAML
-2. WASM saves byte-for-byte backup → source_backup:{store_id} (if absent)
-3. verify_stored_vault_import(ctx, event) — secret id parity
-4. Append vault-imported genesis event locally
-5. Flush outbox → append-only event files/records on configured providers
-   (GitHub, Google Drive, iCloud), repairing missing local events per provider
-6. Projection cache rewritten with schema_version: 1
-```
-
-Remote projection YAML (if present) is **read-only** for import; writes go to
-the provider's append-only event log (`nook-log/v1/events/...` on file-backed
-providers, `NookVaultEvent` records on iCloud) only.
-
-## Current schema support
-
-| App | Projection schema read | Projection schema write | Event schema |
-|-----|------------------------|-------------------------|--------------|
-| Current | `1` only | `1` | reads `2`, writes `2` |
-
-Opening a projection with `schema_version > 1` fails with an actionable error (upgrade the app).
-
-## Stable releases
-
-`nokey.sh` is the stable release channel. `.github/workflows/release.yml` deploys
-immutable semantic-version tags using the same production Docker gate as `main`
-(`task ci:main ... WASM_BUILD_MODE=prod`) and then publishes the verified `dist`
-artifact to GitHub Pages. A manual run accepts a version and source ref, creates
-the corresponding `vX.Y.Z` tag without ever moving an existing tag, and publishes
-a GitHub Release only after deployment succeeds. Pushing a semantic-version tag
-also runs the same release path. The deploy build passes
-`VITE_SITE_URL=https://nokey.sh` and
-`VITE_PUBLIC_APP_URL=https://nokey.sh` so generated release metadata and
-enrollment links use the stable root host while the pre-deploy e2e gate keeps
-local Playwright URLs. The deployed artifact exposes its exact version and commit
-at `/release.json`.
-
-`dev.nokey.sh` is the active development channel for `main`. `.github/workflows/main.yml`
-keeps the normal main verification and toolchain publish path, then deploys a
-development artifact to Cloudflare Pages with
-`VITE_SITE_URL=https://dev.nokey.sh` and
-`VITE_PUBLIC_APP_URL=https://dev.nokey.sh`. The workflow also ensures the
-Cloudflare Pages custom domain exists and verifies the preconfigured
-Cloudflare DNS CNAME and HTTPS response for `dev.nokey.sh`.
-
-Maintenance rule: tags are immutable. A rollback is a new deployment of a new
-semantic version built from the chosen compatible commit; never move or overwrite
-an existing release tag. If a future app version changes event or projection
-compatibility, do not deploy it to `nokey.sh` until the migration/rollback policy
-for existing vaults is explicit.
-
-## Deferred (#52 non-goals retained)
-
-- Settings UI to remove source backup (opt-in destructive)
-- Re-migration after user edits on a hypothetical v1 app post-cutover
+Release tags are immutable. A rollback is a new deployment built from the
+chosen commit; existing tags are never moved or overwritten. Any future schema
+change requires an explicit current-format contract before release.
