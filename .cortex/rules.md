@@ -137,7 +137,10 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > This prohibition applies regardless of `sharing=shared`, `sharing=private`, or
 > `sharing=locked`. Changing the sharing mode is not an acceptable workaround.
-> PR and main CI enforce this rule through `_ci:dockerfile-cache-policy`.
+> The repository-root Rust suite at `preflight/` enforces this rule. Run it
+> through `task preflight`; `task check`, PR CI, and main CI run it before the
+> application Docker setup begins. Repository-wide invariant tests belong in
+> this standalone crate, not in the `nook-app` Cargo workspace or shell snippets.
 
 ### Docker daemon — never kill it
 

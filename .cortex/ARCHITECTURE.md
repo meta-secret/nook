@@ -11,6 +11,10 @@ Nook is built as a modular monorepo using a strict, uni-directional dependency f
 ```
 root/
 ├── Taskfile.yml          (repo entrypoint; includes app tasks + root tooling)
+├── preflight/            (standalone Rust tests for whole-repository invariants)
+│   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
+│   ├── Dockerfile
+│   └── tests/
 ├── .task/
 │   └── agentic-ai.yml    (repo-level agent tooling)
 └── nook-app/
@@ -223,6 +227,7 @@ members:  members_key-encrypted catalog entries
 
 | Package     | Tests                                                                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preflight` | `task preflight` — standalone Rust tests for whole-repository invariants; runs before app setup in PR/main CI                                                                                            |
 | `nook-core` / `nook-auth2` | `task rust:coverage:check` — llvm-cov + nextest with **line coverage floor** (`nook-app/nook-core/coverage-floor.json`); fast path `task rust:test`                                                               |
 | `nook-web/nook-web-app`  | Playwright e2e: `task web:test:e2e` (main stub gate and explicit PR validation), `task web:test:e2e:pr` (fast manual subset), `task web:test:e2e:sync-live` (nightly); see [workflows/ci-pipeline.md](workflows/ci-pipeline.md) |
 | `nook-wasm` | Covered via `nook-core` + e2e; no separate domain tests required                                                                                                                                         |

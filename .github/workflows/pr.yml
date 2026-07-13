@@ -49,7 +49,7 @@ jobs:
       # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
       # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
       # path and makes a cold Rust cache slower than the former combined build.
-      - name: Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
+      - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
         env:
           CI: true

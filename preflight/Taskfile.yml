@@ -1,0 +1,20 @@
+version: '3'
+
+tasks:
+  preflight:
+    desc: Run all repository-wide invariant tests.
+    cmds:
+      - task: preflight:test
+
+  preflight:test:
+    desc: Run the Rust preflight test suite in Docker.
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - >-
+        docker buildx build
+        --builder "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"
+        --platform linux/amd64
+        --file preflight/Dockerfile
+        --target test
+        --output type=cacheonly
+        .

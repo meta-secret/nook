@@ -3,18 +3,18 @@ version: "3"
 tasks:
   ci:pr:
     desc: PR CI — Rust/WASM image validation, then one slim web container for format/verify/build (browser e2e runs on main).
-    deps:
-      - setup
     cmds:
+      - task: preflight
+      - task: setup
       - task: docker:task
         vars: { TASK: _ci:pr }
 
   ci:pr:e2e:
     desc: Explicit local/manual full stub web Playwright e2e plus extension e2e.
-    deps:
+    cmds:
+      - task: preflight
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
-    cmds:
       - task: docker:e2e:run
         vars: { TASK: _ci:main }
 
@@ -25,10 +25,10 @@ tasks:
 
   ci:main:
     desc: Main CI — Rust/WASM image validation, then one slim web container for verify/build/e2e.
-    deps:
+    cmds:
+      - task: preflight
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
-    cmds:
       - task: docker:e2e:run
         vars: { TASK: _ci:main }
 
@@ -66,18 +66,18 @@ tasks:
 
   ci:nightly:e2e:
     desc: Nightly live sync provider e2e (real APIs; requires provider credentials).
-    deps:
+    cmds:
+      - task: preflight
       - task: setup
         vars: { SETUP_TARGET: nook-web-e2e }
-    cmds:
       - task: docker:e2e:run
         vars: { TASK: _ci:nightly:e2e }
 
   ci:main:build:
     desc: Format, wasm, verify, and web build in one container (no e2e).
-    deps:
-      - setup
     cmds:
+      - task: preflight
+      - task: setup
       - task: docker:task
         vars: { TASK: _ci:main:build }
 
@@ -140,30 +140,17 @@ tasks:
 
   ci:verify:
     desc: Format, lint, and test in Docker (no web production build).
-    deps:
-      - setup
     cmds:
+      - task: preflight
+      - task: setup
       - task: docker:task
         vars: { TASK: _verify }
 
   _ci:pr:
     desc: PR gate — format, wasm (image-seeded), verify ‖ build (one container; no browser e2e).
     cmds:
-      - task: _ci:dockerfile-cache-policy
       - task: _format:check
       - task: _ci:pr:parallel
-
-  _ci:dockerfile-cache-policy:
-    desc: Reject Dockerfile BuildKit cache mounts; immutable image layers are the cache boundary.
-    cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        matches="$(find . -type f \( -name Dockerfile -o -name "*.Dockerfile" \) -not -path "./.git/*" -exec grep -Hn -- "--mount=type=cache" {} + || true)";
-        if [ -n "$matches" ]; then
-          echo "Dockerfile RUN --mount=type=cache is prohibited by .cortex/rules.md:" >&2;
-          echo "$matches" >&2;
-          exit 1;
-        fi'
 
   _ci:pr:parallel:
     desc: Lint/test ‖ production web build after wasm is ready.
@@ -174,7 +161,6 @@ tasks:
   _ci:main:build:
     desc: Main verify/build track without e2e.
     cmds:
-      - task: _ci:dockerfile-cache-policy
       - task: _format:check
       - task: _ci:pr:parallel
 

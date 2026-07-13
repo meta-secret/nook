@@ -243,9 +243,10 @@ as the base comparison because the measured source is unchanged.
 ## Local vs remote CI
 
 **Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
-self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
-an explicit **Rust unit tests and coverage** solve followed by **`task ci:pr`**
-(no-opt WASM, WASM/web unit tests, verify, web build, no browser e2e, Cloudflare preview,
+self-hosted `nook` pool and reuses its Docker/BuildKit cache. `task ci:pr` runs
+the standalone Rust **repository preflight** before app setup, then one parallel
+Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
+no browser e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
 toolchain image push). The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
@@ -429,7 +430,7 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
 5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds; it omits **only browser e2e**. Main runs full local-provider and extension **e2e**; nightly runs **sync-live**. Main and nightly failures invoke `ci-fix`.
-6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. `_ci:dockerfile-cache-policy` rejects violations.
+6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
 <!-- agent-implement docker smoke -->
