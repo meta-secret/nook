@@ -72,6 +72,10 @@ origins, aborts non-local HTTP and WebSocket traffic through a Playwright contex
 route, limits console forwarding to warnings/errors, and exposes a narrow tool
 allowlist. `browser_network_requests`, storage inspection/export, file upload,
 and unrestricted Playwright execution are not available to the pilot agent.
+The isolated MCP browser also intercepts the native directory chooser, so
+`showDirectoryPicker()` cannot complete there. Nook reports that boundary in
+the local-folder setup UI; connect a local backup folder from a regular browser
+instead.
 
 ### Concurrent AI-debug sessions
 

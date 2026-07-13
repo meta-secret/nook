@@ -114,7 +114,7 @@
   let chosenPath = $state<ChosenPath>('undecided')
   let vaultName = $state('')
   let sentinelName = $state('')
-  let sentinelDashboard = $state<SentinelDashboard | null>(null)
+  let sentinelDashboard = $state<SentinelDashboard | undefined>(undefined)
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
   let copyingJoinResponse = $state(false)
@@ -200,7 +200,7 @@
 
   $effect(() => {
     if (sentinelGenesisStatus === 'complete') {
-      sentinelDashboard = null
+      sentinelDashboard = undefined
       return
     }
     if (sentinelGenesisStatus !== 'idle') {
@@ -222,7 +222,7 @@
       sentinelThreshold <= sentinelParticipantCount,
   )
   const sentinelDashboardActive = $derived(
-    sentinelDashboard !== null &&
+    sentinelDashboard !== undefined &&
       (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
   )
   const showImportFooter = $derived(
@@ -230,27 +230,27 @@
       wizardStep === 'simple-create' ||
       wizardStep === 'sentinel-dashboard',
   )
+
+  $effect(() => {
+    const deviceProtectionReady = vault.deviceProtectionReady
+    if (
+      initiatorPasskeyRequested &&
+      deviceProtectionReady &&
+      sentinelDashboardActive &&
+      sentinelGenesisStatus === 'idle' &&
+      !initiatorFingerprint &&
+      !initiatorKeyLoading &&
+      !isBusy
+    ) {
+      void prepareInitiatorDeviceKeys()
+    }
+  })
   const canGoBack = $derived(
     wizardStep === 'simple-create' ||
       wizardStep === 'sentinel-dashboard' ||
       wizardStep === 'sentinel-policy' ||
       wizardStep === 'join',
   )
-
-  $effect(() => {
-    const deviceProtectionReady = vault.deviceProtectionReady
-    if (
-      sentinelDashboardActive &&
-      sentinelGenesisStatus === 'idle' &&
-      !initiatorFingerprint &&
-      !initiatorKeyLoading &&
-      !isBusy &&
-      (!initiatorPasskeyRequested || deviceProtectionReady) &&
-      onCreateSentinelGenesisPublicKeyAnnouncement
-    ) {
-      void prepareInitiatorDeviceKeys()
-    }
-  })
 
   const stepIndex = $derived.by(() => {
     switch (wizardStep) {
@@ -412,7 +412,7 @@
     chosenPath = 'sentinel'
     initiatorFingerprint = ''
     initiatorPasskeyRequested = false
-    sentinelDashboard = null
+    sentinelDashboard = undefined
     wizardStep = 'sentinel-dashboard'
   }
 
@@ -465,14 +465,14 @@
       return
     }
     if (wizardStep === 'sentinel-dashboard') {
-      sentinelDashboard = null
+      sentinelDashboard = undefined
       chosenPath = 'undecided'
       wizardStep = 'choose'
       return
     }
     if (wizardStep === 'sentinel-policy') {
       const dashboard = sentinelDashboard
-      sentinelDashboard = null
+      sentinelDashboard = undefined
       wizardStep = 'sentinel-dashboard'
       if (dashboard) restoreDashboardChoiceFocus(dashboard)
     }

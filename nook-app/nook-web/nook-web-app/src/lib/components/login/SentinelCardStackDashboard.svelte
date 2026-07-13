@@ -349,8 +349,17 @@
   ></div>
 
   <section class="relative mx-auto max-w-7xl px-6 py-24 sm:px-10">
+    <header data-testid="sentinel-dashboard-heading">
+      <p
+        class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
+      >
+        {vault.t('login.sentinel_card_stack_eyebrow')}
+      </p>
+      <h1 class="mt-4 text-4xl font-semibold tracking-[0.18em]">SENTINEL</h1>
+    </header>
+
     <ol
-      class="mb-12 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
+      class="mt-8 mb-12 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
       data-testid="sentinel-onboarding-progress"
     >
       {#each [vault.t('login.sentinel_onboarding_step_keys'), vault.t('login.sentinel_onboarding_step_devices'), vault.t('login.sentinel_onboarding_step_shares'), vault.t('login.sentinel_onboarding_step_build')] as label, index (label)}
@@ -386,33 +395,7 @@
       {/each}
     </ol>
 
-    <header>
-      <div>
-        <p
-          class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
-        >
-          {vault.t('login.sentinel_card_stack_eyebrow')}
-        </p>
-        <div class="mt-4 flex flex-wrap items-end gap-7">
-          <h1 class="text-4xl font-semibold tracking-[0.18em]">SENTINEL</h1>
-          <div
-            class="flex rounded-full bg-white/[0.06] p-1 text-xs text-[#aeb8c2]"
-          >
-            <span class="rounded-full bg-white/10 px-4 py-2 text-white">
-              {vault.t('login.sentinel_card_stack_tab_vault')}
-            </span>
-            <span class="px-4 py-2">
-              {vault.t('login.sentinel_card_stack_tab_policy')}
-            </span>
-            <span class="px-4 py-2">
-              {vault.t('login.sentinel_card_stack_tab_keys')}
-            </span>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <div class="mt-12 grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
+    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
       <div>
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
@@ -438,6 +421,7 @@
         <div class="mt-5 space-y-3">
           <button
             class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === 0 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
+            data-testid="sentinel-onboarding-create-keys"
             onclick={() => {
               selected = 0
               if (!initiatorKeyReady) void onPrepareInitiator()
@@ -557,7 +541,10 @@
                     />{:else}<Plus class="size-5" />{/if}
                 </button>
               </div>
-              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+              <div
+                class="mt-5 grid gap-5"
+                data-testid="sentinel-genesis-participant-fields"
+              >
                 <label
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
@@ -575,8 +562,8 @@
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
                   {vault.t('login.sentinel_card_stack_public_key_label')}
-                  <input
-                    class="mt-2 w-full border-b border-white/20 bg-transparent py-2 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                  <textarea
+                    class="mt-2 min-h-28 w-full resize-y border border-white/20 bg-[#192128] p-3 font-mono text-xs leading-5 text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
                     data-testid="sentinel-genesis-response-input"
                     placeholder={vault.t(
                       'login.sentinel_card_stack_public_key_placeholder',
@@ -584,8 +571,9 @@
                     value={response}
                     oninput={changeParticipantPayload}
                     onkeydown={(event) =>
-                      event.key === 'Enter' && void addParticipant()}
-                  />
+                      event.key === 'Enter' &&
+                      (event.metaKey || event.ctrlKey) &&
+                      void addParticipant()}></textarea>
                 </label>
               </div>
               {#if participantInputError}
