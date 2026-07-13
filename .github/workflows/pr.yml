@@ -1,4 +1,4 @@
-# Pull requests: run the Rust domain unit/coverage gate, verify/build in one container, deploy preview.
+# Pull requests: run the Rust domain unit/coverage gate, build no-opt WASM, verify/build, deploy preview.
 # Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
 # and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
@@ -49,12 +49,12 @@ jobs:
       # nook-core + nook-auth2 nextest suites and enforces the committed line floor; the following
       # full PR solve reuses its BuildKit layers instead of running the native tests a second time.
       - name: Rust unit tests and coverage
-        run: task docker:coverage:export COVERAGE_OUT_DIR=coverage/current COVERAGE_CACHE_MODE=local WASM_BUILD_MODE=prod
+        run: task docker:coverage:export COVERAGE_OUT_DIR=coverage/current COVERAGE_CACHE_MODE=local WASM_BUILD_MODE=dev
         env:
           CI: true
 
       - name: WASM and web unit tests, checks, and preview build (no browser e2e)
-        run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
+        run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
         env:
           CI: true
 
@@ -70,7 +70,7 @@ jobs:
           # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
           # print the container output (it holds the real error) before failing the step.
           set +e
-          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=prod 2>&1)"
+          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
           status=$?
           set -e
           echo "$out"
@@ -302,7 +302,7 @@ jobs:
           task docker:coverage:export \
             REPO_ROOT="$PWD/../nook-base-coverage" \
             COVERAGE_OUT_DIR="$base_coverage_out" \
-            WASM_BUILD_MODE=prod
+            WASM_BUILD_MODE=dev
 
       - name: Reuse current coverage as base
         if: steps.coverage-inputs.outputs.base_coverage_required == 'false'

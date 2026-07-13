@@ -6,7 +6,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, format, wasm-bindgen/web unit tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt WASM, wasm-bindgen/web unit tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -169,7 +169,7 @@ All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 
 # Full PR CI mirror — parallel local gate; mandatory before merge/handoff after broad remote failure
-WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build (no browser e2e)
+WASM_BUILD_MODE=dev task ci:pr       # prepare → no-opt WASM → verify ‖ build (no browser e2e)
 
 # Explicit full browser validation for high-risk PRs
 task ci:pr:e2e                       # full local-provider web e2e + extension e2e
@@ -240,7 +240,7 @@ as the base comparison because the measured source is unchanged.
 **Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
 self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
 an explicit **Rust unit tests and coverage** solve followed by **`task ci:pr`**
-(WASM/web unit tests, verify, web build, no browser e2e, Cloudflare preview,
+(no-opt WASM, WASM/web unit tests, verify, web build, no browser e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
 toolchain image push). The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
