@@ -67,6 +67,7 @@ import {
 } from '$lib/vault-idle-session'
 import {
   isPasskeyPrfUnavailableError,
+  isPasskeyUnavailableError,
   recoverDeviceProtectionWithPasskey as recoverExistingPasskeyProtection,
   setupDeviceProtection as createPasskeyProtection,
   unlockDeviceProtection as authorizePasskeyProtection,
@@ -944,11 +945,25 @@ export class VaultState {
       await this.continueInitializationAfterDeviceUnlock()
       this.deviceProtectionStatus = 'unlocked'
     } catch (error) {
+      if (isPasskeyUnavailableError(error)) {
+        vaultLog.warn(
+          'passkey unavailable; offering PIN device protection fallback',
+        )
+        this.deviceProtectionStatus = 'pin-setup'
+        this.errorMsg = this.t(
+          'device_protection.passkey_unavailable_pin_fallback_ready',
+        )
+        return
+      }
       if (isPasskeyPrfUnavailableError(error)) {
+        vaultLog.warn(
+          'passkey PRF unavailable; offering PIN device protection fallback',
+        )
         this.deviceProtectionStatus = 'pin-setup'
         this.errorMsg = this.t('device_protection.pin_fallback_ready')
         return
       }
+      vaultLog.warn('passkey device protection setup failed')
       if (
         this.deviceProtectionStatus === 'unlocked' ||
         deviceIdentityUnlocked
@@ -979,11 +994,25 @@ export class VaultState {
       await this.continueInitializationAfterDeviceUnlock()
       this.deviceProtectionStatus = 'unlocked'
     } catch (error) {
+      if (isPasskeyUnavailableError(error)) {
+        vaultLog.warn(
+          'passkey recovery unavailable; offering PIN device protection fallback',
+        )
+        this.deviceProtectionStatus = 'pin-setup'
+        this.errorMsg = this.t(
+          'device_protection.recovery_passkey_unavailable_pin_fallback_ready',
+        )
+        return
+      }
       if (isPasskeyPrfUnavailableError(error)) {
+        vaultLog.warn(
+          'passkey recovery PRF unavailable; offering PIN device protection fallback',
+        )
         this.deviceProtectionStatus = 'pin-setup'
         this.errorMsg = this.t('device_protection.recovery_pin_fallback_ready')
         return
       }
+      vaultLog.warn('passkey device protection recovery failed')
       if (
         this.deviceProtectionStatus === 'unlocked' ||
         deviceIdentityUnlocked

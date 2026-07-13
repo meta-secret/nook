@@ -269,6 +269,76 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('login-gate')).toBeVisible()
   })
 
+  test('falls back to PIN setup when passkeys are unavailable', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+      localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
+    })
+    await page.goto('/app/')
+    await clickDeviceProtectionSetup(page)
+
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'Passkeys are unavailable in this browser profile',
+    )
+    await expect(
+      page.getByTestId('device-protection-pin-setup-btn'),
+    ).toBeVisible()
+    await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
+  })
+
+  test('falls back to a new PIN identity when passkey recovery is unavailable', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+      localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
+    })
+    await page.goto('/app/')
+    await page.getByTestId('device-protection-use-existing-choice').click()
+    await page.getByTestId('device-protection-existing-passkey-btn').click()
+
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'Set a local PIN to protect a new device identity instead',
+    )
+    await expect(
+      page.getByTestId('device-protection-pin-setup-btn'),
+    ).toBeVisible()
+    await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
+  })
+
+  for (const scenario of [
+    {
+      mode: 'not-supported-error',
+      error:
+        'NotSupportedError: The requested public-key algorithm is not supported.',
+    },
+    {
+      mode: 'security-error',
+      error: 'SecurityError: This is an invalid domain.',
+    },
+  ]) {
+    test(`keeps ${scenario.mode} explicit`, async ({ page }) => {
+      await page.addInitScript((mode) => {
+        localStorage.setItem('nook_e2e_manual_passkey', 'true')
+        localStorage.setItem('nook_e2e_passkey_mode', mode)
+      }, scenario.mode)
+      await page.goto('/app/')
+      await clickDeviceProtectionSetup(page)
+
+      await expect(page.getByTestId('device-protection-error')).toContainText(
+        scenario.error,
+      )
+      await expect(
+        page.getByTestId('device-protection-setup-btn'),
+      ).toBeEnabled()
+      await expect(
+        page.getByTestId('device-protection-pin-setup-btn'),
+      ).toBeHidden()
+    })
+  }
+
   test('keeps setup recoverable after passkey cancellation', async ({
     page,
   }) => {
@@ -281,6 +351,9 @@ test.describe('passkey device-key protection', () => {
 
     await expect(page.getByTestId('device-protection-error')).toBeVisible()
     await expect(page.getByTestId('device-protection-setup-btn')).toBeEnabled()
+    await expect(
+      page.getByTestId('device-protection-pin-setup-btn'),
+    ).toBeHidden()
   })
 
   test('can reset an inaccessible local identity without deleting vault storage', async ({

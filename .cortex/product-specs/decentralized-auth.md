@@ -130,8 +130,14 @@ actual extension result as authoritative:
 
 At registration Nook prefers `getClientExtensionResults().prf.enabled ===
 true`; at authorization it requires a 32-byte `prf.results.first` for PRF-backed
-records. Missing support switches first-time setup to the PIN fallback and never
-falls back to plaintext. Returning browsers inspect the persisted
+records. A missing WebAuthn API/provider method or a completed ceremony without
+the required PRF result switches first-time setup to the PIN fallback and never
+falls back to plaintext. Ceremony exceptions remain explicit because names such
+as `NotSupportedError` and `NotAllowedError` cover ambiguous option,
+authenticator, cancellation, and timeout failures. Origin/configuration errors
+such as an invalid RP ID likewise remain explicit rather than silently
+weakening device protection.
+Returning browsers inspect the persisted
 `device_identity_wrapped` version to choose passkey or PIN authorization without
 user-agent guesses; browsers with no local passkey metadata can use the
 discoverable passkey chooser to rebuild the deterministic passkey record.

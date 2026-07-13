@@ -43,31 +43,32 @@ export function installMockPasskeyRuntime() {
       }),
     }
   }
+  const publicKeyCredential = {
+    signalCurrentUserDetails: async (details: {
+      displayName?: string
+      name?: string
+      rpId?: string
+      userId?: ArrayBuffer | ArrayBufferView
+    }) => {
+      localStorage.setItem(
+        'nook_e2e_passkey_label',
+        details.displayName ?? details.name ?? '',
+      )
+      localStorage.setItem('nook_e2e_passkey_signal_rp_id', details.rpId ?? '')
+      if (details.userId) {
+        localStorage.setItem(
+          'nook_e2e_passkey_signal_user_id',
+          JSON.stringify(Array.from(bytesFrom(details.userId))),
+        )
+      }
+    },
+  }
   Object.defineProperty(window, 'PublicKeyCredential', {
     configurable: true,
-    value: {
-      signalCurrentUserDetails: async (details: {
-        displayName?: string
-        name?: string
-        rpId?: string
-        userId?: ArrayBuffer | ArrayBufferView
-      }) => {
-        localStorage.setItem(
-          'nook_e2e_passkey_label',
-          details.displayName ?? details.name ?? '',
-        )
-        localStorage.setItem(
-          'nook_e2e_passkey_signal_rp_id',
-          details.rpId ?? '',
-        )
-        if (details.userId) {
-          localStorage.setItem(
-            'nook_e2e_passkey_signal_user_id',
-            JSON.stringify(Array.from(bytesFrom(details.userId))),
-          )
-        }
-      },
-    },
+    get: () =>
+      localStorage.getItem('nook_e2e_passkey_mode') === 'unavailable'
+        ? undefined
+        : publicKeyCredential,
   })
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
@@ -90,6 +91,15 @@ export function installMockPasskeyRuntime() {
             'The operation was cancelled.',
             'NotAllowedError',
           )
+        }
+        if (mode === 'not-supported-error') {
+          throw new DOMException(
+            'The requested public-key algorithm is not supported.',
+            'NotSupportedError',
+          )
+        }
+        if (mode === 'security-error') {
+          throw new DOMException('This is an invalid domain.', 'SecurityError')
         }
         const createdUserHandle = options.publicKey?.user?.id
         if (createdUserHandle) {
