@@ -280,10 +280,21 @@ jobs:
             git worktree remove --force ../nook-base-coverage >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          # Use this branch's already-verified coverage export plumbing with the base source. This
-          # also allows the first rollout to fall back when base predates the export-only target.
-          cp nook-app/nook-core/Dockerfile ../nook-base-coverage/nook-app/nook-core/Dockerfile
-          cp nook-app/nook-core/docker-bake.hcl ../nook-base-coverage/nook-app/nook-core/docker-bake.hcl
+          # Use this branch's already-verified coverage export plumbing with the base source. Copy
+          # the Bake graph as one unit: package targets reference cache variables and split bases
+          # declared by the root files, so mixing new package HCL with the old combined graph fails
+          # before BuildKit can reach the coverage target. Rust source remains at BASE_SHA.
+          for file in \
+            nook-app/docker-bake.hcl \
+            nook-app/docker/base.docker-bake.hcl \
+            nook-app/docker/base.Dockerfile \
+            nook-app/nook-core/Dockerfile \
+            nook-app/nook-core/docker-bake.hcl \
+            nook-app/nook-wasm/docker-bake.hcl \
+            nook-app/docker/toolchain.docker-bake.hcl \
+            nook-app/nook-web/nook-web-app/docker-bake.hcl; do
+            cp "$file" "../nook-base-coverage/$file"
+          done
           base_coverage_out="$PWD/coverage/base"
           task docker:coverage:export \
             REPO_ROOT="$PWD/../nook-base-coverage" \
