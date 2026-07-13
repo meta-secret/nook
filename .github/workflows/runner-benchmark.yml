@@ -1,0 +1,64 @@
+# Temporary benchmark: run the same PR check on GitHub-hosted and self-hosted runners.
+# This workflow is intentionally scoped to changes to itself and should not be merged.
+
+name: Runner benchmark
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/runner-benchmark.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: runner-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Benchmark (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GitHub-hosted
+            runner: ubuntu-latest
+          - name: Self-hosted
+            runner: nook
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Benchmark task ci:pr
+        shell: bash
+        env:
+          CI: true
+          BUILDKIT_PROGRESS: plain
+        run: |
+          set +e
+          started_at="$(date +%s)"
+          task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
+          status=$?
+          finished_at="$(date +%s)"
+          elapsed_seconds="$((finished_at - started_at))"
+          {
+            echo "### ${{ matrix.name }}"
+            echo
+            echo "- Runner: \`${{ matrix.runner }}\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Command: \`task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod\`"
+            echo "- Exit status: \`${status}\`"
+            echo "- Elapsed: \`${elapsed_seconds}s\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
