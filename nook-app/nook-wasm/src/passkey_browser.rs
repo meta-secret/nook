@@ -26,6 +26,7 @@ use wasm_bindgen::{JsCast, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
 pub(crate) const PASSKEY_PRF_UNAVAILABLE: &str = "PASSKEY_PRF_UNAVAILABLE";
+pub(crate) const PASSKEY_UNAVAILABLE: &str = "PASSKEY_UNAVAILABLE";
 pub(crate) const DEFAULT_PASSKEY_LABEL: &str = "Nook device";
 
 const CHALLENGE_LEN: usize = 32;
@@ -166,15 +167,17 @@ fn require_passkey_support() -> Result<(), JsError> {
     )
     .map_err(|_| JsError::new("Failed to inspect browser passkey support"))?;
     if is_absent(&public_key_credential) {
-        return Err(JsError::new("Passkeys require a supported browser."));
+        return Err(passkey_unavailable(
+            "Passkeys are not available in this browser.",
+        ));
     }
 
     let navigator = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("navigator"))
         .map_err(|_| JsError::new("Failed to inspect browser navigator"))?;
     let credentials = get_optional(&navigator, "credentials")?;
     if is_absent(&credentials) {
-        return Err(JsError::new(
-            "Passkeys require navigator.credentials support.",
+        return Err(passkey_unavailable(
+            "Passkeys are not available in this browser profile.",
         ));
     }
     Ok(())
@@ -185,22 +188,53 @@ async fn credential_ceremony(method: &str, options: &JsValue) -> Result<JsValue,
     let navigator = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("navigator"))
         .map_err(|_| JsError::new("Failed to inspect browser navigator"))?;
     let credentials = get_required(&navigator, "credentials")?;
-    let method_value = get_required(&credentials, method)?;
-    let method_fn: js_sys::Function = method_value
-        .dyn_into()
-        .map_err(|_| JsError::new(&format!("navigator.credentials.{method} is not callable")))?;
+    let method_value = get_optional(&credentials, method)?;
+    if is_absent(&method_value) {
+        return Err(passkey_unavailable(&format!(
+            "Passkey {method} is not available in this browser profile."
+        )));
+    }
+    let method_fn: js_sys::Function = method_value.dyn_into().map_err(|_| {
+        passkey_unavailable(&format!(
+            "Passkey {method} is not available in this browser profile."
+        ))
+    })?;
     let promise = method_fn
         .call1(&credentials, options)
-        .map_err(|_| JsError::new(&format!("Failed to start passkey {method} ceremony")))?;
+        .map_err(|error| credential_ceremony_error(method, &error))?;
     let credential = JsFuture::from(js_sys::Promise::from(promise))
         .await
-        .map_err(|_| JsError::new(&format!("Passkey {method} ceremony failed")))?;
+        .map_err(|error| credential_ceremony_error(method, &error))?;
     if is_absent(&credential) {
         return Err(JsError::new(&format!(
             "Passkey {method} ceremony was cancelled."
         )));
     }
     Ok(credential)
+}
+
+fn credential_ceremony_error(method: &str, error: &JsValue) -> JsError {
+    let name = js_error_text(error, "name");
+    let message = js_error_text(error, "message");
+    let detail = match (name.as_deref(), message.as_deref()) {
+        (Some(name), Some(message)) => format!("{name}: {message}"),
+        (Some(name), None) => name.to_owned(),
+        (None, Some(message)) => message.to_owned(),
+        (None, None) => "unknown browser error".to_owned(),
+    };
+
+    JsError::new(&format!("Passkey {method} ceremony failed ({detail})."))
+}
+
+fn js_error_text(error: &JsValue, property: &str) -> Option<String> {
+    js_sys::Reflect::get(error, &JsValue::from_str(property))
+        .ok()
+        .and_then(|value| value.as_string())
+        .filter(|value| !value.trim().is_empty())
+}
+
+fn passkey_unavailable(message: &str) -> JsError {
+    JsError::new(&format!("{PASSKEY_UNAVAILABLE}: {message}"))
 }
 
 async fn try_signal_current_user_details(

@@ -2,6 +2,11 @@ import type { NookVaultManager } from '$lib/nook-wasm/nook_wasm'
 import type { DeviceMode } from '$lib/vault-architecture'
 
 const PASSKEY_PRF_UNAVAILABLE = 'PASSKEY_PRF_UNAVAILABLE'
+const PASSKEY_UNAVAILABLE = 'PASSKEY_UNAVAILABLE'
+
+export function isPasskeyUnavailableError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes(PASSKEY_UNAVAILABLE)
+}
 
 export function isPasskeyPrfUnavailableError(error: unknown): boolean {
   return (
