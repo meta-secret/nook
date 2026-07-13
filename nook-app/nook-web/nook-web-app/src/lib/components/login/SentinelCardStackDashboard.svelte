@@ -714,7 +714,10 @@
                       {vault.t('login.sentinel_card_stack_policy')}
                     </span>
                     <strong class="mt-1 block text-[#d7e0e6]">
-                      {threshold}-of-{participantCount}
+                      {vault.t('login.sentinel_onboarding_threshold_summary', {
+                        threshold: String(threshold),
+                        count: String(participantCount),
+                      })}
                     </strong>
                   </div>
                   <div>
