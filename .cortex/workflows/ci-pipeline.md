@@ -149,7 +149,7 @@ Defined in `nook-app/nook-web/playwright.config.ts`:
 
 | Project     | Specs                                          | CI                            |
 | ----------- | ---------------------------------------------- | ----------------------------- |
-| `e2e`       | All local-provider specs (IndexedDB + sync remotes) | pr.yml, main, e2e-pr (manual) |
+| `e2e`       | All local-provider specs (IndexedDB + sync remotes) | main, e2e-pr (manual)         |
 | `e2e-pr`    | IndexedDB-only subset                          | e2e-pr (manual/debug)         |
 | `sync-live` | `e2e/live/**/*.spec.ts`                        | e2e-nightly, e2e-pr (manual)  |
 
@@ -164,10 +164,13 @@ All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 
 # Full PR CI mirror — parallel local gate; mandatory before merge/handoff after broad remote failure
-WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build → full local-provider e2e
+WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build (no browser e2e)
+
+# Explicit full browser validation for high-risk PRs
+task ci:pr:e2e                      # full local-provider web e2e + extension e2e
 
 # E2e projects
-task web:test:e2e                   # full local-provider e2e (PR/main gate)
+task web:test:e2e                   # full local-provider e2e (main gate; explicit on PRs)
 task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
 
 # WASM tests
@@ -211,7 +214,7 @@ exported.
 
 ## Local vs remote CI
 
-**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview, and a successful `github-pages` deployment status for the PR head SHA — no toolchain image push). PR coverage always checks the current `nook-core + nook-auth2` artifact against the floor; the expensive base-worktree coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs changed, otherwise the current coverage artifact is reused as the base comparison. Main pushes the commit-tagged toolchain image after green verify and deploys the active development channel to Cloudflare Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages for stable `nokey.sh`, and publishes the GitHub Release only after deployment succeeds. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
+**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner and pulls the toolchain Docker image from GHCR. PR workflow runs **`task ci:pr`** (verify, web build, no browser e2e, Cloudflare preview, and a successful `github-pages` deployment status for the PR head SHA — no toolchain image push). PR coverage always checks the current `nook-core + nook-auth2` artifact against the floor; the expensive base-worktree coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs changed, otherwise the current coverage artifact is reused as the base comparison. Main runs the full local-provider and extension e2e suites, invokes `ci-fix` on failure, pushes the commit-tagged toolchain image after green verify, and deploys the active development channel to Cloudflare Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages for stable `nokey.sh`, and publishes the GitHub Release only after deployment succeeds. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit failures.
 
 Main's toolchain publish must authenticate immediately before the GHCR
 `toolchain-push` bake. Do not assume a prior Docker login from setup is still
@@ -239,7 +242,7 @@ After targeted fixes pass and the iteration is ready for final validation, push/
 **Agent efficiency rules:**
 
 1. **Before long final local checks** — push/open/update the PR once the iteration is functionally complete so remote CI can start.
-2. **Parallel local gate** — run `task check` minimum; add `task web:test:e2e` or `task ci:pr` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
+2. **Parallel local gate** — run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e` or `task ci:pr:e2e` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
 3. **After any remote CI failure** — read test output and static-analysis errors,
    then **persisted app logs** (see below), fix locally (prefer single-spec e2e
    while iterating), push the completed fix, then run the required local gate
@@ -364,9 +367,9 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** run `task ci:pr` (or `task web:test:e2e` for the full local-provider suite) before merge when changing web vault/sync flows.
+3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI and main both run full local-provider **e2e**; nightly runs **sync-live**.
+5. PR CI omits browser e2e; main runs full local-provider and extension **e2e**; nightly runs **sync-live**. Main and nightly failures invoke `ci-fix`.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
 <!-- agent-implement docker smoke -->

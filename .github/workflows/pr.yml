@@ -1,6 +1,6 @@
-# Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
-# Toolchain publish runs on main only (ci:main:publish). PR and main CI run full local-provider e2e;
-# nightly runs sync-live.
+# Pull requests: pull toolchain cache, verify/build in one container, deploy preview.
+# Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
+# and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
@@ -42,7 +42,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and build preview
+      - name: Verify and build preview (no browser e2e)
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
         env:
           CI: true

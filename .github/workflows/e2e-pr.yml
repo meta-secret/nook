@@ -1,7 +1,7 @@
 # Manually run Playwright e2e against a pull request branch.
 #
-# PR CI (pr.yml) runs full local-provider e2e automatically via ci:pr:e2e. Main CI also runs full e2e
-# after merge; nightly runs sync-live. Use this workflow to re-run or debug on a PR branch.
+# PR CI intentionally omits browser e2e. Main runs the full suite after merge and nightly runs
+# sync-live. Use this workflow for explicit pre-merge validation or debugging on a PR branch.
 # Inputs:
 #   pr_number — PR to checkout (refs/pull/<n>/head)
 #   suite     — e2e-pr, e2e, sync-live, or all

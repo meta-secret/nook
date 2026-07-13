@@ -217,7 +217,8 @@ task web:test:e2e:pr       # fast Playwright subset (IndexedDB / local provider)
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
 task extension:build       # browser extension package
-task ci:pr                 # local mirror of the PR CI gate
+task ci:pr                 # fast local mirror of the PR CI gate (no browser e2e)
+task ci:pr:e2e             # explicit full web + extension e2e validation
 ```
 
 Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or

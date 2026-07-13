@@ -38,7 +38,7 @@ Default PR-first loop:
 
 ## Testing strategy — parallel final validation
 
-**GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, run the full prepared test set (`task ci:pr` on PRs). Expect **5+ minutes** per run plus queue time. A failing fmt, clippy, unit test, or e2e spec burns that entire cycle — do not use remote CI as the primary debug loop.
+**GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, and run the PR verification set (`task ci:pr`). Browser e2e is excluded from PR CI and runs automatically on main. A failing fmt, clippy, unit test, or build still burns a remote cycle — do not use remote CI as the primary debug loop.
 
 **Local Docker is warm and fast.** The same Task commands run against **cached** toolchain images on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating.
 
@@ -52,7 +52,7 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 E2E_SPEC="e2e/connect.spec.ts e2e/login-unlock-flow.spec.ts" task web:test:e2e:file
 ```
 
-After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the relevant project or full PR mirror locally while remote CI runs (`task web:test:e2e:pr`, `task ci:pr`).
+After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the PR mirror plus any relevant e2e project locally while remote CI runs (`task ci:pr`, `task web:test:e2e:pr`, or `task ci:pr:e2e`).
 
 Default agent flow:
 
@@ -60,7 +60,7 @@ Default agent flow:
    the PR title/scope before editing.
 2. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
 3. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
-4. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
+4. **Validate locally in parallel** — immediately run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e:pr` or `task ci:pr:e2e` when web/vault/sync flows change.
 5. **Monitor remote CI and Codex review in parallel** — watch checks and automatic Codex reviews on PR open and every push while local validation runs; use `@codex review` only when automatic review does not run or a one-off focus is needed. See [code-review.md](code-review.md).
 6. **On any local or remote failure** — read **app logs** (`nook-app-logs.json` attachment,
    `fetchAppLogs`, or `/app-logs`) → fix locally (prefer single-spec e2e while
@@ -200,7 +200,8 @@ branch/PR and run the relevant project or full PR mirror while remote CI runs:
 
 ```bash
 task web:test:e2e                # full local-provider e2e project
-task ci:pr                       # full PR mirror; mandatory after a prior CI failure
+task ci:pr:e2e                  # explicit full web + extension e2e
+task ci:pr                       # PR mirror without browser e2e; mandatory after a prior PR CI failure
 ```
 
 ```text
@@ -209,7 +210,7 @@ implement → fix → E2E_SPEC=… task web:test:e2e:file   (fast debug loop)
            → task check / web:test:e2e / task ci:pr     (parallel with remote CI)
 ```
 
-Add `task web:test:e2e` or `task ci:pr` to the parallel local gate when the
+Add `task web:test:e2e` or `task ci:pr:e2e` to the parallel local gate when the
 change touches vault sync, login/unlock, multi-step web flows, or Playwright
 helpers. Skip e2e for isolated Rust-only or docs-only changes.
 
@@ -221,12 +222,12 @@ helpers. Skip e2e for isolated Rust-only or docs-only changes.
 gh run view <run-id> --log-failed   # CI job output
 # For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
-task ci:pr                          # full PR mirror
+task ci:pr                          # full PR mirror (no browser e2e)
 # fix, push the completed fix, and run the local gate while CI refreshes
 gh pr checks <number> --watch
 ```
 
-`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy). Toolchain publish is main-only (`task ci:main:publish`).
+`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. Toolchain publish and the automatic full browser gate are main-only (`task ci:main:publish`).
 
 E2e helpers when debugging web flows:
 
@@ -251,7 +252,7 @@ See [pull-requests.md § Local checks](pull-requests.md#5-local-checks) and [ci-
 
 Push once the current iteration is functionally complete and ready for final
 validation. Then run the local gate immediately while monitoring remote CI.
-Include scoped e2e or `task ci:pr` when the touch surface warrants it (see step
+Include scoped e2e or `task ci:pr:e2e` when the touch surface warrants it (see step
 5).
 
 ```bash
