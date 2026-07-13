@@ -5,7 +5,6 @@ import {
   disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  UI_TIMEOUT_MS,
   unlockVaultOnLogin,
 } from './helpers'
 
