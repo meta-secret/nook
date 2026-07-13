@@ -7,6 +7,38 @@ telemetry, session replay, or an agent bridge. Issue
 [#336](https://github.com/meta-secret/nook/issues/336) is the mandatory
 go/adjust/stop gate before any additional implementation.
 
+## Purpose and completion contract
+
+**AI-debug mode exists to fix bugs.** Annotation is the developer's input to a
+bug-fixing workflow; it is not the final deliverable. A successful annotation
+handoff obligates the agent to continue from evidence to implementation unless
+the developer explicitly asks for diagnosis only.
+
+The workflow is not complete when the agent has merely:
+
+- received or summarized the annotations;
+- identified the affected component;
+- read the logs or diagnosed the root cause; or
+- described a possible fix.
+
+For every submitted annotation, the agent must:
+
+1. reproduce or otherwise verify the reported behavior from the captured
+   evidence;
+2. map it to the exact source and inspect the relevant sanitized application
+   logs;
+3. implement every in-scope fix instead of stopping at diagnosis;
+4. add or update behavior-focused tests that fail on the reported regression;
+   and
+5. commit, push, open or update the PR, and complete the repository's normal
+   validation workflow.
+
+The agent may stop without a code fix only when the developer explicitly asked
+for diagnosis/review only, or when a concrete permission, product-decision, or
+external-state blocker makes the fix impossible within the authorized scope.
+In that case, report the exact blocker and the remaining work. Difficulty,
+uncertainty, or having already explained the bug are not blockers.
+
 ## What the pilot proves
 
 The developer should be able to reproduce a problem in local Nook, ask the
@@ -72,6 +104,10 @@ origins, aborts non-local HTTP and WebSocket traffic through a Playwright contex
 route, limits console forwarding to warnings/errors, and exposes a narrow tool
 allowlist. `browser_network_requests`, storage inspection/export, file upload,
 and unrestricted Playwright execution are not available to the pilot agent.
+The isolated MCP browser also intercepts the native directory chooser, so
+`showDirectoryPicker()` cannot complete there. Nook reports that boundary in
+the local-folder setup UI; connect a local backup folder from a regular browser
+instead.
 
 ### Concurrent AI-debug sessions
 

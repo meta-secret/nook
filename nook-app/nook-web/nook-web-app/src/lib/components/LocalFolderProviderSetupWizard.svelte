@@ -44,11 +44,17 @@
         error instanceof Error
           ? error.message
           : vault.t('auth_storage.local_folder_choose_err')
-      folderError = message.includes(
-        'Local folder backup is not supported in this browser',
-      )
-        ? vault.t('provider_setup.local_folder_unsupported_browser')
-        : message
+      if (message.includes('Page.setInterceptFileChooserDialog')) {
+        folderError = vault.t(
+          'provider_setup.local_folder_automated_browser_error',
+        )
+      } else if (
+        message.includes('Local folder backup is not supported in this browser')
+      ) {
+        folderError = vault.t('provider_setup.local_folder_unsupported_browser')
+      } else {
+        folderError = message
+      }
     } finally {
       folderBusy = false
     }

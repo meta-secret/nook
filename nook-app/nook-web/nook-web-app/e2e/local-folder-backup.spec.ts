@@ -169,6 +169,20 @@ async function installLocalFolderPickerMock(page: Page) {
   })
 }
 
+async function installInterceptedLocalFolderPickerMock(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'showDirectoryPicker', {
+      configurable: true,
+      value: async () => {
+        throw new DOMException(
+          "Failed to execute 'showDirectoryPicker' on 'Window': Intercepted by Page.setInterceptFileChooserDialog().",
+          'InvalidStateError',
+        )
+      },
+    })
+  })
+}
+
 async function installUnsupportedLocalFolderPickerMock(page: Page) {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'showDirectoryPicker', {
@@ -234,6 +248,29 @@ async function connectLocalFolderProviderFromSettings(page: Page) {
 }
 
 test.describe('local folder backup provider', () => {
+  test('explains the AI-debug browser directory-picker boundary', async ({
+    page,
+  }) => {
+    await installPasskeyMock(page)
+    await installInterceptedLocalFolderPickerMock(page)
+    await page.goto('/app/')
+    await clearBrowserVault(page)
+    await page.reload()
+    await connectLocalVault(page)
+
+    await openStorageSettings(page)
+    await expandSettingsSection(page, 'storage')
+    await page.getByTestId('add-provider-btn').first().click()
+    await page.getByTestId('provider-option-local-folder').click()
+    await page.getByTestId('settings-choose-local-folder-btn').click()
+    await expect(page.getByTestId('settings-local-folder-error')).toContainText(
+      'automated AI-debug browser',
+    )
+    await expect(page.getByTestId('settings-local-folder-error')).toContainText(
+      'regular browser',
+    )
+  })
+
   test('disables local folder backup when writable folders are unavailable', async ({
     page,
   }) => {

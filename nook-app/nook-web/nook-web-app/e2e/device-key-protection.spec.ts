@@ -181,6 +181,11 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
       0,
     )
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toHaveCount(0)
+    await page.getByTestId('sentinel-onboarding-create-keys').click()
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

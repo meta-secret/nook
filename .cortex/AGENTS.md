@@ -2,6 +2,21 @@
 
 This is the system of record and entry point for all AI agents working in this repository. Follow the links below for deep context on Nook's architecture, design, and standards.
 
+## ⛔ Non-negotiable: AI-debug mode exists to fix bugs
+
+**The purpose of AI-debug mode is to turn developer annotations into verified
+code fixes.** Collecting screenshots, reading logs, explaining a root cause, or
+proposing a plan is not completion. Unless the developer explicitly requests a
+diagnosis-only session, every submitted annotation is a request to investigate
+and fix the reported behavior.
+
+After annotation, the agent must map the evidence to the implementation,
+inspect the relevant app logs, implement every in-scope fix, add behavior-focused
+coverage, and carry the change through the normal commit, PR, and validation
+workflow. Stop without a fix only for a concrete blocker that cannot be resolved
+inside the authorized scope, and report that blocker precisely. Full contract:
+[references/ai-debugging.md § Purpose and completion contract](references/ai-debugging.md#purpose-and-completion-contract).
+
 ## ⛔ Non-negotiable: squash merge every PR
 
 **All pull requests merged into `main` MUST be squash-merged** (GitHub: **Squash and merge**; CLI: `gh pr merge --squash`). One PR = one commit on `main`. Merge commits and rebase merges are **forbidden**. Full policy: [rules.md §6](rules.md#6-git--pull-request-workflow).
