@@ -114,6 +114,7 @@ test.describe('legal pages', () => {
     await expect(
       page.getByRole('button', {
         name: 'AES-256-GCM authenticated encryption',
+        exact: true,
       }),
     ).toBeVisible()
 
