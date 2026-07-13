@@ -47,8 +47,9 @@ When the user says `Use <skill-name> and refactor <scope>`:
 2. Search the requested scope for the problem pattern.
 3. Refactor to the preferred pattern without unrelated cleanup.
 4. Add or update tests when behavior or a durable invariant changes.
-5. Run focused validation first. For implementation tasks, follow
-   [coding-bro](../coding-bro/SKILL.md) and finish with `task check` before push.
+5. Use focused development validation as needed. For implementation tasks,
+   follow [coding-bro](../coding-bro/SKILL.md): commit and push the coherent
+   change first, then run the required local gate in parallel with PR checks.
 
 ## Output
 

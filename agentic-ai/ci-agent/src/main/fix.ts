@@ -2,6 +2,7 @@ import { chdir } from "node:process";
 
 import { loadConfig } from "./config.js";
 import {
+  assertNoPendingPrFeedback,
   branchExistsOnOrigin,
   createFixPr,
   createOctokit,
@@ -83,6 +84,7 @@ export async function runCiFix(): Promise<void> {
 
   const fixLabel = process.env.CI_FIX_LABEL?.trim() || "main CI";
   await waitForPrChecks(octokit, repoRef, prNumber, pollMs);
+  await assertNoPendingPrFeedback(octokit, repoRef, prNumber);
   await squashMergePr(octokit, repoRef, prNumber, fixBranch);
   log.info(`Done — merged PR #${prNumber} (fix for ${fixLabel} run ${runId})`);
 }

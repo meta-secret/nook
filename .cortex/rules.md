@@ -154,8 +154,39 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Linear `main` history is a project requirement, not a preference.
 
+> ## ⛔ NEVER WAIT FOR EXTERNAL REVIEWS OR CHECKS
+>
+> Applicable repository-owned PR test checks are the only remote checks agents
+> wait for: normally `PR / Verify and preview`, plus `Web research / Build and
+> deploy research catalog` when web-research paths change. Codex review is explicitly optional and is not a
+> merge gate. Agents must never request, poll, monitor, or delay work for Codex,
+> Claude, Cursor, CodeRabbit, or any other external review, check, deployment,
+> or service. Once Nook's own applicable PR test checks pass, do not add a grace period for
+> external feedback.
+>
+> Before merge or handoff, inspect comments and findings that already exist and
+> address every active actionable item, regardless of whether it came from a
+> human or an external service. Reply with the fix, validation, or no-change
+> rationale, then proceed without waiting for another response, re-review, or
+> external status transition. Every external-service review comment already
+> present must be inspected; optional review never means optional handling of
+> feedback that arrived.
+
+> ## ⛔ PUSH BEFORE FINAL CHECKS — RUN LOCAL AND PR CHECKS IN PARALLEL
+>
+> Once a change or fix is coherent enough to check, the mandatory sequence is:
+> **commit → push/open or update the PR → start local validation while the
+> applicable repository-owned PR workflows run**. Never finish `task check`, a
+> full test suite, build, e2e, or another final gate before pushing the checkable
+> change; serializing local then remote validation wastes wall-clock time.
+>
+> Fast focused commands needed during implementation are allowed before the
+> commit. Required final validation and post-fix validation run on the latest
+> already-pushed head. A local failure still must be fixed, committed, and pushed
+> before rerunning the required local gate in parallel with refreshed PR checks.
+
 - **Never push directly to `main`.** All changes land on `main` only through merged pull requests.
-- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, push/open/update PR at the final-validation boundary, run local and remote checks in parallel, fix loop, squash merge.
+- **Default workflow:** Follow [workflows/coding-bro.md](workflows/coding-bro.md) for every implementation task — fetch, branch from `origin/main`, implement, commit and push/open/update the PR before required final checks, run local validation while Nook's applicable PR test checks run, fix failures, address comments already present, and squash merge. Never wait for external services.
 - **Always use a feature branch.** Branch from `main`, commit there, and push the branch — not `main`.
 - **Always open a pull request.** After pushing a branch, create a PR with a summary and test plan; do not merge or push to `main` yourself unless the user explicitly asks.
 - **Squash merge when closing a PR.** When merging (yourself or via `gh`), use **Squash and merge** only:
@@ -163,4 +194,4 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   gh pr merge <number> --squash
   ```
   Never use `gh pr merge --merge` or `gh pr merge --rebase`.
-- **Verify before requesting review.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head before merge or handoff.
+- **Verify without requesting review.** After opening or updating the PR at the final-validation boundary, run `task format` and `task check` on the latest pushed head before merge or handoff. Do not request an external review.

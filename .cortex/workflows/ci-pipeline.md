@@ -10,7 +10,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait for checks → **squash merge** (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
+| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Issue labeled `ai-agent`, or manual prompt | Cursor SDK implement → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → **squash merge** or manual handoff (GitHub-hosted `ubuntu-latest`, not self-hosted `nook`) | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
 | [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)           | Manual                  | Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`)                 | Only for `sync-live`                      |
 | [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Prune unused Docker data and anonymous volumes on the self-hosted Nook runners (`runs-on: nook` only) | No                                        |
 
@@ -234,6 +234,13 @@ comparison. Use
 remote CI as the **PR validation gate** — not as the primary
 place to discover fmt/clippy/unit/e2e failures.
 
+Applicable repository-owned PR checks are the only remote checks an agent may
+wait for: `PR / Verify and preview`, plus `Web research / Build and deploy
+research catalog` when web-research paths change.
+External reviews and checks (Codex, Claude, Cursor, CodeRabbit, or any other
+service) are never requested, polled, or awaited. Existing actionable comments
+must still be addressed, but no external status may delay merge or handoff.
+
 **GitHub-hosted jobs are isolated but cold.** Main, release, scheduled/manual e2e,
 research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
 the toolchain cache from GHCR. Main pushes the commit-tagged toolchain image
@@ -258,7 +265,7 @@ domain exists, verifies the preconfigured Cloudflare DNS CNAME and HTTPS
 response, and records a `development` deployment status whose URL is
 `https://dev.nokey.sh/`.
 
-**Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is functionally complete, push/open/update the PR before the long final local gate, then run local validation while remote CI runs.
+**Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
 
 **E2e debug — one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
 
@@ -336,7 +343,7 @@ do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
 
 ## CI agent (`ci-fix` / `ci-agent:implement`)
 
-Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait for checks → squash merge. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for labeled issues / manual prompts (see below).
+Both [`main.yml`](../../.github/workflows/main.yml) and [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) run a **`ci-fix`** job on failure: Cursor SDK agent → fix branch → PR → wait only for applicable repository-owned PR checks → final existing-feedback audit → squash merge or manual handoff when feedback remains. Nightly uses `.github/prompts/ci-fix-nightly-agent.md` and `CI_FIX_LABEL=nightly e2e`; main uses the default main-CI prompt. [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the same harness via **`task ci-agent:implement`** for labeled issues / manual prompts (see below).
 
 **Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire `pull_request` workflows for PRs opened with the default Actions token (`github-actions[bot]`). Those PRs also sit behind branch protection as bot-authored and need a manual approval you cannot self-grant. The ci-fix job checks out and pushes with `NOOK_GITHUB_PAT` so the fix PR is attributed to the PAT owner, `pr.yml` runs, and squash merge can proceed without a manual approve step (assuming the PAT owner can merge per branch rules).
 
@@ -373,7 +380,7 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 | Level     | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`                                                                          |
 | Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
 
-Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). The harness's local/default agent timeout is 90m, but every production Actions agent job explicitly sets `CI_AGENT_TIMEOUT_MS=21600000` and `timeout-minutes: 360`, matching GitHub's six-hour hosted-runner ceiling so the harness does not interrupt the agent earlier. The six-hour job limit covers setup, the agent run, PR creation, and check polling together, so GitHub remains the ultimate cutoff. PR check wait timeout: `CI_FIX_CHECKS_TIMEOUT_MS` (default 45m) — `waitForPrChecks` must not poll forever.
+Set `CI_AGENT_LOG_LEVEL=DEBUG` in the job env to include step/turn traces (`step started`, `turn ended`). Tool starts, shell output, and command results are always logged at **INFO**. Heartbeat interval: `CI_AGENT_HEARTBEAT_MS` (default 60s). The harness's local/default agent timeout is 90m, but every production Actions agent job explicitly sets `CI_AGENT_TIMEOUT_MS=21600000` and `timeout-minutes: 360`, matching GitHub's six-hour hosted-runner ceiling so the harness does not interrupt the agent earlier. The six-hour job limit covers setup, the agent run, PR creation, and Nook PR-check polling together, so GitHub remains the ultimate cutoff. PR check wait timeout: `CI_FIX_CHECKS_TIMEOUT_MS` (default 45m) — `waitForPrChecks` derives applicable repository-owned checks from changed paths, filters exact GitHub Actions check names on the current head SHA, and never includes external checks.
 
 The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes. Without an explicit exit, the Cursor SDK local executor can leave child processes and open handles that keep the Node event loop alive and the `ci-fix` job running long after the agent merges its PR.
 
@@ -390,7 +397,7 @@ Smoke coverage: [`.github/workflows/ci-agent-smoke.yml`](../../.github/workflows
 
 Opt-in only: create milestones/epics/sub-issues first, then assign `ai-agent` to the focused issue you want executed. Opening an issue (even with labels pre-selected) does not start the job unless GitHub emits a `labeled` event for `ai-agent`. The workflow does **not** auto-create the label — maintainers create it once (`gh label create ai-agent` or the GitHub UI).
 
-Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + docker.sock) → push branch → open PR → comment on the issue with the PR URL (issue runs) → wait for checks → **squash merge** → optional merged comment. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt: [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
+Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + docker.sock) → push branch → open PR → comment on the issue with the PR URL (issue runs) → wait only for applicable repository-owned PR checks → perform one final audit of feedback already present → **squash merge** when clear or stop for manual feedback handling → optional merged comment. The audit never waits for new feedback or a re-review. Same secrets as ci-fix: `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt: [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 
 ## Agent checklist when touching CI or e2e
 
