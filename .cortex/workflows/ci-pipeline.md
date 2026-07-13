@@ -116,6 +116,13 @@ GitHub-hosted `ubuntu-latest`, where their six-hour background work cannot
 exhaust or block the Nook machine. Other scheduled, main, release, manual e2e,
 and research jobs also remain GitHub-hosted.
 
+The web dependency stage uses a private (non-locking) BuildKit mount for Bun's
+package cache. Do not change it to `sharing=locked`: superseded PR solves share
+the runner daemon, and a canceled cache-mount owner can otherwise serialize or
+stall unrelated PR builds. Private mounts also avoid concurrent writers to the
+same cache directory. The frozen lockfile and Docker layer remain the
+reproducibility boundary.
+
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
 | `pr.yml` | `nook` | Fast, cache-warm verification and preview for developer-critical PRs |
