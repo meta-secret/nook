@@ -53,6 +53,7 @@
     onCreateDeviceVault,
     onStartSentinelGenesis,
     onCreateSentinelGenesisPublicKeyAnnouncement,
+    onCreateSentinelGenesisParticipantResponse,
     onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
@@ -93,6 +94,9 @@
     onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
       | string
       | Promise<string>
+    onCreateSentinelGenesisParticipantResponse?: (
+      requestPayload: string,
+    ) => string | Promise<string>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
@@ -239,8 +243,8 @@
       onAddSentinelGenesisParticipantResponse={(payload) =>
         vault.addSentinelGenesisParticipantResponse(payload)}
       onFinalizeSentinelGenesis={() => vault.finalizeSentinelGenesis()}
-      onCreateSentinelGenesisParticipantResponse={(payload) =>
-        vault.createSentinelGenesisParticipantResponse(payload)}
+      onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
+        ((payload) => vault.createSentinelGenesisParticipantResponse(payload))}
       onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelGenesisPublicKeyAnnouncement ??
         (() => vault.createSentinelGenesisPublicKeyAnnouncement())}
       onRememberSentinelGenesisRequest={(payload) =>

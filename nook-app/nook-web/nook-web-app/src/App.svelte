@@ -41,6 +41,7 @@
   } from '$lib/extension-connect'
   import type { VaultItemType } from '$lib/nook'
   import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
+  import { consumeSentinelGenesisRequestFromLocation } from '$lib/sentinel-genesis-link'
 
   const vault = new VaultState()
   type ColorMode = 'light' | 'dark'
@@ -82,8 +83,7 @@
   )
   let sentinelInvitationRequest = $state(
     typeof window !== 'undefined'
-      ? (new URLSearchParams(window.location.search).get('sentinel-request') ??
-          '')
+      ? consumeSentinelGenesisRequestFromLocation()
       : '',
   )
   let sentinelOnboardingPackage = $state(
@@ -100,8 +100,8 @@
     extensionConnectRequest = extensionConnectRequestFromLocation(
       window.location,
     )
-    sentinelInvitationRequest =
-      new URLSearchParams(window.location.search).get('sentinel-request') ?? ''
+    const invitationRequest = consumeSentinelGenesisRequestFromLocation()
+    if (invitationRequest) sentinelInvitationRequest = invitationRequest
     const onboardingPackage = consumeSentinelOnboardingFromLocation()
     if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
   }
@@ -284,6 +284,7 @@
     | { kind: 'simple'; label: string }
     | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
     | { kind: 'sentinel-participant-key' }
+    | { kind: 'sentinel-participant-response'; requestPayload: string }
     | { kind: 'sentinel-onboarding'; packageJson: string }
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
   let pendingExistingVaultUnlock = $state(false)
@@ -324,6 +325,20 @@
     return vault.createSentinelGenesisPublicKeyAnnouncement()
   }
 
+  async function handleCreateSentinelParticipantResponse(
+    requestPayload: string,
+  ): Promise<string> {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = {
+        kind: 'sentinel-participant-response',
+        requestPayload,
+      }
+      return ''
+    }
+    pendingVaultCreation = undefined
+    return vault.createSentinelGenesisParticipantResponse(requestPayload)
+  }
+
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreation = { kind: 'sentinel-onboarding', packageJson }
@@ -342,7 +357,11 @@
       void vault.createLocalVaultWithDeviceKeys(pending.label)
       return
     }
-    if (pending.kind === 'sentinel-participant-key') return
+    if (
+      pending.kind === 'sentinel-participant-key' ||
+      pending.kind === 'sentinel-participant-response'
+    )
+      return
     if (pending.kind === 'sentinel-onboarding') {
       void handleAcceptSentinelOnboarding(pending.packageJson)
       return
@@ -583,6 +602,7 @@
                 onCreateDeviceVault={handleCreateDeviceVault}
                 onStartSentinelGenesis={handleStartSentinelGenesis}
                 onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}
+                onCreateSentinelGenesisParticipantResponse={handleCreateSentinelParticipantResponse}
                 onRemoveProvider={(id) => vault.removeProvider(id)}
               />
               <VaultStatusBar

@@ -57,6 +57,15 @@ flowchart TB
 
 Both keys are generated together on genesis (`generate_vault_keys()`).
 
+For Sentinel genesis, the owner shares a `#sentinel-request=` invitation URL
+containing only the signed public ceremony request. A participant opens that
+URL on the device being enrolled, explicitly connects its locally protected
+device identity, and returns a `#sentinel-response=` URL containing the signed,
+session-bound public-key response. Rust validates and normalizes both URL
+payloads; TypeScript only transports them and drives the browser UI. No vault is
+persisted until every configured participant response has been verified and
+the ceremony can be finalized atomically.
+
 ### 2.1 Local device-key protection
 
 Before any provider credential or device-key operation, the browser runs

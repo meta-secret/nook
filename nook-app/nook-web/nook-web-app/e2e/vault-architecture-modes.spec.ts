@@ -397,8 +397,15 @@ test.describe('vault architecture modes', () => {
   test('opens participant response only from an owner invitation URL', async ({
     page,
   }) => {
+    const ownerRequest = JSON.stringify({
+      version: 1,
+      sessionId: 'abcdefghijk',
+      policy: { participantCount: 3, threshold: 2 },
+      initiatorDeviceId: '0123456789abcdef',
+      initiatorSigningPublicKey: 'ab'.repeat(32),
+    })
     await page.goto(
-      `/app/?sentinel-request=${encodeURIComponent('owner-issued-request')}`,
+      `/app/?sentinel-request=${encodeURIComponent(ownerRequest)}`,
     )
     await expect(
       page.getByTestId('sentinel-genesis-participant-step'),
@@ -406,7 +413,10 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('get-started-path-chooser')).toHaveCount(0)
     await expect(
       page.getByTestId('sentinel-genesis-share-request-input'),
-    ).toHaveValue('owner-issued-request')
+    ).toHaveValue(ownerRequest)
+    await expect(
+      page.getByTestId('sentinel-genesis-connect-device'),
+    ).toBeVisible()
   })
 
   test('disables providers that cannot satisfy shared replication', async ({

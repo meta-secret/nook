@@ -72,9 +72,11 @@ item, add a corrected copy and delete the old one.
 1. Choose **Create Simple vault** or **Create Sentinel vault**. Sentinel member
    devices enter only through an owner-issued invitation.
 2. Creating a **Simple** vault protects this browser with a passkey (WebAuthn
-   PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup; after
-   atomic creation, the owner connects a sync provider and sends each member a
-   distinct device-addressed onboarding QR/link.
+   PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup: the owner
+   shares an invitation URL, each participant opens it and connects a protected
+   device, then returns the signed response URL. After atomic creation, the
+   owner connects a sync provider and sends each member a distinct
+   device-addressed onboarding QR/link.
    Member devices connect only through those owner-issued invitations.
 3. Secrets are encrypted in Rust/WASM before anything is written to storage.
 4. The browser keeps an encrypted local copy. Sync providers are optional
