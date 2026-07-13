@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-# Slim nook-web image: web-base (Bun/Node/Task/Playwright), cached node_modules, and the tiny
+# Slim nook-web image: web-base (Bun/Node/Task, no browser), cached node_modules, and the tiny
 # host-exported WASM/coverage artifact directory. It never inherits the Rust toolchain or target/.
 # Workspace source is still sealed into the image; there is no runtime bind mount on the common path.
 #

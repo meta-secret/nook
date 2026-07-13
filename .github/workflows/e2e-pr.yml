@@ -72,7 +72,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (format, wasm, verify, web)
-        run: task ci:main:build VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
+        run: task ci:main:build SETUP_TARGET=nook-web-e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
         env:
           CI: true
 

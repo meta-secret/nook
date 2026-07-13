@@ -61,7 +61,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check, build, e2e, and push toolchain
+      - name: Preflight, check, build, e2e, and push toolchain
         run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=prod
         env:
           CI: true

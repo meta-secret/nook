@@ -28,11 +28,13 @@ vars:
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
+  DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
   PREPARE_GROUP: '{{default "prepare" .PREPARE_GROUP}}'
+  SETUP_TARGET: '{{default "nook-web" .SETUP_TARGET}}'
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
@@ -82,7 +84,8 @@ tasks:
     # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
     # generated WASM package + coverage files to a commit-scoped, invocation-isolated host directory.
     # Phase two consumes that tiny directory to build the web image; builder-wasm is never a
-    # parent/context of nook-web.
+    # parent/context of nook-web. Do not retry the whole solve here: registry/session failures can
+    # take minutes to surface, so a retry loop makes a failed PR occupy the runner indefinitely.
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
@@ -96,6 +99,8 @@ tasks:
       - >-
         bash -c 'set -euo pipefail;
         commit_id="${GIT_COMMIT_ID:?task setup requires GIT_COMMIT_ID}";
+        setup_target="{{.SETUP_TARGET}}";
+        case "$setup_target" in nook-web|nook-web-e2e) ;; *) echo "Unsupported SETUP_TARGET=$setup_target" >&2; exit 2 ;; esac;
         if [ "${#commit_id}" -ne 40 ] || [[ "$commit_id" == *[!0-9a-f]* ]]; then
           echo "task setup: GIT_COMMIT_ID must be a full lowercase git SHA" >&2;
           exit 1;
@@ -110,20 +115,13 @@ tasks:
           rmdir "$artifacts_parent" 2>/dev/null || true;
         };
         trap cleanup EXIT;
-        for attempt in 1 2 3; do
-          rm -rf "$artifacts_dir";
-          mkdir -p "$artifacts_dir";
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" {{.PREPARE_GROUP}} &&
-             artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)" &&
-             echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB" &&
-             { test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; }; } &&
-             env WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 3 ]; then exit 1; fi;
-          echo "task setup: bake attempt $attempt failed; retrying in 5s..." >&2;
-          sleep 5;
-        done'
+        rm -rf "$artifacts_dir";
+        mkdir -p "$artifacts_dir";
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" {{.PREPARE_GROUP}};
+        artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
+        echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
+        test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
+        env WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
 
   setup:rust:
     desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.

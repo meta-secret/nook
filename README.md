@@ -218,6 +218,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 ```sh
 task check                 # format, lint, tests, coverage floor, builds
+task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
 task web:dev               # local Vite development server
 task web:test              # web unit tests

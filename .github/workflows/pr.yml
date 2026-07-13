@@ -1,4 +1,5 @@
-# Pull requests: pull toolchain cache, verify/build in one container, deploy preview.
+# Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
+# build and deploy the preview. Only browser e2e is excluded.
 # Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
 # and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
@@ -45,10 +46,18 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and build preview (no browser e2e)
-        run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
+      # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
+      # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
+      # path and makes a cold Rust cache slower than the former combined build.
+      - name: Preflight, Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
+        run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
         env:
           CI: true
+
+      # The verified image already contains the Rust coverage artifacts produced by the graph
+      # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.
+      - name: Export Rust coverage from verified image
+        run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
 
       - name: Deploy to Cloudflare Pages
         id: deploy
@@ -62,7 +71,7 @@ jobs:
           # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
           # print the container output (it holds the real error) before failing the step.
           set +e
-          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=prod 2>&1)"
+          out="$(task ci:pr:deploy-preview VITE_BASE=/ WASM_BUILD_MODE=dev 2>&1)"
           status=$?
           set -e
           echo "$out"
@@ -148,11 +157,6 @@ jobs:
               description: 'Cloudflare Pages preview deployed',
               auto_inactive: false,
             })
-
-      - name: Export PR nook-core/auth coverage
-        run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
-        env:
-          CI: true
 
       - name: Detect nook-core/auth coverage input changes
         id: coverage-inputs
@@ -299,7 +303,7 @@ jobs:
           task docker:coverage:export \
             REPO_ROOT="$PWD/../nook-base-coverage" \
             COVERAGE_OUT_DIR="$base_coverage_out" \
-            WASM_BUILD_MODE=prod
+            WASM_BUILD_MODE=dev
 
       - name: Reuse current coverage as base
         if: steps.coverage-inputs.outputs.base_coverage_required == 'false'

@@ -7,5 +7,4 @@
 FROM web-base AS web-deps
 
 COPY nook-app/nook-web/nook-web-app/package.json nook-app/nook-web/nook-web-app/bun.lock ./nook-app/nook-web/nook-web-app/
-RUN --mount=type=cache,target=/opt/nook/bun-install-cache,sharing=locked \
-    cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
+RUN cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
