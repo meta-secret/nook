@@ -4,7 +4,6 @@ import {
   createLocalVaultOnLogin,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   readLocalVaultYamlFromIdb,
-  unlockVaultOnLogin,
 } from './helpers'
 
 async function readIdbKey(
@@ -124,7 +123,6 @@ test.describe('source vault import to event log', () => {
     expect(await readIdbKey(page, 'vault', 'event_log:mode')).toBeUndefined()
 
     await authorizeDeviceProtection(page)
-    await unlockVaultOnLogin(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

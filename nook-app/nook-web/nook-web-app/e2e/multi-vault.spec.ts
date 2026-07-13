@@ -221,8 +221,7 @@ test.describe('multi-vault on one browser profile', () => {
 
     for (let i = 0; i < 2; i += 1) {
       await page.getByTestId('header-lock-vault-btn').click()
-      await authorizeDeviceProtection(page)
-      await unlockVaultOnLogin(page, { storeId: storeB })
+      await authorizeDeviceProtection(page, { storeId: storeB })
       await expect(page.getByTestId('vault-panel')).toBeVisible()
       await expect(page.getByTestId('vault-switcher-trigger')).toBeVisible()
       await page.getByTestId('vault-switcher-trigger').click()
@@ -240,11 +239,7 @@ test.describe('multi-vault on one browser profile', () => {
         '[data-testid="vault-switcher-option"][data-store-id="' + storeA + '"]',
       )
       .click()
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await unlockVaultOnLogin(page)
+    await authorizeDeviceProtection(page, { storeId: storeA })
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     let activeYaml = await readLocalVaultYamlFromIdb(page)
@@ -257,11 +252,7 @@ test.describe('multi-vault on one browser profile', () => {
         '[data-testid="vault-switcher-option"][data-store-id="' + storeB + '"]',
       )
       .click()
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await unlockVaultOnLogin(page)
+    await authorizeDeviceProtection(page, { storeId: storeB })
     activeYaml = await readLocalVaultYamlFromIdb(page)
     expect(parseStoreId(activeYaml)).toEqual(storeB)
 

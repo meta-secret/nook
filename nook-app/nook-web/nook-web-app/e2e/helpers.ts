@@ -2481,11 +2481,31 @@ export async function selectLoginUnlockMethod(
 }
 
 /** Authorize the wrapped device identity after an explicit or idle lock. */
-export async function authorizeDeviceProtection(page: Page) {
+export async function authorizeDeviceProtection(
+  page: Page,
+  opts?: { storeId?: string },
+) {
+  const overlay = page.getByTestId('passkey-auth-overlay')
+  if (!(await overlay.isVisible())) {
+    const vaultPicker = page.getByTestId('login-vault-picker')
+    if (await vaultPicker.isVisible()) {
+      const option = opts?.storeId
+        ? page.locator(
+            `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
+          )
+        : page.getByTestId('login-vault-option').first()
+      await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await option.click()
+    }
+    const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+    await expect(unlockVaultButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await unlockVaultButton.click()
+    await expect(overlay).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  }
   const button = page.getByTestId('device-protection-unlock-btn')
   await expect(button).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await button.click()
-  await expect(page.getByTestId('login-gate')).toBeVisible({
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await waitForVaultOperationsIdle(page)

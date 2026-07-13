@@ -13,6 +13,19 @@ async function clickDeviceProtectionSetup(page: Page) {
   await setupButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 }
 
+async function openExistingVaultProtectionOverlay(page: Page) {
+  const overlay = page.getByTestId('passkey-auth-overlay')
+  await expect(overlay).toBeHidden()
+  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  await expect(unlockVaultButton).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await unlockVaultButton.click()
+  await expect(overlay).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
 async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -264,6 +277,7 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
     await page.getByTestId('header-lock-vault-btn').click()
+    await openExistingVaultProtectionOverlay(page)
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
     await expect(page.getByTestId('device-protection-unlock-btn')).toHaveText(
       'Continue with passkey',
@@ -273,12 +287,13 @@ test.describe('passkey device-key protection', () => {
     ).toBeHidden()
     await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
     await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.reload()
+    await openExistingVaultProtectionOverlay(page)
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
     await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
   test('reuses high-security device mode without showing it during vault naming', async ({
@@ -299,8 +314,9 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
 
     await page.getByTestId('header-lock-vault-btn').click()
+    await openExistingVaultProtectionOverlay(page)
     await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     await expect
       .poll(() =>
@@ -380,6 +396,7 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
     await page.getByTestId('header-lock-vault-btn').click()
+    await openExistingVaultProtectionOverlay(page)
     await expect(
       page.getByTestId('device-protection-pin-unlock-btn'),
     ).toBeVisible()
@@ -390,15 +407,16 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.reload()
+    await openExistingVaultProtectionOverlay(page)
     await expect(
       page.getByTestId('device-protection-pin-unlock-btn'),
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
   test('keeps setup recoverable after passkey cancellation', async ({
@@ -429,6 +447,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.reload()
+    await openExistingVaultProtectionOverlay(page)
 
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByTestId('device-protection-recovery-btn').click()

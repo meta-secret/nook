@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures'
 import {
+  authorizeDeviceProtection,
   createLocalVaultOnLogin,
   dismissSyncConflictIfVisible,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -178,7 +179,7 @@ test.describe('vault connect flow', () => {
     await expect(page.getByTestId('sync-providers-empty')).toBeVisible()
   })
 
-  test('returns to vault login after passkey authorization on reload', async ({
+  test('unlocks the vault after passkey authorization on reload', async ({
     page,
   }) => {
     await page.goto('/app/')
@@ -191,14 +192,15 @@ test.describe('vault connect flow', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     await page.reload()
-    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible({
-      timeout: UI_TIMEOUT_MS,
-    })
-    await page.getByTestId('device-protection-unlock-btn').click()
     await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
-    await expect(page.getByTestId('vault-panel')).not.toBeVisible()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
+    await authorizeDeviceProtection(page)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('login-gate')).not.toBeVisible()
   })
 
   test('stays locked after reload when user locked the vault', async ({
@@ -211,9 +213,10 @@ test.describe('vault connect flow', () => {
     })
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible({
+    await expect(page.getByTestId('login-gate')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
 
     await waitForPersistedAppLog(page, {
       scope: 'vault-session',
