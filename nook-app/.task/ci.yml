@@ -2,7 +2,7 @@ version: "3"
 
 tasks:
   ci:pr:
-    desc: PR CI — one container for format/verify/build (browser e2e runs on main).
+    desc: PR CI — Rust/WASM image validation, then one slim web container for format/verify/build (browser e2e runs on main).
     deps:
       - setup
     cmds:
@@ -23,7 +23,7 @@ tasks:
       - task: ci:pr:e2e
 
   ci:main:
-    desc: Main branch CI — one container for format/verify/build/web e2e/extension e2e (source + warm target/ baked in the nook-web image).
+    desc: Main CI — Rust/WASM image validation, then one slim web container for verify/build/e2e.
     deps:
       - setup
     cmds:

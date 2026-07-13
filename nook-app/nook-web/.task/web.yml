@@ -170,12 +170,14 @@ tasks:
   web:dev:
     desc: Start the Svelte dev server in Docker.
     deps:
-      - setup
+      - setup:rust:browser
     cmds:
       - task: docker:web:dev
 
   web:dev:fast:
     desc: Start the Svelte dev server in Docker with a no-opt wasm build (local iteration).
+    deps:
+      - setup:rust:browser
     cmds:
       - task: docker:web:dev:fast
 
@@ -185,9 +187,7 @@ tasks:
       - cd "{{.WEB_ROOT}}" && bun install --frozen-lockfile
 
   _web:build:
-    desc: Build the Svelte app.
-    deps:
-      - _wasm:build
+    desc: Build the Svelte app from the image-seeded WASM package.
     env:
       VITE_BASE: "{{.VITE_BASE}}"
     cmds:
@@ -227,23 +227,17 @@ tasks:
       - cd "{{.WEB_ROOT}}" && bun run lint
 
   _web:check:
-    desc: Run Svelte and TypeScript checks.
-    deps:
-      - _wasm:build
+    desc: Run Svelte and TypeScript checks against the image-seeded WASM package.
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run check
 
   _web:test:
-    desc: Run web unit tests.
-    deps:
-      - _wasm:build
+    desc: Run web unit tests against the image-seeded WASM package.
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run test
 
   _web:test:e2e:
     desc: Run full Playwright e2e suite.
-    deps:
-      - _wasm:build
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
@@ -281,8 +275,6 @@ tasks:
 
   _web:test:e2e:file:
     desc: Run one or more Playwright e2e spec files (E2E_SPEC; skips vite when dist is fresh).
-    deps:
-      - _wasm:build
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
@@ -306,8 +298,6 @@ tasks:
 
   _web:test:e2e:pr:
     desc: Fast Playwright e2e-pr with production build.
-    deps:
-      - _wasm:build
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
@@ -348,8 +338,6 @@ tasks:
 
   _web:test:e2e:sync-stub:
     desc: Legacy alias for _web:test:e2e (build + full local-provider project).
-    deps:
-      - _wasm:build
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "500"
@@ -361,8 +349,6 @@ tasks:
 
   _web:test:e2e:sync-live:
     desc: Run live sync provider Playwright e2e specs.
-    deps:
-      - _wasm:build
     env:
       VITE_E2E_EXPOSE_VAULT: "true"
       VITE_VAULT_SYNC_INTERVAL_MS: "1000"
@@ -395,16 +381,12 @@ tasks:
 
   _web:test:e2e:multi-device:
     desc: Run multi-device Playwright e2e specs.
-    deps:
-      - _wasm:build
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:multi-device
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:lint:
-    desc: Lint the web app.
-    deps:
-      - _wasm:build
+    desc: Lint the web app against the image-seeded WASM package.
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run lint
 

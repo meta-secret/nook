@@ -1,7 +1,7 @@
-// nook-web image: the toolchain base with workspace SOURCE copied in. This is the image `task`
-// runs against at runtime (no bind mount). Declares its own contexts next to nook-app/nook-web/nook-web-app/Dockerfile,
+// Slim nook-web image: web base + dependencies + host-exported WASM/coverage + workspace source.
+// This is the image `task` runs against at runtime (no bind mount). Declares its own contexts next to nook-app/nook-web/nook-web-app/Dockerfile,
 // like every other package bake file. nook-app/docker-bake.hcl adds the loadable `nook-web` variant.
-// cache-from comes from shared_cache_from in nook-app/docker-bake.hcl (platform is always amd64).
+// cache-from comes from web_cache_from in nook-app/docker-bake.hcl (platform is always amd64).
 
 variable "VITE_BASE" {
   default = "/"
@@ -15,6 +15,13 @@ variable "VITE_PUBLIC_APP_URL" {
   default = ""
 }
 
+// Set by `task setup` to the temporary directory exported by the web-artifacts target. The default
+// keeps `bake --print` usable; a direct nook-web build without the prepare phase fails on the missing
+// /nook-wasm artifact instead of silently using stale generated code.
+variable "WEB_ARTIFACTS_CONTEXT" {
+  default = "."
+}
+
 target "_nook-web-common" {
   context    = "."
   dockerfile = "nook-app/nook-web/nook-web-app/Dockerfile"
@@ -26,7 +33,9 @@ target "_nook-web-common" {
     VITE_PUBLIC_APP_URL = VITE_PUBLIC_APP_URL
   }
   contexts = {
-    toolchain = "target:toolchain"
+    web-base      = "target:web-base"
+    web-deps      = "target:web-deps"
+    web-artifacts = WEB_ARTIFACTS_CONTEXT
   }
-  cache-from = shared_cache_from
+  cache-from = web_cache_from
 }

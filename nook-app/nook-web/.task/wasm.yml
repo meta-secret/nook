@@ -4,29 +4,31 @@ tasks:
   wasm:test:
     desc: Run nook-wasm wasm-bindgen tests in Node.
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _wasm:test }
 
   wasm:build:
     desc: Build nook-wasm for the web app in Docker.
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _wasm:build }
 
   wasm:build:fast:
     desc: Build nook-wasm for the mounted web app without wasm-opt (local iteration).
+    deps:
+      - setup:rust
     cmds:
       - task: docker:wasm:build:fast
 
   wasm:build:prod:
     desc: Build nook-wasm for the web app with optimized production wasm.
     cmds:
-      - task setup WASM_BUILD_MODE=prod
-      - task: docker:task
+      - task setup:rust WASM_BUILD_MODE=prod
+      - task: docker:rust:task
         vars:
           TASK: _wasm:build
           WASM_BUILD_MODE: prod
@@ -74,9 +76,9 @@ tasks:
   wasm:test:browser:
     desc: Run nook-wasm wasm-bindgen tests in headless Chrome (manual/debug).
     deps:
-      - setup
+      - setup:rust:browser
     cmds:
-      - task: docker:task
+      - task: docker:rust:browser:task
         vars: { TASK: _wasm:test:browser }
 
   _wasm:test:browser:

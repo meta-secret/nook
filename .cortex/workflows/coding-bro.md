@@ -67,7 +67,7 @@ GitHub-hosted runners, where cold setup is acceptable. A failing fmt, clippy,
 unit test, or e2e spec still burns a remote validation cycle, so do not use PR
 CI as the primary debug loop.
 
-**Local Docker is warm and fast.** The same Task commands run against **cached** toolchain images on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating.
+**Local Docker is warm and fast.** The same Task commands reuse independently cached Rust/WASM and web image lineages on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating.
 
 When functionality for the current iteration is complete, **commit and push/open/update the PR before starting any required final local gate**, then immediately run the local gate while Nook's PR workflows start remotely. This is for final-validation parallelism, not half-finished work: do only focused development checks before the push, and do not merge until the latest branch has both passing local validation and green applicable repository-owned PR test checks.
 
@@ -198,8 +198,8 @@ Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 ### 4–6 — Push, validate locally, and monitor remotely
 
 **Why push before the long final gate:** GitHub Actions runners download Docker
-images and run the full prepared test set from scratch every time. Locally,
-toolchain images are **already cached** — the same gates finish much faster. Use
+images and run the full prepared test set from scratch every time. Locally, the
+Rust/WASM and web lineages are **already cached** — the same gates finish much faster. Use
 local Task commands for implementation/debug loops. Once the current iteration is
 functionally complete, commit and push/open/update the PR, then run the local
 final gate immediately while remote CI runs.

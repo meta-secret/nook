@@ -210,7 +210,9 @@ creates a stopped container from the already-built `nook-web:local` image and
 copies `summary.txt`, `summary.json`, `lcov.info`, and `coverage-floor.json`.
 Do not make coverage export start a container and rerun `cargo llvm-cov`; PR CI
 exports current and base coverage, so a runtime coverage command would duplicate
-the same Rust tests after the image build.
+the same Rust tests after the image build. `task setup` gets those files into the
+slim web image through the same temporary host artifact directory as generated
+WASM; it does not copy them directly from the multi-GB Rust builder snapshot.
 
 After a successful main gate, `main.yml` uploads those four files plus a manifest
 as `nook-core-auth-coverage-<commit SHA>`. A PR with changed Rust coverage inputs
@@ -246,8 +248,8 @@ must still be addressed, but no external status may delay merge or handoff.
 
 **GitHub-hosted jobs are isolated but cold.** Main, release, scheduled/manual e2e,
 research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
-the toolchain cache from GHCR. Main pushes the commit-tagged toolchain image
-after green verify and deploys the active development channel to Cloudflare
+the independent Rust and web caches from GHCR. Main pushes separate commit-tagged
+Rust/WASM and web-dependency cache images after green verify and deploys the active development channel to Cloudflare
 Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
 `release.yml` runs the main-equivalent gate without
 pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages
@@ -255,8 +257,9 @@ for stable `nokey.sh`, and publishes the GitHub Release only after deployment
 succeeds. The extra latency is acceptable for background work and keeps it from
 consuming the Nook runner pool.
 
-Main's toolchain publish must authenticate immediately before the GHCR
-`toolchain-push` bake. Do not assume a prior Docker login from setup is still
+Main's cache publish must authenticate immediately before the GHCR
+`toolchain-push` bake group. The legacy group name now fans out to independent
+Rust and web targets and never constructs a merged image. Do not assume a prior Docker login from setup is still
 visible to Buildx throughout the job; a green verify/e2e run can still
 block the Pages deploy if the final push falls back to anonymous GHCR auth and
 gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into
@@ -268,7 +271,7 @@ domain exists, verifies the preconfigured Cloudflare DNS CNAME and HTTPS
 response, and records a `development` deployment status whose URL is
 `https://dev.nokey.sh/`.
 
-**Local Docker is warm and fast.** Toolchain images are **cached** on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
+**Local Docker is warm and fast.** Rust/WASM and web image lineages are cached independently on the developer machine. The same Task gates (`task check`, `task ci:pr`, e2e) finish much faster locally. **Prefer local runs** to check tests, fix issues, and iterate. Once the current iteration is coherent and checkable, commit and push/open/update the PR before any required final local gate, then run local validation while remote CI runs. Never serialize a full local gate before the push.
 
 **E2e debug — one spec at a time.** During a fix/debug session, do not re-run the full e2e suite after every change. Run individual specs for fast feedback:
 
@@ -314,7 +317,7 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
-Local `task ci:pr` is still much faster on a warm cached toolchain image than a cold remote run. See [pull-requests.md § Local checks](pull-requests.md#4-local-checks) and [coding-bro.md](coding-bro.md).
+Local `task ci:pr` is still much faster with warm Rust/WASM and web caches than a cold remote run. See [pull-requests.md § Local checks](pull-requests.md#4-local-checks) and [coding-bro.md](coding-bro.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 

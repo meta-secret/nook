@@ -1,6 +1,6 @@
 // nook-core build targets: cargo-chef dependency cache + native verify warm-up.
 // `builder-deps` is also the shared base for the wasm build (see nook-app/nook-wasm/docker-bake.hcl).
-// cache-from/to come from shared_cache_* in nook-app/docker-bake.hcl (platform is always amd64).
+// cache-from/to come from rust_cache_* in nook-app/docker-bake.hcl (platform is always amd64).
 
 // Rust dependency cache (cargo-chef cook + fetch). Base for both native and wasm builders.
 target "builder-deps" {
@@ -9,10 +9,10 @@ target "builder-deps" {
   target     = "builder-deps"
   platforms  = ["linux/amd64"]
   contexts = {
-    nook-base = "target:nook-base"
+    rust-base = "target:rust-base"
   }
-  cache-from = shared_cache_from
-  cache-to   = shared_cache_to
+  cache-from = rust_cache_from
+  cache-to   = rust_cache_to
 }
 
 // Native verify warm-up (nextest --no-run, clippy, llvm-cov). Parallel with builder-wasm.
@@ -22,11 +22,11 @@ target "builder-debug" {
   target     = "builder-debug"
   platforms  = ["linux/amd64"]
   contexts = {
-    nook-base    = "target:nook-base"
+    rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = shared_cache_from
-  cache-to   = shared_cache_to
+  cache-from = rust_cache_from
+  cache-to   = rust_cache_to
 }
 
 // Small local-output target for the rare case where a commit-keyed main coverage artifact is
@@ -37,9 +37,9 @@ target "coverage-export" {
   target     = "coverage-export"
   platforms  = ["linux/amd64"]
   contexts = {
-    nook-base    = "target:nook-base"
+    rust-base    = "target:rust-base"
     builder-deps = "target:builder-deps"
   }
-  cache-from = shared_cache_from
-  cache-to   = shared_cache_to
+  cache-from = rust_cache_from
+  cache-to   = rust_cache_to
 }
