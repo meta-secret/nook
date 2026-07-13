@@ -222,6 +222,7 @@ task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
 task extension:build       # browser extension package
 task ci:pr                 # local mirror of the PR CI gate
+task docker:coverage:export  # coverage-only CI fallback (no app image export)
 ```
 
 Live sync e2e reads `NOOK_GITHUB_PAT` from the environment or

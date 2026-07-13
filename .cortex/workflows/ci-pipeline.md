@@ -209,10 +209,15 @@ Do not make coverage export start a container and rerun `cargo llvm-cov`; PR CI
 exports current and base coverage, so a runtime coverage command would duplicate
 the same Rust tests after the image build.
 
-When PR CI builds the base worktree for comparison, it measures the base source in
-the base worktree's own layout. The current PR image is built first, so this
-branch's Dockerfile/task plumbing is still validated before base coverage is
-exported.
+After a successful main gate, `main.yml` uploads those four files plus a manifest
+as `nook-core-auth-coverage-<commit SHA>`. A PR with changed Rust coverage inputs
+downloads and validates the artifact for its exact base SHA instead of rebuilding
+the base app image. If the artifact is missing or invalid, the PR runs
+`task docker:coverage:export` against the base source; that Bake target stops at
+`builder-debug` and exports only the coverage payload, never the WASM/web stages or
+the multi-GB app image. PRs without Rust/Cargo/source changes—including changes
+only to coverage build/export plumbing—reuse the floor-validated current coverage
+as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
@@ -220,11 +225,13 @@ exported.
 self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
 **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
-toolchain image push). PR coverage always checks the current
-`nook-core + nook-auth2` artifact against the floor; the expensive base-worktree
-coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs
-changed, otherwise the current coverage artifact is reused as the base
-comparison. Use remote CI as the **PR validation gate** — not as the primary
+toolchain image push). The preview deploy reuses that prepared sealed image and
+must not declare another `setup` dependency. PR coverage always checks the current
+`nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
+inputs reuse the exact base commit's main artifact (with a coverage-only build
+fallback), while unchanged source reuses the current artifact as the base
+comparison. Use
+remote CI as the **PR validation gate** — not as the primary
 place to discover fmt/clippy/unit/e2e failures.
 
 Applicable repository-owned PR checks are the only remote checks an agent may
@@ -238,7 +245,8 @@ must still be addressed, but no external status may delay merge or handoff.
 research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
 the toolchain cache from GHCR. Main pushes the commit-tagged toolchain image
 after green verify and deploys the active development channel to Cloudflare
-Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without
+Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
+`release.yml` runs the main-equivalent gate without
 pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages
 for stable `nokey.sh`, and publishes the GitHub Release only after deployment
 succeeds. The extra latency is acceptable for background work and keeps it from

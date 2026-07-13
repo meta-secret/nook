@@ -80,6 +80,7 @@ jobs:
           CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
           CF_PAGES_PRODUCTION_BRANCH: main
         run: |
+          # ci:main:publish prepared the sealed image; deploy it without a second setup/bake.
           set +e
           out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod 2>&1)"
           status=$?
@@ -196,6 +197,23 @@ jobs:
               description: 'Development channel deployed to Cloudflare Pages',
               auto_inactive: false,
             })
+
+      - name: Export commit-keyed nook-core/auth coverage
+        run: |
+          set -euo pipefail
+          task docker:extract:coverage COVERAGE_OUT_DIR=coverage/main
+          jq -n \
+            --arg commit_sha "$GITHUB_SHA" \
+            '{schema_version: 1, commit_sha: $commit_sha}' \
+            > coverage/main/manifest.json
+
+      - name: Upload commit-keyed nook-core/auth coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: nook-core-auth-coverage-${{ github.sha }}
+          path: coverage/main
+          retention-days: 90
+          if-no-files-found: error
 
   ci-fix:
     name: AI fix, PR, and merge
