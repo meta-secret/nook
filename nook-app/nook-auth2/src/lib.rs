@@ -47,39 +47,26 @@ pub use auth::mock_passkey::{
 };
 pub use auth::multi_device::{
     AuthEnvelopes, ConnectAccessStatus, DeviceIdentity, JoinRequest, MEMBER_RECORD_PREFIX,
-    MemberEntry, NEXUS_SHARE_RECORD_PREFIX, NexusParticipantEntry, NexusShareEnvelope,
-    OpenedNexusShare, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
+    MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelParticipantEntry,
+    SentinelShareEnvelope, VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState,
     approve_join_request, assess_connect_access, auth_record, build_members_records,
-    count_nexus_share_records, create_join_request_record,
-    create_join_request_record_with_signing_key, create_nexus_root_share_records_for_recipients,
-    create_nexus_share_records, create_nexus_share_records_for_recipients, dec_auth_id,
+    count_sentinel_share_records, create_join_request_record,
+    create_join_request_record_with_signing_key, create_sentinel_root_share_records_for_recipients,
+    create_sentinel_share_records, create_sentinel_share_records_for_recipients, dec_auth_id,
     dec_auth_id_from_public_key, deny_join_request, device_is_enrolled, encrypt_for_recipient,
     encrypt_member_entry, enroll_device_with_dec, enroll_device_with_keys, ensure_self_in_roster,
     explain_connect_blocked, generate_dec, generate_id, generate_symmetric_key,
     generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
     is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
-    is_members_stored_record, is_nexus_share_stored_record, is_reserved_device_label,
+    is_members_stored_record, is_reserved_device_label, is_sentinel_share_stored_record,
     is_vault_meta_record, join_record_key, list_join_requests, member_from_identity,
-    member_from_join, member_stored_key, merge_remote_join_records, nexus_share_record_key,
-    open_nexus_share_for_identity, parse_auth_envelopes, parse_join_request,
-    parse_nexus_share_envelope, pending_join_for_device, reconstruct_nexus_vault_keys,
-    reconstruct_nexus_vault_keys_from_opened, rename_vault_member, replace_member_records,
+    member_from_join, member_stored_key, merge_remote_join_records,
+    open_sentinel_share_for_identity, parse_auth_envelopes, parse_join_request,
+    parse_sentinel_share_envelope, pending_join_for_device, reconstruct_sentinel_vault_keys,
+    reconstruct_sentinel_vault_keys_from_opened, rename_vault_member, replace_member_records,
     resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key, resolve_secrets_key,
-    revoke_vault_member, roster_add_member, user_stored_records, vault_has_multi_device_records,
-};
-pub use auth::nexus_genesis::{
-    NexusGenesisIssued, NexusGenesisParticipant, NexusGenesisParticipantResponse,
-    NexusGenesisPolicy, NexusGenesisPublicKeyAnnouncement, NexusGenesisRequest,
-    NexusGenesisSession, NexusGenesisShareDelivery, accept_nexus_genesis_share_delivery,
-    add_nexus_genesis_participant_payload, add_nexus_genesis_public_key_announcement,
-    add_nexus_genesis_response, create_nexus_genesis_public_key_announcement,
-    finalize_nexus_genesis_shares, nexus_genesis_request, respond_to_nexus_genesis_request,
-    start_nexus_genesis,
-};
-pub use auth::nexus_unlock::{
-    NexusUnlockPolicy, NexusUnlockRequest, NexusUnlockResponse, NexusUnlockSession,
-    NexusUnlockStatus, add_nexus_unlock_response, finalize_nexus_unlock, nexus_unlock_request,
-    nexus_unlock_status, respond_to_nexus_unlock_request, start_nexus_unlock,
+    revoke_vault_member, roster_add_member, sentinel_share_record_key, user_stored_records,
+    vault_has_multi_device_records,
 };
 pub use auth::password_envelope::{
     LEGACY_PASSWORD_ENTRY_LABEL, PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope,
@@ -89,6 +76,21 @@ pub use auth::password_envelope::{
     is_vault_password_recommended_length, resolve_keys_from_entry, resolve_keys_from_password,
     vault_password_min_length, vault_password_recommended_min_length, verify_password,
     verify_password_entry,
+};
+pub use auth::sentinel_genesis::{
+    SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
+    SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest,
+    SentinelGenesisSession, SentinelGenesisShareDelivery, accept_sentinel_genesis_share_delivery,
+    add_sentinel_genesis_participant_payload, add_sentinel_genesis_public_key_announcement,
+    add_sentinel_genesis_response, create_sentinel_genesis_public_key_announcement,
+    finalize_sentinel_genesis_shares, respond_to_sentinel_genesis_request,
+    sentinel_genesis_request, start_sentinel_genesis,
+};
+pub use auth::sentinel_unlock::{
+    SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
+    SentinelUnlockStatus, add_sentinel_unlock_response, finalize_sentinel_unlock,
+    respond_to_sentinel_unlock_request, sentinel_unlock_request, sentinel_unlock_status,
+    start_sentinel_unlock,
 };
 pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{

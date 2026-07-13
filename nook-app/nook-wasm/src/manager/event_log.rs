@@ -303,7 +303,7 @@ impl NookVaultManager {
         self.vault.database =
             apply_user_records_to_armored_session(user_records, crypto, &mut self.vault.meta)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-        self.ensure_nexus_architecture_from_shares()?;
+        self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
             let _ = self.maybe_sync_self_into_roster(&identity);
         }
@@ -311,7 +311,7 @@ impl NookVaultManager {
     }
 
     /// Materialize join/share meta from the local event graph without vault keys.
-    /// Used by locked nexus joiners before the opened-share ceremony.
+    /// Used by locked sentinel joiners before the opened-share ceremony.
     pub(in crate::manager) async fn materialize_vault_meta_from_events(
         &mut self,
     ) -> Result<(), NookError> {
@@ -321,7 +321,7 @@ impl NookVaultManager {
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-        self.ensure_nexus_architecture_from_shares()?;
+        self.ensure_sentinel_architecture_from_shares()?;
         Ok(())
     }
 
@@ -545,12 +545,12 @@ impl NookVaultManager {
         save_heads(&self.vault.store_id, &heads).await?;
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-        self.ensure_nexus_architecture_from_shares()?;
+        self.ensure_sentinel_architecture_from_shares()?;
         if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
             self.persist_projection_cache().await?;
         }
-        // Locked nexus sessions keep share/join meta in memory for ceremony
+        // Locked sentinel sessions keep share/join meta in memory for ceremony
         // without rewriting a keyless projection cache.
         Ok(())
     }
@@ -655,7 +655,7 @@ impl NookVaultManager {
             save_heads(&self.vault.store_id, &heads).await?;
             let graph = local.load_graph(&self.vault.store_id)?;
             nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-            self.ensure_nexus_architecture_from_shares()?;
+            self.ensure_sentinel_architecture_from_shares()?;
             if self.vault.crypto.is_some() || self.ensure_vault_crypto_from_cache().await.is_ok() {
                 self.apply_event_projection_to_session().await?;
             }
@@ -806,8 +806,8 @@ impl NookVaultManager {
                         members_key_ciphertext: envelopes.members_key,
                     });
                 }
-                nook_core::VaultType::Nexus => {
-                    operations.push(VaultOperation::NexusParticipantEnrolled {
+                nook_core::VaultType::Sentinel => {
+                    operations.push(VaultOperation::SentinelParticipantEnrolled {
                         device_id: identity.device_id().clone(),
                         encryption_public_key: identity.public_key(),
                         signing_public_key: signing_public_key.clone(),
@@ -838,13 +838,13 @@ impl NookVaultManager {
         Ok(())
     }
 
-    /// Write Nexus genesis as one immutable root event. The complete roster and
+    /// Write Sentinel genesis as one immutable root event. The complete roster and
     /// complete encrypted share set are deliberately inseparable here: no
-    /// partially enrolled/openable Nexus event history is ever published.
-    pub(in crate::manager) async fn bootstrap_nexus_genesis_event(
+    /// partially enrolled/openable Sentinel event history is ever published.
+    pub(in crate::manager) async fn bootstrap_sentinel_genesis_event(
         &mut self,
-        participants: &[nook_core::NexusGenesisParticipant],
-        deliveries: &[nook_core::NexusGenesisShareDelivery],
+        participants: &[nook_core::SentinelGenesisParticipant],
+        deliveries: &[nook_core::SentinelGenesisShareDelivery],
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
         let signing = self.ensure_signing_identity().await?;
@@ -856,17 +856,17 @@ impl NookVaultManager {
             password_entries: vec![],
         }];
         operations.extend(participants.iter().map(|participant| {
-            VaultOperation::NexusParticipantEnrolled {
+            VaultOperation::SentinelParticipantEnrolled {
                 device_id: participant.device_id.clone(),
                 encryption_public_key: participant.encryption_public_key.clone(),
                 signing_public_key: participant.signing_public_key.clone(),
                 label: nook_core::MemberLabel::from_trusted(participant.label.clone()),
             }
         }));
-        operations.push(VaultOperation::NexusSharesIssued {
+        operations.push(VaultOperation::SentinelSharesIssued {
             shares: deliveries
                 .iter()
-                .map(|delivery| nook_core::NexusShareIssuedPayload {
+                .map(|delivery| nook_core::SentinelShareIssuedPayload {
                     device_id: delivery.device_id.clone(),
                     version: delivery.share.version,
                     threshold: delivery.share.threshold,
@@ -898,18 +898,18 @@ impl NookVaultManager {
         Ok(())
     }
 
-    /// Idempotently finish the event-log portion of Nexus genesis. If a crash
+    /// Idempotently finish the event-log portion of Sentinel genesis. If a crash
     /// happened after event bytes were indexed but before heads were written,
     /// rebuild heads from the existing graph rather than creating a second root.
-    pub(in crate::manager) async fn ensure_nexus_genesis_event(
+    pub(in crate::manager) async fn ensure_sentinel_genesis_event(
         &mut self,
-        participants: &[nook_core::NexusGenesisParticipant],
-        deliveries: &[nook_core::NexusGenesisShareDelivery],
+        participants: &[nook_core::SentinelGenesisParticipant],
+        deliveries: &[nook_core::SentinelGenesisShareDelivery],
     ) -> Result<(), NookError> {
         let store = load_local_event_store(&self.vault.store_id).await?;
         if store.event_ids().is_empty() {
             return self
-                .bootstrap_nexus_genesis_event(participants, deliveries)
+                .bootstrap_sentinel_genesis_event(participants, deliveries)
                 .await;
         }
         self.activate_event_log_mode().await?;

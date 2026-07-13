@@ -1,9 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import {
-  createLocalVaultOnLogin,
-  ENROLLMENT_UNLOCK_TIMEOUT_MS,
-} from './helpers'
+import { createIsolatedContext, ENROLLMENT_UNLOCK_TIMEOUT_MS } from './helpers'
 
 async function clickDeviceProtectionSetup(page: Page) {
   const setupButton = page.getByTestId('device-protection-setup-btn')
@@ -14,6 +11,32 @@ async function clickDeviceProtectionSetup(page: Page) {
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await setupButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+}
+
+async function openExistingVaultProtectionOverlay(page: Page) {
+  const overlay = page.getByTestId('passkey-auth-overlay')
+  await expect(overlay).toBeHidden()
+  const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+  await expect(unlockVaultButton).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await unlockVaultButton.click()
+  await expect(overlay).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+}
+
+async function openPasskeyOverlayForSimpleCreate(page: Page) {
+  await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await page.getByTestId('get-started-path-simple').click()
+  await page.getByTestId('login-vault-name-input').fill('Passkey flow vault')
+  await page.getByTestId('login-create-device-vault-btn').click()
+  await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('device-protection-gate')).toBeVisible()
 }
 
 async function readVaultValue<T>(
@@ -74,13 +97,18 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
 }
 
 test.describe('passkey device-key protection', () => {
-  test('makes passkey creation primary and keeps setup workflows mutually exclusive', async ({
+  test('defers passkey until simple vault create without a second existing-passkey widget', async ({
     page,
   }) => {
     await page.addInitScript(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     await page.goto('/app/')
+
+    await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible()
+    await expect(page.getByTestId('device-protection-gate')).toHaveCount(0)
+
+    await openPasskeyOverlayForSimpleCreate(page)
 
     await expect(page.getByTestId('device-protection-step')).toHaveText(
       'Device setup · Step 1 of 2',
@@ -93,28 +121,129 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('device-protection-create-workflow'),
     ).toBeVisible()
     await expect(
+      page.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Use existing passkey')
+    await expect(
       page.getByTestId('device-protection-existing-workflow'),
-    ).toBeHidden()
+    ).toHaveCount(0)
+  })
 
-    await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(
-      page.getByTestId('device-protection-existing-workflow'),
-    ).toBeVisible()
-    await expect(page.getByText('Need a new Nook passkey?')).toBeVisible()
-    await expect(
-      page.getByTestId('device-protection-create-new-choice'),
-    ).toHaveText('Create new passkey')
-    await expect(
-      page.getByTestId('device-protection-create-workflow'),
-    ).toBeHidden()
+  test('uses participant passkeys and adds a signed key from the pre-genesis card', async ({
+    browser,
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.goto('/app/')
 
-    await page.getByTestId('device-protection-create-new-choice').click()
+    const participantContext = await createIsolatedContext(browser)
+    await participantContext.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    const participant = await participantContext.newPage()
+    await participant.goto('/app/')
     await expect(
-      page.getByTestId('device-protection-create-workflow'),
-    ).toBeVisible()
+      participant.getByTestId('login-create-vault-chooser'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect
+      .poll(() =>
+        participant.evaluate(() =>
+          Boolean((window as Window & { __nookVault?: unknown }).__nookVault),
+        ),
+      )
+      .toBe(true)
+
+    const participantAnnouncement = await participant.evaluate(async () => {
+      const participantVault = (
+        window as Window & {
+          __nookVault?: {
+            setupDeviceProtection: (
+              label: string,
+              mode: 'standard',
+            ) => Promise<void>
+            createSentinelGenesisPublicKeyAnnouncement: () => Promise<string>
+          }
+        }
+      ).__nookVault
+      if (!participantVault) throw new Error('Participant vault is unavailable')
+      await participantVault.setupDeviceProtection(
+        'Sentinel participant',
+        'standard',
+      )
+      return participantVault.createSentinelGenesisPublicKeyAnnouncement()
+    })
+    expect(participantAnnouncement).toContain('publicKeyAnnouncement')
+
+    await page.getByTestId('get-started-path-sentinel').click()
+    await page.getByTestId('sentinel-dashboard-card-stack').click()
+    await expect(page.getByTestId('sentinel-onboarding-identity')).toBeVisible()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
+      0,
+    )
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(
-      page.getByTestId('device-protection-existing-workflow'),
-    ).toBeHidden()
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toHaveCount(0)
+    await clickDeviceProtectionSetup(page)
+    await expect(
+      page.getByTestId('sentinel-genesis-response-input'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(
+      page.getByTestId('sentinel-card-stack-dashboard'),
+    ).toContainText('AUTOMATICALLY INCLUDED')
+    await page.getByTestId('sentinel-genesis-response-input').fill('bb')
+    await expect(
+      page.getByTestId('sentinel-genesis-add-participant'),
+    ).toBeEnabled()
+    await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-error'),
+    ).toHaveText('Paste signed public key')
+    await page
+      .getByTestId('sentinel-genesis-response-input')
+      .fill(participantAnnouncement)
+    await expect(
+      page.getByTestId('sentinel-genesis-add-participant'),
+    ).toBeEnabled()
+
+    await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-queued-participant'),
+    ).toContainText('KEY PENDING')
+    await page
+      .getByTestId('sentinel-genesis-response-input')
+      .fill(participantAnnouncement)
+    await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-error'),
+    ).toHaveText('This device key is already in the roster.')
+    await expect(
+      page.getByTestId('sentinel-genesis-queued-participant'),
+    ).toHaveCount(1)
+    await expect(
+      page.getByTestId('sentinel-genesis-ceremony-step'),
+    ).toHaveCount(0)
+    await page.getByTestId('sentinel-onboarding-continue-policy').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
+    await page
+      .getByTestId('sentinel-genesis-name-input')
+      .fill('Passkey Sentinel')
+    await page.getByTestId('sentinel-genesis-start').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-ceremony-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
+      '2 / 2',
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    await expect(page.getByTestId('sentinel-genesis-deliveries')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    await participantContext.close()
   })
 
   test('derives the device identity and requires passkey authorization after reload', async ({
@@ -125,13 +254,15 @@ test.describe('passkey device-key protection', () => {
     })
     await page.goto('/app/')
 
-    await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    await openPasskeyOverlayForSimpleCreate(page)
     await page.getByTestId('device-protection-label-input').fill('Work laptop')
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('login-gate')).toBeVisible()
-    await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     const deviceId = await readDeviceId(page)
-    const shortDeviceId = `${deviceId.slice(0, 6)}...${deviceId.slice(-4)}`
+    expect(deviceId).toBeTruthy()
+    const shortDeviceId = `${deviceId!.slice(0, 6)}...${deviceId!.slice(-4)}`
     await expect
       .poll(() =>
         page.evaluate(() => localStorage.getItem('nook_e2e_passkey_label')),
@@ -145,26 +276,27 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).not.toContain('"ciphertext"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
-    await createLocalVaultOnLogin(page, 'Passkey test vault')
     await page.getByTestId('header-lock-vault-btn').click()
+    await openExistingVaultProtectionOverlay(page)
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
     await expect(page.getByTestId('device-protection-unlock-btn')).toHaveText(
       'Continue with passkey',
     )
     await expect(
-      page.getByTestId('device-protection-create-new-choice'),
+      page.getByTestId('device-protection-use-existing-choice'),
     ).toBeHidden()
     await expect(page.getByTestId('device-protection-setup-btn')).toBeHidden()
     await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.reload()
+    await openExistingVaultProtectionOverlay(page)
     await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
     await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
-  test('reuses high-security device mode without showing it during vault creation', async ({
+  test('reuses high-security device mode without showing it during vault naming', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -172,15 +304,19 @@ test.describe('passkey device-key protection', () => {
     })
     await page.goto('/app/')
 
+    await openPasskeyOverlayForSimpleCreate(page)
     await page.getByTestId('device-mode-select').click()
     await page.getByRole('option', { name: 'High security' }).click()
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
 
-    await page.reload()
+    await page.getByTestId('header-lock-vault-btn').click()
+    await openExistingVaultProtectionOverlay(page)
     await page.getByTestId('device-protection-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
     await expect(page.getByTestId('mode-group-device')).toHaveCount(0)
     await expect
       .poll(() =>
@@ -204,20 +340,30 @@ test.describe('passkey device-key protection', () => {
     })
     await page.goto('/app/')
 
-    await expect(page.getByTestId('device-protection-gate')).toBeVisible()
+    await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     const originalDeviceId = await readDeviceId(page)
     await clearDeviceMetadata(page)
 
     await page.reload()
-    await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(
-      page.getByTestId('device-protection-existing-passkey-btn'),
-    ).toBeVisible()
-    await page.getByTestId('device-protection-existing-passkey-btn').click()
+    // Existing vault stays in the app unlock workflow while device recovery is
+    // deferred until the user explicitly asks to unlock it.
     await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled()
+
+    await page.getByTestId('unlock-vault-btn').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
+    await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
+    await page.getByTestId('device-protection-use-existing-choice').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     const recoveredDeviceId = await readDeviceId(page)
     expect(recoveredDeviceId).toBe(originalDeviceId)
@@ -231,6 +377,7 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_passkey_mode', 'unsupported')
     })
     await page.goto('/app/')
+    await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
 
     await expect(page.getByTestId('device-protection-error')).toContainText(
@@ -239,15 +386,17 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('device-protection-pin-input').fill('123456')
     await page.getByTestId('device-protection-pin-confirm').fill('123456')
     await page.getByTestId('device-protection-pin-setup-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     const wrapped = await readPersistedDeviceIdentity(page)
     expect(wrapped).toBeDefined()
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
-    await createLocalVaultOnLogin(page, 'PIN fallback vault')
     await page.getByTestId('header-lock-vault-btn').click()
+    await openExistingVaultProtectionOverlay(page)
     await expect(
       page.getByTestId('device-protection-pin-unlock-btn'),
     ).toBeVisible()
@@ -258,15 +407,16 @@ test.describe('passkey device-key protection', () => {
     )
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.reload()
+    await openExistingVaultProtectionOverlay(page)
     await expect(
       page.getByTestId('device-protection-pin-unlock-btn'),
     ).toBeVisible()
     await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
     await page.getByTestId('device-protection-pin-unlock-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
   })
 
   test('keeps setup recoverable after passkey cancellation', async ({
@@ -277,6 +427,7 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
     })
     await page.goto('/app/')
+    await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
 
     await expect(page.getByTestId('device-protection-error')).toBeVisible()
@@ -290,10 +441,13 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     await page.goto('/app/')
+    await openPasskeyOverlayForSimpleCreate(page)
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('login-gate')).toBeVisible()
-    await createLocalVaultOnLogin(page, 'Recovery test vault')
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
     await page.reload()
+    await openExistingVaultProtectionOverlay(page)
 
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByTestId('device-protection-recovery-btn').click()
@@ -324,6 +478,6 @@ test.describe('passkey device-key protection', () => {
         ),
     )
     expect(persisted.wrapped).toBeUndefined()
-    expect(persisted.registry).toBeDefined()
+    expect(persisted.registry).toBeTruthy()
   })
 })

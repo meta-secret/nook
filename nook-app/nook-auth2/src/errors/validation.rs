@@ -27,20 +27,20 @@ pub enum ValidationError {
         replication_type: String,
     },
 
-    #[error("errors.validation.simple_vault_has_nexus_policy")]
-    SimpleVaultHasNexusPolicy,
+    #[error("errors.validation.simple_vault_has_sentinel_policy")]
+    SimpleVaultHasSentinelPolicy,
 
-    #[error("errors.validation.invalid_nexus_policy")]
-    InvalidNexusPolicy,
+    #[error("errors.validation.invalid_sentinel_policy")]
+    InvalidSentinelPolicy,
 
-    #[error("errors.validation.nexus_vault_has_full_key_envelopes")]
-    NexusVaultHasFullKeyEnvelopes,
+    #[error("errors.validation.sentinel_vault_has_full_key_envelopes")]
+    SentinelVaultHasFullKeyEnvelopes,
 
-    #[error("errors.validation.simple_vault_has_nexus_shares")]
-    SimpleVaultHasNexusShares,
+    #[error("errors.validation.simple_vault_has_sentinel_shares")]
+    SimpleVaultHasSentinelShares,
 
-    #[error("errors.validation.invalid_nexus_share_set")]
-    InvalidNexusShareSet,
+    #[error("errors.validation.invalid_sentinel_share_set")]
+    InvalidSentinelShareSet,
 
     #[error("errors.validation.github_pat_empty")]
     GithubPatEmpty,

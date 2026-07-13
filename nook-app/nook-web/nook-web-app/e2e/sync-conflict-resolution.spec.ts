@@ -117,7 +117,6 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-panel')).toBeVisible()
 
     await page.getByTestId('header-lock-vault-btn').click()
-    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
     })
@@ -132,6 +131,7 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('login-unlock-section')).toBeHidden()
     await page.getByTestId('login-vault-name-input').fill('test-2')
     await page.getByTestId('login-create-additional-vault-btn').click()
+    await authorizeDeviceProtection(page)
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

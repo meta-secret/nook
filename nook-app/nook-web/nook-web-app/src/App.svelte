@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
-  import { VaultState } from '$lib/vault.svelte'
+  import { VaultState, type StartSentinelGenesisArgs } from '$lib/vault.svelte'
   import { loadAuthProviders, saveAuthProviders } from '$lib/auth-providers'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
@@ -11,8 +11,7 @@
   import AppLogsApiPage from '$lib/components/AppLogsApiPage.svelte'
   import SiteFooter from '$lib/components/SiteFooter.svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
-  import ProductIntro from '$lib/components/ProductIntro.svelte'
-  import DeviceProtectionGate from '$lib/components/DeviceProtectionGate.svelte'
+  import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
@@ -41,11 +40,21 @@
     type ExtensionConnectRequest,
   } from '$lib/extension-connect'
   import type { VaultItemType } from '$lib/nook'
+  import { consumeSentinelOnboardingFromLocation } from '$lib/sentinel-onboarding-link'
 
   const vault = new VaultState()
   type ColorMode = 'light' | 'dark'
   const THEME_STORAGE_KEY = 'nook_color_mode'
-  let colorMode = $state<ColorMode>('dark')
+
+  function systemColorMode(): ColorMode {
+    return typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light'
+  }
+
+  let colorMode = $state<ColorMode>(systemColorMode())
+  let followsSystemColorMode = $state(true)
   let legalPage = $state<LegalPageId | undefined>(
     typeof window !== 'undefined'
       ? getLegalPageFromPath(window.location.pathname)
@@ -71,6 +80,17 @@
       ? extensionConnectRequestFromLocation(window.location)
       : undefined,
   )
+  let sentinelInvitationRequest = $state(
+    typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('sentinel-request') ??
+          '')
+      : '',
+  )
+  let sentinelOnboardingPackage = $state(
+    typeof window !== 'undefined'
+      ? consumeSentinelOnboardingFromLocation()
+      : '',
+  )
 
   function syncRoute() {
     legalPage = getLegalPageFromPath(window.location.pathname)
@@ -80,6 +100,10 @@
     extensionConnectRequest = extensionConnectRequestFromLocation(
       window.location,
     )
+    sentinelInvitationRequest =
+      new URLSearchParams(window.location.search).get('sentinel-request') ?? ''
+    const onboardingPackage = consumeSentinelOnboardingFromLocation()
+    if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
   }
 
   function conflictCandidates(
@@ -116,10 +140,20 @@
   }
 
   onMount(() => {
+    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
     const savedMode = localStorage.getItem(THEME_STORAGE_KEY)
     if (savedMode === 'light' || savedMode === 'dark') {
       colorMode = savedMode
+      followsSystemColorMode = false
+    } else {
+      colorMode = colorScheme.matches ? 'dark' : 'light'
     }
+    const handleColorSchemeChange = (event: MediaQueryListEvent) => {
+      if (followsSystemColorMode) {
+        colorMode = event.matches ? 'dark' : 'light'
+      }
+    }
+    colorScheme.addEventListener('change', handleColorSchemeChange)
     void vault.init()
 
     if (vault.runtimeConfig.exposeDebugHooks()) {
@@ -151,6 +185,7 @@
       vault.stopIdleSessionTracking()
       void vault.lockDeviceProtection()
       window.removeEventListener('popstate', syncRoute)
+      colorScheme.removeEventListener('change', handleColorSchemeChange)
     }
   })
 
@@ -176,7 +211,16 @@
 
   async function handleUnlock() {
     if (vault.loginSetupType) {
-      await vault.connectStagedProvider()
+      if (vault.sentinelGenesisStatus === 'delivering') {
+        await vault.connectAndSyncStagedProvider()
+        await vault.prepareSentinelOnboardingLinks()
+      } else {
+        await vault.connectStagedProvider()
+      }
+      return
+    }
+    if (existingVaultNeedsDeviceUnlock) {
+      pendingExistingVaultUnlock = true
       return
     }
     await vault.loadDb()
@@ -191,6 +235,7 @@
   }
 
   function toggleColorMode() {
+    followsSystemColorMode = false
     colorMode = colorMode === 'dark' ? 'light' : 'dark'
     localStorage.setItem(THEME_STORAGE_KEY, colorMode)
   }
@@ -221,6 +266,98 @@
         ? authenticatedShellSpacing
         : 'py-5 sm:py-6',
   )
+  /** Existing vault unlock keeps passkey-first; empty create defers passkey. */
+  const requiresPasskeyFirst = $derived(
+    vault.localVaultPresent || vault.localVaults.length > 0,
+  )
+  const existingVaultNeedsDeviceUnlock = $derived(
+    requiresPasskeyFirst && !vault.deviceProtectionReady,
+  )
+  const showLoginWithoutPasskey = $derived(
+    !requiresPasskeyFirst && vault.providersLoaded,
+  )
+  type PendingVaultCreation =
+    | { kind: 'simple'; label: string }
+    | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
+    | { kind: 'sentinel-participant-key' }
+    | { kind: 'sentinel-onboarding'; packageJson: string }
+
+  let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
+  let pendingExistingVaultUnlock = $state(false)
+  const showPasskeyOverlay = $derived(
+    pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
+  )
+  const showExistingVaultPasskeyOverlay = $derived(
+    pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
+  )
+
+  async function handleCreateDeviceVault(label: string) {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'simple', label }
+      return
+    }
+    pendingVaultCreation = undefined
+    await vault.createLocalVaultWithDeviceKeys(label)
+  }
+
+  async function handleStartSentinelGenesis(
+    args: StartSentinelGenesisArgs,
+  ): Promise<boolean> {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'sentinel', args }
+      return false
+    }
+    pendingVaultCreation = undefined
+    await vault.startSentinelGenesis(args)
+    return true
+  }
+
+  async function handleCreateSentinelParticipantKey(): Promise<string> {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'sentinel-participant-key' }
+      return ''
+    }
+    pendingVaultCreation = undefined
+    return vault.createSentinelGenesisPublicKeyAnnouncement()
+  }
+
+  async function handleAcceptSentinelOnboarding(packageJson: string) {
+    if (!vault.deviceProtectionReady) {
+      pendingVaultCreation = { kind: 'sentinel-onboarding', packageJson }
+      return
+    }
+    pendingVaultCreation = undefined
+    await vault.acceptSentinelOnboardingPackage(packageJson)
+    sentinelOnboardingPackage = ''
+  }
+
+  $effect(() => {
+    const pending = pendingVaultCreation
+    if (!pending || !vault.deviceProtectionReady || vault.isVerifying) return
+    pendingVaultCreation = undefined
+    if (pending.kind === 'simple') {
+      void vault.createLocalVaultWithDeviceKeys(pending.label)
+      return
+    }
+    if (pending.kind === 'sentinel-participant-key') return
+    if (pending.kind === 'sentinel-onboarding') {
+      void handleAcceptSentinelOnboarding(pending.packageJson)
+      return
+    }
+    void vault.startSentinelGenesis(pending.args)
+  })
+
+  $effect(() => {
+    if (
+      !pendingExistingVaultUnlock ||
+      !vault.deviceProtectionReady ||
+      vault.isVerifying
+    ) {
+      return
+    }
+    pendingExistingVaultUnlock = false
+    void vault.loadDb()
+  })
 </script>
 
 {#if appLogsPage}
@@ -413,54 +550,68 @@
               />
             </div>
           {/if}
-          {#if !vault.deviceProtectionReady}
-            <div class="mx-auto w-full max-w-lg">
-              <ProductIntro {vault} onOpenHelp={() => vault.openHelp()} />
-            </div>
-            <DeviceProtectionGate {vault} />
-          {:else if vault.providersLoaded}
-            <LoginGate
-              {vault}
-              providers={vault.providers}
-              bind:setupType={vault.loginSetupType}
-              bind:githubPat={vault.githubPat}
-              bind:githubRepo={vault.githubRepo}
-              addProviderOpen={vault.addProviderOpen}
-              isVerifying={vault.isVerifying}
-              isInitializing={vault.isInitializing}
-              onUnlock={handleUnlock}
-              onBeginAddProvider={() => vault.beginAddProvider()}
-              onCancelAddProvider={() => vault.cancelAddProvider()}
-              onBeginSetup={(type, preset) =>
-                vault.beginProviderSetup(type, preset)}
-              onCancelSetup={() => vault.cancelProviderSetup()}
-              onOpenHelp={() => vault.openHelp()}
-              onUseEnrollmentCode={(code, password) =>
-                vault.connectWithEnrollmentCode(code, password)}
-              prefillEnrollmentCode={vault.prefillEnrollmentCode}
-              enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
-              onUnlockWithPassword={(entryId, password) =>
-                vault.unlockWithPassword(entryId, password)}
-              onCreateDeviceVault={(label) =>
-                vault.createLocalVaultWithDeviceKeys(label)}
-              onRemoveProvider={(id) => vault.removeProvider(id)}
-            />
-            <VaultStatusBar
-              {vault}
-              storageMode={vault.storageMode}
-              githubRepo={vault.githubRepo}
-              lastSyncedAt={vault.lastSyncedAt}
-              isSyncing={vault.isSyncActivityVisible}
-              successMsg={vault.successMsg}
-              errorMsg={vault.errorMsg}
-              {appVersion}
-              label="Nook"
-              showSyncStatus={false}
-              showStorageIcon={false}
-              variant="quiet"
-              onDismissSuccess={() => vault.dismissSuccess()}
-              onDismissError={() => vault.dismissError()}
-            />
+          {#if vault.deviceProtectionReady || showLoginWithoutPasskey || existingVaultNeedsDeviceUnlock}
+            {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock}
+              <LoginGate
+                {vault}
+                providers={vault.providers}
+                bind:setupType={vault.loginSetupType}
+                bind:githubPat={vault.githubPat}
+                bind:githubRepo={vault.githubRepo}
+                addProviderOpen={vault.addProviderOpen}
+                isVerifying={vault.isVerifying}
+                isInitializing={vault.isInitializing}
+                deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
+                onUnlock={handleUnlock}
+                onBeginAddProvider={() => vault.beginAddProvider()}
+                onCancelAddProvider={() => vault.cancelAddProvider()}
+                onBeginSetup={(type, preset) =>
+                  vault.beginProviderSetup(type, preset)}
+                onCancelSetup={() => vault.cancelProviderSetup()}
+                onOpenHelp={() => vault.openHelp()}
+                onUseEnrollmentCode={(code, password) =>
+                  vault.connectWithEnrollmentCode(code, password)}
+                prefillEnrollmentCode={vault.prefillEnrollmentCode}
+                enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
+                {sentinelInvitationRequest}
+                {sentinelOnboardingPackage}
+                onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
+                onUnlockWithPassword={(entryId, password) =>
+                  vault.unlockWithPassword(entryId, password)}
+                onCreateDeviceVault={handleCreateDeviceVault}
+                onStartSentinelGenesis={handleStartSentinelGenesis}
+                onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}
+                onRemoveProvider={(id) => vault.removeProvider(id)}
+              />
+              <VaultStatusBar
+                {vault}
+                storageMode={vault.storageMode}
+                githubRepo={vault.githubRepo}
+                lastSyncedAt={vault.lastSyncedAt}
+                isSyncing={vault.isSyncActivityVisible}
+                successMsg={vault.successMsg}
+                errorMsg={vault.errorMsg}
+                {appVersion}
+                label="Nook"
+                showSyncStatus={false}
+                showStorageIcon={false}
+                variant="quiet"
+                onDismissSuccess={() => vault.dismissSuccess()}
+                onDismissError={() => vault.dismissError()}
+              />
+            {/if}
+            {#if showPasskeyOverlay || showExistingVaultPasskeyOverlay}
+              <PasskeyAuthOverlay
+                {vault}
+                onDismiss={() => {
+                  if (showExistingVaultPasskeyOverlay) {
+                    pendingExistingVaultUnlock = false
+                    return
+                  }
+                  pendingVaultCreation = undefined
+                }}
+              />
+            {/if}
           {/if}
         </div>
       {:else if extensionConnectRequest}

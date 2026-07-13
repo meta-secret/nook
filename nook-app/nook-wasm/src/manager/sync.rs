@@ -46,7 +46,7 @@ impl NookVaultManager {
                     self.persist_projection_cache().await?;
                 }
             } else {
-                // Locked nexus joiners still need share/join meta for ceremony.
+                // Locked sentinel joiners still need share/join meta for ceremony.
                 let _ = self.materialize_vault_meta_from_events().await;
             }
             let result = sync_result_session(self, changed)?;
@@ -95,7 +95,7 @@ impl NookVaultManager {
         let fresh_records = nook_core::deserialize_stored(&content, format)?;
 
         nook_core::merge_remote_join_records(&mut self.vault.meta, &fresh_records);
-        let loaded = self.load_stored_vault_or_nexus_ceremony(&content, &identity)?;
+        let loaded = self.load_stored_vault_or_sentinel_ceremony(&content, &identity)?;
         let LoadedVault {
             database,
             meta,

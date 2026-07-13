@@ -22,10 +22,10 @@ These files are the source of truth for how this project works.
 - **Local mode requires no credentials.** The encrypted vault lives in IndexedDB under `encrypted_db`.
 
 ### Get started paths
-- **Three mutually exclusive first-run intents:** Create Simple vault, Create Nexus vault, Join Nexus setup. Do not collapse create/join into one vault-type dropdown with footer links.
+- **Three mutually exclusive first-run intents:** Create Simple vault, Create Sentinel vault, Join Sentinel setup. Do not collapse create/join into one vault-type dropdown with footer links.
 - **Sync-provider import is secondary** (“already have a vault”), not a create/join path.
-- **Nexus create** chooses `N`/`T`, waits for all participant public keys, then atomically creates an empty vault. See `.cortex/design-docs/nexus-genesis.md`.
-- **Nexus join** primarily shares standalone public keys with the vault owner; initiator request is optional (session-bound response or share delivery only). Post-genesis share delivery and later Onboard+sync QR are separate steps.
+- **Sentinel create** chooses `N`/`T`, waits for all participant public keys, then atomically creates an empty vault. See `.cortex/design-docs/sentinel-genesis.md`.
+- **Sentinel join** primarily shares standalone public keys with the vault owner; initiator request is optional (session-bound response or share delivery only). Post-genesis share delivery and later Onboard+sync QR are separate steps.
 - Source of truth: `.cortex/design-docs/vault-architecture-modes.md` and issue #303.
 
 ### Package boundaries

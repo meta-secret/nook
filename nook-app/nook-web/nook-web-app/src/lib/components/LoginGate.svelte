@@ -1,6 +1,6 @@
 <script lang="ts">
   import { RefreshCw, ShieldCheck } from '@lucide/svelte'
-  import type { VaultState } from '$lib/vault.svelte'
+  import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
   import { Button } from '$lib/components/ui/button'
   import type {
     OAuthFilePreset,
@@ -26,7 +26,7 @@
   import LoginProviderManagement from '$lib/components/login/LoginProviderManagement.svelte'
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
-  import NexusCeremonyPanel from '$lib/components/login/NexusCeremonyPanel.svelte'
+  import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import {
     peekEnrollmentEntryId,
@@ -51,9 +51,15 @@
     onUseEnrollmentCode,
     onUnlockWithPassword,
     onCreateDeviceVault,
+    onStartSentinelGenesis,
+    onCreateSentinelGenesisPublicKeyAnnouncement,
     onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
+    deviceAuthorizationPending = false,
+    sentinelInvitationRequest = '',
+    sentinelOnboardingPackage = '',
+    onAcceptSentinelOnboardingPackage,
   }: {
     vault: VaultState
     providers: StorageProvider[]
@@ -81,9 +87,21 @@
       password: string,
     ) => void | Promise<void>
     onCreateDeviceVault?: (label: string) => void | Promise<void>
+    onStartSentinelGenesis?: (
+      args: StartSentinelGenesisArgs,
+    ) => boolean | void | Promise<boolean | void>
+    onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
+      | string
+      | Promise<string>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
+    deviceAuthorizationPending?: boolean
+    sentinelInvitationRequest?: string
+    sentinelOnboardingPackage?: string
+    onAcceptSentinelOnboardingPackage?: (
+      packageJson: string,
+    ) => void | Promise<void>
   } = $props()
 
   let enrollmentPanelOpen = $state(false)
@@ -94,15 +112,15 @@
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
-  const showNexusCeremony = $derived(
+  const showSentinelCeremony = $derived(
     !vault.isAuthenticated &&
-      (vault.nexusCeremonyPrompt ||
-        vault.nexusUnlockStatus === 'ceremony_required' ||
-        vault.nexusUnlockStatus === 'awaiting_shares'),
+      (vault.sentinelCeremonyPrompt ||
+        vault.sentinelUnlockStatus === 'ceremony_required' ||
+        vault.sentinelUnlockStatus === 'awaiting_shares'),
   )
   const showLocalUnlock = $derived(
     vault.localVaultPresent &&
-      vault.nexusGenesisStatus !== 'delivering' &&
+      vault.sentinelGenesisStatus !== 'delivering' &&
       !showSetup &&
       !addProviderOpen &&
       !showProviderSetupLink &&
@@ -118,9 +136,10 @@
       undefined,
   )
   const showCreateVault = $derived(
-    (!vault.localVaultPresent || vault.nexusGenesisStatus === 'delivering') &&
-      vault.localVaults.length === 0 &&
-      !hasProviders &&
+    (vault.sentinelGenesisStatus === 'delivering' ||
+      (!vault.localVaultPresent &&
+        vault.localVaults.length === 0 &&
+        !hasProviders)) &&
       !showSetup &&
       !addProviderOpen &&
       !showProviderSetupLink &&
@@ -145,7 +164,7 @@
   const showEnrollmentAccess = $derived(
     Boolean(onUseEnrollmentCode) &&
       !showQrOnboarding &&
-      (showProviderSetup || showSetup || showCreateVault),
+      (showProviderSetup || showSetup),
   )
 
   const setupCanConnect = $derived(
@@ -163,14 +182,23 @@
   }
 
   $effect(() => {
-    if (showLocalUnlock) {
+    if (
+      vault.sentinelGenesisStatus === 'delivering' &&
+      vault.syncProviders.length > 0 &&
+      !showSetup &&
+      !addProviderOpen
+    ) {
+      showProviderSetupLink = false
+    }
+    if (showLocalUnlock && !deviceAuthorizationPending) {
       void vault.prepareLocalLogin()
     }
     if (
+      !deviceAuthorizationPending &&
       !vault.isAuthenticated &&
       (vault.syncProviders.length > 0 || vault.localVaultPresent)
     ) {
-      void vault.refreshNexusUnlockStatus()
+      void vault.refreshSentinelUnlockStatus()
     }
   })
 </script>
@@ -200,6 +228,49 @@
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}
     />
+  {:else if showCreateVault && onCreateDeviceVault}
+    <LoginCreateVaultChooser
+      {vault}
+      {isVerifying}
+      {isInitializing}
+      {onCreateDeviceVault}
+      onStartSentinelGenesis={onStartSentinelGenesis ??
+        ((args) => vault.startSentinelGenesis(args))}
+      onAddSentinelGenesisParticipantResponse={(payload) =>
+        vault.addSentinelGenesisParticipantResponse(payload)}
+      onFinalizeSentinelGenesis={() => vault.finalizeSentinelGenesis()}
+      onCreateSentinelGenesisParticipantResponse={(payload) =>
+        vault.createSentinelGenesisParticipantResponse(payload)}
+      onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelGenesisPublicKeyAnnouncement ??
+        (() => vault.createSentinelGenesisPublicKeyAnnouncement())}
+      onRememberSentinelGenesisRequest={(payload) =>
+        vault.rememberSentinelGenesisRequest(payload)}
+      onReceiveSentinelGenesisShare={(payload) =>
+        vault.acceptSentinelGenesisShareDelivery(payload)}
+      onCompleteSentinelGenesisDelivery={() =>
+        vault.completeSentinelGenesisDelivery()}
+      sentinelGenesisStatus={vault.sentinelGenesisStatus}
+      sentinelGenesisRequest={vault.sentinelGenesisRequest}
+      sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
+      sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
+      {sentinelInvitationRequest}
+      {sentinelOnboardingPackage}
+      {onAcceptSentinelOnboardingPackage}
+      onConnectStorage={() => {
+        showProviderSetupLink = true
+      }}
+    />
+
+    {#if showEnrollmentAccess}
+      <LoginEnrollmentPanel
+        {vault}
+        bind:open={enrollmentPanelOpen}
+        {isVerifying}
+        initialCode={prefillEnrollmentCode}
+        openFormInitially={false}
+        {onUseEnrollmentCode}
+      />
+    {/if}
   {:else}
     {#if !hasProviders && !showSetup && !showLocalUnlock && onOpenHelp}
       <ProductIntro {vault} {onOpenHelp} />
@@ -226,8 +297,6 @@
               {vault.t('login.vault_picker_title')}
             {:else if showLocalUnlock}
               {vault.t('login.open_vault_title')}
-            {:else if showCreateVault}
-              {vault.t('login.create_vault_title')}
             {:else if showSetup}
               {vault.t('onboarding.connect_to', {
                 provider:
@@ -255,10 +324,6 @@
             <CardDescription class="text-pretty">
               {vault.t('login.open_vault_subtitle')}
             </CardDescription>
-          {:else if showCreateVault}
-            <CardDescription class="text-pretty">
-              {vault.t('login.create_vault_subtitle')}
-            </CardDescription>
           {:else if showSetup && setupType === 'github'}
             <CardDescription class="text-pretty">
               {vault.t('onboarding.github_description')}
@@ -276,8 +341,8 @@
       </CardHeader>
 
       <CardContent class="px-6 pb-5 pt-4 sm:pb-6">
-        {#if showNexusCeremony && !showVaultPicker}
-          <NexusCeremonyPanel {vault} {isVerifying} {isInitializing} />
+        {#if showSentinelCeremony && !showVaultPicker}
+          <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
         {:else if showVaultPicker && onCreateDeviceVault}
           <LoginVaultPicker
             {vault}
@@ -311,35 +376,6 @@
           <p class="mt-4 text-center text-xs text-muted-foreground">
             {vault.t('login.sync_after_unlock')}
           </p>
-        {:else if showCreateVault && onCreateDeviceVault}
-          <LoginCreateVaultChooser
-            {vault}
-            {isVerifying}
-            {isInitializing}
-            {onCreateDeviceVault}
-            onStartNexusGenesis={(args) => vault.startNexusGenesis(args)}
-            onAddNexusGenesisParticipantResponse={(payload) =>
-              vault.addNexusGenesisParticipantResponse(payload)}
-            onFinalizeNexusGenesis={() => vault.finalizeNexusGenesis()}
-            onCreateNexusGenesisParticipantResponse={(payload) =>
-              vault.createNexusGenesisParticipantResponse(payload)}
-            onCreateNexusGenesisPublicKeyAnnouncement={() =>
-              vault.createNexusGenesisPublicKeyAnnouncement()}
-            onRememberNexusGenesisRequest={(payload) =>
-              vault.rememberNexusGenesisRequest(payload)}
-            onReceiveNexusGenesisShare={(payload) =>
-              vault.acceptNexusGenesisShareDelivery(payload)}
-            onCompleteNexusGenesisDelivery={() =>
-              vault.completeNexusGenesisDelivery()}
-            nexusGenesisStatus={vault.nexusGenesisStatus}
-            nexusGenesisRequest={vault.nexusGenesisRequest}
-            nexusGenesisParticipantCount={vault.nexusGenesisParticipantCount}
-            nexusGenesisParticipants={vault.nexusGenesisParticipants}
-            nexusGenesisDeliveries={vault.nexusGenesisDeliveries}
-            onConnectStorage={() => {
-              showProviderSetupLink = true
-            }}
-          />
         {:else if showSetup && setupType}
           {#if setupType === 'oauth-file'}
             <OAuthProviderSetupWizard

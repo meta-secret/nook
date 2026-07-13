@@ -8,6 +8,7 @@ import {
   type VaultMember,
 } from '$lib/nook'
 import { consumeEnrollmentFromLocation } from '$lib/enrollment-code'
+import { buildSentinelOnboardingLink } from '$lib/sentinel-onboarding-link'
 import { SvelteDate } from 'svelte/reactivity'
 import {
   chooseLocalFolderBackupDirectory,
@@ -89,14 +90,14 @@ import * as syncActions from '$lib/vault/sync'
 import * as multiDeviceActions from '$lib/vault/multi-device'
 import * as secretsActions from '$lib/vault/secrets'
 import * as passwordUnlockActions from '$lib/vault/password-unlock'
-import * as nexusUnlockActions from '$lib/vault/nexus-unlock'
+import * as sentinelUnlockActions from '$lib/vault/sentinel-unlock'
 import * as idleSessionActions from '$lib/vault/idle-session'
 import * as lifecycleActions from '$lib/vault/lifecycle'
 import type {
-  NexusStoredDeliverySummary,
-  NexusUnlockSessionStatus,
-  NexusUnlockStatus,
-} from '$lib/vault/nexus-unlock'
+  SentinelStoredDeliverySummary,
+  SentinelUnlockSessionStatus,
+  SentinelUnlockStatus,
+} from '$lib/vault/sentinel-unlock'
 
 const vaultLog = createLogger('vault')
 
@@ -116,7 +117,7 @@ type PendingSyncConflictDraft = {
 
 type TranslationCatalog = string
 
-export type NexusGenesisStatus =
+export type SentinelGenesisStatus =
   | 'idle'
   | 'collecting'
   | 'ready'
@@ -124,19 +125,26 @@ export type NexusGenesisStatus =
   | 'delivering'
   | 'complete'
 
-export type NexusGenesisDelivery = {
+export type SentinelGenesisDelivery = {
   participantId: string
   fingerprint?: string
   payload: string
+  sharePayload?: string
 }
 
-export type NexusGenesisParticipantSummary = {
+export type SentinelGenesisParticipantSummary = {
   participantId: string
   label: string
   fingerprint: string
 }
 
-type NexusGenesisManagerStatus = {
+export type StartSentinelGenesisArgs = {
+  label: string
+  participantCount: number
+  threshold: number
+}
+
+type SentinelGenesisManagerStatus = {
   active: boolean
   participants?: Array<{
     deviceId: string
@@ -146,7 +154,7 @@ type NexusGenesisManagerStatus = {
   isComplete?: boolean
 }
 
-type NexusGenesisFinalizeResult = {
+type SentinelGenesisFinalizeResult = {
   storeId: string
   architecture: VaultArchitecture
   participantDeliveries: Array<{
@@ -212,12 +220,12 @@ export class VaultState {
   draftDeviceMode = $state<DeviceMode>('standard')
   draftVaultType = $state<VaultType>('simple')
   draftReplicationType = $state<ReplicationType>('personal')
-  nexusGenesisStatus = $state<NexusGenesisStatus>('idle')
-  nexusGenesisRequest = $state('')
-  nexusGenesisParticipantCount = $state(0)
-  nexusGenesisParticipants = $state<NexusGenesisParticipantSummary[]>([])
-  nexusGenesisDeliveries = $state<NexusGenesisDelivery[]>([])
-  nexusGenesisStoreId = $state<string | undefined>(undefined)
+  sentinelGenesisStatus = $state<SentinelGenesisStatus>('idle')
+  sentinelGenesisRequest = $state('')
+  sentinelGenesisParticipantCount = $state(0)
+  sentinelGenesisParticipants = $state<SentinelGenesisParticipantSummary[]>([])
+  sentinelGenesisDeliveries = $state<SentinelGenesisDelivery[]>([])
+  sentinelGenesisStoreId = $state<string | undefined>(undefined)
   oauthSetupPreset = $state<OAuthFilePreset | undefined>(undefined)
   googleOAuthBusy = $state(false)
   icloudOAuthPreparing = $state(false)
@@ -308,7 +316,7 @@ export class VaultState {
       return this.t('auth_storage.sync_blocked_edits')
     }
     if (!this.architectureCanCreateSecret) {
-      return this.t('architecture_modes.nexus_secret_creation_blocked')
+      return this.t('architecture_modes.sentinel_secret_creation_blocked')
     }
     return undefined
   }
@@ -343,20 +351,20 @@ export class VaultState {
   loginUnlockMode = $state<'unknown' | 'keys' | 'password'>('unknown')
   /** Open the login password form after Connect finds a password-mode vault. */
   loginPasswordPrompt = $state(false)
-  /** Nexus vault needs a signed, session-bound quorum ceremony. */
-  nexusCeremonyPrompt = $state(false)
-  nexusUnlockStatus = $state<NexusUnlockStatus>('not_nexus')
-  /** Public, signed Nexus unlock request. It contains no share material. */
-  nexusUnlockRequest = $state('')
+  /** Sentinel vault needs a signed, session-bound quorum ceremony. */
+  sentinelCeremonyPrompt = $state(false)
+  sentinelUnlockStatus = $state<SentinelUnlockStatus>('not_sentinel')
+  /** Public, signed Sentinel unlock request. It contains no share material. */
+  sentinelUnlockRequest = $state('')
   /** Rust-owned unlock-session progress rendered by the web layer. */
-  nexusUnlockSession = $state<NexusUnlockSessionStatus>({
+  sentinelUnlockSession = $state<SentinelUnlockSessionStatus>({
     active: false,
     collected: 0,
     threshold: 0,
     ready: false,
   })
   /** Provider-free encrypted deliveries available to this protected device. */
-  nexusStoredDeliveries = $state<NexusStoredDeliverySummary[]>([])
+  sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([])
   /** Remote vault file missing on storage — prompt before unlock. */
   remoteVaultRecoveryPrompt = $state<'none' | 'with_cache' | 'missing_only'>(
     'none',
@@ -758,7 +766,23 @@ export class VaultState {
         this.deviceAuthorizationInProgress = true
       }
 
-      if (!this.deviceProtectionReady && !deviceIdentityUnlocked) return
+      if (!this.deviceProtectionReady && !deviceIdentityUnlocked) {
+        // Empty-device Landing → Sentinel: show create flow before passkey.
+        // Existing-vault unlock stays in LoginGate with passkey authorization
+        // presented by PasskeyAuthOverlay.
+        if (!this.localVaultPresent && this.localVaults.length === 0) {
+          try {
+            await this.loadProviders({ ensureLocalRow: true })
+            this.applyActiveProviderCredentials()
+          } catch (error) {
+            vaultLog.warn('empty-device provider load deferred until passkey', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+            this.providersLoaded = true
+          }
+        }
+        return
+      }
       await this.continueInitializationAfterDeviceUnlock()
       this.deviceProtectionStatus = 'unlocked'
     } catch (error) {
@@ -787,13 +811,13 @@ export class VaultState {
     await this.initDeviceIdentity({ allowPendingAuthorization: true })
     if (
       await this.enqueueStorage(() =>
-        this.manager!.hasPendingNexusGenesisFinalization(),
+        this.manager!.hasPendingSentinelGenesisFinalization(),
       )
     ) {
       const rawResult = await this.enqueueStorage(() =>
-        this.manager!.resumePendingNexusGenesisFinalization(),
+        this.manager!.resumePendingSentinelGenesisFinalization(),
       )
-      this.applyNexusGenesisFinalizeResult(rawResult)
+      this.applySentinelGenesisFinalizeResult(rawResult)
     }
     await this.loadProviders({ ensureLocalRow: true })
     await localLoginActions.refreshLocalVaultCatalog(this)
@@ -865,8 +889,8 @@ export class VaultState {
       device_mode: this.draftDeviceMode,
       vault_type: this.draftVaultType,
       replication_type: this.draftReplicationType,
-      nexus:
-        this.draftVaultType === 'nexus'
+      sentinel:
+        this.draftVaultType === 'sentinel'
           ? {
               threshold: 2,
               required_participants: 2,
@@ -1144,96 +1168,95 @@ export class VaultState {
     return localLoginActions.createLocalVaultWithDeviceKeys(this, label)
   }
 
-  private applyNexusGenesisStatus(rawStatus: string): void {
-    const status = JSON.parse(rawStatus) as NexusGenesisManagerStatus
-    this.nexusGenesisParticipantCount = status.participants?.length ?? 0
-    this.nexusGenesisParticipants = (status.participants ?? []).map(
+  private applySentinelGenesisStatus(rawStatus: string): void {
+    const status = JSON.parse(rawStatus) as SentinelGenesisManagerStatus
+    this.sentinelGenesisParticipantCount = status.participants?.length ?? 0
+    this.sentinelGenesisParticipants = (status.participants ?? []).map(
       (participant) => ({
         participantId: participant.deviceId,
         label: participant.label ?? '',
         fingerprint: participant.fingerprint ?? '',
       }),
     )
-    this.nexusGenesisStatus = status.isComplete ? 'ready' : 'collecting'
+    this.sentinelGenesisStatus = status.isComplete ? 'ready' : 'collecting'
   }
 
-  private applyNexusGenesisFinalizeResult(rawResult: string): void {
-    const result = JSON.parse(rawResult) as NexusGenesisFinalizeResult
-    this.nexusGenesisStoreId = result.storeId
+  private applySentinelGenesisFinalizeResult(rawResult: string): void {
+    const result = JSON.parse(rawResult) as SentinelGenesisFinalizeResult
+    this.sentinelGenesisStoreId = result.storeId
     this.activeVaultStoreId = result.storeId
     this.vaultArchitecture = validateVaultArchitecture(result.architecture)
-    this.nexusGenesisDeliveries = result.participantDeliveries.map(
+    this.sentinelGenesisDeliveries = result.participantDeliveries.map(
       (delivery) => ({
         participantId: delivery.deviceId,
         fingerprint:
           delivery.fingerprint ??
-          this.nexusGenesisParticipants.find(
+          this.sentinelGenesisParticipants.find(
             (participant) => participant.participantId === delivery.deviceId,
           )?.fingerprint,
         payload: JSON.stringify(delivery),
+        sharePayload: JSON.stringify(delivery),
       }),
     )
-    this.nexusGenesisStatus = 'delivering'
+    this.sentinelGenesisStatus = 'delivering'
   }
 
-  async startNexusGenesis(args: {
-    label: string
-    participantCount: number
-    threshold: number
-  }): Promise<void> {
+  async startSentinelGenesis(args: StartSentinelGenesisArgs): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     this.dismissSuccess()
-    this.nexusGenesisDeliveries = []
-    this.nexusGenesisParticipants = []
-    this.nexusGenesisParticipantCount = 0
-    this.nexusGenesisStoreId = undefined
+    this.sentinelGenesisDeliveries = []
+    this.sentinelGenesisParticipants = []
+    this.sentinelGenesisParticipantCount = 0
+    this.sentinelGenesisStoreId = undefined
     try {
       await this.initDeviceIdentity()
       this.manager.setVaultName(args.label.trim())
       const status = await this.enqueueStorage(() =>
-        this.manager!.startNexusGenesis(
+        this.manager!.startSentinelGenesis(
           args.participantCount,
           args.threshold,
           args.label.trim(),
         ),
       )
-      this.nexusGenesisRequest = this.manager.nexusGenesisRequestJson()
-      this.applyNexusGenesisStatus(status)
+      this.sentinelGenesisRequest = this.manager.sentinelGenesisRequestJson()
+      this.applySentinelGenesisStatus(status)
     } catch (error) {
-      this.nexusGenesisStatus = 'idle'
+      this.sentinelGenesisStatus = 'idle'
       this.errorMsg =
-        error instanceof Error ? error.message : 'Failed to start Nexus setup.'
+        error instanceof Error
+          ? error.message
+          : 'Failed to start Sentinel setup.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async addNexusGenesisParticipantResponse(payload: string): Promise<void> {
+  async addSentinelGenesisParticipantResponse(payload: string): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     try {
       const status = await this.enqueueStorage(() =>
-        this.manager!.addNexusGenesisParticipantResponse(payload.trim()),
+        this.manager!.addSentinelGenesisParticipantResponse(payload.trim()),
       )
-      this.applyNexusGenesisStatus(status)
+      this.applySentinelGenesisStatus(status)
     } catch (error) {
       this.errorMsg =
         error instanceof Error
           ? error.message
-          : 'Failed to add Nexus participant.'
+          : 'Failed to add Sentinel participant.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async createNexusGenesisPublicKeyAnnouncement(): Promise<string> {
+  async createSentinelGenesisPublicKeyAnnouncement(): Promise<string> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return ''
     this.isVerifying = true
@@ -1241,7 +1264,7 @@ export class VaultState {
     try {
       await this.initDeviceIdentity()
       return await this.enqueueStorage(() =>
-        this.manager!.createNexusGenesisPublicKeyAnnouncement(
+        this.manager!.createSentinelGenesisPublicKeyAnnouncement(
           this.t('device_protection.passkey_label_placeholder'),
         ),
       )
@@ -1249,34 +1272,34 @@ export class VaultState {
       this.errorMsg =
         error instanceof Error
           ? error.message
-          : 'Failed to create Nexus public key announcement.'
+          : 'Failed to create Sentinel public key announcement.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async rememberNexusGenesisRequest(requestPayload: string): Promise<void> {
+  async rememberSentinelGenesisRequest(requestPayload: string): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     try {
       await this.enqueueStorage(() =>
-        this.manager!.rememberNexusGenesisRequest(requestPayload.trim()),
+        this.manager!.rememberSentinelGenesisRequest(requestPayload.trim()),
       )
     } catch (error) {
       this.errorMsg =
         error instanceof Error
           ? error.message
-          : 'Failed to remember the Nexus initiator request.'
+          : 'Failed to remember the Sentinel initiator request.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async createNexusGenesisParticipantResponse(
+  async createSentinelGenesisParticipantResponse(
     requestPayload: string,
   ): Promise<string> {
     if (!this.manager) throw new Error('Vault engine is not available.')
@@ -1286,7 +1309,7 @@ export class VaultState {
     try {
       await this.initDeviceIdentity()
       return await this.enqueueStorage(() =>
-        this.manager!.respondToNexusGenesisRequest(
+        this.manager!.respondToSentinelGenesisRequest(
           requestPayload.trim(),
           this.t('device_protection.passkey_label_placeholder'),
         ),
@@ -1295,70 +1318,114 @@ export class VaultState {
       this.errorMsg =
         error instanceof Error
           ? error.message
-          : 'Failed to create Nexus participant response.'
+          : 'Failed to create Sentinel participant response.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async finalizeNexusGenesis(): Promise<void> {
+  async finalizeSentinelGenesis(): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
-    this.nexusGenesisStatus = 'finalizing'
+    this.sentinelGenesisStatus = 'finalizing'
     try {
       const rawResult = await this.enqueueStorage(() =>
-        this.manager!.finalizeNexusGenesis(),
+        this.manager!.finalizeSentinelGenesis(),
       )
-      this.applyNexusGenesisFinalizeResult(rawResult)
+      this.applySentinelGenesisFinalizeResult(rawResult)
     } catch (error) {
-      this.nexusGenesisStatus = 'ready'
+      this.sentinelGenesisStatus = 'ready'
       this.errorMsg =
         error instanceof Error
           ? error.message
-          : 'Failed to finalize Nexus setup.'
+          : 'Failed to finalize Sentinel setup.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async acceptNexusGenesisShareDelivery(payload: string): Promise<void> {
+  async acceptSentinelGenesisShareDelivery(payload: string): Promise<void> {
     if (!this.manager) throw new Error('Vault engine is not available.')
     if (this.isVerifying) return
     this.isVerifying = true
     this.errorMsg = ''
     try {
       await this.enqueueStorage(() =>
-        this.manager!.acceptNexusGenesisShareDelivery(payload.trim()),
+        this.manager!.acceptSentinelGenesisShareDelivery(payload.trim()),
       )
-      this.showSuccess(this.t('login.nexus_genesis_receive_share_success'))
+      this.showSuccess(this.t('login.sentinel_genesis_receive_share_success'))
     } catch (error) {
       this.errorMsg =
         error instanceof Error
           ? error.message
-          : 'Failed to receive Nexus share.'
+          : 'Failed to receive Sentinel share.'
       throw error
     } finally {
       this.isVerifying = false
     }
   }
 
-  async completeNexusGenesisDelivery(): Promise<void> {
-    if (!this.nexusGenesisStoreId || this.isVerifying) return
+  async completeSentinelGenesisDelivery(): Promise<void> {
+    if (!this.sentinelGenesisStoreId || this.isVerifying) return
     this.isVerifying = true
     try {
-      this.nexusGenesisStatus = 'complete'
-      await setActiveVault(this.nexusGenesisStoreId)
+      this.sentinelGenesisStatus = 'complete'
+      await setActiveVault(this.sentinelGenesisStoreId)
       await this.refreshLocalVaultCatalog()
-      this.selectedLoginVaultStoreId = this.nexusGenesisStoreId
+      this.selectedLoginVaultStoreId = this.sentinelGenesisStoreId
       this.localLoginPrepared = false
-      this.nexusCeremonyPrompt = true
+      this.sentinelCeremonyPrompt = true
     } finally {
       this.isVerifying = false
     }
+  }
+
+  async prepareSentinelOnboardingLinks(): Promise<void> {
+    if (!this.manager || !this.sentinelGenesisStoreId) return
+    const provider = this.syncProviders[0]
+    if (!provider || provider.type === 'local-folder') return
+    const providerSnapshot = JSON.parse(
+      JSON.stringify({
+        providers: [provider],
+        activeVaultStoreId: this.sentinelGenesisStoreId,
+      }),
+    )
+    this.sentinelGenesisDeliveries = this.sentinelGenesisDeliveries.map(
+      (delivery) => {
+        const sharePayload = delivery.sharePayload ?? delivery.payload
+        if (delivery.participantId === this.deviceId) {
+          return { ...delivery, sharePayload }
+        }
+        const packageJson = this.manager!.createSentinelOnboardingPackage(
+          this.sentinelGenesisRequest,
+          sharePayload,
+          providerSnapshot,
+        )
+        return {
+          ...delivery,
+          sharePayload,
+          payload: buildSentinelOnboardingLink(packageJson),
+        }
+      },
+    )
+  }
+
+  async acceptSentinelOnboardingPackage(packageJson: string): Promise<void> {
+    if (!this.manager) throw new Error('Vault engine is not available.')
+    this.errorMsg = ''
+    const storeId = await this.enqueueStorage(() =>
+      this.manager!.acceptSentinelOnboardingPackage(packageJson),
+    )
+    this.activeVaultStoreId = storeId
+    await setActiveVault(storeId)
+    await this.loadProviders()
+    this.applyActiveProviderCredentials()
+    this.sentinelGenesisStatus = 'complete'
+    await this.loadDb()
   }
 
   async renameLocalVault(storeId: string, label: string): Promise<void> {
@@ -1560,16 +1627,16 @@ export class VaultState {
     this.selectedPasswordEntryId = undefined
     this.loginUnlockMode = 'unknown'
     this.loginPasswordPrompt = false
-    this.nexusCeremonyPrompt = false
-    this.nexusUnlockStatus = 'not_nexus'
-    this.nexusUnlockRequest = ''
-    this.nexusUnlockSession = {
+    this.sentinelCeremonyPrompt = false
+    this.sentinelUnlockStatus = 'not_sentinel'
+    this.sentinelUnlockRequest = ''
+    this.sentinelUnlockSession = {
       active: false,
       collected: 0,
       threshold: 0,
       ready: false,
     }
-    this.nexusStoredDeliveries = []
+    this.sentinelStoredDeliveries = []
     this.sharedJoinerIdentity = ''
     this.sharedGrantInstructions = ''
   }
@@ -1631,11 +1698,11 @@ export class VaultState {
     this.settingsOpen = false
     this.enrollmentCode = ''
     this.errorMsg = ''
-    const wasNexus = this.vaultArchitecture.vault_type === 'nexus'
+    const wasSentinel = this.vaultArchitecture.vault_type === 'sentinel'
     this.resetVaultSessionState()
-    if (wasNexus) {
-      this.nexusCeremonyPrompt = true
-      this.nexusUnlockStatus = 'ceremony_required'
+    if (wasSentinel) {
+      this.sentinelCeremonyPrompt = true
+      this.sentinelUnlockStatus = 'ceremony_required'
     }
   }
 
@@ -2295,49 +2362,55 @@ export class VaultState {
     return passwordUnlockActions.unlockWithPassword(this, entryId, password)
   }
 
-  isNexusVault(): boolean {
-    return nexusUnlockActions.isNexusVault(this)
+  isSentinelVault(): boolean {
+    return sentinelUnlockActions.isSentinelVault(this)
   }
 
-  async getNexusUnlockStatus(): Promise<NexusUnlockStatus> {
-    return nexusUnlockActions.getNexusUnlockStatus(this)
+  async getSentinelUnlockStatus(): Promise<SentinelUnlockStatus> {
+    return sentinelUnlockActions.getSentinelUnlockStatus(this)
   }
 
-  async refreshNexusUnlockStatus(): Promise<NexusUnlockStatus> {
-    const status = await nexusUnlockActions.refreshNexusUnlockStatus(this)
+  async refreshSentinelUnlockStatus(): Promise<SentinelUnlockStatus> {
+    const status = await sentinelUnlockActions.refreshSentinelUnlockStatus(this)
     await this.refreshArchitectureSecretCreationAllowed()
     return status
   }
 
-  async startNexusUnlock(): Promise<void> {
-    return nexusUnlockActions.startNexusUnlock(this)
+  async startSentinelUnlock(): Promise<void> {
+    return sentinelUnlockActions.startSentinelUnlock(this)
   }
 
-  async addNexusUnlockResponse(response: string): Promise<void> {
-    return nexusUnlockActions.addNexusUnlockResponse(this, response)
+  async addSentinelUnlockResponse(response: string): Promise<void> {
+    return sentinelUnlockActions.addSentinelUnlockResponse(this, response)
   }
 
-  async refreshNexusUnlockSession(): Promise<void> {
-    return nexusUnlockActions.refreshNexusUnlockSession(this)
+  async refreshSentinelUnlockSession(): Promise<void> {
+    return sentinelUnlockActions.refreshSentinelUnlockSession(this)
   }
 
-  async listNexusStoredDeliveries(): Promise<NexusStoredDeliverySummary[]> {
-    return nexusUnlockActions.listNexusStoredDeliveries(this)
+  async listSentinelStoredDeliveries(): Promise<
+    SentinelStoredDeliverySummary[]
+  > {
+    return sentinelUnlockActions.listSentinelStoredDeliveries(this)
   }
 
-  async createNexusUnlockResponse(
+  async createSentinelUnlockResponse(
     storeId: string,
     request: string,
   ): Promise<string> {
-    return nexusUnlockActions.createNexusUnlockResponse(this, storeId, request)
+    return sentinelUnlockActions.createSentinelUnlockResponse(
+      this,
+      storeId,
+      request,
+    )
   }
 
-  async finalizeNexusUnlock(): Promise<void> {
-    return nexusUnlockActions.finalizeNexusUnlock(this)
+  async finalizeSentinelUnlock(): Promise<void> {
+    return sentinelUnlockActions.finalizeSentinelUnlock(this)
   }
 
-  isNexusCeremonyRequiredError(err: unknown): boolean {
-    return nexusUnlockActions.isNexusCeremonyRequiredError(err)
+  isSentinelCeremonyRequiredError(err: unknown): boolean {
+    return sentinelUnlockActions.isSentinelCeremonyRequiredError(err)
   }
 
   /**

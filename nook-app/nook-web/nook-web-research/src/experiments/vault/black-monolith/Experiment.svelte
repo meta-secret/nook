@@ -62,7 +62,7 @@
   >
     <div>
       <p class="font-mono text-xs tracking-[0.22em] text-[#686865] uppercase">
-        Nexus genesis · {String(step).padStart(2, '0')} / 04
+        Sentinel genesis · {String(step).padStart(2, '0')} / 04
       </p>
       {#if step === 1}<h1
           class="mt-5 text-6xl font-light tracking-[-0.07em] sm:text-8xl"
@@ -75,7 +75,7 @@
         </p>
         <input
           class="mt-10 w-full max-w-md border-b border-black bg-transparent py-4 text-2xl font-light outline-none placeholder:text-[#999]"
-          placeholder="Nexus vault name"
+          placeholder="Sentinel vault name"
           bind:value={name}
         />
       {:else if step === 2}<h1
@@ -153,7 +153,8 @@
           It now<br />exists.
         </h1>
         <p class="mt-8 max-w-md text-lg leading-8 text-[#777773]">
-          {name}. A {threshold}-of-{total} Nexus vault, sealed atomically from {total}
+          {name}. A {threshold}-of-{total} Sentinel vault, sealed atomically from
+          {total}
           verified participant keys.
         </p>
         <div class="mt-10 flex items-center gap-3 text-sm">
@@ -187,7 +188,7 @@
         class="absolute right-5 bottom-14 font-mono text-[10px] tracking-wider text-[#777]"
       >
         {step === 4
-          ? 'NEXUS VAULT SEALED'
+          ? 'SENTINEL VAULT SEALED'
           : step === 3
             ? `${keys}/${total} KEYS PRESENT`
             : 'VOLATILE DRAFT'}

@@ -69,7 +69,7 @@
     >
       <div>
         <p class="font-mono text-xs tracking-[0.2em] uppercase">
-          Nexus admission control
+          Sentinel admission control
         </p>
         <h1 class="mt-3 text-6xl font-bold tracking-[-0.06em] sm:text-8xl">
           Genesis Airlock
@@ -95,7 +95,7 @@
         <p class="mt-2 text-sm text-[#667378]">Create a volatile draft.</p>
         <input
           class="mt-8 w-full border-b-2 border-[#1f7888] bg-transparent py-3 text-xl font-bold outline-none"
-          placeholder="Nexus name"
+          placeholder="Sentinel name"
           bind:value={name}
         /><span class="absolute right-6 bottom-6 font-mono text-[10px]"
           >{chamber > 1 ? 'CLEARED' : 'ACTIVE'}</span
@@ -226,7 +226,7 @@
           (chamber === 2 && (threshold < 2 || threshold > total)) ||
           (chamber === 3 && keys !== total)}
         onclick={advance}
-        >{chamber === 3 ? 'SEAL NEXUS VAULT' : `CLEAR CHAMBER 0${chamber}`} →</button
+        >{chamber === 3 ? 'SEAL SENTINEL VAULT' : `CLEAR CHAMBER 0${chamber}`} →</button
       >{/if}
   </section>
 </main>

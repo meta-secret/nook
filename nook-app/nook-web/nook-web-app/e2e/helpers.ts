@@ -136,6 +136,12 @@ export async function advanceCreateVaultWizardToFinalStep(page: Page) {
   await expect(finalStep).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  const nameInput = page.getByTestId('login-vault-name-input')
+  if (!(await nameInput.inputValue()).trim()) {
+    await nameInput.fill('Test vault', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  }
 }
 
 export async function openLoginProviderSetup(page: Page) {
@@ -189,7 +195,23 @@ export async function createLocalVaultOnLogin(
   page: Page,
   vaultName = 'Test vault',
 ) {
-  await advanceCreateVaultWizardToFinalStep(page)
+  const chooser = page.getByTestId('login-create-vault-chooser')
+  await expect(chooser).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+
+  const finalStep = page.getByTestId('create-vault-wizard-create')
+  if (!(await finalStep.isVisible())) {
+    const simplePath = page.getByTestId('get-started-path-simple')
+    await expect(simplePath).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await simplePath.click()
+    await expect(finalStep).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  }
+
   const nameInput = page.getByTestId('login-vault-name-input')
   await expect(nameInput).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -204,7 +226,28 @@ export async function createLocalVaultOnLogin(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await createButton.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-  await expect(page.getByTestId('vault-panel')).toBeVisible({
+
+  // Deferred passkey: empty create may show the top-right overlay first.
+  const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+  const vaultPanel = page.getByTestId('vault-panel')
+  await expect
+    .poll(
+      async () =>
+        (await passkeyOverlay.isVisible()) || (await vaultPanel.isVisible()),
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe(true)
+  if (await passkeyOverlay.isVisible()) {
+    const setupBtn = page.getByTestId('device-protection-setup-btn')
+    const unlockBtn = page.getByTestId('device-protection-unlock-btn')
+    if (await setupBtn.isVisible()) {
+      await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    } else if (await unlockBtn.isVisible()) {
+      await unlockBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    }
+  }
+
+  await expect(vaultPanel).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await disableVaultIdleLock(page)
@@ -2438,11 +2481,31 @@ export async function selectLoginUnlockMethod(
 }
 
 /** Authorize the wrapped device identity after an explicit or idle lock. */
-export async function authorizeDeviceProtection(page: Page) {
+export async function authorizeDeviceProtection(
+  page: Page,
+  opts?: { storeId?: string },
+) {
+  const overlay = page.getByTestId('passkey-auth-overlay')
+  if (!(await overlay.isVisible())) {
+    const vaultPicker = page.getByTestId('login-vault-picker')
+    if (await vaultPicker.isVisible()) {
+      const option = opts?.storeId
+        ? page.locator(
+            `[data-testid="login-vault-option"][data-store-id="${opts.storeId}"]`,
+          )
+        : page.getByTestId('login-vault-option').first()
+      await expect(option).toBeVisible({ timeout: UI_TIMEOUT_MS })
+      await option.click()
+    }
+    const unlockVaultButton = page.getByTestId('unlock-vault-btn')
+    await expect(unlockVaultButton).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await unlockVaultButton.click()
+    await expect(overlay).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  }
   const button = page.getByTestId('device-protection-unlock-btn')
   await expect(button).toBeVisible({ timeout: UI_TIMEOUT_MS })
   await button.click()
-  await expect(page.getByTestId('login-gate')).toBeVisible({
+  await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
   await waitForVaultOperationsIdle(page)

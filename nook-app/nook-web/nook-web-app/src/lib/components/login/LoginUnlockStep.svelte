@@ -5,7 +5,7 @@
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
-  import NexusCeremonyPanel from '$lib/components/login/NexusCeremonyPanel.svelte'
+  import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
@@ -47,13 +47,15 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   let workflow = $state<'open' | 'create' | 'import'>('open')
-  const showNexusCeremony = $derived(
-    vault.nexusCeremonyPrompt ||
-      vault.nexusUnlockStatus === 'ceremony_required' ||
-      vault.nexusUnlockStatus === 'awaiting_shares' ||
-      (vault.isNexusVault() && !vault.isAuthenticated),
+  const showSentinelCeremony = $derived(
+    vault.sentinelCeremonyPrompt ||
+      vault.sentinelUnlockStatus === 'ceremony_required' ||
+      vault.sentinelUnlockStatus === 'awaiting_shares' ||
+      (vault.isSentinelVault() && !vault.isAuthenticated),
   )
-  const hidePasswordUnlock = $derived(showNexusCeremony || vault.isNexusVault())
+  const hidePasswordUnlock = $derived(
+    showSentinelCeremony || vault.isSentinelVault(),
+  )
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
@@ -86,8 +88,8 @@
       </section>
     {/if}
 
-    {#if showNexusCeremony}
-      <NexusCeremonyPanel {vault} {isVerifying} {isInitializing} />
+    {#if showSentinelCeremony}
+      <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
     {:else}
       <section
         class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"

@@ -44,7 +44,9 @@
   let renameAuthId = $state<string | undefined>(undefined)
   let renameLabel = $state('')
   let revokeAuthId = $state<string | undefined>(undefined)
-  const isNexusVault = $derived(vault.vaultArchitecture.vault_type === 'nexus')
+  const isSentinelVault = $derived(
+    vault.vaultArchitecture.vault_type === 'sentinel',
+  )
 
   const sortedMembers = $derived(
     [...vaultMembers].sort((a, b) => {
@@ -127,22 +129,22 @@
       <TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
       <span>
         {vault.t(
-          isNexusVault
-            ? 'devices_card.nexus_single_device_warning'
+          isSentinelVault
+            ? 'devices_card.sentinel_single_device_warning'
             : 'devices_card.single_device_warning',
         )}
       </span>
     </div>
   {/if}
 
-  {#if isNexusVault}
+  {#if isSentinelVault}
     <div
       class="flex items-start gap-2 rounded-lg border border-border/50 bg-muted/25 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
       role="status"
-      data-testid="nexus-device-change-guidance"
+      data-testid="sentinel-device-change-guidance"
     >
       <TriangleAlert class="mt-0.5 size-3.5 shrink-0" />
-      <span>{vault.t('devices_card.nexus_device_change_guidance')}</span>
+      <span>{vault.t('devices_card.sentinel_device_change_guidance')}</span>
     </div>
   {/if}
 
@@ -244,7 +246,7 @@
           {@const isCurrent = member.deviceId === deviceId}
           {@const isRenaming = renameAuthId === member.authId}
           {@const isConfirmingRevoke = revokeAuthId === member.authId}
-          {@const canRevoke = vaultMembers.length > 1 && !isNexusVault}
+          {@const canRevoke = vaultMembers.length > 1 && !isSentinelVault}
           <li
             class="rounded-lg border border-border/40 bg-background/60 p-3 sm:border-border/60"
             data-testid="vault-member-row"

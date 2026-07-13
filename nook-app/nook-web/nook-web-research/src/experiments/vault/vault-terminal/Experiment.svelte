@@ -64,7 +64,7 @@
   )
 
   const openingLines: Line[] = [
-    { text: 'NOOK NEXUS INIT v0.3.0', tone: 'accent' },
+    { text: 'NOOK SENTINEL INIT v0.3.0', tone: 'accent' },
     {
       text: 'Guided threshold-vault setup. No commands required.',
       tone: 'muted',
@@ -231,7 +231,7 @@
           class="size-3 rounded-full bg-[#febc2e]"
         ></span><span class="size-3 rounded-full bg-[#28c840]"></span>
       </div>
-      <span>nook://nexus/genesis — guided setup</span><span>SLIP_0039</span>
+      <span>nook://sentinel/genesis — guided setup</span><span>SLIP_0039</span>
     </header>
 
     <div class="grid min-h-[44rem] lg:grid-cols-[1fr_18rem]">
@@ -276,7 +276,7 @@
               class="mt-7 border border-[#83e273] bg-[#0c190b] p-5 text-[#a5f58f]"
             >
               <p class="flex items-center gap-2 font-bold">
-                <Check class="size-4" /> NEXUS VAULT SEALED
+                <Check class="size-4" /> SENTINEL VAULT SEALED
               </p>
               <p class="mt-2 text-xs">
                 {name} · {threshold}-of-{total} · {total} encrypted share packages
@@ -354,7 +354,7 @@
             {:else if step === 'confirm'}
               <div class="flex flex-wrap items-center justify-between gap-4">
                 <p>
-                  <span class="text-[#83e273]">?</span> Seal this Nexus vault?
+                  <span class="text-[#83e273]">?</span> Seal this Sentinel vault?
                 </p>
                 <button
                   bind:this={choiceElement}
@@ -374,7 +374,7 @@
                 <button
                   bind:this={choiceElement}
                   class="border border-[#4f7a46] px-5 py-3 text-xs"
-                  onclick={restart}>Create another Nexus</button
+                  onclick={restart}>Create another Sentinel</button
                 >
               </div>
             {/if}

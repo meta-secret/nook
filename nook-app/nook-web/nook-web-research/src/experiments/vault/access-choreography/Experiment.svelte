@@ -67,7 +67,7 @@
   <section class="mx-auto max-w-7xl px-6 py-24">
     <header class="text-center">
       <p class="font-mono text-xs tracking-[0.2em] uppercase">
-        Nexus genesis performance / four movements
+        Sentinel genesis performance / four movements
       </p>
       <h1
         class="mt-4 font-serif text-6xl italic tracking-[-0.04em] sm:text-8xl"
@@ -112,7 +112,7 @@
           </p>
           <input
             class="mt-4 w-full border-b border-[#998590] bg-transparent py-2 text-center text-2xl outline-none"
-            placeholder="Nexus vault name"
+            placeholder="Sentinel vault name"
             bind:value={name}
           />{:else if cue === 1}<p class="font-serif text-2xl italic">
             Set the ensemble and the quorum.
@@ -185,7 +185,7 @@
             (cue === 2 && keys !== total) ||
             cue === 3}
           class="grid size-12 place-items-center rounded-full bg-[#251d24] text-white disabled:opacity-30"
-          aria-label={cue === 2 ? 'Seal Nexus vault' : 'Advance workflow'}
+          aria-label={cue === 2 ? 'Seal Sentinel vault' : 'Advance workflow'}
           onclick={advance}><Play /></button
         ><button
           class="grid size-12 place-items-center rounded-full border border-[#998590]"

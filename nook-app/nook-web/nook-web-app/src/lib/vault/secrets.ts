@@ -7,10 +7,10 @@ import {
 import { createLogger } from '$lib/log'
 import { syncLocalFolderProvider } from '$lib/vault/sync'
 import {
-  isNexusCeremonyRequiredError,
-  refreshNexusUnlockStatus,
-  surfaceNexusCeremonyIfNeeded,
-} from '$lib/vault/nexus-unlock'
+  isSentinelCeremonyRequiredError,
+  refreshSentinelUnlockStatus,
+  surfaceSentinelCeremonyIfNeeded,
+} from '$lib/vault/sentinel-unlock'
 
 const log = createLogger('connect')
 
@@ -180,13 +180,13 @@ export async function loadDb(state: VaultState) {
     state.isAuthenticated = false
     const message = e instanceof Error ? e.message : String(e)
     log.warn('loadDb failed', message)
-    if (await surfaceNexusCeremonyIfNeeded(state, e)) {
+    if (await surfaceSentinelCeremonyIfNeeded(state, e)) {
       state.refreshVaultArchitectureFromManager()
-      await refreshNexusUnlockStatus(state)
+      await refreshSentinelUnlockStatus(state)
       return
     }
-    if (isNexusCeremonyRequiredError(e)) {
-      state.nexusCeremonyPrompt = true
+    if (isSentinelCeremonyRequiredError(e)) {
+      state.sentinelCeremonyPrompt = true
       state.errorMsg = ''
       return
     }

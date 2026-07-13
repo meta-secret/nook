@@ -44,7 +44,7 @@ type StoredVaultYaml = {
   members?: MembersYamlRecord[]
   unlock?: UnlockYaml
   password_entries?: PasswordEntryYaml[]
-  nexus_shares?: StoredSecretRecord[]
+  sentinel_shares?: StoredSecretRecord[]
   /** Legacy field — pre-enum vaults wrote the envelope at the top level. */
   password_envelope?: PasswordEnvelopeYaml
 }
@@ -92,8 +92,8 @@ export type VaultYamlSnapshot = {
   authPkIds: string[]
   joinEntries: Array<{ deviceId: string; publicKey: string }>
   memberPkIds: string[]
-  /** Count of nexus share records / issued share payloads observed. */
-  nexusShareCount: number
+  /** Count of sentinel share records / issued share payloads observed. */
+  sentinelShareCount: number
   unlockMode: 'keys' | 'password'
   hasPasswordEnvelope: boolean
   /**
@@ -141,7 +141,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
   const joinEntries = (vault.joins ?? []).map((record) =>
     parseJoinValue(record.id, record.data),
   )
-  const nexusShareCount = (vault.nexus_shares ?? []).length
+  const sentinelShareCount = (vault.sentinel_shares ?? []).length
 
   const passwordEntries = collectPasswordEntries(vault)
   const hasPasswordEnvelope = passwordEntries.length > 0
@@ -161,7 +161,7 @@ export function parseVaultYamlSnapshot(yaml: string): VaultYamlSnapshot {
     authPkIds,
     joinEntries,
     memberPkIds,
-    nexusShareCount,
+    sentinelShareCount,
     unlockMode,
     hasPasswordEnvelope,
     passwordEnvelopeCiphertext,
@@ -205,7 +205,7 @@ export function parseVaultEventLogSnapshot(
   >()
   const members = new Map<string, { pk_id: string; ciphertext: string }>()
   const passwordEntries = new Map<string, PasswordEntryYaml>()
-  const nexusShares = new Map<string, StoredSecretRecord>()
+  const sentinelShares = new Map<string, StoredSecretRecord>()
 
   for (const event of sortEventYamls(eventYamls)) {
     for (const operation of event.operations ?? []) {
@@ -267,7 +267,7 @@ export function parseVaultEventLogSnapshot(
             })
           }
           break
-        case 'nexus-participant-enrolled':
+        case 'sentinel-participant-enrolled':
           if (operation.device_id) {
             joins.delete(operation.device_id)
             members.set(operation.device_id, {
@@ -276,12 +276,12 @@ export function parseVaultEventLogSnapshot(
             })
           }
           break
-        case 'nexus-shares-issued':
+        case 'sentinel-shares-issued':
           for (const share of operation.shares ?? []) {
             const deviceId = share.device_id?.trim()
             if (!deviceId) continue
-            nexusShares.set(deviceId, {
-              id: `nexus_share:${deviceId}`,
+            sentinelShares.set(deviceId, {
+              id: `sentinel_share:${deviceId}`,
               type: 'secure-note',
               data: share.ciphertext ?? '',
             })
@@ -295,7 +295,7 @@ export function parseVaultEventLogSnapshot(
             joins.delete(operation.device_id)
             auth.delete(operation.device_id)
             members.delete(operation.device_id)
-            nexusShares.delete(operation.device_id)
+            sentinelShares.delete(operation.device_id)
           }
           break
         case 'password-added':
@@ -341,7 +341,7 @@ export function parseVaultEventLogSnapshot(
       }),
     })),
     members: [...members.values()],
-    nexus_shares: [...nexusShares.values()],
+    sentinel_shares: [...sentinelShares.values()],
     password_entries: [...passwordEntries.values()],
   })
 
@@ -392,7 +392,7 @@ export function assertJoinPendingYaml(
   if (!join.publicKey.startsWith('age1')) {
     throw new Error('Join request must include age1 public_key while pending')
   }
-  // Simple vaults keep genesis auth while a join is pending. Nexus genesis
+  // Simple vaults keep genesis auth while a join is pending. Sentinel genesis
   // never writes auth envelopes, so an empty auth section is expected there.
 }
 
