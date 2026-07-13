@@ -73,26 +73,27 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await expectPathChooser(deviceA)
     await deviceA.getByTestId('get-started-path-sentinel').click()
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
-    await deviceA.evaluate(async () => {
-      const initiatorVault = (
-        window as Window & {
-          __nookVault?: {
-            setupDeviceProtection: (
-              label: string,
-              mode: 'standard',
-            ) => Promise<void>
-          }
-        }
-      ).__nookVault
-      if (!initiatorVault) throw new Error('Initiator vault is unavailable')
-      await initiatorVault.setupDeviceProtection(
-        'Sentinel initiator',
-        'standard',
+    await deviceA.getByTestId('sentinel-onboarding-create-keys').click()
+    const passkeyOverlay = deviceA.getByTestId('passkey-auth-overlay')
+    const responseInput = deviceA.getByTestId('sentinel-genesis-response-input')
+    await expect
+      .poll(
+        async () =>
+          (await passkeyOverlay.isVisible()) ||
+          (await responseInput.isVisible()),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
+      .toBe(true)
+    if (await passkeyOverlay.isVisible()) {
+      const setupBtn = deviceA.getByTestId('device-protection-setup-btn')
+      await expect(setupBtn).toBeEnabled({
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
+      await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    }
+    await expect(responseInput).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await expect(
-      deviceA.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await deviceA
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)
