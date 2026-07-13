@@ -1,9 +1,10 @@
 # Cursor SDK agent: implement a labeled issue or a manual prompt, then open a PR
 # and squash-merge after checks pass (same loop as main.yml ci-fix).
 #
-# The GHA job runs on GitHub-hosted ubuntu-latest. Inside the job, the Cursor
-# agent still runs in nook-ci-agent with docker.sock (sibling containers on the
-# hosted runner's Docker daemon — not DinD).
+# The GHA job runs on GitHub-hosted ubuntu-latest — not the shared self-hosted
+# `nook` runners — so the agent does not share that machine with other CI.
+# Inside the job, the Cursor agent still runs in nook-ci-agent with docker.sock
+# (sibling containers on the hosted runner's Docker daemon — not DinD).
 #
 # Triggers:
 #   - issues labeled — only when the label being assigned is exactly `ai-agent`
