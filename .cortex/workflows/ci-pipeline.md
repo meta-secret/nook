@@ -6,7 +6,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, wasm-bindgen tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, format, wasm-bindgen/web unit tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -205,14 +205,20 @@ before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
 `cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
 and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
-PR coverage export must remain a copy-out step: `task docker:extract:coverage`
-creates a stopped container from the already-built `nook-web:local` image and
-copies `summary.txt`, `summary.json`, `lcov.info`, and `coverage-floor.json`.
-Do not make coverage export start a container and rerun `cargo llvm-cov`; PR CI
-exports current and base coverage, so a runtime coverage command would duplicate
-the same Rust tests after the image build. `task setup` gets those files into the
-slim web image through the same temporary host artifact directory as generated
-WASM; it does not copy them directly from the multi-GB Rust builder snapshot.
+PR CI starts with an explicit **Rust unit tests and coverage** step using
+`task docker:coverage:export`. That coverage-only BuildKit solve stops at
+`builder-debug`, runs the `nook-core + nook-auth2` nextest suites, enforces the
+coverage floor, and exports `summary.txt`, `summary.json`, `lcov.info`, and
+`coverage-floor.json` directly to `coverage/current`. The following `task ci:pr`
+solve reuses those source-sensitive BuildKit layers, so it does not run the same
+native tests a second time. Do not add a runtime `cargo llvm-cov` invocation after
+the image build; that would duplicate the tests instead of reusing the cache.
+
+`task docker:extract:coverage` remains the copy-only path for workflows that
+already have a sealed `nook-web:local` image, including main's commit-keyed
+coverage artifact. `task setup` gets those files into the slim web image through
+the same temporary host artifact directory as generated WASM; it does not copy
+them directly from the multi-GB Rust builder snapshot.
 
 After a successful main gate, `main.yml` uploads those four files plus a manifest
 as `nook-core-auth-coverage-<commit SHA>`. A PR with changed Rust coverage inputs
@@ -228,7 +234,8 @@ as the base comparison because the measured source is unchanged.
 
 **Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
 self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
-**`task ci:pr`** (verify, web build, no browser e2e, Cloudflare preview,
+an explicit **Rust unit tests and coverage** solve followed by **`task ci:pr`**
+(WASM/web unit tests, verify, web build, no browser e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
 toolchain image push). The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current

@@ -1,4 +1,4 @@
-# Pull requests: pull toolchain cache, verify/build in one container, deploy preview.
+# Pull requests: run the Rust domain unit/coverage gate, verify/build in one container, deploy preview.
 # Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
 # and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
@@ -45,7 +45,15 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and build preview (no browser e2e)
+      # Keep Rust domain correctness as an explicit PR gate. This coverage-only solve runs the
+      # nook-core + nook-auth2 nextest suites and enforces the committed line floor; the following
+      # full PR solve reuses its BuildKit layers instead of running the native tests a second time.
+      - name: Rust unit tests and coverage
+        run: task docker:coverage:export COVERAGE_OUT_DIR=coverage/current WASM_BUILD_MODE=prod
+        env:
+          CI: true
+
+      - name: WASM and web unit tests, checks, and preview build (no browser e2e)
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
         env:
           CI: true
@@ -148,11 +156,6 @@ jobs:
               description: 'Cloudflare Pages preview deployed',
               auto_inactive: false,
             })
-
-      - name: Export PR nook-core/auth coverage
-        run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
-        env:
-          CI: true
 
       - name: Detect nook-core/auth coverage input changes
         id: coverage-inputs

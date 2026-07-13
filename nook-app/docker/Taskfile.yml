@@ -192,7 +192,7 @@ tasks:
         {{.DOCKER}} cp "$cid:/opt/nook/coverage/nook-core/." "$out_dir/"'
 
   docker:coverage:export:
-    desc: Build and export only nook-core + nook-auth2 coverage artifacts (CI fallback; no app image export).
+    desc: Run coverage-gated nook-core + nook-auth2 unit tests and export their artifacts (no app image export).
     vars:
       COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
     cmds:
