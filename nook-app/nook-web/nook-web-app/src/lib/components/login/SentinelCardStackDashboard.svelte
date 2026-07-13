@@ -187,11 +187,11 @@
       response = ''
       participantInputError = ''
       selected = participants.length
-    } catch (error) {
-      participantInputError =
-        error instanceof Error
-          ? error.message
-          : vault.t('login.sentinel_genesis_response_failed')
+    } catch {
+      participantInputError = vault.t(
+        'login.sentinel_genesis_participant_import_failed',
+      )
+      vault.errorMsg = participantInputError
     } finally {
       actionBusy = false
     }

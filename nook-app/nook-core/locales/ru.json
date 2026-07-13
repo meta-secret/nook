@@ -221,6 +221,7 @@
     "sentinel_genesis_response_label": "Ответ участника",
     "sentinel_genesis_response_placeholder": "Вставьте один подписанный ответ участника",
     "sentinel_genesis_add_participant": "Проверить участника",
+    "sentinel_genesis_participant_import_failed": "Не удалось проверить ответ участника. Проверьте подписанные данные и повторите попытку.",
     "sentinel_genesis_verified_participants": "Проверенные участники",
     "sentinel_genesis_fingerprint": "Отпечаток для проверки",
     "sentinel_genesis_atomic_notice": "Сейфа пока не существует. Nook создаст его атомарно только после проверки всех указанных участников.",

@@ -221,6 +221,7 @@
     "sentinel_genesis_response_label": "Participant response",
     "sentinel_genesis_response_placeholder": "Paste one signed participant response",
     "sentinel_genesis_add_participant": "Verify participant",
+    "sentinel_genesis_participant_import_failed": "Could not verify this participant response. Check the signed payload and try again.",
     "sentinel_genesis_verified_participants": "Verified participants",
     "sentinel_genesis_fingerprint": "Verification fingerprint",
     "sentinel_genesis_atomic_notice": "The vault does not exist yet. Nook creates it atomically only after every configured participant has been verified.",

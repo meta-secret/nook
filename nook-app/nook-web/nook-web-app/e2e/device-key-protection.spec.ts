@@ -218,7 +218,7 @@ test.describe('passkey device-key protection', () => {
     await page.getByTestId('sentinel-genesis-add-participant').click()
     await expect(
       page.getByTestId('sentinel-genesis-participant-error'),
-    ).toHaveText('Invalid sentinel genesis payload.')
+    ).toContainText('Could not verify this participant response.')
     await page
       .getByTestId('sentinel-genesis-response-input')
       .fill(participantAnnouncement)
