@@ -46,18 +46,18 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Keep Rust domain correctness as an explicit PR gate. This coverage-only solve runs the
-      # nook-core + nook-auth2 nextest suites and enforces the committed line floor; the following
-      # full PR solve reuses its BuildKit layers instead of running the native tests a second time.
-      - name: Rust unit tests and coverage
-        run: task docker:coverage:export COVERAGE_OUT_DIR=coverage/current COVERAGE_CACHE_MODE=local WASM_BUILD_MODE=dev
-        env:
-          CI: true
-
-      - name: WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
+      # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
+      # dependency preparation. Never split Rust into an earlier solve: that serializes the critical
+      # path and makes a cold Rust cache slower than the former combined build.
+      - name: Rust/WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
         env:
           CI: true
+
+      # The verified image already contains the Rust coverage artifacts produced by the graph
+      # above. This is a docker cp only: it does not invoke BuildKit or rerun any Rust tests.
+      - name: Export Rust coverage from verified image
+        run: task docker:extract:coverage COVERAGE_OUT_DIR=coverage/current
 
       - name: Deploy to Cloudflare Pages
         id: deploy

@@ -215,19 +215,14 @@ before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
 `cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
 and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
-PR CI starts with an explicit **Rust unit tests and coverage** step using
-`task docker:coverage:export`. That coverage-only BuildKit solve stops at
-`builder-debug`, runs the `nook-core + nook-auth2` nextest suites, enforces the
-coverage floor, and exports `summary.txt`, `summary.json`, `lcov.info`, and
-`coverage-floor.json` directly to `coverage/current`. The following `task ci:pr`
-solve reuses those source-sensitive BuildKit layers, so it does not run the same
-native tests a second time. Do not add a runtime `cargo llvm-cov` invocation after
-the image build; that would duplicate the tests instead of reusing the cache.
-The explicit PR step uses `COVERAGE_CACHE_MODE=local` on the cache-warm self-hosted
-runner. This skips remote registry cache imports that can lose their BuildKit
-session during a long copy while still reusing the runner's local BuildKit cache.
-The base-coverage fallback keeps the default `registry` mode because it may run
-on a cold runner and is not the developer-critical current-branch unit-test gate.
+PR CI uses one explicitly named **Rust/WASM tests, Svelte checks, JS unit tests**
+step. Its single Bake graph runs the `nook-core + nook-auth2` nextest/coverage
+branch, the WASM test/build branch, and web dependency preparation in parallel.
+Do not split Rust into an earlier coverage solve: that serializes the critical
+path and makes a cold Rust cache dominate the whole PR. After verification,
+`task docker:extract:coverage` copies `summary.txt`, `summary.json`, `lcov.info`,
+and `coverage-floor.json` from the already-built image to `coverage/current`.
+That extraction invokes neither BuildKit nor Rust tests.
 
 `task docker:extract:coverage` remains the copy-only path for workflows that
 already have a sealed `nook-web:local` image, including main's commit-keyed

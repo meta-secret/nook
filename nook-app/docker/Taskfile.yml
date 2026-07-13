@@ -195,7 +195,6 @@ tasks:
     desc: Run coverage-gated nook-core + nook-auth2 unit tests and export their artifacts (no app image export).
     vars:
       COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
-      COVERAGE_CACHE_MODE: '{{default "registry" .COVERAGE_CACHE_MODE}}'
     cmds:
       - >-
         bash -c 'set -euo pipefail;
@@ -204,15 +203,9 @@ tasks:
           /*) ;;
           *) out_dir="{{.REPO_ROOT}}/$out_dir" ;;
         esac;
-        cache_args=();
-        case "{{.COVERAGE_CACHE_MODE}}" in
-          registry) ;;
-          local) cache_args=(--set "*.cache-from=") ;;
-          *) echo "Unsupported COVERAGE_CACHE_MODE={{.COVERAGE_CACHE_MODE}} (expected registry or local)" >&2; exit 2 ;;
-        esac;
         rm -rf "$out_dir";
         mkdir -p "$out_dir";
-        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} "${cache_args[@]}" --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} --allow="fs.write=$out_dir" --set "coverage-export.output=type=local,dest=$out_dir" coverage-export'
 
   docker:web:dev:
     internal: true
