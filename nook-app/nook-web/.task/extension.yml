@@ -20,9 +20,10 @@ tasks:
   extension:test:e2e:
     desc: Run browser extension Playwright e2e in Docker.
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
-      - task: docker:task
+      - task: docker:e2e:run
         vars: { TASK: _extension:test:e2e }
 
   extension:format:

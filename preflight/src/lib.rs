@@ -2,7 +2,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-const FORBIDDEN_CACHE_MOUNT: &str = "--mount=type=cache";
+const MOUNT_PREFIX: &str = "--mount=";
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Violation {
@@ -25,7 +25,7 @@ pub fn dockerfile_cache_mounts(root: &Path) -> io::Result<Vec<Violation>> {
     for path in dockerfiles {
         let contents = fs::read_to_string(&path)?;
         for (index, line) in contents.lines().enumerate() {
-            if line.contains(FORBIDDEN_CACHE_MOUNT) {
+            if contains_cache_mount(line) {
                 violations.push(Violation {
                     path: path.strip_prefix(root).unwrap_or(&path).to_path_buf(),
                     line: index + 1,
@@ -36,6 +36,25 @@ pub fn dockerfile_cache_mounts(root: &Path) -> io::Result<Vec<Violation>> {
 
     violations.sort_by(|left, right| left.path.cmp(&right.path).then(left.line.cmp(&right.line)));
     Ok(violations)
+}
+
+fn contains_cache_mount(line: &str) -> bool {
+    let mut remaining = line;
+    while let Some(prefix_index) = remaining.find(MOUNT_PREFIX) {
+        let options = &remaining[prefix_index + MOUNT_PREFIX.len()..];
+        let token = options.split_ascii_whitespace().next().unwrap_or_default();
+        if token
+            .trim_end_matches('\\')
+            .split(',')
+            .any(|option| option == "type=cache")
+        {
+            return true;
+        }
+
+        remaining = &options[token.len()..];
+    }
+
+    false
 }
 
 fn collect_dockerfiles(directory: &Path, dockerfiles: &mut Vec<PathBuf>) -> io::Result<()> {
@@ -79,19 +98,25 @@ mod tests {
         fs::create_dir_all(root.join("nested")).unwrap();
         fs::write(
             root.join("nested/build.Dockerfile"),
-            "FROM scratch\nRUN --mount=type=cache,target=/cache true\n",
+            "FROM scratch\nRUN --mount=type=cache,target=/cache true\nRUN --mount=target=/other-cache,type=cache true\n",
         )
         .unwrap();
-        fs::write(root.join("notes.txt"), FORBIDDEN_CACHE_MOUNT).unwrap();
+        fs::write(root.join("notes.txt"), "--mount=type=cache").unwrap();
 
         let violations = dockerfile_cache_mounts(&root).unwrap();
 
         assert_eq!(
             violations,
-            vec![Violation {
-                path: PathBuf::from("nested/build.Dockerfile"),
-                line: 2,
-            }]
+            vec![
+                Violation {
+                    path: PathBuf::from("nested/build.Dockerfile"),
+                    line: 2,
+                },
+                Violation {
+                    path: PathBuf::from("nested/build.Dockerfile"),
+                    line: 3,
+                },
+            ]
         );
         fs::remove_dir_all(root).unwrap();
     }

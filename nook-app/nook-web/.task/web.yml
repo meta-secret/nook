@@ -48,7 +48,8 @@ tasks:
   web:test:e2e:
     desc: Run full local-provider Playwright e2e in Docker (e2e project; no PAT).
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e }
@@ -56,7 +57,8 @@ tasks:
   web:test:e2e:parallel:
     desc: Full local-provider Playwright e2e in Docker when wasm/dist already built (ci:pr/main).
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:parallel }
@@ -64,7 +66,8 @@ tasks:
   web:test:e2e:file:
     desc: Run specific Playwright e2e spec file(s) in Docker (E2E_SPEC env var).
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     env:
       E2E_SPEC: "{{.E2E_SPEC}}"
     cmds:
@@ -76,7 +79,8 @@ tasks:
   web:test:e2e:pr:
     desc: Fast Playwright e2e-pr in Docker (IndexedDB specs only).
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:pr }
@@ -100,7 +104,8 @@ tasks:
   web:test:e2e:sync-live:
     desc: Run live sync provider Playwright e2e in Docker (requires provider credentials).
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:sync-live }
@@ -154,7 +159,8 @@ tasks:
   web:test:e2e:multi-device:
     desc: Run multi-device Playwright e2e in Docker.
     deps:
-      - setup
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
     cmds:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:multi-device }

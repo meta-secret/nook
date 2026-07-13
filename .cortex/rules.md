@@ -136,7 +136,8 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 > let the immutable Docker layer plus the pinned lockfile be the cache boundary.
 >
 > This prohibition applies regardless of `sharing=shared`, `sharing=private`, or
-> `sharing=locked`. Changing the sharing mode is not an acceptable workaround.
+> `sharing=locked`, and regardless of the comma-separated mount-option order.
+> Changing the sharing mode or placing `type=cache` later is not an acceptable workaround.
 > The repository-root Rust suite at `preflight/` enforces this rule. Run it
 > through `task preflight`; `task check`, PR CI, and main CI run it before the
 > application Docker setup begins. Repository-wide invariant tests belong in
