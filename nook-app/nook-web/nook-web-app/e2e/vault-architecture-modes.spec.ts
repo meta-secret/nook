@@ -250,19 +250,6 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const policyColumn = page.getByTestId('sentinel-onboarding-policy-column')
-    const overallProgress = page.getByTestId(
-      'sentinel-onboarding-overall-progress',
-    )
-    await expect(policyColumn).toBeVisible()
-    await expect(overallProgress).toContainText('STEP 2 OF 4')
-    await expect(overallProgress).toContainText('In progress')
-    const policyColumnBox = await policyColumn.boundingBox()
-    const overallProgressBox = await overallProgress.boundingBox()
-    if (!policyColumnBox || !overallProgressBox) {
-      throw new Error('Sentinel policy and progress must have layout boxes')
-    }
-    expect(policyColumnBox.x).toBeLessThan(overallProgressBox.x)
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
