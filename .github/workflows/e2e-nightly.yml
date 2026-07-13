@@ -83,7 +83,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve toolchain image
+      - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=prod
         env:
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}

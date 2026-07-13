@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.4
 
 # nook-core build stages: chef recipe -> shared rust dependency cache -> native verify warm-up.
-# Build context is the repo root; the Rust workspace root lives at nook-app. `nook-base` is injected by bake
-# via `contexts = { nook-base = "target:nook-base" }`. `builder-deps` here is also the shared
+# Build context is the repo root; the Rust workspace root lives at nook-app. `rust-base` is injected by bake
+# via `contexts = { rust-base = "target:rust-base" }`. `builder-deps` here is also the shared
 # base for the wasm build (nook-app/nook-wasm/Dockerfile consumes it the same way).
 
 # --- Chef planner: recipe.json generated here during docker build (not committed) ---
-FROM nook-base AS chef-planner
+FROM rust-base AS chef-planner
 
 WORKDIR /meta-secret/nook/nook-app
 
@@ -19,7 +19,7 @@ RUN mkdir -p nook-auth2/src nook-core/src nook-wasm/src \
 RUN cargo chef prepare --recipe-path recipe.json
 
 # --- Shared rust dependency cache (chef cook + fetch once) ---
-FROM nook-base AS builder-deps
+FROM rust-base AS builder-deps
 
 WORKDIR /meta-secret/nook/nook-app
 

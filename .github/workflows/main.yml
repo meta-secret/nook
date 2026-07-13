@@ -10,7 +10,7 @@
 # Requires repository secrets CURSOR_API_KEY and NOOK_GITHUB_PAT (PAT opens PRs as a user so
 # pr.yml runs and branch protection does not require manual bot-approval).
 #
-# Playwright browsers are pre-installed in the toolchain image.
+# Playwright browsers are pre-installed in the web base image.
 
 name: Main
 
@@ -226,7 +226,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve toolchain image
+      - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=prod
         env:
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}

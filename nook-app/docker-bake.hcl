@@ -1,21 +1,29 @@
 // App bake: shared variables, parallel groups, and the publish variants.
 // Every target's build definition (dockerfile/target/contexts) lives next to its Dockerfile and
 // is merged in via multiple -f flags (bake has no `include`):
-//   nook-app/docker/base.docker-bake.hcl        -> nook-base
+//   nook-app/docker/base.docker-bake.hcl        -> rust-base, web-base
 //   nook-app/nook-core/docker-bake.hcl          -> builder-deps, builder-debug
-//   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm      (FROM builder-debug)
-//   nook-app/docker/toolchain.docker-bake.hcl   -> web-deps, _toolchain-common (parallel web + rust merge)
-//   nook-app/nook-web/nook-web-app/docker-bake.hcl -> _nook-web-common  (FROM toolchain + workspace source)
+//   nook-app/nook-wasm/docker-bake.hcl          -> builder-wasm, web-artifacts, on-demand Rust images
+//   nook-app/docker/toolchain.docker-bake.hcl   -> web-deps
+//   nook-app/nook-web/nook-web-app/docker-bake.hcl -> _nook-web-common (slim web image)
 // Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
-// LINEAR CHAIN (rust): nook-base -> builder-deps -> builder-debug -> builder-wasm -> toolchain ->
-// nook-web. The web branch (web-deps) is a PARALLEL bake target off nook-base; toolchain merges
-// node_modules via COPY --from=web-deps. Each named stage (nook-base, builder-*, web-deps) has its
-// own cache-to so GHCR :buildcache captures every layer. Two tiers for publishing: `toolchain` is
-// the shared base pushed to GHCR (cache); `nook-web` layers the workspace source on top.
+// PREPARE PHASE: rust-base -> builder-deps -> builder-debug -> builder-wasm -> web-artifacts, in
+// parallel with web-base -> web-deps. web-artifacts is exported to a temporary host directory.
+// WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
+// Rust snapshot never becomes a context or parent of the final image. Main publishes the two cache
+// lineages independently; no combined Rust + web image exists.
 
 variable "DOCKER_IMAGE" {
   default = "nook-web:local"
+}
+
+variable "DOCKER_RUST_IMAGE" {
+  default = "nook-rust:local"
+}
+
+variable "DOCKER_RUST_BROWSER_IMAGE" {
+  default = "nook-rust-browser:local"
 }
 
 // ghcr.io/<owner>/<repo>/toolchain — shared remote cache. Defaults to the canonical repo path so
@@ -36,16 +44,36 @@ variable "GIT_COMMIT_ID" {
   default = ""
 }
 
-// Shared cache settings referenced by package targets (in their own bake files) and this app bake.
-// cache-from: always on (pull the shared base). cache-to: gated on TOOLCHAIN_PUSH (CI only).
-// Platform is always linux/amd64 (hardcoded per target); no cross-platform builds.
-shared_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
-  ["type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache"],
-  GIT_COMMIT_ID != "" ? ["type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}"] : [],
+// Rust and web use independent cache refs so publishing one branch never assembles or overwrites
+// the other. The legacy combined refs remain read-only fallbacks during the migration.
+rust_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
+  [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache",
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
+  ],
+  GIT_COMMIT_ID != "" ? [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-${GIT_COMMIT_ID}",
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
+  ] : [],
 ) : []
 
-shared_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
-  "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache,mode=max",
+web_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(
+  [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache",
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:buildcache",
+  ],
+  GIT_COMMIT_ID != "" ? [
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-${GIT_COMMIT_ID}",
+    "type=registry,ref=${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
+  ] : [],
+) : []
+
+rust_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:rust-buildcache,mode=max",
+] : []
+
+web_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache,mode=max",
 ] : []
 
 // Default: build the nook-web image (source-in-image) that `task` runs.
@@ -53,9 +81,26 @@ group "default" {
   targets = ["nook-web"]
 }
 
-// Pre-build the linear chain top explicitly so cold CI warms the whole toolchain in one target.
+// Phase one of `task setup`: Rust/WASM validation + tiny artifact export runs concurrently with
+// Bun dependency preparation. The second phase builds nook-web from the host artifact directory.
+group "prepare" {
+  targets = ["rust-format-check", "web-artifacts", "web-deps"]
+}
+
+// Formatting must be able to build source-sealed images before the host applies the emitted diff.
+group "prepare-with-unformatted-rust" {
+  targets = ["web-artifacts", "web-deps"]
+}
+
+// Pre-build both independent cache lineages in parallel.
 group "builders" {
-  targets = ["toolchain"]
+  targets = ["builder-wasm", "web-deps"]
+}
+
+// Main publishes the independent Rust and web cache images in parallel. Keeping this legacy group
+// name preserves the existing Task/workflow interface without constructing a merged image.
+group "toolchain-push" {
+  targets = ["rust-toolchain-push", "web-toolchain-push"]
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
@@ -66,33 +111,36 @@ target "nook-web" {
   output   = ["type=docker"]
 }
 
-// --- Toolchain base image (linear top: deps + warm native/wasm target/ + node_modules + wasm pkg;
-// the shared GHCR cache). _toolchain-common lives in nook-app/docker/toolchain.docker-bake.hcl; the variants
-// below inherit it and set output/tags/cache-to. ---
-
-// In-graph base for nook-web (local + CI). Pulls the shared cache (cache-from) but never tags/pushes
-// a registry ref — that is toolchain-push's job. Loadable locally for debugging.
-target "toolchain" {
-  inherits = ["_toolchain-common"]
+// Explicit Rust/WASM commands load this source-sealed image on demand. Normal setup/CI does not.
+target "nook-rust" {
+  inherits = ["_nook-rust-common"]
+  tags     = [DOCKER_RUST_IMAGE]
   output   = ["type=docker"]
 }
 
-// Cache-only publish (manual / legacy): push just the :buildcache layers, no commit-tagged image.
-// CI uses toolchain-push on main only; this target is not invoked by Taskfile workflows.
-target "toolchain-cache" {
-  inherits = ["_toolchain-common"]
-  output   = ["type=cacheonly"]
-  cache-to = shared_cache_to
+// Manual browser-wasm tests install Chromium only in this on-demand image.
+target "nook-rust-browser" {
+  inherits = ["_nook-rust-browser-common"]
+  tags     = [DOCKER_RUST_BROWSER_IMAGE]
+  output   = ["type=docker"]
 }
 
-// After green MAIN CI: publish the verified toolchain base to GHCR (commit hash tag + :buildcache
-// layers) so every later build — CI and LOCAL — pulls it via cache-from. Gated on TOOLCHAIN_PUSH.
-// Do not use `docker push` after `--load`; the daemon re-uploads layers buildkit already has in GHCR.
-target "toolchain-push" {
-  inherits = ["_toolchain-common"]
+// After green main CI, publish the verified Rust/WASM lineage and its max-mode cache.
+target "rust-toolchain-push" {
+  inherits = ["builder-wasm"]
   tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
-    "${TOOLCHAIN_REGISTRY}:${GIT_COMMIT_ID}",
+    "${TOOLCHAIN_REGISTRY}:rust-${GIT_COMMIT_ID}",
   ] : []
   output   = ["type=registry"]
-  cache-to = shared_cache_to
+  cache-to = rust_cache_to
+}
+
+// Publish web dependencies separately. This image has no Cargo registry, Rust toolchain, or target/.
+target "web-toolchain-push" {
+  inherits = ["web-deps"]
+  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
+    "${TOOLCHAIN_REGISTRY}:web-${GIT_COMMIT_ID}",
+  ] : []
+  output   = ["type=registry"]
+  cache-to = web_cache_to
 }

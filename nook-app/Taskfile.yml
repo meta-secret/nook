@@ -13,10 +13,9 @@ vars:
   # limits are host prerequisites documented in README.md; they cannot be set per container.
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
   DOCKER_RUN_LIMITS: '--ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}'
-  # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that, with the
-  # containerd image store, the build result is written STRAIGHT into the image store — no 9 GB
-  # tarball export + `docker load`. Warm builds only write the small changed source/dist layers;
-  # unchanged deps/target layers already live in the store. Do NOT point this at a
+  # buildx builder. We use the `docker` driver (BuildKit embedded in the daemon) so that the slim
+  # web result is written straight into the containerd image store. Heavy Rust snapshots remain
+  # only in BuildKit/GHCR cache unless an explicit Rust command loads one. Do NOT point this at a
   # `docker-container` builder: that driver forces a full-image re-export on every build.
   #
   # buildx auto-creates a docker-driver builder named after the active docker context, so
@@ -24,12 +23,16 @@ vars:
   # `default` on plain Linux/CI. Override by exporting BUILDX_BUILDER.
   BUILDX_BUILDER:
     sh: 'echo "${BUILDX_BUILDER:-$(docker context show 2>/dev/null || echo default)}"'
-  # The sealed nook-web image is always loaded locally as nook-web:local (both dev and CI).
+  # The slim sealed web image is the common runtime. Heavy Rust images are loaded only by explicit
+  # rust/wasm commands (and the browser variant only by manual browser-wasm tests).
   DOCKER_IMAGE: '{{default "nook-web:local" .DOCKER_IMAGE}}'
+  DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
+  DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
   TOOLCHAIN_REGISTRY: '{{default "ghcr.io/meta-secret/nook/toolchain" .TOOLCHAIN_REGISTRY}}'
   GIT_COMMIT_ID:
     sh: 'if [ -n "${GIT_COMMIT_ID:-}" ]; then printf "%s" "$GIT_COMMIT_ID"; else repo="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"; cd "$repo" && git rev-parse HEAD; fi'
   WASM_BUILD_MODE: '{{default "dev" .WASM_BUILD_MODE}}'
+  PREPARE_GROUP: '{{default "prepare" .PREPARE_GROUP}}'
   # buildx bake `-f` flags: app orchestration + one file per package (single source of truth).
   NOOK_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
@@ -41,7 +44,7 @@ vars:
     -f {{.REPO_ROOT}}/nook-app/nook-web/nook-web-app/docker-bake.hcl
     --set '*.context={{.REPO_ROOT}}'
     --set 'builder-wasm.args.WASM_BUILD_MODE={{.WASM_BUILD_MODE}}'
-  # ci sets TOOLCHAIN_REGISTRY so bake reuses GHCR :buildcache; dev builds locally.
+  # CI sets TOOLCHAIN_REGISTRY so bake reuses the split GHCR rust/web caches; dev builds locally.
   NOOK_ENV: '{{default "dev" .NOOK_ENV}}'
   VITE_BASE: '{{default "/" .VITE_BASE}}'
   VITE_SITE_URL: '{{default "" .VITE_SITE_URL}}'
@@ -74,12 +77,11 @@ tasks:
       - task: build
 
   setup:
-    desc: Build the linux/amd64 nook-web image (source-in-image; pulls the GHCR toolchain base as cache).
+    desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
     dir: '{{.REPO_ROOT}}'
-    # Always rebuild: the sealed image must reflect current source. TOOLCHAIN_REGISTRY is ALWAYS
-    # wired so buildx pulls the shared toolchain base + :buildcache (cache-from) — local dev and CI
-    # alike — so a fresh checkout reuses CI's warm dep/target layers instead of a cold recompile.
-    # setup never sets TOOLCHAIN_PUSH, so it only pulls; publishing is CI-only (docker:push).
+    # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
+    # generated WASM package + coverage files to a temporary host directory. Phase two consumes that
+    # tiny directory to build the web image; builder-wasm is never a parent/context of nook-web.
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
@@ -92,11 +94,57 @@ tasks:
       # builder-debug both use nook-app/nook-core/Dockerfile) — retry before failing CI on a transient parse error.
       - >-
         bash -c 'set -euo pipefail;
+        artifacts_dir="$(mktemp -d "${TMPDIR:-/tmp}/nook-web-artifacts.XXXXXX")";
+        cleanup() { rm -rf "$artifacts_dir"; };
+        trap cleanup EXIT;
         for attempt in 1 2 3; do
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-web; then
+          rm -rf "$artifacts_dir"/*;
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" {{.PREPARE_GROUP}} &&
+             artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)" &&
+             echo "task setup: host WASM/coverage handoff is ${artifact_kib} KiB" &&
+             { test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; }; } &&
+             env WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web; then
             exit 0;
           fi;
           if [ "$attempt" -eq 3 ]; then exit 1; fi;
           echo "task setup: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'
+
+  setup:rust:
+    desc: Build and load the source-sealed Rust/WASM image for explicit rust/wasm commands.
+    dir: '{{.REPO_ROOT}}'
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        for attempt in 1 2 3; do
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task setup:rust: bake attempt $attempt failed; retrying in 5s..." >&2;
+          sleep 5;
+        done'
+
+  setup:rust:browser:
+    desc: Build and load the on-demand Rust image with Chromium for browser-wasm tests.
+    dir: '{{.REPO_ROOT}}'
+    env:
+      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
+      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
+      WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        for attempt in 1 2 3; do
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} nook-rust-browser; then
+            exit 0;
+          fi;
+          if [ "$attempt" -eq 3 ]; then exit 1; fi;
+          echo "task setup:rust:browser: bake attempt $attempt failed; retrying in 5s..." >&2;
           sleep 5;
         done'

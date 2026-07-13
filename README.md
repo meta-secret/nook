@@ -167,8 +167,10 @@ Open [http://localhost:5173](http://localhost:5173) for the landing page, or
 [http://localhost:5173/app/](http://localhost:5173/app/) for the vault UI.
 
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
-image so it reflects current source. Buildx reuses the cached toolchain base and
-GHCR `:buildcache`, so only the small source + dist layers rebuild.
+image so it reflects current source. Buildx prepares the Rust/WASM and web
+dependency branches in parallel, exports only the generated WASM and coverage
+files through a temporary host directory, then builds a web-only image. Rust
+`target/` and the compiler toolchain never enter `nook-web:local`.
 Runtime containers receive an explicit 1,048,576 open-file limit; override it
 with `DOCKER_NOFILE_LIMIT` when needed.
 
@@ -235,18 +237,22 @@ change, update this README in the same change (see [`.cortex/AGENTS.md`](.cortex
 
 ### Rust dependency cache
 
-Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) and a
-shared **linux/amd64** toolchain base on GHCR. Workspace source is copied into the
-`nook-web:local` image (sealed image; no runtime bind mount except `task web:dev`).
+Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) and
+independent **linux/amd64** Rust and web caches on GHCR. Workspace source is
+copied into the slim `nook-web:local` image (sealed image; no runtime bind mount
+except `task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a
+separate source-sealed Rust image on demand.
 
 ```text
-ghcr.io/<owner>/<repo>/toolchain:<git-commit>  # deps + warm target/ base
-ghcr.io/<owner>/<repo>/toolchain:buildcache    # buildx layer cache
-nook-web:local                                 # base + your source (what task runs)
+ghcr.io/<owner>/<repo>/toolchain:rust-<git-commit>  # Rust/WASM cache image
+ghcr.io/<owner>/<repo>/toolchain:rust-buildcache    # Rust BuildKit cache
+ghcr.io/<owner>/<repo>/toolchain:web-<git-commit>   # web-deps cache image
+ghcr.io/<owner>/<repo>/toolchain:web-buildcache     # web BuildKit cache
+nook-web:local                                      # slim common task image
 ```
 
-**The GHCR cache is pull-always, push-main-only.** Local builds pull `:buildcache`;
-only main CI publishes it. Run `docker login ghcr.io` once so local pulls
+**The GHCR caches are pull-always, push-main-only.** Local builds pull both
+branch caches; only main CI publishes them. Run `docker login ghcr.io` once so local pulls
 authenticate. Details: [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

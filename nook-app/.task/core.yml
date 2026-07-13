@@ -35,9 +35,12 @@ tasks:
 
   format:
     desc: Format all projects in Docker.
-    deps:
-      - setup
     cmds:
+      - task: setup:rust
+      - task: docker:rust:task
+        vars: { TASK: _rust:format }
+      - task: setup
+        vars: { PREPARE_GROUP: prepare-with-unformatted-rust }
       - task: docker:task
         vars: { TASK: _format }
 
@@ -52,41 +55,41 @@ tasks:
   rust:build:
     desc: Build the Rust workspace in Docker.
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _rust:build }
 
   rust:test:
     desc: Test the Rust workspace in Docker.
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _rust:test }
 
   rust:coverage:
     desc: Report nook-core + nook-auth2 line coverage (cargo llvm-cov + nextest).
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _rust:coverage }
 
   rust:coverage:check:
     desc: Enforce nook-core + nook-auth2 90% line coverage threshold.
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _rust:coverage:check }
 
   rust:coverage:update:
     desc: Rewrite coverage-floor.json to measured % (user approval only).
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _rust:coverage:update }
 
   rust:coverage:export:
@@ -100,31 +103,28 @@ tasks:
   rust:lint:
     desc: Lint the Rust workspace in Docker.
     deps:
-      - setup
+      - setup:rust
     cmds:
-      - task: docker:task
+      - task: docker:rust:task
         vars: { TASK: _rust:lint }
 
   _build:
-    desc: Build Rust crates, wasm package, web app, and browser extension.
+    desc: Build web app and browser extension after Rust/WASM succeeded in the image build.
     cmds:
-      - task: _rust:build
-      - task: _web:build
+      - task: _web:build:parallel
       - task: _extension:build
 
   _test:
     desc: Run all test suites.
     cmds:
-      # nook-core + nook-auth2 tests and coverage floor run at IMAGE BUILD time (nook-app/nook-core/Dockerfile builder-debug),
-      # so the image would not exist if they failed — only web tests run at task runtime.
+      # Native Rust coverage/tests and wasm-bindgen Node tests run in the Rust image-build branch.
       - task: _web:check
       - task: _web:test
       - task: _extension:check
 
   _lint:
-    desc: Run all linters.
+    desc: Run web linters after Rust/WASM clippy succeeded in the image build.
     cmds:
-      - task: _rust:lint
       - task: _web:lint
       - task: _extension:format:check
 
@@ -150,17 +150,16 @@ tasks:
       - _test:parallel
 
   _lint:parallel:
-    desc: Web and extension linters only — Rust clippy already runs in the toolchain docker build warm-up.
+    desc: Web and extension linters only — Rust clippy already runs in the Rust image branch.
     cmds:
       - task: _web:lint:parallel
       - task: _extension:format:check
 
   _test:parallel:
-    desc: svelte-check, vitest, wasm-bindgen tests, and extension check when wasm is already built (nook-core + nook-auth2 tests/coverage ran at image build).
+    desc: Svelte check, Vitest, and extension check after all Rust/WASM tests ran at image build.
     deps:
       - _web:check:parallel
       - _web:test:parallel
-      - _wasm:test
       - _extension:check
 
   _rust:test:parallel:
@@ -198,9 +197,8 @@ tasks:
       - cd "{{.APP_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-core -p nook-auth2 --json --summary-only
 
   _format:
-    desc: Format all projects, then print the changes as a git diff (sealed image — apply on host).
+    desc: Format web projects, then print the changes as a git diff (sealed image — apply on host).
     cmds:
-      - bash -c 'cd "{{.APP_ROOT}}" && cargo fmt --all'
       - cd "{{.WEB_ROOT}}" && bun run format
       - cd "{{.EXTENSION_ROOT}}" && bun run format
       - >-
@@ -212,11 +210,22 @@ tasks:
         fi'
 
   _format:check:
-    desc: Check formatting for all projects.
+    desc: Check web formatting after Rust fmt succeeded in the image-build branch.
     cmds:
-      - bash -c 'cd "{{.APP_ROOT}}" && cargo fmt --all -- --check'
       - cd "{{.WEB_ROOT}}" && bun run format:check
       - cd "{{.EXTENSION_ROOT}}" && bun run format:check
+
+  _rust:format:
+    desc: Format Rust projects, then print the changes as a git diff from the sealed Rust image.
+    cmds:
+      - bash -c 'cd "{{.APP_ROOT}}" && cargo fmt --all'
+      - >-
+        sh -c 'if git diff --quiet; then
+          echo "==> Rust already formatted; no changes.";
+        else
+          echo "==> Rust formatting changes (apply with: task format | git apply):";
+          git --no-pager diff;
+        fi'
 
   _rust:build:
     desc: Build the native Rust crates (wasm is built via _wasm:build).

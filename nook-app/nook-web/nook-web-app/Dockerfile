@@ -1,19 +1,13 @@
 # syntax=docker/dockerfile:1.4
 
-# nook-web image: the merged toolchain (rust lineage with warm native/wasm target/ + generated wasm
-# pkg, plus node_modules copied from the parallel web-deps branch, plus Playwright from nook-base)
-# with the workspace SOURCE copied in. This is what `task` runs against at runtime — there is NO
-# bind mount, so the image is self-contained and reproducible. Rebuilt per commit; only the small
-# source + dist layers rebuild on top of the fully cached toolchain.
+# Slim nook-web image: web-base (Bun/Node/Task/Playwright), cached node_modules, and the tiny
+# host-exported WASM/coverage artifact directory. It never inherits the Rust toolchain or target/.
+# Workspace source is still sealed into the image; there is no runtime bind mount on the common path.
 #
-# Bake context (wired in nook-app/nook-web/nook-web-app/docker-bake.hcl):
-#   toolchain -> nook-app/nook-web/nook-web-app/Dockerfile (merged top: rust target/ + wasm pkg + node_modules + playwright)
-#
-# NOTE: no COPY --from here. The wasm pkg (nook-app/nook-web/nook-web-app/src/lib/nook-wasm) and node_modules are already
-# present in the toolchain (wasm pkg from the rust lineage, node_modules merged from web-deps).
-# .dockerignore excludes both from the source COPY below, so the source layer never clobbers them.
+# `task setup` first exports web-artifacts to a temporary host directory while web-deps builds in
+# parallel. Bake then injects web-base, web-deps, and that small host directory as named contexts.
 
-FROM toolchain AS nook-web
+FROM web-base AS nook-web
 
 # Production Vite base path (GitHub Pages / Cloudflare use "/").
 ARG VITE_BASE=/
@@ -22,33 +16,22 @@ ARG VITE_PUBLIC_APP_URL=
 
 WORKDIR /meta-secret/nook
 
-# Toolchain layers from older builds may still contain the pre-`nook-app` root-level app layout.
-# Clear those paths before overlaying the current source so the sealed image cannot accidentally run
-# stale root Taskfiles or packages from cache.
-RUN rm -rf \
-    .cargo \
-    .config \
-    .task \
-    Cargo.lock \
-    Cargo.toml \
-    docker \
-    docker-bake.hcl \
-    nook-auth2 \
-    nook-core \
-    nook-wasm \
-    nook-web \
-    recipe.json \
-    target
+# Only these small outputs cross the Rust/web boundary. The Rust target/, Cargo registry, and
+# compiler toolchain remain exclusively in BuildKit/GHCR cache.
+COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
+COPY --from=web-artifacts /nook-wasm /meta-secret/nook/nook-app/nook-web/nook-web-app/src/lib/nook-wasm
+COPY --from=web-artifacts /coverage /opt/nook/coverage
 
-# Workspace source, copied as late as possible so the fully-cached toolchain layers above are never
+# Workspace source, copied as late as possible so the cached web dependency layers above are never
 # invalidated by a source edit. .dockerignore excludes target/, node_modules, dist/, and the
-# generated wasm pkg, so this layers source over the toolchain WITHOUT clobbering the pre-built
-# deps/target/node_modules/wasm already present.
+# generated wasm pkg, so this layers source without clobbering node_modules or the generated WASM.
 COPY . .
 
 RUN test -f nook-app/Taskfile.yml \
     && test ! -d nook-core \
-    && test ! -f Cargo.toml
+    && test ! -f Cargo.toml \
+    && test ! -e /usr/local/cargo \
+    && test ! -d nook-app/target
 
 # Seed a throwaway git repo of the copied source so in-container write tasks (task format,
 # rust:coverage:update) can emit their changes as `git diff` for the user to apply on the host
@@ -70,5 +53,5 @@ RUN cd nook-app/nook-web/nook-web-app \
     bun run build
 RUN cd nook-app/nook-web/nook-web-extension && bun run build
 
-# No ENTRYPOINT: the image is sealed (source + deps + warm target/ baked in), so `docker run`
+# No ENTRYPOINT: the image is sealed (source + web deps + generated WASM baked in), so `docker run`
 # invokes the task command directly (e.g. `docker run <img> task check`).
