@@ -49,7 +49,7 @@ jobs:
       # nook-core + nook-auth2 nextest suites and enforces the committed line floor; the following
       # full PR solve reuses its BuildKit layers instead of running the native tests a second time.
       - name: Rust unit tests and coverage
-        run: task docker:coverage:export COVERAGE_OUT_DIR=coverage/current WASM_BUILD_MODE=prod
+        run: task docker:coverage:export COVERAGE_OUT_DIR=coverage/current COVERAGE_CACHE_MODE=local WASM_BUILD_MODE=prod
         env:
           CI: true
 

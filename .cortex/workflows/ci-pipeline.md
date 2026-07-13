@@ -213,9 +213,11 @@ coverage floor, and exports `summary.txt`, `summary.json`, `lcov.info`, and
 solve reuses those source-sensitive BuildKit layers, so it does not run the same
 native tests a second time. Do not add a runtime `cargo llvm-cov` invocation after
 the image build; that would duplicate the tests instead of reusing the cache.
-The export task retries the Bake solve with a fresh BuildKit session when a
-registry-cache copy loses its authorization/session context; a transient cache
-transport failure must not masquerade as a failed Rust test.
+The explicit PR step uses `COVERAGE_CACHE_MODE=local` on the cache-warm self-hosted
+runner. This skips remote registry cache imports that can lose their BuildKit
+session during a long copy while still reusing the runner's local BuildKit cache.
+The base-coverage fallback keeps the default `registry` mode because it may run
+on a cold runner and is not the developer-critical current-branch unit-test gate.
 
 `task docker:extract:coverage` remains the copy-only path for workflows that
 already have a sealed `nook-web:local` image, including main's commit-keyed
