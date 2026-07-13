@@ -1,4 +1,5 @@
-# Pull requests: run the Rust domain unit/coverage gate, build no-opt WASM, verify/build, deploy preview.
+# Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
+# build and deploy the preview. Only browser e2e is excluded.
 # Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
 # and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
@@ -53,7 +54,7 @@ jobs:
         env:
           CI: true
 
-      - name: WASM and web unit tests, checks, and preview build (no browser e2e)
+      - name: WASM tests, Svelte checks, JS unit tests, lint, and preview build (no browser e2e)
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=dev
         env:
           CI: true
