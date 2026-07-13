@@ -11,6 +11,7 @@ import {
   selectLoginUnlockMethod,
   UI_TIMEOUT_MS,
   unlockVaultOnLogin,
+  waitForPersistedAppLog,
 } from './helpers'
 
 async function wipeDeviceIdentity(page: import('@playwright/test').Page) {
@@ -108,6 +109,40 @@ test.describe('login unlock flow (local-first)', () => {
       entryList.getByRole('button', { name: 'Travel' }),
     ).toBeVisible()
     await expect(page.getByTestId('login-password-input')).toBeVisible()
+  })
+
+  test('unlocks with a selected backup password after explicit lock', async ({
+    page,
+  }) => {
+    await openStorageSettings(page)
+    await addVaultPassword(page, 'Recovery', 'recovery-pass-99')
+
+    await page.getByTestId('header-lock-vault-btn').click()
+    await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeHidden()
+
+    await selectLoginUnlockMethod(page, 'password')
+    await page
+      .getByTestId('login-password-entry-list')
+      .getByRole('button', { name: 'Recovery' })
+      .click()
+    await page.getByTestId('login-password-input').fill('recovery-pass-99')
+    await page.getByTestId('unlock-vault-btn').click()
+
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await page.getByTestId('device-protection-unlock-btn').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await waitForPersistedAppLog(page, {
+      scope: 'vault-password',
+      level: 'info',
+      messageIncludes: 'vault unlocked with password',
+    })
   })
 
   test('unlocks with backup password when device keys are missing', async ({

@@ -93,6 +93,10 @@ passkey recovery action.
 
 - **Multiple local vaults** → vault picker (`login-vault-picker`); unlock chosen vault.
 - **Single local vault** → unlock with device keys and/or backup password.
+- Backup-password summaries are read from the encrypted local vault before
+  device authorization, so Lock must not hide the password choice. If the
+  selected unlock action still needs passkey/PIN authorization for the wrapped
+  device identity, that exact password action resumes after authorization.
 - **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Sentinel starts the pre-vault reverse-onboarding ceremony in [sentinel-genesis.md](sentinel-genesis.md).
 
 The login vault surface presents **Open existing**, **Create new**, and **Import**

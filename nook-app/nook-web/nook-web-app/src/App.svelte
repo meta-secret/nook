@@ -220,10 +220,18 @@
       return
     }
     if (existingVaultNeedsDeviceUnlock) {
-      pendingExistingVaultUnlock = true
+      pendingExistingVaultUnlock = { kind: 'keys' }
       return
     }
     await vault.loadDb()
+  }
+
+  async function handlePasswordUnlock(entryId: string, password: string) {
+    if (existingVaultNeedsDeviceUnlock) {
+      pendingExistingVaultUnlock = { kind: 'password', entryId, password }
+      return
+    }
+    await vault.unlockWithPassword(entryId, password)
   }
 
   async function handleSettingsReconnect() {
@@ -281,14 +289,19 @@
     | { kind: 'sentinel'; args: StartSentinelGenesisArgs }
     | { kind: 'sentinel-participant-key' }
     | { kind: 'sentinel-onboarding'; packageJson: string }
+  type PendingExistingVaultUnlock =
+    | { kind: 'keys' }
+    | { kind: 'password'; entryId: string; password: string }
 
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
-  let pendingExistingVaultUnlock = $state(false)
+  let pendingExistingVaultUnlock = $state<
+    PendingExistingVaultUnlock | undefined
+  >(undefined)
   const showPasskeyOverlay = $derived(
     pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
   )
   const showExistingVaultPasskeyOverlay = $derived(
-    pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
+    pendingExistingVaultUnlock !== undefined && existingVaultNeedsDeviceUnlock,
   )
 
   async function handleCreateDeviceVault(label: string) {
@@ -348,14 +361,15 @@
   })
 
   $effect(() => {
-    if (
-      !pendingExistingVaultUnlock ||
-      !vault.deviceProtectionReady ||
-      vault.isVerifying
-    ) {
+    const pending = pendingExistingVaultUnlock
+    if (!pending || !vault.deviceProtectionReady || vault.isVerifying) {
       return
     }
-    pendingExistingVaultUnlock = false
+    pendingExistingVaultUnlock = undefined
+    if (pending.kind === 'password') {
+      void vault.unlockWithPassword(pending.entryId, pending.password)
+      return
+    }
     void vault.loadDb()
   })
 </script>
@@ -576,8 +590,7 @@
                 {sentinelInvitationRequest}
                 {sentinelOnboardingPackage}
                 onAcceptSentinelOnboardingPackage={handleAcceptSentinelOnboarding}
-                onUnlockWithPassword={(entryId, password) =>
-                  vault.unlockWithPassword(entryId, password)}
+                onUnlockWithPassword={handlePasswordUnlock}
                 onCreateDeviceVault={handleCreateDeviceVault}
                 onStartSentinelGenesis={handleStartSentinelGenesis}
                 onCreateSentinelGenesisPublicKeyAnnouncement={handleCreateSentinelParticipantKey}
@@ -605,7 +618,7 @@
                 {vault}
                 onDismiss={() => {
                   if (showExistingVaultPasskeyOverlay) {
-                    pendingExistingVaultUnlock = false
+                    pendingExistingVaultUnlock = undefined
                     return
                   }
                   pendingVaultCreation = undefined

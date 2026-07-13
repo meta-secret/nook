@@ -190,7 +190,7 @@
     ) {
       showProviderSetupLink = false
     }
-    if (showLocalUnlock && !deviceAuthorizationPending) {
+    if (showLocalUnlock) {
       void vault.prepareLocalLogin()
     }
     if (
