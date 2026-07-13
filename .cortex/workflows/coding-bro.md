@@ -38,7 +38,12 @@ Default PR-first loop:
 
 ## Testing strategy — parallel final validation
 
-**GitHub Actions is slow and cold.** Every run starts from scratch on a fresh runner: pull the toolchain Docker image, build wasm/web, run the full prepared test set (`task ci:pr` on PRs). Expect **5+ minutes** per run plus queue time. A failing fmt, clippy, unit test, or e2e spec burns that entire cycle — do not use remote CI as the primary debug loop.
+**PR GitHub Actions is cache-warm and developer-critical.** `pr.yml` runs on the
+self-hosted `nook` pool so `task ci:pr` can reuse warm Docker/BuildKit state.
+Long-running AI agents and other background workflows stay on fresh
+GitHub-hosted runners, where cold setup is acceptable. A failing fmt, clippy,
+unit test, or e2e spec still burns a remote validation cycle, so do not use PR
+CI as the primary debug loop.
 
 **Local Docker is warm and fast.** The same Task commands run against **cached** toolchain images on the developer machine. Local runs are **strongly preferred** for checking tests, fixing issues, and iterating.
 

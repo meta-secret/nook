@@ -109,14 +109,19 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-CI jobs run on **GitHub-hosted** `ubuntu-latest` runners so agent/CI load does
-not contend with the self-hosted Nook machine. The Docker setup action already
-enables the containerd image store on GitHub-hosted runners.
+Runner placement separates latency-sensitive PR validation from long-running
+background work. The `pr.yml` verify/preview gate uses the self-hosted `nook`
+pool so it can reuse warm Docker/BuildKit state. AI implement/fix/smoke jobs use
+GitHub-hosted `ubuntu-latest`, where their six-hour background work cannot
+exhaust or block the Nook machine. Other scheduled, main, release, manual e2e,
+and research jobs also remain GitHub-hosted.
 
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
-| `pr.yml`, `main.yml`, `release.yml`, `e2e-pr.yml`, `e2e-nightly.yml` | `ubuntu-latest` | Default CI and AI ci-fix agents |
-| `runner-cleanup.yml` | `nook` | Self-hosted Docker prune only |
+| `pr.yml` | `nook` | Fast, cache-warm verification and preview for developer-critical PRs |
+| `agent-implement.yml`, `ci-agent-smoke.yml`, `main.yml` `ci-fix`, `e2e-nightly.yml` `ci-fix` | `ubuntu-latest` | Isolate long-running background AI work from the Nook machine |
+| `main.yml` `ci`, `release.yml`, `e2e-pr.yml`, `e2e-nightly.yml` `sync-live`, `web-research.yml` | `ubuntu-latest` | GitHub-hosted post-merge, release, scheduled, manual, and research work |
+| `runner-cleanup.yml` | `nook` | Maintain the self-hosted Docker cache and disk |
 
 ## Why local-provider e2e vs sync-live
 
@@ -211,11 +216,30 @@ exported.
 
 ## Local vs remote CI
 
-**Remote (GitHub Actions) is cold and heavy.** Every run starts on a fresh `ubuntu-latest` runner: pull the toolchain Docker image from GHCR, build wasm/web from scratch, run the full prepared test set. PR workflow runs **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview, and a successful `github-pages` deployment status for the PR head SHA — no toolchain image push). PR coverage always checks the current `nook-core + nook-auth2` artifact against the floor; the expensive base-worktree coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs changed, otherwise the current coverage artifact is reused as the base comparison. Main pushes the commit-tagged toolchain image after green verify and deploys the active development channel to Cloudflare Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages for stable `nokey.sh`, and publishes the GitHub Release only after deployment succeeds. Expect several minutes per PR run plus queue time. Use remote CI as the **PR validation gate** — not as the primary place to discover fmt/clippy/unit/e2e failures.
+**Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
+self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
+**`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview,
+and a successful `github-pages` deployment status for the PR head SHA — no
+toolchain image push). PR coverage always checks the current
+`nook-core + nook-auth2` artifact against the floor; the expensive base-worktree
+coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs
+changed, otherwise the current coverage artifact is reused as the base
+comparison. Use remote CI as the **PR validation gate** — not as the primary
+place to discover fmt/clippy/unit/e2e failures.
+
+**GitHub-hosted jobs are isolated but cold.** Main, release, scheduled/manual e2e,
+research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
+the toolchain cache from GHCR. Main pushes the commit-tagged toolchain image
+after green verify and deploys the active development channel to Cloudflare
+Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without
+pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages
+for stable `nokey.sh`, and publishes the GitHub Release only after deployment
+succeeds. The extra latency is acceptable for background work and keeps it from
+consuming the Nook runner pool.
 
 Main's toolchain publish must authenticate immediately before the GHCR
 `toolchain-push` bake. Do not assume a prior Docker login from setup is still
-visible to Buildx on every self-hosted runner; a green verify/e2e run can still
+visible to Buildx throughout the job; a green verify/e2e run can still
 block the Pages deploy if the final push falls back to anonymous GHCR auth and
 gets a 403. `main.yml` passes `GITHUB_TOKEN` / `GITHUB_ACTOR` into
 `task ci:main:publish`, and `docker:push` re-logins before pushing. After the
