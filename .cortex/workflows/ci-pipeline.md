@@ -154,7 +154,7 @@ Defined in `nook-app/nook-web/playwright.config.ts`:
 
 | Project     | Specs                                          | CI                            |
 | ----------- | ---------------------------------------------- | ----------------------------- |
-| `e2e`       | All local-provider specs (IndexedDB + sync remotes) | pr.yml, main, e2e-pr (manual) |
+| `e2e`       | All local-provider specs (IndexedDB + sync remotes) | main, e2e-pr (manual)         |
 | `e2e-pr`    | IndexedDB-only subset                          | e2e-pr (manual/debug)         |
 | `sync-live` | `e2e/live/**/*.spec.ts`                        | e2e-nightly, e2e-pr (manual)  |
 
@@ -169,10 +169,13 @@ All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 
 # Full PR CI mirror — parallel local gate; mandatory before merge/handoff after broad remote failure
-WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build → full local-provider e2e
+WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build (no browser e2e)
+
+# Explicit full browser validation for high-risk PRs
+task ci:pr:e2e                       # full local-provider web e2e + extension e2e
 
 # E2e projects
-task web:test:e2e                   # full local-provider e2e (PR/main gate)
+task web:test:e2e                   # full local-provider e2e (main gate; explicit on PRs)
 task web:test:e2e:pr                # fast e2e-pr subset (manual/debug only)
 
 # WASM tests
@@ -211,22 +214,29 @@ the same Rust tests after the image build. `task setup` gets those files into th
 slim web image through the same temporary host artifact directory as generated
 WASM; it does not copy them directly from the multi-GB Rust builder snapshot.
 
-When PR CI builds the base worktree for comparison, it measures the base source in
-the base worktree's own layout. The current PR image is built first, so this
-branch's Dockerfile/task plumbing is still validated before base coverage is
-exported.
+After a successful main gate, `main.yml` uploads those four files plus a manifest
+as `nook-core-auth-coverage-<commit SHA>`. A PR with changed Rust coverage inputs
+downloads and validates the artifact for its exact base SHA instead of rebuilding
+the base app image. If the artifact is missing or invalid, the PR runs
+`task docker:coverage:export` against the base source; that Bake target stops at
+`builder-debug` and exports only the coverage payload, never the WASM/web stages or
+the multi-GB app image. PRs without Rust/Cargo/source changes—including changes
+only to coverage build/export plumbing—reuse the floor-validated current coverage
+as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
 **Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
 self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
-**`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview,
+**`task ci:pr`** (verify, web build, no browser e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
-toolchain image push). PR coverage always checks the current
-`nook-core + nook-auth2` artifact against the floor; the expensive base-worktree
-coverage rebuild runs only when Rust/auth/core/Cargo/Docker coverage inputs
-changed, otherwise the current coverage artifact is reused as the base
-comparison. Use remote CI as the **PR validation gate** — not as the primary
+toolchain image push). The preview deploy reuses that prepared sealed image and
+must not declare another `setup` dependency. PR coverage always checks the current
+`nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
+inputs reuse the exact base commit's main artifact (with a coverage-only build
+fallback), while unchanged source reuses the current artifact as the base
+comparison. Use
+remote CI as the **PR validation gate** — not as the primary
 place to discover fmt/clippy/unit/e2e failures.
 
 Applicable repository-owned PR checks are the only remote checks an agent may
@@ -240,7 +250,8 @@ must still be addressed, but no external status may delay merge or handoff.
 research, and every AI-agent job start on fresh `ubuntu-latest` runners and pull
 the independent Rust and web caches from GHCR. Main pushes separate commit-tagged
 Rust/WASM and web-dependency cache images after green verify and deploys the active development channel to Cloudflare
-Pages for `dev.nokey.sh`. `release.yml` runs the main-equivalent gate without
+Pages for `dev.nokey.sh` from the same prepared image, without a second setup.
+`release.yml` runs the main-equivalent gate without
 pushing the toolchain, deploys an immutable semantic-version tag to GitHub Pages
 for stable `nokey.sh`, and publishes the GitHub Release only after deployment
 succeeds. The extra latency is acceptable for background work and keeps it from
@@ -273,7 +284,7 @@ After targeted fixes pass and the iteration is ready for final validation, push/
 **Agent efficiency rules:**
 
 1. **Before long final local checks** — push/open/update the PR once the iteration is functionally complete so remote CI can start.
-2. **Parallel local gate** — run `task check` minimum; add `task web:test:e2e` or `task ci:pr` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
+2. **Parallel local gate** — run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e` or `task ci:pr:e2e` when web/vault/sync flows change. Use `E2E_SPEC=… task web:test:e2e:file` while debugging a specific e2e failure.
 3. **After any remote CI failure** — read test output and static-analysis errors,
    then **persisted app logs** (see below), fix locally (prefer single-spec e2e
    while iterating), push the completed fix, then run the required local gate
@@ -398,9 +409,9 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** run `task ci:pr` (or `task web:test:e2e` for the full local-provider suite) before merge when changing web vault/sync flows.
+3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI and main both run full local-provider **e2e**; nightly runs **sync-live**.
+5. PR CI omits browser e2e; main runs full local-provider and extension **e2e**; nightly runs **sync-live**. Main and nightly failures invoke `ci-fix`.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
 <!-- agent-implement docker smoke -->

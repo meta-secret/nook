@@ -99,3 +99,9 @@ RUN FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json
 
 COPY nook-app/nook-wasm nook-wasm
+
+# Export only the small, already-computed coverage payload. This target deliberately branches
+# before the WASM/web production stages so a PR fallback never materializes the multi-GB app image.
+FROM scratch AS coverage-export
+
+COPY --from=builder-debug /opt/nook/coverage/nook-core/ /

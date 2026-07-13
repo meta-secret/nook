@@ -79,7 +79,7 @@ E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 E2E_SPEC="e2e/connect.spec.ts e2e/login-unlock-flow.spec.ts" task web:test:e2e:file
 ```
 
-After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the relevant project or full PR mirror locally while remote CI runs (`task web:test:e2e:pr`, `task ci:pr`).
+After targeted fixes pass and the iteration is ready for final validation, push/open/update the PR, then run the PR mirror plus any relevant e2e project locally while remote CI runs (`task ci:pr`, `task web:test:e2e:pr`, or `task ci:pr:e2e`).
 
 Default agent flow:
 
@@ -87,7 +87,7 @@ Default agent flow:
    the PR title/scope before editing.
 2. **Implement and iterate locally** — scoped checks as you go (`task check`, `task rust:test`, single-spec e2e via `E2E_SPEC=… task web:test:e2e:file`).
 3. **Push and open/update the PR before long final local checks** — once the branch has a coherent commit, commit, push, and create/update the PR.
-4. **Validate locally in parallel** — immediately run `task check` minimum; add `task web:test:e2e:pr` or `task ci:pr` when web/vault/sync flows change.
+4. **Validate locally in parallel** — immediately run `task check` minimum and `task ci:pr` for the exact PR mirror; add `task web:test:e2e:pr` or `task ci:pr:e2e` when web/vault/sync flows change.
 5. **Monitor only Nook's applicable PR test checks** — normally `PR / Verify and
    preview`, plus `Web research / Build and deploy research catalog` for
    web-research paths. Never request, poll,
@@ -235,7 +235,8 @@ branch/PR and run the relevant project or full PR mirror while remote CI runs:
 
 ```bash
 task web:test:e2e                # full local-provider e2e project
-task ci:pr                       # full PR mirror; mandatory after a prior CI failure
+task ci:pr:e2e                   # explicit full web + extension e2e
+task ci:pr                       # PR mirror without browser e2e; mandatory after a prior PR CI failure
 ```
 
 ```text
@@ -244,7 +245,7 @@ implement → fix → E2E_SPEC=… task web:test:e2e:file   (fast debug loop)
            → task check / web:test:e2e / task ci:pr     (parallel with remote CI)
 ```
 
-Add `task web:test:e2e` or `task ci:pr` to the parallel local gate when the
+Add `task web:test:e2e` or `task ci:pr:e2e` to the parallel local gate when the
 change touches vault sync, login/unlock, multi-step web flows, or Playwright
 helpers. Skip e2e for isolated Rust-only or docs-only changes.
 
@@ -256,7 +257,7 @@ helpers. Skip e2e for isolated Rust-only or docs-only changes.
 gh run view <run-id> --log-failed   # CI job output
 # For e2e failures: read nook-app-logs.json from the Playwright report, or locally:
 # E2E_SPEC=e2e/<spec>.spec.ts task web:test:e2e:file  then fetchAppLogs / /app-logs
-task ci:pr                          # full PR mirror
+task ci:pr                          # full PR mirror (no browser e2e)
 # fix, push the completed fix, and run the local gate while CI refreshes
 head_sha="$(gh pr view <number> --json headRefOid --jq .headRefOid)"
 pr_run_id="$(gh run list --workflow PR --commit "$head_sha" \
@@ -266,7 +267,7 @@ gh run watch "$pr_run_id" --exit-status
 # Repeat with --workflow "Web research" when web-research paths changed.
 ```
 
-`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy). Toolchain publish is main-only (`task ci:main:publish`).
+`task ci:pr` matches `pr.yml` gates (minus Cloudflare deploy) and intentionally excludes browser e2e. Toolchain publish and the automatic full browser gate are main-only (`task ci:main:publish`).
 
 E2e helpers when debugging web flows:
 
@@ -291,7 +292,7 @@ See [pull-requests.md § Local checks](pull-requests.md#5-local-checks) and [ci-
 
 Push once the current iteration is functionally complete and ready for final
 validation. Then run the local gate immediately while monitoring remote CI.
-Include scoped e2e or `task ci:pr` when the touch surface warrants it (see step
+Include scoped e2e or `task ci:pr:e2e` when the touch surface warrants it (see step
 5).
 
 ```bash

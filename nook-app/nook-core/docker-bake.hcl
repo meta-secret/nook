@@ -28,3 +28,18 @@ target "builder-debug" {
   cache-from = rust_cache_from
   cache-to   = rust_cache_to
 }
+
+// Small local-output target for the rare case where a commit-keyed main coverage artifact is
+// unavailable. It reuses builder-debug's cached Rust layers without exporting the full app image.
+target "coverage-export" {
+  context    = "."
+  dockerfile = "nook-app/nook-core/Dockerfile"
+  target     = "coverage-export"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    rust-base    = "target:rust-base"
+    builder-deps = "target:builder-deps"
+  }
+  cache-from = rust_cache_from
+  cache-to   = rust_cache_to
+}

@@ -143,10 +143,10 @@ task rust:coverage:check                  # nook-core + nook-auth2 tests + line 
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-**Full PR CI mirror** — include in the parallel local gate when web/vault flows change; **mandatory before merge/handoff** after any broad remote CI failure:
+**Full PR CI mirror** — run in the parallel local gate; **mandatory before merge/handoff** after any broad remote PR CI failure:
 
 ```bash
-task ci:pr    # prepare → verify ‖ web build → full local-provider e2e
+task ci:pr    # prepare → verify ‖ web build (no browser e2e)
 ```
 
 After a remote failure, fix the root cause, push the completed fix, and run
@@ -158,14 +158,14 @@ After a remote failure, fix the root cause, push the completed fix, and run
 | While debugging e2e             | `E2E_SPEC=… task web:test:e2e:file`     | Fast feedback — one spec, not the full suite               |
 | Final validation boundary       | `git push` / `gh pr create`            | Start remote CI before long local checks                   |
 | Normal final local gate         | `task check` (+ scoped e2e when needed) | Cached local Docker; runs in parallel with remote CI       |
-| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr`     | Full local-provider e2e or PR mirror locally               |
+| Web/vault/sync changes          | `task web:test:e2e` or `task ci:pr:e2e` | Explicit full local-provider or web + extension e2e        |
 | After broad remote CI failure   | `task ci:pr`                           | Full PR gates locally before merge/handoff                 |
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
 
 ### 5.1. Local e2e (debug and final validation)
 
-PR CI runs the full local-provider **e2e** Playwright project. Use a single spec while debugging, then run the full project or `task ci:pr` in the parallel local gate for changes that touch:
+PR CI intentionally omits browser e2e; `main.yml` is the automatic full-suite gate after merge. Use a single spec while debugging, then run the full project or `task ci:pr:e2e` explicitly before merge for changes that touch:
 
 - vault sync, join, or enrollment flows
 - login / unlock / password envelope UI
@@ -177,19 +177,19 @@ PR CI runs the full local-provider **e2e** Playwright project. Use a single spec
 E2E_SPEC=e2e/connect.spec.ts task web:test:e2e:file
 ```
 
-**Final local gate — full local-provider project or PR mirror:**
+**Final local e2e gate — full local-provider project or web + extension wrapper:**
 
 ```bash
 task web:test:e2e          # full local-provider e2e project in Docker
-# or, after task check already built wasm + dist:
-task web:test:e2e:parallel
+# or include extension e2e as well:
+task ci:pr:e2e
 ```
 
 Skip e2e for small, isolated Rust-only or docs-only changes.
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
-`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build → **full local-provider e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish runs on main only (`ci:main:publish`).
+`pr.yml` runs `task ci:pr`: prepare → verify ‖ web build, with **no browser e2e**, then deploys a Cloudflare preview and records it as a successful `github-pages` deployment for ruleset enforcement. Toolchain publish and the automatic full browser e2e gate run on main only (`ci:main:publish`).
 
 **Do not stop after opening the PR.** Wait only for applicable repository-owned
 workflows: `PR`, plus `Web research` when `.github/workflows/web-research.yml` or
@@ -286,7 +286,7 @@ important after the first two). See
    `/app-logs`, or `dumpNookLogs(page)`.
 3. Fix the root cause.
 4. Push the completed fix so Nook's PR workflow restarts.
-5. **Run full local PR CI while Nook's PR workflow runs:** `task ci:pr` (not just `task check` — a repository-owned PR-test failure means the gap is likely e2e, web build, or a gate `check` skips).
+5. **Run full local PR CI while Nook's PR workflow runs:** `task ci:pr` (not just `task check` — a broad remote failure may be in the production web build or another gate `check` skips). For a browser failure from main/nightly or a high-risk web change, also run the matching e2e spec/project.
 6. Return to step 5 and wait for both local validation and Nook's applicable PR
    test checks to be green. Never wait for an external service.
 
@@ -304,7 +304,7 @@ user asked you to merge (or the task implies merge-on-green):
 gh pr merge <number> --squash
 ```
 
-After merge, `main.yml` runs full local-provider **e2e** Playwright. Nightly covers sync-live. The agent's job on the PR is complete once squash-merged.
+After merge, `main.yml` runs full local-provider and extension **e2e**. Nightly covers sync-live. Failures in either workflow invoke the `ci-fix` AI worker, which opens a fix PR, waits for checks, and squash-merges the repair.
 
 ### 9. Task completion report
 

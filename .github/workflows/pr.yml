@@ -1,6 +1,6 @@
-# Pull requests: pull toolchain cache, verify/build/e2e in one container, deploy preview.
-# Toolchain publish runs on main only (ci:main:publish). PR and main CI run full local-provider e2e;
-# nightly runs sync-live.
+# Pull requests: pull toolchain cache, verify/build in one container, deploy preview.
+# Browser e2e is intentionally excluded here: main runs the full local-provider and extension suites,
+# and nightly runs sync-live. Both failure paths invoke the ci-fix AI worker.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline.
 # Superseded runs (new push or PR close) are cancelled via concurrency below.
@@ -18,6 +18,7 @@ on:
       - nook-app/nook-web/nook-web-research/**
 
 permissions:
+  actions: read
   contents: read
   deployments: write
   packages: read
@@ -44,7 +45,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify and build preview
+      - name: Verify and build preview (no browser e2e)
         run: task ci:pr VITE_BASE=/ WASM_BUILD_MODE=prod
         env:
           CI: true
@@ -56,8 +57,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CF_PAGES_BRANCH: pr-${{ github.event.pull_request.number }}
         run: |
-          # Deploy runs inside the app container (dist is in-image, no bind mount). Capture the
-          # preview URL from the container's stdout marker and hand it to the comment step.
+          # Deploy reuses the image prepared by the preceding gate (dist is in-image, no bind
+          # mount or second setup). Capture the preview URL from the container's stdout marker.
           # Do NOT let `bash -e` abort on the command substitution: on a deploy failure we must still
           # print the container output (it holds the real error) before failing the step.
           set +e
@@ -156,12 +157,12 @@ jobs:
       - name: Detect nook-core/auth coverage input changes
         id: coverage-inputs
         env:
-          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          git fetch origin "+$BASE_REF:refs/remotes/origin/$BASE_REF" --depth=1
+          git fetch origin "$BASE_SHA" --depth=1
           changed_count="$(
-            git diff --name-only "origin/$BASE_REF" HEAD -- \
+            git diff --name-only "$BASE_SHA" HEAD -- \
               nook-app/.cargo \
               nook-app/Cargo.lock \
               nook-app/Cargo.toml \
@@ -173,39 +174,124 @@ jobs:
               | wc -l \
               | tr -d ' '
           )"
+          source_changed_count="$(
+            git diff --name-only "$BASE_SHA" HEAD -- \
+              nook-app/.cargo \
+              nook-app/Cargo.lock \
+              nook-app/Cargo.toml \
+              nook-app/nook-auth2 \
+              nook-app/nook-core \
+              ':(exclude)nook-app/nook-core/Dockerfile' \
+              ':(exclude)nook-app/nook-core/docker-bake.hcl' \
+              | wc -l \
+              | tr -d ' '
+          )"
           if [ "$changed_count" -gt 0 ]; then
             echo "rust_coverage_inputs_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust_coverage_inputs_changed=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ "$source_changed_count" -gt 0 ]; then
+            echo "base_coverage_required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_coverage_required=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Export base nook-core/auth coverage
-        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'true'
+      - name: Resolve base coverage artifact
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
+        id: base-coverage-run
+        continue-on-error: true
+        uses: actions/github-script@v9
         env:
-          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        with:
+          retries: 3
+          script: |
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'main.yml',
+              head_sha: process.env.BASE_SHA,
+              event: 'push',
+              status: 'success',
+              per_page: 100,
+            })
+            const run = data.workflow_runs.find((candidate) =>
+              candidate.head_sha === process.env.BASE_SHA && candidate.conclusion === 'success'
+            )
+            if (run) {
+              core.info(`Using base coverage from Main run ${run.id}`)
+              core.setOutput('run-id', String(run.id))
+            } else {
+              core.warning(`No successful Main run found for base ${process.env.BASE_SHA}`)
+              core.setOutput('run-id', '')
+            }
+
+      - name: Download base coverage artifact
+        if: >-
+          steps.coverage-inputs.outputs.base_coverage_required == 'true' &&
+          steps.base-coverage-run.outputs.run-id != ''
+        id: download-base-coverage
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: nook-core-auth-coverage-${{ github.event.pull_request.base.sha }}
+          path: coverage/base
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.base-coverage-run.outputs.run-id }}
+
+      - name: Validate base coverage artifact
+        if: always() && steps.coverage-inputs.outputs.base_coverage_required == 'true'
+        id: base-coverage-artifact
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
+          valid=false
+          if [ -s coverage/base/manifest.json ] \
+            && jq -e --arg commit_sha "$BASE_SHA" \
+              '.schema_version == 1 and .commit_sha == $commit_sha' \
+              coverage/base/manifest.json >/dev/null \
+            && test -s coverage/base/summary.txt \
+            && test -s coverage/base/summary.json \
+            && test -s coverage/base/lcov.info \
+            && test -s coverage/base/coverage-floor.json; then
+            valid=true
+          else
+            echo "::warning::Base coverage artifact is unavailable or invalid; using coverage-only fallback"
+            rm -rf coverage/base
+          fi
+          echo "valid=$valid" >> "$GITHUB_OUTPUT"
+
+      - name: Export base nook-core/auth coverage fallback
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.base-coverage-artifact.outputs.valid }}" = "true" ]; then
+            exit 0
+          fi
           git worktree prune
           rm -rf ../nook-base-coverage
-          git worktree add --detach ../nook-base-coverage "origin/$BASE_REF"
+          git worktree add --detach ../nook-base-coverage "$BASE_SHA"
           cleanup() {
             git worktree remove --force ../nook-base-coverage >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          # Measure base source coverage in the base worktree's own layout. The PR image above
-          # already verifies this branch's current Dockerfile/task plumbing.
-          (
-            cd ../nook-base-coverage
-            task setup VITE_BASE=/ WASM_BUILD_MODE=prod
-          )
+          # Use this branch's already-verified coverage export plumbing with the base source. This
+          # also allows the first rollout to fall back when base predates the export-only target.
+          cp nook-app/nook-core/Dockerfile ../nook-base-coverage/nook-app/nook-core/Dockerfile
+          cp nook-app/nook-core/docker-bake.hcl ../nook-base-coverage/nook-app/nook-core/docker-bake.hcl
           base_coverage_out="$PWD/coverage/base"
-          (
-            cd ../nook-base-coverage
-            task docker:extract:coverage COVERAGE_OUT_DIR="$base_coverage_out"
-          )
+          task docker:coverage:export \
+            REPO_ROOT="$PWD/../nook-base-coverage" \
+            COVERAGE_OUT_DIR="$base_coverage_out" \
+            WASM_BUILD_MODE=prod
 
       - name: Reuse current coverage as base
-        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'false'
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'false'
         run: |
           set -euo pipefail
           rm -rf coverage/base

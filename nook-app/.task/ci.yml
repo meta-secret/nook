@@ -2,7 +2,7 @@ version: "3"
 
 tasks:
   ci:pr:
-    desc: PR CI — Rust/WASM image validation, then one slim web container for verify/build/e2e.
+    desc: PR CI — Rust/WASM image validation, then one slim web container for format/verify/build (browser e2e runs on main).
     deps:
       - setup
     cmds:
@@ -10,7 +10,7 @@ tasks:
         vars: { TASK: _ci:pr }
 
   ci:pr:e2e:
-    desc: Full stub web Playwright e2e plus extension e2e for PRs.
+    desc: Explicit local/manual full stub web Playwright e2e plus extension e2e.
     cmds:
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
       - task: web:e2e:build-dist
@@ -85,17 +85,13 @@ tasks:
       - task: docker:push:ci
 
   ci:pr:deploy-preview:
-    desc: Deploy nook-app/nook-web/dist to Cloudflare Pages inside the app container (dist is in-image, no mount).
-    deps:
-      - setup
+    desc: Deploy the prepared PR image's dist to Cloudflare Pages (CI only; ci:pr must run first).
     cmds:
       - task: docker:task
         vars: { TASK: _deploy-preview }
 
   ci:cloudflare:deploy:
-    desc: Deploy nook-app/nook-web/dist to Cloudflare Pages for the configured branch.
-    deps:
-      - setup
+    desc: Deploy the prepared main image's dist to Cloudflare Pages (CI only; ci:main must run first).
     cmds:
       - task: docker:task
         vars: { TASK: _deploy-cloudflare }
@@ -148,15 +144,10 @@ tasks:
         vars: { TASK: _verify }
 
   _ci:pr:
-    desc: PR gate — format, wasm (image-seeded), verify ‖ build, full stub web e2e, extension e2e, restore prod dist (one container).
+    desc: PR gate — format, wasm (image-seeded), verify ‖ build (one container; no browser e2e).
     cmds:
       - task: _format:check
       - task: _ci:pr:parallel
-      - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
-      - task: _web:e2e:build-dist
-      - task: _web:test:e2e:parallel
-      - task: _web:e2e:restore-prod-dist
-      - task: _extension:test:e2e
 
   _ci:pr:parallel:
     desc: Lint/test ‖ production web build after wasm is ready.
