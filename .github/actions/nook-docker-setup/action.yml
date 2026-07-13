@@ -21,7 +21,11 @@ runs:
           local current
           current="$(sysctl -n "$key")"
           if (( current < minimum )); then
-            sudo sysctl -w "$key=$minimum"
+            if sudo -n true 2>/dev/null; then
+              sudo sysctl -w "$key=$minimum"
+            else
+              echo "::warning::$key = $current (< $minimum); runner cannot raise it without interactive sudo"
+            fi
           else
             echo "$key = $current (already >= $minimum)"
           fi
