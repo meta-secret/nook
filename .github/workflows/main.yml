@@ -197,6 +197,23 @@ jobs:
               auto_inactive: false,
             })
 
+      - name: Export commit-keyed nook-core/auth coverage
+        run: |
+          set -euo pipefail
+          task docker:extract:coverage COVERAGE_OUT_DIR=coverage/main
+          jq -n \
+            --arg commit_sha "$GITHUB_SHA" \
+            '{schema_version: 1, commit_sha: $commit_sha}' \
+            > coverage/main/manifest.json
+
+      - name: Upload commit-keyed nook-core/auth coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: nook-core-auth-coverage-${{ github.sha }}
+          path: coverage/main
+          retention-days: 90
+          if-no-files-found: error
+
   ci-fix:
     name: AI fix, PR, and merge
     needs: ci

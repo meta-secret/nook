@@ -162,6 +162,26 @@ tasks:
         trap cleanup EXIT;
         {{.DOCKER}} cp "$cid:/opt/nook/coverage/nook-core/." "$out_dir/"'
 
+  docker:coverage:export:
+    desc: Build and export only nook-core + nook-auth2 coverage artifacts (CI fallback; no app image export).
+    vars:
+      COVERAGE_OUT_DIR: '{{default (printf "%s/coverage/nook-core" .REPO_ROOT) .COVERAGE_OUT_DIR}}'
+    cmds:
+      - >-
+        bash -c 'set -euo pipefail;
+        out_dir="{{.COVERAGE_OUT_DIR}}";
+        case "$out_dir" in
+          /*) ;;
+          *) out_dir="{{.REPO_ROOT}}/$out_dir" ;;
+        esac;
+        rm -rf "$out_dir";
+        mkdir -p "$out_dir";
+        {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake
+        {{.NOOK_BAKE_FILES}}
+        --allow="fs.write=$out_dir"
+        --set "coverage-export.output=type=local,dest=$out_dir"
+        coverage-export'
+
   docker:web:dev:
     internal: true
     # Mounted for Vite hot-reload. node_modules is an
