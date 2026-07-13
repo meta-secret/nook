@@ -99,7 +99,7 @@ tasks:
         trap cleanup EXIT;
         for attempt in 1 2 3; do
           rm -rf "$artifacts_dir"/*;
-          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" {{.PREPARE_GROUP}} &&
+          if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" {{.PREPARE_GROUP}} &&
              artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)" &&
              echo "task setup: host WASM/coverage handoff is ${artifact_kib} KiB" &&
              { test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; }; } &&
