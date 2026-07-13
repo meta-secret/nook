@@ -44,6 +44,13 @@ variable "GIT_COMMIT_ID" {
   default = ""
 }
 
+// Passed to every target that reaches the internal builder-wasm Dockerfile stage. Setting only the
+// standalone `builder-wasm` bake target is insufficient for scratch exports such as web-artifacts,
+// because each final target owns its own Dockerfile solve.
+variable "WASM_BUILD_MODE" {
+  default = "dev"
+}
+
 // Rust and web use independent cache refs so publishing one branch never assembles or overwrites
 // the other. The legacy combined refs remain read-only fallbacks during the migration.
 rust_cache_from = TOOLCHAIN_REGISTRY != "" ? concat(

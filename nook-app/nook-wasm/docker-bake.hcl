@@ -11,6 +11,9 @@ target "builder-wasm" {
   contexts = {
     builder-debug = "target:builder-debug"
   }
+  args = {
+    WASM_BUILD_MODE = WASM_BUILD_MODE
+  }
   cache-from = rust_cache_from
   cache-to   = rust_cache_to
 }
@@ -35,6 +38,9 @@ target "web-artifacts" {
   contexts = {
     builder-debug = "target:builder-debug"
   }
+  args = {
+    WASM_BUILD_MODE = WASM_BUILD_MODE
+  }
   cache-from = rust_cache_from
 }
 
@@ -47,6 +53,9 @@ target "_nook-rust-common" {
   contexts = {
     builder-debug = "target:builder-debug"
   }
+  args = {
+    WASM_BUILD_MODE = WASM_BUILD_MODE
+  }
   cache-from = rust_cache_from
 }
 
@@ -58,6 +67,9 @@ target "_nook-rust-browser-common" {
   platforms  = ["linux/amd64"]
   contexts = {
     builder-debug = "target:builder-debug"
+  }
+  args = {
+    WASM_BUILD_MODE = WASM_BUILD_MODE
   }
   cache-from = rust_cache_from
 }
