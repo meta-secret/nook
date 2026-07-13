@@ -9,7 +9,8 @@
 // Callers (Taskfile `setup`, nook-app/docker/Taskfile.yml) pass all files via the NOOK_BAKE_FILES list.
 //
 // PREPARE PHASE: rust-base -> builder-deps -> builder-debug -> builder-wasm -> web-artifacts, in
-// parallel with web-base -> web-deps. web-artifacts is exported to a temporary host directory.
+// parallel with web-base -> web-deps. web-artifacts is exported to a commit-scoped,
+// invocation-isolated host directory.
 // WEB PHASE: nook-web consumes web-base + web-deps + only that host artifact directory. The heavy
 // Rust snapshot never becomes a context or parent of the final image. Main publishes the two cache
 // lineages independently; no combined Rust + web image exists.

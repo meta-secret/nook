@@ -80,8 +80,9 @@ tasks:
     desc: Build the slim linux/amd64 nook-web image via parallel Rust/WASM + web preparation.
     dir: '{{.REPO_ROOT}}'
     # Phase one builds Rust/WASM validation and web dependencies concurrently, exporting only the
-    # generated WASM package + coverage files to a temporary host directory. Phase two consumes that
-    # tiny directory to build the web image; builder-wasm is never a parent/context of nook-web.
+    # generated WASM package + coverage files to a commit-scoped, invocation-isolated host directory.
+    # Phase two consumes that tiny directory to build the web image; builder-wasm is never a
+    # parent/context of nook-web.
     env:
       TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
       GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
@@ -94,14 +95,27 @@ tasks:
       # builder-debug both use nook-app/nook-core/Dockerfile) — retry before failing CI on a transient parse error.
       - >-
         bash -c 'set -euo pipefail;
-        artifacts_dir="$(mktemp -d "${TMPDIR:-/tmp}/nook-web-artifacts.XXXXXX")";
-        cleanup() { rm -rf "$artifacts_dir"; };
+        commit_id="${GIT_COMMIT_ID:?task setup requires GIT_COMMIT_ID}";
+        if [ "${#commit_id}" -ne 40 ] || [[ "$commit_id" == *[!0-9a-f]* ]]; then
+          echo "task setup: GIT_COMMIT_ID must be a full lowercase git SHA" >&2;
+          exit 1;
+        fi;
+        artifacts_parent="${TMPDIR:-/tmp}/nook-web-artifacts";
+        artifacts_root="$artifacts_parent/$commit_id";
+        mkdir -p "$artifacts_root";
+        artifacts_dir="$(mktemp -d "$artifacts_root/invocation.XXXXXX")";
+        cleanup() {
+          rm -rf "$artifacts_dir";
+          rmdir "$artifacts_root" 2>/dev/null || true;
+          rmdir "$artifacts_parent" 2>/dev/null || true;
+        };
         trap cleanup EXIT;
         for attempt in 1 2 3; do
-          rm -rf "$artifacts_dir"/*;
+          rm -rf "$artifacts_dir";
+          mkdir -p "$artifacts_dir";
           if {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.write="$artifacts_dir" {{.NOOK_BAKE_FILES}} --set "web-artifacts.output=type=local,dest=$artifacts_dir" --set "web-deps.output=type=cacheonly" --set "rust-format-check.output=type=cacheonly" {{.PREPARE_GROUP}} &&
              artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)" &&
-             echo "task setup: host WASM/coverage handoff is ${artifact_kib} KiB" &&
+             echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB" &&
              { test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; }; } &&
              env WEB_ARTIFACTS_CONTEXT="$artifacts_dir" {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} nook-web; then
             exit 0;

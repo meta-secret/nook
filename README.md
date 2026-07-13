@@ -169,8 +169,10 @@ Open [http://localhost:5173](http://localhost:5173) for the landing page, or
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx prepares the Rust/WASM and web
 dependency branches in parallel, exports only the generated WASM and coverage
-files through a temporary host directory, then builds a web-only image. Rust
-`target/` and the compiler toolchain never enter `nook-web:local`.
+files through a commit-scoped host directory with an isolated subdirectory per
+invocation, then builds a web-only image. Concurrent builds cannot consume each
+other's handoff, and Rust `target/` and the compiler toolchain never enter
+`nook-web:local`.
 Runtime containers receive an explicit 1,048,576 open-file limit; override it
 with `DOCKER_NOFILE_LIMIT` when needed.
 
