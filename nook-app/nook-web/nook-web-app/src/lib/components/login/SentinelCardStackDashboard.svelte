@@ -141,9 +141,7 @@
 
   function changeParticipantCount(value: string | undefined) {
     if (!value) return
-    const count = Number(value)
-    participantCount = count
-    threshold = Math.min(threshold, participantCount)
+    participantCount = Number(value)
   }
 
   function changeThreshold(value: string | undefined) {

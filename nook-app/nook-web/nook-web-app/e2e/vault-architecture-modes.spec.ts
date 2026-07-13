@@ -256,8 +256,18 @@ test.describe('vault architecture modes', () => {
     await page
       .getByTestId('sentinel-genesis-name-input')
       .fill('Ordered Sentinel')
+    await page.getByTestId('sentinel-genesis-threshold').click()
+    await page.getByTestId('sentinel-threshold-option-3').click()
     await page.getByTestId('sentinel-genesis-participant-count').click()
     await page.getByTestId('sentinel-participant-count-option-2').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-threshold'),
+    ).toHaveAttribute('data-value', '3')
+    await expect(
+      page.getByTestId('sentinel-onboarding-continue-devices'),
+    ).toBeDisabled()
+    await page.getByTestId('sentinel-genesis-threshold').click()
+    await page.getByTestId('sentinel-threshold-option-2').click()
     await page.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
