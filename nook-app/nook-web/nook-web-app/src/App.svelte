@@ -198,6 +198,10 @@
       await vault.connectStagedProvider()
       return
     }
+    if (existingVaultNeedsDeviceUnlock) {
+      pendingExistingVaultUnlock = true
+      return
+    }
     await vault.loadDb()
   }
 
@@ -257,8 +261,12 @@
     | { kind: 'sentinel-participant-key' }
 
   let pendingVaultCreation = $state<PendingVaultCreation | undefined>(undefined)
+  let pendingExistingVaultUnlock = $state(false)
   const showPasskeyOverlay = $derived(
     pendingVaultCreation !== undefined && !vault.deviceProtectionReady,
+  )
+  const showExistingVaultPasskeyOverlay = $derived(
+    pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
   )
 
   async function handleCreateDeviceVault(label: string) {
@@ -301,6 +309,18 @@
     }
     if (pending.kind === 'sentinel-participant-key') return
     void vault.startSentinelGenesis(pending.args)
+  })
+
+  $effect(() => {
+    if (
+      !pendingExistingVaultUnlock ||
+      !vault.deviceProtectionReady ||
+      vault.isVerifying
+    ) {
+      return
+    }
+    pendingExistingVaultUnlock = false
+    void vault.loadDb()
   })
 </script>
 
@@ -503,8 +523,7 @@
                 bind:githubPat={vault.githubPat}
                 bind:githubRepo={vault.githubRepo}
                 addProviderOpen={vault.addProviderOpen}
-                isVerifying={vault.isVerifying ||
-                  existingVaultNeedsDeviceUnlock}
+                isVerifying={vault.isVerifying}
                 isInitializing={vault.isInitializing}
                 deviceAuthorizationPending={existingVaultNeedsDeviceUnlock}
                 onUnlock={handleUnlock}
@@ -542,14 +561,16 @@
                 onDismissError={() => vault.dismissError()}
               />
             {/if}
-            {#if showPasskeyOverlay || existingVaultNeedsDeviceUnlock}
+            {#if showPasskeyOverlay || showExistingVaultPasskeyOverlay}
               <PasskeyAuthOverlay
                 {vault}
-                onDismiss={showPasskeyOverlay
-                  ? () => {
-                      pendingVaultCreation = undefined
-                    }
-                  : undefined}
+                onDismiss={() => {
+                  if (showExistingVaultPasskeyOverlay) {
+                    pendingExistingVaultUnlock = false
+                    return
+                  }
+                  pendingVaultCreation = undefined
+                }}
               />
             {/if}
           {/if}

@@ -318,15 +318,19 @@ test.describe('passkey device-key protection', () => {
 
     await page.reload()
     // Existing vault stays in the app unlock workflow while device recovery is
-    // presented as its mandatory passkey step.
+    // deferred until the user explicitly asks to unlock it.
     await expect(page.getByTestId('login-gate')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(page.getByTestId('unlock-vault-btn')).toBeEnabled()
+
+    await page.getByTestId('unlock-vault-btn').click()
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
-    await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toHaveCount(
-      0,
-    )
+    await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
 
     const recoveredDeviceId = await readDeviceId(page)
     expect(recoveredDeviceId).toBe(originalDeviceId)

@@ -65,10 +65,11 @@ flowchart TB
 
 **Unlock ordering:** `markVaultUnlocked()` must run only after `loadProviders()` (and related provider hydrate). Fan-out after local save uses `syncProviders`; unlocking the UI earlier lets a fast edit (especially delete) push with an empty provider list and leave the remote event log stale. Delete/replace/add all `await runFanOutSyncAfterLocalSave()` so remote observers see the event before the handler returns.
 
-After lock, the app stays in **`LoginGate`** and presents
-**`DeviceProtectionGate`** in `PasskeyAuthOverlay` as the mandatory device-unlock
-step. Successful passkey authorization or PIN fallback restores the identity in
-WASM memory and enables the vault-unlock controls already visible underneath:
+After lock, the app stays in **`LoginGate`** without opening a passkey prompt.
+When the user explicitly chooses **Unlock**, it presents `DeviceProtectionGate`
+in `PasskeyAuthOverlay` as the required device-authorization step. Successful
+passkey authorization or PIN fallback restores the identity in WASM memory and
+continues that same vault-unlock action automatically:
 
 The gate presents itself as **Device setup — Step 1 of 2**, not as vault login.
 Its copy explains that it prepares or unlocks the browser's protected device
