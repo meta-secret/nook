@@ -215,8 +215,9 @@ downloads and validates the artifact for its exact base SHA instead of rebuildin
 the base app image. If the artifact is missing or invalid, the PR runs
 `task docker:coverage:export` against the base source; that Bake target stops at
 `builder-debug` and exports only the coverage payload, never the WASM/web stages or
-the multi-GB app image. PRs without Rust coverage input changes continue to reuse
-the current coverage as the base comparison.
+the multi-GB app image. PRs without Rust/Cargo/source changes—including changes
+only to coverage build/export plumbing—reuse the floor-validated current coverage
+as the base comparison because the measured source is unchanged.
 
 ## Local vs remote CI
 
@@ -225,9 +226,10 @@ self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
 **`task ci:pr`** (verify, web build, full local-provider e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
 toolchain image push). PR coverage always checks the current
-`nook-core + nook-auth2` artifact against the floor; changed Rust coverage inputs
-reuse the exact base commit's main artifact (with a coverage-only build fallback),
-while unchanged inputs reuse the current artifact as the base comparison. Use
+`nook-core + nook-auth2` artifact against the floor; changed Rust/Cargo/source
+inputs reuse the exact base commit's main artifact (with a coverage-only build
+fallback), while unchanged source reuses the current artifact as the base
+comparison. Use
 remote CI as the **PR validation gate** — not as the primary
 place to discover fmt/clippy/unit/e2e failures.
 

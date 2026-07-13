@@ -174,14 +174,31 @@ jobs:
               | wc -l \
               | tr -d ' '
           )"
+          source_changed_count="$(
+            git diff --name-only "$BASE_SHA" HEAD -- \
+              nook-app/.cargo \
+              nook-app/Cargo.lock \
+              nook-app/Cargo.toml \
+              nook-app/nook-auth2 \
+              nook-app/nook-core \
+              ':(exclude)nook-app/nook-core/Dockerfile' \
+              ':(exclude)nook-app/nook-core/docker-bake.hcl' \
+              | wc -l \
+              | tr -d ' '
+          )"
           if [ "$changed_count" -gt 0 ]; then
             echo "rust_coverage_inputs_changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "rust_coverage_inputs_changed=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ "$source_changed_count" -gt 0 ]; then
+            echo "base_coverage_required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_coverage_required=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Resolve base coverage artifact
-        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'true'
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
         id: base-coverage-run
         continue-on-error: true
         uses: actions/github-script@v9
@@ -212,7 +229,7 @@ jobs:
 
       - name: Download base coverage artifact
         if: >-
-          steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'true' &&
+          steps.coverage-inputs.outputs.base_coverage_required == 'true' &&
           steps.base-coverage-run.outputs.run-id != ''
         id: download-base-coverage
         continue-on-error: true
@@ -225,7 +242,7 @@ jobs:
           run-id: ${{ steps.base-coverage-run.outputs.run-id }}
 
       - name: Validate base coverage artifact
-        if: always() && steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'true'
+        if: always() && steps.coverage-inputs.outputs.base_coverage_required == 'true'
         id: base-coverage-artifact
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -248,7 +265,7 @@ jobs:
           echo "valid=$valid" >> "$GITHUB_OUTPUT"
 
       - name: Export base nook-core/auth coverage fallback
-        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'true'
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -274,7 +291,7 @@ jobs:
             WASM_BUILD_MODE=prod
 
       - name: Reuse current coverage as base
-        if: steps.coverage-inputs.outputs.rust_coverage_inputs_changed == 'false'
+        if: steps.coverage-inputs.outputs.base_coverage_required == 'false'
         run: |
           set -euo pipefail
           rm -rf coverage/base
