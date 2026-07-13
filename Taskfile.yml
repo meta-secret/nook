@@ -4,6 +4,9 @@ vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 includes:
+  preflight:
+    taskfile: preflight/Taskfile.yml
+    flatten: true
   app:
     taskfile: nook-app/Taskfile.yml
     flatten: true

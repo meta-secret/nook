@@ -2,7 +2,7 @@
 
 Use this workflow for quality, CI, and deployment changes.
 
-1. Keep Taskfile as the source of truth for build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
+1. Keep Taskfile as the source of truth for build, lint, test, and check commands. App commands live in `nook-app/Taskfile.yml`; cross-package app tasks live in `nook-app/.task/`, Docker tasks in `nook-app/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` plus `nook-app/nook-web/.task/`. Repository-wide invariant tests live in the standalone root Rust crate `preflight/` and run through `task preflight`. The root `Taskfile.yml` is the repo entrypoint and may also own repo-level non-app tooling.
 2. Public Taskfile commands must run project builds/checks inside Docker. CI may install host orchestration tools such as Task, but should call Taskfile tasks for repo behavior.
 3. Build Docker images with Docker Buildx Bake through `nook-app/docker-bake.hcl`. Do **not** use Docker named volumes in `docker run` — GH Actions does not persist them; the Rust dep cache and warm `target/` are baked into the image (cargo-chef), and workspace source is copied into the nook-web image (sealed image, no runtime mount). See [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness).
 4. Use Bun for web tooling. Do not introduce npm commands or Node-only command flows.
@@ -16,6 +16,7 @@ Use this workflow for quality, CI, and deployment changes.
    - `prettier --check`
    - `vitest run`
    - `vite build`
+   - `task preflight` — repository-wide Rust invariant tests, before app setup
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.

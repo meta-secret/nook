@@ -27,6 +27,10 @@ variable "DOCKER_RUST_BROWSER_IMAGE" {
   default = "nook-rust-browser:local"
 }
 
+variable "DOCKER_E2E_IMAGE" {
+  default = "nook-web-e2e:local"
+}
+
 // ghcr.io/<owner>/<repo>/toolchain — shared remote cache. Defaults to the canonical repo path so
 // that EVERYONE (local dev included) pulls the warm dep/target layers CI already published. This is
 // the whole point: a fresh local build reuses CI's cache instead of a catastrophic cold recompile.
@@ -84,6 +88,14 @@ web_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
   "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-buildcache,mode=max",
 ] : []
 
+web_e2e_cache_from = TOOLCHAIN_REGISTRY != "" ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-e2e-buildcache",
+] : []
+
+web_e2e_cache_to = (TOOLCHAIN_REGISTRY != "" && TOOLCHAIN_PUSH != "") ? [
+  "type=registry,ref=${TOOLCHAIN_REGISTRY}:web-e2e-buildcache,mode=max",
+] : []
+
 // Default: build the nook-web image (source-in-image) that `task` runs.
 group "default" {
   targets = ["nook-web"]
@@ -108,7 +120,7 @@ group "builders" {
 // Main publishes the independent Rust and web cache images in parallel. Keeping this legacy group
 // name preserves the existing Task/workflow interface without constructing a merged image.
 group "toolchain-push" {
-  targets = ["rust-toolchain-push", "web-toolchain-push"]
+  targets = ["rust-toolchain-push", "web-toolchain-push", "web-e2e-toolchain-push"]
 }
 
 // --- nook-web image (source-in-image; loaded as nook-web:local, what `task` runs) ---
@@ -117,6 +129,17 @@ target "nook-web" {
   inherits = ["_nook-web-common"]
   tags     = [DOCKER_IMAGE]
   output   = ["type=docker"]
+}
+
+# Main/nightly-only image. It has the same sealed app as nook-web, but swaps in the Chromium base.
+# Tag it as DOCKER_IMAGE too so the existing deploy/extract tasks consume the already-tested image.
+target "nook-web-e2e" {
+  inherits = ["_nook-web-common"]
+  contexts = {
+    web-base = "target:web-e2e-base"
+  }
+  tags   = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
+  output = ["type=docker"]
 }
 
 // Explicit Rust/WASM commands load this source-sealed image on demand. Normal setup/CI does not.
@@ -151,4 +174,14 @@ target "web-toolchain-push" {
   ] : []
   output   = ["type=registry"]
   cache-to = web_cache_to
+}
+
+# Browser cache is separate so PR cache imports never fetch Chromium layers.
+target "web-e2e-toolchain-push" {
+  inherits = ["web-e2e-base"]
+  tags = (TOOLCHAIN_PUSH != "" && GIT_COMMIT_ID != "") ? [
+    "${TOOLCHAIN_REGISTRY}:web-e2e-${GIT_COMMIT_ID}",
+  ] : []
+  output   = ["type=registry"]
+  cache-to = web_e2e_cache_to
 }

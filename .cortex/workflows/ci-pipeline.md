@@ -6,7 +6,7 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 | Workflow                                                     | Trigger                 | What runs                                                                 | GitHub PAT                                |
 | ------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------- |
-| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | Format, verify, wasm-bindgen tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
+| [`pr.yml`](../../.github/workflows/pr.yml)                   | PR open/sync            | **Rust domain unit tests + coverage**, no-opt WASM, wasm-bindgen/web unit tests, web build, Cloudflare preview, `github-pages` deployment status | No                                        |
 | [`main.yml`](../../.github/workflows/main.yml)               | Push to `main`          | Verify, wasm-bindgen tests, build, **full local-provider e2e**, Cloudflare Pages deploy to development `dev.nokey.sh`, push toolchain | No |
 | [`release.yml`](../../.github/workflows/release.yml)         | Semver tag `v*.*.*` or manual version + ref | Pin an immutable tag, verify, wasm-bindgen tests, build, **full local-provider e2e**, deploy stable `nokey.sh`, publish GitHub Release | No |
 | [`e2e-nightly.yml`](../../.github/workflows/e2e-nightly.yml) | Cron 03:00 UTC + manual | **Live sync provider e2e** (real GitHub API today); **ci-fix** on failure | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
@@ -116,6 +116,16 @@ GitHub-hosted `ubuntu-latest`, where their six-hour background work cannot
 exhaust or block the Nook machine. Other scheduled, main, release, manual e2e,
 and research jobs also remain GitHub-hosted.
 
+The web dependency stage runs `bun install --frozen-lockfile` directly in its
+Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
+lockfile and immutable Docker layer are the cache and reproducibility boundary.
+
+PR web solves use browser-free `web-base`. The roughly 432 MB Playwright
+Chromium layer lives in `web-e2e-base`, uses a separate remote cache, and is
+pulled only by main, nightly, or explicitly requested browser e2e.
+The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
+a whole-build retry loop.
+
 | Workflow | `runs-on` | Why |
 | --- | --- | --- |
 | `pr.yml` | `nook` | Fast, cache-warm verification and preview for developer-critical PRs |
@@ -169,7 +179,7 @@ All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo
 task check                          # format, clippy, unit tests, wasm-bindgen tests, web build (dev/no-opt wasm)
 
 # Full PR CI mirror — parallel local gate; mandatory before merge/handoff after broad remote failure
-WASM_BUILD_MODE=prod task ci:pr      # prepare → verify ‖ build (no browser e2e)
+WASM_BUILD_MODE=dev task ci:pr       # prepare → no-opt WASM → verify ‖ build (no browser e2e)
 
 # Explicit full browser validation for high-risk PRs
 task ci:pr:e2e                       # full local-provider web e2e + extension e2e
@@ -205,14 +215,20 @@ before `nook-core`; the `nook-core` coverage run uses `--no-clean` and the final
 `cargo llvm-cov report -p nook-core -p nook-auth2` enforces the committed floor
 and writes reusable artifacts to `/opt/nook/coverage/nook-core` in the image.
 
-PR coverage export must remain a copy-out step: `task docker:extract:coverage`
-creates a stopped container from the already-built `nook-web:local` image and
-copies `summary.txt`, `summary.json`, `lcov.info`, and `coverage-floor.json`.
-Do not make coverage export start a container and rerun `cargo llvm-cov`; PR CI
-exports current and base coverage, so a runtime coverage command would duplicate
-the same Rust tests after the image build. `task setup` gets those files into the
-slim web image through the same temporary host artifact directory as generated
-WASM; it does not copy them directly from the multi-GB Rust builder snapshot.
+PR CI uses one explicitly named **Rust/WASM tests, Svelte checks, JS unit tests**
+step. Its single Bake graph runs the `nook-core + nook-auth2` nextest/coverage
+branch, the WASM test/build branch, and web dependency preparation in parallel.
+Do not split Rust into an earlier coverage solve: that serializes the critical
+path and makes a cold Rust cache dominate the whole PR. After verification,
+`task docker:extract:coverage` copies `summary.txt`, `summary.json`, `lcov.info`,
+and `coverage-floor.json` from the already-built image to `coverage/current`.
+That extraction invokes neither BuildKit nor Rust tests.
+
+`task docker:extract:coverage` remains the copy-only path for workflows that
+already have a sealed `nook-web:local` image, including main's commit-keyed
+coverage artifact. `task setup` gets those files into the slim web image through
+the same temporary host artifact directory as generated WASM; it does not copy
+them directly from the multi-GB Rust builder snapshot.
 
 After a successful main gate, `main.yml` uploads those four files plus a manifest
 as `nook-core-auth-coverage-<commit SHA>`. A PR with changed Rust coverage inputs
@@ -227,8 +243,10 @@ as the base comparison because the measured source is unchanged.
 ## Local vs remote CI
 
 **Remote PR CI is cache-warm and latency-sensitive.** The PR workflow runs on the
-self-hosted `nook` pool and reuses its Docker/BuildKit cache. It runs
-**`task ci:pr`** (verify, web build, no browser e2e, Cloudflare preview,
+self-hosted `nook` pool and reuses its Docker/BuildKit cache. `task ci:pr` runs
+the standalone Rust **repository preflight** before app setup, then one parallel
+Rust/WASM and web solve (no-opt WASM, Rust/WASM/web unit tests, verify, web build,
+no browser e2e, Cloudflare preview,
 and a successful `github-pages` deployment status for the PR head SHA — no
 toolchain image push). The preview deploy reuses that prepared sealed image and
 must not declare another `setup` dependency. PR coverage always checks the current
@@ -411,7 +429,8 @@ Loop: `task setup` → **`task ci-agent:implement`** (nook-ci-agent container + 
 2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
 3. **Do** run `task ci:pr` plus `task web:test:e2e` or `task ci:pr:e2e` before merge when changing web vault/sync flows.
 4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. PR CI omits browser e2e; main runs full local-provider and extension **e2e**; nightly runs **sync-live**. Main and nightly failures invoke `ci-fix`.
+5. PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds; it omits **only browser e2e**. Main runs full local-provider and extension **e2e**; nightly runs **sync-live**. Main and nightly failures invoke `ci-fix`.
+6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
 <!-- agent-implement docker smoke -->

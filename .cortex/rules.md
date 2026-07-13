@@ -120,10 +120,28 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   - Svelte project dependencies must be managed using Bun.
   - Do not commit `package-lock.json` or `yarn.lock`. Commit `bun.lock` (with `package.json`) for reproducible Docker web installs. Pin linux/amd64 native optional deps (`@rolldown/binding-linux-x64-gnu`, `@tailwindcss/oxide-linux-x64-gnu`, `lightningcss-linux-x64-gnu`) — regenerate via `docker run --platform linux/amd64 ... bun install` after web dep changes.
 - **Harness Verification:**
-  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. Local `task check` uses the default dev/no-opt WASM mode; CI/deploy validation passes `WASM_BUILD_MODE=prod` explicitly.
+  - All linting, formatting, testing, and building must run inside the Docker builder image using Taskfile targets. Local `task check` and PR CI use dev/no-opt WASM mode; main/release deployment validation passes `WASM_BUILD_MODE=prod` explicitly.
   - Before committing, developers must run:
     1. `task format` - Automatically formats all Rust and JS/TS/Svelte files.
     2. `task check` - Runs formatting checks, Rust Clippy warnings checks, vitest unit tests, Svelte type checks, and web builds.
+
+### Dockerfile cache mounts — never use them
+
+> ## ⛔ STRICTLY PROHIBITED: `RUN --mount=type=cache`
+>
+> **Never add a Dockerfile `RUN --mount=type=cache` directive anywhere in this repository.**
+> Cache mounts introduce hidden BuildKit-daemon state, can serialize concurrent
+> builds, and have caused immediate severe performance regressions on the shared
+> runner. Install dependencies directly in ordinary Dockerfile `RUN` layers and
+> let the immutable Docker layer plus the pinned lockfile be the cache boundary.
+>
+> This prohibition applies regardless of `sharing=shared`, `sharing=private`, or
+> `sharing=locked`, and regardless of the comma-separated mount-option order.
+> Changing the sharing mode or placing `type=cache` later is not an acceptable workaround.
+> The repository-root Rust suite at `preflight/` enforces this rule. Run it
+> through `task preflight`; `task check`, PR CI, and main CI run it before the
+> application Docker setup begins. Repository-wide invariant tests belong in
+> this standalone crate, not in the `nook-app` Cargo workspace or shell snippets.
 
 ### Docker daemon — never kill it
 

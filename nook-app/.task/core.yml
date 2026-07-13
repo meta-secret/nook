@@ -11,9 +11,9 @@ tasks:
 
   test:
     desc: Run all test suites in Docker.
-    deps:
-      - setup
     cmds:
+      - task: preflight
+      - task: setup
       - task: docker:task
         vars: { TASK: _test }
 
@@ -27,9 +27,9 @@ tasks:
 
   check:
     desc: Run formatting, linting, tests, and builds in Docker.
-    deps:
-      - setup
     cmds:
+      - task: preflight
+      - task: setup
       - task: docker:task
         vars: { TASK: _check }
 
