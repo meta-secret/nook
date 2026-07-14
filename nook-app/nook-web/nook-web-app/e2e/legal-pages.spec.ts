@@ -1,8 +1,13 @@
 import { expect, test } from './fixtures'
 
+// The combined e2e preview keeps the legacy unified app at `/` and mounts the
+// independently built public nokey.sh artifact here. Production deploys the
+// contents of this directory at the site root.
+const PUBLIC_SITE_PATH = '/site'
+
 test.describe('legal pages', () => {
   test('serves static privacy policy at /privacy.html', async ({ page }) => {
-    await page.goto('/privacy.html')
+    await page.goto(`${PUBLIC_SITE_PATH}/privacy.html`)
     await expect(page.locator('h1')).toHaveText('Privacy Policy')
     await expect(page.locator('body')).toContainText('zero-knowledge')
     await expect(page.locator('#app')).toHaveCount(0)
@@ -12,7 +17,7 @@ test.describe('legal pages', () => {
   test('serves static terms at /terms.html and links between documents', async ({
     page,
   }) => {
-    await page.goto('/terms.html')
+    await page.goto(`${PUBLIC_SITE_PATH}/terms.html`)
     await expect(page.locator('h1')).toHaveText('Terms of Service')
     await expect(page.locator('body')).toContainText('as is')
     await page.locator('header a[href="/privacy.html"]').click()
@@ -38,7 +43,7 @@ test.describe('legal pages', () => {
   })
 
   test('serves the public landing page at the site root', async ({ page }) => {
-    await page.goto('/')
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
     await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
     await expect(page).toHaveTitle('Nook — Keys, not accounts')
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
@@ -54,9 +59,13 @@ test.describe('legal pages', () => {
       name: 'Nook',
       url: 'https://nokey.sh/',
     })
-    await expect(page.getByTestId('hero-cta-primary')).toHaveAttribute(
+    await expect(page.getByTestId('hero-cta-simple')).toHaveAttribute(
       'href',
-      '/app/',
+      'https://simple.nokey.sh/',
+    )
+    await expect(page.getByTestId('hero-cta-sentinel')).toHaveAttribute(
+      'href',
+      'https://sentinel.nokey.sh/',
     )
     await expect(page.getByTestId('hero-cta-secondary')).toHaveAttribute(
       'href',
@@ -76,7 +85,7 @@ test.describe('legal pages', () => {
       sessionStorage.setItem('landing-theme-test-initialized', 'true')
     })
     await page.emulateMedia({ colorScheme: 'light' })
-    await page.goto('/')
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
 
     const root = page.locator('html')
     const toggle = page.getByTestId('landing-theme-toggle')
@@ -100,7 +109,7 @@ test.describe('legal pages', () => {
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem('nook_locale', 'ru'))
-    await page.goto('/')
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
 
     await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
     await expect(page.locator('h1')).toHaveText('Ключи,не аккаунты.')
@@ -142,7 +151,7 @@ test.describe('legal pages', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 575, height: 760 })
-    await page.goto('/')
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
 
     const actionsBox = await page.locator('.actions').boundingBox()
     const stageBox = await page.locator('.capsule-stage').boundingBox()
@@ -161,7 +170,7 @@ test.describe('legal pages', () => {
   test('serves static public about page without the app bundle', async ({
     page,
   }) => {
-    await page.goto('/about.html')
+    await page.goto(`${PUBLIC_SITE_PATH}/about.html`)
     await expect(page.locator('h1')).toHaveText('Keys,not accounts.')
     await expect(page.locator('body')).toContainText(
       'passwordless, local first, decentralized secrets manager',
@@ -184,7 +193,7 @@ test.describe('legal pages', () => {
   })
 
   test('exposes an interactive cryptographic inventory', async ({ page }) => {
-    await page.goto('/')
+    await page.goto(`${PUBLIC_SITE_PATH}/`)
 
     const terms = page.locator('.crypto-term')
     await expect(terms).toHaveCount(17)
@@ -282,14 +291,16 @@ test.describe('legal pages', () => {
   })
 
   test('publishes the canonical crawl configuration', async ({ request }) => {
-    const robotsResponse = await request.get('/robots.txt')
+    const robotsResponse = await request.get(`${PUBLIC_SITE_PATH}/robots.txt`)
     expect(robotsResponse.ok()).toBe(true)
     const robots = await robotsResponse.text()
     expect(robots).toContain('Allow: /$')
     expect(robots).toContain('Disallow: /app/')
     expect(robots).toContain('Sitemap: https://nokey.sh/sitemap.xml')
 
-    const sitemapResponse = await request.get('/sitemap.xml')
+    const sitemapResponse = await request.get(
+      `${PUBLIC_SITE_PATH}/sitemap.xml`,
+    )
     expect(sitemapResponse.ok()).toBe(true)
     const sitemap = await sitemapResponse.text()
     expect(sitemap).toContain('<loc>https://nokey.sh/</loc>')
@@ -304,7 +315,7 @@ test.describe('legal pages', () => {
   test('returns to home from static legal page brand link', async ({
     page,
   }) => {
-    await page.goto('/privacy.html')
+    await page.goto(`${PUBLIC_SITE_PATH}/privacy.html`)
     await page.locator('header a.brand').click()
     await expect(page).toHaveURL('/')
   })
