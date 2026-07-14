@@ -3635,6 +3635,10 @@ export async function reloadUnlockWithSyncProvider(
     }
   }
 
+  // Unlock starts idle tracking asynchronously after the shell first appears.
+  // A one-shot stop can therefore run too early and let the 2.5s e2e timeout
+  // lock the vault while provider loading is still in progress.
+  await keepVaultIdleLockDisabled(page)
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
@@ -3648,7 +3652,6 @@ export async function reloadUnlockWithSyncProvider(
   await expect(page.getByTestId('vault-panel')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
-  await disableVaultIdleLock(page)
   await dismissSyncConflictIfVisible(page)
   await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
