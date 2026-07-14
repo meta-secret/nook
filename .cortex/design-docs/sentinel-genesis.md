@@ -91,6 +91,15 @@ user happened to add. The user must not have to create a vault or start a
 request-bound flow before the `+` action can collect standalone participant
 keys.
 
+The Card Stack also keeps a stable interaction boundary between its two
+columns. The left column owns every setup and management action: creating local
+keys, naming the draft, choosing `T` and `N`, importing participant responses,
+finalizing genesis, and choosing or completing sync delivery. The right column
+is read-only ceremony context: it accumulates the chosen vault name, policy,
+and roster count, then presents invitation and delivery QR data. Copying
+displayed ceremony data is allowed on the right; configuration controls are
+not.
+
 The pending roster is pre-genesis ceremony state. It is not a vault member
 roster, has no `store_id`, creates no vault event, and cannot be opened as a
 vault. The Rust session contains public ceremony data only. Verified participant

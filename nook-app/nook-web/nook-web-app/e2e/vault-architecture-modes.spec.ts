@@ -280,12 +280,35 @@ test.describe('vault architecture modes', () => {
     await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    const actionsColumn = page.getByTestId('sentinel-onboarding-actions-column')
+    const summaryColumn = page.getByTestId('sentinel-onboarding-summary-column')
+    const policyStep = actionsColumn.getByTestId('sentinel-genesis-policy-step')
+    const vaultSummary = summaryColumn.getByTestId(
+      'sentinel-onboarding-vault-summary',
+    )
+    await expect(policyStep).toBeVisible()
+    await expect(vaultSummary).toBeVisible()
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
+    ).toContainText('NOT SET')
+    await expect(summaryColumn.locator('input, [role="combobox"]')).toHaveCount(
+      0,
+    )
+    const policyStepBox = await policyStep.boundingBox()
+    const vaultSummaryBox = await vaultSummary.boundingBox()
+    if (!policyStepBox || !vaultSummaryBox) {
+      throw new Error('Sentinel policy and summary must have layout boxes')
+    }
+    expect(policyStepBox.x).toBeLessThan(vaultSummaryBox.x)
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
     await page
       .getByTestId('sentinel-genesis-name-input')
       .fill('Ordered Sentinel')
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
+    ).toHaveText('Ordered Sentinel')
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-3').click()
     await page.getByTestId('sentinel-genesis-participant-count').click()
@@ -298,6 +321,12 @@ test.describe('vault architecture modes', () => {
     ).toBeDisabled()
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-2').click()
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
+    ).toContainText('2 OF 2 SHARES REQUIRED')
+    await expect(
+      actionsColumn.getByTestId('sentinel-onboarding-continue-devices'),
+    ).toBeEnabled()
     await page.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
@@ -309,6 +338,12 @@ test.describe('vault architecture modes', () => {
       page.getByTestId('sentinel-onboarding-devices-remaining'),
     ).toContainText('1')
     await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
+    await expect(
+      actionsColumn.getByTestId('sentinel-genesis-finalize'),
+    ).toBeVisible()
+    await expect(
+      summaryColumn.getByTestId('sentinel-genesis-request'),
+    ).toBeVisible()
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toBeVisible()

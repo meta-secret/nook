@@ -300,8 +300,8 @@
       {/each}
     </ol>
 
-    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-      <div>
+    <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+      <div data-testid="sentinel-onboarding-actions-column">
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
@@ -474,9 +474,207 @@
             </div>
           {/if}
         </div>
+
+        {#if status === 'idle' && onboardingStage === 'policy'}
+          <section
+            class="relative mt-6 overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-7 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-8"
+            data-testid="sentinel-genesis-policy-step"
+          >
+            <p class="font-mono text-[9px] tracking-[0.16em] text-[#79dfff]">
+              {vault.t('login.sentinel_onboarding_policy_step')}
+            </p>
+            <div
+              class="relative mt-6 border border-[#79dfff]/20 bg-black/10 p-5"
+              data-testid="sentinel-onboarding-policy"
+            >
+              <label
+                class="block text-[10px] tracking-[0.16em] text-[#b5c0c9] uppercase"
+              >
+                {vault.t('login.sentinel_card_stack_module_identity')}
+                <input
+                  class="mt-3 w-full border-b border-white/25 bg-transparent py-2 text-3xl font-light tracking-tight text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
+                  data-testid="sentinel-genesis-name-input"
+                  placeholder={vault.t('login.vault_name_placeholder')}
+                  bind:value={name}
+                />
+              </label>
+            </div>
+
+            <div
+              class="relative mt-6 flex flex-wrap items-end justify-between gap-8 border border-white/10 bg-black/10 p-5"
+            >
+              <div class="min-w-72 flex-1">
+                <span
+                  class="text-[10px] tracking-wider text-[#aab5be] uppercase"
+                >
+                  {vault.t('login.sentinel_card_stack_threshold_policy')}
+                </span>
+                <span
+                  class="mt-2 grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-5 border-b border-white/70"
+                >
+                  <Select.Root
+                    type="single"
+                    value={String(threshold)}
+                    onValueChange={changeThreshold}
+                  >
+                    <Select.Trigger
+                      class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
+                      data-testid="sentinel-genesis-threshold"
+                      data-value={threshold}
+                      aria-label={vault.t('login.sentinel_genesis_threshold')}
+                    >
+                      <span>
+                        <span class="block text-4xl font-light text-white">
+                          {threshold}
+                        </span>
+                        <small
+                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                          >{vault.t('login.sentinel_card_stack_needed')}</small
+                        >
+                      </span>
+                    </Select.Trigger>
+                    <Select.Content
+                      portalProps={{ disabled: true }}
+                      class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                    >
+                      {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
+                        <Select.Item
+                          value={String(option)}
+                          class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                          data-testid={`sentinel-threshold-option-${option}`}
+                        >
+                          {option}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                  <span class="text-3xl font-light text-white/35">/</span>
+                  <Select.Root
+                    type="single"
+                    value={String(participantCount)}
+                    onValueChange={changeParticipantCount}
+                  >
+                    <Select.Trigger
+                      class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
+                      data-testid="sentinel-genesis-participant-count"
+                      data-value={participantCount}
+                      aria-label={vault.t(
+                        'login.sentinel_genesis_participant_count',
+                      )}
+                    >
+                      <span>
+                        <span class="block text-4xl font-light text-white">
+                          {participantCount}
+                        </span>
+                        <small
+                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                          >{vault.t('login.sentinel_card_stack_total')}</small
+                        >
+                      </span>
+                    </Select.Trigger>
+                    <Select.Content
+                      portalProps={{ disabled: true }}
+                      class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                    >
+                      {#each participantChoices as option (option)}
+                        <Select.Item
+                          value={String(option)}
+                          class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                          data-testid={`sentinel-participant-count-option-${option}`}
+                        >
+                          {option}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                </span>
+              </div>
+              <div
+                class="border border-[#7b8993] bg-[#192128] px-5 py-3 font-mono text-xs text-[#d7e0e6]"
+              >
+                {vault.t('login.sentinel_onboarding_threshold_summary', {
+                  threshold: String(threshold),
+                  count: String(participantCount),
+                })}
+              </div>
+            </div>
+
+            <div class="mt-6 flex flex-wrap items-center justify-between gap-5">
+              <p class="flex items-center gap-3 text-xs text-[#a4afb9]">
+                <span
+                  class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
+                  ><Check class="size-3" /></span
+                >
+                {vault.t('login.sentinel_card_stack_shares_return')}
+              </p>
+              <button
+                disabled={!policyValid || isBusy || actionBusy}
+                class="rounded-md bg-[#46e56f] px-8 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.22)] transition hover:-translate-y-0.5 hover:bg-[#6bed8c] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-25"
+                data-testid="sentinel-onboarding-continue-devices"
+                onclick={() => void continueToRoster()}
+              >
+                {vault.t('login.sentinel_onboarding_continue_with_devices', {
+                  count: String(participantCount),
+                })}
+              </button>
+            </div>
+          </section>
+        {:else if status === 'collecting' || status === 'ready' || status === 'finalizing'}
+          <div class="mt-6 flex justify-end">
+            <button
+              disabled={status !== 'ready' || isBusy || actionBusy}
+              class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
+              data-testid="sentinel-genesis-finalize"
+              onclick={() => void finalize()}
+            >
+              {#if actionBusy}<RefreshCw
+                  class="mr-2 inline size-4 animate-spin"
+                />{/if}
+              {vault.t('login.sentinel_genesis_finalize')}
+            </button>
+          </div>
+        {/if}
+
+        {#if status === 'delivering' || deliveries.length > 0}
+          <div
+            class="mt-8 rounded-lg border border-[#79dfff]/25 bg-[#79dfff]/5 p-6"
+            data-testid="sentinel-onboarding-delivery-actions"
+          >
+            <p
+              class="font-mono text-[10px] tracking-[0.16em] text-[#79dfff] uppercase"
+            >
+              {vault.t('login.sentinel_onboarding_sync_step')}
+            </p>
+            <h2 class="mt-2 text-xl font-semibold">
+              {vault.t('login.sentinel_onboarding_sync_title')}
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed text-[#aeb8c2]">
+              {vault.t('login.sentinel_onboarding_sync_description')}
+            </p>
+            {#if !syncProviderReady}
+              <button
+                type="button"
+                class="mt-5 rounded-md bg-[#79dfff] px-6 py-3 text-xs font-bold tracking-wide text-[#101820] uppercase hover:bg-[#9be7ff]"
+                data-testid="sentinel-choose-sync-provider"
+                onclick={onChooseSyncProvider}
+              >
+                {vault.t('login.sentinel_onboarding_sync_action')}
+              </button>
+            {:else if onboardingLinksReady}
+              <Button
+                type="button"
+                class="mt-5"
+                data-testid="sentinel-genesis-delivery-complete"
+                onclick={() => void onCompleteDelivery()}
+              >
+                {vault.t('login.sentinel_onboarding_finish_action')}
+              </Button>
+            {/if}
+          </div>
+        {/if}
       </div>
 
-      <div>
+      <div data-testid="sentinel-onboarding-summary-column">
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
@@ -484,9 +682,7 @@
         </p>
         <div
           class="relative mt-5 min-h-[28rem] overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-7 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-10"
-          data-testid={status === 'idle' && onboardingStage === 'policy'
-            ? 'sentinel-genesis-policy-step'
-            : undefined}
+          data-testid="sentinel-onboarding-vault-summary"
         >
           <div class="relative flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -504,131 +700,58 @@
             </span>
           </div>
 
-          {#if status === 'idle'}
-            {#if onboardingStage === 'policy'}
-              <div
-                class="relative mt-10 border border-[#79dfff]/20 bg-black/10 p-5"
-                data-testid="sentinel-onboarding-policy"
+          <dl
+            class="relative mt-8 grid gap-3 sm:grid-cols-2"
+            data-testid="sentinel-onboarding-summary-details"
+          >
+            <div class="border border-white/10 bg-black/10 p-4 sm:col-span-2">
+              <dt
+                class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
-                <p
-                  class="mb-5 font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
-                >
-                  {vault.t('login.sentinel_onboarding_policy_step')}
-                </p>
-                <label
-                  class="block text-[10px] tracking-[0.16em] text-[#b5c0c9] uppercase"
-                >
-                  {vault.t('login.sentinel_card_stack_module_identity')}
-                  <input
-                    class="mt-3 w-full border-b border-white/25 bg-transparent py-2 text-3xl font-light tracking-tight text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
-                    data-testid="sentinel-genesis-name-input"
-                    placeholder={vault.t('login.vault_name_placeholder')}
-                    bind:value={name}
-                  />
-                </label>
-              </div>
+                {vault.t('login.sentinel_card_stack_module_identity')}
+              </dt>
+              <dd
+                class="mt-2 break-words text-lg font-semibold text-[#d7e0e6]"
+                data-testid="sentinel-onboarding-summary-name"
+              >
+                {name.trim() || vault.t('login.sentinel_onboarding_not_set')}
+              </dd>
+            </div>
+            <div class="border border-white/10 bg-black/10 p-4">
+              <dt
+                class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
+              >
+                {vault.t('login.sentinel_card_stack_policy')}
+              </dt>
+              <dd
+                class="mt-2 font-mono text-sm text-[#d7e0e6]"
+                data-testid="sentinel-onboarding-summary-policy"
+              >
+                {onboardingStage === 'identity'
+                  ? vault.t('login.sentinel_onboarding_not_set')
+                  : vault.t('login.sentinel_onboarding_threshold_summary', {
+                      threshold: String(threshold),
+                      count: String(participantCount),
+                    })}
+              </dd>
+            </div>
+            <div class="border border-white/10 bg-black/10 p-4">
+              <dt
+                class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
+              >
+                {vault.t('login.sentinel_onboarding_devices_ready')}
+              </dt>
+              <dd
+                class="mt-2 font-mono text-sm text-[#d7e0e6]"
+                data-testid="sentinel-onboarding-summary-devices"
+              >
+                {rosterCount} / {participantCount}
+              </dd>
+            </div>
+          </dl>
 
-              <div
-                class="relative mt-6 flex flex-wrap items-end justify-between gap-8 border border-white/10 bg-black/10 p-5"
-              >
-                <div class="min-w-72">
-                  <span
-                    class="text-[10px] tracking-wider text-[#aab5be] uppercase"
-                  >
-                    {vault.t('login.sentinel_card_stack_threshold_policy')}
-                  </span>
-                  <span
-                    class="mt-2 grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-5 border-b border-white/70"
-                  >
-                    <Select.Root
-                      type="single"
-                      value={String(threshold)}
-                      onValueChange={changeThreshold}
-                    >
-                      <Select.Trigger
-                        class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
-                        data-testid="sentinel-genesis-threshold"
-                        data-value={threshold}
-                        aria-label={vault.t('login.sentinel_genesis_threshold')}
-                      >
-                        <span>
-                          <span class="block text-4xl font-light text-white">
-                            {threshold}
-                          </span>
-                          <small
-                            class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                            >{vault.t(
-                              'login.sentinel_card_stack_needed',
-                            )}</small
-                          >
-                        </span>
-                      </Select.Trigger>
-                      <Select.Content
-                        portalProps={{ disabled: true }}
-                        class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
-                      >
-                        {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
-                          <Select.Item
-                            value={String(option)}
-                            class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
-                            data-testid={`sentinel-threshold-option-${option}`}
-                          >
-                            {option}
-                          </Select.Item>
-                        {/each}
-                      </Select.Content>
-                    </Select.Root>
-                    <span class="text-3xl font-light text-white/35">/</span>
-                    <Select.Root
-                      type="single"
-                      value={String(participantCount)}
-                      onValueChange={changeParticipantCount}
-                    >
-                      <Select.Trigger
-                        class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
-                        data-testid="sentinel-genesis-participant-count"
-                        data-value={participantCount}
-                        aria-label={vault.t(
-                          'login.sentinel_genesis_participant_count',
-                        )}
-                      >
-                        <span>
-                          <span class="block text-4xl font-light text-white">
-                            {participantCount}
-                          </span>
-                          <small
-                            class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                            >{vault.t('login.sentinel_card_stack_total')}</small
-                          >
-                        </span>
-                      </Select.Trigger>
-                      <Select.Content
-                        portalProps={{ disabled: true }}
-                        class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
-                      >
-                        {#each participantChoices as option (option)}
-                          <Select.Item
-                            value={String(option)}
-                            class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
-                            data-testid={`sentinel-participant-count-option-${option}`}
-                          >
-                            {option}
-                          </Select.Item>
-                        {/each}
-                      </Select.Content>
-                    </Select.Root>
-                  </span>
-                </div>
-                <div
-                  class="border border-[#7b8993] bg-[#192128] px-5 py-3 font-mono text-xs text-[#d7e0e6]"
-                >
-                  {vault.t('login.sentinel_onboarding_threshold_summary', {
-                    threshold: String(threshold),
-                    count: String(participantCount),
-                  })}
-                </div>
-              </div>
-            {:else}
+          {#if status === 'idle'}
+            {#if onboardingStage !== 'policy'}
               <div
                 class="relative mt-10 grid min-h-72 place-items-center border border-white/10 bg-black/10 p-8 text-center"
                 data-testid="sentinel-onboarding-guidance"
@@ -732,43 +855,17 @@
           {/if}
         </div>
 
-        <div class="mt-6 flex flex-wrap items-center justify-between gap-5">
-          {#if onboardingStage !== 'identity' || status !== 'idle'}
-            <label class="flex items-center gap-3 text-xs text-[#a4afb9]">
-              <span
-                class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
-                ><Check class="size-3" /></span
-              >
+        {#if onboardingStage !== 'identity' || status !== 'idle'}
+          <div class="mt-6 flex items-center gap-3 text-xs text-[#a4afb9]">
+            <span
+              class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
+              ><Check class="size-3" /></span
+            >
+            <span>
               {vault.t('login.sentinel_card_stack_shares_return')}
-            </label>
-          {:else}
-            <span></span>
-          {/if}
-          {#if status === 'idle' && onboardingStage === 'policy'}
-            <button
-              disabled={!policyValid || isBusy || actionBusy}
-              class="rounded-md bg-[#46e56f] px-8 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.22)] transition hover:-translate-y-0.5 hover:bg-[#6bed8c] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-25"
-              data-testid="sentinel-onboarding-continue-devices"
-              onclick={() => void continueToRoster()}
-            >
-              {vault.t('login.sentinel_onboarding_continue_with_devices', {
-                count: String(participantCount),
-              })}
-            </button>
-          {:else if status === 'collecting' || status === 'ready' || status === 'finalizing'}
-            <button
-              disabled={status !== 'ready' || isBusy || actionBusy}
-              class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
-              data-testid="sentinel-genesis-finalize"
-              onclick={() => void finalize()}
-            >
-              {#if actionBusy}<RefreshCw
-                  class="mr-2 inline size-4 animate-spin"
-                />{/if}
-              {vault.t('login.sentinel_genesis_finalize')}
-            </button>
-          {/if}
-        </div>
+            </span>
+          </div>
+        {/if}
 
         {#if status === 'delivering' || deliveries.length > 0}
           <div class="mt-8 space-y-4" data-testid="sentinel-genesis-deliveries">
@@ -789,14 +886,6 @@
                 >
                   {vault.t('login.sentinel_onboarding_sync_description')}
                 </p>
-                <button
-                  type="button"
-                  class="mt-5 rounded-md bg-[#79dfff] px-6 py-3 text-xs font-bold tracking-wide text-[#101820] uppercase hover:bg-[#9be7ff]"
-                  data-testid="sentinel-choose-sync-provider"
-                  onclick={onChooseSyncProvider}
-                >
-                  {vault.t('login.sentinel_onboarding_sync_action')}
-                </button>
               </div>
             {:else}
               <h2 class="text-lg font-semibold">
@@ -839,15 +928,6 @@
                     </div>
                   </div>
                 {/each}
-                <div class="flex justify-end">
-                  <Button
-                    type="button"
-                    data-testid="sentinel-genesis-delivery-complete"
-                    onclick={() => void onCompleteDelivery()}
-                  >
-                    {vault.t('login.sentinel_onboarding_finish_action')}
-                  </Button>
-                </div>
               {/if}
             {/if}
           </div>
