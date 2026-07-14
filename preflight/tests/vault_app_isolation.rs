@@ -136,12 +136,29 @@ fn extension_and_release_contract_preserve_origin_isolation() {
         "simple.nokey.sh:nokey-simple",
         "sentinel.nokey.sh:nokey-sentinel",
         "nook-app-kind",
+        "node:24-trixie-slim",
+        "uses: actions/github-script@v9",
     ] {
         assert!(
             release.contains(required),
             "release workflow missing {required}"
         );
     }
+    assert!(
+        !release.contains("gh release "),
+        "release publication must not assume the self-hosted runner has the GitHub CLI"
+    );
+    let deploy = section(
+        &release,
+        "      - name: Deploy isolated Simple and Sentinel applications\n",
+        "\n      - name: Attach and verify isolated production domains",
+    );
+    assert!(
+        deploy.contains("docker run --rm")
+            && deploy.contains("node:24-trixie-slim")
+            && deploy.contains("npx --yes wrangler@4"),
+        "Wrangler must run inside an explicit Node container on the self-hosted runner"
+    );
 }
 
 #[test]
