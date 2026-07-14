@@ -61,12 +61,13 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
     await deviceA.getByTestId('sentinel-onboarding-create-keys').click()
     const passkeyOverlay = deviceA.getByTestId('passkey-auth-overlay')
+    const nameStep = deviceA.getByTestId('sentinel-genesis-name-step')
     const policyStep = deviceA.getByTestId('sentinel-genesis-policy-step')
     const responseInput = deviceA.getByTestId('sentinel-genesis-response-input')
     await expect
       .poll(
         async () =>
-          (await passkeyOverlay.isVisible()) || (await policyStep.isVisible()),
+          (await passkeyOverlay.isVisible()) || (await nameStep.isVisible()),
         { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
       )
       .toBe(true)
@@ -77,12 +78,14 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
       })
       await setupBtn.click({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     }
-    await expect(policyStep).toBeVisible({
+    await expect(nameStep).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await deviceA
       .getByTestId('sentinel-genesis-name-input')
       .fill('Sentinel quorum')
+    await deviceA.getByTestId('sentinel-onboarding-continue-policy').click()
+    await expect(policyStep).toBeVisible()
     await deviceA.getByTestId('sentinel-genesis-participant-count').click()
     await deviceA.getByTestId('sentinel-participant-count-option-2').click()
     await deviceA.getByTestId('sentinel-onboarding-continue-devices').click()

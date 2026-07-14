@@ -21,7 +21,7 @@
     | 'delivering'
     | 'complete'
 
-  type OnboardingStage = 'identity' | 'policy' | 'roster' | 'build'
+  type OnboardingStage = 'identity' | 'name' | 'policy' | 'roster' | 'build'
 
   type Participant = {
     participantId: string
@@ -120,7 +120,7 @@
   const onboardingStep = $derived(
     onboardingStage === 'identity'
       ? 0
-      : onboardingStage === 'policy'
+      : onboardingStage === 'name' || onboardingStage === 'policy'
         ? 1
         : onboardingStage === 'roster'
           ? 2
@@ -133,7 +133,7 @@
     } else if (status !== 'idle') {
       onboardingStage = 'build'
     } else if (initiatorKeyReady && onboardingStage === 'identity') {
-      onboardingStage = 'policy'
+      onboardingStage = 'name'
     } else if (!initiatorKeyReady) {
       onboardingStage = 'identity'
     }
@@ -152,6 +152,11 @@
   function changeParticipantPayload(event: Event) {
     response = (event.currentTarget as HTMLInputElement).value
     participantInputError = ''
+  }
+
+  function continueToPolicy() {
+    if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return
+    onboardingStage = 'policy'
   }
 
   async function continueToRoster() {
@@ -300,7 +305,7 @@
       {/each}
     </ol>
 
-    <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+    <div class="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       <div data-testid="sentinel-onboarding-actions-column">
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
@@ -394,7 +399,7 @@
           {/each}
 
           {#if status === 'collecting' && availableRosterSlots > 0}
-            <div class="border border-dashed border-[#aeb8c2] p-5">
+            <div class="border border-dashed border-[#aeb8c2] p-4">
               <div class="flex items-center justify-between gap-4">
                 <div>
                   <p class="text-sm text-[#d6dde3]">
@@ -407,7 +412,7 @@
                   </p>
                 </div>
                 <button
-                  class="grid size-12 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
+                  class="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
                   disabled={!response.trim() || isBusy || actionBusy}
@@ -419,7 +424,7 @@
                 </button>
               </div>
               <div
-                class="mt-5"
+                class="mt-4"
                 data-testid="sentinel-genesis-participant-fields"
               >
                 <label
@@ -427,7 +432,7 @@
                 >
                   {vault.t('login.sentinel_card_stack_public_key_label')}
                   <textarea
-                    class="mt-2 min-h-28 w-full resize-y border border-white/20 bg-[#192128] p-3 font-mono text-xs leading-5 text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                    class="mt-2 min-h-20 w-full resize-y border border-white/20 bg-[#192128] p-3 font-mono text-xs leading-5 text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
                     data-testid="sentinel-genesis-response-input"
                     placeholder={vault.t(
                       'login.sentinel_card_stack_public_key_placeholder',
@@ -454,17 +459,14 @@
 
           {#if onboardingStage === 'roster'}
             <div
-              class="rounded-xl border border-white/10 bg-white/[0.035] p-5"
+              class="flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-white/[0.035] px-4 py-3"
               data-testid="sentinel-onboarding-roster-next"
             >
-              <p class="text-sm font-semibold">
+              <p class="text-xs font-semibold text-[#d6dde3]">
                 {vault.t('login.sentinel_onboarding_roster_title')}
               </p>
-              <p class="mt-2 text-xs leading-5 text-[#8f9ca7]">
-                {vault.t('login.sentinel_onboarding_roster_description')}
-              </p>
               <p
-                class="mt-5 w-full rounded-md border border-white/10 bg-black/10 px-5 py-3 text-center text-xs font-bold tracking-wide text-[#aeb8c2] uppercase"
+                class="font-mono text-[9px] tracking-wider text-[#8f9ca7] uppercase"
                 data-testid="sentinel-onboarding-devices-remaining"
               >
                 {vault.t('login.sentinel_onboarding_devices_remaining', {
@@ -475,42 +477,58 @@
           {/if}
         </div>
 
-        {#if status === 'idle' && onboardingStage === 'policy'}
+        {#if status === 'idle' && onboardingStage === 'name'}
           <section
-            class="relative mt-6 border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-7 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-8"
-            data-testid="sentinel-genesis-policy-step"
+            class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
+            data-testid="sentinel-genesis-name-step"
           >
-            <p class="font-mono text-[9px] tracking-[0.16em] text-[#79dfff]">
-              {vault.t('login.sentinel_onboarding_policy_step')}
-            </p>
-            <div
-              class="relative mt-6 border border-[#79dfff]/20 bg-black/10 p-5"
-              data-testid="sentinel-onboarding-policy"
-            >
-              <label
-                class="block text-[10px] tracking-[0.16em] text-[#b5c0c9] uppercase"
-              >
-                {vault.t('login.sentinel_card_stack_module_identity')}
+            <div class="flex flex-wrap items-end gap-5">
+              <label class="min-w-56 flex-1">
+                <span
+                  class="block font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
+                >
+                  {vault.t('login.sentinel_onboarding_name_step')}
+                </span>
+                <span
+                  class="mt-3 block text-[10px] tracking-[0.14em] text-[#b5c0c9] uppercase"
+                >
+                  {vault.t('login.vault_name_label')}
+                </span>
                 <input
-                  class="mt-3 w-full border-b border-white/25 bg-transparent py-2 text-3xl font-light tracking-tight text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
+                  class="mt-1 w-full border-b border-white/35 bg-transparent py-2 text-xl font-medium text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
                   data-testid="sentinel-genesis-name-input"
                   placeholder={vault.t('login.vault_name_placeholder')}
                   bind:value={name}
                 />
               </label>
+              <button
+                type="button"
+                disabled={!name.trim() || isBusy || actionBusy}
+                class="rounded-full border border-[#79dfff]/45 bg-[#79dfff]/10 px-5 py-3 font-mono text-[9px] tracking-wider text-[#79dfff] uppercase transition hover:bg-[#79dfff]/20 disabled:cursor-not-allowed disabled:opacity-30"
+                data-testid="sentinel-onboarding-continue-policy"
+                onclick={continueToPolicy}
+              >
+                {vault.t('login.sentinel_onboarding_continue_to_policy')}
+              </button>
             </div>
-
-            <div
-              class="relative mt-6 flex flex-wrap items-end justify-between gap-8 border border-white/10 bg-black/10 p-5"
-            >
-              <div class="min-w-72 flex-1">
+          </section>
+        {:else if status === 'idle' && onboardingStage === 'policy'}
+          <section
+            class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
+            data-testid="sentinel-genesis-policy-step"
+          >
+            <p class="font-mono text-[9px] tracking-[0.16em] text-[#79dfff]">
+              {vault.t('login.sentinel_onboarding_policy_step')}
+            </p>
+            <div class="mt-4" data-testid="sentinel-onboarding-policy">
+              <div class="max-w-sm">
                 <span
                   class="text-[10px] tracking-wider text-[#aab5be] uppercase"
                 >
                   {vault.t('login.sentinel_card_stack_threshold_policy')}
                 </span>
                 <span
-                  class="mt-2 grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-5 border-b border-white/70"
+                  class="mt-2 grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-white/70"
                 >
                   <Select.Root
                     type="single"
@@ -524,7 +542,7 @@
                       aria-label={vault.t('login.sentinel_genesis_threshold')}
                     >
                       <span>
-                        <span class="block text-4xl font-light text-white">
+                        <span class="block text-3xl font-light text-white">
                           {threshold}
                         </span>
                         <small
@@ -549,7 +567,7 @@
                       {/each}
                     </Select.Content>
                   </Select.Root>
-                  <span class="text-3xl font-light text-white/35">/</span>
+                  <span class="text-2xl font-light text-white/35">/</span>
                   <Select.Root
                     type="single"
                     value={String(participantCount)}
@@ -564,7 +582,7 @@
                       )}
                     >
                       <span>
-                        <span class="block text-4xl font-light text-white">
+                        <span class="block text-3xl font-light text-white">
                           {participantCount}
                         </span>
                         <small
@@ -591,27 +609,20 @@
                   </Select.Root>
                 </span>
               </div>
-              <div
-                class="border border-[#7b8993] bg-[#192128] px-5 py-3 font-mono text-xs text-[#d7e0e6]"
-              >
-                {vault.t('login.sentinel_onboarding_threshold_summary', {
-                  threshold: String(threshold),
-                  count: String(participantCount),
-                })}
-              </div>
             </div>
 
-            <div class="mt-6 flex flex-wrap items-center justify-between gap-5">
-              <p class="flex items-center gap-3 text-xs text-[#a4afb9]">
-                <span
-                  class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
-                  ><Check class="size-3" /></span
-                >
-                {vault.t('login.sentinel_card_stack_shares_return')}
-              </p>
+            <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                class="px-2 py-2 text-[10px] font-semibold tracking-wider text-[#aeb8c2] uppercase hover:text-white"
+                data-testid="sentinel-onboarding-policy-back"
+                onclick={() => (onboardingStage = 'name')}
+              >
+                {vault.t('common.back')}
+              </button>
               <button
                 disabled={!policyValid || isBusy || actionBusy}
-                class="rounded-md bg-[#46e56f] px-8 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.22)] transition hover:-translate-y-0.5 hover:bg-[#6bed8c] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-25"
+                class="rounded-full bg-[#46e56f] px-5 py-3 text-[10px] font-bold tracking-wide text-[#112218] uppercase shadow-[0_8px_24px_rgb(45_225_99/0.18)] transition hover:bg-[#6bed8c] disabled:cursor-not-allowed disabled:opacity-25"
                 data-testid="sentinel-onboarding-continue-devices"
                 onclick={() => void continueToRoster()}
               >
@@ -729,7 +740,7 @@
                 class="mt-2 font-mono text-sm text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-policy"
               >
-                {onboardingStage === 'identity'
+                {onboardingStage === 'identity' || onboardingStage === 'name'
                   ? vault.t('login.sentinel_onboarding_not_set')
                   : vault.t('login.sentinel_onboarding_threshold_summary', {
                       threshold: String(threshold),
@@ -753,7 +764,7 @@
           </dl>
 
           {#if status === 'idle'}
-            {#if onboardingStage !== 'policy'}
+            {#if onboardingStage === 'identity'}
               <div
                 class="relative mt-10 grid min-h-72 place-items-center border border-white/10 bg-black/10 p-8 text-center"
                 data-testid="sentinel-onboarding-guidance"
@@ -762,25 +773,15 @@
                   <span
                     class="mx-auto grid size-16 place-items-center rounded-full border border-[#79dfff]/30 bg-[#79dfff]/5 text-[#79dfff] shadow-[0_0_50px_rgb(82_198_238/0.1)]"
                   >
-                    {#if onboardingStage === 'identity'}
-                      <Cpu class="size-7" />
-                    {:else}
-                      <Plus class="size-7" />
-                    {/if}
+                    <Cpu class="size-7" />
                   </span>
                   <h2 class="mt-6 text-2xl font-semibold">
-                    {onboardingStage === 'identity'
-                      ? vault.t('login.sentinel_onboarding_create_keys_title')
-                      : vault.t('login.sentinel_onboarding_add_devices_title')}
+                    {vault.t('login.sentinel_onboarding_create_keys_title')}
                   </h2>
                   <p class="mt-3 text-sm leading-6 text-[#9eabb5]">
-                    {onboardingStage === 'identity'
-                      ? vault.t(
-                          'login.sentinel_onboarding_create_keys_description',
-                        )
-                      : vault.t(
-                          'login.sentinel_onboarding_add_devices_description',
-                        )}
+                    {vault.t(
+                      'login.sentinel_onboarding_create_keys_description',
+                    )}
                   </p>
                 </div>
               </div>

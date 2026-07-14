@@ -170,6 +170,8 @@
     "sentinel_onboarding_device_already_added": "Ключ этого устройства уже добавлен в список.",
     "sentinel_onboarding_continue_with_devices": "Продолжить с {count} устройствами",
     "sentinel_onboarding_devices_remaining": "Осталось ключей устройств: {count}",
+    "sentinel_onboarding_name_step": "ШАГ 02 · НАЗВАТЬ СЕЙФ",
+    "sentinel_onboarding_continue_to_policy": "Перейти к политике",
     "sentinel_onboarding_policy_step": "ШАГ 02 · НАСТРОИТЬ ДОЛИ",
     "sentinel_onboarding_add_devices_title": "Добавьте доверенные устройства",
     "sentinel_onboarding_add_devices_description": "Каждый участник создаёт ключи на своём устройстве. Подписанные открытые ключи проверяются перед добавлением в сейф.",

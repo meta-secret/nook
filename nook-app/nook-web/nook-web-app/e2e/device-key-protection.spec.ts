@@ -193,7 +193,7 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
     await clickDeviceProtectionSetup(page)
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible({
+    await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await expect(
@@ -205,6 +205,8 @@ test.describe('passkey device-key protection', () => {
     await page
       .getByTestId('sentinel-genesis-name-input')
       .fill('Passkey Sentinel')
+    await page.getByTestId('sentinel-onboarding-continue-policy').click()
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible()
     await page.getByTestId('sentinel-genesis-participant-count').click()
     await page.getByTestId('sentinel-participant-count-option-2').click()
     await page.getByTestId('sentinel-onboarding-continue-devices').click()

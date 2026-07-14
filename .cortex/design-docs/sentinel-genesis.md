@@ -100,6 +100,12 @@ and roster count, then presents invitation and delivery QR data. Copying
 displayed ceremony data is allowed on the right; configuration controls are
 not.
 
+Within the left column, configuration is progressive and compact. Device-key
+creation, vault naming, threshold selection, and participant collection are
+separate steps rather than one expanding form. Each step uses the same concise
+card language as the local-device row, while the wider right column preserves
+space for accumulated context and QR payloads.
+
 The pending roster is pre-genesis ceremony state. It is not a vault member
 roster, has no `store_id`, creates no vault event, and cannot be opened as a
 vault. The Rust session contains public ceremony data only. Verified participant
