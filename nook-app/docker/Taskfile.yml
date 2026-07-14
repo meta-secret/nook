@@ -6,37 +6,6 @@ tasks:
     cmds:
       - task: setup
 
-  docker:push:
-    desc: Publish compact web dependency and browser cache images to GHCR after green main CI.
-    # PUSH_TOOLCHAIN is re-declared here (not just on the docker:push:ci wrapper): go-task does NOT
-    # propagate a parent task's `env:` into a called subtask, so we source it from the ambient var
-    # so the gate below sees it regardless of caller.
-    env:
-      TOOLCHAIN_REGISTRY: '{{.TOOLCHAIN_REGISTRY}}'
-      GIT_COMMIT_ID: '{{.GIT_COMMIT_ID}}'
-      PUSH_TOOLCHAIN: '{{.PUSH_TOOLCHAIN}}'
-    cmds:
-      # Gate on PUSH_TOOLCHAIN (set by CI). TOOLCHAIN_PUSH is the bake flag that enables the
-      # registry tag + cache-to; local dev never sets it, so it only ever pulls the cache.
-      - >-
-        bash -c 'set -euo pipefail;
-        test -n "${PUSH_TOOLCHAIN:-}" && test -n "${TOOLCHAIN_REGISTRY:-}" || exit 0;
-        git_commit_id="${GIT_COMMIT_ID:-$(git rev-parse HEAD)}";
-        test -n "$git_commit_id";
-        if [ -n "${GITHUB_TOKEN:-}" ]; then
-          registry="${TOOLCHAIN_REGISTRY%%/*}";
-          user="${GITHUB_ACTOR:-github-actions[bot]}";
-          printf "%s" "$GITHUB_TOKEN" | {{.DOCKER}} login "$registry" -u "$user" --password-stdin;
-        fi;
-        for attempt in 1 2 3; do
-          if env TOOLCHAIN_REGISTRY="${TOOLCHAIN_REGISTRY}" GIT_COMMIT_ID="${git_commit_id}" TOOLCHAIN_PUSH=1 {{.DOCKER}} buildx --builder {{.BUILDX_BUILDER}} bake {{.NOOK_BAKE_FILES}} toolchain-push; then
-            exit 0;
-          fi;
-          if [ "$attempt" -eq 3 ]; then exit 1; fi;
-          echo "task docker:push: bake attempt $attempt failed; retrying in 5s..." >&2;
-          sleep 5;
-        done'
-
   docker:task:
     internal: true
     # No bind mount: the nook-web image already contains the workspace source (nook-app/nook-web/nook-web-app/Dockerfile).

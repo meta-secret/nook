@@ -1,4 +1,4 @@
-# Main branch: one container for format/wasm/verify/build/e2e (task ci:main:publish);
+# Main branch: one container for format/wasm/verify/build/e2e (task ci:main);
 # deploy the fast, unoptimized development channel to Cloudflare Pages. Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
@@ -54,25 +54,18 @@ jobs:
     permissions:
       contents: read
       deployments: write
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Preflight, check, build, e2e, and push toolchain
-        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
+      - name: Preflight, check, build, and e2e
+        run: task ci:main VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
         env:
           CI: true
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GIT_COMMIT_ID: ${{ github.sha }}
-          PUSH_TOOLCHAIN: "1"
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Deploy development to Cloudflare Pages
         id: deploy-dev
@@ -83,7 +76,7 @@ jobs:
           CF_PAGES_PROJECT_NAME: ${{ env.CI_MAIN_CF_PAGES_PROJECT }}
           CF_PAGES_PRODUCTION_BRANCH: main
         run: |
-          # ci:main:publish prepared the sealed image; deploy it without a second setup/bake.
+          # ci:main prepared the sealed image; deploy it without a second setup/bake.
           set +e
           out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
           status=$?
@@ -228,7 +221,6 @@ jobs:
       contents: write
       pull-requests: write
       checks: read
-      packages: write
     env:
       FIX_BRANCH: fix/ci-${{ github.run_id }}
       GITHUB_REPOSITORY: ${{ github.repository }}
@@ -244,13 +236,9 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=dev
-        env:
-          TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
       - name: Run ci-fix (Docker + docker.sock)
         env:

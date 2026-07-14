@@ -22,7 +22,6 @@ permissions:
   actions: read
   contents: read
   deployments: write
-  packages: read
   pull-requests: write
   issues: write
 
@@ -43,8 +42,6 @@ jobs:
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # One parallel Bake graph runs the Rust domain unit/coverage gate, WASM tests/build, and web
       # dependency preparation. Never split Rust into an earlier solve: that serializes the critical

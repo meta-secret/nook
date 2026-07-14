@@ -81,12 +81,6 @@ tasks:
       - task: docker:task
         vars: { TASK: _ci:main:build }
 
-  ci:main:publish:
-    desc: Main CI verify/build/e2e, then push toolchain to GHCR on success.
-    cmds:
-      - task: ci:main
-      - task: docker:push:ci
-
   ci:pr:deploy-preview:
     desc: Deploy the prepared PR image's dist to Cloudflare Pages (CI only; ci:pr must run first).
     cmds:
@@ -106,15 +100,6 @@ tasks:
     cmds:
       - task: docker:task
         vars: { TASK: _comment-preview }
-
-  docker:push:ci:
-    desc: Publish the toolchain base image + cache to GHCR (after green main CI).
-    # Pass PUSH_TOOLCHAIN as a VAR (not task env): go-task does not propagate a parent's `env:` into
-    # a called subtask, but it does propagate call vars. docker:push maps this var into its own env.
-    cmds:
-      - task: docker:push
-        vars:
-          PUSH_TOOLCHAIN: "1"
 
   ci:pr:prepare:
     desc: Format check and wasm build in one container (manual/debug only — prefer ci:pr).

@@ -257,25 +257,20 @@ Architecture changes belong in the lowest appropriate layer: key access in
 `nook-web-*`. When package boundaries, sync model, or public Task commands
 change, update this README in the same change (see [`.cortex/AGENTS.md`](.cortex/AGENTS.md)).
 
-### Rust dependency cache
+### Docker dependency caches
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef) and
-independent **linux/amd64** Rust and web caches on GHCR. Workspace source is
-copied into the slim `nook-web:local` image (sealed image; no runtime bind mount
-except `task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a
-separate source-sealed Rust image on demand.
+independent **linux/amd64** Rust, web dependency, and browser lineages in the
+selected builder's local BuildKit content store. Workspace source is copied into
+the slim `nook-web:local` image (sealed image; no runtime bind mount except
+`task web:dev`). Explicit `task rust:*` and `task wasm:*` commands load a separate
+source-sealed Rust image on demand.
 
-```text
-ghcr.io/<owner>/<repo>/toolchain:rust-<git-commit>  # Rust/WASM cache image
-ghcr.io/<owner>/<repo>/toolchain:rust-buildcache    # Rust BuildKit cache
-ghcr.io/<owner>/<repo>/toolchain:web-<git-commit>   # web-deps cache image
-ghcr.io/<owner>/<repo>/toolchain:web-buildcache     # web BuildKit cache
-nook-web:local                                      # slim common task image
-```
-
-**The GHCR caches are pull-always, push-main-only.** Local builds pull both
-branch caches; only main CI publishes them. Run `docker login ghcr.io` once so local pulls
-authenticate. Details: [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
+No BuildKit cache is imported from or exported to a registry. The persistent
+`nook` delivery runners reuse their local content store across PR, main, and
+release jobs; isolated GitHub-hosted jobs build cold. This prevents cache blobs
+from becoming large, failure-prone network transfers. Details:
+[`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:
 
