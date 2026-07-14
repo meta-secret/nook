@@ -8,7 +8,7 @@ Long feature milestones cannot be executed safely by assigning every child issue
 
 ## Integration decision
 
-`agentic-ai/meta-agent` is a standalone Rust CLI. Its first Codex adapter invokes `codex exec` as an ephemeral, read-only subprocess with a strict structured-output schema.
+`agentic-ai/meta-agent` is a standalone host Rust CLI. Its first Codex adapter invokes the host `codex exec` as an ephemeral, read-only subprocess with a strict structured-output schema. Running on the host gives both processes the same worktree, linked Git metadata, Codex authentication, and artifact filesystem without repository mounts, credential mounts, or Docker socket access.
 
 This boundary was chosen because the first workflow is a one-shot planning job. Codex app-server is reserved for a later execution controller that needs persistent threads, turn steering, approval handling, and streamed events. There is no documented public Rust Codex SDK; the CLI adapter is kept behind the `CodexRunner` trait rather than depending on Codex's internal Rust crates.
 

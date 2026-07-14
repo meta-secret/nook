@@ -11,7 +11,7 @@ The CLI invokes the installed Codex CLI as a subprocess with:
 - an ephemeral, read-only planning session;
 - the target repository as Codex's working directory;
 - a strict JSON output schema; and
-- the existing Codex authentication/configuration mounted by the Task harness.
+- the developer's existing host Codex authentication and configuration.
 
 This is the smallest documented automation boundary for one-shot jobs. The Codex app-server is a better future adapter when the meta-agent needs long-lived threads, steering, approvals, and streamed event handling. OpenAI currently documents TypeScript and Python SDKs, but no public Rust SDK, so depending on internal Codex Rust crates would couple this project to unstable implementation details.
 
@@ -19,7 +19,7 @@ The `CodexRunner` Rust trait isolates that choice. A future app-server adapter c
 
 ## Usage
 
-Authenticate the Codex CLI once on the host, then run:
+Install Rust 1.96 and authenticate the Codex CLI once on the host, then run:
 
 ```bash
 task meta-agent:plan PROMPT='Add a repository-grounded feature planner'
@@ -40,7 +40,7 @@ Validate an existing artifact and print conflict-safe execution batches:
 task meta-agent:validate FEATURE=agentic-ai/features/resumable-sync
 ```
 
-Run the containerized Rust format, Clippy, and test gate:
+Run the host Rust format, Clippy, and test gate:
 
 ```bash
 task meta-agent:check

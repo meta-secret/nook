@@ -170,9 +170,12 @@ Prerequisites:
 
 - Docker with Buildx
 - [Task](https://taskfile.dev/)
+- Rust 1.96 and an authenticated Codex CLI for `meta-agent:*` commands
 
-The root `Taskfile.yml` is the repository entrypoint. All compile, test, and
-package installs run inside the project container.
+The root `Taskfile.yml` is the repository entrypoint. Application compile,
+test, and package-install commands run inside project containers. Meta-agent
+commands are included from `agentic-ai/Taskfile.yml` and run as host processes
+so they can use the current worktree and existing Codex authentication directly.
 
 Plan a large coding feature as a dependency and resource-aware task DAG after authenticating Codex on the host:
 
