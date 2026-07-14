@@ -212,10 +212,25 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
     );
 
     let e2e_builder = read(&root, ".github/scripts/e2e-build-if-needed.sh");
-    assert!(e2e_builder.contains("bun run build:unified && bun run assemble:preview"));
+    assert_eq!(
+        e2e_builder.matches("bun run build:unified").count(),
+        1,
+        "e2e must compile the unified harness exactly once"
+    );
+    for required in [
+        "site_source=\"$WEB_ROOT/dist-prod/site\"",
+        "cp -a \"$site_source\" \"$DIST/site\"",
+        "bun run assemble:preview",
+    ] {
+        assert!(
+            e2e_builder.contains(required),
+            "e2e assembly contract missing: {required}"
+        );
+    }
     assert!(
-        !e2e_builder.contains("&& bun run build)"),
-        "e2e needs the unified harness, not every deployable production artifact"
+        !e2e_builder.contains("bun run build:simple")
+            && !e2e_builder.contains("bun run build:sentinel"),
+        "e2e must reuse the sealed Simple and Sentinel artifacts"
     );
 
     let extension = read(&root, "nook-app/nook-web/.task/extension.yml");
