@@ -8,9 +8,17 @@ import {
   UI_TIMEOUT_MS,
 } from './helpers'
 
-async function openFreshDevice(page: Page) {
+async function openFreshDevice(
+  page: Page,
+  options?: { manualPasskey?: boolean },
+) {
   await page.goto('/app/')
   await clearBrowserVault(page)
+  if (options?.manualPasskey) {
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+  }
   await page.reload()
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -37,7 +45,7 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     deviceA = await contextA.newPage()
     deviceB = await contextB.newPage()
     await openFreshDevice(deviceA)
-    await openFreshDevice(deviceB)
+    await openFreshDevice(deviceB, { manualPasskey: true })
   })
 
   test.afterAll(async () => {
@@ -48,28 +56,6 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
   })
 
   test('creates a 2-of-2 Sentinel and issues a provider-backed member invitation', async () => {
-    await expectPathChooser(deviceB)
-    const participantAnnouncement = await deviceB.evaluate(async () => {
-      const participantVault = (
-        window as Window & {
-          __nookVault?: {
-            setupDeviceProtection: (
-              label: string,
-              mode: 'standard',
-            ) => Promise<void>
-            createSentinelGenesisPublicKeyAnnouncement: () => Promise<string>
-          }
-        }
-      ).__nookVault
-      if (!participantVault) throw new Error('Participant vault is unavailable')
-      await participantVault.setupDeviceProtection(
-        'Sentinel participant',
-        'standard',
-      )
-      return participantVault.createSentinelGenesisPublicKeyAnnouncement()
-    })
-    expect(participantAnnouncement).toContain('publicKeyAnnouncement')
-
     await expectPathChooser(deviceA)
     await deviceA.getByTestId('get-started-path-sentinel').click()
     await deviceA.getByTestId('sentinel-dashboard-card-stack').click()
@@ -101,22 +87,54 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     await deviceA.getByTestId('sentinel-participant-count-option-2').click()
     await deviceA.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(responseInput).toBeVisible()
-    await deviceA
-      .getByTestId('sentinel-genesis-response-input')
-      .fill(participantAnnouncement)
-    await deviceA.getByTestId('sentinel-genesis-add-participant').click()
+
+    const genesisRequest = deviceA.getByTestId(
+      'sentinel-genesis-request-output',
+    )
+    await expect(genesisRequest).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    const invitationLink = await genesisRequest.inputValue()
+    expect(invitationLink).toContain('#sentinel-request=')
+
+    await deviceB.goto(invitationLink)
+    await expect(
+      deviceB.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(
+      deviceB.getByTestId('sentinel-genesis-connect-device'),
+    ).toBeVisible()
+    await deviceB.getByTestId('sentinel-genesis-connect-device').click()
+    const participantPasskeyOverlay = deviceB.getByTestId(
+      'passkey-auth-overlay',
+    )
+    await expect(participantPasskeyOverlay).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const participantSetupButton = deviceB.getByTestId(
+      'device-protection-setup-btn',
+    )
+    await expect(participantSetupButton).toBeEnabled({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await participantSetupButton.click({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const participantResponseOutput = deviceB.getByTestId(
+      'sentinel-genesis-generated-response',
+    )
+    await expect(participantResponseOutput).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    const participantResponseLink = await participantResponseOutput.inputValue()
+    expect(participantResponseLink).toContain('#sentinel-response=')
+
+    await deviceA.goto(participantResponseLink)
     await expect(
       deviceA.getByTestId('sentinel-genesis-participant-count'),
     ).toHaveCount(0)
     await expect(deviceA.getByTestId('sentinel-genesis-finalize')).toBeEnabled()
     await deviceA.getByTestId('sentinel-genesis-finalize').click()
 
-    const genesisRequest = deviceA.getByTestId(
-      'sentinel-genesis-request-output',
-    )
-    await expect(genesisRequest).toBeVisible({ timeout: UI_TIMEOUT_MS })
-    const requestPayload = await genesisRequest.inputValue()
-    expect(requestPayload.length).toBeGreaterThan(20)
+    expect((await genesisRequest.inputValue()).length).toBeGreaterThan(20)
 
     await expect(
       deviceA.getByTestId('sentinel-choose-sync-provider'),

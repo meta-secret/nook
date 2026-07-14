@@ -13,12 +13,17 @@ use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
     MultiDeviceResult, StoreId, StoredSecretRecord,
 };
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 const GENESIS_VERSION: u32 = 1;
 const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
+const SENTINEL_REQUEST_HASH_PREFIX: &str = "#sentinel-request=";
+const SENTINEL_RESPONSE_HASH_PREFIX: &str = "#sentinel-response=";
+const MAX_SENTINEL_LINK_PAYLOAD_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +53,7 @@ pub struct SentinelGenesisRequest {
     pub policy: SentinelGenesisPolicy,
     pub initiator_device_id: DeviceId,
     pub initiator_signing_public_key: DeviceSigningPublicKey,
+    pub signature: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,13 +150,19 @@ pub fn start_sentinel_genesis(
     policy.validate()?;
     let session_id = generate_id()?;
     let signing_public_key = signing_public_key(signing_key);
-    let request = SentinelGenesisRequest {
+    let mut request = SentinelGenesisRequest {
         version: GENESIS_VERSION,
         session_id: session_id.clone(),
         policy,
         initiator_device_id: identity.device_id().clone(),
         initiator_signing_public_key: signing_public_key,
+        signature: String::new(),
     };
+    request.signature = hex::encode(
+        signing_key
+            .sign(&request_signing_bytes(&request)?)
+            .to_bytes(),
+    );
     let response = respond_to_sentinel_genesis_request(&request, identity, signing_key, label)?;
     let mut session = SentinelGenesisSession {
         request,
@@ -226,6 +238,118 @@ pub fn respond_to_sentinel_genesis_request(
         session_id: request.session_id.clone(),
         participant,
         signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
+    })
+}
+
+/// Build a browser deep link for the public owner request. The browser supplies
+/// the app base URL; Rust owns canonical serialization and payload validation.
+pub fn build_sentinel_genesis_request_link(
+    request_json: &str,
+    base_url: &str,
+) -> MultiDeviceResult<String> {
+    let canonical = normalize_sentinel_genesis_request(request_json)?;
+    Ok(build_sentinel_link(
+        &canonical,
+        base_url,
+        SENTINEL_REQUEST_HASH_PREFIX,
+    ))
+}
+
+/// Accept a raw request payload or a full Sentinel request URL and return the
+/// canonical JSON consumed by the signed response ceremony.
+pub fn normalize_sentinel_genesis_request(input: &str) -> MultiDeviceResult<String> {
+    let json =
+        decode_sentinel_link_payload(input, SENTINEL_REQUEST_HASH_PREFIX, "sentinel-request")?;
+    let request: SentinelGenesisRequest =
+        serde_json::from_str(&json).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    validate_request(&request)?;
+    serde_json::to_string(&request).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+}
+
+/// Build the return URL a participant sends back to the owner. The signed
+/// response remains public ceremony data and is verified against the active
+/// session when the owner imports it.
+pub fn build_sentinel_genesis_participant_response_link(
+    response_json: &str,
+    base_url: &str,
+) -> MultiDeviceResult<String> {
+    let canonical = normalize_sentinel_genesis_participant_payload(response_json)?;
+    Ok(build_sentinel_link(
+        &canonical,
+        base_url,
+        SENTINEL_RESPONSE_HASH_PREFIX,
+    ))
+}
+
+/// Accept a signed response/public-key announcement as JSON or as a return URL.
+/// Signature and session verification still happen in
+/// `add_sentinel_genesis_participant_payload`.
+pub fn normalize_sentinel_genesis_participant_payload(input: &str) -> MultiDeviceResult<String> {
+    let json =
+        decode_sentinel_link_payload(input, SENTINEL_RESPONSE_HASH_PREFIX, "sentinel-response")?;
+    let value: serde_json::Value =
+        serde_json::from_str(&json).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+        let announcement: SentinelGenesisPublicKeyAnnouncement = serde_json::from_value(value)
+            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        return serde_json::to_string(&announcement)
+            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload);
+    }
+    let response: SentinelGenesisParticipantResponse = serde_json::from_value(value)
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    serde_json::to_string(&response).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+}
+
+fn build_sentinel_link(payload: &str, base_url: &str, hash_prefix: &str) -> String {
+    let base = base_url.trim().trim_end_matches('/');
+    let encoded = URL_SAFE_NO_PAD.encode(payload.as_bytes());
+    format!("{base}/{hash_prefix}{encoded}")
+}
+
+fn decode_sentinel_link_payload(
+    input: &str,
+    hash_prefix: &str,
+    query_key: &str,
+) -> MultiDeviceResult<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || trimmed.len() > MAX_SENTINEL_LINK_PAYLOAD_BYTES {
+        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+    }
+    if trimmed.starts_with('{') {
+        return Ok(trimmed.to_owned());
+    }
+
+    let encoded = extract_link_value(trimmed, hash_prefix, query_key)
+        .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    let decoded = percent_decode_str(encoded)
+        .decode_utf8()
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    if decoded.starts_with('{') {
+        return Ok(decoded.into_owned());
+    }
+    let bytes = URL_SAFE_NO_PAD
+        .decode(decoded.as_bytes())
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
+    if bytes.len() > MAX_SENTINEL_LINK_PAYLOAD_BYTES {
+        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+    }
+    String::from_utf8(bytes).map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+}
+
+fn extract_link_value<'a>(input: &'a str, hash_prefix: &str, query_key: &str) -> Option<&'a str> {
+    if let Some(value) = input.strip_prefix(hash_prefix) {
+        return Some(value);
+    }
+    if let Some(hash) = input.split_once('#').map(|(_, hash)| hash) {
+        let prefix = hash_prefix.trim_start_matches('#');
+        if let Some(value) = hash.strip_prefix(prefix) {
+            return Some(value);
+        }
+    }
+    let query = input.split_once('?').map_or(input, |(_, query)| query);
+    query.split('&').find_map(|part| {
+        let (key, value) = part.split_once('=')?;
+        (key == query_key).then_some(value)
     })
 }
 
@@ -418,7 +542,22 @@ fn validate_request(request: &SentinelGenesisRequest) -> MultiDeviceResult<()> {
     if request.version != GENESIS_VERSION || request.initiator_signing_public_key.is_empty() {
         return Err(MultiDeviceError::InvalidSentinelGenesisSession);
     }
-    Ok(())
+    verify_signature(
+        &request.initiator_signing_public_key,
+        &request.signature,
+        &request_signing_bytes(request)?,
+    )
+}
+
+fn request_signing_bytes(request: &SentinelGenesisRequest) -> MultiDeviceResult<Vec<u8>> {
+    serde_json::to_vec(&(
+        request.version,
+        &request.session_id,
+        request.policy,
+        &request.initiator_device_id,
+        &request.initiator_signing_public_key,
+    ))
+    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
 }
 
 fn validate_participant(
@@ -677,6 +816,52 @@ mod tests {
     }
 
     #[test]
+    fn request_link_round_trips_as_canonical_validated_json() {
+        let owner = DeviceIdentity::generate().unwrap();
+        let owner_signing = signing_key();
+        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into()).unwrap();
+        let request_json = serde_json::to_string(&session.request).unwrap();
+
+        let link = build_sentinel_genesis_request_link(&request_json, "https://nook.example/app/")
+            .unwrap();
+        assert!(link.starts_with("https://nook.example/app/#sentinel-request="));
+        assert!(!link.contains(&session.request.session_id.to_string()));
+        assert_eq!(
+            normalize_sentinel_genesis_request(&link).unwrap(),
+            request_json
+        );
+        let mut tampered = session.request.clone();
+        tampered.policy.threshold = 3;
+        assert!(
+            normalize_sentinel_genesis_request(&serde_json::to_string(&tampered).unwrap()).is_err()
+        );
+        assert!(normalize_sentinel_genesis_request("not-a-request").is_err());
+    }
+
+    #[test]
+    fn participant_response_link_round_trips_and_remains_session_verified() {
+        let owner = DeviceIdentity::generate().unwrap();
+        let owner_signing = signing_key();
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let (_, _, response) = participant(&session.request, "Peer");
+        let response_json = serde_json::to_string(&response).unwrap();
+
+        let link = build_sentinel_genesis_participant_response_link(
+            &response_json,
+            "https://nook.example/app/",
+        )
+        .unwrap();
+        assert!(link.starts_with("https://nook.example/app/#sentinel-response="));
+        assert!(!link.contains(&response.signature));
+        let normalized = normalize_sentinel_genesis_participant_payload(&link).unwrap();
+        assert_eq!(normalized, response_json);
+        add_sentinel_genesis_participant_payload(&mut session, &normalized).unwrap();
+        assert!(session.is_complete());
+        assert!(normalize_sentinel_genesis_participant_payload("not-a-response").is_err());
+    }
+
+    #[test]
     fn tampered_public_key_announcement_fails() {
         let owner = DeviceIdentity::generate().unwrap();
         let owner_signing = signing_key();
@@ -756,6 +941,7 @@ mod tests {
             start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
         let (peer, _, response) = participant(&session.request, "Peer");
         add_sentinel_genesis_response(&mut session, response).unwrap();
+        let expected_request = session.request.clone();
         let issued = finalize_sentinel_genesis_shares(session, &store_id, &owner_signing).unwrap();
         assert_eq!(issued.records.len(), 4);
         assert_eq!(issued.deliveries.len(), 2);
@@ -764,13 +950,6 @@ mod tests {
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
             .unwrap();
-        let expected_request = SentinelGenesisRequest {
-            version: GENESIS_VERSION,
-            session_id: peer_delivery.session_id.clone(),
-            policy: peer_delivery.policy,
-            initiator_device_id: owner.device_id().clone(),
-            initiator_signing_public_key: peer_delivery.initiator_signing_public_key.clone(),
-        };
         let accepted =
             accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &peer)
                 .unwrap();

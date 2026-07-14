@@ -19,6 +19,10 @@
   import SentinelUnlockParticipantHelper from '$lib/components/login/SentinelUnlockParticipantHelper.svelte'
   import VaultSecurityOrbit from '$lib/components/login/VaultSecurityOrbit.svelte'
   import type { StartSentinelGenesisArgs, VaultState } from '$lib/vault.svelte'
+  import {
+    buildSentinelGenesisParticipantResponseLink,
+    buildSentinelGenesisRequestLink,
+  } from '$lib/sentinel-genesis-link'
 
   type SentinelGenesisStatus =
     | 'idle'
@@ -70,6 +74,7 @@
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
     sentinelInvitationRequest = '',
+    sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
   }: {
@@ -103,6 +108,7 @@
     sentinelGenesisParticipants?: SentinelGenesisParticipantSummary[]
     sentinelGenesisDeliveries?: SentinelGenesisDelivery[]
     sentinelInvitationRequest?: string
+    sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
@@ -129,6 +135,7 @@
   let initiatorFingerprint = $state('')
   let initiatorKeyLoading = $state(false)
   let initiatorPasskeyRequested = $state(false)
+  let importedParticipantResponse = $state('')
 
   $effect(() => {
     if (sentinelOnboardingPackage.trim() && wizardStep === 'choose') {
@@ -147,15 +154,33 @@
   })
 
   $effect(() => {
+    const response = sentinelParticipantResponse.trim()
+    if (
+      !response ||
+      response === importedParticipantResponse ||
+      sentinelGenesisStatus !== 'collecting' ||
+      !onAddSentinelGenesisParticipantResponse
+    ) {
+      return
+    }
+    importedParticipantResponse = response
+    void onAddSentinelGenesisParticipantResponse(response)
+  })
+
+  $effect(() => {
     const deviceProtectionReady = vault.deviceProtectionReady
+    const invitationPending = sentinelInvitationRequest.trim().length > 0
+    const shouldLoadStandalone =
+      !invitationPending && (!joinPasskeyRequested || deviceProtectionReady)
+    const shouldResumeInvitation =
+      invitationPending && joinPasskeyRequested && deviceProtectionReady
     if (
       wizardStep === 'join' &&
       !sentinelOnboardingPackage.trim() &&
-      !sentinelInvitationRequest.trim() &&
       !generatedParticipantResponse &&
       !joinPublicKeysLoading &&
       !isBusy &&
-      (!joinPasskeyRequested || deviceProtectionReady) &&
+      (shouldLoadStandalone || shouldResumeInvitation) &&
       onCreateSentinelGenesisPublicKeyAnnouncement
     ) {
       void loadJoinPublicKeys()
@@ -182,10 +207,12 @@
         return
       }
       joinPasskeyRequested = false
-      const announcement = JSON.parse(generatedParticipantResponse) as {
+      const response = JSON.parse(generatedParticipantResponse) as {
         fingerprint?: string
+        participant?: { fingerprint?: string }
       }
-      generatedParticipantFingerprint = announcement.fingerprint ?? ''
+      generatedParticipantFingerprint =
+        response.participant?.fingerprint ?? response.fingerprint ?? ''
     } catch (error) {
       generatedParticipantResponse = ''
       generatedParticipantFingerprint = ''
@@ -224,6 +251,12 @@
   const sentinelDashboardActive = $derived(
     sentinelDashboard !== undefined &&
       (wizardStep === 'sentinel-policy' || wizardStep === 'sentinel-ceremony'),
+  )
+  const sentinelGenesisInvitationLink = $derived(
+    buildSentinelGenesisRequestLink(sentinelGenesisRequest),
+  )
+  const generatedParticipantResponseLink = $derived(
+    buildSentinelGenesisParticipantResponseLink(generatedParticipantResponse),
   )
   const showImportFooter = $derived(
     wizardStep === 'choose' ||
@@ -511,9 +544,9 @@
   }
 
   async function copyJoinResponse() {
-    if (!generatedParticipantResponse) return
+    if (!generatedParticipantResponseLink) return
     try {
-      await navigator.clipboard.writeText(generatedParticipantResponse)
+      await navigator.clipboard.writeText(generatedParticipantResponseLink)
       copyingJoinResponse = true
       setTimeout(() => {
         copyingJoinResponse = false
@@ -602,7 +635,7 @@
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
       status={sentinelGenesisStatus}
-      request={sentinelGenesisRequest}
+      request={sentinelGenesisInvitationLink}
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
@@ -625,7 +658,7 @@
       bind:participantCount={sentinelParticipantCount}
       bind:threshold={sentinelThreshold}
       status={sentinelGenesisStatus}
-      request={sentinelGenesisRequest}
+      request={sentinelGenesisInvitationLink}
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
@@ -1023,7 +1056,7 @@
                   </div>
                   <div class="grid gap-3 sm:grid-cols-[160px_1fr]">
                     <EnrollmentQrCode
-                      enrollmentLink={generatedParticipantResponse}
+                      enrollmentLink={generatedParticipantResponseLink}
                       loadingLabel={vault.t(
                         'login.sentinel_genesis_qr_loading',
                       )}
@@ -1034,7 +1067,7 @@
                         class="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                         readonly
                         data-testid="sentinel-genesis-generated-response"
-                        value={generatedParticipantResponse}></textarea>
+                        value={generatedParticipantResponseLink}></textarea>
                       {#if generatedParticipantFingerprint}
                         <p
                           class="text-xs text-muted-foreground"
@@ -1056,7 +1089,7 @@
                         <Copy class="size-4" />
                         {copyingJoinResponse
                           ? vault.t('common.copied')
-                          : vault.t('common.copy')}
+                          : vault.t('login.sentinel_genesis_copy_response_url')}
                       </Button>
                     </div>
                   </div>
@@ -1069,17 +1102,31 @@
                   {vault.t('login.sentinel_genesis_join_loading')}
                 </p>
               {:else}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  data-testid="sentinel-genesis-refresh-public-keys"
-                  disabled={isBusy || sentinelActionBusy}
-                  onclick={() => refreshJoinPublicKeys()}
+                <div
+                  class="rounded-lg border border-primary/25 bg-primary/5 p-4"
+                  data-testid="sentinel-genesis-connect-card"
                 >
-                  <RefreshCw class="size-4" />
-                  {vault.t('login.sentinel_genesis_refresh_public_keys')}
-                </Button>
+                  <p class="text-sm font-semibold text-foreground">
+                    {vault.t('login.sentinel_genesis_connect_title')}
+                  </p>
+                  <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {vault.t('login.sentinel_genesis_connect_description')}
+                  </p>
+                  <Button
+                    type="button"
+                    class="mt-4 w-full sm:w-auto"
+                    data-testid={sentinelInvitationRequest.trim()
+                      ? 'sentinel-genesis-connect-device'
+                      : 'sentinel-genesis-refresh-public-keys'}
+                    disabled={isBusy || sentinelActionBusy}
+                    onclick={() => refreshJoinPublicKeys()}
+                  >
+                    <ShieldCheck class="size-4" />
+                    {sentinelInvitationRequest.trim()
+                      ? vault.t('login.sentinel_genesis_connect_action')
+                      : vault.t('login.sentinel_genesis_refresh_public_keys')}
+                  </Button>
+                </div>
               {/if}
 
               {#if !sentinelInvitationRequest.trim() && !sentinelOnboardingPackage.trim()}

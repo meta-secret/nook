@@ -203,6 +203,7 @@ impl NookVaultManager {
         request_json: String,
         participant_label: String,
     ) -> Result<String, JsError> {
+        let request_json = nook_core::normalize_sentinel_genesis_request(&request_json)?;
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let identity = self.ensure_device_identity()?;
@@ -222,7 +223,8 @@ impl NookVaultManager {
     /// Remember the initiator request so a later share delivery can be verified.
     #[wasm_bindgen(js_name = rememberSentinelGenesisRequest)]
     pub fn remember_sentinel_genesis_request(&mut self, request_json: &str) -> Result<(), JsError> {
-        let request: nook_core::SentinelGenesisRequest = serde_json::from_str(request_json)
+        let request_json = nook_core::normalize_sentinel_genesis_request(request_json)?;
+        let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         self.pending_sentinel_genesis_request = Some(request);
         Ok(())
@@ -239,7 +241,9 @@ impl NookVaultManager {
             .sentinel_genesis
             .as_mut()
             .ok_or_else(|| JsError::new("No Sentinel genesis ceremony is active."))?;
-        nook_core::add_sentinel_genesis_participant_payload(session, response_json)?;
+        let response_json =
+            nook_core::normalize_sentinel_genesis_participant_payload(response_json)?;
+        nook_core::add_sentinel_genesis_participant_payload(session, &response_json)?;
         self.sentinel_genesis_status_json()
     }
 

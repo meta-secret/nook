@@ -694,6 +694,42 @@ pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
     nook_core::build_enrollment_link(code, base_url)
 }
 
+#[wasm_bindgen(js_name = buildSentinelGenesisRequestLink)]
+pub fn build_sentinel_genesis_request_link(
+    request_json: &str,
+    base_url: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::build_sentinel_genesis_request_link(
+        request_json,
+        base_url,
+    )?)
+}
+
+#[wasm_bindgen(js_name = normalizeSentinelGenesisRequest)]
+pub fn normalize_sentinel_genesis_request(input: &str) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::normalize_sentinel_genesis_request(input)?)
+}
+
+#[wasm_bindgen(js_name = buildSentinelGenesisParticipantResponseLink)]
+pub fn build_sentinel_genesis_participant_response_link(
+    response_json: &str,
+    base_url: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::build_sentinel_genesis_participant_response_link(
+        response_json,
+        base_url,
+    )?)
+}
+
+#[wasm_bindgen(js_name = normalizeSentinelGenesisParticipantPayload)]
+pub fn normalize_sentinel_genesis_participant_payload(
+    input: &str,
+) -> Result<String, wasm_bindgen::JsError> {
+    Ok(nook_core::normalize_sentinel_genesis_participant_payload(
+        input,
+    )?)
+}
+
 #[wasm_bindgen(js_name = normalizeEnrollmentCode)]
 #[must_use]
 pub fn normalize_enrollment_code(code: &str) -> String {

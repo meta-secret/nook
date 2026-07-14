@@ -53,11 +53,13 @@
     onCreateDeviceVault,
     onStartSentinelGenesis,
     onCreateSentinelGenesisPublicKeyAnnouncement,
+    onCreateSentinelGenesisParticipantResponse,
     onRemoveProvider,
     prefillEnrollmentCode = '',
     enrollmentFromUrlPending = false,
     deviceAuthorizationPending = false,
     sentinelInvitationRequest = '',
+    sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
   }: {
@@ -93,11 +95,15 @@
     onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
       | string
       | Promise<string>
+    onCreateSentinelGenesisParticipantResponse?: (
+      requestPayload: string,
+    ) => string | Promise<string>
     onRemoveProvider?: (id: string) => void | Promise<void>
     prefillEnrollmentCode?: string
     enrollmentFromUrlPending?: boolean
     deviceAuthorizationPending?: boolean
     sentinelInvitationRequest?: string
+    sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
@@ -228,7 +234,7 @@
       onSubmit={(password) =>
         onUseEnrollmentCode!(prefillEnrollmentCode, password)}
     />
-  {:else if showCreateVault && onCreateDeviceVault}
+  {:else if (showCreateVault || sentinelInvitationRequest.trim()) && onCreateDeviceVault}
     <LoginCreateVaultChooser
       {vault}
       {isVerifying}
@@ -239,8 +245,8 @@
       onAddSentinelGenesisParticipantResponse={(payload) =>
         vault.addSentinelGenesisParticipantResponse(payload)}
       onFinalizeSentinelGenesis={() => vault.finalizeSentinelGenesis()}
-      onCreateSentinelGenesisParticipantResponse={(payload) =>
-        vault.createSentinelGenesisParticipantResponse(payload)}
+      onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
+        ((payload) => vault.createSentinelGenesisParticipantResponse(payload))}
       onCreateSentinelGenesisPublicKeyAnnouncement={onCreateSentinelGenesisPublicKeyAnnouncement ??
         (() => vault.createSentinelGenesisPublicKeyAnnouncement())}
       onRememberSentinelGenesisRequest={(payload) =>
@@ -254,6 +260,7 @@
       sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
       sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
       {sentinelInvitationRequest}
+      {sentinelParticipantResponse}
       {sentinelOnboardingPackage}
       {onAcceptSentinelOnboardingPackage}
       onConnectStorage={() => {
