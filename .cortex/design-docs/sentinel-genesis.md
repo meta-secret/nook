@@ -55,6 +55,11 @@ The initiator chooses before collecting participants:
 - participant count `N`;
 - unlock threshold `T`, where `2 <= T <= N`.
 
+The Card Stack dashboard intentionally offers the compact product presets
+`N = 3`, `4`, or `5`. Rust/WASM retains the wider validated policy range up to
+`N = 16` for protocol compatibility and other trusted clients; the dashboard
+does not redefine that domain boundary.
+
 The participant count says how many encrypted member shares genesis will issue.
 The threshold says how many distinct participant contributions are required to
 open the vault. Genesis waits for all configured `N` participant public keys;

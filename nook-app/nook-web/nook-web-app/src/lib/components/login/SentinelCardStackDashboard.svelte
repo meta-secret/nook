@@ -88,6 +88,7 @@
   let copied = $state(false)
   let selected = $state(0)
   let participantInputError = $state('')
+  let deliveriesAcknowledged = $state(false)
   let onboardingStage = $state<OnboardingStage>('identity')
 
   const participantChoices = [3, 4, 5]
@@ -724,11 +725,27 @@
             <p class="mt-2 text-sm leading-relaxed text-[#aeb8c2]">
               {vault.t('login.sentinel_onboarding_vault_ready_description')}
             </p>
+            <label
+              class="mt-5 flex cursor-pointer items-start gap-3 border border-white/10 bg-black/10 p-3 text-xs leading-5 text-[#d7e0e6]"
+            >
+              <input
+                type="checkbox"
+                class="mt-0.5 size-4 accent-[#46e56f]"
+                bind:checked={deliveriesAcknowledged}
+                data-testid="sentinel-genesis-delivery-acknowledgement"
+              />
+              <span>
+                {vault.t(
+                  'login.sentinel_onboarding_delivery_acknowledgement',
+                )}
+              </span>
+            </label>
             <Button
               type="button"
               class="mt-5"
               data-testid="sentinel-genesis-delivery-complete"
-              disabled={memberDeliveries.length === 0}
+              disabled={memberDeliveries.length === 0 ||
+                !deliveriesAcknowledged}
               onclick={() => void onCompleteDelivery()}
             >
               {vault.t('login.sentinel_onboarding_finish_action')}

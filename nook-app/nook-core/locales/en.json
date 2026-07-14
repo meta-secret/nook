@@ -239,6 +239,7 @@
     "sentinel_onboarding_vault_ready_step": "Final step",
     "sentinel_onboarding_vault_ready_title": "Empty Sentinel vault created",
     "sentinel_onboarding_vault_ready_description": "The encrypted participant shares are ready on the right. Continue to Sentinel unlock; add sync providers later from inside the vault.",
+    "sentinel_onboarding_delivery_acknowledgement": "I saved or sent every encrypted participant share shown on the right.",
     "sentinel_onboarding_finish_action": "Continue to Sentinel unlock",
     "sentinel_onboarding_member_title": "Join this Sentinel vault",
     "sentinel_onboarding_member_description": "This invitation is addressed to your device. Authorize the same Nook passkey to receive your encrypted share and connect the vault's sync provider.",

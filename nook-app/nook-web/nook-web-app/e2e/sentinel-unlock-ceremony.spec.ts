@@ -232,7 +232,15 @@ test.describe('Sentinel member onboarding and unlock ceremony', () => {
     })
     expect(ownerProviderCount).toBe(0)
 
-    await deviceA.getByTestId('sentinel-genesis-delivery-complete').click()
+    const continueToUnlock = deviceA.getByTestId(
+      'sentinel-genesis-delivery-complete',
+    )
+    await expect(continueToUnlock).toBeDisabled()
+    await deviceA
+      .getByTestId('sentinel-genesis-delivery-acknowledgement')
+      .check()
+    await expect(continueToUnlock).toBeEnabled()
+    await continueToUnlock.click()
     await expect(deviceA.getByTestId('sentinel-ceremony-panel')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

@@ -239,6 +239,7 @@
     "sentinel_onboarding_vault_ready_step": "Последний шаг",
     "sentinel_onboarding_vault_ready_title": "Пустой сейф Sentinel создан",
     "sentinel_onboarding_vault_ready_description": "Зашифрованные доли участников готовы справа. Перейдите к разблокировке Sentinel, а провайдеры синхронизации добавьте позже внутри сейфа.",
+    "sentinel_onboarding_delivery_acknowledgement": "Я сохранил или отправил каждую зашифрованную долю участника, показанную справа.",
     "sentinel_onboarding_finish_action": "Перейти к разблокировке Sentinel",
     "sentinel_onboarding_member_title": "Присоединиться к сейфу Sentinel",
     "sentinel_onboarding_member_description": "Это приглашение предназначено вашему устройству. Авторизуйте тот же ключ доступа Nook, чтобы получить зашифрованную долю и подключить провайдер синхронизации сейфа.",
