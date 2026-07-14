@@ -5,7 +5,6 @@ on:
     paths:
       - agentic-ai/meta-agent/**
       - agentic-ai/Taskfile.yml
-      - Taskfile.yml
       - .github/workflows/meta-agent.yml
   push:
     branches:
@@ -13,7 +12,6 @@ on:
     paths:
       - agentic-ai/meta-agent/**
       - agentic-ai/Taskfile.yml
-      - Taskfile.yml
       - .github/workflows/meta-agent.yml
 
 permissions:
