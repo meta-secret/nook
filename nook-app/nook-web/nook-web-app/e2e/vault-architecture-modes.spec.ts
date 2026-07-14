@@ -280,7 +280,7 @@ test.describe('vault architecture modes', () => {
     if (!initialSummaryDetailsBox) {
       throw new Error('Initial Sentinel summary must have a layout box')
     }
-    expect(initialSummaryDetailsBox.height).toBeLessThan(120)
+    expect(initialSummaryDetailsBox.height).toBeLessThan(90)
     const brandBox = await page
       .getByTestId('sentinel-dashboard-brand')
       .boundingBox()
@@ -456,7 +456,7 @@ test.describe('vault architecture modes', () => {
     if (!compactSummaryBox || !participantRequestBox || !collectingSummaryBox) {
       throw new Error('Sentinel collecting summary must have layout boxes')
     }
-    expect(compactSummaryBox.height).toBeLessThan(120)
+    expect(compactSummaryBox.height).toBeLessThan(90)
     expect(participantRequestBox.y - collectingSummaryBox.y).toBeLessThan(360)
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
