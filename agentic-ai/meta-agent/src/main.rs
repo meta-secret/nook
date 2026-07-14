@@ -1,10 +1,11 @@
-use std::error::Error;
 use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
 
+use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand};
-use nook_meta_agent::{CodexOptions, Planner, ProcessCodexRunner, load_feature, write_feature};
+use codex::Arg0DispatchPaths;
+use nook_meta_agent::{CodexOptions, InProcessCodexRunner, Planner, load_feature, write_feature};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -53,15 +54,15 @@ struct PlanArgs {
     /// Override the Codex model; the configured default is used when omitted.
     #[arg(long)]
     model: Option<String>,
-
-    /// Codex CLI executable.
-    #[arg(long, default_value = "codex")]
-    codex_bin: PathBuf,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
+    codex::arg0_dispatch_or_else(run_main)
+}
+
+async fn run_main(arg0_paths: Arg0DispatchPaths) -> Result<()> {
     match Cli::parse().command {
-        Command::Plan(args) => run_plan(args),
+        Command::Plan(args) => run_plan(args, arg0_paths).await,
         Command::Validate { path } => {
             let plan = load_feature(&path)?;
             print_schedule(&plan)?;
@@ -70,7 +71,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn run_plan(args: PlanArgs) -> Result<(), Box<dyn Error>> {
+async fn run_plan(args: PlanArgs, arg0_paths: Arg0DispatchPaths) -> Result<()> {
     let prompt = resolve_prompt(&args)?;
     let repo_root = absolute(&args.repo_root)?;
     let output_root = if args.output_root.is_absolute() {
@@ -81,10 +82,11 @@ fn run_plan(args: PlanArgs) -> Result<(), Box<dyn Error>> {
 
     eprintln!("Inspecting {} with Codex...", repo_root.display());
     let mut options = CodexOptions::new(repo_root);
-    options.binary = args.codex_bin;
     options.model = args.model;
-    let plan =
-        Planner::new(ProcessCodexRunner::new(options)).plan(&prompt, args.feature_id.as_deref())?;
+    options.arg0_paths = arg0_paths;
+    let plan = Planner::new(InProcessCodexRunner::new(options))
+        .plan(&prompt, args.feature_id.as_deref())
+        .await?;
     let target = write_feature(&output_root, &plan, &prompt)?;
 
     println!("Created {}", target.display());
@@ -92,7 +94,7 @@ fn run_plan(args: PlanArgs) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn resolve_prompt(args: &PlanArgs) -> Result<String, Box<dyn Error>> {
+fn resolve_prompt(args: &PlanArgs) -> Result<String> {
     if let Some(prompt) = &args.prompt {
         return Ok(prompt.clone());
     }
@@ -100,7 +102,7 @@ fn resolve_prompt(args: &PlanArgs) -> Result<String, Box<dyn Error>> {
         return Ok(fs::read_to_string(path)?);
     }
     if io::stdin().is_terminal() {
-        return Err("provide a prompt argument, --prompt-file, or pipe the prompt on stdin".into());
+        bail!("provide a prompt argument, --prompt-file, or pipe the prompt on stdin");
     }
 
     let mut prompt = String::new();
@@ -115,7 +117,7 @@ fn absolute(path: &Path) -> Result<PathBuf, io::Error> {
     Ok(std::env::current_dir()?.join(path))
 }
 
-fn print_schedule(plan: &nook_meta_agent::FeaturePlan) -> Result<(), Box<dyn Error>> {
+fn print_schedule(plan: &nook_meta_agent::FeaturePlan) -> Result<()> {
     let batches = plan.execution_batches()?;
     println!(
         "Valid feature `{}`: {} tasks in {} safe execution batches",

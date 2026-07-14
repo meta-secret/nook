@@ -14,7 +14,7 @@ root/
 ├── agentic-ai/
 │   ├── Taskfile.yml      (host meta-agent and containerized CI-agent commands)
 │   ├── ci-agent/         (Cursor-based implementation and CI repair harness)
-│   └── meta-agent/       (Rust feature-DAG planner and validator using Codex CLI)
+│   └── meta-agent/       (Rust feature-DAG planner with embedded Codex crates)
 ├── preflight/            (standalone Rust tests for whole-repository invariants)
 │   ├── Taskfile.yml      (`task preflight` Docker entrypoint)
 │   ├── Dockerfile
@@ -267,7 +267,7 @@ Domain logic changes **must** add or update Rust tests before merge. **Line cove
 
 All development tasks run containerized via `Taskfile`. The root `Taskfile.yml` is the repo entrypoint; app-specific commands live in `nook-app/Taskfile.yml` and are included into the root command surface. Cross-package app/CI tasks stay under `nook-app/.task/`, Docker orchestration lives in `nook-app/docker/Taskfile.yml`, and web-family commands are owned by `nook-app/nook-web/Taskfile.yml` with local includes under `nook-app/nook-web/.task/`. The workspace **source is copied into the nook-web image** at build time (`nook-app/nook-web/nook-web-app/Dockerfile`) — there is **no runtime bind mount** on the common path, so the image is self-contained and reproducible. The explicit local-iteration exceptions are `task web:dev` / `task web:dev:fast` (Vite hot-reload) and `task wasm:build:fast` (mounted no-opt WASM regeneration).
 
-Repository agent tooling lives under `agentic-ai/` and is exposed through `agentic-ai/Taskfile.yml`, which the root Taskfile includes. The Rust `meta-agent` and its `codex exec` child run directly on the host so they share the current worktree, Git metadata, Codex authentication, and artifact filesystem without Docker mounts or socket access. `task meta-agent:plan` inspects a developer prompt with an ephemeral read-only Codex session, writes one validated feature directory, and derives conflict-safe execution batches from logical dependencies plus declared write scopes. Its artifact and scheduling contract is documented in [meta-agent-feature-dag.md](design-docs/meta-agent-feature-dag.md).
+Repository agent tooling lives under `agentic-ai/` and is exposed through `agentic-ai/Taskfile.yml`, which the root Taskfile includes. The Rust `meta-agent` embeds OpenAI Codex through one lockfile-resolved `codex-core-api` dependency from `main` and uses its `ThreadManager` and `CodexThread` directly, sharing the current worktree, Git metadata, `CODEX_HOME` authentication, and artifact filesystem without a CLI parser, Codex subprocess, app-server transport, Docker mounts, or socket access. `task meta-agent:plan` inspects a developer prompt with an ephemeral read-only Codex session, writes one validated feature directory, and derives conflict-safe execution batches from logical dependencies plus declared write scopes. Its artifact and scheduling contract is documented in [meta-agent-feature-dag.md](design-docs/meta-agent-feature-dag.md).
 
 ### Split Rust/WASM and web images
 

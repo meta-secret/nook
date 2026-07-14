@@ -4,22 +4,24 @@
 
 The first release is a planner, validator, and artifact generator. It does not create GitHub issues or execute the generated tasks yet.
 
-## Why `codex exec`
+## Embedded Codex runtime
 
-The CLI invokes the installed Codex CLI as a subprocess with:
+The CLI embeds OpenAI's Codex Rust source from `main` through one direct dependency, aliased as `codex` in `Cargo.toml` from OpenAI's public `codex-core-api` facade. `ThreadManager` creates an in-process `CodexThread`, and `Op::UserInput` submits the developer prompt together with the planner's JSON schema. A planning turn therefore runs in the meta-agent process with:
 
 - an ephemeral, read-only planning session;
 - the target repository as Codex's working directory;
 - a strict JSON output schema; and
-- the developer's existing host Codex authentication and configuration.
+- the developer's existing `CODEX_HOME` authentication and configuration.
 
-This is the smallest documented automation boundary for one-shot jobs. The Codex app-server is a better future adapter when the meta-agent needs long-lived threads, steering, approvals, and streamed event handling. OpenAI currently documents TypeScript and Python SDKs, but no public Rust SDK, so depending on internal Codex Rust crates would couple this project to unstable implementation details.
+No Codex CLI parser, subprocess, CLI-over-JSONL wrapper, app-server transport, HTTP server, repository mount, or Docker socket is involved. The adapter follows OpenAI's `thread-manager-sample`, uses the developer's `CODEX_HOME` authentication, and constructs an ephemeral read-only core configuration for the target repository. `Cargo.lock` records the exact `main` commit used by a build; refreshing Codex is an explicit lockfile update because these source-crate APIs are not a separately versioned stable SDK contract.
 
-The `CodexRunner` Rust trait isolates that choice. A future app-server adapter can replace the subprocess without changing DAG validation, scheduling, or artifacts.
+OpenAI `main` currently relies on patched WebSocket crates for proxy support. Cargo does not inherit a Git dependency's workspace-level `[patch]` entries, so this manifest mirrors those two upstream patch overrides. They are not additional direct Codex dependencies; `cargo tree --depth 1` exposes only the single aliased `codex` facade.
+
+The `CodexRunner` Rust trait contains that upstream coupling. The current adapter already consumes core thread events directly; a future execution controller can retain threads for steering, approvals, and multiple turns without changing DAG validation, scheduling, or artifacts.
 
 ## Usage
 
-Install Rust 1.96 and authenticate the Codex CLI once on the host, then run:
+Install Rust 1.96 and ensure the host `CODEX_HOME` contains Codex authentication, then run:
 
 ```bash
 task meta-agent:plan PROMPT='Add a repository-grounded feature planner'

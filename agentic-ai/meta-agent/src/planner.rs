@@ -19,7 +19,7 @@ impl<R: CodexRunner> Planner<R> {
         Self { runner }
     }
 
-    pub fn plan(
+    pub async fn plan(
         &self,
         developer_prompt: &str,
         feature_id_override: Option<&str>,
@@ -28,7 +28,7 @@ impl<R: CodexRunner> Planner<R> {
             return Err(PlannerError::EmptyPrompt);
         }
 
-        let response = self.runner.run(&planning_prompt(developer_prompt))?;
+        let response = self.runner.run(&planning_prompt(developer_prompt)).await?;
         let output: PlannerOutput = serde_json::from_str(&response)
             .map_err(|source| PlannerError::InvalidResponse { source, response })?;
         output.into_plan(feature_id_override)
@@ -184,9 +184,12 @@ mod tests {
     }
 
     impl CodexRunner for FakeRunner {
-        fn run(&self, prompt: &str) -> Result<String, CodexError> {
+        fn run<'a>(
+            &'a self,
+            prompt: &'a str,
+        ) -> impl std::future::Future<Output = Result<String, CodexError>> + Send + 'a {
             assert!(prompt.contains("<developer-feature>\nBuild sync\n</developer-feature>"));
-            Ok(self.response.clone())
+            std::future::ready(Ok(self.response.clone()))
         }
     }
 
@@ -204,8 +207,8 @@ mod tests {
         )
     }
 
-    #[test]
-    fn converts_structured_codex_output_to_canonical_mapping() {
+    #[tokio::test]
+    async fn converts_structured_codex_output_to_canonical_mapping() {
         let runner = FakeRunner {
             response: response(
                 r#"{
@@ -222,6 +225,7 @@ mod tests {
 
         let plan = Planner::new(runner)
             .plan("Build sync", Some("custom-sync"))
+            .await
             .unwrap();
 
         assert_eq!(plan.feature.id, "custom-sync");
@@ -230,8 +234,8 @@ mod tests {
         assert_eq!(plan.tasks["design-protocol"].priority, Priority::High);
     }
 
-    #[test]
-    fn rejects_duplicate_task_ids() {
+    #[tokio::test]
+    async fn rejects_duplicate_task_ids() {
         let task = r#"{
           "id": "same-task",
           "title": "Task",
@@ -245,7 +249,10 @@ mod tests {
             response: response(&format!("{task},{task}")),
         };
 
-        let error = Planner::new(runner).plan("Build sync", None).unwrap_err();
+        let error = Planner::new(runner)
+            .plan("Build sync", None)
+            .await
+            .unwrap_err();
         assert!(matches!(error, PlannerError::DuplicateTaskId(id) if id == "same-task"));
     }
 }

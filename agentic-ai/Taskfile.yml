@@ -31,7 +31,7 @@ tasks:
       - cargo build --manifest-path {{.META_AGENT_DIR}}/Cargo.toml --locked --release
 
   meta-agent:plan:
-    desc: Convert PROMPT into a validated local feature DAG using the host Codex CLI.
+    desc: Convert PROMPT into a validated local feature DAG using embedded Codex crates.
     requires:
       vars:
         - PROMPT
