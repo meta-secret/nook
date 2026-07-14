@@ -236,7 +236,7 @@ impl NookVaultManager {
     pub fn add_sentinel_genesis_participant_response(
         &mut self,
         response_json: &str,
-        participant_label: String,
+        participant_label: &str,
     ) -> Result<String, JsError> {
         let session = self
             .sentinel_genesis
@@ -247,7 +247,7 @@ impl NookVaultManager {
         nook_core::add_sentinel_genesis_participant_payload_with_label(
             session,
             &response_json,
-            &participant_label,
+            participant_label,
         )?;
         self.sentinel_genesis_status_json()
     }
