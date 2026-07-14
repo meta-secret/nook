@@ -1,5 +1,6 @@
 # Main branch: one container for format/wasm/verify/build/e2e (task ci:main:publish);
-# deploy the development channel to Cloudflare Pages.
+# deploy the fast, unoptimized development channel to Cloudflare Pages. Immutable releases remain
+# responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # agentic-AI-only changes do not need the product pipeline.
 #
@@ -62,7 +63,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Preflight, check, build, e2e, and push toolchain
-        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=prod
+        run: task ci:main:publish VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} WASM_BUILD_MODE=dev
         env:
           CI: true
           GITHUB_ACTOR: ${{ github.actor }}
@@ -82,7 +83,7 @@ jobs:
         run: |
           # ci:main:publish prepared the sealed image; deploy it without a second setup/bake.
           set +e
-          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=prod 2>&1)"
+          out="$(task ci:cloudflare:deploy VITE_BASE=${{ env.CI_MAIN_VITE_BASE }} VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }} VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }} VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }} WASM_BUILD_MODE=dev 2>&1)"
           status=$?
           set -e
           echo "$out"
@@ -245,7 +246,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build split Rust/WASM and web images
-        run: task setup WASM_BUILD_MODE=prod
+        run: task setup WASM_BUILD_MODE=dev
         env:
           TOOLCHAIN_REGISTRY: ${{ env.TOOLCHAIN_REGISTRY }}
 
@@ -255,7 +256,7 @@ jobs:
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
           REPO_ROOT: ${{ github.workspace }}
           VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
-          WASM_BUILD_MODE: prod
+          WASM_BUILD_MODE: dev
           VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
           NOOK_GITHUB_E2E_REPO: nook-e2e-github-${{ github.run_id }}-fix
           NOOK_GITHUB_POLL_MS: ${{ env.CI_MAIN_GITHUB_POLL_MS }}
