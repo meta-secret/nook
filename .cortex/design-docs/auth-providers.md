@@ -74,11 +74,14 @@ interface OAuthFileConfig {
 **Google Drive modes:** Provider setup offers `private` and `shared`
 independently of vault replication or membership. Private mode requests
 `drive.appdata` and stores events below the hidden `appDataFolder`. Shared mode
-requests `drive.file`, creates or verifies a visible My Drive folder, and stores
-its stable `folderId`. Each collaborator saves a separate OAuth token for their
-own Google account. Switching modes clears the scope-bound token and target in
-Rust before the user signs in again; it never reuses an app-data token for a
-shared folder or vice versa.
+requests `drive.file` for app-created writes plus `drive.readonly` because Drive
+authorizes `drive.file` per user and collaborators must read folders and event
+files created by another account. It creates or verifies a visible My Drive
+folder and stores its stable `folderId`; writes remain limited to app-created
+files below that selected folder. Each collaborator saves a separate OAuth token
+for their own Google account. Switching modes clears the scope-bound token and
+target in Rust before the user signs in again; it never reuses an app-data token
+for a shared folder or vice versa.
 
 **Local-folder provider availability:** Local backup uses the browser File
 System Access directory API (`showDirectoryPicker`) and persisted structured

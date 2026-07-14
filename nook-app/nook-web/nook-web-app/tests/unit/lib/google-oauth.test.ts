@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   DRIVE_APPDATA_SCOPE,
   DRIVE_FILE_SCOPE,
+  DRIVE_READONLY_SCOPE,
   isGoogleOAuthConfigured,
   isOAuthAccessTokenExpired,
   oauthTokensToConfig,
@@ -57,13 +58,14 @@ describe('google-oauth', () => {
     })
 
     const appdataToken = requestGoogleAccessToken({ scope: 'appdata' })
-    const fileToken = requestGoogleAccessToken({ scope: 'file' })
+    const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
+    const fileToken = requestGoogleAccessToken({ scope: 'shared' })
 
     await vi.waitFor(() => {
       expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()
-      expect(requests.get(DRIVE_FILE_SCOPE)).toHaveBeenCalledOnce()
+      expect(requests.get(sharedScope)).toHaveBeenCalledOnce()
     })
-    callbacks.get(DRIVE_FILE_SCOPE)!({
+    callbacks.get(sharedScope)!({
       access_token: 'file-token',
       expires_in: 3600,
     })

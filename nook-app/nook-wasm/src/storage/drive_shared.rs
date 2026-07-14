@@ -1,4 +1,5 @@
-//! Shared Google Drive vault folder helpers (`drive.file` scope).
+//! Shared Google Drive vault folder helpers (`drive.file` writes plus
+//! `drive.readonly` for cross-account event reads).
 //!
 //! Private providers keep using `drive.appdata`. Shared providers create a
 //! dedicated My Drive folder, share it with another account, and sync event

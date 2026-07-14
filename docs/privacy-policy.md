@@ -45,7 +45,7 @@ If you self-host or deploy Nook, **you** control the hosting environment. This p
 If you choose **Sign in with Google**, Nook uses Google Identity Services in the browser to obtain an **OAuth access token**. You choose the provider's storage mode independently of the vault type:
 
 - **Private** provider mode: `https://www.googleapis.com/auth/drive.appdata` — encrypted vault data in a **hidden Google Drive application data folder** associated with your Google account (not in your normal visible Drive files).
-- **Shared** provider mode: `https://www.googleapis.com/auth/drive.file` — Nook creates or connects a dedicated **My Drive folder**, grants another Google account writer access when requested, and syncs encrypted event files under that folder. Google may email the invited account about the shared folder.
+- **Shared** provider mode: `https://www.googleapis.com/auth/drive.file` and `https://www.googleapis.com/auth/drive.readonly` — Nook creates or connects a dedicated **My Drive folder**, grants another Google account writer access when requested, and syncs encrypted event files under that folder. Read-only Drive access is required because Google authorizes `drive.file` per user, so a collaborator cannot otherwise read files created by the other account. Nook writes only app-created files in the selected folder. Google may email the invited account about the shared folder.
 
 - The OAuth token is stored **only in your browser** (like a saved GitHub token).
 - Nook may read your **Google account email address** from Google's API to show "Signed in as …" in the UI.

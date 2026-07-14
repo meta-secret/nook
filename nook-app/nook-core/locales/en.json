@@ -1047,7 +1047,7 @@
     "local_folder_sync_title": "Save backup provider",
     "local_folder_sync_subtitle": "Merge events and write missing backup files",
     "google_drive_desc": "Nook stores your encrypted vault in a hidden Google Drive app folder. Click Sign in with Google — no API keys to copy.",
-    "google_drive_shared_desc": "Nook stores your encrypted vault in a dedicated Drive folder. Each person signs in with their own Google account; only the folder is shared.",
+    "google_drive_shared_desc": "Nook stores your encrypted vault in a dedicated Drive folder. Each person signs in separately. Google grants Nook read access to Drive so it can read events created by collaborators; Nook writes app-created files only in the selected folder.",
     "google_drive_mode": "Storage mode",
     "google_drive_private": "Private",
     "google_drive_private_desc": "Hidden app data for this Google account only.",

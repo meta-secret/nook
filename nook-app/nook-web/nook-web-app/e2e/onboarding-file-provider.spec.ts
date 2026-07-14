@@ -141,7 +141,9 @@ test.describe('Google Drive provider modes', () => {
       'aria-checked',
       'true',
     )
-    await owner.getByTestId('drive-file-input').fill('shared-provider-events')
+    // Shared folder display names are independent from the validated internal
+    // event-log backup name and may contain normal Drive filename characters.
+    await owner.getByTestId('drive-file-input').fill('Team Vault')
     await owner.getByTestId('google-sign-in-btn').click()
     await expect(owner.getByTestId('google-shared-account-email')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -164,6 +166,7 @@ test.describe('Google Drive provider modes', () => {
     const [sharedFolder] = driveStub.getSharedFolders()
     expect(sharedFolder).toBeDefined()
     if (!sharedFolder) throw new Error('Drive stub did not create a folder')
+    expect(sharedFolder.name).toBe('Team Vault')
     const connectButton = owner.getByTestId('connect-provider-btn')
     await expect(connectButton).toBeEnabled()
     await connectButton.click()

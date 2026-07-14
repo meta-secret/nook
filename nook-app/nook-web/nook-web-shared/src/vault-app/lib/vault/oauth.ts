@@ -1,6 +1,7 @@
 import type { VaultState } from "$lib/vault.svelte";
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
+  findDuplicateSyncProvider,
   setGoogleDriveProviderMode,
   type GoogleDriveMode,
 } from "$lib/auth-providers";
@@ -41,6 +42,16 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     hasAccessToken: Boolean(state.oauthFile.accessToken?.trim()),
     expiresAt: state.oauthFile.expiresAt,
   });
+  const providerToRefresh =
+    state.loginSetupType === undefined && !state.addProviderOpen
+      ? findDuplicateSyncProvider(state.syncProviders, {
+          id: "oauth-refresh-target",
+          type: "oauth-file",
+          label: "",
+          oauthFile: state.oauthFile,
+          createdAt: "",
+        })
+      : undefined;
   const refreshed =
     state.oauthFile.preset === "icloud"
       ? await ensureValidICloudOAuthFileConfig(state.oauthFile)
@@ -56,10 +67,9 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
     return;
   }
   state.oauthFile = refreshed;
-  if (state.oauthFile && state.providers.some((p) => p.type === "oauth-file")) {
+  if (providerToRefresh) {
     state.providers = state.providers.map((provider) =>
-      provider.type === "oauth-file" &&
-      provider.oauthFile?.preset === refreshed.preset
+      provider.id === providerToRefresh.id
         ? { ...provider, oauthFile: refreshed }
         : provider,
     );
@@ -68,7 +78,7 @@ export async function ensureOAuthTokensFresh(state: VaultState): Promise<void> {
   log.info("oauth token freshness check refreshed provider", {
     preset: refreshed.preset,
     expiresAt: refreshed.expiresAt,
-    providerCount: state.providers.length,
+    providerId: providerToRefresh?.id,
   });
 }
 
@@ -374,6 +384,7 @@ async function applyGoogleOAuthTokens(
   tokens: GoogleOAuthTokens,
 ): Promise<void> {
   const email = await fetchGoogleAccountEmail(tokens.accessToken);
+  const sharedFolderName = state.githubRepo.trim();
   state.loginSetupType = "oauth-file";
   if (!state.addProviderOpen) {
     state.storageMode = "oauth-file";
@@ -395,6 +406,10 @@ async function applyGoogleOAuthTokens(
     accountEmail: email,
   });
   state.githubPat = "";
-  state.githubRepo =
-    state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME;
+  const sharedGoogleDrive =
+    state.oauthFile.driveMode === "shared" ||
+    Boolean(state.oauthFile.folderId?.trim());
+  state.githubRepo = sharedGoogleDrive
+    ? sharedFolderName || DEFAULT_DRIVE_BACKUP_NAME
+    : state.oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME;
 }

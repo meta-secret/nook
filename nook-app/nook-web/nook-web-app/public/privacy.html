@@ -266,9 +266,11 @@
           uses <code>https://www.googleapis.com/auth/drive.appdata</code> for a
           hidden application data folder associated with your Google account.
           Shared mode uses
-          <code>https://www.googleapis.com/auth/drive.file</code> for a
-          dedicated My Drive folder that multiple Google accounts can access
-          with their own sign-ins.
+          <code>https://www.googleapis.com/auth/drive.file</code> for
+          app-created writes and
+          <code>https://www.googleapis.com/auth/drive.readonly</code> so each
+          collaborator can read the owner-created folder and encrypted event
+          files. Nook writes only app-created files in the selected folder.
         </p>
         <ul>
           <li>The OAuth token is stored only in your browser.</li>

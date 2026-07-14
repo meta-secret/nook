@@ -519,7 +519,8 @@ pub const DRIVE_SHARED_FOLDER_REF_PREFIX: &str = "shared:";
 pub enum DriveEventParent {
     /// Private provider mode: hidden application data folder (`drive.appdata`).
     AppDataFolder,
-    /// Shared provider mode: a My Drive folder created under `drive.file`.
+    /// Shared provider mode: a My Drive folder written with `drive.file` and
+    /// read across collaborator accounts with `drive.readonly`.
     SharedFolder { folder_id: String },
 }
 

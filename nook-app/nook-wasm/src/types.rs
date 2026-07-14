@@ -41,7 +41,7 @@ export interface NookOAuthFileConfig {
   fileName?: string;
   accountEmail?: string;
   driveMode?: NookGoogleDriveMode;
-  /** Shared-mode My Drive folder id (`drive.file`). */
+  /** Shared-mode My Drive folder id (`drive.file` + `drive.readonly`). */
   folderId?: string;
 }
 

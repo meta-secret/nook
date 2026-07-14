@@ -10,6 +10,7 @@
  * - OAuth consent screen scopes:
  *   - Private provider mode: https://www.googleapis.com/auth/drive.appdata
  *   - Shared provider mode: https://www.googleapis.com/auth/drive.file
+ *   - Shared cross-account reads: https://www.googleapis.com/auth/drive.readonly
  *
  * Redirect URIs are not used by the GIS token client flow.
  */

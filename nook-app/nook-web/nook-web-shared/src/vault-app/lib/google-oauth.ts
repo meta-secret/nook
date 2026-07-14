@@ -7,7 +7,8 @@
  *
  * Scopes:
  * - Private provider mode: `drive.appdata` (hidden application data folder).
- * - Shared provider mode: `drive.file` (My Drive folder created/shared by Nook).
+ * - Shared provider mode: `drive.file` for writes plus `drive.readonly` so a
+ *   collaborator can read the owner-created folder and immutable event files.
  */
 
 import type { OAuthFileConfig } from "$lib/auth-providers";
@@ -17,8 +18,10 @@ const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
 export const DRIVE_APPDATA_SCOPE =
   "https://www.googleapis.com/auth/drive.appdata";
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+export const DRIVE_READONLY_SCOPE =
+  "https://www.googleapis.com/auth/drive.readonly";
 
-export type GoogleDriveOAuthScope = "appdata" | "file" | "both";
+export type GoogleDriveOAuthScope = "appdata" | "shared";
 
 export type GoogleOAuthTokens = {
   accessToken: string;
@@ -75,10 +78,8 @@ function googleClientId(): string {
 
 function scopeString(scope: GoogleDriveOAuthScope): string {
   switch (scope) {
-    case "file":
-      return DRIVE_FILE_SCOPE;
-    case "both":
-      return `${DRIVE_APPDATA_SCOPE} ${DRIVE_FILE_SCOPE}`;
+    case "shared":
+      return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
     case "appdata":
     default:
       return DRIVE_APPDATA_SCOPE;
@@ -150,9 +151,9 @@ export async function initGoogleAuth(): Promise<void> {
   await tokenClientForScope("appdata");
 }
 
-/** Shared mode: initialize a `drive.file` token client. */
+/** Shared mode: initialize the per-file write + Drive read token client. */
 export async function initGoogleSharedDriveAuth(): Promise<void> {
-  await tokenClientForScope("file");
+  await tokenClientForScope("shared");
 }
 
 function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
@@ -192,13 +193,13 @@ export async function requestGoogleAccessToken(options?: {
   });
 }
 
-/** Request a token with `drive.file` for a shared Google Drive provider. */
+/** Request the scopes required for cross-account shared-folder replication. */
 export async function requestGoogleDriveSharedAccess(options?: {
   prompt?: "" | "none" | "consent" | "select_account";
 }): Promise<GoogleOAuthTokens> {
   return requestGoogleAccessToken({
     prompt: options?.prompt ?? "consent",
-    scope: "file",
+    scope: "shared",
   });
 }
 
@@ -237,9 +238,9 @@ export async function ensureValidOAuthFileConfig(
   if (!isOAuthAccessTokenExpired(config)) {
     return config;
   }
-  const scope: GoogleDriveOAuthScope = config.folderId?.trim()
-    ? "file"
-    : "appdata";
+  const shared =
+    config.driveMode === "shared" || Boolean(config.folderId?.trim());
+  const scope: GoogleDriveOAuthScope = shared ? "shared" : "appdata";
   const refreshed = await requestGoogleAccessToken({ prompt: "", scope });
   return oauthTokensToConfig(refreshed, config);
 }

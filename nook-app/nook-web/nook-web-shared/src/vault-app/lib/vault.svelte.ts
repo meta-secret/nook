@@ -493,10 +493,18 @@ export class VaultState {
       if (!oauthFile || !token) {
         return undefined;
       }
-      const fileName =
-        this.githubRepo.trim() ||
-        this.oauthFile?.fileName?.trim() ||
-        DEFAULT_DRIVE_BACKUP_NAME;
+      const sharedGoogleDrive =
+        oauthFile.preset === "google-drive" &&
+        (oauthFile.driveMode === "shared" ||
+          Boolean(oauthFile.folderId?.trim()));
+      // The visible shared-folder display name is not the legacy Drive backup
+      // file name. Keep the validated internal name independent so ordinary
+      // folder names such as "Team Vault" cannot break the connect boundary.
+      const fileName = sharedGoogleDrive
+        ? oauthFile.fileName?.trim() || DEFAULT_DRIVE_BACKUP_NAME
+        : this.githubRepo.trim() ||
+          oauthFile.fileName?.trim() ||
+          DEFAULT_DRIVE_BACKUP_NAME;
       return this.providerWasmArgs({
         id: "staged-oauth-file",
         type: OAUTH_FILE_PROVIDER_TYPE,
