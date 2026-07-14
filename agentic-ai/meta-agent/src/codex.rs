@@ -372,22 +372,22 @@ async fn submit_and_wait(
             }
             EventMsg::ExecApprovalRequest(_) | EventMsg::ApplyPatchApprovalRequest(_) => {
                 return Err(CodexError::Run(
-                    "read-only planning turn unexpectedly requested approval".into(),
+                    "Codex turn unexpectedly requested approval".into(),
                 ));
             }
             EventMsg::RequestPermissions(_) => {
                 return Err(CodexError::Run(
-                    "read-only planning turn requested additional permissions".into(),
+                    "Codex turn requested additional permissions".into(),
                 ));
             }
             EventMsg::RequestUserInput(_) => {
                 return Err(CodexError::Run(
-                    "planning turn requested interactive user input".into(),
+                    "Codex turn requested interactive user input".into(),
                 ));
             }
             EventMsg::DynamicToolCallRequest(_) => {
                 return Err(CodexError::Run(
-                    "planning turn requested an unsupported dynamic tool".into(),
+                    "Codex turn requested an unsupported dynamic tool".into(),
                 ));
             }
             _ => {}
@@ -414,6 +414,11 @@ struct TaskProgressReporter<W> {
     decorate: bool,
     task_id: String,
     step: usize,
+    reasoning_buffer: String,
+    reasoning_truncated: bool,
+    reasoning_excerpts: usize,
+    saw_reasoning_delta: bool,
+    finalizing_announced: bool,
 }
 
 impl<W: Write> TaskProgressReporter<W> {
@@ -423,45 +428,162 @@ impl<W: Write> TaskProgressReporter<W> {
             decorate,
             task_id,
             step: 0,
+            reasoning_buffer: String::new(),
+            reasoning_truncated: false,
+            reasoning_excerpts: 0,
+            saw_reasoning_delta: false,
+            finalizing_announced: false,
         }
     }
 
     fn observe(&mut self, event: &EventMsg) -> io::Result<()> {
         match event {
+            EventMsg::TurnStarted(_) => self.line("36", "●", "start", "Agent started"),
+            EventMsg::ReasoningContentDelta(event) => self.reasoning_delta(&event.delta),
+            EventMsg::AgentReasoning(event) if !self.saw_reasoning_delta => {
+                self.reasoning_excerpt(&event.text)
+            }
+            EventMsg::AgentReasoningSectionBreak(_) => self.flush_reasoning(),
             EventMsg::ExecCommandBegin(event) => {
+                self.flush_reasoning()?;
                 self.step += 1;
                 let summary = summarize_inspection(&event.command);
-                self.line("36", "↳", &format!("{:02} {}", self.step, summary.title))
+                let message = match summary.detail {
+                    Some(detail) => format!("{:02} {} · {detail}", self.step, summary.title),
+                    None => format!("{:02} {}", self.step, summary.title),
+                };
+                self.line("36", "↳", "action", &message)
             }
-            EventMsg::ExecCommandEnd(event) if event.exit_code != 0 => {
-                self.line(
-                    "31",
-                    "✗",
-                    &format!("command failed with exit {}", event.exit_code),
-                )?;
-                let command = self.paint("2", &event.command.join(" "));
-                writeln!(self.writer, "       {command}")?;
-                self.writer.flush()
+            EventMsg::ExecCommandEnd(event) => self.command_finished(
+                &event.command,
+                event.exit_code,
+                &event.aggregated_output,
+                event.duration.as_secs_f64(),
+            ),
+            EventMsg::PatchApplyBegin(event) => {
+                self.flush_reasoning()?;
+                let mut paths = event
+                    .changes
+                    .keys()
+                    .map(|path| path.display().to_string())
+                    .collect::<Vec<_>>();
+                paths.sort();
+                let detail = if paths.is_empty() {
+                    "Applying code changes".to_owned()
+                } else {
+                    format!("Editing {}", paths.join(" · "))
+                };
+                self.line("35", "✎", "edit", &detail)
+            }
+            EventMsg::PatchApplyEnd(event) if !event.success => {
+                self.line("31", "✗", "edit", "Code patch failed")
             }
             EventMsg::Warning(event) | EventMsg::GuardianWarning(event) => {
-                self.line("33", "!", &event.message)
+                self.line("33", "!", "warning", &event.message)
             }
-            EventMsg::StreamError(event) => {
-                self.line("33", "↻", &format!("connection retry: {}", event.message))
-            }
+            EventMsg::StreamError(event) => self.line(
+                "33",
+                "↻",
+                "retry",
+                &format!("Connection retry: {}", event.message),
+            ),
             EventMsg::ModelReroute(event) => self.line(
                 "36",
                 "↪",
-                &format!("model rerouted: {} → {}", event.from_model, event.to_model),
+                "model",
+                &format!("{} → {}", event.from_model, event.to_model),
             ),
+            EventMsg::AgentMessageContentDelta(_) => self.announce_finalizing(),
+            EventMsg::Error(event) => self.line("31", "✗", "error", &event.message),
+            EventMsg::TurnAborted(event) => {
+                self.line("31", "✗", "aborted", &format!("{:?}", event.reason))
+            }
+            EventMsg::TurnComplete(_) => self.flush_reasoning(),
             _ => Ok(()),
         }
     }
 
-    fn line(&mut self, color: &str, symbol: &str, message: &str) -> io::Result<()> {
+    fn reasoning_delta(&mut self, delta: &str) -> io::Result<()> {
+        self.saw_reasoning_delta = true;
+        self.reasoning_buffer.push_str(delta);
+        const BUFFER_LIMIT: usize = 2_048;
+        if self.reasoning_buffer.len() > BUFFER_LIMIT {
+            let mut boundary = BUFFER_LIMIT;
+            while !self.reasoning_buffer.is_char_boundary(boundary) {
+                boundary -= 1;
+            }
+            self.reasoning_buffer.truncate(boundary);
+            self.reasoning_truncated = true;
+        }
+        Ok(())
+    }
+
+    fn flush_reasoning(&mut self) -> io::Result<()> {
+        let mut message = std::mem::take(&mut self.reasoning_buffer);
+        if self.reasoning_truncated {
+            message.push_str(" …");
+            self.reasoning_truncated = false;
+        }
+        if message.trim().is_empty() {
+            return Ok(());
+        }
+        self.reasoning_excerpt(&message)
+    }
+
+    fn reasoning_excerpt(&mut self, message: &str) -> io::Result<()> {
+        const MAX_EXCERPTS: usize = 6;
+        if self.reasoning_excerpts < MAX_EXCERPTS {
+            self.reasoning_excerpts += 1;
+            self.line("35", "◇", "think", message)
+        } else if self.reasoning_excerpts == MAX_EXCERPTS {
+            self.reasoning_excerpts += 1;
+            self.line("35", "…", "think", "Additional reasoning summaries hidden")
+        } else {
+            Ok(())
+        }
+    }
+
+    fn command_finished(
+        &mut self,
+        command: &[String],
+        exit_code: i32,
+        output: &str,
+        duration_seconds: f64,
+    ) -> io::Result<()> {
+        if exit_code != 0 {
+            let output = last_non_empty_line(output).unwrap_or("No command output");
+            self.line("31", "✗", "failed", &format!("Exit {exit_code} · {output}"))?;
+            let command = compact_text(&command.join(" "), 180);
+            return self.line("2", "│", "command", &command);
+        }
+        if is_verification_command(command) {
+            let output = last_non_empty_line(output).unwrap_or("completed successfully");
+            return self.line(
+                "32",
+                "✓",
+                "result",
+                &format!("{duration_seconds:.1}s · {output}"),
+            );
+        }
+        Ok(())
+    }
+
+    fn announce_finalizing(&mut self) -> io::Result<()> {
+        self.flush_reasoning()?;
+        if self.finalizing_announced {
+            return Ok(());
+        }
+        self.finalizing_announced = true;
+        self.line("36", "◆", "report", "Finalizing task result")
+    }
+
+    fn line(&mut self, color: &str, symbol: &str, kind: &str, message: &str) -> io::Result<()> {
         let symbol = self.paint(color, symbol);
-        let task_id = self.paint("1", &self.task_id);
-        writeln!(self.writer, "    {symbol}  {task_id} · {message}")?;
+        let task_id = compact_task_id(&self.task_id);
+        let task_id = self.paint(agent_color(&self.task_id), &format!("{task_id:<30}"));
+        let kind = self.paint("2", &format!("{kind:<7}"));
+        let message = compact_text(message, 140);
+        writeln!(self.writer, "    {symbol}  {task_id} {kind} · {message}")?;
         self.writer.flush()
     }
 
@@ -472,6 +594,58 @@ impl<W: Write> TaskProgressReporter<W> {
             text.to_owned()
         }
     }
+}
+
+fn compact_task_id(task_id: &str) -> String {
+    const WIDTH: usize = 30;
+    if task_id.chars().count() <= WIDTH {
+        return task_id.to_owned();
+    }
+    let prefix = task_id.chars().take(WIDTH - 1).collect::<String>();
+    format!("{prefix}…")
+}
+
+fn agent_color(task_id: &str) -> &'static str {
+    const COLORS: [&str; 4] = ["36", "35", "34", "33"];
+    let index = task_id
+        .bytes()
+        .fold(0usize, |hash, byte| hash.wrapping_mul(31) + byte as usize)
+        % COLORS.len();
+    COLORS[index]
+}
+
+fn compact_text(message: &str, limit: usize) -> String {
+    let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.chars().count() <= limit {
+        return normalized;
+    }
+    let prefix = normalized
+        .chars()
+        .take(limit.saturating_sub(1))
+        .collect::<String>();
+    format!("{prefix}…")
+}
+
+fn last_non_empty_line(output: &str) -> Option<&str> {
+    output.lines().rev().find(|line| !line.trim().is_empty())
+}
+
+fn is_verification_command(command: &[String]) -> bool {
+    let command = command.join(" ").to_ascii_lowercase();
+    [
+        "cargo test",
+        "cargo clippy",
+        "cargo fmt",
+        "task ",
+        "bun test",
+        "bun run test",
+        "npm test",
+        "npm run test",
+        "pytest",
+        "go test",
+    ]
+    .iter()
+    .any(|marker| command.contains(marker))
 }
 
 struct ProgressReporter<W> {
@@ -813,5 +987,59 @@ mod tests {
 
         assert!(output.contains("Repository inspection failed (exit 2)"));
         assert!(output.contains("/bin/zsh -lc rg missing-file"));
+    }
+
+    #[test]
+    fn task_progress_shows_compact_labeled_agent_excerpts() {
+        let mut progress = TaskProgressReporter::new(Vec::new(), false, "core-agent".into());
+
+        progress.line("36", "●", "start", "Agent started").unwrap();
+        progress
+            .reasoning_delta(
+                "Inspecting the lifecycle contract before changing the implementation.\n",
+            )
+            .unwrap();
+        progress.flush_reasoning().unwrap();
+        progress
+            .command_finished(
+                &["cargo".into(), "test".into(), "-p".into(), "core".into()],
+                0,
+                "running tests\ntest result: ok. 8 passed; 0 failed\n",
+                1.24,
+            )
+            .unwrap();
+        progress.announce_finalizing().unwrap();
+        progress.announce_finalizing().unwrap();
+
+        let output = String::from_utf8(progress.writer).unwrap();
+        assert!(output.contains("core-agent"));
+        assert!(output.contains("think   · Inspecting the lifecycle contract"));
+        assert!(output.contains("result  · 1.2s · test result: ok. 8 passed; 0 failed"));
+        assert_eq!(output.matches("Finalizing task result").count(), 1);
+    }
+
+    #[test]
+    fn task_progress_limits_reasoning_noise_and_reveals_failed_commands() {
+        let mut progress = TaskProgressReporter::new(Vec::new(), false, "ui-agent".into());
+
+        for index in 0..8 {
+            progress
+                .reasoning_excerpt(&format!("Reasoning section {index}"))
+                .unwrap();
+        }
+        progress
+            .command_finished(
+                &["bun".into(), "run".into(), "test".into()],
+                1,
+                "Tests failed in onboarding.spec.ts\n",
+                0.5,
+            )
+            .unwrap();
+
+        let output = String::from_utf8(progress.writer).unwrap();
+        assert!(output.contains("Additional reasoning summaries hidden"));
+        assert!(!output.contains("Reasoning section 7"));
+        assert!(output.contains("failed  · Exit 1 · Tests failed"));
+        assert!(output.contains("command · bun run test"));
     }
 }

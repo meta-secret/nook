@@ -235,6 +235,7 @@ fn print_execute_header(
         ("Repository", repo_root.as_str()),
         ("Model", model),
         ("Reasoning", reasoning),
+        ("Output", "summarized live agent feed"),
     ] {
         eprintln!(
             "{} {} {}",
@@ -271,20 +272,20 @@ fn print_execution_event(event: ExecutionEvent, decorate: bool) {
                 )
             );
             for task in tasks {
-                eprintln!("     {}  {task}", paint(decorate, "36", "●"));
+                eprintln!("     {}  {task}", paint(decorate, "2", "○"));
             }
         }
         ExecutionEvent::TaskCompleted { task_id, summary } => eprintln!(
             "     {}  {} · {}",
             paint(decorate, "32", "✓"),
             paint(decorate, "1", &task_id),
-            summary
+            terminal_excerpt(&summary, 180)
         ),
         ExecutionEvent::TaskFailed { task_id, message } => eprintln!(
             "     {}  {} · {}",
             paint(decorate, "31", "✗"),
             paint(decorate, "1;31", &task_id),
-            message
+            terminal_excerpt(&message, 220)
         ),
         ExecutionEvent::BatchCompleted { index, total } => {
             eprintln!(
@@ -348,5 +349,30 @@ fn paint(enabled: bool, code: &str, text: &str) -> String {
         format!("\u{1b}[{code}m{text}\u{1b}[0m")
     } else {
         text.to_owned()
+    }
+}
+
+fn terminal_excerpt(message: &str, limit: usize) -> String {
+    let normalized = message.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.chars().count() <= limit {
+        return normalized;
+    }
+    let prefix = normalized
+        .chars()
+        .take(limit.saturating_sub(1))
+        .collect::<String>();
+    format!("{prefix}…")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_excerpt_compacts_multiline_agent_summaries() {
+        assert_eq!(
+            terminal_excerpt("Implemented the flow.\nAll tests pass.", 28),
+            "Implemented the flow. All t…"
+        );
     }
 }

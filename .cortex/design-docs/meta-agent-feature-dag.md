@@ -44,6 +44,13 @@ This creates two separate relationships:
 
 The execution controller honors both without rewriting resource conflicts as dependencies. It starts one ephemeral embedded Codex thread for every task in a safe batch and polls them concurrently. Each worker receives the canonical task Markdown, feature acceptance criteria, completed dependency IDs, and strict instructions to stay inside its declared write scope and avoid Git mutations. Workers return structured `completed` or `blocked` results. The controller waits for the entire batch; any blocked turn, Codex error, or invalid completion JSON stops execution before descendants become runnable.
 
+Concurrent thread events are rendered as a line-oriented multiplexed feed with
+stable colored task labels. The default output exposes bounded reasoning
+summaries, semantic command actions, edited paths, verification result excerpts,
+warnings, and final task summaries. It suppresses raw reasoning streams, normal
+command output, and completion JSON so parallel workers remain readable; failed
+commands reveal a compact output tail and command for diagnosis.
+
 ## Execution boundary and follow-up
 
 Execution intentionally uses one shared worktree because safe batches have non-conflicting declared resources. It does not create milestones/issues, branches, worktrees, commits, or stashes, and it does not persist resumable execution state yet. GitHub publication, per-agent worktree isolation, resume, and reconciliation remain separate future capabilities so the developer can review the generated local plan before granting execution.

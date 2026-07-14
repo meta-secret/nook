@@ -76,6 +76,25 @@ task stops the run before any descendant starts. Workers share the repository
 working tree, may modify only their declared write scope, and are forbidden from
 creating commits, branches, worktrees, or stashes.
 
+Parallel workers share a compact, line-oriented terminal feed. Every event is
+tagged with a stable colored task label. The default view shows bounded reasoning
+excerpts, readable action names, edited paths, test duration/results, warnings,
+and completion summaries. Full reasoning streams, ordinary command output, and
+structured completion JSON remain hidden; failed commands reveal a concise
+output excerpt and the command needed for debugging. For example:
+
+```text
+  ◆  Wave 1/5 · 2 agents
+     ○  harden-core-onboarding-lifecycle
+     ○  streamline-simple-onboarding-ui
+    ●  harden-core-onboarding-lifec… start   · Agent started
+    ●  streamline-simple-onboardin… start   · Agent started
+    ◇  harden-core-onboarding-lifec… think   · Inspecting lifecycle invariants and existing Rust tests
+    ↳  streamline-simple-onboardin… action  · 02 Reading implementation context · LoginGate.svelte
+    ✎  harden-core-onboarding-lifec… edit    · Editing nook-app/nook-core/src/vault/vault_connect.rs
+    ✓  harden-core-onboarding-lifec… result  · 8.4s · test result: ok. 12 passed; 0 failed
+```
+
 Run the host Rust format, Clippy, and test gate:
 
 ```bash
