@@ -88,7 +88,7 @@
   let onboardingStage = $state<OnboardingStage>('identity')
   let preparingOnboardingLinks = $state(false)
 
-  const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
+  const participantChoices = [3, 4, 5]
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),

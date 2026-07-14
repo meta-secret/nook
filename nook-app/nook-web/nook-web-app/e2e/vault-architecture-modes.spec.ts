@@ -358,18 +358,37 @@ test.describe('vault architecture modes', () => {
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-3').click()
     await page.getByTestId('sentinel-genesis-participant-count').click()
-    await page.getByTestId('sentinel-participant-count-option-2').click()
+    const participantCountOptions = page.locator(
+      '[data-testid^="sentinel-participant-count-option-"]',
+    )
+    await expect(participantCountOptions).toHaveCount(3)
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-2'),
+    ).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-3'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-4'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-5'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-6'),
+    ).toHaveCount(0)
+    await page.getByTestId('sentinel-participant-count-option-5').click()
     await expect(
       page.getByTestId('sentinel-genesis-threshold'),
     ).toHaveAttribute('data-value', '3')
     await expect(
-      page.getByTestId('sentinel-onboarding-continue-devices'),
-    ).toBeDisabled()
+      page.getByTestId('sentinel-genesis-participant-count'),
+    ).toHaveAttribute('data-value', '5')
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-2').click()
     await expect(
       summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
-    ).toContainText('2 OF 2 SHARES REQUIRED')
+    ).toContainText('2 OF 5 SHARES REQUIRED')
     await expect(
       actionsColumn.getByTestId('sentinel-onboarding-continue-devices'),
     ).toBeEnabled()
@@ -385,7 +404,7 @@ test.describe('vault architecture modes', () => {
     await expect(nameSummaryCard).toBeDisabled()
     await expect(
       page.getByTestId('sentinel-onboarding-devices-remaining'),
-    ).toContainText('1')
+    ).toContainText('4')
     await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
     await expect(
       actionsColumn.getByTestId('sentinel-genesis-finalize'),
