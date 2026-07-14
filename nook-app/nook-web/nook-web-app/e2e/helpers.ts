@@ -3653,8 +3653,8 @@ export async function reloadUnlockWithSyncProvider(
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await dismissSyncConflictIfVisible(page)
-  await waitForVaultOperationsIdle(page)
   await forceVaultQuiescentForE2e(page)
+  await waitForVaultOperationsIdle(page)
   await waitForLoadedSyncProviders(page)
   await waitForVaultSyncIdle(page)
   if (sharedStub) {
