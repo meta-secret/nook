@@ -182,4 +182,21 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() {
         !extension_check.contains("bun run build"),
         "extension setup already sealed a validated build"
     );
+
+    let web_base = read(&root, "nook-app/docker/base.Dockerfile");
+    assert!(web_base.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium"));
+    assert!(web_base.contains("chromium xvfb"));
+    assert!(
+        !web_base.contains("playwright@${PLAYWRIGHT_VERSION} install"),
+        "e2e must not download Playwright's duplicate Chromium and headless-shell bundle"
+    );
+    for config in [
+        "nook-app/nook-web/nook-web-app/playwright.config.ts",
+        "nook-app/nook-web/nook-web-extension/e2e/extension-smoke.spec.ts",
+    ] {
+        assert!(
+            read(&root, config).contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
+            "{config} must use the e2e image's system Chromium"
+        );
+    }
 }

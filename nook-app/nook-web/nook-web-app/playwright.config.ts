@@ -15,6 +15,8 @@ process.env.VITE_VAULT_IDLE_WARNING_MS ??= '0'
 process.env.NOOK_GITHUB_POLL_MS ??= '3000'
 
 const isCi = !!process.env.CI
+const chromiumExecutablePath =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined
 const distDir = path.join(rootDir, 'dist')
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; provider routes are per-page. */
 
@@ -95,6 +97,9 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
     actionTimeout: 5_000,
+    launchOptions: {
+      executablePath: chromiumExecutablePath,
+    },
   },
   webServer: {
     command: webServerCommand,

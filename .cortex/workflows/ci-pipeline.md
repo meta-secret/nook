@@ -123,9 +123,11 @@ The web dependency stage runs `bun install --frozen-lockfile` directly in its
 Dockerfile layer. It has no host or BuildKit daemon cache mount; the frozen
 lockfile and immutable Docker layer are the cache and reproducibility boundary.
 
-PR web solves use browser-free `web-base`. The roughly 432 MB Playwright
-Chromium layer lives in `web-e2e-base`, uses a separate remote cache, and is
-pulled only by main, nightly, or explicitly requested browser e2e.
+PR web solves use browser-free `web-base`. Main, nightly, and explicitly
+requested browser e2e use a separate `web-e2e-base` with Debian's single
+`chromium` package. Playwright is pointed at `/usr/bin/chromium`; do not install
+its bundled Chromium + headless-shell payload, which creates a roughly 1.3 GB
+image layer (about 432 MB compressed) on cold runners.
 The PR setup solve runs once; it does not wrap multi-minute BuildKit failures in
 a whole-build retry loop.
 
