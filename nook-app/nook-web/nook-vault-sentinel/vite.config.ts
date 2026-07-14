@@ -5,12 +5,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig, type Plugin } from "vitest/config";
 import { vaultAppHeaders } from "../nook-web-shared/src/vault-app/security-headers";
 
-const spaPaths = new Set([
-  "/app-logs",
-  "/logs",
-  "/privacy",
-  "/terms",
-]);
+const spaPaths = new Set(["/app-logs", "/logs", "/privacy", "/terms"]);
 
 function sentinelSpa(): Plugin {
   return {

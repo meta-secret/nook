@@ -26,7 +26,9 @@ for (const root of [simpleRoot, sentinelRoot]) {
     throw new Error(`Independent vault project was not built: ${root}`)
   }
   if (existsSync(join(root, 'dist/migrate.html'))) {
-    throw new Error(`Vault artifact contains a retired migration route: ${root}`)
+    throw new Error(
+      `Vault artifact contains a retired migration route: ${root}`,
+    )
   }
 }
 if (existsSync(join(webRoot, 'nook-web-app/dist/site/migration.html'))) {
