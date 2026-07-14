@@ -833,6 +833,9 @@ export async function waitForVaultOperationsIdle(
   timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
 ) {
   await pauseVaultBackgroundSync(page)
+  // Sync UI flags can be reasserted by an already queued timer after it is
+  // stopped. The storage chain below is the authoritative persistence gate;
+  // only unlock/save/password work must block this poll.
   await expect
     .poll(
       async () =>
@@ -842,9 +845,6 @@ export async function waitForVaultOperationsIdle(
               __nookVault?: {
                 isVerifying?: boolean
                 isSaving?: boolean
-                isSyncing?: boolean
-                isFanOutSyncing?: boolean
-                syncingProviderId?: string | undefined
                 isPasswordBusy?: boolean
               }
             }
@@ -853,9 +853,6 @@ export async function waitForVaultOperationsIdle(
           return (
             !vault.isVerifying &&
             !vault.isSaving &&
-            !vault.isSyncing &&
-            !vault.isFanOutSyncing &&
-            !vault.syncingProviderId &&
             !vault.isPasswordBusy
           )
         }),
