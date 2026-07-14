@@ -88,6 +88,7 @@
     ) => boolean | void | Promise<boolean | void>
     onAddSentinelGenesisParticipantResponse?: (
       payload: string,
+      participantLabel?: string,
     ) => void | Promise<void>
     onFinalizeSentinelGenesis?: () => void | Promise<void>
     onCreateSentinelGenesisParticipantResponse?: (
@@ -159,6 +160,7 @@
       !response ||
       response === importedParticipantResponse ||
       sentinelGenesisStatus !== 'collecting' ||
+      sentinelDashboard !== 'terminal' ||
       !onAddSentinelGenesisParticipantResponse
     ) {
       return
@@ -636,6 +638,7 @@
       bind:threshold={sentinelThreshold}
       status={sentinelGenesisStatus}
       request={sentinelGenesisInvitationLink}
+      participantResponse={sentinelParticipantResponse}
       participants={sentinelGenesisParticipants}
       deliveries={sentinelGenesisDeliveries}
       isBusy={isBusy || sentinelActionBusy}
@@ -644,12 +647,10 @@
       onPrepareInitiator={() => prepareInitiatorDeviceKeys()}
       onBack={goBack}
       onStart={() => startSentinelGenesis()}
-      onAddParticipant={(payload) =>
-        onAddSentinelGenesisParticipantResponse?.(payload)}
+      onAddParticipant={(payload, participantLabel) =>
+        onAddSentinelGenesisParticipantResponse?.(payload, participantLabel)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
-      onChooseSyncProvider={onConnectStorage}
-      onPrepareOnboardingLinks={() => vault.prepareSentinelOnboardingLinks()}
     />
   {:else if sentinelDashboardActive && sentinelDashboard === 'terminal'}
     <SentinelTerminalDashboard
@@ -668,8 +669,6 @@
         onAddSentinelGenesisParticipantResponse?.(payload)}
       onFinalize={() => onFinalizeSentinelGenesis?.()}
       onCompleteDelivery={() => onCompleteSentinelGenesisDelivery?.()}
-      onChooseSyncProvider={onConnectStorage}
-      onPrepareOnboardingLinks={() => vault.prepareSentinelOnboardingLinks()}
     />
   {:else}
     <section

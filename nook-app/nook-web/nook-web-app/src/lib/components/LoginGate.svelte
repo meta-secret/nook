@@ -242,8 +242,8 @@
       {onCreateDeviceVault}
       onStartSentinelGenesis={onStartSentinelGenesis ??
         ((args) => vault.startSentinelGenesis(args))}
-      onAddSentinelGenesisParticipantResponse={(payload) =>
-        vault.addSentinelGenesisParticipantResponse(payload)}
+      onAddSentinelGenesisParticipantResponse={(payload, participantLabel) =>
+        vault.addSentinelGenesisParticipantResponse(payload, participantLabel)}
       onFinalizeSentinelGenesis={() => vault.finalizeSentinelGenesis()}
       onCreateSentinelGenesisParticipantResponse={onCreateSentinelGenesisParticipantResponse ??
         ((payload) => vault.createSentinelGenesisParticipantResponse(payload))}

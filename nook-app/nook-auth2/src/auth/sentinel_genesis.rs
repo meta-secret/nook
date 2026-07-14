@@ -370,6 +370,26 @@ pub fn add_sentinel_genesis_participant_payload(
     add_sentinel_genesis_response(session, response)
 }
 
+/// Verify a participant payload, then assign the owner-authored display name.
+/// The label is not part of device identity or the participant fingerprint;
+/// signed keys are always verified before this local roster metadata changes.
+pub fn add_sentinel_genesis_participant_payload_with_label(
+    session: &mut SentinelGenesisSession,
+    payload_json: &str,
+    participant_label: &str,
+) -> MultiDeviceResult<()> {
+    let participant_label = participant_label.trim();
+    if participant_label.chars().count() > 80 {
+        return Err(MultiDeviceError::DeviceNameTooLong);
+    }
+    let participant_index = session.participants.len();
+    add_sentinel_genesis_participant_payload(session, payload_json)?;
+    if !participant_label.is_empty() {
+        participant_label.clone_into(&mut session.participants[participant_index].label);
+    }
+    Ok(())
+}
+
 pub fn add_sentinel_genesis_response(
     session: &mut SentinelGenesisSession,
     response: SentinelGenesisParticipantResponse,
@@ -813,6 +833,33 @@ mod tests {
         )
         .unwrap();
         assert_eq!(issued.deliveries.len(), 2);
+    }
+
+    #[test]
+    fn owner_can_name_a_verified_participant_device() {
+        let owner = DeviceIdentity::generate().unwrap();
+        let owner_signing = signing_key();
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into()).unwrap();
+        let peer = DeviceIdentity::generate().unwrap();
+        let peer_signing = signing_key();
+        let announcement =
+            create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())
+                .unwrap();
+        let payload = serde_json::to_string(&announcement).unwrap();
+
+        add_sentinel_genesis_participant_payload_with_label(
+            &mut session,
+            &payload,
+            "  Ada's iPhone  ",
+        )
+        .unwrap();
+
+        assert_eq!(session.participants()[1].label, "Ada's iPhone");
+        assert_eq!(
+            session.participants()[1].device_id,
+            peer.device_id().clone()
+        );
     }
 
     #[test]

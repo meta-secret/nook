@@ -21,7 +21,7 @@
     | 'delivering'
     | 'complete'
 
-  type OnboardingStage = 'identity' | 'policy' | 'roster' | 'build'
+  type OnboardingStage = 'identity' | 'name' | 'policy' | 'roster' | 'build'
 
   type Participant = {
     participantId: string
@@ -43,6 +43,7 @@
     threshold = $bindable(2),
     status,
     request,
+    participantResponse = '',
     participants,
     deliveries,
     isBusy,
@@ -54,8 +55,6 @@
     onAddParticipant,
     onFinalize,
     onCompleteDelivery,
-    onChooseSyncProvider,
-    onPrepareOnboardingLinks,
   }: {
     vault: VaultState
     name: string
@@ -63,6 +62,7 @@
     threshold: number
     status: SentinelGenesisStatus
     request: string
+    participantResponse?: string
     participants: Participant[]
     deliveries: Delivery[]
     isBusy: boolean
@@ -73,32 +73,29 @@
     onStart: (
       args: StartSentinelGenesisArgs,
     ) => boolean | void | Promise<boolean | void>
-    onAddParticipant: (payload: string) => void | Promise<void>
+    onAddParticipant: (
+      payload: string,
+      participantLabel: string,
+    ) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
-    onChooseSyncProvider: () => void
-    onPrepareOnboardingLinks: () => void | Promise<void>
   } = $props()
 
   let response = $state('')
+  let loadedParticipantResponse = $state('')
+  let participantLabel = $state('')
   let actionBusy = $state(false)
   let copied = $state(false)
   let selected = $state(0)
   let participantInputError = $state('')
+  let deliveriesAcknowledged = $state(false)
   let onboardingStage = $state<OnboardingStage>('identity')
-  let preparingOnboardingLinks = $state(false)
 
-  const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
+  const participantChoices = [3, 4, 5]
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),
   )
-  const syncProviderReady = $derived(vault.syncProviders.length > 0)
-  const onboardingLinksReady = $derived(
-    memberDeliveries.length > 0 &&
-      memberDeliveries.every((delivery) => delivery.payload.startsWith('http')),
-  )
-
   const initiatorKeyReady = $derived(
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
   )
@@ -120,7 +117,7 @@
   const onboardingStep = $derived(
     onboardingStage === 'identity'
       ? 0
-      : onboardingStage === 'policy'
+      : onboardingStage === 'name' || onboardingStage === 'policy'
         ? 1
         : onboardingStage === 'roster'
           ? 2
@@ -128,12 +125,25 @@
   )
 
   $effect(() => {
+    const incomingResponse = participantResponse.trim()
+    if (
+      incomingResponse &&
+      incomingResponse !== loadedParticipantResponse &&
+      status === 'collecting'
+    ) {
+      response = incomingResponse
+      loadedParticipantResponse = incomingResponse
+      participantInputError = ''
+    }
+  })
+
+  $effect(() => {
     if (status === 'collecting') {
       onboardingStage = 'roster'
     } else if (status !== 'idle') {
       onboardingStage = 'build'
     } else if (initiatorKeyReady && onboardingStage === 'identity') {
-      onboardingStage = 'policy'
+      onboardingStage = 'name'
     } else if (!initiatorKeyReady) {
       onboardingStage = 'identity'
     }
@@ -149,9 +159,9 @@
     threshold = Number(value)
   }
 
-  function changeParticipantPayload(event: Event) {
-    response = (event.currentTarget as HTMLInputElement).value
-    participantInputError = ''
+  function continueToPolicy() {
+    if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return
+    onboardingStage = 'policy'
   }
 
   async function continueToRoster() {
@@ -183,8 +193,9 @@
       return
     actionBusy = true
     try {
-      await onAddParticipant(payload)
+      await onAddParticipant(payload, participantLabel.trim())
       response = ''
+      participantLabel = ''
       participantInputError = ''
       selected = participants.length
     } catch {
@@ -207,20 +218,6 @@
     }
   }
 
-  $effect(() => {
-    if (
-      status === 'delivering' &&
-      syncProviderReady &&
-      !onboardingLinksReady &&
-      !preparingOnboardingLinks
-    ) {
-      preparingOnboardingLinks = true
-      void Promise.resolve(onPrepareOnboardingLinks()).finally(() => {
-        preparingOnboardingLinks = false
-      })
-    }
-  })
-
   async function copyRequest() {
     if (!request) return
     try {
@@ -239,32 +236,38 @@
   data-sentinel-dashboard-focus
   tabindex="-1"
 >
-  {#if status === 'idle'}
-    <button
-      class="fixed top-5 left-5 z-50 flex h-10 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md sm:left-10"
-      data-testid="sentinel-dashboard-back"
-      onclick={onBack}
-    >
-      <ArrowLeft class="size-4" aria-hidden="true" />
-      {vault.t('login.sentinel_dashboard_change')}
-    </button>
-  {/if}
   <div
     class="pointer-events-none fixed inset-0 opacity-45 [background-image:radial-gradient(#a9b8c5_1px,transparent_1px)] [background-size:22px_22px]"
   ></div>
 
-  <section class="relative mx-auto max-w-7xl px-6 py-24 sm:px-10">
-    <header data-testid="sentinel-dashboard-heading">
-      <p
-        class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
-      >
-        {vault.t('login.sentinel_card_stack_eyebrow')}
-      </p>
-      <h1 class="mt-4 text-4xl font-semibold tracking-[0.18em]">SENTINEL</h1>
+  <section class="relative mx-auto max-w-7xl px-6 pt-8 pb-12 sm:px-10 sm:pt-10">
+    <header
+      class="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between"
+      data-testid="sentinel-dashboard-heading"
+    >
+      <div data-testid="sentinel-dashboard-brand">
+        <p
+          class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
+        >
+          {vault.t('login.sentinel_card_stack_eyebrow')}
+        </p>
+        <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
+      </div>
+
+      {#if status === 'idle'}
+        <button
+          class="flex h-10 shrink-0 items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 text-xs font-semibold text-white backdrop-blur-md"
+          data-testid="sentinel-dashboard-back"
+          onclick={onBack}
+        >
+          <ArrowLeft class="size-4" aria-hidden="true" />
+          {vault.t('login.sentinel_dashboard_change')}
+        </button>
+      {/if}
     </header>
 
     <ol
-      class="mt-8 mb-12 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
+      class="mt-5 mb-8 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
       data-testid="sentinel-onboarding-progress"
     >
       {#each [vault.t('login.sentinel_onboarding_step_keys'), vault.t('login.sentinel_onboarding_step_shares'), vault.t('login.sentinel_onboarding_step_devices'), vault.t('login.sentinel_onboarding_step_build')] as label, index (label)}
@@ -300,8 +303,8 @@
       {/each}
     </ol>
 
-    <div class="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-      <div>
+    <div class="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+      <div data-testid="sentinel-onboarding-actions-column">
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
@@ -367,6 +370,32 @@
             {/if}
           </button>
 
+          {#if initiatorKeyReady && onboardingStage !== 'identity' && onboardingStage !== 'name'}
+            <button
+              type="button"
+              class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 border-white/10 border-l-[#63eaa1] bg-[#303840]/85 px-5 py-4 text-left transition hover:border-[#6ed9ff]/60 hover:bg-[#37424b] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:border-l-[#63eaa1] disabled:hover:bg-[#303840]/85"
+              data-testid="sentinel-onboarding-name-summary-card"
+              aria-label={vault.t('login.vault_name_label')}
+              disabled={status !== 'idle' || isBusy || actionBusy}
+              onclick={() => (onboardingStage = 'name')}
+            >
+              <span
+                class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[10px] text-[#79dfff]"
+              >
+                02
+              </span>
+              <span class="min-w-0">
+                <span
+                  class="block font-mono text-[9px] tracking-[0.16em] text-[#9ba7b1] uppercase"
+                >
+                  {vault.t('login.vault_name_label')}
+                </span>
+                <b class="mt-1 block truncate text-sm text-white">{name}</b>
+              </span>
+              <Check class="size-4 text-[#63eaa1]" />
+            </button>
+          {/if}
+
           {#each participants.slice(1) as participant, index (participant.participantId)}
             <button
               class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
@@ -394,7 +423,7 @@
           {/each}
 
           {#if status === 'collecting' && availableRosterSlots > 0}
-            <div class="border border-dashed border-[#aeb8c2] p-5">
+            <div class="border border-dashed border-[#aeb8c2] p-4">
               <div class="flex items-center justify-between gap-4">
                 <div>
                   <p class="text-sm text-[#d6dde3]">
@@ -407,10 +436,13 @@
                   </p>
                 </div>
                 <button
-                  class="grid size-12 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
+                  class="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
                   aria-label={vault.t('login.sentinel_genesis_add_participant')}
-                  disabled={!response.trim() || isBusy || actionBusy}
+                  disabled={!participantLabel.trim() ||
+                    !response.trim() ||
+                    isBusy ||
+                    actionBusy}
                   onclick={() => void addParticipant()}
                 >
                   {#if actionBusy}<RefreshCw
@@ -419,26 +451,60 @@
                 </button>
               </div>
               <div
-                class="mt-5"
+                class="mt-4 grid gap-4"
                 data-testid="sentinel-genesis-participant-fields"
               >
                 <label
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
-                  {vault.t('login.sentinel_card_stack_public_key_label')}
-                  <textarea
-                    class="mt-2 min-h-28 w-full resize-y border border-white/20 bg-[#192128] p-3 font-mono text-xs leading-5 text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
-                    data-testid="sentinel-genesis-response-input"
+                  {vault.t('login.sentinel_card_stack_device_name_label')}
+                  <input
+                    class="mt-2 h-11 w-full border border-white/20 bg-[#192128] px-3 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
+                    data-testid="sentinel-genesis-participant-name"
+                    maxlength="80"
                     placeholder={vault.t(
-                      'login.sentinel_card_stack_public_key_placeholder',
+                      'login.sentinel_card_stack_device_name_placeholder',
                     )}
-                    value={response}
-                    oninput={changeParticipantPayload}
-                    onkeydown={(event) =>
-                      event.key === 'Enter' &&
-                      (event.metaKey || event.ctrlKey) &&
-                      void addParticipant()}></textarea>
+                    bind:value={participantLabel}
+                  />
                 </label>
+                {#if response}
+                  <div
+                    class="border border-[#63eaa1]/40 bg-[#63eaa1]/5 px-3 py-3"
+                    data-testid="sentinel-genesis-authentication-ready"
+                    aria-live="polite"
+                  >
+                    <p
+                      class="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-[#63eaa1] uppercase"
+                    >
+                      <Check class="size-4" />
+                      {vault.t(
+                        'login.sentinel_card_stack_authentication_ready',
+                      )}
+                    </p>
+                    <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
+                      {vault.t(
+                        'login.sentinel_card_stack_authentication_ready_help',
+                      )}
+                    </p>
+                  </div>
+                {:else}
+                  <div
+                    class="border border-white/15 bg-white/[0.025] px-3 py-3"
+                    data-testid="sentinel-genesis-authentication-instructions"
+                  >
+                    <p
+                      class="text-[10px] font-semibold tracking-wider text-[#8d99a4] uppercase"
+                    >
+                      {vault.t(
+                        'login.sentinel_card_stack_authentication_label',
+                      )}
+                    </p>
+                    <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
+                      {vault.t('login.sentinel_card_stack_authentication_help')}
+                    </p>
+                  </div>
+                {/if}
               </div>
               {#if participantInputError}
                 <p
@@ -454,17 +520,14 @@
 
           {#if onboardingStage === 'roster'}
             <div
-              class="rounded-xl border border-white/10 bg-white/[0.035] p-5"
+              class="flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-white/[0.035] px-4 py-3"
               data-testid="sentinel-onboarding-roster-next"
             >
-              <p class="text-sm font-semibold">
+              <p class="text-xs font-semibold text-[#d6dde3]">
                 {vault.t('login.sentinel_onboarding_roster_title')}
               </p>
-              <p class="mt-2 text-xs leading-5 text-[#8f9ca7]">
-                {vault.t('login.sentinel_onboarding_roster_description')}
-              </p>
               <p
-                class="mt-5 w-full rounded-md border border-white/10 bg-black/10 px-5 py-3 text-center text-xs font-bold tracking-wide text-[#aeb8c2] uppercase"
+                class="font-mono text-[9px] tracking-wider text-[#8f9ca7] uppercase"
                 data-testid="sentinel-onboarding-devices-remaining"
               >
                 {vault.t('login.sentinel_onboarding_devices_remaining', {
@@ -474,19 +537,231 @@
             </div>
           {/if}
         </div>
+
+        {#if status === 'idle' && onboardingStage === 'name'}
+          <section
+            class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
+            data-testid="sentinel-genesis-name-step"
+          >
+            <div class="flex flex-wrap items-end gap-5">
+              <label class="min-w-56 flex-1">
+                <span
+                  class="block font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
+                >
+                  {vault.t('login.landing_step_name')}
+                </span>
+                <span
+                  class="mt-3 block text-[10px] tracking-[0.14em] text-[#b5c0c9] uppercase"
+                >
+                  {vault.t('login.vault_name_label')}
+                </span>
+                <input
+                  class="mt-1 w-full border-b border-white/35 bg-transparent py-2 text-xl font-medium text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
+                  data-testid="sentinel-genesis-name-input"
+                  placeholder={vault.t('login.vault_name_placeholder')}
+                  bind:value={name}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!name.trim() || isBusy || actionBusy}
+                class="rounded-full border border-[#79dfff]/45 bg-[#79dfff]/10 px-5 py-3 font-mono text-[9px] tracking-wider text-[#79dfff] uppercase transition hover:bg-[#79dfff]/20 disabled:cursor-not-allowed disabled:opacity-30"
+                data-testid="sentinel-onboarding-continue-policy"
+                onclick={continueToPolicy}
+              >
+                {vault.t('login.create_wizard_continue')}
+              </button>
+            </div>
+          </section>
+        {:else if status === 'idle' && onboardingStage === 'policy'}
+          <section
+            class="mt-5 border border-[#6ed9ff] bg-[#3b4650] px-5 py-5 shadow-[0_0_30px_rgb(82_198_238/0.08)]"
+            data-testid="sentinel-genesis-policy-step"
+          >
+            <p class="font-mono text-[9px] tracking-[0.16em] text-[#79dfff]">
+              {vault.t('login.sentinel_onboarding_policy_step')}
+            </p>
+            <div class="mt-4" data-testid="sentinel-onboarding-policy">
+              <div class="max-w-sm">
+                <span
+                  class="text-[10px] tracking-wider text-[#aab5be] uppercase"
+                >
+                  {vault.t('login.sentinel_card_stack_threshold_policy')}
+                </span>
+                <span
+                  class="mt-2 grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-white/70"
+                >
+                  <Select.Root
+                    type="single"
+                    value={String(threshold)}
+                    onValueChange={changeThreshold}
+                  >
+                    <Select.Trigger
+                      class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
+                      data-testid="sentinel-genesis-threshold"
+                      data-value={threshold}
+                      aria-label={vault.t('login.sentinel_genesis_threshold')}
+                    >
+                      <span>
+                        <span class="block text-3xl font-light text-white">
+                          {threshold}
+                        </span>
+                        <small
+                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                          >{vault.t('login.sentinel_card_stack_needed')}</small
+                        >
+                      </span>
+                    </Select.Trigger>
+                    <Select.Content
+                      portalProps={{ disabled: true }}
+                      side="top"
+                      class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                    >
+                      {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
+                        <Select.Item
+                          value={String(option)}
+                          class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                          data-testid={`sentinel-threshold-option-${option}`}
+                        >
+                          {option}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                  <span class="text-2xl font-light text-white/35">/</span>
+                  <Select.Root
+                    type="single"
+                    value={String(participantCount)}
+                    onValueChange={changeParticipantCount}
+                  >
+                    <Select.Trigger
+                      class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
+                      data-testid="sentinel-genesis-participant-count"
+                      data-value={participantCount}
+                      aria-label={vault.t(
+                        'login.sentinel_genesis_participant_count',
+                      )}
+                    >
+                      <span>
+                        <span class="block text-3xl font-light text-white">
+                          {participantCount}
+                        </span>
+                        <small
+                          class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
+                          >{vault.t('login.sentinel_card_stack_total')}</small
+                        >
+                      </span>
+                    </Select.Trigger>
+                    <Select.Content
+                      portalProps={{ disabled: true }}
+                      side="top"
+                      class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
+                    >
+                      {#each participantChoices as option (option)}
+                        <Select.Item
+                          value={String(option)}
+                          class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
+                          data-testid={`sentinel-participant-count-option-${option}`}
+                        >
+                          {option}
+                        </Select.Item>
+                      {/each}
+                    </Select.Content>
+                  </Select.Root>
+                </span>
+              </div>
+            </div>
+
+            <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                class="px-2 py-2 text-[10px] font-semibold tracking-wider text-[#aeb8c2] uppercase hover:text-white"
+                data-testid="sentinel-onboarding-policy-back"
+                onclick={() => (onboardingStage = 'name')}
+              >
+                {vault.t('common.back')}
+              </button>
+              <button
+                disabled={!policyValid || isBusy || actionBusy}
+                class="rounded-full bg-[#46e56f] px-5 py-3 text-[10px] font-bold tracking-wide text-[#112218] uppercase shadow-[0_8px_24px_rgb(45_225_99/0.18)] transition hover:bg-[#6bed8c] disabled:cursor-not-allowed disabled:opacity-25"
+                data-testid="sentinel-onboarding-continue-devices"
+                onclick={() => void continueToRoster()}
+              >
+                {vault.t('login.sentinel_onboarding_continue_with_devices', {
+                  count: String(participantCount),
+                })}
+              </button>
+            </div>
+          </section>
+        {:else if status === 'collecting' || status === 'ready' || status === 'finalizing'}
+          <div class="mt-6 flex justify-end">
+            <button
+              disabled={status !== 'ready' || isBusy || actionBusy}
+              class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
+              data-testid="sentinel-genesis-finalize"
+              onclick={() => void finalize()}
+            >
+              {#if actionBusy}<RefreshCw
+                  class="mr-2 inline size-4 animate-spin"
+                />{/if}
+              {vault.t('login.sentinel_genesis_finalize')}
+            </button>
+          </div>
+        {/if}
+
+        {#if status === 'delivering' || deliveries.length > 0}
+          <div
+            class="mt-8 rounded-lg border border-[#79dfff]/25 bg-[#79dfff]/5 p-6"
+            data-testid="sentinel-onboarding-delivery-actions"
+          >
+            <p
+              class="font-mono text-[10px] tracking-[0.16em] text-[#79dfff] uppercase"
+            >
+              {vault.t('login.sentinel_onboarding_vault_ready_step')}
+            </p>
+            <h2 class="mt-2 text-xl font-semibold">
+              {vault.t('login.sentinel_onboarding_vault_ready_title')}
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed text-[#aeb8c2]">
+              {vault.t('login.sentinel_onboarding_vault_ready_description')}
+            </p>
+            <label
+              class="mt-5 flex cursor-pointer items-start gap-3 border border-white/10 bg-black/10 p-3 text-xs leading-5 text-[#d7e0e6]"
+            >
+              <input
+                type="checkbox"
+                class="mt-0.5 size-4 accent-[#46e56f]"
+                bind:checked={deliveriesAcknowledged}
+                data-testid="sentinel-genesis-delivery-acknowledgement"
+              />
+              <span>
+                {vault.t('login.sentinel_onboarding_delivery_acknowledgement')}
+              </span>
+            </label>
+            <Button
+              type="button"
+              class="mt-5"
+              data-testid="sentinel-genesis-delivery-complete"
+              disabled={memberDeliveries.length === 0 ||
+                !deliveriesAcknowledged}
+              onclick={() => void onCompleteDelivery()}
+            >
+              {vault.t('login.sentinel_onboarding_finish_action')}
+            </Button>
+          </div>
+        {/if}
       </div>
 
-      <div>
+      <div data-testid="sentinel-onboarding-summary-column">
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
           {vault.t('login.sentinel_card_stack_active_configuration')}
         </p>
         <div
-          class="relative mt-5 min-h-[28rem] overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-7 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-10"
-          data-testid={status === 'idle' && onboardingStage === 'policy'
-            ? 'sentinel-genesis-policy-step'
-            : undefined}
+          class="relative mt-5 overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-5 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-6"
+          data-testid="sentinel-onboarding-vault-summary"
+          data-layout="compact"
         >
           <div class="relative flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -504,165 +779,61 @@
             </span>
           </div>
 
-          {#if status === 'idle'}
-            {#if onboardingStage === 'policy'}
-              <div
-                class="relative mt-10 border border-[#79dfff]/20 bg-black/10 p-5"
-                data-testid="sentinel-onboarding-policy"
+          <dl
+            class="relative mt-5 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]"
+            data-testid="sentinel-onboarding-summary-details"
+          >
+            <div class="min-w-0 border border-white/10 bg-black/10 px-3 py-2">
+              <dt
+                class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
-                <p
-                  class="mb-5 font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
-                >
-                  {vault.t('login.sentinel_onboarding_policy_step')}
-                </p>
-                <label
-                  class="block text-[10px] tracking-[0.16em] text-[#b5c0c9] uppercase"
-                >
-                  {vault.t('login.sentinel_card_stack_module_identity')}
-                  <input
-                    class="mt-3 w-full border-b border-white/25 bg-transparent py-2 text-3xl font-light tracking-tight text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
-                    data-testid="sentinel-genesis-name-input"
-                    placeholder={vault.t('login.vault_name_placeholder')}
-                    bind:value={name}
-                  />
-                </label>
-              </div>
-
-              <div
-                class="relative mt-6 flex flex-wrap items-end justify-between gap-8 border border-white/10 bg-black/10 p-5"
+                {vault.t('login.sentinel_card_stack_module_identity')}
+              </dt>
+              <dd
+                class="mt-1 truncate text-sm leading-tight font-semibold text-[#d7e0e6]"
+                data-testid="sentinel-onboarding-summary-name"
               >
-                <div class="min-w-72">
-                  <span
-                    class="text-[10px] tracking-wider text-[#aab5be] uppercase"
-                  >
-                    {vault.t('login.sentinel_card_stack_threshold_policy')}
-                  </span>
-                  <span
-                    class="mt-2 grid h-20 grid-cols-[1fr_auto_1fr] items-center gap-5 border-b border-white/70"
-                  >
-                    <Select.Root
-                      type="single"
-                      value={String(threshold)}
-                      onValueChange={changeThreshold}
-                    >
-                      <Select.Trigger
-                        class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
-                        data-testid="sentinel-genesis-threshold"
-                        data-value={threshold}
-                        aria-label={vault.t('login.sentinel_genesis_threshold')}
-                      >
-                        <span>
-                          <span class="block text-4xl font-light text-white">
-                            {threshold}
-                          </span>
-                          <small
-                            class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                            >{vault.t(
-                              'login.sentinel_card_stack_needed',
-                            )}</small
-                          >
-                        </span>
-                      </Select.Trigger>
-                      <Select.Content
-                        portalProps={{ disabled: true }}
-                        class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
-                      >
-                        {#each Array.from({ length: participantCount - 1 }, (_, index) => index + 2) as option (option)}
-                          <Select.Item
-                            value={String(option)}
-                            class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
-                            data-testid={`sentinel-threshold-option-${option}`}
-                          >
-                            {option}
-                          </Select.Item>
-                        {/each}
-                      </Select.Content>
-                    </Select.Root>
-                    <span class="text-3xl font-light text-white/35">/</span>
-                    <Select.Root
-                      type="single"
-                      value={String(participantCount)}
-                      onValueChange={changeParticipantCount}
-                    >
-                      <Select.Trigger
-                        class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
-                        data-testid="sentinel-genesis-participant-count"
-                        data-value={participantCount}
-                        aria-label={vault.t(
-                          'login.sentinel_genesis_participant_count',
-                        )}
-                      >
-                        <span>
-                          <span class="block text-4xl font-light text-white">
-                            {participantCount}
-                          </span>
-                          <small
-                            class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                            >{vault.t('login.sentinel_card_stack_total')}</small
-                          >
-                        </span>
-                      </Select.Trigger>
-                      <Select.Content
-                        portalProps={{ disabled: true }}
-                        class="border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
-                      >
-                        {#each participantChoices as option (option)}
-                          <Select.Item
-                            value={String(option)}
-                            class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
-                            data-testid={`sentinel-participant-count-option-${option}`}
-                          >
-                            {option}
-                          </Select.Item>
-                        {/each}
-                      </Select.Content>
-                    </Select.Root>
-                  </span>
-                </div>
-                <div
-                  class="border border-[#7b8993] bg-[#192128] px-5 py-3 font-mono text-xs text-[#d7e0e6]"
-                >
-                  {vault.t('login.sentinel_onboarding_threshold_summary', {
-                    threshold: String(threshold),
-                    count: String(participantCount),
-                  })}
-                </div>
-              </div>
-            {:else}
-              <div
-                class="relative mt-10 grid min-h-72 place-items-center border border-white/10 bg-black/10 p-8 text-center"
-                data-testid="sentinel-onboarding-guidance"
+                {name.trim() || vault.t('login.sentinel_onboarding_not_set')}
+              </dd>
+            </div>
+            <div class="min-w-0 border border-white/10 bg-black/10 px-3 py-2">
+              <dt
+                class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
-                <div class="max-w-md">
-                  <span
-                    class="mx-auto grid size-16 place-items-center rounded-full border border-[#79dfff]/30 bg-[#79dfff]/5 text-[#79dfff] shadow-[0_0_50px_rgb(82_198_238/0.1)]"
-                  >
-                    {#if onboardingStage === 'identity'}
-                      <Cpu class="size-7" />
-                    {:else}
-                      <Plus class="size-7" />
-                    {/if}
-                  </span>
-                  <h2 class="mt-6 text-2xl font-semibold">
-                    {onboardingStage === 'identity'
-                      ? vault.t('login.sentinel_onboarding_create_keys_title')
-                      : vault.t('login.sentinel_onboarding_add_devices_title')}
-                  </h2>
-                  <p class="mt-3 text-sm leading-6 text-[#9eabb5]">
-                    {onboardingStage === 'identity'
-                      ? vault.t(
-                          'login.sentinel_onboarding_create_keys_description',
-                        )
-                      : vault.t(
-                          'login.sentinel_onboarding_add_devices_description',
-                        )}
-                  </p>
-                </div>
-              </div>
-            {/if}
-          {:else}
+                {vault.t('login.sentinel_card_stack_policy')}
+              </dt>
+              <dd
+                class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
+                data-testid="sentinel-onboarding-summary-policy"
+              >
+                {onboardingStage === 'identity' || onboardingStage === 'name'
+                  ? vault.t('login.sentinel_onboarding_not_set')
+                  : vault.t('login.sentinel_onboarding_threshold_summary', {
+                      threshold: String(threshold),
+                      count: String(participantCount),
+                    })}
+              </dd>
+            </div>
             <div
-              class="relative mt-10 space-y-5"
+              class="border border-white/10 bg-black/10 px-3 py-2 sm:min-w-28"
+            >
+              <dt
+                class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
+              >
+                {vault.t('login.sentinel_onboarding_devices_ready')}
+              </dt>
+              <dd
+                class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
+                data-testid="sentinel-onboarding-summary-devices"
+              >
+                {rosterCount} / {participantCount}
+              </dd>
+            </div>
+          </dl>
+
+          {#if status !== 'idle' && status !== 'delivering' && status !== 'complete'}
+            <div
+              class="relative mt-6 space-y-4"
               data-testid="sentinel-genesis-ceremony-step"
             >
               <div>
@@ -674,7 +845,7 @@
                 </p>
               </div>
               <div
-                class="border border-white/10 bg-black/10 p-5"
+                class="border border-white/10 bg-black/10 p-4"
                 data-testid="sentinel-genesis-request"
               >
                 <div class="flex items-start justify-between gap-4">
@@ -694,7 +865,7 @@
                   </span>
                 </div>
                 {#if request}
-                  <div class="mt-5 grid gap-4 sm:grid-cols-[150px_1fr]">
+                  <div class="mt-4 grid gap-4 sm:grid-cols-[150px_1fr]">
                     <EnrollmentQrCode
                       enrollmentLink={request}
                       loadingLabel={vault.t(
@@ -724,7 +895,7 @@
                 {/if}
               </div>
               <p
-                class="border border-white/10 bg-black/10 p-4 text-xs leading-5 text-[#aeb8c2]"
+                class="border border-white/10 bg-black/10 p-3 text-xs leading-5 text-[#aeb8c2]"
               >
                 {vault.t('login.sentinel_genesis_atomic_notice')}
               </p>
@@ -732,124 +903,49 @@
           {/if}
         </div>
 
-        <div class="mt-6 flex flex-wrap items-center justify-between gap-5">
-          {#if onboardingStage !== 'identity' || status !== 'idle'}
-            <label class="flex items-center gap-3 text-xs text-[#a4afb9]">
-              <span
-                class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
-                ><Check class="size-3" /></span
-              >
+        {#if onboardingStage !== 'identity' || status !== 'idle'}
+          <div class="mt-6 flex items-center gap-3 text-xs text-[#a4afb9]">
+            <span
+              class="grid size-6 place-items-center rounded border border-white/20 bg-white/5"
+              ><Check class="size-3" /></span
+            >
+            <span>
               {vault.t('login.sentinel_card_stack_shares_return')}
-            </label>
-          {:else}
-            <span></span>
-          {/if}
-          {#if status === 'idle' && onboardingStage === 'policy'}
-            <button
-              disabled={!policyValid || isBusy || actionBusy}
-              class="rounded-md bg-[#46e56f] px-8 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.22)] transition hover:-translate-y-0.5 hover:bg-[#6bed8c] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-25"
-              data-testid="sentinel-onboarding-continue-devices"
-              onclick={() => void continueToRoster()}
-            >
-              {vault.t('login.sentinel_onboarding_continue_with_devices', {
-                count: String(participantCount),
-              })}
-            </button>
-          {:else if status === 'collecting' || status === 'ready' || status === 'finalizing'}
-            <button
-              disabled={status !== 'ready' || isBusy || actionBusy}
-              class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
-              data-testid="sentinel-genesis-finalize"
-              onclick={() => void finalize()}
-            >
-              {#if actionBusy}<RefreshCw
-                  class="mr-2 inline size-4 animate-spin"
-                />{/if}
-              {vault.t('login.sentinel_genesis_finalize')}
-            </button>
-          {/if}
-        </div>
+            </span>
+          </div>
+        {/if}
 
         {#if status === 'delivering' || deliveries.length > 0}
           <div class="mt-8 space-y-4" data-testid="sentinel-genesis-deliveries">
-            {#if !syncProviderReady}
+            <h2 class="text-lg font-semibold">
+              {vault.t('login.sentinel_genesis_delivery_title')}
+            </h2>
+            <p class="text-sm text-[#aeb8c2]">
+              {vault.t('login.sentinel_genesis_delivery_description')}
+            </p>
+            {#each memberDeliveries as delivery, index (delivery.participantId)}
               <div
-                class="rounded-lg border border-[#79dfff]/25 bg-[#79dfff]/5 p-6"
+                class="grid gap-4 border border-white/10 bg-[#242d35] p-4 sm:grid-cols-[120px_1fr]"
+                data-testid="sentinel-genesis-delivery"
               >
-                <p
-                  class="font-mono text-[10px] tracking-[0.16em] text-[#79dfff] uppercase"
-                >
-                  {vault.t('login.sentinel_onboarding_sync_step')}
-                </p>
-                <h2 class="mt-2 text-xl font-semibold">
-                  {vault.t('login.sentinel_onboarding_sync_title')}
-                </h2>
-                <p
-                  class="mt-2 max-w-2xl text-sm leading-relaxed text-[#aeb8c2]"
-                >
-                  {vault.t('login.sentinel_onboarding_sync_description')}
-                </p>
-                <button
-                  type="button"
-                  class="mt-5 rounded-md bg-[#79dfff] px-6 py-3 text-xs font-bold tracking-wide text-[#101820] uppercase hover:bg-[#9be7ff]"
-                  data-testid="sentinel-choose-sync-provider"
-                  onclick={onChooseSyncProvider}
-                >
-                  {vault.t('login.sentinel_onboarding_sync_action')}
-                </button>
-              </div>
-            {:else}
-              <h2 class="text-lg font-semibold">
-                {vault.t('login.sentinel_genesis_delivery_title')}
-              </h2>
-              <p class="text-sm text-[#aeb8c2]">
-                {vault.t('login.sentinel_genesis_delivery_description')}
-              </p>
-              {#if preparingOnboardingLinks || !onboardingLinksReady}
-                <p
-                  class="flex items-center gap-2 text-sm text-[#aeb8c2]"
-                  role="status"
-                >
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('login.sentinel_onboarding_links_preparing')}
-                </p>
-              {:else}
-                {#each memberDeliveries as delivery, index (delivery.participantId)}
-                  <div
-                    class="grid gap-4 border border-white/10 bg-[#242d35] p-4 sm:grid-cols-[120px_1fr]"
-                    data-testid="sentinel-genesis-delivery"
-                  >
-                    <EnrollmentQrCode
-                      enrollmentLink={delivery.payload}
-                      loadingLabel={vault.t(
-                        'login.sentinel_genesis_qr_loading',
-                      )}
-                      dense
-                    />
-                    <div class="space-y-2">
-                      <p class="text-sm font-semibold">
-                        {vault.t('login.sentinel_genesis_delivery_participant')}
-                        {index + 2}
-                      </p>
-                      <textarea
-                        class="min-h-20 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white"
-                        readonly
-                        data-testid="sentinel-genesis-delivery-output"
-                        value={delivery.payload}></textarea>
-                    </div>
-                  </div>
-                {/each}
-                <div class="flex justify-end">
-                  <Button
-                    type="button"
-                    data-testid="sentinel-genesis-delivery-complete"
-                    onclick={() => void onCompleteDelivery()}
-                  >
-                    {vault.t('login.sentinel_onboarding_finish_action')}
-                  </Button>
+                <EnrollmentQrCode
+                  enrollmentLink={delivery.payload}
+                  loadingLabel={vault.t('login.sentinel_genesis_qr_loading')}
+                  dense
+                />
+                <div class="space-y-2">
+                  <p class="text-sm font-semibold">
+                    {vault.t('login.sentinel_genesis_delivery_participant')}
+                    {index + 2}
+                  </p>
+                  <textarea
+                    class="min-h-20 w-full border border-white/15 bg-[#192128] p-3 font-mono text-xs text-white"
+                    readonly
+                    data-testid="sentinel-genesis-delivery-output"
+                    value={delivery.payload}></textarea>
                 </div>
-              {/if}
-            {/if}
+              </div>
+            {/each}
           </div>
         {/if}
       </div>

@@ -75,8 +75,9 @@ item, add a corrected copy and delete the old one.
    PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup: the owner
    shares an invitation URL, each participant opens it and connects a protected
    device, then returns the signed response URL. After atomic creation, the
-   owner connects a sync provider and sends each member a distinct
-   device-addressed onboarding QR/link.
+   owner sends each member their device-addressed encrypted share and completes
+   the first quorum unlock. Sync providers remain optional and are added later
+   from inside the vault.
    Member devices connect only through those owner-issued invitations.
 3. Secrets are encrypted in Rust/WASM before anything is written to storage.
 4. The browser keeps an encrypted local copy. Sync providers are optional

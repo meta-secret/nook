@@ -262,53 +262,202 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-create-keys'),
     ).toBeVisible()
-    const headingBox = await page
-      .getByTestId('sentinel-dashboard-heading')
+    const initialSummary = page.getByTestId('sentinel-onboarding-vault-summary')
+    const initialSummaryDetails = page.getByTestId(
+      'sentinel-onboarding-summary-details',
+    )
+    await expect(initialSummary).toHaveAttribute('data-layout', 'compact')
+    await expect(page.getByTestId('sentinel-onboarding-guidance')).toHaveCount(
+      0,
+    )
+    await expect(
+      page.getByTestId('sentinel-onboarding-summary-name'),
+    ).toHaveText('NOT SET')
+    await expect(
+      page.getByTestId('sentinel-onboarding-summary-policy'),
+    ).toHaveText('NOT SET')
+    const initialSummaryDetailsBox = await initialSummaryDetails.boundingBox()
+    if (!initialSummaryDetailsBox) {
+      throw new Error('Initial Sentinel summary must have a layout box')
+    }
+    expect(initialSummaryDetailsBox.height).toBeLessThan(90)
+    const brandBox = await page
+      .getByTestId('sentinel-dashboard-brand')
+      .boundingBox()
+    const backButtonBox = await page
+      .getByTestId('sentinel-dashboard-back')
       .boundingBox()
     const progressBox = await page
       .getByTestId('sentinel-onboarding-progress')
       .boundingBox()
-    if (!headingBox || !progressBox) {
-      throw new Error('Sentinel heading and progress must have layout boxes')
+    if (!brandBox || !backButtonBox || !progressBox) {
+      throw new Error('Sentinel masthead and progress must have layout boxes')
     }
-    expect(headingBox.y).toBeLessThan(progressBox.y)
+    expect(brandBox.y).toBeLessThan(progressBox.y)
+    expect(brandBox.y).toBeLessThan(96)
+    expect(brandBox.height).toBeLessThan(64)
+    expect(progressBox.y - (brandBox.y + brandBox.height)).toBeLessThanOrEqual(
+      24,
+    )
+    expect(backButtonBox.x).toBeGreaterThan(brandBox.x + brandBox.width)
+    expect(
+      Math.abs(
+        backButtonBox.y +
+          backButtonBox.height / 2 -
+          (brandBox.y + brandBox.height / 2),
+      ),
+    ).toBeLessThan(8)
     await expect(page.getByTestId('sentinel-genesis-name-input')).toHaveCount(0)
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
     await page.getByTestId('sentinel-onboarding-create-keys').click()
-    await expect(page.getByTestId('sentinel-genesis-policy-step')).toBeVisible({
+    await expect(page.getByTestId('sentinel-genesis-name-step')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await expect(page.getByTestId('sentinel-genesis-policy-step')).toHaveCount(
+      0,
+    )
+    const actionsColumn = page.getByTestId('sentinel-onboarding-actions-column')
+    const summaryColumn = page.getByTestId('sentinel-onboarding-summary-column')
+    const nameStep = actionsColumn.getByTestId('sentinel-genesis-name-step')
+    const vaultSummary = summaryColumn.getByTestId(
+      'sentinel-onboarding-vault-summary',
+    )
+    await expect(nameStep).toBeVisible()
+    await expect(nameStep).toContainText('Name vault')
+    await expect(nameStep).not.toContainText('login.')
+    await expect(
+      page.getByTestId('sentinel-onboarding-continue-policy'),
+    ).toHaveText('Continue')
+    await expect(vaultSummary).toBeVisible()
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
+    ).toContainText('NOT SET')
+    await expect(summaryColumn.locator('input, [role="combobox"]')).toHaveCount(
+      0,
+    )
+    const nameStepBox = await nameStep.boundingBox()
+    const vaultSummaryBox = await vaultSummary.boundingBox()
+    const actionsColumnBox = await actionsColumn.boundingBox()
+    const summaryColumnBox = await summaryColumn.boundingBox()
+    if (
+      !nameStepBox ||
+      !vaultSummaryBox ||
+      !actionsColumnBox ||
+      !summaryColumnBox
+    ) {
+      throw new Error('Sentinel setup columns must have layout boxes')
+    }
+    expect(nameStepBox.x).toBeLessThan(vaultSummaryBox.x)
+    expect(summaryColumnBox.width).toBeGreaterThan(actionsColumnBox.width)
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
     ).toHaveCount(0)
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
+    ).toContainText('NOT SET')
     await page
       .getByTestId('sentinel-genesis-name-input')
       .fill('Ordered Sentinel')
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
+    ).toHaveText('Ordered Sentinel')
+    await page.getByTestId('sentinel-onboarding-continue-policy').click()
+    await expect(page.getByTestId('sentinel-genesis-name-step')).toHaveCount(0)
+    const createKeysCard = actionsColumn.getByTestId(
+      'sentinel-onboarding-create-keys',
+    )
+    const nameSummaryCard = actionsColumn.getByTestId(
+      'sentinel-onboarding-name-summary-card',
+    )
+    await expect(nameSummaryCard).toBeVisible()
+    await expect(nameSummaryCard).toContainText('Ordered Sentinel')
+    await expect(nameSummaryCard).toBeEnabled()
+    const policyStep = actionsColumn.getByTestId('sentinel-genesis-policy-step')
+    await expect(policyStep).toBeVisible()
+    const createKeysCardBox = await createKeysCard.boundingBox()
+    const nameSummaryCardBox = await nameSummaryCard.boundingBox()
+    const policyStepBox = await policyStep.boundingBox()
+    if (!createKeysCardBox || !nameSummaryCardBox || !policyStepBox) {
+      throw new Error('Sentinel action sequence must have layout boxes')
+    }
+    expect(policyStepBox.x).toBeLessThan(vaultSummaryBox.x)
+    expect(nameSummaryCardBox.y).toBeGreaterThan(createKeysCardBox.y)
+    expect(policyStepBox.y).toBeGreaterThan(nameSummaryCardBox.y)
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-3').click()
     await page.getByTestId('sentinel-genesis-participant-count').click()
-    await page.getByTestId('sentinel-participant-count-option-2').click()
+    const participantCountOptions = page.locator(
+      '[data-testid^="sentinel-participant-count-option-"]',
+    )
+    await expect(participantCountOptions).toHaveCount(3)
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-2'),
+    ).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-3'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-4'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-5'),
+    ).toBeVisible()
+    await expect(
+      page.getByTestId('sentinel-participant-count-option-6'),
+    ).toHaveCount(0)
+    await page.getByTestId('sentinel-participant-count-option-5').click()
     await expect(
       page.getByTestId('sentinel-genesis-threshold'),
     ).toHaveAttribute('data-value', '3')
     await expect(
-      page.getByTestId('sentinel-onboarding-continue-devices'),
-    ).toBeDisabled()
+      page.getByTestId('sentinel-genesis-participant-count'),
+    ).toHaveAttribute('data-value', '5')
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-2').click()
+    await expect(
+      summaryColumn.getByTestId('sentinel-onboarding-summary-policy'),
+    ).toContainText('2 OF 5 SHARES REQUIRED')
+    await expect(
+      actionsColumn.getByTestId('sentinel-onboarding-continue-devices'),
+    ).toBeEnabled()
     await page.getByTestId('sentinel-onboarding-continue-devices').click()
     await expect(
       page.getByTestId('sentinel-genesis-response-input'),
-    ).toBeVisible()
+    ).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-genesis-authentication-instructions'),
+    ).toContainText('Open the authentication URL')
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(vaultSummary).toHaveAttribute('data-layout', 'compact')
+    await expect(nameSummaryCard).toBeVisible()
+    await expect(nameSummaryCard).toContainText('Ordered Sentinel')
+    await expect(nameSummaryCard).toBeDisabled()
     await expect(
       page.getByTestId('sentinel-onboarding-devices-remaining'),
-    ).toContainText('1')
+    ).toContainText('4')
     await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
+    await expect(
+      actionsColumn.getByTestId('sentinel-genesis-finalize'),
+    ).toBeVisible()
+    const summaryDetails = summaryColumn.getByTestId(
+      'sentinel-onboarding-summary-details',
+    )
+    const participantRequest = summaryColumn.getByTestId(
+      'sentinel-genesis-request',
+    )
+    await expect(participantRequest).toBeVisible()
+    const compactSummaryBox = await summaryDetails.boundingBox()
+    const participantRequestBox = await participantRequest.boundingBox()
+    const collectingSummaryBox = await vaultSummary.boundingBox()
+    if (!compactSummaryBox || !participantRequestBox || !collectingSummaryBox) {
+      throw new Error('Sentinel collecting summary must have layout boxes')
+    }
+    expect(compactSummaryBox.height).toBeLessThan(90)
+    expect(participantRequestBox.y - collectingSummaryBox.y).toBeLessThan(360)
     await expect(
       page.getByTestId('sentinel-genesis-participant-fields'),
     ).toBeVisible()

@@ -51,8 +51,6 @@
     onAddParticipant,
     onFinalize,
     onCompleteDelivery,
-    onChooseSyncProvider,
-    onPrepareOnboardingLinks,
   }: {
     vault: VaultState
     name: string
@@ -70,8 +68,6 @@
     onAddParticipant: (payload: string) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
-    onChooseSyncProvider: () => void
-    onPrepareOnboardingLinks: () => void | Promise<void>
   } = $props()
 
   let policyStep = $state<PolicyStep>('total')
@@ -79,17 +75,10 @@
   let actionBusy = $state(false)
   let copied = $state(false)
   let outputElement = $state<HTMLDivElement>()
-  let preparingOnboardingLinks = $state(false)
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.participantId !== vault.deviceId),
   )
-  const syncProviderReady = $derived(vault.syncProviders.length > 0)
-  const onboardingLinksReady = $derived(
-    memberDeliveries.length > 0 &&
-      memberDeliveries.every((delivery) => delivery.payload.startsWith('http')),
-  )
-
   const participantChoices = Array.from({ length: 15 }, (_, index) => index + 2)
   const policyValid = $derived(
     name.trim().length > 0 &&
@@ -195,20 +184,6 @@
       vault.errorMsg = vault.t('login.sentinel_genesis_copy_failed')
     }
   }
-
-  $effect(() => {
-    if (
-      status === 'delivering' &&
-      syncProviderReady &&
-      !onboardingLinksReady &&
-      !preparingOnboardingLinks
-    ) {
-      preparingOnboardingLinks = true
-      void Promise.resolve(onPrepareOnboardingLinks()).finally(() => {
-        preparingOnboardingLinks = false
-      })
-    }
-  })
 </script>
 
 <div
@@ -401,60 +376,47 @@
               class="mt-7 border border-[#83e273] bg-[#0c190b] p-5 text-[#a5f58f]"
               data-testid="sentinel-genesis-deliveries"
             >
-              {#if !syncProviderReady}
-                <p class="font-bold">
-                  {vault.t('login.sentinel_onboarding_sync_title')}
-                </p>
-                <p class="mt-2 text-xs text-[#6ca85e]">
-                  {vault.t('login.sentinel_onboarding_sync_description')}
-                </p>
-                <button
-                  class="mt-5 border border-[#83e273] px-5 py-3 text-xs"
-                  data-testid="sentinel-choose-sync-provider"
-                  onclick={onChooseSyncProvider}
-                >
-                  {vault.t('login.sentinel_onboarding_sync_action')}
-                </button>
-              {:else if preparingOnboardingLinks || !onboardingLinksReady}
-                <p class="flex items-center gap-2">
-                  <RefreshCw class="size-4 animate-spin" />
-                  {vault.t('login.sentinel_onboarding_links_preparing')}
-                </p>
-              {:else}
-                <p class="flex items-center gap-2 font-bold">
-                  <Check class="size-4" />
-                  {vault.t('login.sentinel_genesis_delivery_title')}
-                </p>
-                {#each memberDeliveries as delivery, index (delivery.participantId)}
-                  <div class="mt-4 grid gap-3 sm:grid-cols-[110px_1fr]">
-                    <EnrollmentQrCode
-                      enrollmentLink={delivery.payload}
-                      loadingLabel={vault.t(
-                        'login.sentinel_genesis_qr_loading',
-                      )}
-                      dense
-                    />
-                    <div>
-                      <p class="text-xs">
-                        {vault.t('login.sentinel_genesis_delivery_participant')}
-                        {index + 2}
-                      </p>
-                      <textarea
-                        class="mt-2 min-h-20 w-full border border-[#22321f] bg-[#030503] p-3 text-xs"
-                        readonly
-                        data-testid="sentinel-genesis-delivery-output"
-                        value={delivery.payload}></textarea>
-                    </div>
+              <p class="flex items-center gap-2 font-bold">
+                <Check class="size-4" />
+                {vault.t('login.sentinel_genesis_delivery_title')}
+              </p>
+              <p class="mt-2 text-xs text-[#6ca85e]">
+                {vault.t('login.sentinel_genesis_delivery_description')}
+              </p>
+              {#each memberDeliveries as delivery, index (delivery.participantId)}
+                <div class="mt-4 grid gap-3 sm:grid-cols-[110px_1fr]">
+                  <EnrollmentQrCode
+                    enrollmentLink={delivery.payload}
+                    loadingLabel={vault.t('login.sentinel_genesis_qr_loading')}
+                    dense
+                  />
+                  <div>
+                    <p class="text-xs">
+                      {vault.t('login.sentinel_genesis_delivery_participant')}
+                      {index + 2}
+                    </p>
+                    <textarea
+                      class="mt-2 min-h-20 w-full border border-[#22321f] bg-[#030503] p-3 text-xs"
+                      readonly
+                      data-testid="sentinel-genesis-delivery-output"
+                      value={delivery.payload}></textarea>
                   </div>
-                {/each}
-                <button
-                  class="mt-5 border border-[#83e273] px-5 py-3 text-xs"
-                  data-testid="sentinel-genesis-delivery-complete"
-                  onclick={() => void onCompleteDelivery()}
-                >
-                  {vault.t('login.sentinel_onboarding_finish_action')}
-                </button>
-              {/if}
+                </div>
+              {/each}
+              <p class="mt-5 font-bold">
+                {vault.t('login.sentinel_onboarding_vault_ready_title')}
+              </p>
+              <p class="mt-2 text-xs text-[#6ca85e]">
+                {vault.t('login.sentinel_onboarding_vault_ready_description')}
+              </p>
+              <button
+                class="mt-5 border border-[#83e273] px-5 py-3 text-xs disabled:opacity-30"
+                data-testid="sentinel-genesis-delivery-complete"
+                disabled={memberDeliveries.length === 0}
+                onclick={() => void onCompleteDelivery()}
+              >
+                {vault.t('login.sentinel_onboarding_finish_action')}
+              </button>
             </div>
           {/if}
         </div>
@@ -493,7 +455,7 @@
         <div class="mt-8 border-t border-[#22321f] pt-5">
           <p class="text-[#456440]">WORKFLOW</p>
           <ol class="mt-4 space-y-4">
-            {#each ['Name draft', 'Set N / K', 'Collect public keys', 'Seal vault'] as item, index (item)}
+            {#each ['Name draft', 'Set N / K', vault.t('login.sentinel_genesis_collect_title'), 'Seal vault'] as item, index (item)}
               <li
                 class={`flex items-center gap-3 ${index + 1 < workflowStage ? 'text-[#83e273]' : index + 1 === workflowStage ? 'text-[#d9c365]' : 'text-[#385334]'}`}
               >
