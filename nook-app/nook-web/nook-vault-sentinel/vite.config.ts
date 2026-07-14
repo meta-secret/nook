@@ -8,7 +8,6 @@ import { vaultAppHeaders } from "../nook-web-shared/src/vault-app/security-heade
 const spaPaths = new Set([
   "/app-logs",
   "/logs",
-  "/migrate",
   "/privacy",
   "/terms",
 ]);
@@ -46,7 +45,7 @@ function sentinelSpa(): Plugin {
       const outDir = join(process.cwd(), "dist");
       const shell = join(outDir, "index.html");
       copyFileSync(shell, join(outDir, "404.html"));
-      for (const alias of ["app-logs", "logs", "migrate"]) {
+      for (const alias of ["app-logs", "logs"]) {
         copyFileSync(shell, join(outDir, `${alias}.html`));
       }
       writeFileSync(join(outDir, "_headers"), vaultAppHeaders());

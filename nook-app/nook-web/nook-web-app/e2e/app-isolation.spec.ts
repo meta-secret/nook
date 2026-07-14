@@ -12,6 +12,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId('login-create-vault-chooser')).toBeVisible({
     timeout: UI_TIMEOUT_MS * 2,
   })
+  await expect(page.getByTestId('migrate-legacy-vaults-link')).toHaveCount(0)
 })
 
 test('exposes only the project capability and rejects the opposite vault type', async ({

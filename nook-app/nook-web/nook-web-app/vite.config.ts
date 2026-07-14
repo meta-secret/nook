@@ -74,10 +74,6 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
       const outDir = join(process.cwd(), outputDirectory)
       if (appKind === 'site') {
         copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
-        copyFileSync(
-          join(outDir, 'migration/index.html'),
-          join(outDir, 'migration.html'),
-        )
         return
       }
       const appShell = join(outDir, 'app/index.html')
@@ -91,7 +87,6 @@ function spaFallback(appKind: string, outputDirectory: string): Plugin {
           copyFileSync(appShell, join(outDir, `${alias}.html`))
         }
       }
-      copyFileSync(appShell, join(outDir, 'migrate.html'))
     },
   }
 }
@@ -144,13 +139,10 @@ export default defineConfig(({ mode }) => {
   const appKind =
     env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
   const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'
-  const wasmApplication =
-    appKind === 'site' ? 'legacy-migration' : 'unified-development'
   const input: Record<string, string> =
     appKind === 'site'
       ? {
           landing: join(process.cwd(), 'index.html'),
-          migration: join(process.cwd(), 'migration/index.html'),
         }
       : {
           landing: join(process.cwd(), 'index.html'),
@@ -161,7 +153,7 @@ export default defineConfig(({ mode }) => {
     base: viteBase ?? '/',
     define: {
       __NOOK_APP_KIND__: JSON.stringify(appKind),
-      __NOOK_WASM_APPLICATION__: JSON.stringify(wasmApplication),
+      __NOOK_WASM_APPLICATION__: JSON.stringify('unified-development'),
     },
     plugins: [
       tailwindcss(),

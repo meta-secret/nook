@@ -13,7 +13,6 @@
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import ExtensionConnectConsent from '$lib/components/ExtensionConnectConsent.svelte'
-  import VaultMigrationPage from '$lib/components/VaultMigrationPage.svelte'
   import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
   import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
   import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
@@ -87,9 +86,6 @@
       ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
       : false,
   )
-  let migrationRoute = $state<boolean>(
-    typeof window !== 'undefined' && window.location.pathname === '/migrate',
-  )
   let extensionConnectRequest = $state<ExtensionConnectRequest | undefined>(
     typeof window !== 'undefined' && SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
@@ -120,7 +116,6 @@
     extensionConnectRequest = SUPPORTS_EXTENSION
       ? extensionConnectRequestFromLocation(window.location)
       : undefined
-    migrationRoute = window.location.pathname === '/migrate'
     if (APP_KIND !== 'simple') {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
       if (invitationRequest) sentinelInvitationRequest = invitationRequest
@@ -163,7 +158,6 @@
     appLogsPage = false
     extensionConnectRoute = false
     extensionConnectRequest = undefined
-    migrationRoute = false
   }
 
   function navigateToSiblingApp(event: MouseEvent) {
@@ -246,10 +240,6 @@
       document.title = 'Approve extension · Nook'
       return
     }
-    if (migrationRoute) {
-      document.title = vault.t('migration.page_title')
-      return
-    }
     document.title = IS_SENTINEL_APP ? 'Nook Sentinel Vault' : 'Nook Simple Vault'
   })
 
@@ -298,7 +288,7 @@
     secretsAddOpen ? 'py-4 sm:py-8' : 'pb-28 pt-4 sm:py-8',
   )
   const shellSpacing = $derived(
-    legalPage || logsPage || extensionConnectRoute || migrationRoute
+    legalPage || logsPage || extensionConnectRoute
       ? 'py-5 sm:py-6'
       : vault.isAuthenticated
         ? authenticatedShellSpacing
@@ -463,13 +453,6 @@
 
           {#if siblingAppUrl()}
             <a
-              href="/migrate"
-              class="hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground xl:inline-flex"
-              data-testid="migrate-legacy-vaults-link"
-            >
-              {vault.t('app.migrate_legacy')}
-            </a>
-            <a
               href={siblingAppUrl()}
               class="hidden h-10 items-center rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:inline-flex"
               data-testid="sibling-vault-app-link"
@@ -526,7 +509,7 @@
             >
           </a>
 
-          {#if legalPage || logsPage || extensionConnectRoute || migrationRoute}
+          {#if legalPage || logsPage || extensionConnectRoute}
             <Button
               type="button"
               variant="outline"
@@ -572,8 +555,6 @@
         <LogsPage onClose={navigateHome} />
       {:else if legalPage}
         <LegalDocumentPage pageId={legalPage} onClose={navigateHome} />
-      {:else if migrationRoute}
-        <VaultMigrationPage {vault} appKind={APP_KIND} />
       {:else if vault.helpOpen}
         <div class="space-y-4">
           <HelpPage {vault} onClose={() => vault.closeHelp()} {colorMode} />
@@ -890,7 +871,7 @@
       {/if}
     </div>
 
-    {#if !legalPage && !logsPage && !extensionConnectRoute && !migrationRoute}
+    {#if !legalPage && !logsPage && !extensionConnectRoute}
       <SiteFooter />
     {/if}
 
