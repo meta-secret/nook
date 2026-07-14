@@ -487,7 +487,7 @@
                 <span
                   class="block font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
                 >
-                  {vault.t('login.sentinel_onboarding_name_step')}
+                  {vault.t('login.landing_step_name')}
                 </span>
                 <span
                   class="mt-3 block text-[10px] tracking-[0.14em] text-[#b5c0c9] uppercase"
@@ -508,7 +508,7 @@
                 data-testid="sentinel-onboarding-continue-policy"
                 onclick={continueToPolicy}
               >
-                {vault.t('login.sentinel_onboarding_continue_to_policy')}
+                {vault.t('login.create_wizard_continue')}
               </button>
             </div>
           </section>

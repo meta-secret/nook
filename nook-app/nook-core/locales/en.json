@@ -170,8 +170,6 @@
     "sentinel_onboarding_device_already_added": "This device key is already in the roster.",
     "sentinel_onboarding_continue_with_devices": "Continue with {count} devices",
     "sentinel_onboarding_devices_remaining": "Device keys remaining: {count}",
-    "sentinel_onboarding_name_step": "STEP 02 · NAME VAULT",
-    "sentinel_onboarding_continue_to_policy": "Continue to policy",
     "sentinel_onboarding_policy_step": "STEP 02 · DEFINE SHARES",
     "sentinel_onboarding_add_devices_title": "Add the devices you trust",
     "sentinel_onboarding_add_devices_description": "Every participant creates keys on their own device. Signed public keys are verified before they join the vault.",

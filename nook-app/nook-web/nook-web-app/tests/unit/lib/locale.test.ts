@@ -98,8 +98,6 @@ describe('locale', () => {
       'architecture_modes.sentinel_ceremony_paste_peer',
       'architecture_modes.sentinel_ceremony_unlock',
       'architecture_modes.sentinel_password_forbidden',
-      'login.sentinel_onboarding_name_step',
-      'login.sentinel_onboarding_continue_to_policy',
       'errors.validation.shared_joiner_identity_required',
       'errors.validation.shared_joiner_identity_invalid',
       'errors.validation.shared_storage_target_required',

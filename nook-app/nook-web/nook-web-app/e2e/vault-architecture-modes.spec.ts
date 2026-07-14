@@ -295,6 +295,11 @@ test.describe('vault architecture modes', () => {
       'sentinel-onboarding-vault-summary',
     )
     await expect(nameStep).toBeVisible()
+    await expect(nameStep).toContainText('Name vault')
+    await expect(nameStep).not.toContainText('login.')
+    await expect(
+      page.getByTestId('sentinel-onboarding-continue-policy'),
+    ).toHaveText('Continue')
     await expect(vaultSummary).toBeVisible()
     await expect(
       summaryColumn.getByTestId('sentinel-onboarding-summary-name'),
