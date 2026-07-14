@@ -298,9 +298,7 @@ test.describe('legal pages', () => {
     expect(robots).toContain('Disallow: /app/')
     expect(robots).toContain('Sitemap: https://nokey.sh/sitemap.xml')
 
-    const sitemapResponse = await request.get(
-      `${PUBLIC_SITE_PATH}/sitemap.xml`,
-    )
+    const sitemapResponse = await request.get(`${PUBLIC_SITE_PATH}/sitemap.xml`)
     expect(sitemapResponse.ok()).toBe(true)
     const sitemap = await sitemapResponse.text()
     expect(sitemap).toContain('<loc>https://nokey.sh/</loc>')
