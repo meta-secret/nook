@@ -803,27 +803,27 @@
             class="relative mt-5 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]"
             data-testid="sentinel-onboarding-summary-details"
           >
-            <div class="min-w-0 border border-white/10 bg-black/10 p-3">
+            <div class="min-w-0 border border-white/10 bg-black/10 px-3 py-2">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
                 {vault.t('login.sentinel_card_stack_module_identity')}
               </dt>
               <dd
-                class="mt-2 truncate text-sm font-semibold text-[#d7e0e6]"
+                class="mt-1 truncate text-sm leading-tight font-semibold text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-name"
               >
                 {name.trim() || vault.t('login.sentinel_onboarding_not_set')}
               </dd>
             </div>
-            <div class="min-w-0 border border-white/10 bg-black/10 p-3">
+            <div class="min-w-0 border border-white/10 bg-black/10 px-3 py-2">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
                 {vault.t('login.sentinel_card_stack_policy')}
               </dt>
               <dd
-                class="mt-2 font-mono text-sm text-[#d7e0e6]"
+                class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-policy"
               >
                 {onboardingStage === 'identity' || onboardingStage === 'name'
@@ -834,14 +834,16 @@
                     })}
               </dd>
             </div>
-            <div class="border border-white/10 bg-black/10 p-3 sm:min-w-28">
+            <div
+              class="border border-white/10 bg-black/10 px-3 py-2 sm:min-w-28"
+            >
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
                 {vault.t('login.sentinel_onboarding_devices_ready')}
               </dt>
               <dd
-                class="mt-2 font-mono text-sm text-[#d7e0e6]"
+                class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-devices"
               >
                 {rosterCount} / {participantCount}
