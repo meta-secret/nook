@@ -76,7 +76,10 @@ COPY nook-app/.config .config
 # can reuse the nook-auth2 clippy and coverage-test layers; a nook-wasm-only change can reuse both.
 COPY nook-app/nook-auth2 nook-auth2
 RUN cargo clippy -p nook-auth2 --all-targets -- -D warnings
-RUN cargo llvm-cov nextest --profile ci -p nook-auth2 --no-report
+# --no-clean keeps the manifest-keyed instrumented dependencies warmed above. cargo-llvm-cov does
+# not allow --no-clean with --no-report, so this first source-level run emits its interim report;
+# the nook-core run below then extends the same coverage session and enforces the combined floor.
+RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2
 
 COPY nook-app/nook-core nook-core
 # Docker COPY preserves source mtimes, while the inherited target directory can

@@ -202,6 +202,13 @@ fn coverage_dependencies_are_warmed_in_one_instrumented_build() {
     assert!(warmup.contains(
         "cargo llvm-cov nextest --no-report --profile ci -p nook-auth2 -p nook-core --no-tests=pass"
     ));
+    assert!(
+        dockerfile.contains("RUN cargo llvm-cov nextest --no-clean --profile ci -p nook-auth2")
+    );
+    assert!(
+        dockerfile
+            .contains("cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only")
+    );
 }
 
 #[test]
