@@ -363,7 +363,7 @@ impl NookVaultManager {
                     .to_owned(),
             ));
         }
-        self.capture_vault_unlock(content);
+        self.capture_vault_unlock(content)?;
         let format = nook_core::detect_stored_format(content)?;
         let mut records = nook_core::deserialize_stored(content, format)?;
         records.retain(|record| !nook_core::is_join_stored_record(record));

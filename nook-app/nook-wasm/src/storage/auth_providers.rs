@@ -86,6 +86,57 @@ async fn write_snapshot(snapshot: &AuthProvidersSnapshotData) -> Result<(), Nook
     Ok(())
 }
 
+pub(crate) async fn export_raw_auth_snapshot_for_store_ids(
+    store_ids: &[String],
+) -> Result<Option<String>, NookError> {
+    let raw = read_raw_snapshot().await?;
+    if raw.is_null() {
+        return Ok(None);
+    }
+    let mut snapshot = nook_core::normalize_auth_snapshot(&raw).snapshot;
+    snapshot.providers.retain(|provider| {
+        provider
+            .store_id
+            .as_ref()
+            .is_some_and(|store_id| store_ids.contains(store_id))
+    });
+    snapshot.active_vault_store_id = snapshot
+        .active_vault_store_id
+        .filter(|store_id| store_ids.contains(store_id));
+    serde_json::to_string(&snapshot)
+        .map(Some)
+        .map_err(|error| NookError::Serialization(error.to_string()))
+}
+
+pub(crate) async fn import_raw_auth_snapshot_json(raw_json: &str) -> Result<(), NookError> {
+    let snapshot = parse_raw_auth_snapshot_json(raw_json)?;
+    write_snapshot(&snapshot).await
+}
+
+fn parse_raw_auth_snapshot_json(raw_json: &str) -> Result<AuthProvidersSnapshotData, NookError> {
+    serde_json::from_str(raw_json).map_err(|error| NookError::Serialization(error.to_string()))
+}
+
+pub(crate) fn validate_raw_auth_snapshot_for_store_ids(
+    raw_json: &str,
+    store_ids: &[String],
+) -> Result<(), NookError> {
+    let snapshot = parse_raw_auth_snapshot_json(raw_json)?;
+    if snapshot.providers.iter().any(|provider| {
+        provider
+            .store_id
+            .as_ref()
+            .is_none_or(|store_id| !store_ids.contains(store_id))
+    }) || snapshot
+        .active_vault_store_id
+        .as_ref()
+        .is_some_and(|store_id| !store_ids.contains(store_id))
+    {
+        return Err(nook_core::ValidationError::MigrationVaultTypeMismatch.into());
+    }
+    Ok(())
+}
+
 fn legacy_local_storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok().flatten()
 }

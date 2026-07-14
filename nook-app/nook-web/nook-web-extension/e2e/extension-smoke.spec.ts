@@ -125,10 +125,51 @@ async function hasStoredLoginSummary(context: BrowserContext) {
   })
 }
 
+async function storedLoginSummaryCount(context: BrowserContext) {
+  const storage = await readExtensionStorage(context)
+  return Object.values(storage).filter((value) => {
+    const summary = value as StoredPasswordSummary
+    return (
+      summary.passwordFieldCount === 1 &&
+      summary.usernameFieldCount === 1 &&
+      summary.formCount === 1
+    )
+  }).length
+}
+
+async function sendRuntimeMessageFromPopup(popupPage: Page, message: unknown) {
+  return popupPage.evaluate(
+    (runtimeMessage) =>
+      new Promise<unknown>((resolve, reject) => {
+        const browserGlobal = globalThis as unknown as {
+          chrome: {
+            runtime: {
+              lastError?: { message?: string }
+              sendMessage(
+                message: unknown,
+                callback: (response?: unknown) => void,
+              ): void
+            }
+          }
+        }
+
+        browserGlobal.chrome.runtime.sendMessage(runtimeMessage, (response) => {
+          if (browserGlobal.chrome.runtime.lastError?.message) {
+            reject(new Error(browserGlobal.chrome.runtime.lastError.message))
+            return
+          }
+          resolve(response)
+        })
+      }),
+    message,
+  )
+}
+
 async function sendPairingGrantFromPopup(popupPage: Page) {
   const message: ExtensionPairingApprovedMessage = {
     type: 'nook:extension-pairing-approved',
     payload: {
+      vaultType: 'simple',
       deviceId: 'device-e2e',
       deviceLabel: 'Nook Extension - Chromium test profile',
       vaultStoreId: 'store-e2e',
@@ -146,40 +187,15 @@ async function sendPairingGrantFromPopup(popupPage: Page) {
     },
   }
 
-  await popupPage.evaluate(
-    (grantMessage) =>
-      new Promise<void>((resolve, reject) => {
-        const browserGlobal = globalThis as unknown as {
-          chrome: {
-            runtime: {
-              lastError?: { message?: string }
-              sendMessage(
-                message: unknown,
-                callback: (response?: unknown) => void,
-              ): void
-            }
-          }
-        }
-
-        browserGlobal.chrome.runtime.sendMessage(grantMessage, (response) => {
-          if (browserGlobal.chrome.runtime.lastError?.message) {
-            reject(new Error(browserGlobal.chrome.runtime.lastError.message))
-            return
-          }
-          if (
-            typeof response === 'object' &&
-            response !== null &&
-            'ok' in response &&
-            (response as { ok?: unknown }).ok === true
-          ) {
-            resolve()
-            return
-          }
-          reject(new Error('Pairing grant was not accepted by extension.'))
-        })
-      }),
-    message,
-  )
+  const response = await sendRuntimeMessageFromPopup(popupPage, message)
+  if (
+    typeof response !== 'object' ||
+    response === null ||
+    !('ok' in response) ||
+    (response as { ok?: unknown }).ok !== true
+  ) {
+    throw new Error('Pairing grant was not accepted by extension.')
+  }
 }
 
 test('loads the extension and scans a login form from the popup', async ({
@@ -211,6 +227,17 @@ test('loads the extension and scans a login form from the popup', async ({
       })
       .toBe(true)
 
+    await context.route('https://sentinel.nokey.sh/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: '<form><input autocomplete="username"><input type="password"></form>',
+      }),
+    )
+    const sentinelPage = await context.newPage()
+    await sentinelPage.goto('https://sentinel.nokey.sh/')
+    await sentinelPage.waitForTimeout(300)
+    expect(await storedLoginSummaryCount(context)).toBe(1)
+
     const serviceWorker = await getServiceWorker(context)
     const extensionId = new URL(serviceWorker.url()).host
     expect(extensionId).not.toHaveLength(0)
@@ -228,6 +255,32 @@ test('loads the extension and scans a login form from the popup', async ({
       popupPage.getByText('separate passkey-protected extension device'),
     ).toBeVisible()
     await expect(popupPage.getByTestId('set-up-extension-btn')).toBeVisible()
+
+    const forgedSentinelResponse = await sendRuntimeMessageFromPopup(
+      popupPage,
+      {
+        type: 'nook:extension-pairing-approved',
+        payload: {
+          vaultType: 'sentinel',
+          deviceId: 'sentinel-device-e2e',
+          deviceLabel: 'Forged Sentinel device',
+          vaultStoreId: 'sentinel-store-e2e',
+          vaultName: 'Sentinel safe',
+          approvedAt: '2026-07-07T00:00:00.000Z',
+          scopes: ['vault-access'],
+          providers: [],
+        },
+      },
+    )
+    expect(forgedSentinelResponse).toEqual({
+      ok: false,
+      reason: 'invalid-pairing-grant',
+    })
+    expect(
+      (await readExtensionStorage(context))[
+        'nook:extension-pairing-grant:sentinel-store-e2e'
+      ],
+    ).toBeUndefined()
 
     await sendPairingGrantFromPopup(popupPage)
     await expect

@@ -65,6 +65,88 @@ pub enum VaultType {
     Sentinel,
 }
 
+/// Compile-time application capability presented to vault domain operations.
+///
+/// Production browser artifacts use exactly one of `Simple`, `Sentinel`, or
+/// `Extension`. `LegacyMigration` may classify and transfer encrypted material
+/// but can never open a vault session. `UnifiedDevelopment` exists only for the
+/// local/test bundle and is never emitted as a production web artifact.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum VaultApplication {
+    #[default]
+    UnifiedDevelopment,
+    Simple,
+    Sentinel,
+    Extension,
+    LegacyMigration,
+}
+
+impl VaultApplication {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::UnifiedDevelopment => "unified-development",
+            Self::Simple => "simple",
+            Self::Sentinel => "sentinel",
+            Self::Extension => "extension",
+            Self::LegacyMigration => "legacy-migration",
+        }
+    }
+
+    pub fn parse(value: &str) -> ValidationResult<Self> {
+        match value {
+            "unified-development" => Ok(Self::UnifiedDevelopment),
+            "simple" => Ok(Self::Simple),
+            "sentinel" => Ok(Self::Sentinel),
+            "extension" => Ok(Self::Extension),
+            "legacy-migration" => Ok(Self::LegacyMigration),
+            other => Err(ValidationError::UnknownVaultApplication {
+                application: other.to_owned(),
+            }),
+        }
+    }
+
+    #[must_use]
+    pub const fn permits_vault_type(self, vault_type: VaultType) -> bool {
+        match self {
+            Self::UnifiedDevelopment | Self::LegacyMigration => true,
+            Self::Simple | Self::Extension => matches!(vault_type, VaultType::Simple),
+            Self::Sentinel => matches!(vault_type, VaultType::Sentinel),
+        }
+    }
+
+    pub fn validate_vault_type(self, vault_type: VaultType) -> ValidationResult<()> {
+        if self.permits_vault_type(vault_type) {
+            return Ok(());
+        }
+        Err(ValidationError::VaultApplicationTypeMismatch {
+            application: self.as_str().to_owned(),
+            vault_type: vault_type.as_str().to_owned(),
+        })
+    }
+
+    pub fn validate_session_access(self, vault_type: VaultType) -> ValidationResult<()> {
+        if self == Self::LegacyMigration {
+            return Err(ValidationError::MigrationApplicationCannotOpenVault);
+        }
+        self.validate_vault_type(vault_type)
+    }
+
+    pub fn validate_extension_approval(self, vault_type: VaultType) -> ValidationResult<()> {
+        if vault_type == VaultType::Sentinel {
+            return Err(ValidationError::SentinelExtensionForbidden);
+        }
+        if self != Self::Simple && self != Self::UnifiedDevelopment {
+            return Err(ValidationError::ExtensionApprovalApplicationForbidden {
+                application: self.as_str().to_owned(),
+            });
+        }
+        self.validate_session_access(vault_type)
+    }
+}
+
 impl VaultType {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -1002,5 +1084,78 @@ mod tests {
         assert_eq!(json["storageTargetName"], "Nook shared vault");
         let roundtrip: SharedStorageGrantOutcome = serde_json::from_value(json).unwrap();
         assert_eq!(roundtrip, manual);
+    }
+
+    #[test]
+    fn production_applications_accept_only_their_vault_type() {
+        assert!(
+            VaultApplication::Simple
+                .validate_session_access(VaultType::Simple)
+                .is_ok()
+        );
+        assert!(
+            VaultApplication::Sentinel
+                .validate_session_access(VaultType::Sentinel)
+                .is_ok()
+        );
+        assert!(
+            VaultApplication::Extension
+                .validate_session_access(VaultType::Simple)
+                .is_ok()
+        );
+        assert_eq!(
+            VaultApplication::Simple.validate_session_access(VaultType::Sentinel),
+            Err(ValidationError::VaultApplicationTypeMismatch {
+                application: "simple".to_owned(),
+                vault_type: "sentinel".to_owned(),
+            })
+        );
+        assert_eq!(
+            VaultApplication::Sentinel.validate_session_access(VaultType::Simple),
+            Err(ValidationError::VaultApplicationTypeMismatch {
+                application: "sentinel".to_owned(),
+                vault_type: "simple".to_owned(),
+            })
+        );
+        assert_eq!(
+            VaultApplication::Extension.validate_session_access(VaultType::Sentinel),
+            Err(ValidationError::VaultApplicationTypeMismatch {
+                application: "extension".to_owned(),
+                vault_type: "sentinel".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn migration_can_classify_both_types_but_never_open_a_session() {
+        assert!(VaultApplication::LegacyMigration.permits_vault_type(VaultType::Simple));
+        assert!(VaultApplication::LegacyMigration.permits_vault_type(VaultType::Sentinel));
+        assert_eq!(
+            VaultApplication::LegacyMigration.validate_session_access(VaultType::Simple),
+            Err(ValidationError::MigrationApplicationCannotOpenVault)
+        );
+        assert_eq!(
+            VaultApplication::LegacyMigration.validate_session_access(VaultType::Sentinel),
+            Err(ValidationError::MigrationApplicationCannotOpenVault)
+        );
+    }
+
+    #[test]
+    fn extension_approval_is_forbidden_for_sentinel() {
+        assert!(
+            VaultApplication::Simple
+                .validate_extension_approval(VaultType::Simple)
+                .is_ok()
+        );
+        assert_eq!(
+            VaultApplication::Sentinel.validate_extension_approval(VaultType::Sentinel),
+            Err(ValidationError::SentinelExtensionForbidden)
+        );
+        assert_eq!(
+            VaultApplication::Extension.validate_extension_approval(VaultType::Simple),
+            Err(ValidationError::ExtensionApprovalApplicationForbidden {
+                application: "extension".to_owned(),
+            })
+        );
     }
 }

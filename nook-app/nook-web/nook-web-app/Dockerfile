@@ -19,7 +19,12 @@ WORKDIR /meta-secret/nook
 # Only these small outputs cross the Rust/web boundary. The Rust target/, Cargo registry, and
 # compiler toolchain remain exclusively in BuildKit/GHCR cache.
 COPY --from=web-deps /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules
-COPY --from=web-artifacts /nook-wasm /meta-secret/nook/nook-app/nook-web/nook-web-app/src/lib/nook-wasm
+RUN ln -s nook-web-app/node_modules /meta-secret/nook/nook-app/nook-web/node_modules
+COPY --from=web-artifacts /nook-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm
+COPY --from=web-artifacts /nook-wasm-simple /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-simple
+COPY --from=web-artifacts /nook-wasm-sentinel /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-sentinel
+COPY --from=web-artifacts /nook-wasm-extension /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-extension
+COPY --from=web-artifacts /nook-wasm-migration /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-migration
 COPY --from=web-artifacts /coverage /opt/nook/coverage
 
 # Workspace source, copied as late as possible so the cached web dependency layers above are never

@@ -8,8 +8,10 @@ those concerns to the web app shell.
 The extension first-run model is specified in
 [`.cortex/product-specs/browser-extension.md`](../../../.cortex/product-specs/browser-extension.md).
 The short version: the extension becomes its own passkey-protected Nook device
-and pairs through `https://nokey.sh/extension-connect`; it does not borrow or
-scrape the `nokey.sh` web app device key.
+and pairs only through `https://simple.nokey.sh/extension-connect`; it does not
+borrow or scrape the Simple web app device key. Sentinel Vault is excluded by
+the extension manifest, runtime content-script guard, pairing DTO validation,
+and Rust/WASM capability checks.
 
 Build it through Docker-backed Taskfile commands from the repo root or `nook-app/`:
 

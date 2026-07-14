@@ -11,7 +11,7 @@ export type ExtensionReadySetupState = {
   deviceLabel: string
   pairedVaults: string[]
   selectedVaultName: string
-  syncStatus: string
+  syncProviderCount: number
 }
 
 export function setupStateFromPairingGrant(
@@ -22,10 +22,7 @@ export function setupStateFromPairingGrant(
     deviceLabel: grant.deviceLabel,
     pairedVaults: [grant.vaultName],
     selectedVaultName: grant.vaultName,
-    syncStatus:
-      grant.providers.length > 0
-        ? `${grant.providers.length} sync provider${grant.providers.length === 1 ? '' : 's'} granted`
-        : 'Vault access granted',
+    syncProviderCount: grant.providers.length,
   }
 }
 

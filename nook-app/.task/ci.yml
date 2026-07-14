@@ -171,6 +171,7 @@ tasks:
       - cp -a "{{.WEB_ROOT}}/dist" "{{.WEB_ROOT}}/dist-prod"
       - task: _web:e2e:build-dist
       - task: _web:test:e2e:parallel
+      - task: _web:test:e2e:isolation
       - task: _web:e2e:restore-prod-dist
       - task: _extension:test:e2e
 
@@ -208,8 +209,9 @@ tasks:
         test -n "${CLOUDFLARE_API_TOKEN:-}" && test -n "${CLOUDFLARE_ACCOUNT_ID:-}" && test -n "${CF_PAGES_BRANCH:-}";
         project="${CF_PAGES_PROJECT_NAME:-nook}";
         production_branch="${CF_PAGES_PRODUCTION_BRANCH:-main}";
-        if [ ! -d "{{.WEB_ROOT}}/dist" ]; then
-          echo "error: nook-app/nook-web/dist not found — run the web build before deploy" >&2;
+        deploy_dir="${CF_PAGES_DIST_DIR:-{{.WEB_ROOT}}/dist}";
+        if [ ! -d "$deploy_dir" ]; then
+          echo "error: Cloudflare Pages deploy directory not found: $deploy_dir" >&2;
           exit 1;
         fi;
         wr_dir="$(mktemp -d)";
@@ -218,7 +220,7 @@ tasks:
         wrangler pages project create "$project" --production-branch="$production_branch" >/dev/null 2>&1 || true;
         set +e;
         deploy_output="$(
-          wrangler pages deploy "{{.WEB_ROOT}}/dist" \
+          wrangler pages deploy "$deploy_dir" \
             --project-name="$project" \
             --branch="${CF_PAGES_BRANCH}" \
             --commit-dirty=true 2>&1

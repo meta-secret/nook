@@ -6,7 +6,7 @@
 
 **Keys, not accounts.**
 
-[Site](https://nokey.sh) · [Open app](https://nokey.sh/app/) · [GitHub](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
+[Site](https://nokey.sh) · [Simple Vault](https://simple.nokey.sh) · [Sentinel Vault](https://sentinel.nokey.sh) · [GitHub](https://github.com/meta-secret/nook) · [MIT License](LICENSE)
 
 Nook is an open-source, client-side password and secrets manager. Your vault is
 encrypted before it leaves the browser, replicated only through storage you
@@ -20,8 +20,11 @@ Keep the vault local-first, then optionally sync encrypted events to GitHub
 (more providers planned).
 
 The public site at [nokey.sh](https://nokey.sh) is the sealed-capsule landing
-page (English / Russian). The interactive vault lives at
-[`/app/`](https://nokey.sh/app/).
+page and locked legacy-migration broker (English / Russian). Everyday Simple
+vaults live at [simple.nokey.sh](https://simple.nokey.sh); quorum-protected
+Sentinel vaults live at [sentinel.nokey.sh](https://sentinel.nokey.sh). They are
+independent applications and browser origins, not modes in one production app.
+The browser extension can pair only with Simple Vault.
 
 > [!WARNING]
 > Nook is early-stage software. Vault formats and workflows may still change. Do
@@ -69,8 +72,9 @@ item, add a corrected copy and delete the old one.
 
 ### Local-first vault
 
-1. Choose **Create Simple vault** or **Create Sentinel vault**. Sentinel member
-   devices enter only through an owner-issued invitation.
+1. Open **Simple Vault** for everyday secrets or **Sentinel Vault** for a
+   quorum safe. Sentinel member devices enter only through an owner-issued
+   invitation.
 2. Creating a **Simple** vault protects this browser with a passkey (WebAuthn
    PRF) or PIN fallback. **Sentinel** starts quorum / SLIP-0039 setup: the owner
    shares an invitation URL, each participant opens it and connects a protected
@@ -127,7 +131,7 @@ payloads are typed YAML encrypted with [age](https://age-encryption.org/).
 App code lives under `nook-app/`. Dependencies flow one way:
 
 ```text
-nook-web-app / nook-web-extension
+nook-vault-simple / nook-vault-sentinel / nook-web-extension
         ↓
    nook-wasm          browser I/O + session bridge
         ↓
@@ -141,9 +145,11 @@ nook-web-app / nook-web-extension
 | `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
 | `nook-core` | Domain: event log, causal merge, projection, typed secrets, sync policy |
 | `nook-wasm` | `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager |
-| `nook-web-app` | Svelte 5 web UI |
-| `nook-web-extension` | Manifest V3 browser extension |
-| `nook-web-shared` | Shared TypeScript / Svelte presentation glue |
+| `nook-vault-simple` | Independent Svelte 5 Simple Vault application and artifact |
+| `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application and artifact |
+| `nook-web-app` | Public site, locked migration broker, and unified local e2e harness |
+| `nook-web-extension` | Simple-only Manifest V3 browser extension |
+| `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
 
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
@@ -171,7 +177,10 @@ task web:dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) for the landing page, or
-[http://localhost:5173/app/](http://localhost:5173/app/) for the vault UI.
+[http://localhost:5173/app/](http://localhost:5173/app/) for the unified local
+test harness. The production builds are `bun run build` inside
+`nook-vault-simple` and `nook-vault-sentinel`; they never use a hostname flag to
+select a vault type.
 
 `setup` runs automatically before docker tasks and rebuilds the `nook-web:local`
 image so it reflects current source. Buildx prepares the Rust/WASM and web
@@ -230,6 +239,7 @@ task build                 # Rust, WASM, web, and extension production build
 task web:dev               # local Vite development server
 task web:test              # web unit tests
 task web:test:e2e:pr       # fast Playwright subset (IndexedDB / local provider)
+task web:test:e2e:isolation # Simple/Sentinel project and origin boundary suite
 task web:test:e2e          # full local-provider Playwright suite (no PAT)
 task web:test:e2e:sync-live  # live GitHub sync e2e (requires NOOK_GITHUB_PAT)
 task extension:build       # browser extension package

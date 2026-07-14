@@ -3,7 +3,7 @@ import {
   NookClientRunModeUtil,
   NookPendingSyncConflict,
   NookRuntimeConfig,
-} from '$lib/nook-wasm/nook_wasm'
+} from '$app-wasm'
 import {
   providerStoreMismatchFromError,
   syncConflictLabel,

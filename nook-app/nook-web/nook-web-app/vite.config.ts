@@ -1,21 +1,20 @@
 import { defineConfig, type Plugin } from 'vitest/config'
 import { copyFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { PreviewServer, ViteDevServer } from 'vite'
+import { loadEnv, type PreviewServer, type ViteDevServer } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import {
   buildRobotsTxt,
   buildSitemapXml,
   siteUrlFromEnv,
-} from './src/lib/sitemap'
+} from '../nook-web-shared/src/vault-app/lib/sitemap'
 
 const viteBase =
   typeof Bun !== 'undefined' ? Bun.env.VITE_BASE : process.env.VITE_BASE
 
-const APP_SPA_PATHS = new Set([
+const COMMON_APP_SPA_PATHS = new Set([
   '/app-logs',
-  '/extension-connect',
   '/logs',
   '/privacy',
   '/terms',
@@ -23,7 +22,10 @@ const APP_SPA_PATHS = new Set([
 const NOT_FOUND_PATHS = new Set(['/schema.xml'])
 const APP_SHELL_ALIASES = ['app-logs', 'extension-connect', 'logs']
 
-function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
+function routeSpaRequestsToApp(
+  server: ViteDevServer | PreviewServer,
+  appKind: string,
+): void {
   server.middlewares.use((request, response, next) => {
     const requestUrl = request.url
     if (!requestUrl) {
@@ -44,7 +46,11 @@ function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
       return
     }
 
-    if (APP_SPA_PATHS.has(normalizedPath)) {
+    const appSpaPaths =
+      appKind === 'unified-development'
+        ? new Set([...COMMON_APP_SPA_PATHS, '/extension-connect'])
+        : new Set<string>()
+    if (appSpaPaths.has(normalizedPath)) {
       request.url = `/app/index.html${suffix}`
     }
     next()
@@ -52,29 +58,47 @@ function routeSpaRequestsToApp(server: ViteDevServer | PreviewServer): void {
 }
 
 /** Keep the public landing alias and route SPA fallbacks into the vault app. */
-function spaFallback(): Plugin {
+function spaFallback(appKind: string, outputDirectory: string): Plugin {
   return {
     name: 'spa-fallback',
-    configureServer: routeSpaRequestsToApp,
-    configurePreviewServer: routeSpaRequestsToApp,
+    configureServer(server) {
+      routeSpaRequestsToApp(server, appKind)
+    },
+    configurePreviewServer(server) {
+      routeSpaRequestsToApp(server, appKind)
+    },
     writeBundle() {
-      const outDir = join(process.cwd(), 'dist')
+      const outDir = join(process.cwd(), outputDirectory)
+      if (appKind === 'site') {
+        copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
+        copyFileSync(
+          join(outDir, 'migration/index.html'),
+          join(outDir, 'migration.html'),
+        )
+        return
+      }
       const appShell = join(outDir, 'app/index.html')
+      copyFileSync(appShell, join(outDir, 'index.html'))
       copyFileSync(appShell, join(outDir, '404.html'))
       for (const alias of APP_SHELL_ALIASES) {
-        copyFileSync(appShell, join(outDir, `${alias}.html`))
+        if (
+          alias !== 'extension-connect' ||
+          appKind === 'unified-development'
+        ) {
+          copyFileSync(appShell, join(outDir, `${alias}.html`))
+        }
       }
-      copyFileSync(join(outDir, 'index.html'), join(outDir, 'about.html'))
+      copyFileSync(appShell, join(outDir, 'migrate.html'))
     },
   }
 }
 
 /** Emit sitemap.xml and robots.txt for production deploys (nokey.sh). */
-function seoStaticFiles(): Plugin {
+function seoStaticFiles(outputDirectory: string): Plugin {
   return {
     name: 'seo-static-files',
     writeBundle() {
-      const outDir = join(process.cwd(), 'dist')
+      const outDir = join(process.cwd(), outputDirectory)
       const siteUrl = siteUrlFromEnv(process.env)
       writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(siteUrl))
       writeFileSync(join(outDir, 'robots.txt'), buildRobotsTxt(siteUrl))
@@ -83,31 +107,67 @@ function seoStaticFiles(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: viteBase ?? '/',
-  plugins: [tailwindcss(), svelte(), spaFallback(), seoStaticFiles()],
-  build: {
-    rollupOptions: {
-      input: {
-        landing: join(process.cwd(), 'index.html'),
-        app: join(process.cwd(), 'app/index.html'),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const appKind =
+    env.VITE_NOOK_APP_KIND === 'site' ? 'site' : 'unified-development'
+  const outputDirectory = env.VITE_NOOK_OUT_DIR ?? 'dist'
+  const wasmDirectory = appKind === 'site' ? 'nook-wasm-migration' : 'nook-wasm'
+  const input: Record<string, string> =
+    appKind === 'site'
+      ? {
+          landing: join(process.cwd(), 'index.html'),
+          migration: join(process.cwd(), 'migration/index.html'),
+        }
+      : {
+          landing: join(process.cwd(), 'index.html'),
+          app: join(process.cwd(), 'app/index.html'),
+        }
+
+  return {
+    base: viteBase ?? '/',
+    define: {
+      __NOOK_APP_KIND__: JSON.stringify(appKind),
+    },
+    plugins: [
+      tailwindcss(),
+      svelte(),
+      spaFallback(appKind, outputDirectory),
+      seoStaticFiles(outputDirectory),
+    ],
+    build: {
+      outDir: outputDirectory,
+      emptyOutDir: true,
+      rollupOptions: {
+        input,
       },
     },
-  },
-  resolve: {
-    alias: {
-      $lib: new URL('./src/lib', import.meta.url).pathname,
+    resolve: {
+      alias: {
+        $lib: new URL('../nook-web-shared/src/vault-app/lib', import.meta.url)
+          .pathname,
+        '$vault-shared': new URL(
+          '../nook-web-shared/src/vault-app',
+          import.meta.url,
+        ).pathname,
+        '$web-shared': new URL('../nook-web-shared/src', import.meta.url)
+          .pathname,
+        '$app-wasm': new URL(
+          `../nook-web-shared/src/vault-app/lib/${wasmDirectory}/nook_wasm`,
+          import.meta.url,
+        ).pathname,
+      },
     },
-  },
-  server: {
-    fs: {
-      allow: ['../../..'],
+    server: {
+      fs: {
+        allow: ['../../..'],
+      },
     },
-  },
-  test: {
-    include: ['tests/unit/**/*.{test,spec}.{js,ts}'],
-    exclude: ['e2e/**', 'node_modules/**'],
-    environment: 'happy-dom',
-    setupFiles: ['tests/unit/setup-wasm.ts'],
-  },
+    test: {
+      include: ['tests/unit/**/*.{test,spec}.{js,ts}'],
+      exclude: ['e2e/**', 'node_modules/**'],
+      environment: 'happy-dom',
+      setupFiles: ['tests/unit/setup-wasm.ts'],
+    },
+  }
 })

@@ -17,8 +17,9 @@
     "src/**/*.ts",
     "src/**/*.d.ts",
     "src/**/*.svelte",
-    "../nook-web-shared/src/**/*.ts",
-    "../nook-web-shared/src/**/*.svelte",
-    "../nook-web-app/src/lib/nook-wasm/**/*.d.ts"
+    "../nook-web-shared/src/components/NookIcon.svelte",
+    "../nook-web-shared/src/extension/**/*.ts",
+    "../nook-web-shared/src/password/generator.ts",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-extension/**/*.d.ts"
   ]
 }

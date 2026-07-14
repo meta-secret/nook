@@ -23,6 +23,7 @@ export type ScanPasswordFieldsMessage = {
 }
 
 export type ExtensionPairingApprovedGrant = {
+  vaultType: 'simple'
   deviceId: string
   deviceLabel: string
   vaultStoreId: string
@@ -81,6 +82,7 @@ export function isExtensionPairingApprovedMessage(
 
   const payload = (message as { payload: Record<string, unknown> }).payload
   return (
+    payload.vaultType === 'simple' &&
     typeof payload.deviceId === 'string' &&
     typeof payload.deviceLabel === 'string' &&
     typeof payload.vaultStoreId === 'string' &&

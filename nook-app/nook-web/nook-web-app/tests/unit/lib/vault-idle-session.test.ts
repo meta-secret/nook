@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'vitest'
 import initNookWasm, {
   NookClientRunModeUtil,
   NookRuntimeConfig,
-} from '$lib/nook-wasm/nook_wasm'
+} from '$app-wasm'
 import { createVaultIdleSessionTracker } from '$lib/vault-idle-session'
 
 beforeAll(async () => {

@@ -17,10 +17,24 @@
     "moduleDetection": "force",
     "resolveJsonModule": true,
     "paths": {
-      "$lib": ["./src/lib"],
-      "$lib/*": ["./src/lib/*"]
+      "$lib": ["../nook-web-shared/src/vault-app/lib"],
+      "$lib/*": ["../nook-web-shared/src/vault-app/lib/*"],
+      "$vault-shared": ["../nook-web-shared/src/vault-app"],
+      "$vault-shared/*": ["../nook-web-shared/src/vault-app/*"],
+      "$web-shared/*": ["../nook-web-shared/src/*"],
+      "$app-wasm": ["../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "tests/**/*.ts"],
-  "exclude": ["src/lib/nook-wasm"]
+  "include": [
+    "src/main.ts",
+    "src/migration.ts",
+    "../nook-web-shared/src/**/*.ts",
+    "../nook-web-shared/src/**/*.svelte",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "src/lib",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm",
+    "../nook-web-shared/src/vault-app/lib/nook-wasm-*"
+  ]
 }

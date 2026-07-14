@@ -153,13 +153,17 @@ Event-log sync is in `nook-app/nook-core/src`. UI uses the local
 
 Browser OAuth providers are origin-bound. Nook's Google Drive flow uses Google
 Identity Services in the browser; the current Google web client is configured
-for `http://localhost:5173`, `https://nokey.sh`, and
-`https://dev.nokey.sh`. Nook's CloudKit JS token is configured for
-`https://nokey.sh` and `https://dev.nokey.sh`.
+for `http://localhost:5173`, `https://simple.nokey.sh`,
+`https://sentinel.nokey.sh`, and `https://dev.nokey.sh`. Nook's CloudKit JS
+token must likewise register the two production vault origins and the
+development origin. `https://nokey.sh` remains registered only while the
+time-bounded legacy migration broker needs provider-state compatibility; it is
+not a production vault origin.
 
 Google/Auth Platform branding should use `https://nokey.sh/` as the public app
 home page. The root path is the crawlable product and branding page; the vault
-application lives at `/app/`. Do not user-agent fork the root path for
+applications live at `https://simple.nokey.sh` and
+`https://sentinel.nokey.sh`. Do not user-agent fork the root path for
 Googlebot; a bot-only version is cloaking-prone and makes OAuth review behavior
 differ from real user behavior. `/about.html` remains a compatibility alias
 whose canonical URL is the root page, so it should not be listed separately in
@@ -167,7 +171,8 @@ the sitemap. Legal branding links should use the static
 `https://nokey.sh/privacy.html` and `https://nokey.sh/terms.html` documents so
 GitHub Pages can serve them directly without relying on the SPA router.
 `robots.txt` should allow the public root/legal pages and assets while
-disallowing `/app/` and private utility routes.
+disallowing migration and private utility routes. Both vault applications emit
+`robots.txt` with `Disallow: /`.
 
 PR previews deploy to Cloudflare Pages aliases such as
 `https://pr-191.nook-1n8.pages.dev/`. The browser origin is the exact
@@ -179,12 +184,13 @@ represented as `https://pr-*.nook-1n8.pages.dev`, and origin-sprawl should not b
 treated as a durable preview strategy. Apple CloudKit API tokens have the same
 practical constraint when allowed origins are restricted to specific domains.
 
-Current fallback: [`oauth-origin.ts`](../../nook-app/nook-web/src/lib/oauth-origin.ts)
+Current fallback: [`oauth-origin.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/oauth-origin.ts)
 detects Nook PR preview hosts (`pr-<number>.nook-1n8.pages.dev`) and disables
 Google Drive / iCloud sign-in with a clear message. Reviewers can still test
 local, local-folder, and GitHub providers on PR previews. Google Drive browser
-OAuth should be tested on `https://nokey.sh`, `https://dev.nokey.sh`, or local
-dev until preview hosting uses a registered stable origin. If a stable
+OAuth should be tested on `https://simple.nokey.sh`,
+`https://sentinel.nokey.sh`, `https://dev.nokey.sh`, or local dev until preview
+hosting uses a registered stable origin. If a stable
 Cloudflare origin such as
 `https://nook-1n8.pages.dev` or `https://preview.nokey.sh` becomes the preview
 entry point, add that exact origin both in Google Cloud Console and in

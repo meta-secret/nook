@@ -8,7 +8,7 @@ import initNookWasm, {
   resolveAppLocaleFromTag,
   resolveAppLocaleFromTags,
   translateFromCatalog,
-} from '$lib/nook-wasm/nook_wasm'
+} from '$app-wasm'
 import { HELP_SECTIONS } from '$lib/help-content'
 
 beforeAll(async () => {

@@ -85,6 +85,15 @@ tasks:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e:pr }
 
+  web:test:e2e:isolation:
+    desc: Run the independent Simple/Sentinel application boundary suite.
+    deps:
+      - task: setup
+        vars: { SETUP_TARGET: nook-web-e2e }
+    cmds:
+      - task: docker:e2e:run
+        vars: { TASK: _web:test:e2e:isolation }
+
   web:test:e2e:pr:parallel:
     desc: Fast Playwright e2e-pr when wasm and e2e dist already built (manual/debug).
     cmds:
@@ -312,6 +321,11 @@ tasks:
     cmds:
       - cd "{{.WEB_ROOT}}" && bun run build
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:pr
+
+  _web:test:e2e:isolation:
+    desc: Run both isolated vault app dev servers and their Playwright boundary suite.
+    cmds:
+      - cd "{{.WEB_ROOT}}" && bun run test:e2e:isolation
 
   _web:e2e:build-dist:
     desc: Build web dist with fast vault sync for CI e2e preview (skips when already fresh).

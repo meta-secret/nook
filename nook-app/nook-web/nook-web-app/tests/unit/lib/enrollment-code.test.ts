@@ -11,7 +11,7 @@ import {
   peekEnrollmentEntryId,
   peekEnrollmentEntryLabel,
   peekEnrollmentIssuedAt,
-} from '$lib/nook-wasm/nook_wasm'
+} from '$app-wasm'
 
 await initNookWasm()
 

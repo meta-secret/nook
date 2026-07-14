@@ -155,13 +155,15 @@ tasks:
         task {{.TASK}}
 
   docker:extract:dist:
-    desc: Copy the nook-web image's built nook-app/nook-web/nook-web-app/dist to the host (for GitHub Pages upload on release branches).
+    desc: Copy the landing, Simple Vault, and Sentinel Vault web artifacts to the host.
     cmds:
       - >-
-        sh -c 'rm -rf "{{.WEB_ROOT}}/dist";
+        sh -c 'rm -rf "{{.WEB_ROOT}}/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-simple/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-sentinel/dist";
         cid="$({{.DOCKER}} create --platform linux/amd64 {{.DOCKER_IMAGE}})";
         trap "{{.DOCKER}} rm -f \"$cid\" >/dev/null 2>&1 || true" EXIT;
-        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-web-app/dist" "{{.WEB_ROOT}}/dist"'
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-web-app/dist" "{{.WEB_ROOT}}/dist";
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-simple/dist";
+        {{.DOCKER}} cp "$cid:/meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist" "{{.WEB_GROUP_ROOT}}/nook-vault-sentinel/dist"'
 
   docker:extract:extension:
     desc: Copy the nook-web image's built nook-app/nook-web/nook-web-extension/dist to the host (for manual browser loading).

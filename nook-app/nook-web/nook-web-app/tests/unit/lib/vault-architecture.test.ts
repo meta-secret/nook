@@ -1,7 +1,5 @@
 import { beforeAll, describe, expect, test } from 'vitest'
-import initNookWasm, {
-  enrollmentProviderForArchitecture,
-} from '$lib/nook-wasm/nook_wasm'
+import initNookWasm, { enrollmentProviderForArchitecture } from '$app-wasm'
 import type { StorageProvider } from '$lib/auth-providers'
 import {
   canCreateSecret,

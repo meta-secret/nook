@@ -22,14 +22,24 @@ RUN case "$WASM_BUILD_MODE" in \
       dev) wasm_opt_flag="--no-opt" && stamp_mode="no-opt" ;; \
       *) echo "Unsupported WASM_BUILD_MODE=$WASM_BUILD_MODE (expected dev or prod)" >&2; exit 1 ;; \
     esac \
-    && wasm-pack build nook-wasm --target web --out-dir ../nook-web/nook-web-app/src/lib/nook-wasm --out-name nook_wasm $wasm_opt_flag \
+    && for spec in \
+         "nook-wasm:default" \
+         "nook-wasm-simple:app-simple" \
+         "nook-wasm-sentinel:app-sentinel" \
+         "nook-wasm-extension:app-extension" \
+         "nook-wasm-migration:app-legacy-migration"; do \
+         out_dir="${spec%%:*}"; feature="${spec#*:}"; \
+         if [ "$feature" = default ]; then cargo_args=""; \
+         else cargo_args="-- --no-default-features --features $feature"; fi; \
+         wasm-pack build nook-wasm --target web --out-dir "../nook-web/nook-web-shared/src/vault-app/lib/$out_dir" --out-name nook_wasm $wasm_opt_flag $cargo_args || exit 1; \
+       done \
     && ( current="$(find nook-wasm/src nook-core/src nook-core/locales nook-auth2/src \
            \( -name '*.rs' -o -name '*.json' \) -print0 \
          | LC_ALL=C sort -z \
          | xargs -0 sha256sum \
          | sha256sum \
          | cut -d' ' -f1)" \
-         && echo "$current $stamp_mode" > nook-web/nook-web-app/src/lib/nook-wasm/.wasm-source-sha256 )
+         && echo "$current $stamp_mode" > nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 )
 
 RUN wasm-pack test --node nook-wasm
 
@@ -44,7 +54,11 @@ RUN cargo fmt --all -- --check
 # context. The web solve never consumes or materializes the multi-GB builder-wasm snapshot.
 FROM scratch AS web-artifacts
 
-COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-app/src/lib/nook-wasm /nook-wasm
+COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm /nook-wasm
+COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-simple /nook-wasm-simple
+COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-sentinel /nook-wasm-sentinel
+COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-extension /nook-wasm-extension
+COPY --from=builder-wasm /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm-migration /nook-wasm-migration
 COPY --from=builder-wasm /opt/nook/coverage /coverage
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting

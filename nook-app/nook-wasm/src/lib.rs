@@ -11,6 +11,7 @@
     clippy::items_after_statements
 )]
 
+mod application;
 mod conversion;
 mod error_mapping;
 mod logger;
@@ -868,6 +869,50 @@ struct LocalAuthProviderSnapshot {
     migrated: bool,
 }
 
+fn validate_compiled_application_for_content(content: &str) -> Result<(), NookError> {
+    let architecture = nook_core::read_vault_architecture(content)?;
+    application::compiled_vault_application().validate_session_access(architecture.vault_type)?;
+    Ok(())
+}
+
+/// Return the immutable capability compiled into this WASM artifact.
+#[wasm_bindgen(js_name = compiledVaultApplication)]
+pub fn compiled_vault_application_name() -> String {
+    application::compiled_vault_application()
+        .as_str()
+        .to_owned()
+}
+
+/// Fail before persistence/session creation when encrypted vault content does
+/// not belong to this artifact's compile-time application capability.
+#[wasm_bindgen(js_name = validateVaultContentForApplication)]
+pub fn validate_vault_content_for_application(content: &str) -> Result<(), wasm_bindgen::JsError> {
+    validate_compiled_application_for_content(content).map_err(Into::into)
+}
+
+/// Validate extension pairing metadata through the Rust capability matrix.
+#[wasm_bindgen(js_name = validateExtensionPairingVaultType)]
+pub fn validate_extension_pairing_vault_type(
+    vault_type: &str,
+) -> Result<(), wasm_bindgen::JsError> {
+    let vault_type = nook_core::VaultType::parse(vault_type)?;
+    let application = application::compiled_vault_application();
+    if application == nook_core::VaultApplication::Extension {
+        application.validate_session_access(vault_type)?;
+    } else {
+        application.validate_extension_approval(vault_type)?;
+    }
+    Ok(())
+}
+
+async fn local_vault_matches_compiled_application(store_id: &str) -> Result<bool, NookError> {
+    let Some(content) = crate::storage::indexed_db::load_vault_blob(store_id).await? else {
+        return Ok(false);
+    };
+    let architecture = nook_core::read_vault_architecture(&content)?;
+    Ok(application::compiled_vault_application().permits_vault_type(architecture.vault_type))
+}
+
 /// Ensure auth snapshots always keep a local provider row when this browser has
 /// a local vault. Returns the updated snapshot plus whether a row was added.
 #[wasm_bindgen(js_name = ensureLocalAuthProviderSnapshot)]
@@ -876,7 +921,7 @@ pub async fn ensure_local_auth_provider_snapshot(
     snapshot: JsValue,
 ) -> Result<JsValue, wasm_bindgen::JsError> {
     let snapshot: nook_core::AuthProvidersSnapshotData = serde_wasm_bindgen::from_value(snapshot)?;
-    if !crate::storage::indexed_db::has_local_vault().await? {
+    if !has_local_vault().await? {
         return Ok(to_js_value(&LocalAuthProviderSnapshot {
             snapshot,
             migrated: false,
@@ -894,12 +939,20 @@ pub async fn ensure_local_auth_provider_snapshot(
 
 #[wasm_bindgen(js_name = hasLocalVault)]
 pub async fn has_local_vault() -> Result<bool, wasm_bindgen::JsError> {
-    Ok(crate::storage::indexed_db::has_local_vault().await?)
+    for entry in crate::storage::indexed_db::list_vault_registry_entries().await? {
+        if local_vault_matches_compiled_application(&entry.store_id).await? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 #[wasm_bindgen(js_name = hasActiveLocalVault)]
 pub async fn has_active_local_vault() -> Result<bool, wasm_bindgen::JsError> {
-    Ok(crate::storage::indexed_db::has_active_local_vault().await?)
+    let Some(store_id) = crate::storage::indexed_db::get_active_vault_id().await? else {
+        return Ok(false);
+    };
+    Ok(local_vault_matches_compiled_application(&store_id).await?)
 }
 
 #[wasm_bindgen]
@@ -942,24 +995,37 @@ impl NookLocalVaultEntry {
 
 #[wasm_bindgen(js_name = listLocalVaults)]
 pub async fn list_local_vaults() -> Result<Vec<NookLocalVaultEntry>, wasm_bindgen::JsError> {
-    Ok(crate::storage::indexed_db::list_vault_registry_entries()
-        .await?
-        .into_iter()
-        .map(|entry| NookLocalVaultEntry {
-            store_id: entry.store_id,
-            label: entry.label,
-            last_unlocked_at: entry.last_unlocked_at,
-        })
-        .collect())
+    let mut matching = Vec::new();
+    for entry in crate::storage::indexed_db::list_vault_registry_entries().await? {
+        if local_vault_matches_compiled_application(&entry.store_id).await? {
+            matching.push(NookLocalVaultEntry {
+                store_id: entry.store_id,
+                label: entry.label,
+                last_unlocked_at: entry.last_unlocked_at,
+            });
+        }
+    }
+    Ok(matching)
 }
 
 #[wasm_bindgen(js_name = getActiveVaultId)]
 pub async fn get_active_vault_id() -> Result<Option<String>, wasm_bindgen::JsError> {
-    Ok(crate::storage::indexed_db::get_active_vault_id().await?)
+    let Some(store_id) = crate::storage::indexed_db::get_active_vault_id().await? else {
+        return Ok(None);
+    };
+    if local_vault_matches_compiled_application(&store_id).await? {
+        Ok(Some(store_id))
+    } else {
+        Ok(None)
+    }
 }
 
 #[wasm_bindgen(js_name = setActiveVault)]
 pub async fn set_active_vault(store_id: String) -> Result<(), wasm_bindgen::JsError> {
+    let content = crate::storage::indexed_db::load_vault_blob(&store_id)
+        .await?
+        .ok_or_else(|| NookError::Database("Local vault was not found.".to_owned()))?;
+    validate_compiled_application_for_content(&content)?;
     crate::storage::indexed_db::switch_active_vault(&store_id)
         .await
         .map_err(Into::into)
@@ -987,6 +1053,7 @@ pub async fn import_local_vault_blob(
     content: String,
     label: Option<String>,
 ) -> Result<String, wasm_bindgen::JsError> {
+    validate_compiled_application_for_content(&content)?;
     crate::storage::indexed_db::import_vault_blob(&content, label.as_deref())
         .await
         .map_err(Into::into)
