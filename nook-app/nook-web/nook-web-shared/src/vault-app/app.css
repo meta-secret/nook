@@ -143,6 +143,12 @@
 }
 
 @layer utilities {
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
   .authenticated-shell {
     min-height: calc(100svh - 11rem);
   }

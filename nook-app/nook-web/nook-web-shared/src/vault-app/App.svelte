@@ -420,7 +420,7 @@
     class:dark={colorMode === 'dark'}
   >
     <header
-      class="border-b border-border/50 bg-card/80 backdrop-blur-md sticky top-0 z-40"
+      class="app-header border-b border-border/50 bg-card/80 backdrop-blur-md"
     >
       <div
         class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
