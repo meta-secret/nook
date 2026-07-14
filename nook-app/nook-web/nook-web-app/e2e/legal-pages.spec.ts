@@ -67,10 +67,7 @@ test.describe('legal pages', () => {
       'href',
       'https://sentinel.nokey.sh/',
     )
-    await expect(page.getByTestId('hero-cta-secondary')).toHaveAttribute(
-      'href',
-      '#architecture',
-    )
+    await expect(page.getByTestId('hero-cta-secondary')).toHaveCount(0)
     await expect(page.locator('#architecture')).toHaveCount(1)
     await expect(page.locator('#app')).toHaveCount(0)
     await expect(page.getByTestId('landing-theme-toggle')).toBeVisible()
