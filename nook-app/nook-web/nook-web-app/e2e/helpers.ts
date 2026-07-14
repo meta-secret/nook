@@ -2481,11 +2481,71 @@ export async function authorizeDeviceProtection(
   await waitForVaultOperationsIdle(page)
 }
 
+async function invokeVaultLoadProviders(page: Page) {
+  await page.evaluate(async () => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          isAuthenticated?: boolean
+          loadProviders?: () => Promise<void>
+        }
+      }
+    ).__nookVault
+    if (vault?.isAuthenticated && vault.loadProviders) {
+      await vault.loadProviders()
+    }
+  })
+}
+
+/** Wait until the login gate exposes local unlock or the vault is already open. */
+async function ensureLoginLocalUnlockReady(page: Page) {
+  const vaultPanel = page.getByTestId('vault-panel')
+  if (await vaultPanel.isVisible()) {
+    return
+  }
+
+  await expect(page.getByTestId('login-gate')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+
+  const localUnlock = page.getByTestId('login-local-unlock-step')
+  const vaultPicker = page.getByTestId('login-vault-picker')
+
+  await expect
+    .poll(
+      async () => {
+        if (await vaultPanel.isVisible()) return 'ready'
+        if (await localUnlock.isVisible()) return 'ready'
+        if (await vaultPicker.isVisible()) return 'ready'
+        await page.evaluate(async () => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                refreshLocalVaultCatalog?: () => Promise<void>
+                prepareLocalLogin?: () => Promise<void>
+              }
+            }
+          ).__nookVault
+          await vault?.refreshLocalVaultCatalog?.()
+          await vault?.prepareLocalLogin?.()
+        })
+        return 'waiting'
+      },
+      { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+    )
+    .toBe('ready')
+}
+
 /** Unlock from the login gate — optional password when device keys are unavailable. */
 export async function unlockVaultOnLogin(
   page: Page,
   opts?: { password?: string; entryLabel?: string; storeId?: string },
 ) {
+  if (await page.getByTestId('vault-panel').isVisible()) {
+    return
+  }
+  await ensureLoginLocalUnlockReady(page)
+
   const vaultPicker = page.getByTestId('login-vault-picker')
   if (await vaultPicker.isVisible()) {
     const option = opts?.storeId
@@ -3365,6 +3425,7 @@ export async function reloadUnlockLocalVaultWithSync(
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await ensureLoginLocalUnlockReady(page)
   await selectLoginUnlockMethod(page, 'keys')
   await page.getByTestId('unlock-vault-btn').click()
   await expect(page.getByTestId('vault-panel')).toBeVisible({
@@ -3577,6 +3638,7 @@ export async function reloadUnlockWithSyncProvider(
   await expect(page.getByTestId('login-gate')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
   })
+  await ensureLoginLocalUnlockReady(page)
   await unlockVaultOnLogin(
     page,
     opts?.password
@@ -3619,16 +3681,42 @@ export async function waitForLoadedSyncProviders(
   minCount = 1,
   timeoutMs = ENROLLMENT_UNLOCK_TIMEOUT_MS,
 ) {
+  await assertVaultReady(page)
+  await expect
+    .poll(
+      async () => {
+        const state = await page.evaluate(() => {
+          const vault = (
+            window as Window & {
+              __nookVault?: {
+                isAuthenticated?: boolean
+                syncProviderCount?: number
+                syncProviders?: unknown[]
+              }
+            }
+          ).__nookVault
+          return {
+            authenticated: Boolean(vault?.isAuthenticated),
+            count:
+              vault?.syncProviderCount ?? vault?.syncProviders?.length ?? 0,
+          }
+        })
+        if (state.authenticated && state.count < minCount) {
+          await invokeVaultLoadProviders(page).catch(() => undefined)
+        }
+        return state.authenticated ? state.count : -1
+      },
+      { timeout: timeoutMs },
+    )
+    .toBeGreaterThanOrEqual(minCount)
+
   const pattern =
     minCount === 1
       ? /1 sync provider/
       : new RegExp(`${minCount} sync providers`)
-  await expect(page.getByTestId('vault-sync-out-status')).toContainText(
-    pattern,
-    {
-      timeout: timeoutMs,
-    },
-  )
+  const syncStatus = page.getByTestId('vault-sync-out-status')
+  await expect(syncStatus).toBeVisible({ timeout: timeoutMs })
+  await expect(syncStatus).toContainText(pattern, { timeout: timeoutMs })
 }
 
 async function syncSecretCount(target: GithubE2eTarget): Promise<number> {
