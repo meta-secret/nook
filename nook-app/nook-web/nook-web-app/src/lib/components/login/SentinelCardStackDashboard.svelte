@@ -372,6 +372,32 @@
             {/if}
           </button>
 
+          {#if initiatorKeyReady && onboardingStage !== 'identity' && onboardingStage !== 'name'}
+            <button
+              type="button"
+              class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 border-white/10 border-l-[#63eaa1] bg-[#303840]/85 px-5 py-4 text-left transition hover:border-[#6ed9ff]/60 hover:bg-[#37424b] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:border-l-[#63eaa1] disabled:hover:bg-[#303840]/85"
+              data-testid="sentinel-onboarding-name-summary-card"
+              aria-label={vault.t('login.vault_name_label')}
+              disabled={status !== 'idle' || isBusy || actionBusy}
+              onclick={() => (onboardingStage = 'name')}
+            >
+              <span
+                class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[10px] text-[#79dfff]"
+              >
+                02
+              </span>
+              <span class="min-w-0">
+                <span
+                  class="block font-mono text-[9px] tracking-[0.16em] text-[#9ba7b1] uppercase"
+                >
+                  {vault.t('login.vault_name_label')}
+                </span>
+                <b class="mt-1 block truncate text-sm text-white">{name}</b>
+              </span>
+              <Check class="size-4 text-[#63eaa1]" />
+            </button>
+          {/if}
+
           {#each participants.slice(1) as participant, index (participant.participantId)}
             <button
               class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}

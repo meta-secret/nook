@@ -335,13 +335,26 @@ test.describe('vault architecture modes', () => {
     ).toHaveText('Ordered Sentinel')
     await page.getByTestId('sentinel-onboarding-continue-policy').click()
     await expect(page.getByTestId('sentinel-genesis-name-step')).toHaveCount(0)
+    const createKeysCard = actionsColumn.getByTestId(
+      'sentinel-onboarding-create-keys',
+    )
+    const nameSummaryCard = actionsColumn.getByTestId(
+      'sentinel-onboarding-name-summary-card',
+    )
+    await expect(nameSummaryCard).toBeVisible()
+    await expect(nameSummaryCard).toContainText('Ordered Sentinel')
+    await expect(nameSummaryCard).toBeEnabled()
     const policyStep = actionsColumn.getByTestId('sentinel-genesis-policy-step')
     await expect(policyStep).toBeVisible()
+    const createKeysCardBox = await createKeysCard.boundingBox()
+    const nameSummaryCardBox = await nameSummaryCard.boundingBox()
     const policyStepBox = await policyStep.boundingBox()
-    if (!policyStepBox) {
-      throw new Error('Sentinel policy step must have a layout box')
+    if (!createKeysCardBox || !nameSummaryCardBox || !policyStepBox) {
+      throw new Error('Sentinel action sequence must have layout boxes')
     }
     expect(policyStepBox.x).toBeLessThan(vaultSummaryBox.x)
+    expect(nameSummaryCardBox.y).toBeGreaterThan(createKeysCardBox.y)
+    expect(policyStepBox.y).toBeGreaterThan(nameSummaryCardBox.y)
     await page.getByTestId('sentinel-genesis-threshold').click()
     await page.getByTestId('sentinel-threshold-option-3').click()
     await page.getByTestId('sentinel-genesis-participant-count').click()
@@ -367,6 +380,9 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-onboarding-roster-next'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(nameSummaryCard).toBeVisible()
+    await expect(nameSummaryCard).toContainText('Ordered Sentinel')
+    await expect(nameSummaryCard).toBeDisabled()
     await expect(
       page.getByTestId('sentinel-onboarding-devices-remaining'),
     ).toContainText('1')
