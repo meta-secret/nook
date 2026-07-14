@@ -1,9 +1,9 @@
 import { expect, test } from './fixtures'
 
-// The combined e2e preview keeps the legacy unified app at `/` and mounts the
-// independently built public nokey.sh artifact here. Production deploys the
-// contents of this directory at the site root.
-const PUBLIC_SITE_PATH = '/site'
+// The combined production preview mounts the independently built nokey.sh
+// artifact at /site. The default local Vite server serves the same public
+// surface at /, so Playwright config supplies the matching path.
+const PUBLIC_SITE_PATH = process.env.NOOK_E2E_PUBLIC_SITE_PATH ?? ''
 
 test.describe('legal pages', () => {
   test('serves static privacy policy at /privacy.html', async ({ page }) => {
@@ -193,6 +193,7 @@ test.describe('legal pages', () => {
   })
 
   test('exposes an interactive cryptographic inventory', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
     await page.goto(`${PUBLIC_SITE_PATH}/`)
 
     const terms = page.locator('.crypto-term')
@@ -306,7 +307,9 @@ test.describe('legal pages', () => {
     expect(sitemap).toContain('<loc>https://nokey.sh/terms.html</loc>')
     expect(sitemap).not.toContain('/app/</loc>')
 
-    const obsoleteSchemaResponse = await request.get('/schema.xml')
+    const obsoleteSchemaResponse = await request.get(
+      `${PUBLIC_SITE_PATH}/schema.xml`,
+    )
     expect(obsoleteSchemaResponse.status()).toBe(404)
   })
 
